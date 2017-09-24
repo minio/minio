@@ -569,8 +569,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	port := r.Header.Get("X-Forward-Proto")
+	location := getObjectLocation(r.Host, port, bucket, object)
 	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
-	w.Header().Set("Location", getObjectLocation(bucket, object))
+	w.Header().Set("Location", location)
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, err := net.SplitHostPort(r.RemoteAddr)
@@ -603,7 +605,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			Bucket:   objInfo.Bucket,
 			Key:      objInfo.Name,
 			ETag:     `"` + objInfo.ETag + `"`,
-			Location: getObjectLocation(objInfo.Bucket, objInfo.Name),
+			Location: location,
 		})
 		writeResponse(w, http.StatusCreated, resp, "application/xml")
 	case "200":

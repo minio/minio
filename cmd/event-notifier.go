@@ -101,12 +101,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 			host = localIP4.ToSlice()[0]
 		}
 
-		scheme := httpScheme
-		if globalIsSSL {
-			scheme = httpsScheme
-		}
-
-		return fmt.Sprintf("%s://%s:%s", scheme, host, globalMinioPort)
+		return fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), host, globalMinioPort)
 	}
 
 	// Fetch the region.

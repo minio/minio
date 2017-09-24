@@ -275,9 +275,25 @@ func getLocation(r *http.Request) string {
 	return path.Clean(r.URL.Path) // Clean any trailing slashes.
 }
 
-// getObjectLocation gets the relative URL for an object
-func getObjectLocation(bucketName string, key string) string {
-	return "/" + bucketName + "/" + key
+// returns "https" if the tls boolean is true, "http" otherwise.
+func getURLScheme(tls bool) string {
+	if tls {
+		return httpsScheme
+	}
+	return httpScheme
+}
+
+// getObjectLocation gets the fully qualified URL of an object.
+func getObjectLocation(host, proto, bucket, object string) string {
+	if proto == "" {
+		proto = getURLScheme(globalIsSSL)
+	}
+	u := url.URL{
+		Host:   host,
+		Path:   path.Join(slashSeparator, bucket, object),
+		Scheme: proto,
+	}
+	return u.String()
 }
 
 // generates ListBucketsResponse from array of BucketInfo which can be
