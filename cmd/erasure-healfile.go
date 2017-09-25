@@ -70,6 +70,10 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
 	// Scan part files on disk, block-by-block reconstruct it and
 	// write to stale disks.
 	chunksize := getChunkSize(blocksize, s.dataBlocks)
+	blocks := make([][]byte, len(s.disks))
+	for i := range blocks {
+		blocks[i] = make([]byte, chunksize)
+	}
 	var chunkOffset, blockOffset int64
 	for ; blockOffset < size; blockOffset += blocksize {
 		// last iteration may have less than blocksize data
@@ -77,40 +81,35 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
 		if size < blockOffset+blocksize {
 			blocksize = size - blockOffset
 			chunksize = getChunkSize(blocksize, s.dataBlocks)
+			for i := range blocks {
+				blocks[i] = blocks[i][:chunksize]
+			}
 		}
-
 		// read a chunk from each disk, until we have
 		// `s.dataBlocks` number of chunks set to non-nil in
 		// `blocks`
-		blocks := make([][]byte, len(s.disks))
-		var buffer []byte
 		numReads := 0
 		for i, disk := range s.disks {
 			// skip reading from unavailable or stale disks
 			if disk == nil || staleDisks[i] != nil {
+				blocks[i] = blocks[i][:0] // mark shard as missing
 				continue
 			}
-			// allocate buffer only when needed - when
-			// reads fail, the buffer can be reused
-			if int64(len(buffer)) != chunksize {
-				buffer = make([]byte, chunksize)
-			}
-			_, err = disk.ReadFile(volume, path, chunkOffset, buffer, verifiers[i])
+			_, err = disk.ReadFile(volume, path, chunkOffset, blocks[i], verifiers[i])
 			if err != nil {
 				// LOG FIXME: add a conditional log
 				// for read failures, once per-disk
 				// per-function-invocation.
+				blocks[i] = blocks[i][:0] // mark shard as missing
 				continue
 			}
-
-			// read was successful, so set the buffer as
-			// blocks[i], and reset buffer to nil to force
-			// allocation on next iteration
-			blocks[i], buffer = buffer, nil
-
 			numReads++
 			if numReads == s.dataBlocks {
 				// we have enough data to reconstruct
+				// mark all other blocks as missing
+				for j := i + 1; j < len(blocks); j++ {
+					blocks[j] = blocks[j][:0] // mark shard as missing
+				}
 				break
 			}
 		}
