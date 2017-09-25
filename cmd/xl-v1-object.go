@@ -24,7 +24,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -242,10 +241,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	var totalBytesRead int64
-
-	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
-
 	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
@@ -276,7 +271,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			checksums[index] = checksumInfo.Hash
 		}
 
-		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize, pool)
+		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize)
 		if err != nil {
 			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)

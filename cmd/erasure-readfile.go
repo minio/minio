@@ -18,14 +18,12 @@ package cmd
 
 import (
 	"io"
-
-	"github.com/minio/minio/pkg/bpool"
 )
 
 // ReadFile reads as much data as requested from the file under the given volume and path and writes the data to the provided writer.
 // The algorithm and the keys/checksums are used to verify the integrity of the given file. ReadFile will read data from the given offset
 // up to the given length. If parts of the file are corrupted ReadFile tries to reconstruct the data.
-func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, length int64, totalLength int64, checksums [][]byte, algorithm BitrotAlgorithm, blocksize int64, pool *bpool.BytePool) (f ErasureFileInfo, err error) {
+func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, length int64, totalLength int64, checksums [][]byte, algorithm BitrotAlgorithm, blocksize int64) (f ErasureFileInfo, err error) {
 	if offset < 0 || length < 0 {
 		return f, traceError(errUnexpected)
 	}
@@ -53,15 +51,20 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, 
 	chunksize := getChunkSize(blocksize, s.dataBlocks)
 
 	blocks := make([][]byte, len(s.disks))
+	for i := range blocks {
+		blocks[i] = make([]byte, chunksize)
+	}
 	for off := offset / blocksize; length > 0; off++ {
 		blockOffset := off * chunksize
-		pool.Reset()
 
 		if currentBlock := (offset + f.Size) / blocksize; currentBlock == lastBlock {
 			blocksize = totalLength % blocksize
 			chunksize = getChunkSize(blocksize, s.dataBlocks)
+			for i := range blocks {
+				blocks[i] = blocks[i][:chunksize]
+			}
 		}
-		err = s.readConcurrent(volume, path, blockOffset, chunksize, blocks, verifiers, errChans, pool)
+		err = s.readConcurrent(volume, path, blockOffset, blocks, verifiers, errChans)
 		if err != nil {
 			return f, traceError(errXLReadQuorum)
 		}
@@ -92,7 +95,7 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, 
 func erasureCountMissingBlocks(blocks [][]byte, limit int) int {
 	missing := 0
 	for i := range blocks[:limit] {
-		if blocks[i] == nil {
+		if len(blocks[i]) == 0 {
 			missing++
 		}
 	}
@@ -101,15 +104,8 @@ func erasureCountMissingBlocks(blocks [][]byte, limit int) int {
 
 // readConcurrent reads all requested data concurrently from the disks into blocks. It returns an error if
 // too many disks failed while reading.
-func (s *ErasureStorage) readConcurrent(volume, path string, offset int64, length int64, blocks [][]byte, verifiers []*BitrotVerifier, errChans []chan error, pool *bpool.BytePool) (err error) {
+func (s *ErasureStorage) readConcurrent(volume, path string, offset int64, blocks [][]byte, verifiers []*BitrotVerifier, errChans []chan error) (err error) {
 	errs := make([]error, len(s.disks))
-	for i := range blocks {
-		blocks[i], err = pool.Get()
-		if err != nil {
-			return traceErrorf("failed to get new buffer from pool: %v", err)
-		}
-		blocks[i] = blocks[i][:length]
-	}
 
 	erasureReadBlocksConcurrent(s.disks[:s.dataBlocks], volume, path, offset, blocks[:s.dataBlocks], verifiers[:s.dataBlocks], errs[:s.dataBlocks], errChans[:s.dataBlocks])
 	missingDataBlocks := erasureCountMissingBlocks(blocks, s.dataBlocks)
@@ -145,7 +141,7 @@ func erasureReadBlocksConcurrent(disks []StorageAPI, volume, path string, offset
 		errors[i] = <-errChans[i] // blocks until the go routine 'i' is done - no data race
 		if errors[i] != nil {
 			disks[i] = OfflineDisk
-			blocks[i] = nil
+			blocks[i] = blocks[i][:0] // mark shard as missing
 		}
 	}
 }
