@@ -238,7 +238,7 @@ func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 }
 
 // ReadFile - reads a file at remote path and fills the buffer.
-func (n *networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
+func (n *networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Recover any panic from allocation, and return error.
@@ -246,41 +246,21 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 		}
 	}() // Do not crash the server.
 
-	var result []byte
-	err = n.rpcClient.Call("Storage.ReadFileHandler", &ReadFileArgs{
-		Vol:    volume,
-		Path:   path,
-		Offset: offset,
-		Buffer: buffer,
-	}, &result)
-
-	// Copy results to buffer.
-	copy(buffer, result)
-
-	// Return length of result, err if any.
-	return int64(len(result)), toStorageErr(err)
-}
-
-// ReadFileWithVerify - reads a file at remote path and fills the buffer.
-func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
-
-	defer func() {
-		if r := recover(); r != nil {
-			// Recover any panic from allocation, and return error.
-			err = bytes.ErrTooLarge
-		}
-	}() // Do not crash the server.
+	args := ReadFileArgs{
+		Vol:      volume,
+		Path:     path,
+		Offset:   offset,
+		Buffer:   buffer,
+		Verified: true, // mark read as verified by default
+	}
+	if verifier != nil {
+		args.Algo = verifier.algorithm
+		args.ExpectedHash = verifier.sum
+		args.Verified = verifier.IsVerified()
+	}
 
 	var result []byte
-	err = n.rpcClient.Call("Storage.ReadFileWithVerifyHandler",
-		&ReadFileWithVerifyArgs{
-			Vol:          volume,
-			Path:         path,
-			Offset:       offset,
-			Buffer:       buffer,
-			Algo:         verifier.algorithm,
-			ExpectedHash: verifier.sum,
-		}, &result)
+	err = n.rpcClient.Call("Storage.ReadFileHandler", &args, &result)
 
 	// Copy results to buffer.
 	copy(buffer, result)

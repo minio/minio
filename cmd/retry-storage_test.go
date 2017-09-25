@@ -290,7 +290,7 @@ func TestRetryStorage(t *testing.T) {
 	for _, disk := range storageDisks {
 		var buf2 = make([]byte, 5)
 		var n int64
-		if n, err = disk.ReadFile("existent", "path", 7, buf2); err != nil {
+		if n, err = disk.ReadFile("existent", "path", 7, buf2, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err != nil {
@@ -312,11 +312,11 @@ func TestRetryStorage(t *testing.T) {
 		var buf2 = make([]byte, 5)
 		verifier := NewBitrotVerifier(SHA256, sha256Hash([]byte("Hello, World")))
 		var n int64
-		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2, verifier); err != nil {
+		if n, err = disk.ReadFile("existent", "path", 7, buf2, verifier); err != nil {
 			t.Fatal(err)
 		}
 		if err != nil {
-			t.Error("Error in ReadFileWithVerify", err)
+			t.Error("Error in ReadFile with bitrot verification", err)
 		}
 		if n != 5 {
 			t.Fatalf("Expected 5, got %d", n)

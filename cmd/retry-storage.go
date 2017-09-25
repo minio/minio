@@ -207,25 +207,14 @@ func (f *retryStorage) ReadAll(volume, path string) (buf []byte, err error) {
 }
 
 // ReadFile - a retryable implementation of reading at offset from a file.
-func (f *retryStorage) ReadFile(volume, path string, offset int64, buffer []byte) (m int64, err error) {
+func (f *retryStorage) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 	if f.IsOffline() {
 		return m, errDiskNotFound
 	}
-	m, err = f.remoteStorage.ReadFile(volume, path, offset, buffer)
+	m, err = f.remoteStorage.ReadFile(volume, path, offset, buffer, verifier)
 	if f.reInitUponDiskNotFound(err) {
-		m, err = f.remoteStorage.ReadFile(volume, path, offset, buffer)
+		m, err = f.remoteStorage.ReadFile(volume, path, offset, buffer, verifier)
 		return m, retryToStorageErr(err)
-	}
-	return m, retryToStorageErr(err)
-}
-
-// ReadFileWithVerify - a retryable implementation of reading at
-// offset from a file with verification.
-func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
-
-	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
-	if f.reInitUponDiskNotFound(err) {
-		m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
 	}
 	return m, retryToStorageErr(err)
 }

@@ -533,25 +533,14 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // for io.EOF.
 //
 // If an EOF happens after reading some but not all the bytes,
-// ReadFull returns ErrUnexpectedEOF.
+// ReadFile returns ErrUnexpectedEOF.
+//
+// If the BitrotVerifier is not nil or not verified ReadFile
+// tries to verify whether the disk has bitrot.
 //
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
-func (s *posix) ReadFile(volume, path string, offset int64, buf []byte) (n int64, err error) {
-	return s.ReadFileWithVerify(volume, path, offset, buf, &BitrotVerifier{verified: true})
-}
-
-// ReadFileWithVerify is the same as ReadFile but with hashsum
-// verification: the operation will fail if the hash verification
-// fails.
-//
-// The `expectedHash` is the expected hex-encoded hash string for
-// verification. With an empty expected hash string, hash verification
-// is skipped. An empty HashAlgo defaults to `blake2b`.
-//
-// The function takes care to minimize the number of disk read
-// operations.
-func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (n int64, err error) {
+func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (n int64, err error) {
 	defer func() {
 		if err == syscall.EIO {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -612,7 +601,7 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buffer []b
 		return 0, errIsNotRegular
 	}
 
-	if !verifier.IsVerified() {
+	if verifier != nil && !verifier.IsVerified() {
 		bufp := s.pool.Get().(*[]byte)
 		defer s.pool.Put(bufp)
 

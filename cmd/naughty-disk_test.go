@@ -115,18 +115,11 @@ func (d *naughtyDisk) ListDir(volume, path string) (entries []string, err error)
 	return d.disk.ListDir(volume, path)
 }
 
-func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
 	if err := d.calcError(); err != nil {
 		return 0, err
 	}
-	return d.disk.ReadFile(volume, path, offset, buf)
-}
-
-func (d *naughtyDisk) ReadFileWithVerify(volume, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
-	if err := d.calcError(); err != nil {
-		return 0, err
-	}
-	return d.disk.ReadFileWithVerify(volume, path, offset, buf, verifier)
+	return d.disk.ReadFile(volume, path, offset, buf, verifier)
 }
 
 func (d *naughtyDisk) PrepareFile(volume, path string, length int64) error {

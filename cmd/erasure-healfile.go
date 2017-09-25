@@ -95,13 +95,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
 			if int64(len(buffer)) != chunksize {
 				buffer = make([]byte, chunksize)
 			}
-			if !verifiers[i].IsVerified() {
-				_, err = disk.ReadFileWithVerify(volume, path,
-					chunkOffset, buffer, verifiers[i])
-			} else {
-				_, err = disk.ReadFile(volume, path,
-					chunkOffset, buffer)
-			}
+			_, err = disk.ReadFile(volume, path, chunkOffset, buffer, verifiers[i])
 			if err != nil {
 				// LOG FIXME: add a conditional log
 				// for read failures, once per-disk

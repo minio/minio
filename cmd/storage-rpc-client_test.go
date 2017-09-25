@@ -379,7 +379,7 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 			t.Errorf("Expected `Hello, world`, got %s", string(buf))
 		}
 		buf1 := make([]byte, 5)
-		n, err := storageDisk.ReadFile("myvol", "file1", 4, buf1)
+		n, err := storageDisk.ReadFile("myvol", "file1", 4, buf1, nil)
 		if err != nil {
 			t.Error("Unable to initiate ReadFile", err)
 		}
@@ -396,9 +396,9 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 		}
 		verifier := NewBitrotVerifier(BLAKE2b512, blakeHash(buf))
 		buf2 := make([]byte, 2)
-		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1, buf2, verifier)
+		n, err = storageDisk.ReadFile("myvol", "file1", 1, buf2, verifier)
 		if err != nil {
-			t.Error("Error in ReadFileWithVerify", err)
+			t.Error("Error in ReadFile with bitrot verification", err)
 		}
 		if n != 2 {
 			t.Errorf("Expected `2`, got %d", n)

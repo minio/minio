@@ -157,11 +157,6 @@ func erasureReadFromFile(disk StorageAPI, volume, path string, offset int64, buf
 		errChan <- traceError(errDiskNotFound)
 		return
 	}
-	var err error
-	if !verifier.IsVerified() {
-		_, err = disk.ReadFileWithVerify(volume, path, offset, buffer, verifier)
-	} else {
-		_, err = disk.ReadFile(volume, path, offset, buffer)
-	}
+	_, err := disk.ReadFile(volume, path, offset, buffer, verifier)
 	errChan <- err
 }
