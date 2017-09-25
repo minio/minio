@@ -287,7 +287,7 @@ func canonicalizedAmzHeadersV2(headers http.Header) string {
 }
 
 // Return canonical resource string.
-func canonicalizedResourceV2(encodedQuery string) string {
+func canonicalizedResourceV2(encodedResource, encodedQuery string) string {
 	queries := strings.Split(encodedQuery, "&")
 	keyval := make(map[string]string)
 	for _, query := range queries {
@@ -316,7 +316,11 @@ func canonicalizedResourceV2(encodedQuery string) string {
 
 	// The queries will be already sorted as resourceList is sorted, if canonicalQueries
 	// is empty strings.Join returns empty.
-	return strings.Join(canonicalQueries, "&")
+	canonicalQuery := strings.Join(canonicalQueries, "&")
+	if canonicalQuery != "" {
+		return encodedResource + "?" + canonicalQuery
+	}
+	return encodedResource
 }
 
 // Return string to sign under two different conditions.
@@ -350,16 +354,5 @@ func getStringToSignV2(method string, encodedResource, encodedQuery string, head
 		canonicalHeaders,
 	}, "\n")
 
-	// For presigned signature no need to filter out based on resourceList,
-	// just sign whatever is with the request.
-	if expires != "" {
-		return stringToSign + encodedResource + "?" + encodedQuery
-	}
-
-	canonicalResource := canonicalizedResourceV2(encodedQuery)
-	if canonicalResource != "" {
-		return stringToSign + encodedResource + "?" + canonicalResource
-	}
-
-	return stringToSign + encodedResource
+	return stringToSign + canonicalizedResourceV2(encodedResource, encodedQuery)
 }
