@@ -491,13 +491,14 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error
 func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
-		if p == "." {
+		if p == "." || p == "/" {
 			return false
 		}
 		if _, err := fsStatFile(pathJoin(fs.fsPath, bucket, p)); err == nil {
-			// If there is already a file at prefix "p" return error.
+			// If there is already a file at prefix "p", return true.
 			return true
 		}
+
 		// Check if there is a file as one of the parent paths.
 		return isParentDirObject(path.Dir(p))
 	}
