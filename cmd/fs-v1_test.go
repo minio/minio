@@ -24,6 +24,77 @@ import (
 	"testing"
 )
 
+// Tests for if parent directory is object
+func TestFSParentDirIsObject(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(rootPath)
+
+	obj, disk, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(disk)
+
+	bucketName := "testbucket"
+	objectName := "object"
+
+	if err = obj.MakeBucketWithLocation(bucketName, ""); err != nil {
+		t.Fatal(err)
+	}
+	objectContent := "12345"
+	objInfo, err := obj.PutObject(bucketName, objectName,
+		NewHashReader(bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if objInfo.Name != objectName {
+		t.Fatalf("Unexpected object name returned got %s, expected %s", objInfo.Name, objectName)
+	}
+
+	fs := obj.(*fsObjects)
+	testCases := []struct {
+		parentIsObject bool
+		objectName     string
+	}{
+		// parentIsObject is true if object is available.
+		{
+			parentIsObject: true,
+			objectName:     objectName,
+		},
+		{
+			parentIsObject: false,
+			objectName:     "",
+		},
+		{
+			parentIsObject: false,
+			objectName:     ".",
+		},
+		// Should not cause infinite loop.
+		{
+			parentIsObject: false,
+			objectName:     "/",
+		},
+		{
+			parentIsObject: false,
+			objectName:     "\\",
+		},
+		// Should not cause infinite loop with double forward slash.
+		{
+			parentIsObject: false,
+			objectName:     "//",
+		},
+	}
+	for i, testCase := range testCases {
+		gotValue := fs.parentDirIsObject(bucketName, testCase.objectName)
+		if testCase.parentIsObject != gotValue {
+			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
+		}
+	}
+}
+
 // TestNewFS - tests initialization of all input disks
 // and constructs a valid `FS` object layer.
 func TestNewFS(t *testing.T) {
