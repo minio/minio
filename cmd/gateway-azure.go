@@ -41,52 +41,90 @@ const globalAzureAPIVersion = "2016-05-31"
 const azureBlockSize = 100 * humanize.MiByte
 const metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 
-// Canonicalize the metadata headers, without this azure-sdk calculates
-// incorrect signature. This attempt to canonicalize is to convert
-// any HTTP header which is of form say `accept-encoding` should be
-// converted to `Accept-Encoding` in its canonical form.
-// Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
-// defined metadata to have X-Ms-Meta prefix.
-func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
+// s3MetaToAzure converts metadata meant for S3 PUT/COPY object into
+// Azure data structures. Header names are canonicalized as in
+// net/http.Header. Also, `X-Amz-Meta-` prefix is replaced to
+// `X-Ms-Meta-` as expected by Azure.
+func s3MetaToAzure(metadata map[string]string) (storage.BlobMetadata, storage.BlobProperties) {
 	gatewayHeaders := map[string]string{
 		"X-Amz-Meta-X-Amz-Key":     "X-Amz-Meta-x_minio_key",
 		"X-Amz-Meta-X-Amz-Matdesc": "X-Amz-Meta-x_minio_matdesc",
 		"X-Amz-Meta-X-Amz-Iv":      "X-Amz-Meta-x_minio_iv",
 	}
 
-	newHeaders = make(map[string]string)
-	for k, v := range headers {
+	blobMeta := make(map[string]string)
+	var props storage.BlobProperties
+	for k, v := range metadata {
 		k = http.CanonicalHeaderKey(k)
 		if nk, ok := gatewayHeaders[k]; ok {
 			k = nk
 		}
-		if strings.HasPrefix(k, "X-Amz-Meta") {
-			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
+		switch {
+		case strings.HasPrefix(k, "X-Amz-Meta-"):
+			// header prefix is stripped, as azure SDK
+			// takes care of prefixing with X-Ms-Meta
+			k = strings.Replace(k, "X-Amz-Meta-", "", 1)
+			blobMeta[k] = v
+		case k == "Cache-Control":
+			props.CacheControl = v
+		case k == "Content-Disposition":
+			props.ContentDisposition = v
+		case k == "Content-Encoding":
+			props.ContentEncoding = v
+		case k == "Content-Length":
+			// assume this doesn't fail
+			props.ContentLength, _ = strconv.ParseInt(v, 10, 64)
+		case k == "Content-MD5":
+			props.ContentMD5 = v
+		case k == "Content-Type":
+			props.ContentType = v
 		}
-		newHeaders[k] = v
 	}
-	return newHeaders
+	return blobMeta, props
 }
 
-// Prefix user metadata with "X-Amz-Meta-".
-// client.GetBlobMetadata() already strips "X-Ms-Meta-"
-func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
+// azureToS3Meta converts Azure metadata/properties to S3 metdata. It
+// is the reverse of s3MetaToAzure. Azure's `.GetMetadata()`
+// lower-cases all header keys, so this is taken into account by this
+// function.
+func azureToS3Meta(meta storage.BlobMetadata, props storage.BlobProperties) map[string]string {
 	gatewayHeaders := map[string]string{
-		"X-Amz-Meta-x_minio_key":     "X-Amz-Meta-X-Amz-Key",
-		"X-Amz-Meta-x_minio_matdesc": "X-Amz-Meta-X-Amz-Matdesc",
-		"X-Amz-Meta-x_minio_iv":      "X-Amz-Meta-X-Amz-Iv",
+		"x-amz-meta-x_minio_key":     "X-Amz-Meta-X-Amz-Key",
+		"x-amz-meta-x_minio_matdesc": "X-Amz-Meta-X-Amz-Matdesc",
+		"x-amz-meta-x_minio_iv":      "X-Amz-Meta-X-Amz-Iv",
 	}
 
-	newMeta = make(map[string]string)
-
+	result := make(map[string]string)
 	for k, v := range meta {
-		k = "X-Amz-Meta-" + k
+		// k's `x-ms-meta-` prefix is already stripped by
+		// Azure SDK, so we add the appropriate prefix.
+		k = "x-amz-meta-" + strings.ToLower(k)
 		if nk, ok := gatewayHeaders[k]; ok {
 			k = nk
 		}
-		newMeta[k] = v
+		k = http.CanonicalHeaderKey(k)
+		result[k] = v
 	}
-	return newMeta
+
+	if props.CacheControl != "" {
+		result["Cache-Control"] = props.CacheControl
+	}
+	if props.ContentDisposition != "" {
+		result["Content-Disposition"] = props.ContentDisposition
+	}
+	if props.ContentEncoding != "" {
+		result["Content-Encoding"] = props.ContentEncoding
+	}
+	if props.ContentLength != 0 {
+		result["Content-Length"] = fmt.Sprintf("%d", props.ContentLength)
+	}
+	if props.ContentMD5 != "" {
+		result["Content-MD5"] = props.ContentMD5
+	}
+	if props.ContentType != "" {
+		result["Content-Type"] = props.ContentType
+	}
+	return result
 }
 
 // Append "-1" to etag so that clients do not interpret it as MD5.
@@ -435,24 +473,17 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 
-	meta := azureToS3Metadata(blob.Metadata)
-
-	t := time.Time(blob.Properties.LastModified)
-
-	if blob.Properties.ContentEncoding != "" {
-		meta["Content-Encoding"] = blob.Properties.ContentEncoding
-	}
-	meta["Content-Type"] = blob.Properties.ContentType
-
+	meta := azureToS3Meta(blob.Metadata, blob.Properties)
 	objInfo = ObjectInfo{
-		Bucket:      bucket,
-		UserDefined: meta,
-		ETag:        azureToS3ETag(blob.Properties.Etag),
-		ModTime:     t,
-		Name:        object,
-		Size:        blob.Properties.ContentLength,
+		Bucket:          bucket,
+		UserDefined:     meta,
+		ETag:            azureToS3ETag(blob.Properties.Etag),
+		ModTime:         time.Time(blob.Properties.LastModified),
+		Name:            object,
+		Size:            blob.Properties.ContentLength,
+		ContentType:     blob.Properties.ContentType,
+		ContentEncoding: blob.Properties.ContentEncoding,
 	}
-
 	return objInfo, nil
 }
 
@@ -461,7 +492,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	delete(metadata, "etag")
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
-	blob.Metadata = s3ToAzureHeaders(metadata)
+	blob.Metadata, blob.Properties = s3MetaToAzure(metadata)
 	err = blob.CreateBlockBlobFromReader(data, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
@@ -478,8 +509,14 @@ func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metada
 func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
-	destBlob.Metadata = s3ToAzureHeaders(metadata)
+	metadata, props := s3MetaToAzure(metadata)
+	destBlob.Metadata = metadata
 	err = destBlob.Copy(srcBlobURL, nil)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
+	}
+	destBlob.Properties = props
+	err = destBlob.SetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
 	}
@@ -535,7 +572,6 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 		return "", traceError(errors.New("Upload ID name collision"))
 	}
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
-	metadata = s3ToAzureHeaders(metadata)
 
 	var jsonData []byte
 	if jsonData, err = json.Marshal(azureMultipartMetadata{Name: object, Metadata: metadata}); err != nil {
@@ -649,7 +685,6 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 		return objInfo, azureToObjectError(traceError(err), bucket, metadataObject)
 	}
 
-	meta := metadata.Metadata
 	defer func() {
 		if err != nil {
 			return
@@ -721,19 +756,12 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	if len(meta) > 0 {
-		objBlob.Properties = storage.BlobProperties{
-			ContentMD5:      meta["Content-Md5"],
-			ContentLanguage: meta["Content-Language"],
-			ContentEncoding: meta["Content-Encoding"],
-			ContentType:     meta["Content-Type"],
-			CacheControl:    meta["Cache-Control"],
-		}
+	if len(metadata.Metadata) > 0 {
+		objBlob.Metadata, objBlob.Properties = s3MetaToAzure(metadata.Metadata)
 		err = objBlob.SetProperties(nil)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
-		objBlob.Metadata = meta
 		err = objBlob.SetMetadata(nil)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
