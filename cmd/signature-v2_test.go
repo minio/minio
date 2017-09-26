@@ -105,12 +105,17 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
-		// (6) Should error when the signature does not match.
+		// (6) Should not error signature matches with extra query params.
 		{
 			queryParams: map[string]string{
 				"response-content-disposition": "attachment; filename=\"4K%2d4M.txt\"",
 			},
 			expected: ErrNone,
+		},
+		// (7) Should not error signature matches with no special query params.
+		{
+			queryParams: map[string]string{},
+			expected:    ErrNone,
 		},
 	}
 

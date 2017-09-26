@@ -20,11 +20,14 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -880,8 +883,56 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	if accessKeyID == "" || secretAccessKey == "" {
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
-	// Success.
-	req = s3signer.PreSignV2(*req, accessKeyID, secretAccessKey, expires)
+
+	// FIXME: Remove following portion of code after fixing a bug in minio-go preSignV2.
+
+	d := UTCNow()
+	// Find epoch expires when the request will expire.
+	epochExpires := d.Unix() + expires
+
+	// Add expires header if not present.
+	expiresStr := req.Header.Get("Expires")
+	if expiresStr == "" {
+		expiresStr = strconv.FormatInt(epochExpires, 10)
+		req.Header.Set("Expires", expiresStr)
+	}
+
+	// url.RawPath will be valid if path has any encoded characters, if not it will
+	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	encodedResource := req.URL.RawPath
+	encodedQuery := req.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.SplitN(req.URL.Path, "?", 2)
+		encodedResource = splits[0]
+		if len(splits) == 2 {
+			encodedQuery = splits[1]
+		}
+	}
+
+	unescapedQueries, err := unescapeQueries(encodedQuery)
+	if err != nil {
+		return err
+	}
+
+	// Get presigned string to sign.
+	stringToSign := getStringToSignV2(req.Method, encodedResource, strings.Join(unescapedQueries, "&"), req.Header, expiresStr)
+	hm := hmac.New(sha1.New, []byte(secretAccessKey))
+	hm.Write([]byte(stringToSign))
+
+	// Calculate signature.
+	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
+
+	query := req.URL.Query()
+	// Handle specially for Google Cloud Storage.
+	query.Set("AWSAccessKeyId", accessKeyID)
+	// Fill in Expires for presigned query.
+	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
+
+	// Encode query and save.
+	req.URL.RawQuery = query.Encode()
+
+	// Save signature finally.
+	req.URL.RawQuery += "&Signature=" + url.QueryEscape(signature)
 	return nil
 }
 
