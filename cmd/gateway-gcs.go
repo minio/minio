@@ -762,7 +762,10 @@ func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket s
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)
 
-	attrs, err := dst.CopierFrom(src).Run(l.ctx)
+	copier := dst.CopierFrom(src)
+	copier.ObjectAttrs.Metadata = metadata
+
+	attrs, err := copier.Run(l.ctx)
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), destBucket, destObject)
 	}
