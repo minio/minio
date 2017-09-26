@@ -24,5 +24,6 @@
 - [ ] My code follows the code style of this project.
 - [ ] My change requires a change to the documentation.
 - [ ] I have updated the documentation accordingly.
-- [ ] I have added tests to cover my changes.
+- [ ] I have added unit tests to cover my changes.
+- [ ] I have added/updated functional tests in [mint](https://github.com/minio/mint). (If yes, add `mint` PR # here: )
 - [ ] All new and existing tests passed.
