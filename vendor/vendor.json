@@ -51,10 +51,34 @@
 			"revisionTime": "2017-05-01T17:57:10Z"
 		},
 		{
-			"checksumSHA1": "rK3ght7KTtHGdm0V4+U7fv9+tUU=",
+			"checksumSHA1": "02D1G/awFY2Jb/w/OLN2tlMuORk=",
 			"path": "github.com/Azure/azure-sdk-for-go/storage",
-			"revision": "8e625d1702a32d01cef05a9252198d231c4af113",
-			"revisionTime": "2017-02-08T01:01:20Z"
+			"revision": "21f5db4a3b31b290b68bd706520298d37c87cd29",
+			"revisionTime": "2017-09-22T22:15:32Z"
+		},
+		{
+			"checksumSHA1": "+4d+Y67AMKKuyR1EO33Zdt+RVx0=",
+			"path": "github.com/Azure/go-autorest/autorest",
+			"revision": "f6be1abbb5abd0517522f850dd785990d373da7e",
+			"revisionTime": "2017-09-13T22:19:17Z"
+		},
+		{
+			"checksumSHA1": "7G4HgRaIT25bgz/hPtXG6Kv8Fho=",
+			"path": "github.com/Azure/go-autorest/autorest/adal",
+			"revision": "f6be1abbb5abd0517522f850dd785990d373da7e",
+			"revisionTime": "2017-09-13T22:19:17Z"
+		},
+		{
+			"checksumSHA1": "2KdBFgT4qY+fMOkBTa5vA9V0AiM=",
+			"path": "github.com/Azure/go-autorest/autorest/azure",
+			"revision": "f6be1abbb5abd0517522f850dd785990d373da7e",
+			"revisionTime": "2017-09-13T22:19:17Z"
+		},
+		{
+			"checksumSHA1": "LSF/pNrjhIxl6jiS6bKooBFCOxI=",
+			"path": "github.com/Azure/go-autorest/autorest/date",
+			"revision": "f6be1abbb5abd0517522f850dd785990d373da7e",
+			"revisionTime": "2017-09-13T22:19:17Z"
 		},
 		{
 			"path": "github.com/Sirupsen/logrus",
@@ -427,6 +451,12 @@
 			"path": "github.com/rs/xhandler",
 			"revision": "ed27b6fd65218132ee50cd95f38474a3d8a2cd12",
 			"revisionTime": "2016-06-18T12:32:21-07:00"
+		},
+		{
+			"checksumSHA1": "iqUXcP3VA+G1/gVLRpQpBUt/BuA=",
+			"path": "github.com/satori/uuid",
+			"revision": "5bf94b69c6b68ee1b541973bb8e1144db23a194b",
+			"revisionTime": "2017-03-21T23:07:31Z"
 		},
 		{
 			"checksumSHA1": "u0hXGADM3JDza8YjgiyNJpAJk8g=",
