@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/subtle"
 	"hash"
+	"runtime"
 
 	"github.com/klauspost/reedsolomon"
 )
@@ -44,7 +45,7 @@ type ErasureStorage struct {
 // NewErasureStorage creates a new ErasureStorage. The storage erasure codes and protects all data written to
 // the disks.
 func NewErasureStorage(disks []StorageAPI, dataBlocks, parityBlocks int) (s ErasureStorage, err error) {
-	erasure, err := reedsolomon.New(dataBlocks, parityBlocks)
+	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithMaxGoroutines(runtime.NumCPU()))
 	if err != nil {
 		return s, traceErrorf("failed to create erasure coding: %v", err)
 	}
