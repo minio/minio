@@ -17,13 +17,14 @@
 package minio
 
 import (
+	"context"
 	"io"
 
 	"github.com/minio/minio-go/pkg/encrypt"
 )
 
 // PutEncryptedObject - Encrypt and store object.
-func (c Client) PutEncryptedObject(bucketName, objectName string, reader io.Reader, encryptMaterials encrypt.Materials, metadata map[string][]string, progress io.Reader) (n int64, err error) {
+func (c Client) PutEncryptedObject(bucketName, objectName string, reader io.Reader, encryptMaterials encrypt.Materials) (n int64, err error) {
 
 	if encryptMaterials == nil {
 		return 0, ErrInvalidArgument("Unable to recognize empty encryption properties")
@@ -33,14 +34,10 @@ func (c Client) PutEncryptedObject(bucketName, objectName string, reader io.Read
 		return 0, err
 	}
 
-	if metadata == nil {
-		metadata = make(map[string][]string)
-	}
+	return c.PutObjectWithContext(context.Background(), bucketName, objectName, reader, -1, PutObjectOptions{EncryptMaterials: encryptMaterials})
+}
 
-	// Set the necessary encryption headers, for future decryption.
-	metadata[amzHeaderIV] = []string{encryptMaterials.GetIV()}
-	metadata[amzHeaderKey] = []string{encryptMaterials.GetKey()}
-	metadata[amzHeaderMatDesc] = []string{encryptMaterials.GetDesc()}
-
-	return c.putObjectMultipartStreamNoLength(bucketName, objectName, encryptMaterials, metadata, progress)
+// FPutEncryptedObject - Encrypt and store an object with contents from file at filePath.
+func (c Client) FPutEncryptedObject(bucketName, objectName, filePath string, encryptMaterials encrypt.Materials) (n int64, err error) {
+	return c.FPutObjectWithContext(context.Background(), bucketName, objectName, filePath, PutObjectOptions{EncryptMaterials: encryptMaterials})
 }

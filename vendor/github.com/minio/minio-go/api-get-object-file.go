@@ -21,11 +21,23 @@ import (
 	"os"
 	"path/filepath"
 
+	"context"
+
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
+// FGetObjectWithContext - download contents of an object to a local file.
+func (c Client) FGetObjectWithContext(ctx context.Context, bucketName, objectName, filePath string) error {
+	return c.fGetObjectWithContext(ctx, bucketName, objectName, filePath)
+}
+
 // FGetObject - download contents of an object to a local file.
 func (c Client) FGetObject(bucketName, objectName, filePath string) error {
+	return c.fGetObjectWithContext(context.Background(), bucketName, objectName, filePath)
+}
+
+// fGetObjectWithContext - fgetObject wrapper function with context
+func (c Client) fGetObjectWithContext(ctx context.Context, bucketName, objectName, filePath string) error {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return err
@@ -88,7 +100,7 @@ func (c Client) FGetObject(bucketName, objectName, filePath string) error {
 	}
 
 	// Seek to current position for incoming reader.
-	objectReader, objectStat, err := c.getObject(bucketName, objectName, reqHeaders)
+	objectReader, objectStat, err := c.getObject(ctx, bucketName, objectName, reqHeaders)
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,7 @@ install:
   - go get -u github.com/minio/go-homedir
   - go get -u github.com/remyoudompheng/go-misc/deadcode
   - go get -u github.com/gordonklaus/ineffassign
+  - go get -u github.com/dustin/go-humanize
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:

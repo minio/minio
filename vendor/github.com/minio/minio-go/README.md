@@ -55,6 +55,7 @@ func main() {
 	}
 
 	log.Printf("%#v\n", minioClient) // minioClient is now setup
+}
 ```
 
 ## Quick Start Example - File Uploader
@@ -105,7 +106,7 @@ func main() {
 	contentType := "application/zip"
 
 	// Upload the zip file with FPutObject
-	n, err := minioClient.FPutObject(bucketName, objectName, filePath, contentType)
+	n, err := minioClient.FPutObject(bucketName, objectName, filePath, minio.PutObjectOptions{ContentType:contentType})
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -152,10 +153,13 @@ The full API Reference is available here.
 ### API Reference : File Object Operations
 * [`FPutObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
 * [`FGetObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
-
+* [`FPutObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#FPutObjectWithContext)
+* [`FGetObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#FGetObjectWithContext)
 ### API Reference : Object Operations
 * [`GetObject`](https://docs.minio.io/docs/golang-client-api-reference#GetObject)
 * [`PutObject`](https://docs.minio.io/docs/golang-client-api-reference#PutObject)
+* [`GetObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#GetObjectWithContext)
+* [`PutObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#PutObjectWithContext)
 * [`PutObjectStreaming`](https://docs.minio.io/docs/golang-client-api-reference#PutObjectStreaming)
 * [`StatObject`](https://docs.minio.io/docs/golang-client-api-reference#StatObject)
 * [`CopyObject`](https://docs.minio.io/docs/golang-client-api-reference#CopyObject)
@@ -204,10 +208,13 @@ The full API Reference is available here.
 ### Full Examples : File Object Operations
 * [fputobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/fputobject.go)
 * [fgetobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/fgetobject.go)
-
+* [fputobject-context.go](https://github.com/minio/minio-go/blob/master/examples/s3/fputobject-context.go)
+* [fgetobject-context.go](https://github.com/minio/minio-go/blob/master/examples/s3/fgetobject-context.go)
 ### Full Examples : Object Operations
 * [putobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/putobject.go)
 * [getobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/getobject.go)
+* [putobject-context.go](https://github.com/minio/minio-go/blob/master/examples/s3/putobject-context.go)
+* [getobject-context.go](https://github.com/minio/minio-go/blob/master/examples/s3/getobject-context.go)
 * [statobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/statobject.go)
 * [copyobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/copyobject.go)
 * [removeobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/removeobject.go)

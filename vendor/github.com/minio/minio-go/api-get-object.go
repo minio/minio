@@ -17,6 +17,7 @@
 package minio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -57,6 +58,11 @@ func (c Client) GetEncryptedObject(bucketName, objectName string, encryptMateria
 
 // GetObject - returns an seekable, readable object.
 func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
+	return c.getObjectWithContext(context.Background(), bucketName, objectName)
+}
+
+// GetObject wrapper function that accepts a request context
+func (c Client) getObjectWithContext(ctx context.Context, bucketName, objectName string) (*Object, error) {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return nil, err
@@ -110,14 +116,14 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 							// Do not set objectInfo from the first readAt request because it will not get
 							// the whole object.
 							reqHeaders.SetRange(req.Offset, req.Offset+int64(len(req.Buffer))-1)
-							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
+							httpReader, objectInfo, err = c.getObject(ctx, bucketName, objectName, reqHeaders)
 						} else {
 							if req.Offset > 0 {
 								reqHeaders.SetRange(req.Offset, 0)
 							}
 
 							// First request is a Read request.
-							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
+							httpReader, objectInfo, err = c.getObject(ctx, bucketName, objectName, reqHeaders)
 						}
 						if err != nil {
 							resCh <- getResponse{
@@ -195,14 +201,14 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 						if req.isReadAt {
 							// Range is set with respect to the offset and length of the buffer requested.
 							reqHeaders.SetRange(req.Offset, req.Offset+int64(len(req.Buffer))-1)
-							httpReader, _, err = c.getObject(bucketName, objectName, reqHeaders)
+							httpReader, _, err = c.getObject(ctx, bucketName, objectName, reqHeaders)
 						} else {
 							// Range is set with respect to the offset.
 							if req.Offset > 0 {
 								reqHeaders.SetRange(req.Offset, 0)
 							}
 
-							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
+							httpReader, objectInfo, err = c.getObject(ctx, bucketName, objectName, reqHeaders)
 						}
 						if err != nil {
 							resCh <- getResponse{
@@ -626,7 +632,7 @@ func newObject(reqCh chan<- getRequest, resCh <-chan getResponse, doneCh chan<- 
 //
 // For more information about the HTTP Range header.
 // go to http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35.
-func (c Client) getObject(bucketName, objectName string, reqHeaders RequestHeaders) (io.ReadCloser, ObjectInfo, error) {
+func (c Client) getObject(ctx context.Context, bucketName, objectName string, reqHeaders RequestHeaders) (io.ReadCloser, ObjectInfo, error) {
 	// Validate input arguments.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return nil, ObjectInfo{}, err
@@ -642,7 +648,7 @@ func (c Client) getObject(bucketName, objectName string, reqHeaders RequestHeade
 	}
 
 	// Execute GET on objectName.
-	resp, err := c.executeMethod("GET", requestMetadata{
+	resp, err := c.executeMethod(ctx, "GET", requestMetadata{
 		bucketName:         bucketName,
 		objectName:         objectName,
 		customHeader:       customHeader,

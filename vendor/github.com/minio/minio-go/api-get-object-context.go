@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 package minio
 
-import (
-	"context"
-)
+import "context"
 
-// FPutObject - Create an object in a bucket, with contents from file at filePath
-func (c Client) FPutObject(bucketName, objectName, filePath string, opts PutObjectOptions) (n int64, err error) {
-	return c.FPutObjectWithContext(context.Background(), bucketName, objectName, filePath, opts)
+// GetObjectWithContext - returns an seekable, readable object.
+func (c Client) GetObjectWithContext(ctx context.Context, bucketName, objectName string) (*Object, error) {
+	return c.getObjectWithContext(ctx, bucketName, objectName)
 }

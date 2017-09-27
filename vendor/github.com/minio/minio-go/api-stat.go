@@ -17,6 +17,7 @@
 package minio
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,7 +34,7 @@ func (c Client) BucketExists(bucketName string) (bool, error) {
 	}
 
 	// Execute HEAD on bucketName.
-	resp, err := c.executeMethod("HEAD", requestMetadata{
+	resp, err := c.executeMethod(context.Background(), "HEAD", requestMetadata{
 		bucketName:         bucketName,
 		contentSHA256Bytes: emptySHA256,
 	})
@@ -108,7 +109,7 @@ func (c Client) statObject(bucketName, objectName string, reqHeaders RequestHead
 	}
 
 	// Execute HEAD on objectName.
-	resp, err := c.executeMethod("HEAD", requestMetadata{
+	resp, err := c.executeMethod(context.Background(), "HEAD", requestMetadata{
 		bucketName:         bucketName,
 		objectName:         objectName,
 		contentSHA256Bytes: emptySHA256,

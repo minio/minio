@@ -17,6 +17,7 @@
 package minio
 
 import (
+	"context"
 	"io"
 
 	"github.com/minio/minio-go/pkg/policy"
@@ -53,13 +54,13 @@ func (c Core) ListObjectsV2(bucketName, objectPrefix, continuationToken string, 
 }
 
 // PutObject - Upload object. Uploads using single PUT call.
-func (c Core) PutObject(bucket, object string, size int64, data io.Reader, md5Sum, sha256Sum []byte, metadata map[string][]string) (ObjectInfo, error) {
-	return c.putObjectDo(bucket, object, data, md5Sum, sha256Sum, size, metadata)
+func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Sum, sha256Sum []byte, metadata map[string]string) (ObjectInfo, error) {
+	return c.putObjectDo(context.Background(), bucket, object, data, md5Sum, sha256Sum, size, PutObjectOptions{UserMetadata: metadata})
 }
 
-// NewMultipartUpload - Initiates new multipart upload and returns the new uploaID.
-func (c Core) NewMultipartUpload(bucket, object string, metadata map[string][]string) (uploadID string, err error) {
-	result, err := c.initiateMultipartUpload(bucket, object, metadata)
+// NewMultipartUpload - Initiates new multipart upload and returns the new uploadID.
+func (c Core) NewMultipartUpload(bucket, object string, opts PutObjectOptions) (uploadID string, err error) {
+	result, err := c.initiateMultipartUpload(context.Background(), bucket, object, opts)
 	return result.UploadID, err
 }
 
@@ -69,14 +70,14 @@ func (c Core) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, de
 }
 
 // PutObjectPart - Upload an object part.
-func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Sum, sha256Sum []byte) (ObjectPart, error) {
-	return c.PutObjectPartWithMetadata(bucket, object, uploadID, partID, size, data, md5Sum, sha256Sum, nil)
+func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, data io.Reader, size int64, md5Sum, sha256Sum []byte) (ObjectPart, error) {
+	return c.PutObjectPartWithMetadata(bucket, object, uploadID, partID, data, size, md5Sum, sha256Sum, nil)
 }
 
 // PutObjectPartWithMetadata - upload an object part with additional request metadata.
-func (c Core) PutObjectPartWithMetadata(bucket, object, uploadID string, partID int,
-	size int64, data io.Reader, md5Sum, sha256Sum []byte, metadata map[string][]string) (ObjectPart, error) {
-	return c.uploadPart(bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size, metadata)
+func (c Core) PutObjectPartWithMetadata(bucket, object, uploadID string, partID int, data io.Reader,
+	size int64, md5Sum, sha256Sum []byte, metadata map[string]string) (ObjectPart, error) {
+	return c.uploadPart(context.Background(), bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size, metadata)
 }
 
 // ListObjectParts - List uploaded parts of an incomplete upload.x
@@ -86,7 +87,7 @@ func (c Core) ListObjectParts(bucket, object, uploadID string, partNumberMarker 
 
 // CompleteMultipartUpload - Concatenate uploaded parts and commit to an object.
 func (c Core) CompleteMultipartUpload(bucket, object, uploadID string, parts []CompletePart) error {
-	_, err := c.completeMultipartUpload(bucket, object, uploadID, completeMultipartUpload{
+	_, err := c.completeMultipartUpload(context.Background(), bucket, object, uploadID, completeMultipartUpload{
 		Parts: parts,
 	})
 	return err
@@ -94,7 +95,7 @@ func (c Core) CompleteMultipartUpload(bucket, object, uploadID string, parts []C
 
 // AbortMultipartUpload - Abort an incomplete upload.
 func (c Core) AbortMultipartUpload(bucket, object, uploadID string) error {
-	return c.abortMultipartUpload(bucket, object, uploadID)
+	return c.abortMultipartUpload(context.Background(), bucket, object, uploadID)
 }
 
 // GetBucketPolicy - fetches bucket access policy for a given bucket.
@@ -111,7 +112,7 @@ func (c Core) PutBucketPolicy(bucket string, bucketPolicy policy.BucketAccessPol
 // partial objects and also downloading objects with special conditions
 // matching etag, modtime etc.
 func (c Core) GetObject(bucketName, objectName string, reqHeaders RequestHeaders) (io.ReadCloser, ObjectInfo, error) {
-	return c.getObject(bucketName, objectName, reqHeaders)
+	return c.getObject(context.Background(), bucketName, objectName, reqHeaders)
 }
 
 // StatObject is a lower level API implemented to support special

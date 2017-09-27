@@ -19,6 +19,7 @@ package minio
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
@@ -87,7 +88,7 @@ type Client struct {
 // Global constants.
 const (
 	libraryName    = "minio-go"
-	libraryVersion = "3.0.2"
+	libraryVersion = "4.0.0"
 )
 
 // User Agent should always following the below style.
@@ -494,9 +495,11 @@ var successStatus = []int{
 // executeMethod - instantiates a given method, and retries the
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
-func (c Client) executeMethod(method string, metadata requestMetadata) (res *http.Response, err error) {
+func (c Client) executeMethod(ctx context.Context, method string, metadata requestMetadata) (res *http.Response, err error) {
 	var isRetryable bool     // Indicates if request can be retried.
 	var bodySeeker io.Seeker // Extracted seeker from io.Reader.
+	var reqRetry = MaxRetry  // Indicates how many times we can retry the request
+
 	if metadata.contentBody != nil {
 		// Check if body is seekable then it is retryable.
 		bodySeeker, isRetryable = metadata.contentBody.(io.Seeker)
@@ -504,6 +507,11 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		case os.Stdin, os.Stdout, os.Stderr:
 			isRetryable = false
 		}
+		// Retry only when reader is seekable
+		if !isRetryable {
+			reqRetry = 1
+		}
+
 		// Figure out if the body can be closed - if yes
 		// we will definitely close it upon the function
 		// return.
@@ -522,7 +530,7 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 	// Blank indentifier is kept here on purpose since 'range' without
 	// blank identifiers is only supported since go1.4
 	// https://golang.org/doc/go1.4#forrange.
-	for range c.newRetryTimer(MaxRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
+	for range c.newRetryTimer(reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
 		// Retry executes the following function body if request has an
 		// error until maxRetries have been exhausted, retry attempts are
 		// performed after waiting for a given period of time in a
@@ -545,6 +553,8 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 			}
 			return nil, err
 		}
+		// Add context to request
+		req = req.WithContext(ctx)
 
 		// Initiate the request.
 		res, err = c.do(req)
@@ -720,7 +730,7 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 	}
 
 	// set md5Sum for content protection.
-	if metadata.contentMD5Bytes != nil {
+	if len(metadata.contentMD5Bytes) > 0 {
 		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(metadata.contentMD5Bytes))
 	}
 
