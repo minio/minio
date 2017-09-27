@@ -128,7 +128,6 @@ func TestMustGetLocalIP4(t *testing.T) {
 }
 
 func TestGetHostIP(t *testing.T) {
-	_, err := getHostIP4("myserver")
 	testCases := []struct {
 		host           string
 		expectedIPList set.StringSet
@@ -136,7 +135,6 @@ func TestGetHostIP(t *testing.T) {
 	}{
 		{"localhost", set.CreateStringSet("127.0.0.1"), nil},
 		{"example.org", set.CreateStringSet("93.184.216.34"), nil},
-		{"myserver", nil, err},
 	}
 
 	for _, testCase := range testCases {
