@@ -155,32 +155,6 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 			t.Fatalf("%s : %s", instanceType, perr)
 		}
 	}
-
-	uploadIDPath := path.Join(bucketNames[0], objectNames[0], uploadIDs[0])
-
-	_, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Remove one disk.
-	removeDiskN(disks, 7)
-
-	// Removing disk shouldn't affect reading object parts info.
-	_, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, disk := range disks {
-		os.RemoveAll(path.Join(disk, bucketNames[0]))
-		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, bucketNames[0]))
-	}
-
-	_, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
-	if errorCause(err) != errFileNotFound {
-		t.Fatal(err)
-	}
 }
 
 // Test xlMetaV1.AddObjectPart()

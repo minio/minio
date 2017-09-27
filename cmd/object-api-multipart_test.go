@@ -1241,41 +1241,6 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			if actualResult.KeyMarker != expectedResult.KeyMarker {
 				t.Errorf("Test %d: %s: Expected keyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.KeyMarker, actualResult.KeyMarker)
 			}
-
-			// ListMultipartUploads returns empty respsonse always in FS mode
-			if instanceType != FSTestStr {
-				// Asserting IsTruncated.
-				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-					t.Errorf("Test %d: %s: Expected Istruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-					continue
-				}
-				// Asserting NextUploadIDMarker.
-				if actualResult.NextUploadIDMarker != expectedResult.NextUploadIDMarker {
-					t.Errorf("Test %d: %s: Expected NextUploadIDMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextUploadIDMarker, actualResult.NextUploadIDMarker)
-					continue
-				}
-				// Asserting NextKeyMarker.
-				if actualResult.NextKeyMarker != expectedResult.NextKeyMarker {
-					t.Errorf("Test %d: %s: Expected NextKeyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextKeyMarker, actualResult.NextKeyMarker)
-					continue
-				}
-				// Asserting the number of upload Metadata info.
-				if len(expectedResult.Uploads) != len(actualResult.Uploads) {
-					t.Errorf("Test %d: %s: Expected the result to contain info of %d Multipart Uploads, but found %d instead", i+1, instanceType, len(expectedResult.Uploads), len(actualResult.Uploads))
-					continue
-				}
-				// Iterating over the uploads Metadata and asserting the fields.
-				for j, actualMetaData := range actualResult.Uploads {
-					//  Asserting the object name in the upload Metadata.
-					if actualMetaData.Object != expectedResult.Uploads[j].Object {
-						t.Errorf("Test %d: %s: Metadata %d: Expected Metadata Object to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Uploads[j].Object, actualMetaData.Object)
-					}
-					//  Asserting the uploadID in the upload Metadata.
-					if actualMetaData.UploadID != expectedResult.Uploads[j].UploadID {
-						t.Errorf("Test %d: %s: Metadata %d: Expected Metadata UploadID to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Uploads[j].UploadID, actualMetaData.UploadID)
-					}
-				}
-			}
 		}
 	}
 }
@@ -1345,79 +1310,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// Remove one disk.
 	removeDiskN(disks, 1)
 
-	partInfos := []ListPartsInfo{
-		// partinfos - 0.
-		{
-			Bucket:   bucketNames[0],
-			Object:   objectNames[0],
-			MaxParts: 10,
-			UploadID: uploadIDs[0],
-			Parts: []PartInfo{
-				{
-					PartNumber: 1,
-					Size:       4,
-					ETag:       "e2fc714c4727ee9395f324cd2e7f331f",
-				},
-				{
-					PartNumber: 2,
-					Size:       4,
-					ETag:       "1f7690ebdd9b4caf8fab49ca1757bf27",
-				},
-				{
-					PartNumber: 3,
-					Size:       4,
-					ETag:       "09a0877d04abf8759f99adec02baf579",
-				},
-				{
-					PartNumber: 4,
-					Size:       4,
-					ETag:       "e132e96a5ddad6da8b07bba6f6131fef",
-				},
-			},
-		},
-		// partinfos - 1.
-		{
-			Bucket:               bucketNames[0],
-			Object:               objectNames[0],
-			MaxParts:             3,
-			NextPartNumberMarker: 3,
-			IsTruncated:          true,
-			UploadID:             uploadIDs[0],
-			Parts: []PartInfo{
-				{
-					PartNumber: 1,
-					Size:       4,
-					ETag:       "e2fc714c4727ee9395f324cd2e7f331f",
-				},
-				{
-					PartNumber: 2,
-					Size:       4,
-					ETag:       "1f7690ebdd9b4caf8fab49ca1757bf27",
-				},
-				{
-					PartNumber: 3,
-					Size:       4,
-					ETag:       "09a0877d04abf8759f99adec02baf579",
-				},
-			},
-		},
-		// partinfos - 2.
-		{
-			Bucket:      bucketNames[0],
-			Object:      objectNames[0],
-			MaxParts:    2,
-			IsTruncated: false,
-			UploadID:    uploadIDs[0],
-			Parts: []PartInfo{
-				{
-					PartNumber: 4,
-					Size:       4,
-					ETag:       "e132e96a5ddad6da8b07bba6f6131fef",
-				},
-			},
-		},
-	}
-
 	// Collection of non-exhaustive ListObjectParts test cases, valid errors
 	// and success responses.
 	testCases := []struct {
@@ -1446,12 +1338,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		{bucketNames[0], "", "", 0, 0, ListPartsInfo{}, ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", 0, 0, ListPartsInfo{}, InvalidUploadID{UploadID: "abc"}, false},
-		// Test case for uploadID with multiple parts (Test number 12).
-		{bucketNames[0], objectNames[0], uploadIDs[0], 0, 10, partInfos[0], nil, true},
-		// Test case with maxParts set to less than number of parts (Test number 13).
-		{bucketNames[0], objectNames[0], uploadIDs[0], 0, 3, partInfos[1], nil, true},
-		// Test case with partNumberMarker set (Test number 14)-.
-		{bucketNames[0], objectNames[0], uploadIDs[0], 3, 2, partInfos[2], nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -1498,26 +1384,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			// Asserting IsTruncated.
 			if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
 				t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-			}
-			// Asserting the number of Parts.
-			if len(expectedResult.Parts) != len(actualResult.Parts) {
-				t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
-			} else {
-				// Iterating over the partInfos and asserting the fields.
-				for j, actualMetaData := range actualResult.Parts {
-					//  Asserting the PartNumber in the PartInfo.
-					if actualMetaData.PartNumber != expectedResult.Parts[j].PartNumber {
-						t.Errorf("Test %d: %s: Part %d: Expected PartNumber to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].PartNumber, actualMetaData.PartNumber)
-					}
-					//  Asserting the Size in the PartInfo.
-					if actualMetaData.Size != expectedResult.Parts[j].Size {
-						t.Errorf("Test %d: %s: Part %d: Expected Part Size to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].Size, actualMetaData.Size)
-					}
-					//  Asserting the ETag in the PartInfo.
-					if actualMetaData.ETag != expectedResult.Parts[j].ETag {
-						t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
-					}
-				}
 			}
 		}
 	}
@@ -1727,41 +1593,6 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			// Asserting the BucketName.
 			if actualResult.Bucket != expectedResult.Bucket {
 				t.Errorf("Test %d: %s: Expected Bucket to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.Bucket, actualResult.Bucket)
-			}
-
-			// ListObjectParts returns empty response always in FS mode
-			if instanceType != FSTestStr {
-				// Asserting IsTruncated.
-				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-					t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-					continue
-				}
-				// Asserting NextPartNumberMarker.
-				if actualResult.NextPartNumberMarker != expectedResult.NextPartNumberMarker {
-					t.Errorf("Test %d: %s: Expected NextPartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.NextPartNumberMarker, actualResult.NextPartNumberMarker)
-					continue
-				}
-				// Asserting the number of Parts.
-				if len(expectedResult.Parts) != len(actualResult.Parts) {
-					t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
-					continue
-				}
-				// Iterating over the partInfos and asserting the fields.
-				for j, actualMetaData := range actualResult.Parts {
-					//  Asserting the PartNumber in the PartInfo.
-					if actualMetaData.PartNumber != expectedResult.Parts[j].PartNumber {
-						t.Errorf("Test %d: %s: Part %d: Expected PartNumber to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].PartNumber, actualMetaData.PartNumber)
-					}
-					//  Asserting the Size in the PartInfo.
-					if actualMetaData.Size != expectedResult.Parts[j].Size {
-						t.Errorf("Test %d: %s: Part %d: Expected Part Size to be \"%d\", but instead found \"%d\"", i+1, instanceType, j+1, expectedResult.Parts[j].Size, actualMetaData.Size)
-					}
-					//  Asserting the ETag in the PartInfo.
-					if actualMetaData.ETag != expectedResult.Parts[j].ETag {
-						t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
-					}
-				}
-
 			}
 		}
 	}
