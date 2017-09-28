@@ -133,10 +133,12 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 	if err != nil {
 		return bucketInfo, traceError(err)
 	}
+
 	bucketInfo = BucketInfo{
 		Name:    bucket,
 		Created: t,
 	}
+
 	return bucketInfo, nil
 }
 

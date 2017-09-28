@@ -327,6 +327,14 @@ func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 
 // GetBucketInfo - Get bucket metadata..
 func (a *azureObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	// Verify if bucket (container-name) is valid.
+	// IsValidBucketName has same restrictions as container names mentioned
+	// in azure documentation, so we will simply use the same function here.
+	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
+	if !IsValidBucketName(bucket) {
+		return bi, traceError(BucketNameInvalid{Bucket: bucket})
+	}
+
 	// Azure does not have an equivalent call, hence use
 	// ListContainers with prefix
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
