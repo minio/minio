@@ -309,6 +309,7 @@ func fsRemoveUploadIDPath(basePath, uploadIDPath string) error {
 		}
 	}
 
+	fsRemoveDir(uploadIDPath)
 	return nil
 }
 
