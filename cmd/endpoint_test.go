@@ -31,8 +31,6 @@ func TestNewEndpoint(t *testing.T) {
 	u3, _ := url.Parse("http://127.0.0.1:8080/path")
 	u4, _ := url.Parse("http://192.168.253.200/path")
 
-	errMsg := ": no such host"
-
 	testCases := []struct {
 		arg              string
 		expectedEndpoint Endpoint
@@ -69,7 +67,6 @@ func TestNewEndpoint(t *testing.T) {
 		{"https://93.184.216.34:808080/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")},
 		{"http://server:8080//", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server:8080/", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
-		{"http://server/path", Endpoint{}, -1, fmt.Errorf("lookup server" + errMsg)},
 		{"192.168.1.210:9000", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")},
 	}
 
@@ -81,16 +78,8 @@ func TestNewEndpoint(t *testing.T) {
 			}
 		} else if err == nil {
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else {
-			var match bool
-			if strings.HasSuffix(testCase.expectedErr.Error(), errMsg) {
-				match = strings.HasSuffix(err.Error(), errMsg)
-			} else {
-				match = (testCase.expectedErr.Error() == err.Error())
-			}
-			if !match {
-				t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
-			}
+		} else if testCase.expectedErr.Error() != err.Error() {
+			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 
 		if err == nil && !reflect.DeepEqual(testCase.expectedEndpoint, endpoint) {
