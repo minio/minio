@@ -43,7 +43,7 @@ func TestAzureToS3ETag(t *testing.T) {
 }
 
 // Test canonical metadata.
-func TestS3ToAzureHeaders(t *testing.T) {
+func TestS3MetaToAzureProperties(t *testing.T) {
 	headers := map[string]string{
 		"accept-encoding":          "gzip",
 		"content-encoding":         "gzip",
@@ -52,21 +52,21 @@ func TestS3ToAzureHeaders(t *testing.T) {
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
+	// Only X-Amz-Meta- prefixed entries will be returned in
+	// Metadata (without the prefix!)
 	expectedHeaders := map[string]string{
-		"Accept-Encoding":           "gzip",
-		"Content-Encoding":          "gzip",
-		"X-Ms-Meta-Hdr":             "value",
-		"X-Ms-Meta-x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
-		"X-Ms-Meta-x_minio_matdesc": "{}",
-		"X-Ms-Meta-x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+		"Hdr":             "value",
+		"x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x_minio_matdesc": "{}",
+		"x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	actualHeaders := s3ToAzureHeaders(headers)
-	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
-		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, actualHeaders)
+	meta, _ := s3MetaToAzureProperties(headers)
+	if !reflect.DeepEqual(map[string]string(meta), expectedHeaders) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, meta)
 	}
 }
 
-func TestAzureToS3Metadata(t *testing.T) {
+func TestAzurePropertiesToS3Meta(t *testing.T) {
 	// Just one testcase. Adding more test cases does not add value to the testcase
 	// as azureToS3Metadata() just adds a prefix.
 	metadata := map[string]string{
@@ -81,7 +81,7 @@ func TestAzureToS3Metadata(t *testing.T) {
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	actualMeta := azureToS3Metadata(metadata)
+	actualMeta := azurePropertiesToS3Meta(metadata, storage.BlobProperties{})
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
 		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
@@ -207,16 +207,30 @@ func TestAzureListBlobsGetParameters(t *testing.T) {
 	expectedURLValues.Set("prefix", "test")
 	expectedURLValues.Set("delimiter", "_")
 	expectedURLValues.Set("marker", "marker")
-	expectedURLValues.Set("include", "hello")
+	expectedURLValues.Set("include", "metadata")
 	expectedURLValues.Set("maxresults", "20")
 	expectedURLValues.Set("timeout", "10")
 
-	setBlobParameters := storage.ListBlobsParameters{"test", "_", "marker", "hello", 20, 10}
+	setBlobParameters := storage.ListBlobsParameters{
+		Prefix:     "test",
+		Delimiter:  "_",
+		Marker:     "marker",
+		Include:    &storage.IncludeBlobDataset{Metadata: true},
+		MaxResults: 20,
+		Timeout:    10,
+	}
 
 	// Test values set 2
 	expectedURLValues1 := url.Values{}
 
-	setBlobParameters1 := storage.ListBlobsParameters{"", "", "", "", 0, 0}
+	setBlobParameters1 := storage.ListBlobsParameters{
+		Prefix:     "",
+		Delimiter:  "",
+		Marker:     "",
+		Include:    nil,
+		MaxResults: 0,
+		Timeout:    0,
+	}
 
 	testCases := []struct {
 		name string
