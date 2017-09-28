@@ -212,3 +212,41 @@ func getDefaultLocation(u url.URL, regionOverride string) (location string) {
 	// Default to location to 'us-east-1'.
 	return "us-east-1"
 }
+
+var supportedHeaders = []string{
+	"content-type",
+	"cache-control",
+	"content-encoding",
+	"content-disposition",
+	// Add more supported headers here.
+}
+
+// cseHeaders is list of client side encryption headers
+var cseHeaders = []string{
+	"X-Amz-Iv",
+	"X-Amz-Key",
+	"X-Amz-Matdesc",
+}
+
+// isStandardHeader returns true if header is a supported header and not a custom header
+func isStandardHeader(headerKey string) bool {
+	for _, header := range supportedHeaders {
+		if strings.Compare(strings.ToLower(headerKey), header) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// isCSEHeader returns true if header is a client side encryption header.
+func isCSEHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
+	for _, h := range cseHeaders {
+		header := strings.ToLower(h)
+		if (header == key) ||
+			(("x-amz-meta-" + header) == key) {
+			return true
+		}
+	}
+	return false
+}

@@ -341,7 +341,7 @@ func (l *s3Objects) PutObject(bucket string, object string, data *HashReader, me
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
 	delete(metadata, "etag")
-	oi, err := l.Client.PutObject(bucket, object, data.Size(), data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
@@ -448,17 +448,19 @@ func fromMinioClientMetadata(metadata map[string][]string) map[string]string {
 }
 
 // toMinioClientMetadata converts metadata to map[string][]string
-func toMinioClientMetadata(metadata map[string]string) map[string][]string {
-	mm := map[string][]string{}
+func toMinioClientMetadata(metadata map[string]string) map[string]string {
+	mm := map[string]string{}
 	for k, v := range metadata {
-		mm[http.CanonicalHeaderKey(k)] = []string{v}
+		mm[http.CanonicalHeaderKey(k)] = v
 	}
 	return mm
 }
 
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
-	return l.Client.NewMultipartUpload(bucket, object, toMinioClientMetadata(metadata))
+	// Create PutObject options
+	opts := minio.PutObjectOptions{UserMetadata: metadata}
+	return l.Client.NewMultipartUpload(bucket, object, opts)
 }
 
 // CopyObjectPart copy part of object to other bucket and object
@@ -489,7 +491,7 @@ func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string,
 		return pi, err
 	}
 
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data.Size(), data, md5HexBytes, sha256sumBytes)
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), md5HexBytes, sha256sumBytes)
 	if err != nil {
 		return pi, err
 	}
