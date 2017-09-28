@@ -17,21 +17,70 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 )
 
+func TestMinioVersionToReleaseTime(t *testing.T) {
+	testCases := []struct {
+		version    string
+		isOfficial bool
+	}{
+		{"2017-09-29T19:16:56Z", true},
+		{"RELEASE.2017-09-29T19-16-56Z", false},
+		{"DEVELOPMENT.GOGET", false},
+	}
+	for i, testCase := range testCases {
+		_, err := minioVersionToReleaseTime(testCase.version)
+		if (err == nil) != testCase.isOfficial {
+			t.Errorf("Test %d: Expected %v but got %v",
+				i+1, testCase.isOfficial, err == nil)
+		}
+	}
+}
+
+func TestReleaseTagToNFromTimeConversion(t *testing.T) {
+	utcLoc, _ := time.LoadLocation("")
+	testCases := []struct {
+		t      time.Time
+		tag    string
+		errStr string
+	}{
+		{time.Date(2017, time.September, 29, 19, 16, 56, 0, utcLoc),
+			"RELEASE.2017-09-29T19-16-56Z", ""},
+		{time.Date(2017, time.August, 5, 0, 0, 53, 0, utcLoc),
+			"RELEASE.2017-08-05T00-00-53Z", ""},
+		{time.Now().UTC(), "2017-09-29T19:16:56Z",
+			"2017-09-29T19:16:56Z is not a valid release tag"},
+		{time.Now().UTC(), "DEVELOPMENT.GOGET",
+			"DEVELOPMENT.GOGET is not a valid release tag"},
+	}
+	for i, testCase := range testCases {
+		if testCase.errStr != "" {
+			got := releaseTimeToReleaseTag(testCase.t)
+			if got != testCase.tag && testCase.errStr == "" {
+				t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.tag, got)
+			}
+		}
+		tagTime, err := releaseTagToReleaseTime(testCase.tag)
+		if err != nil && err.Error() != testCase.errStr {
+			t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.errStr, err.Error())
+		}
+		if err == nil && tagTime != testCase.t {
+			t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.t, tagTime)
+		}
+	}
+
+}
+
 func TestDownloadURL(t *testing.T) {
-	minioVersion1 := UTCNow()
+	minioVersion1 := releaseTimeToReleaseTag(UTCNow())
 	durl := getDownloadURL(minioVersion1)
 	if runtime.GOOS == "windows" {
 		if durl != minioReleaseURL+"minio.exe" {
@@ -56,112 +105,6 @@ func TestDownloadURL(t *testing.T) {
 		t.Errorf("Expected %s, got %s", mesosDeploymentDoc, durl)
 	}
 	os.Unsetenv("MESOS_CONTAINER_NAME")
-}
-
-func TestGetCurrentReleaseTime(t *testing.T) {
-	minioVersion1 := UTCNow().Format(time.RFC3339)
-	releaseTime1, _ := time.Parse(time.RFC3339, minioVersion1)
-
-	minioVersion2 := "DEVELOPMENT.GOGET"
-	tmpfile1, err := ioutil.TempFile("", "get-current-release-time-testcase-1")
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %s", err)
-	}
-	defer os.Remove(tmpfile1.Name())
-
-	minioBinaryPath2 := tmpfile1.Name()
-	fi, err := tmpfile1.Stat()
-	if err != nil {
-		t.Fatalf("Unable to get temporary file info. %s", err)
-	}
-	if err = tmpfile1.Close(); err != nil {
-		t.Fatalf("Unable to create temporary file. %s", err)
-	}
-	releaseTime2 := fi.ModTime().UTC()
-
-	minioBinaryPath3 := "go"
-	if runtime.GOOS == globalWindowsOSName {
-		minioBinaryPath3 = "go.exe"
-	}
-	goBinAbsPath, err := exec.LookPath(minioBinaryPath3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fi, err = osStat(goBinAbsPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	releaseTime3 := fi.ModTime().UTC()
-
-	// Get a non-absolute binary path.
-	minioBinaryPath4 := filepath.Base(tmpfile1.Name())
-
-	// Get a non-existent absolute binary path
-	minioBinaryPath5 := "/tmp/non-existent-file"
-	if runtime.GOOS == globalWindowsOSName {
-		minioBinaryPath5 = "C:\\tmp\\non-existent-file"
-	}
-	errorMessage1 := "exec: \"\": executable file not found in $PATH"
-	if runtime.GOOS == globalWindowsOSName {
-		errorMessage1 = "exec: \"\": executable file not found in %PATH%"
-	}
-	errorMessage2 := "exec: \"non-existent-file\": executable file not found in $PATH"
-	if runtime.GOOS == globalWindowsOSName {
-		errorMessage2 = "exec: \"non-existent-file\": executable file not found in %PATH%"
-	}
-	errorMessage3 := fmt.Sprintf("exec: \"%s\": executable file not found in $PATH", minioBinaryPath4)
-	if runtime.GOOS == globalWindowsOSName {
-		errorMessage3 = "exec: \"" + minioBinaryPath4 + "\": executable file not found in %PATH%"
-	}
-	errorMessage4 := "Unable to get ModTime of /tmp/non-existent-file. stat /tmp/non-existent-file: no such file or directory"
-	if runtime.GOOS == "windows" {
-		errorMessage4 = "Unable to get ModTime of C:\\tmp\\non-existent-file. CreateFile C:\\tmp\\non-existent-file: The system cannot find the path specified."
-	}
-
-	testCases := []struct {
-		minioVersion    string
-		minioBinaryPath string
-		expectedResult  time.Time
-		expectedErr     error
-	}{
-		{minioVersion1, "", releaseTime1, nil},
-		{minioVersion1, minioBinaryPath2, releaseTime1, nil},
-		{minioVersion2, minioBinaryPath2, releaseTime2, nil},
-		{minioVersion2, minioBinaryPath3, releaseTime3, nil},
-		{"junk", minioBinaryPath2, releaseTime2, nil},
-		{"3.2.0", minioBinaryPath2, releaseTime2, nil},
-		{minioVersion2, "", time.Time{}, errors.New(errorMessage1)},
-		{"junk", "non-existent-file", time.Time{}, errors.New(errorMessage2)},
-		{"3.2.0", "non-existent-file", time.Time{}, errors.New(errorMessage2)},
-		{minioVersion2, minioBinaryPath4, time.Time{}, errors.New(errorMessage3)},
-		{minioVersion2, minioBinaryPath5, time.Time{}, errors.New(errorMessage4)},
-	}
-
-	if runtime.GOOS == "linux" {
-		testCases = append(testCases, struct {
-			minioVersion    string
-			minioBinaryPath string
-			expectedResult  time.Time
-			expectedErr     error
-		}{"3.2a", "/proc/1/cwd", time.Time{}, errors.New("Unable to get ModTime of /proc/1/cwd. stat /proc/1/cwd: permission denied")})
-	}
-
-	for _, testCase := range testCases {
-		result, err := getCurrentReleaseTime(testCase.minioVersion, testCase.minioBinaryPath)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-		}
-
-		if !testCase.expectedResult.Equal(result) {
-			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, result)
-		}
-	}
 }
 
 // Tests user agent string.
@@ -277,80 +220,6 @@ pod-template-hash="818089471"`)
 	}
 }
 
-// Tests if the environment we are running is in docker.
-func TestIsDocker(t *testing.T) {
-	createTempFile := func(content string) string {
-		tmpfile, err := ioutil.TempFile("", "isdocker-testcase")
-		if err != nil {
-			t.Fatalf("Unable to create temporary file. %s", err)
-		}
-		if _, err = tmpfile.Write([]byte(content)); err != nil {
-			t.Fatalf("Unable to create temporary file. %s", err)
-		}
-		if err = tmpfile.Close(); err != nil {
-			t.Fatalf("Unable to create temporary file. %s", err)
-		}
-		return tmpfile.Name()
-	}
-
-	filename := createTempFile("")
-	defer os.Remove(filename)
-
-	testCases := []struct {
-		filename       string
-		expectedResult bool
-		expectedErr    error
-	}{
-		{"", false, nil},
-		{"/tmp/non-existing-file", false, nil},
-		{filename, true, nil},
-	}
-
-	if runtime.GOOS == "linux" {
-		testCases = append(testCases, struct {
-			filename       string
-			expectedResult bool
-			expectedErr    error
-		}{"/proc/1/cwd", false, errors.New("stat /proc/1/cwd: permission denied")})
-	}
-
-	for _, testCase := range testCases {
-		result, err := isDocker(testCase.filename)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
-		}
-
-		if testCase.expectedResult != result {
-			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestIsSourceBuild(t *testing.T) {
-	testCases := []struct {
-		minioVersion   string
-		expectedResult bool
-	}{
-		{UTCNow().Format(time.RFC3339), false},
-		{"DEVELOPMENT.GOGET", true},
-		{"junk", true},
-		{"3.2.4", true},
-	}
-
-	for _, testCase := range testCases {
-		result := isSourceBuild(testCase.minioVersion)
-		if testCase.expectedResult != result {
-			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, result)
-		}
-	}
-}
-
 func TestDownloadReleaseData(t *testing.T) {
 	httpServer1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer httpServer1.Close()
@@ -374,7 +243,7 @@ func TestDownloadReleaseData(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		result, err := downloadReleaseData(testCase.releaseChecksumURL, 1*time.Second, "")
+		result, err := downloadReleaseURL(testCase.releaseChecksumURL, 1*time.Second, "")
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
@@ -392,7 +261,7 @@ func TestDownloadReleaseData(t *testing.T) {
 }
 
 func TestParseReleaseData(t *testing.T) {
-	releaseTime, _ := time.Parse(minioReleaseTagTimeLayout, "2016-10-07T01-16-39Z")
+	releaseTime, _ := releaseTagToReleaseTime("RELEASE.2016-10-07T01-16-39Z")
 	testCases := []struct {
 		data           string
 		expectedResult time.Time
@@ -400,26 +269,26 @@ func TestParseReleaseData(t *testing.T) {
 	}{
 		{"more than two fields", time.Time{}, fmt.Errorf("Unknown release data `more than two fields`")},
 		{"more than", time.Time{}, fmt.Errorf("Unknown release information `than`")},
-		{"more than.two.fields", time.Time{}, fmt.Errorf("Unknown release 'than.two.fields'")},
-		{"more minio.RELEASE.fields", time.Time{}, fmt.Errorf(`Unknown release time format. parsing time "fields" as "2006-01-02T15-04-05Z": cannot parse "fields" as "2006"`)},
+		{"more than.two.fields", time.Time{}, fmt.Errorf("Unknown release `than.two.fields`")},
+		{"more minio.RELEASE.fields", time.Time{}, fmt.Errorf(`Unknown release tag format. parsing time "fields" as "2006-01-02T15-04-05Z": cannot parse "fields" as "2006"`)},
 		{"more minio.RELEASE.2016-10-07T01-16-39Z", releaseTime, nil},
 		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, nil},
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		result, err := parseReleaseData(testCase.data)
 		if testCase.expectedErr == nil {
 			if err != nil {
-				t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
+				t.Errorf("error case %d: expected: %v, got: %v", i+1, testCase.expectedErr, err)
 			}
 		} else if err == nil {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
+			t.Errorf("error case %d: expected: %v, got: %v", i+1, testCase.expectedErr, err)
 		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)
+			t.Errorf("error case %d: expected: %v, got: %v", i+1, testCase.expectedErr, err)
 		}
 
 		if !testCase.expectedResult.Equal(result) {
-			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, result)
+			t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}
 	}
 }
