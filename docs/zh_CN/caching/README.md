@@ -1,27 +1,20 @@
-## Object Caching
+## 对象缓存
 
-Object caching is on by default with following settings
+默认情况下，对象缓存处于以下设置状态
 
- - Cache size is 50% of your RAM size. Caching is disabled
-   if your RAM size is smaller than 8GB.
+ - 缓存大小是你内存大小的一半，不过如果你的内存小于8G的话，缓存是不开启的。
 
- - Expiration of each entries happen on every 72 hours.
+ - 缓存对象的过期时间是72小时。
 
- - Garbage collection sweep of the expired entries happen every
-   1/4th the set expiration hours value (every 18 hours).
+ - 每次过期时间的1/4时间点（每18小时）出发一次过期对象垃圾回收清理。
 
-NOTE: None of the settings can be configured manually.
+注意：上述配置不支持手动修改。
 
-### Behavior
+### 特性
 
-Caching happens on both GET and PUT operations.
+GET和PUT操作都会进行缓存。
 
-- GET caches new objects for entries not found in cache.
-  Otherwise serves from the cache.
+- GET 如果缓存中没有，则将新对象进行缓存，否则直接取缓存中的对象返回。
 
-- PUT/POST caches all successfully uploaded objects. Replaces
-  existing cached entry for the same object if needed.
-
-NOTE: Expiration happens automatically based on the configured
-interval as explained above, frequently accessed objects stay
-alive in cache for a significantly longer time on every cache hit.
+- PUT/POST 对所有上传成功的对象进行缓存，如果之前存在同名（同一个bucket下同名）对象的缓存，则替换之。
+注意：缓存会按之前阐述的过期配置在一定周期后自动过期，经常访问的对象会因为每次缓存命中而延长生命，在缓存中活的很久很久。
