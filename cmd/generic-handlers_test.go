@@ -17,17 +17,9 @@
 package cmd
 
 import (
-	"bytes"
-	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
-
-	router "github.com/gorilla/mux"
 )
 
 // Tests getRedirectLocation function for all its criteria.
@@ -150,87 +142,5 @@ func TestIsHTTPHeaderSizeTooLarge(t *testing.T) {
 		if res := isHTTPHeaderSizeTooLarge(test.header); res != test.shouldFail {
 			t.Errorf("Test %d: Expected %v got %v", i, res, test.shouldFail)
 		}
-	}
-}
-
-// TestLoggingHandler - test for logging handler.
-func TestLoggingHandler(t *testing.T) {
-	logDir, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(logDir)
-
-	// Set trace dir
-	globalHTTPTraceDir = logDir
-	defer func() {
-		globalHTTPTraceDir = ""
-	}()
-
-	// Setup object REST API handlers.
-	apiRouter := router.NewRouter()
-	registerAPIRouter(apiRouter)
-
-	// Prepare server with FS backend
-	loggingHandlerTestBed, err := prepareFSTestServer(apiRouter)
-	if err != nil {
-		t.Fatal("Failed to initialize a single node FS backend for logging handler tests.")
-	}
-	defer loggingHandlerTestBed.TearDown()
-
-	bucketName := getRandomBucketName()
-	objectName := getRandomObjectName()
-
-	data := []byte(`Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.`)
-
-	// Create bucket
-	loggingHandlerTestBed.objLayer.MakeBucketWithLocation(bucketName, "")
-
-	cred := serverConfig.GetCredential()
-
-	// Prepare query params for get-config mgmt REST API.
-	req, err := newTestSignedRequestV4("PUT", getPutObjectURL("", bucketName, objectName),
-		int64(len(data)), bytes.NewReader(data),
-		cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request for Put Object: <ERROR> %v", err)
-	}
-
-	setupHTTPTrace()
-	defer globalHTTPTrace.logFile.Close()
-
-	// Run a PUT object call with logging Handler
-	handler := registerHandlers(apiRouter, setLoggingHandler)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	// We expect ot have a successful response
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d", rec.Code)
-	}
-
-	// Fetch log file name as it is variable by time
-	logFile := ""
-	files, _ := ioutil.ReadDir(logDir)
-	for _, file := range files {
-		logFile = filepath.Join(logDir, file.Name())
-		break
-	}
-
-	// Load log file content
-	logFileContentBytes, err := ioutil.ReadFile(logFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	logFileContentsStr := string(logFileContentBytes)
-
-	// Check if log file contains correct PUT call
-	if !strings.Contains(logFileContentsStr, "PUT /"+bucketName+"/"+objectName) {
-		t.Fatal("Cannot find correct PUT in log test")
-	}
-
-	// We log the string "[BODY]" instead of the actual body.
-	if !strings.Contains(logFileContentsStr, "[BODY]") {
-		t.Fatal(`log file should contain the body place holder string "[BODY]"`)
 	}
 }
