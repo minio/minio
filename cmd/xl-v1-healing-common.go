@@ -17,22 +17,9 @@
 package cmd
 
 import (
-	"crypto/subtle"
 	"path/filepath"
-	"sync"
 	"time"
-
-	"io"
 )
-
-// healBufferPool is a pool of reusable buffers used to verify a stream
-// while healing.
-var healBufferPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, readSizeV1)
-		return &b
-	},
-}
 
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
@@ -257,42 +244,49 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
+//
 // - disks which have all parts specified in the latest xl.json.
+//
 // - errs updated to have errFileNotFound in place of disks that had
-// missing parts.
-// - non-nil error if any of the online disks failed during
-// calculating blake2b checksum.
-func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
-	availableDisks := make([]StorageAPI, len(onlineDisks))
-	buffer := healBufferPool.Get().(*[]byte)
-	defer healBufferPool.Put(buffer)
+//   missing or corrupted parts.
+//
+// - non-nil error if any of the disks failed unexpectedly (i.e. error
+//   other than file not found and not a checksum error).
+func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
+	object string) ([]StorageAPI, []error, error) {
 
-	for diskIndex, onlineDisk := range onlineDisks {
+	availableDisks := make([]StorageAPI, len(onlineDisks))
+	buffer := []byte{}
+
+	for i, onlineDisk := range onlineDisks {
 		if onlineDisk == OfflineDisk {
 			continue
 		}
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
-		for _, part := range partsMetadata[diskIndex].Parts {
+		for _, part := range partsMetadata[i].Parts {
 			partPath := filepath.Join(object, part.Name)
-			checkSumInfo := partsMetadata[diskIndex].Erasure.GetChecksumInfo(part.Name)
-			hash := checkSumInfo.Algorithm.New()
-			_, hErr := io.CopyBuffer(hash, StorageReader(onlineDisk, bucket, partPath, 0), *buffer)
-			if hErr == errFileNotFound {
-				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = OfflineDisk
-				break
-			}
-			if hErr != nil && hErr != errFileNotFound {
+			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
+			verifier := NewBitrotVerifier(checksumInfo.Algorithm, checksumInfo.Hash)
+
+			// verification happens even if a 0-length
+			// buffer is passed
+			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
+			if hErr != nil {
+				_, isCorrupted := hErr.(hashMismatchError)
+				if isCorrupted || hErr == errFileNotFound {
+					errs[i] = errFileNotFound
+					availableDisks[i] = OfflineDisk
+					break
+				}
 				return nil, nil, traceError(hErr)
 			}
-			if subtle.ConstantTimeCompare(hash.Sum(nil), checkSumInfo.Hash) != 1 {
-				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = OfflineDisk
-				break
-			}
-			availableDisks[diskIndex] = onlineDisk
+		}
+
+		if errs[i] == nil {
+			// All parts verified, mark it as all data available.
+			availableDisks[i] = onlineDisk
 		}
 	}
 
