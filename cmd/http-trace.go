@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,6 +29,101 @@ import (
 	"time"
 )
 
+// recordRequest - records the first recLen bytes
+// of a given io.Reader
+type recordRequest struct {
+	// Data source to record
+	io.Reader
+	// Response body should be logged
+	logBody bool
+	// Internal recording buffer
+	buf bytes.Buffer
+}
+
+func (r *recordRequest) Read(p []byte) (n int, err error) {
+	n, err = r.Reader.Read(p)
+	if r.logBody {
+		r.buf.Write(p[:n])
+	}
+	if err != nil {
+		return n, err
+	}
+	return n, err
+}
+
+// Return the bytes that were recorded.
+func (r *recordRequest) Data() []byte {
+	return r.buf.Bytes()
+}
+
+// recordResponseWriter - records the first recLen bytes
+// of a given http.ResponseWriter
+type recordResponseWriter struct {
+	// Data source to record
+	http.ResponseWriter
+	// Response body should be logged
+	logBody bool
+	// Internal recording buffer
+	headers bytes.Buffer
+	body    bytes.Buffer
+	// The status code of the current HTTP request
+	statusCode int
+	// Indicate if headers are written in the log
+	headersLogged bool
+}
+
+// Write the headers into the given buffer
+func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
+	fmt.Fprintf(w, "%d %s\n", statusCode, http.StatusText(statusCode))
+	for k, v := range headers {
+		fmt.Fprintf(w, "%s: %s\n", k, v[0])
+	}
+}
+
+func (r *recordResponseWriter) WriteHeader(i int) {
+	r.statusCode = i
+	if !r.headersLogged {
+		writeHeaders(&r.headers, i, r.ResponseWriter.Header())
+		r.headersLogged = true
+	}
+	r.ResponseWriter.WriteHeader(i)
+}
+
+func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
+	n, err = r.ResponseWriter.Write(p)
+	// We log after calling ResponseWriter.Write() because this latter
+	// proactively prepares headers when WriteHeader is not called yet.
+	if !r.headersLogged {
+		writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
+		r.headersLogged = true
+	}
+	if r.statusCode != http.StatusOK && r.statusCode != http.StatusNoContent && r.statusCode != 0 {
+		// We always log error responses.
+		r.body.Write(p)
+		return
+	}
+	if r.logBody {
+		r.body.Write(p)
+		return
+	}
+	return n, err
+}
+
+func (r *recordResponseWriter) Flush() {
+	r.ResponseWriter.(http.Flusher).Flush()
+}
+
+// Return response headers.
+func (r *recordResponseWriter) Headers() []byte {
+	return r.headers.Bytes()
+}
+
+// Return response body.
+func (r *recordResponseWriter) Body() []byte {
+	return r.body.Bytes()
+}
+
+// Log headers and body.
 func httpTracelogAll(f http.HandlerFunc) http.HandlerFunc {
 	if !globalHTTPTrace {
 		return f
@@ -35,6 +131,7 @@ func httpTracelogAll(f http.HandlerFunc) http.HandlerFunc {
 	return httpTracelog(f, true)
 }
 
+// Log only the headers.
 func httpTracelogHeaders(f http.HandlerFunc) http.HandlerFunc {
 	if !globalHTTPTrace {
 		return f
@@ -49,12 +146,12 @@ func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const timeFormat = "2006-01-02 15:04:05 -0700"
-		var reqBodyRecorder *recordReader
+		var reqBodyRecorder *recordRequest
 
 		// Generate short random request ID
 		reqID := fmt.Sprintf("%f", float64(time.Now().UnixNano())/1e10)
 
-		reqBodyRecorder = &recordReader{Reader: r.Body, logBody: logBody}
+		reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody}
 		r.Body = ioutil.NopCloser(reqBodyRecorder)
 
 		// Setup a http response body recorder
