@@ -333,8 +333,7 @@ func quickHeal(storageDisks []StorageAPI, writeQuorum int, readQuorum int) error
 }
 
 // Heals an object only the corrupted/missing erasure blocks.
-func healObject(storageDisks []StorageAPI, bucket string, object string,
-	quorum int) (int, int, error) {
+func healObject(storageDisks []StorageAPI, bucket, object string, quorum int) (int, int, error) {
 
 	partsMetadata, errs := readAllXLMetadata(storageDisks, bucket, object)
 	// readQuorum suffices for xl.json since we use monotonic

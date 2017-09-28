@@ -244,11 +244,14 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
+//
 // - disks which have all parts specified in the latest xl.json.
+//
 // - errs updated to have errFileNotFound in place of disks that had
-// missing parts.
-// - non-nil error if any of the online disks failed during
-// calculating bitrot checksum.
+//   missing or corrupted parts.
+//
+// - non-nil error if any of the disks failed unexpectedly (i.e. error
+//   other than file not found and not a checksum error).
 func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
 	object string) ([]StorageAPI, []error, error) {
 
@@ -264,8 +267,8 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 		// it needs healing too.
 		for _, part := range partsMetadata[i].Parts {
 			partPath := filepath.Join(object, part.Name)
-			hashInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
-			verifier := NewBitrotVerifier(hashInfo.Algorithm, hashInfo.Hash)
+			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
+			verifier := NewBitrotVerifier(checksumInfo.Algorithm, checksumInfo.Hash)
 
 			// verification happens even if a 0-length
 			// buffer is passed
@@ -279,7 +282,10 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 				}
 				return nil, nil, traceError(hErr)
 			}
+		}
 
+		if errs[i] == nil {
+			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
 		}
 	}
