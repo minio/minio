@@ -80,6 +80,7 @@ func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
 	}
 }
 
+// Record the headers.
 func (r *recordResponseWriter) WriteHeader(i int) {
 	r.statusCode = i
 	if !r.headersLogged {
@@ -109,6 +110,7 @@ func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+// Calls the underlying Flush.
 func (r *recordResponseWriter) Flush() {
 	r.ResponseWriter.(http.Flusher).Flush()
 }
@@ -139,6 +141,8 @@ func httpTracelogHeaders(f http.HandlerFunc) http.HandlerFunc {
 	return httpTracelog(f, false)
 }
 
+// Logs request/response headers and body.
+// Body is not logged for PutObject, PutObjectPart and GetObject.
 func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
@@ -177,6 +181,8 @@ func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 		if logBody {
 			bodyContents := reqBodyRecorder.Data()
 			if bodyContents != nil {
+				// If body logging is disabled then we print <BODY> as a placeholder
+				// for the actual body.
 				b.Write(bodyContents)
 				fmt.Fprintf(b, "\n")
 			}
@@ -197,9 +203,9 @@ func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 			b.Write(bodyContents)
 			fmt.Fprintf(b, "\n")
 		} else {
-			// If there was no error response and body logging is disabled
-			// then we print <BODY>
 			if !logBody {
+				// If there was no error response and body logging is disabled
+				// then we print <BODY> as a placeholder for the actual body.
 				b.Write(bodyPlaceHolder)
 				fmt.Fprintf(b, "\n")
 			}
@@ -207,6 +213,7 @@ func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 
 		fmt.Fprintf(b, "\n")
 
+		// Write the contents in one shot so that logs don't get interspersed.
 		os.Stdout.Write(b.Bytes())
 	}
 }
