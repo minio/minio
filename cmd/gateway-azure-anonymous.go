@@ -271,7 +271,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     continuationToken,

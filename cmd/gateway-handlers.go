@@ -810,7 +810,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsV2Info object to be
 	// serialized as XML and sent as S3 compatible response body.
-	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, fetchOwner, delimiter, maxKeys)
+	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
 		errorIf(err, "Unable to list objects. Args to listObjectsV2 are bucket=%s, prefix=%s, token=%s, delimiter=%s", bucket, prefix, token, delimiter)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

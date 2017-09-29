@@ -36,8 +36,8 @@ type GatewayLayer interface {
 	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)
 	DeleteBucketPolicies(string) error
 	AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
-	AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error)
-	ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error)
+	AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
+	ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
 }
 

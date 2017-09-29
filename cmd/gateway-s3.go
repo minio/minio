@@ -230,7 +230,7 @@ func (l *s3Objects) ListObjects(bucket string, prefix string, marker string, del
 }
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
-func (l *s3Objects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
+func (l *s3Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
 	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
 		return loi, s3ToObjectError(traceError(err), bucket)

@@ -385,84 +385,73 @@ func (a *azureObjects) DeleteBucket(bucket string) error {
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
 // and marker, uses Azure equivalent ListBlobs.
 func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	var objects []ObjectInfo
+	var prefixes []string
 	container := a.client.GetContainerReference(bucket)
-	resp, err := container.ListBlobs(storage.ListBlobsParameters{
-		Prefix:     prefix,
-		Marker:     marker,
-		Delimiter:  delimiter,
-		MaxResults: uint(maxKeys),
-	})
-	if err != nil {
-		return result, azureToObjectError(traceError(err), bucket, prefix)
-	}
-	result.IsTruncated = resp.NextMarker != ""
-	result.NextMarker = resp.NextMarker
-	for _, object := range resp.Blobs {
-		if strings.HasPrefix(object.Name, globalMinioSysTmp) {
-			continue
-		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:          bucket,
-			Name:            object.Name,
-			ModTime:         time.Time(object.Properties.LastModified),
-			Size:            object.Properties.ContentLength,
-			ETag:            azureToS3ETag(object.Properties.Etag),
-			ContentType:     object.Properties.ContentType,
-			ContentEncoding: object.Properties.ContentEncoding,
+	for len(objects) == 0 && len(prefixes) == 0 {
+		resp, err := container.ListBlobs(storage.ListBlobsParameters{
+			Prefix:     prefix,
+			Marker:     marker,
+			Delimiter:  delimiter,
+			MaxResults: uint(maxKeys),
 		})
-	}
+		if err != nil {
+			return result, azureToObjectError(traceError(err), bucket, prefix)
+		}
 
-	// Remove minio.sys.tmp prefix.
-	for i, prefix := range resp.BlobPrefixes {
-		if prefix == globalMinioSysTmp {
-			resp.BlobPrefixes = append(resp.BlobPrefixes[:i], resp.BlobPrefixes[i+1:]...)
+		for _, object := range resp.Blobs {
+			if strings.HasPrefix(object.Name, globalMinioSysTmp) {
+				continue
+			}
+			objects = append(objects, ObjectInfo{
+				Bucket:          bucket,
+				Name:            object.Name,
+				ModTime:         time.Time(object.Properties.LastModified),
+				Size:            object.Properties.ContentLength,
+				ETag:            azureToS3ETag(object.Properties.Etag),
+				ContentType:     object.Properties.ContentType,
+				ContentEncoding: object.Properties.ContentEncoding,
+			})
+		}
+
+		// Remove minio.sys.tmp prefix.
+		for _, prefix := range resp.BlobPrefixes {
+			if prefix != globalMinioSysTmp {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+
+		marker = resp.NextMarker
+		if resp.NextMarker == "" {
 			break
 		}
 	}
-	result.Prefixes = resp.BlobPrefixes
+
+	result.Objects = objects
+	result.Prefixes = prefixes
+	result.NextMarker = marker
+	result.IsTruncated = (marker != "")
 	return result, nil
 }
 
 // ListObjectsV2 - list all blobs in Azure bucket filtered by prefix
-func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
-	container := a.client.GetContainerReference(bucket)
-	resp, err := container.ListBlobs(storage.ListBlobsParameters{
-		Prefix:     prefix,
-		Marker:     continuationToken,
-		Delimiter:  delimiter,
-		MaxResults: uint(maxKeys),
-	})
-	if err != nil {
-		return result, azureToObjectError(traceError(err), bucket, prefix)
-	}
-	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
-	if resp.NextMarker != "" {
-		result.IsTruncated = true
-		result.NextContinuationToken = resp.NextMarker
-	}
-	for _, object := range resp.Blobs {
-		if strings.HasPrefix(object.Name, globalMinioSysTmp) {
-			continue
-		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:          bucket,
-			Name:            object.Name,
-			ModTime:         time.Time(object.Properties.LastModified),
-			Size:            object.Properties.ContentLength,
-			ETag:            azureToS3ETag(object.Properties.Etag),
-			ContentType:     object.Properties.ContentType,
-			ContentEncoding: object.Properties.ContentEncoding,
-		})
+func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	marker := continuationToken
+	if startAfter != "" {
+		marker = startAfter
 	}
 
-	// Remove minio.sys.tmp prefix.
-	for i, prefix := range resp.BlobPrefixes {
-		if prefix == globalMinioSysTmp {
-			resp.BlobPrefixes = append(resp.BlobPrefixes[:i], resp.BlobPrefixes[i+1:]...)
-			break
-		}
+	var resultV1 ListObjectsInfo
+	resultV1, err = a.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	if err != nil {
+		return result, err
 	}
-	result.Prefixes = resp.BlobPrefixes
+
+	result.Objects = resultV1.Objects
+	result.Prefixes = resultV1.Prefixes
+	result.ContinuationToken = continuationToken
+	result.NextContinuationToken = resultV1.NextMarker
+	result.IsTruncated = (resultV1.NextMarker != "")
 	return result, nil
 }
 
