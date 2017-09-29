@@ -716,6 +716,13 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 	// gateway backends.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
+	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
+	// does not throw an error.
+	if maxKeys < 0 {
+		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
+		return
+	}
+
 	listObjects := objectAPI.ListObjects
 	if reqAuthType == authTypeAnonymous {
 		listObjects = objectAPI.AnonListObjects
