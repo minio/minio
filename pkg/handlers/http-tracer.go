@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package handlers
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -125,25 +124,8 @@ func (r *recordResponseWriter) Body() []byte {
 	return r.body.Bytes()
 }
 
-// Log headers and body.
-func httpTracelogAll(f http.HandlerFunc) http.HandlerFunc {
-	if !globalHTTPTrace {
-		return f
-	}
-	return httpTracelog(f, true)
-}
-
-// Log only the headers.
-func httpTracelogHeaders(f http.HandlerFunc) http.HandlerFunc {
-	if !globalHTTPTrace {
-		return f
-	}
-	return httpTracelog(f, false)
-}
-
-// Logs request/response headers and body.
-// Body is not logged for PutObject, PutObjectPart and GetObject.
-func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
+// TraceReqHandlerFunc logs request/response headers and body.
+func TraceReqHandlerFunc(f http.HandlerFunc, output io.Writer, logBody bool) http.HandlerFunc {
 	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
 	bodyPlaceHolder := []byte("<BODY>")
@@ -214,6 +196,6 @@ func httpTracelog(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 		fmt.Fprintf(b, "\n")
 
 		// Write the contents in one shot so that logs don't get interspersed.
-		os.Stdout.Write(b.Bytes())
+		output.Write(b.Bytes())
 	}
 }

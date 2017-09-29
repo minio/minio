@@ -290,9 +290,6 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		},
 	}
 
-	// Initialize the locks.
-	initNSLock(false)
-
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for

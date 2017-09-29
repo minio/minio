@@ -418,7 +418,6 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
 		setAuthHandler,
-
 		// Add new handlers here.
 	}
 

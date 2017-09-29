@@ -115,7 +115,5 @@ func handleCommonEnvVars() {
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 
-	if os.Getenv("MINIO_HTTP_TRACE") != "" {
-		globalHTTPTrace = true
-	}
+	globalHTTPTrace = os.Getenv("MINIO_HTTP_TRACE") != ""
 }
