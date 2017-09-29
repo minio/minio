@@ -543,7 +543,14 @@ func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metada
 func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
+	azureMeta, props := s3MetaToAzureProperties(metadata)
+	destBlob.Metadata = azureMeta
 	err = destBlob.Copy(srcBlobURL, nil)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
+	}
+	destBlob.Properties = props
+	err = destBlob.SetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
 	}
