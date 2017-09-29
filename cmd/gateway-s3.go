@@ -25,6 +25,7 @@ import (
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // s3ToObjectError converts Minio errors to minio object layer errors.
@@ -161,6 +162,17 @@ func (l *s3Objects) MakeBucketWithLocation(bucket, location string) error {
 
 // GetBucketInfo gets bucket metadata..
 func (l *s3Objects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	// Verify if bucket name is valid.
+	// We are using a separate helper function here to validate bucket
+	// names instead of IsValidBucketName() because there is a possibility
+	// that certains users might have buckets which are non-DNS compliant
+	// in us-east-1 and we might severely restrict them by not allowing
+	// access to these buckets.
+	// Ref - http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+	if s3utils.CheckValidBucketName(bucket) != nil {
+		return bi, traceError(BucketNameInvalid{Bucket: bucket})
+	}
+
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
 		return bi, s3ToObjectError(traceError(err), bucket)

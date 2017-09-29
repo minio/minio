@@ -135,8 +135,14 @@ func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, er
 		return bucketInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
+	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
+	if err != nil {
+		return bucketInfo, traceError(err)
+	}
+
 	// Last-Modified date being returned by GCS
 	return BucketInfo{
-		Name: bucket,
+		Name:    bucket,
+		Created: t,
 	}, nil
 }
