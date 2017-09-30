@@ -19,6 +19,7 @@ package minio
 import "context"
 
 // GetObjectWithContext - returns an seekable, readable object.
-func (c Client) GetObjectWithContext(ctx context.Context, bucketName, objectName string) (*Object, error) {
-	return c.getObjectWithContext(ctx, bucketName, objectName)
+// The options can be used to specify the GET request further.
+func (c Client) GetObjectWithContext(ctx context.Context, bucketName, objectName string, opts GetObjectOptions) (*Object, error) {
+	return c.getObjectWithContext(ctx, bucketName, objectName, opts)
 }

@@ -55,11 +55,11 @@ func (l *s3Objects) AnonPutObject(bucket string, object string, size int64, data
 
 // AnonGetObject - Get object anonymously
 func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	r := minio.NewGetReqHeaders()
-	if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
-	object, _, err := l.anonClient.GetObject(bucket, key, r)
+	object, _, err := l.anonClient.GetObject(bucket, key, opts)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
@@ -75,8 +75,7 @@ func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, 
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, e error) {
-	r := minio.NewHeadReqHeaders()
-	oi, err := l.anonClient.StatObject(bucket, object, r)
+	oi, err := l.anonClient.StatObject(bucket, object, minio.StatObjectOptions{})
 	if err != nil {
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}

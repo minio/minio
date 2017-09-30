@@ -244,11 +244,11 @@ func (s *SourceInfo) getProps(c Client) (size int64, etag string, userMeta map[s
 	// Get object info - need size and etag here. Also, decryption
 	// headers are added to the stat request if given.
 	var objInfo ObjectInfo
-	rh := NewGetReqHeaders()
+	opts := StatObjectOptions{}
 	for k, v := range s.decryptKey.getSSEHeaders(false) {
-		rh.Set(k, v)
+		opts.Set(k, v)
 	}
-	objInfo, err = c.statObject(s.bucket, s.object, rh)
+	objInfo, err = c.statObject(s.bucket, s.object, opts)
 	if err != nil {
 		err = fmt.Errorf("Could not stat object - %s/%s: %v", s.bucket, s.object, err)
 	} else {
@@ -264,6 +264,51 @@ func (s *SourceInfo) getProps(c Client) (size int64, etag string, userMeta map[s
 		}
 	}
 	return
+}
+
+// Low level implementation of CopyObject API, supports only upto 5GiB worth of copy.
+func (c Client) copyObjectDo(ctx context.Context, srcBucket, srcObject, destBucket, destObject string,
+	metadata map[string]string) (ObjectInfo, error) {
+
+	// Build headers.
+	headers := make(http.Header)
+
+	// Set all the metadata headers.
+	for k, v := range metadata {
+		headers.Set(k, v)
+	}
+
+	// Set the source header
+	headers.Set("x-amz-copy-source", s3utils.EncodePath(srcBucket+"/"+srcObject))
+
+	// Send upload-part-copy request
+	resp, err := c.executeMethod(ctx, "PUT", requestMetadata{
+		bucketName:   destBucket,
+		objectName:   destObject,
+		customHeader: headers,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	// Check if we got an error response.
+	if resp.StatusCode != http.StatusOK {
+		return ObjectInfo{}, httpRespToErrorResponse(resp, srcBucket, srcObject)
+	}
+
+	cpObjRes := copyObjectResult{}
+	err = xmlDecoder(resp.Body, &cpObjRes)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	objInfo := ObjectInfo{
+		Key:          destObject,
+		ETag:         strings.Trim(cpObjRes.ETag, "\""),
+		LastModified: cpObjRes.LastModified,
+	}
+	return objInfo, nil
 }
 
 // uploadPartCopy - helper function to create a part in a multipart
