@@ -1151,14 +1151,26 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 // XML response is parsed.
 // Its success verifies the format of the response.
 func (s *TestSuiteCommon) TestListBuckets(c *C) {
-	// create HTTP request for listing buckets.
-	request, err := newTestSignedRequest("GET", getListBucketURL(s.endPoint),
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-
 	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to list buckets.
 	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	// create HTTP request for listing buckets.
+	request, err = newTestSignedRequest("GET", getListBucketURL(s.endPoint),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request to list buckets.
+	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
@@ -1168,6 +1180,24 @@ func (s *TestSuiteCommon) TestListBuckets(c *C) {
 	err = decoder.Decode(&results)
 	// validating that the xml-decoding/parsing was successful.
 	c.Assert(err, IsNil)
+
+	// Fetch the bucket created above
+	var createdBucket Bucket
+	for _, b := range results.Buckets.Buckets {
+		if b.Name == bucketName {
+			createdBucket = b
+		}
+	}
+	c.Assert(createdBucket.Name != "", Equals, true)
+
+	// Parse the bucket modtime
+	creationTime, err := time.Parse(timeFormatAMZLong, createdBucket.CreationDate)
+	c.Assert(err, IsNil)
+
+	// Check if bucket modtime is consistent (not less than current time and not late more than 5 minutes)
+	timeNow := time.Now().UTC()
+	c.Assert(creationTime.Before(timeNow), Equals, true)
+	c.Assert(timeNow.Sub(creationTime) < time.Minute*5, Equals, true)
 }
 
 // This tests validate if PUT handler can successfully detect signature mismatch.
