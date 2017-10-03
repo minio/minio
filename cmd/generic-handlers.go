@@ -241,8 +241,8 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 
 // Supported Amz date formats.
 var amzDateFormats = []string{
-	time.RFC1123,
-	time.RFC1123Z,
+	rfc1123Format,
+	rfc1123ZFormat,
 	iso8601Format,
 	// Add new AMZ date formats here.
 }
