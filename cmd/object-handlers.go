@@ -398,7 +398,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
 	}
+
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects.
 	if !isMetadataReplace(r.Header) && cpSrcDstSame {
