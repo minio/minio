@@ -38,9 +38,14 @@ import (
 )
 
 // AWS Signature Version '4' constants.
+//
+// We define our own version of RFC1123(Z) to allow for single-digit days of
+// the month.
 const (
 	signV4Algorithm = "AWS4-HMAC-SHA256"
 	iso8601Format   = "20060102T150405Z"
+	rfc1123Format   = "Mon, _2 Jan 2006 15:04:05 MST"
+	rfc1123ZFormat  = "Mon, _2 Jan 2006 15:04:05 -0700"
 	yyyymmdd        = "20060102"
 )
 
