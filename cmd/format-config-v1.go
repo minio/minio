@@ -531,30 +531,6 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	return format, nil
 }
 
-// isFormatNotFound - returns true if all `format.json` are not found on all disks.
-func isFormatNotFound(formats []*formatConfigV1) bool {
-	for _, format := range formats {
-		// One of the `format.json` is found.
-		if format != nil {
-			return false
-		}
-	}
-	// All format.json missing, success.
-	return true
-}
-
-// isFormatFound - returns true if all input formats are found on all disks.
-func isFormatFound(formats []*formatConfigV1) bool {
-	for _, format := range formats {
-		// One of `format.json` is not found.
-		if format == nil {
-			return false
-		}
-	}
-	// All format.json present, success.
-	return true
-}
-
 // collectNSaveNewFormatConfigs - creates new format configs based on
 // the reference config and saves it on all disks, this is to be
 // called from healFormatXL* functions.

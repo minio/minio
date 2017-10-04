@@ -720,16 +720,6 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, c TestE
 	}
 }
 
-// Check if error type is ObjectNameInvalid.
-func isErrObjectNameInvalid(err error) bool {
-	err = errorCause(err)
-	switch err.(type) {
-	case ObjectNameInvalid:
-		return true
-	}
-	return false
-}
-
 // Wrapper for calling testGetDirectoryReturnsObjectNotFound for both XL and FS.
 func (s *ObjectLayerAPISuite) TestGetDirectoryReturnsObjectNotFound(c *C) {
 	ExecObjectLayerTest(c, testGetDirectoryReturnsObjectNotFound)

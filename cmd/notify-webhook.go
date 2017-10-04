@@ -50,15 +50,6 @@ type httpConn struct {
 	Endpoint string
 }
 
-// List of success status.
-var successStatus = []int{
-	http.StatusOK,
-	http.StatusAccepted,
-	http.StatusContinue,
-	http.StatusNoContent,
-	http.StatusPartialContent,
-}
-
 // isNetErrorIgnored - is network error ignored.
 func isNetErrorIgnored(err error) bool {
 	if err == nil {
