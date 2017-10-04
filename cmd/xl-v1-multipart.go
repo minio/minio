@@ -577,6 +577,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, err
 	}
 
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return pi, toObjectErr(traceError(errInvalidArgument))
+	}
+
 	var partsMetadata []xlMetaV1
 	var errs []error
 	uploadIDPath := pathJoin(bucket, object, uploadID)
@@ -586,6 +591,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	if err := preUploadIDLock.GetRLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
+
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		preUploadIDLock.RUnlock()
