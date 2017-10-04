@@ -60,6 +60,17 @@ var _ = Suite(&TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true}
 // Init and run test on XL backend.
 var _ = Suite(&TestSuiteCommon{serverType: "XL", signer: signerV4})
 
+func verifyError(c *C, response *http.Response, code, description string, statusCode int) {
+	data, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	errorResponse := APIErrorResponse{}
+	err = xml.Unmarshal(data, &errorResponse)
+	c.Assert(err, IsNil)
+	c.Assert(errorResponse.Code, Equals, code)
+	c.Assert(errorResponse.Message, Equals, description)
+	c.Assert(response.StatusCode, Equals, statusCode)
+}
+
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
 func (s *TestSuiteCommon) SetUpSuite(c *C) {

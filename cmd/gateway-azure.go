@@ -158,6 +158,7 @@ func azureToS3ETag(etag string) string {
 
 // azureObjects - Implements Object layer for Azure blob storage.
 type azureObjects struct {
+	gatewayUnsupported
 	client storage.BlobStorageClient // Azure sdk client
 }
 
@@ -608,11 +609,6 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 	}
 
 	return uploadID, nil
-}
-
-// CopyObjectPart - Not implemented.
-func (a *azureObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	return info, traceError(NotImplemented{})
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.

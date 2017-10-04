@@ -239,6 +239,7 @@ func checkGCSProjectID(ctx context.Context, projectID string) error {
 
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
+	gatewayUnsupported
 	client     *storage.Client
 	anonClient *minio.Core
 	projectID  string

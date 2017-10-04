@@ -142,13 +142,6 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 	return bucketInfo, nil
 }
 
-// AnonPutObject - SendPUT request without authentication.
-// This is needed when clients send PUT requests on objects that can be uploaded without auth.
-func (a *azureObjects) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	// azure doesn't support anonymous put
-	return ObjectInfo{}, traceError(NotImplemented{})
-}
-
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
