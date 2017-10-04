@@ -75,6 +75,16 @@ function start_minio_dist()
     echo "${minio_pids[@]}"
 }
 
+function start_minio_gateway_s3()
+{
+    MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG \
+                    "${MINIO[@]}" gateway s3 https://play.minio.io:9000 >"$WORK_DIR/minio-gateway-s3.log" 2>&1 &
+    minio_pid=$!
+    sleep 3
+
+    echo "$minio_pid"
+}
+
 function run_test_fs()
 {
     minio_pid="$(start_minio_fs)"
@@ -86,9 +96,9 @@ function run_test_fs()
     sleep 3
 
     if [ "$rv" -ne 0 ]; then
-        cat fs-minio.log
+        cat "$WORK_DIR/fs-minio.log"
     fi
-    rm -f fs-minio.log
+    rm -f "$WORK_DIR/fs-minio.log"
 
     return "$rv"
 }
@@ -104,9 +114,9 @@ function run_test_xl()
     sleep 3
 
     if [ "$rv" -ne 0 ]; then
-        cat xl-minio.log
+        cat "$WORK_DIR/xl-minio.log"
     fi
-    rm -f xl-minio.log
+    rm -f "$WORK_DIR/xl-minio.log"
 
     return "$rv"
 }
@@ -125,18 +135,38 @@ function run_test_dist()
 
     if [ "$rv" -ne 0 ]; then
         echo "server1 log:"
-        cat dist-minio-9000.log
+        cat "$WORK_DIR/dist-minio-9000.log"
         echo "server2 log:"
-        cat dist-minio-9001.log
+        cat "$WORK_DIR/dist-minio-9001.log"
         echo "server3 log:"
-        cat dist-minio-9002.log
+        cat "$WORK_DIR/dist-minio-9002.log"
         echo "server4 log:"
-        cat dist-minio-9003.log
+        cat "$WORK_DIR/dist-minio-9003.log"
     fi
 
-    rm -f dist-minio-900{0..3}.log
+    rm -f "$WORK_DIR/dist-minio-9000.log" "$WORK_DIR/dist-minio-9001.log" "$WORK_DIR/dist-minio-9002.log" "$WORK_DIR/dist-minio-9003.log" 
 
    return "$rv"
+}
+
+function run_test_gateway_s3()
+{
+    minio_pid="$(start_minio_gateway_s3)"
+
+    export ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+    export SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
+    rv=$?
+
+    kill "$minio_pid"
+    sleep 3
+
+    if [ "$rv" -ne 0 ]; then
+        cat "$WORK_DIR/minio-gateway-s3.log"
+    fi
+    rm -f "$WORK_DIR/minio-gateway-s3.log"
+
+    return "$rv"
 }
 
 function __init__()
@@ -153,8 +183,8 @@ function __init__()
 
     chmod a+x "$WORK_DIR/mc"
 
-    base64 /dev/urandom | head -c 1048576 >"$FILE_1_MB"
-    base64 /dev/urandom | head -c 68157440 >"$FILE_65_MB"
+    shred -n 1 -s 1M - 1>"$FILE_1_MB" 2>/dev/null
+    shred -n 1 -s 65M - 1>"$FILE_65_MB" 2>/dev/null
 
     ## version is purposefully set to '3' for minio to migrate configuration file
     echo '{"version": "3", "credential": {"accessKey": "minio", "secretKey": "minio123"}, "region": "us-east-1"}' > "$MINIO_CONFIG_DIR/config.json"
@@ -171,21 +201,28 @@ function main()
 {
     echo "Testing in FS setup"
     if ! run_test_fs; then
-        echo "running test for FS setup failed"
+        echo "FAILED"
         rm -fr "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in XL setup"
     if ! run_test_xl; then
-        echo "running test for XL setup"
+        echo "FAILED"
         rm -fr "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Distribute XL setup"
     if ! run_test_dist; then
-        echo "running test for Distribute setup"
+        echo "FAILED"
+        rm -fr "$WORK_DIR"
+        exit 1
+    fi
+
+    echo "Testing in Gateway S3 setup"
+    if ! run_test_gateway_s3; then
+        echo "FAILED"
         rm -fr "$WORK_DIR"
         exit 1
     fi
