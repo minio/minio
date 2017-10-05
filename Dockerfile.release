@@ -2,7 +2,7 @@ FROM alpine:3.6
 
 MAINTAINER Minio Inc <dev@minio.io>
  
-COPY buildscripts/docker-entrypoint.sh buildscripts/healthcheck.sh /usr/bin/ 
+COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
 
 RUN \
      apk add --no-cache ca-certificates && \
