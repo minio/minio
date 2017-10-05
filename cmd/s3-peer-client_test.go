@@ -39,7 +39,6 @@ func TestMakeS3Peers(t *testing.T) {
 		peers      []string
 	}{
 		{"127.0.0.1:9000", mustGetNewEndpointList("/mnt/disk1"), []string{"127.0.0.1:9000"}},
-		{"127.0.0.1:9000", mustGetNewEndpointList("http://localhost:9001/d1"), []string{"127.0.0.1:9000", "localhost:9001"}},
 		{"example.org:9000", mustGetNewEndpointList("http://example.org:9000/d1", "http://example.com:9000/d1", "http://example.net:9000/d1", "http://example.edu:9000/d1"), []string{"example.org:9000", "example.com:9000", "example.edu:9000", "example.net:9000"}},
 	}
 
