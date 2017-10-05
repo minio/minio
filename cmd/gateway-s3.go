@@ -85,6 +85,10 @@ func s3ToObjectError(err error, params ...string) error {
 		}
 	case "XAmzContentSHA256Mismatch":
 		err = SHA256Mismatch{}
+	case "NoSuchUpload":
+		err = InvalidUploadID{}
+	case "EntityTooSmall":
+		err = PartTooSmall{}
 	}
 
 	e.e = err
@@ -195,7 +199,7 @@ func (l *s3Objects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 func (l *s3Objects) ListBuckets() ([]BucketInfo, error) {
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
-		return nil, err
+		return nil, s3ToObjectError(traceError(err))
 	}
 
 	b := make([]BucketInfo, len(buckets))
@@ -450,7 +454,11 @@ func toMinioClientMetadata(metadata map[string]string) map[string]string {
 func (l *s3Objects) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
 	// Create PutObject options
 	opts := minio.PutObjectOptions{UserMetadata: metadata}
-	return l.Client.NewMultipartUpload(bucket, object, opts)
+	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
+	if err != nil {
+		return uploadID, s3ToObjectError(traceError(err), bucket, object)
+	}
+	return uploadID, nil
 }
 
 // CopyObjectPart copy part of object to other bucket and object
@@ -473,7 +481,7 @@ func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
 	md5HexBytes, err := hex.DecodeString(data.md5Sum)
 	if err != nil {
-		return pi, err
+		return pi, s3ToObjectError(traceError(err), bucket, object)
 	}
 
 	sha256sumBytes, err := hex.DecodeString(data.sha256Sum)
@@ -483,7 +491,7 @@ func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string,
 
 	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), md5HexBytes, sha256sumBytes)
 	if err != nil {
-		return pi, err
+		return pi, s3ToObjectError(traceError(err), bucket, object)
 	}
 
 	return fromMinioClientObjectPart(info), nil
@@ -526,7 +534,8 @@ func (l *s3Objects) ListObjectParts(bucket string, object string, uploadID strin
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *s3Objects) AbortMultipartUpload(bucket string, object string, uploadID string) error {
-	return l.Client.AbortMultipartUpload(bucket, object, uploadID)
+	err := l.Client.AbortMultipartUpload(bucket, object, uploadID)
+	return s3ToObjectError(traceError(err), bucket, object)
 }
 
 // toMinioClientCompletePart converts completePart to minio CompletePart
