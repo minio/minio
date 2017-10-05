@@ -164,8 +164,8 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 	return uploads, end, nil
 }
 
-// listMultipartUploads - lists all multipart uploads.
-func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+// listMultipartUploadsCleanup - lists all multipart uploads. Called by fs.cleanupStaleMultipartUpload()
+func (fs fsObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
 	result := ListMultipartsInfo{}
 	recursive := true
 	if delimiter == slashSeparator {
@@ -1014,7 +1014,7 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Durat
 	for {
 		// List multipart uploads in a bucket 1000 at a time
 		prefix := ""
-		lmi, err = fs.listMultipartUploads(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
+		lmi, err = fs.listMultipartUploadsCleanup(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
 		if err != nil {
 			errorIf(err, "Unable to list uploads")
 			return err
