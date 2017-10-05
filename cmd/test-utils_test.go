@@ -240,53 +240,6 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 // The generated certificate contains IP SAN, that way we don't need
 // to enable InsecureSkipVerify in TLS config
 
-var testServerCertPEM = []byte(`-----BEGIN CERTIFICATE-----
-MIIC9zCCAd+gAwIBAgIQV9ukx5ZahXeFygLXnR1WJTANBgkqhkiG9w0BAQsFADAS
-MRAwDgYDVQQKEwdBY21lIENvMB4XDTE2MTExNTE1MDQxNFoXDTE3MTExNTE1MDQx
-NFowEjEQMA4GA1UEChMHQWNtZSBDbzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
-AQoCggEBALLDXunOVIipgtvPVpQxIBTzUpceUtLYrNKTCtYfLtvFCNSPAa2W2EAi
-mW2WgtU+Wd+jFN2leG+lvyEp2n1YzBN12oOzAZMf39K2j05aO6vN68Pf/3w/h2qz
-PDYFWbWBMS1vC6RosfaQc4VFZCkz89M1aonwj0K8FjOHG4pu7rKnVkluC0c4+Xpu
-8rB652chx/h6wFZwscVqFZIarTte8Z1tcbRhbvpdkOV749Wn5i2umlrKpBgsBv22
-8jn115BK7E2mN0rlCYPuN312bFFSSE85NaSdOp06TjD+2Rv9jPKizvnFN+2ADEje
-nlCaYe3VRybKPZLrxPcqFQoCQsO+8ZsCAwEAAaNJMEcwDgYDVR0PAQH/BAQDAgKk
-MBMGA1UdJQQMMAoGCCsGAQUFBwMBMA8GA1UdEwEB/wQFMAMBAf8wDwYDVR0RBAgw
-BocEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAsmNCixmx+srB93+Jz5t90zzCJN4O
-5RDWh7X7D54xtRRZ/t9HLLLFKW9EqhAM17xee3C4eNCicOqHP/htEvLwt3BWFmya
-djvIUQYfymx4GtBTfMH4eC5vYGdxSuTVNe7JGHMpJjArNe4vIlUHyj2n12aGDHUf
-NKEiTR2m+6hiKEyym74vhxGnl208OFa4tAMv3J7BjEObE37oy/vH/getE0HwG/EL
-feE4D2Pp9XqeMCg/sPZPoQgBuq3QsL2RdL8DQywb/HrApdLyfmN0avV5tmbrm0cL
-/0NUqCWjJIIKF0XxZbqlkQsYK5zpDJ36MFXO65aF3QGOMP1rlBD3d0S6kw==
------END CERTIFICATE-----`)
-
-var testServerKeyPEM = []byte(`-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEAssNe6c5UiKmC289WlDEgFPNSlx5S0tis0pMK1h8u28UI1I8B
-rZbYQCKZbZaC1T5Z36MU3aV4b6W/ISnafVjME3Xag7MBkx/f0raPTlo7q83rw9//
-fD+HarM8NgVZtYExLW8LpGix9pBzhUVkKTPz0zVqifCPQrwWM4cbim7usqdWSW4L
-Rzj5em7ysHrnZyHH+HrAVnCxxWoVkhqtO17xnW1xtGFu+l2Q5Xvj1afmLa6aWsqk
-GCwG/bbyOfXXkErsTaY3SuUJg+43fXZsUVJITzk1pJ06nTpOMP7ZG/2M8qLO+cU3
-7YAMSN6eUJph7dVHJso9kuvE9yoVCgJCw77xmwIDAQABAoIBAEE6CmLTd4LaHzZn
-RBcUibk7Q5KCbQQkLYM0Rgr1G9ry3RL6D0mwtb1JIqSa+6gldROl5NIvM2/Bkajf
-JasBAI3FPfM6GMP/KGMxW77iK823eGRjUkyavaWQOtMXRrF0r2X9k8jsrqrh8FTb
-if2CyF/zqKkmTo+yI4Ovs7viWFR1IFBUHRwfYTTKnXA2q4S39knExALe1wWUkc4L
-oOidewQ5IVCU3OQLWXP/beKoV/jw6+dOs5CYjXFsww6tdOsh+WkA9d3/rKPPtLdP
-tDQiZtmI6FCYy/PdYqmzY0xg6dipGTDRfENUEx5SJu6HeSoUQUwEpQqnRxIu0iZl
-FJ2ZziECgYEAzpdbIrFltGlSh7DIJfnQG86QeOw/nGluFTED9AweRAIzOYnUQCV3
-XCKMhFqmzsNpibEC1Cok92ZJk7bfsmPlx+qzL7BFpynA/gezxgc2wNZlWs8btPHi
-s9h8hwL5If1FgAMD4E2iJtNgI/Kn5j8SDo/A5hAP1CXv12JRTB+pzlECgYEA3YQ6
-e2MLQYLDIcD5RoCrXOc9qo/l46uzo5laIuCKtd/IoOlip95kdgzpQC0/eenDLV9y
-KLqAOZxZe+TVKtSOzVGy58FyD6L1oBJgfwuBku1x5ADRsIblq2uIOumDygRU0hMg
-0tM3orIFGLyJU5hv6vC0x1ZdIGit0wP4ULhgKisCgYARJs3BLps0BD5+13V2eawG
-cvrZnzuUv8gM6FncrBjjKo+YKlI91R54vsGNx3zr05tyfAixFqKlC4/2PIuL4vFT
-zK99uRO/Uh8cuAT73uNz1RjrFiDFwANDTSjhiKSoZr+bZiSvPaLFuGzV7zJzUi8s
-mFC6iQDXayLjbd00BbjyUQKBgHJD2R74sj+ywhFRR8S0brDXn5mx7LYKRfnoCvTe
-uu6iZw2KFhfdwhibBF7UeF/c048+ItcbjTUqj4Y3PjZ/usHymMSvprSmLOnLUPd3
-6fjufsdMHN5gV2ybZYRuHEtC/LX4o//ccGB+T964smXqxiB81ePViuhC1xd4fsi0
-svZNAoGBALJOOR8ebtgATqc6jpnFxdqNmlwzAf/dH/jMZ6FZrttqIWiwxKvWaWPK
-eHJtMmEPMustw/sv1GhDzwWmvgNFPzwEitPKW31m4EdbUCZFxPZ69/BtHTjXD3q3
-dP9W+omFXKQ36bVCB6xKmZH/ZVH5iQW0pdkD2JRnUPsDMNBeqmd6
------END RSA PRIVATE KEY-----`)
-
 // Starts the test server and returns the TestServer with TLS configured instance.
 func StartTestTLSServer(t TestErrHandler, instanceType string, cert, key []byte) TestServer {
 	// Fetch TLS key and pem files from test-data/ directory.
@@ -434,11 +387,6 @@ func resetGlobalNSLock() {
 	if globalNSMutex != nil {
 		globalNSMutex = nil
 	}
-}
-
-// reset global event notifier.
-func resetGlobalEventNotifier() {
-	globalEventNotifier = nil
 }
 
 // reset Global event notifier.
@@ -1404,13 +1352,6 @@ func getCopyObjectURL(endPoint, bucketName, objectName string) string {
 
 // return URL for inserting bucket notification.
 func getPutNotificationURL(endPoint, bucketName string) string {
-	queryValue := url.Values{}
-	queryValue.Set("notification", "")
-	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
-}
-
-// return URL for fetching bucket notification.
-func getGetNotificationURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
 	queryValue.Set("notification", "")
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)

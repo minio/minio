@@ -59,9 +59,6 @@ const (
 	// Refer https://cloud.google.com/storage/docs/composite-objects
 	gcsMaxComponents = 32
 
-	// gcsMaxPartCount - maximum multipart parts GCS supports which is 32 x 32 = 1024.
-	gcsMaxPartCount = 1024
-
 	// Every 24 hours we scan minio.sys.tmp to delete expired multiparts in minio.sys.tmp
 	gcsCleanupInterval = time.Hour * 24
 

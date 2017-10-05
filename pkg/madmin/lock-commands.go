@@ -28,17 +28,7 @@ import (
 
 type statusType string
 
-const (
-	runningStatus statusType = "Running"
-	blockedStatus statusType = "Blocked"
-)
-
 type lockType string
-
-const (
-	debugRLockStr lockType = "RLock"
-	debugWLockStr lockType = "WLock"
-)
 
 // OpsLockState - represents lock specific details.
 type OpsLockState struct {

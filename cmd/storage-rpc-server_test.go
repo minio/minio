@@ -23,8 +23,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 )
 
-const invalidToken = "invalidToken"
-
 type testStorageRPCServer struct {
 	configDir string
 	token     string

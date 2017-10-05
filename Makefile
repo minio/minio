@@ -19,7 +19,7 @@ getdeps: checks
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
-verifiers: getdeps vet fmt lint cyclo spelling
+verifiers: getdeps vet fmt lint cyclo deadcode spelling
 
 vet:
 	@echo "Running $@"
@@ -46,7 +46,8 @@ cyclo:
 	@${GOPATH}/bin/gocyclo -over 100 pkg
 
 deadcode:
-	@${GOPATH}/bin/deadcode
+	@echo "Running $@"
+	@${GOPATH}/bin/deadcode -test $(shell go list ./... | grep -v -e browser -e vendor) || true
 
 spelling:
 	@${GOPATH}/bin/misspell -error `find cmd/`

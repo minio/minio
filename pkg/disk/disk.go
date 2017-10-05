@@ -29,11 +29,3 @@ type Info struct {
 	Ffree  uint64
 	FSType string
 }
-
-func b2s(bs []int8) string {
-	b := make([]byte, len(bs))
-	for i, v := range bs {
-		b[i] = byte(v)
-	}
-	return string(b)
-}
