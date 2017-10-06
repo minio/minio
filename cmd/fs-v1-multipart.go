@@ -482,6 +482,11 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, toObjectErr(err, bucket)
 	}
 
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return pi, toObjectErr(traceError(errInvalidArgument))
+	}
+
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))

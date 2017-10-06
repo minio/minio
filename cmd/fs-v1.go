@@ -537,6 +537,11 @@ func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, me
 		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return ObjectInfo{}, traceError(errInvalidArgument)
+	}
+
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)

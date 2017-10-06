@@ -443,6 +443,11 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		return ObjectInfo{}, err
 	}
 
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return ObjectInfo{}, toObjectErr(traceError(errInvalidArgument))
+	}
+
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
@@ -504,7 +509,10 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize) // alloc additional space for parity blocks created while erasure coding
+
+	// Alloc additional space for parity blocks created while erasure codinga
+	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize)
+
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
 		// Compute part name
@@ -512,10 +520,10 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		// Compute the path of current part
 		tempErasureObj := pathJoin(uniqueID, partName)
 
-		// Calculate the size of the current part, if size is unknown, curPartSize wil be unknown too.
-		// allowEmptyPart will always be true if this is the first part and false otherwise.
+		// Calculate the size of the current part. AllowEmptyPart will always be true
+		// if this is the first part and false otherwise.
 		var curPartSize int64
-		curPartSize, err = getPartSizeFromIdx(data.Size(), globalPutPartSize, partIdx)
+		curPartSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -529,7 +537,8 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 			}
 		}
 
-		file, erasureErr := storage.CreateFile(io.LimitReader(reader, globalPutPartSize), minioMetaTmpBucket, tempErasureObj, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
+		file, erasureErr := storage.CreateFile(io.LimitReader(reader, curPartSize), minioMetaTmpBucket,
+			tempErasureObj, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
@@ -561,7 +570,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 
 		// Check part size for the next index.
 		var partSize int64
-		partSize, err = getPartSizeFromIdx(data.Size(), globalPutPartSize, partIdx+1)
+		partSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx+1)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -570,7 +579,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		}
 	}
 
-	if size := data.Size(); size > 0 && sizeWritten < data.Size() {
+	if sizeWritten < data.Size() {
 		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 

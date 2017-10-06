@@ -340,8 +340,6 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 		partIndex    int
 		expectedSize int64
 	}{
-		// Total size is - 1
-		{-1, 10, 1, -1},
 		// Total size is zero
 		{0, 10, 1, 0},
 		// part size 2MiB, total size 4MiB
@@ -356,7 +354,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		s, err := getPartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
+		s, err := calculatePartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
 		if err != nil {
 			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
 		}
@@ -371,13 +369,16 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 		partIndex int
 		err       error
 	}{
-		// partSize is 0, error.
+		// partSize is 0, returns error.
 		{10, 0, 1, errPartSizeZero},
+		// partIndex is 0, returns error.
 		{10, 1, 0, errPartSizeIndex},
+		// Total size is -1, returns error.
+		{-1, 10, 1, errInvalidArgument},
 	}
 
 	for i, testCaseFailure := range testCasesFailure {
-		_, err := getPartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		_, err := calculatePartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
 		if err == nil {
 			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
 		}
