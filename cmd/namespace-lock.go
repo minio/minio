@@ -22,9 +22,10 @@ import (
 	"sync"
 
 	"fmt"
+	"time"
+
 	"github.com/minio/dsync"
 	"github.com/minio/lsync"
-	"time"
 )
 
 // Global name space lock.

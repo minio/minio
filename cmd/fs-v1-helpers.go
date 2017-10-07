@@ -133,7 +133,7 @@ func fsStat(statLoc string) (os.FileInfo, error) {
 	if err := checkPathLength(statLoc); err != nil {
 		return nil, traceError(err)
 	}
-	fi, err := osStat((statLoc))
+	fi, err := os.Stat((statLoc))
 	if err != nil {
 		return nil, traceError(err)
 	}
@@ -211,7 +211,7 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 	}
 
 	// Stat to get the size of the file at path.
-	st, err := osStat((readPath))
+	st, err := os.Stat((readPath))
 	if err != nil {
 		return nil, 0, traceError(err)
 	}

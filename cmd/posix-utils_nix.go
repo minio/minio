@@ -18,14 +18,6 @@
 
 package cmd
 
-import "os"
-
-// osStat returns a FileInfo structure describing the named file.
-// If there is an error, it will be of type *PathError.
-func osStat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
-
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {

@@ -21,8 +21,6 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	os2 "github.com/minio/minio/pkg/x/os"
 )
 
 type MySuite struct {
@@ -54,7 +52,7 @@ func TestSafeAbort(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "testfile-abort"))
+	_, err = os.Stat(path.Join(s.root, "testfile-abort"))
 	if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -80,7 +78,7 @@ func TestSafeClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "testfile-close"))
+	_, err = os.Stat(path.Join(s.root, "testfile-close"))
 	if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -90,7 +88,7 @@ func TestSafeClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "testfile-close"))
+	_, err = os.Stat(path.Join(s.root, "testfile-close"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +116,7 @@ func TestSafe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "testfile-safe"))
+	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
 	if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -142,7 +140,7 @@ func TestSafe(t *testing.T) {
 		}
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "testfile-safe"))
+	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +161,7 @@ func TestSafeAbortWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "purgefile-abort"))
+	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
 	if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -173,7 +171,7 @@ func TestSafeAbortWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = os2.Stat(path.Join(s.root, "purgefile-abort"))
+	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
 	if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
