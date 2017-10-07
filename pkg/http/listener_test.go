@@ -734,7 +734,6 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 	}
 
 	handleConnection := func(i int, wg *sync.WaitGroup, serverConn net.Conn, request, reply string) {
-		wg.Add(1)
 		defer wg.Done()
 
 		received, err := bufio.NewReader(serverConn).ReadString('\n')
@@ -778,12 +777,14 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test %d: accept: expected = <nil>, got = %v", i+1, err)
 			}
+			wg.Add(1)
 			go handleConnection(i, &wg, serverConn, "GET /2 HTTP/1.0\n", testCase.reply)
 
 			serverConn, err = listener.Accept()
 			if err != nil {
 				t.Fatalf("Test %d: accept: expected = <nil>, got = %v", i+1, err)
 			}
+			wg.Add(1)
 			go handleConnection(i, &wg, serverConn, "GET /1 HTTP/1.0\n", testCase.reply)
 
 			wg.Wait()
