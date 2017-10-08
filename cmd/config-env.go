@@ -90,7 +90,7 @@ type envNotifyPostgreSQL struct {
 
 type envNotifyKafka struct {
 	Enable *bool
-	Topic *string
+	Topic  *string
 }
 
 type envNotifyWebhook struct {
