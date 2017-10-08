@@ -94,7 +94,7 @@ func TestEnvConfigCredential(t *testing.T) {
 		t.Error("Could not unset environment variable")
 	}
 
-	if cred != nil {
+	if cred == nil {
 		t.Errorf("Expected to get `nil` but got `%v`", cred)
 	}
 }
