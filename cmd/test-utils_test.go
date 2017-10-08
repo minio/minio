@@ -403,9 +403,9 @@ func resetGlobalIsXL() {
 }
 
 func resetGlobalIsEnvs() {
-	globalIsEnvCreds = false
-	globalIsEnvBrowser = false
-	globalIsEnvRegion = false
+	globalEnvConfig.Credential = nil
+	globalEnvConfig.Browser = nil
+	globalEnvConfig.Region = nil
 }
 
 // Resets all the globals used modified in tests.

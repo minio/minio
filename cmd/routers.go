@@ -71,7 +71,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	}
 
 	// Register web router when its enabled.
-	if globalIsBrowserEnabled {
+	if serverConfig.Browser {
 		if err := registerWebRouter(mux); err != nil {
 			return nil, err
 		}

@@ -306,7 +306,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	handleCommonEnvVars()
 
 	// Validate if we have access, secret set through environment.
-	if !globalIsEnvCreds {
+	if globalEnvConfig.Credential == nil {
 		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
 	}
 
@@ -335,7 +335,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	router := mux.NewRouter().SkipClean(true)
 
 	// Register web router when its enabled.
-	if globalIsBrowserEnabled {
+	if serverConfig.Browser {
 		fatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
 	registerGatewayAPIRouter(router, newObject)

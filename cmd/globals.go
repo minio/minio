@@ -84,17 +84,7 @@ var (
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsXL = false
 
-	// This flag is set to 'true' by default
-	globalIsBrowserEnabled = true
-
-	// This flag is set to 'true' when MINIO_BROWSER env is set.
-	globalIsEnvBrowser = false
-
-	// Set to true if credentials were passed from env, default is false.
-	globalIsEnvCreds = false
-
-	// This flag is set to 'true' wen MINIO_REGION env is set.
-	globalIsEnvRegion = false
+	globalEnvConfig = envConfigV19{}
 
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
@@ -169,10 +159,10 @@ func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
 		"isDistXL":         globalIsDistXL,
 		"isXL":             globalIsXL,
-		"isBrowserEnabled": globalIsBrowserEnabled,
-		"isEnvBrowser":     globalIsEnvBrowser,
-		"isEnvCreds":       globalIsEnvCreds,
-		"isEnvRegion":      globalIsEnvRegion,
+		"isBrowserEnabled": bool(serverConfig.Browser),
+		"isEnvBrowser":     globalEnvConfig.Browser != nil,
+		"isEnvCreds":       globalEnvConfig.Credential != nil,
+		"isEnvRegion":      globalEnvConfig.Region != nil,
 		"isSSL":            globalIsSSL,
 		"serverRegion":     globalServerRegion,
 		"serverUserAgent":  globalServerUserAgent,
