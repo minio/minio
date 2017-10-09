@@ -28,12 +28,6 @@ func toGCSPublicURL(bucket, object string) string {
 	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object)
 }
 
-// AnonPutObject creates a new object anonymously with the incoming data,
-func (l *gcsGateway) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-
-	return ObjectInfo{}, NotImplemented{}
-}
-
 // AnonGetObject - Get object anonymously
 func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
 	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)

@@ -73,6 +73,95 @@ func init() {
 	log.logger.Hooks = nil
 }
 
+// concurreny level for certain parallel tests.
+const (
+	testConcurrencyLevel = 10
+)
+
+///
+/// Excerpts from @lsegal - https://github.com/aws/aws-sdk-js/issues/659#issuecomment-120477258
+///
+///  User-Agent:
+///
+///      This is ignored from signing because signing this causes problems with generating pre-signed URLs
+///      (that are executed by other agents) or when customers pass requests through proxies, which may
+///      modify the user-agent.
+///
+///  Content-Length:
+///
+///      This is ignored from signing because generating a pre-signed URL should not provide a content-length
+///      constraint, specifically when vending a S3 pre-signed PUT URL. The corollary to this is that when
+///      sending regular requests (non-pre-signed), the signature contains a checksum of the body, which
+///      implicitly validates the payload length (since changing the number of bytes would change the checksum)
+///      and therefore this header is not valuable in the signature.
+///
+///  Content-Type:
+///
+///      Signing this header causes quite a number of problems in browser environments, where browsers
+///      like to modify and normalize the content-type header in different ways. There is more information
+///      on this in https://github.com/aws/aws-sdk-js/issues/244. Avoiding this field simplifies logic
+///      and reduces the possibility of future bugs
+///
+///  Authorization:
+///
+///      Is skipped for obvious reasons
+///
+var ignoredHeaders = map[string]bool{
+	"Authorization":  true,
+	"Content-Type":   true,
+	"Content-Length": true,
+	"User-Agent":     true,
+}
+
+// Headers to ignore in streaming v4
+var ignoredStreamingHeaders = map[string]bool{
+	"Authorization": true,
+	"Content-Type":  true,
+	"Content-Md5":   true,
+	"User-Agent":    true,
+}
+
+// calculateSignedChunkLength - calculates the length of chunk metadata
+func calculateSignedChunkLength(chunkDataSize int64) int64 {
+	return int64(len(fmt.Sprintf("%x", chunkDataSize))) +
+		17 + // ";chunk-signature="
+		64 + // e.g. "f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"
+		2 + // CRLF
+		chunkDataSize +
+		2 // CRLF
+}
+
+// calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)
+func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
+	if dataLen <= 0 {
+		return 0
+	}
+	chunksCount := int64(dataLen / chunkSize)
+	remainingBytes := int64(dataLen % chunkSize)
+	var streamLen int64
+	streamLen += chunksCount * calculateSignedChunkLength(chunkSize)
+	if remainingBytes > 0 {
+		streamLen += calculateSignedChunkLength(remainingBytes)
+	}
+	streamLen += calculateSignedChunkLength(0)
+	return streamLen
+}
+
+// Ask the kernel for a free open port.
+func getFreePort() string {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+	return fmt.Sprintf("%d", l.Addr().(*net.TCPAddr).Port)
+}
+
 func prepareFS() (ObjectLayer, string, error) {
 	nDisks := 1
 	fsDirs, err := getRandomDisks(nDisks)
@@ -2298,4 +2387,25 @@ func randomizeBytes(s []byte, seed int64) []byte {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
+}
+
+func TestToErrIsNil(t *testing.T) {
+	if toObjectErr(nil) != nil {
+		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", toObjectErr(nil))
+	}
+	if toStorageErr(nil) != nil {
+		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", toStorageErr(nil))
+	}
+	if toAPIErrorCode(nil) != ErrNone {
+		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(nil))
+	}
+	if s3ToObjectError(nil) != nil {
+		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", s3ToObjectError(nil))
+	}
+	if azureToObjectError(nil) != nil {
+		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", azureToObjectError(nil))
+	}
+	if gcsToObjectError(nil) != nil {
+		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", gcsToObjectError(nil))
+	}
 }

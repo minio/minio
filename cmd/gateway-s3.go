@@ -97,13 +97,13 @@ func s3ToObjectError(err error, params ...string) error {
 
 // s3Objects implements gateway for Minio and S3 compatible object storage servers.
 type s3Objects struct {
+	gatewayUnsupported
 	Client     *minio.Core
 	anonClient *minio.Core
 }
 
 // newS3Gateway returns s3 gatewaylayer
 func newS3Gateway(host string) (GatewayLayer, error) {
-
 	var err error
 	var endpoint string
 	var secure = true
@@ -459,12 +459,6 @@ func (l *s3Objects) NewMultipartUpload(bucket string, object string, metadata ma
 		return uploadID, s3ToObjectError(traceError(err), bucket, object)
 	}
 	return uploadID, nil
-}
-
-// CopyObjectPart copy part of object to other bucket and object
-func (l *s3Objects) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	// FIXME: implement CopyObjectPart
-	return PartInfo{}, traceError(NotImplemented{})
 }
 
 // fromMinioClientObjectPart converts minio ObjectPart to PartInfo
