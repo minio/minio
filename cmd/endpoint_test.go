@@ -330,6 +330,38 @@ func TestCreateEndpoints(t *testing.T) {
 	}
 }
 
+// Tests get local peer functionality, local peer is supposed to only return one entry per minio service.
+// So it means that if you have say localhost:9000 and localhost:9001 as endpointArgs then localhost:9001
+// is considered a remote service from localhost:9000 perspective.
+func TestGetLocalPeer(t *testing.T) {
+	tempGlobalMinioAddr := globalMinioAddr
+	defer func() {
+		globalMinioAddr = tempGlobalMinioAddr
+	}()
+	globalMinioAddr = ":9000"
+
+	testCases := []struct {
+		endpointArgs   []string
+		expectedResult string
+	}{
+		{[]string{"/d1", "/d2", "d3", "d4"}, ":9000"},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"},
+			"localhost:9000"},
+		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"},
+			"localhost:9000"},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"},
+			"localhost:9000"},
+	}
+
+	for i, testCase := range testCases {
+		endpoints, _ := NewEndpointList(testCase.endpointArgs...)
+		remotePeer := GetLocalPeer(endpoints)
+		if remotePeer != testCase.expectedResult {
+			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, remotePeer)
+		}
+	}
+}
+
 func TestGetRemotePeers(t *testing.T) {
 	tempGlobalMinioPort := globalMinioPort
 	defer func() {

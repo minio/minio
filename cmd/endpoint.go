@@ -419,6 +419,29 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	return serverAddr, endpoints, setupType, nil
 }
 
+// GetLocalPeer - returns local peer value, returns globalMinioAddr
+// for FS and Erasure mode. In case of distributed server return
+// the first element from the set of peers which indicate that
+// they are local. There is always one entry that is local
+// even with repeated server endpoints.
+func GetLocalPeer(endpoints EndpointList) (localPeer string) {
+	peerSet := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		if endpoint.Type() != URLEndpointType {
+			continue
+		}
+		if endpoint.IsLocal && endpoint.Host != "" {
+			peerSet.Add(endpoint.Host)
+		}
+	}
+	if peerSet.IsEmpty() {
+		// If local peer is empty can happen in FS or Erasure coded mode.
+		// then set the value to globalMinioAddr instead.
+		return globalMinioAddr
+	}
+	return peerSet.ToSlice()[0]
+}
+
 // GetRemotePeers - get hosts information other than this minio service.
 func GetRemotePeers(endpoints EndpointList) []string {
 	peerSet := set.NewStringSet()

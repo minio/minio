@@ -296,6 +296,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
+	targetServer := GetLocalPeer(globalEndpoints)
 	accountID := fmt.Sprintf("%d", UTCNow().UnixNano())
 	accountARN := fmt.Sprintf(
 		"%s:%s:%s:%s-%s",
@@ -303,8 +304,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		serverConfig.GetRegion(),
 		accountID,
 		snsTypeMinio,
-		globalMinioAddr,
+		targetServer,
 	)
+
 	var filterRules []filterRule
 
 	for _, prefix := range prefixes {
@@ -357,7 +359,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// nEventCh
 	lc := listenerConfig{
 		TopicConfig:  *topicCfg,
-		TargetServer: globalMinioAddr,
+		TargetServer: targetServer,
 	}
 
 	err = AddBucketListenerConfig(bucket, &lc, objAPI)
