@@ -47,7 +47,7 @@ cyclo:
 
 deadcode:
 	@echo "Running $@"
-	@${GOPATH}/bin/deadcode -test $(shell go list ./... | grep -v -e browser -e vendor) || true
+	@${GOPATH}/bin/deadcode -test $(shell go list ./...) || true
 
 spelling:
 	@${GOPATH}/bin/misspell -error `find cmd/`
