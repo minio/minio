@@ -147,6 +147,7 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
+	ErrPartsSizeUnequal
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -660,6 +661,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers are not supported.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPartsSizeUnequal: {
+		Code:           "XMinioPartsSizeUnequal",
+		Description:    "All parts except the last part should be of the same size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -758,6 +764,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case UnsupportedMetadata:
 		apiErr = ErrUnsupportedMetadata
+	case PartsSizeUnequal:
+		apiErr = ErrPartsSizeUnequal
 	default:
 		apiErr = ErrInternalError
 	}
