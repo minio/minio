@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Quick (C) 2015 Minio, Inc.
+ * Quick (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package quick
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -26,70 +27,87 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	. "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestReadVersion(c *C) {
+func TestReadVersion(t *testing.T) {
 	type myStruct struct {
 		Version string
 	}
 	saveMe := myStruct{"1"}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Save("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	version, err := GetVersion("test.json")
-	c.Assert(err, IsNil)
-	c.Assert(version, Equals, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "1" {
+		t.Fatalf("Expected version '1', got '%v'", version)
+	}
 }
 
-func (s *MySuite) TestReadVersionErr(c *C) {
+func TestReadVersionErr(t *testing.T) {
 	type myStruct struct {
 		Version int
 	}
 	saveMe := myStruct{1}
 	_, err := New(&saveMe)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail in initialization for bad input")
+	}
 
 	err = ioutil.WriteFile("test.json", []byte("{ \"version\":2,"), 0644)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = GetVersion("test.json")
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail to fetch version")
+	}
 
 	err = ioutil.WriteFile("test.json", []byte("{ \"version\":2 }"), 0644)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = GetVersion("test.json")
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail to fetch version")
+	}
 }
 
-func (s *MySuite) TestSaveFailOnDir(c *C) {
-	defer os.RemoveAll("test.json")
-	e := os.MkdirAll("test.json", 0644)
-	c.Assert(e, IsNil)
+func TestSaveFailOnDir(t *testing.T) {
+	defer os.RemoveAll("test-1.json")
+	err := os.MkdirAll("test-1.json", 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
 	type myStruct struct {
 		Version string
 	}
 	saveMe := myStruct{"1"}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
-	err = config.Save("test.json")
-	c.Assert(err, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = config.Save("test-1.json")
+	if err == nil {
+		t.Fatal("Unexpected should fail to save if test-1.json is a directory")
+	}
 }
 
-func (s *MySuite) TestCheckData(c *C) {
+func TestCheckData(t *testing.T) {
 	err := checkData(nil)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail")
+	}
 
 	type myStructBadNoVersion struct {
 		User        string
@@ -98,7 +116,9 @@ func (s *MySuite) TestCheckData(c *C) {
 	}
 	saveMeBadNoVersion := myStructBadNoVersion{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	err = checkData(&saveMeBadNoVersion)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail if Version is not set")
+	}
 
 	type myStructBadVersionInt struct {
 		Version  int
@@ -107,7 +127,9 @@ func (s *MySuite) TestCheckData(c *C) {
 	}
 	saveMeBadVersionInt := myStructBadVersionInt{1, "guest", "nopassword"}
 	err = checkData(&saveMeBadVersionInt)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail if Version is integer")
+	}
 
 	type myStructGood struct {
 		Version     string
@@ -118,10 +140,12 @@ func (s *MySuite) TestCheckData(c *C) {
 
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	err = checkData(&saveMeGood)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func (s *MySuite) TestLoadFile(c *C) {
+func TestLoadFile(t *testing.T) {
 	type myStruct struct {
 		Version     string
 		User        string
@@ -130,38 +154,64 @@ func (s *MySuite) TestLoadFile(c *C) {
 	}
 	saveMe := myStruct{}
 	_, err := Load("test.json", &saveMe)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal(err)
+	}
 
 	file, err := os.Create("test.json")
-	c.Assert(err, IsNil)
-	c.Assert(file.Close(), IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
 	_, err = Load("test.json", &saveMe)
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail to load empty JSON")
+	}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Load("test-non-exist.json")
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail to Load non-existent config")
+	}
+
 	err = config.Load("test.json")
-	c.Assert(err, Not(IsNil))
+	if err == nil {
+		t.Fatal("Unexpected should fail to load empty JSON")
+	}
 
 	saveMe = myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err = New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Save("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	saveMe1 := myStruct{}
 	_, err = Load("test.json", &saveMe1)
-	c.Assert(err, IsNil)
-	c.Assert(saveMe1, DeepEquals, saveMe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(saveMe1, saveMe) {
+		t.Fatalf("Expected %v, got %v", saveMe1, saveMe)
+	}
 
 	saveMe2 := myStruct{}
 	err = json.Unmarshal([]byte(config.String()), &saveMe2)
-	c.Assert(err, IsNil)
-	c.Assert(saveMe2, DeepEquals, saveMe1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(saveMe2, saveMe1) {
+		t.Fatalf("Expected %v, got %v", saveMe2, saveMe1)
+	}
 }
 
-func (s *MySuite) TestYAMLFormat(c *C) {
+func TestYAMLFormat(t *testing.T) {
 	testYAML := "test.yaml"
 	defer os.RemoveAll(testYAML)
 
@@ -189,28 +239,43 @@ directories:
 
 	// Save format using
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = config.Save(testYAML)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Check if the saved structure in actually an YAML format
-	bytes, err := ioutil.ReadFile(testYAML)
-	c.Assert(err, IsNil)
+	b, err := ioutil.ReadFile(testYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(plainYAML, Equals, string(bytes))
+	if !bytes.Equal([]byte(plainYAML), b) {
+		t.Fatalf("Expected %v, got %v", plainYAML, string(b))
+	}
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
 	config, err = New(&loadMe)
-	err = config.Load(testYAML)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(reflect.DeepEqual(saveMe, loadMe), Equals, true)
+	err = config.Load(testYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(saveMe, loadMe) {
+		t.Fatalf("Expected %v, got %v", saveMe, loadMe)
+	}
 }
 
-func (s *MySuite) TestJSONFormat(c *C) {
+func TestJSONFormat(t *testing.T) {
 	testJSON := "test.json"
 	defer os.RemoveAll(testJSON)
 
@@ -240,28 +305,42 @@ func (s *MySuite) TestJSONFormat(c *C) {
 
 	// Save format using
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = config.Save(testJSON)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Check if the saved structure in actually an JSON format
-	bytes, err := ioutil.ReadFile(testJSON)
-	c.Assert(err, IsNil)
+	b, err := ioutil.ReadFile(testJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(plainJSON, Equals, string(bytes))
+	if !bytes.Equal([]byte(plainJSON), b) {
+		t.Fatalf("Expected %v, got %v", plainJSON, string(b))
+	}
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
 	config, err = New(&loadMe)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Load(testJSON)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(reflect.DeepEqual(saveMe, loadMe), Equals, true)
+	if !reflect.DeepEqual(saveMe, loadMe) {
+		t.Fatalf("Expected %v, got %v", saveMe, loadMe)
+	}
 }
 
-func (s *MySuite) TestSaveLoad(c *C) {
+func TestSaveLoad(t *testing.T) {
 	defer os.RemoveAll("test.json")
 	type myStruct struct {
 		Version     string
@@ -271,26 +350,38 @@ func (s *MySuite) TestSaveLoad(c *C) {
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Save("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	loadMe := myStruct{Version: "1"}
 	newConfig, err := New(&loadMe)
-	c.Assert(err, IsNil)
-	c.Assert(newConfig, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = newConfig.Load("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(config.Data(), DeepEquals, newConfig.Data())
-	c.Assert(config.Data(), DeepEquals, &loadMe)
+	if !reflect.DeepEqual(config.Data(), newConfig.Data()) {
+		t.Fatalf("Expected %v, got %v", config.Data(), newConfig.Data())
+	}
+	if !reflect.DeepEqual(config.Data(), &loadMe) {
+		t.Fatalf("Expected %v, got %v", config.Data(), &loadMe)
+	}
 
 	mismatch := myStruct{"1.1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	c.Assert(newConfig.Data(), Not(DeepEquals), &mismatch)
+	if reflect.DeepEqual(config.Data(), &mismatch) {
+		t.Fatal("Expected to mismatch but succeeded instead")
+	}
 }
 
-func (s *MySuite) TestSaveBackup(c *C) {
+func TestSaveBackup(t *testing.T) {
 	defer os.RemoveAll("test.json")
 	defer os.RemoveAll("test.json.old")
 	type myStruct struct {
@@ -301,31 +392,47 @@ func (s *MySuite) TestSaveBackup(c *C) {
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Save("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	loadMe := myStruct{Version: "1"}
 	newConfig, err := New(&loadMe)
-	c.Assert(err, IsNil)
-	c.Assert(newConfig, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = newConfig.Load("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	c.Assert(config.Data(), DeepEquals, newConfig.Data())
-	c.Assert(config.Data(), DeepEquals, &loadMe)
+	if !reflect.DeepEqual(config.Data(), newConfig.Data()) {
+		t.Fatalf("Expected %v, got %v", config.Data(), newConfig.Data())
+	}
+	if !reflect.DeepEqual(config.Data(), &loadMe) {
+		t.Fatalf("Expected %v, got %v", config.Data(), &loadMe)
+	}
 
 	mismatch := myStruct{"1.1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	c.Assert(newConfig.Data(), Not(DeepEquals), &mismatch)
+	if reflect.DeepEqual(newConfig.Data(), &mismatch) {
+		t.Fatal("Expected to mismatch but succeeded instead")
+	}
+
 	config, err = New(&mismatch)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = config.Save("test.json")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func (s *MySuite) TestDiff(c *C) {
+func TestDiff(t *testing.T) {
 	type myStruct struct {
 		Version     string
 		User        string
@@ -334,8 +441,9 @@ func (s *MySuite) TestDiff(c *C) {
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	type myNewStruct struct {
 		Version string
@@ -346,12 +454,17 @@ func (s *MySuite) TestDiff(c *C) {
 
 	mismatch := myNewStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
 	newConfig, err := New(&mismatch)
-	c.Assert(err, IsNil)
-	c.Assert(newConfig, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	fields, ok := config.Diff(newConfig)
-	c.Assert(ok, IsNil)
-	c.Assert(len(fields), Equals, 1)
+	fields, err := config.Diff(newConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("Expected len 1, got %v", len(fields))
+	}
 
 	// Uncomment for debugging
 	//	for i, field := range fields {
@@ -359,7 +472,7 @@ func (s *MySuite) TestDiff(c *C) {
 	//	}
 }
 
-func (s *MySuite) TestDeepDiff(c *C) {
+func TestDeepDiff(t *testing.T) {
 	type myStruct struct {
 		Version     string
 		User        string
@@ -368,17 +481,23 @@ func (s *MySuite) TestDeepDiff(c *C) {
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mismatch := myStruct{"1", "Guest", "nopassword", []string{"Work", "documents", "Music"}}
 	newConfig, err := New(&mismatch)
-	c.Assert(err, IsNil)
-	c.Assert(newConfig, Not(IsNil))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	fields, err := config.DeepDiff(newConfig)
-	c.Assert(err, IsNil)
-	c.Assert(len(fields), Equals, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 2 {
+		t.Fatalf("Expected len 2, got %v", len(fields))
+	}
 
 	// Uncomment for debugging
 	//	for i, field := range fields {

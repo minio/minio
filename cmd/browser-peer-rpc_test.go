@@ -29,8 +29,8 @@ type TestRPCBrowserPeerSuite struct {
 }
 
 // Setting up the test suite and starting the Test server.
-func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
-	s.testServer = StartTestBrowserPeerRPCServer(c, s.serverType)
+func (s *TestRPCBrowserPeerSuite) SetUpSuite(t *testing.T) {
+	s.testServer = StartTestBrowserPeerRPCServer(t, s.serverType)
 	s.testAuthConf = authConfig{
 		serverAddr:      s.testServer.Server.Listener.Addr().String(),
 		accessKey:       s.testServer.AccessKey,
@@ -40,10 +40,9 @@ func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
 	}
 }
 
-// No longer used with gocheck, but used in explicit teardown code in
-// each test function. // Called implicitly by "gopkg.in/check.v1"
-// after all tests are run.
-func (s *TestRPCBrowserPeerSuite) TearDownSuite(c *testing.T) {
+// TeatDownSuite - called implicitly by after all tests are run in
+// browser peer rpc suite.
+func (s *TestRPCBrowserPeerSuite) TearDownSuite(t *testing.T) {
 	s.testServer.Stop()
 }
 

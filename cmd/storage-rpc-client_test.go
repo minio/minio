@@ -219,8 +219,8 @@ type TestRPCStorageSuite struct {
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
-func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
-	s.testServer = StartTestStorageRPCServer(c, s.serverType, 1)
+func (s *TestRPCStorageSuite) SetUpSuite(t *testing.T) {
+	s.testServer = StartTestStorageRPCServer(t, s.serverType, 1)
 	listenAddress := s.testServer.Server.Listener.Addr().String()
 
 	for _, ep := range s.testServer.Disks {
@@ -236,9 +236,8 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 }
 
 // No longer used with gocheck, but used in explicit teardown code in
-// each test function. // Called implicitly by "gopkg.in/check.v1"
-// after all tests are run.
-func (s *TestRPCStorageSuite) TearDownSuite(c *testing.T) {
+// each test function. Called implicitly by after all tests are run.
+func (s *TestRPCStorageSuite) TearDownSuite(t *testing.T) {
 	s.testServer.Stop()
 }
 
