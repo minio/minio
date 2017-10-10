@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
@@ -55,7 +56,7 @@ func assetFS() *assetfs.AssetFS {
 }
 
 // specialAssets are files which are unique files not embedded inside index_bundle.js.
-const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
+const specialAssets = ".*index_bundle.*.js$|.*loader.css$|.*logo.svg$|.*firefox.png$|.*safari.png$|.*chrome.png$|.*favicon.ico$"
 
 // registerWebRouter - registers web router for serving minio browser.
 func registerWebRouter(mux *router.Router) error {
@@ -90,13 +91,20 @@ func registerWebRouter(mux *router.Router) error {
 	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
 
 	// Add compression for assets.
-	compressedAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))
+	h := http.FileServer(assetFS())
+	compressedAssets := handlers.CompressHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		idx := strings.LastIndex(r.URL.Path, slashSeparator)
+		if idx != -1 {
+			r.URL.Path = r.URL.Path[idx+1:]
+		}
+		h.ServeHTTP(w, r)
+	}))
 
 	// Serve javascript files and favicon from assets.
-	webBrowserRouter.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(compressedAssets)
+	webBrowserRouter.Path(fmt.Sprintf("/{assets:%s}", specialAssets)).Handler(compressedAssets)
 
 	// Serve index.html for rest of the requests.
-	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS()))})
+	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(minioReservedBucketPath, h)})
 
 	return nil
 }
