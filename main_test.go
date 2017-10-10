@@ -28,9 +28,9 @@ func TestCheckGoVersion(t *testing.T) {
 		expectedErr error
 	}{
 		{minGoVersion, nil},
-		{"1.6.8", fmt.Errorf("Minio is not compiled by Go >= 1.8.3.  Please recompile accordingly")},
-		{"1.5", fmt.Errorf("Minio is not compiled by Go >= 1.8.3.  Please recompile accordingly")},
-		{"0.1", fmt.Errorf("Minio is not compiled by Go >= 1.8.3.  Please recompile accordingly")},
+		{"1.6.8", fmt.Errorf("Minio is not compiled by Go >= 1.9.1.  Please recompile accordingly")},
+		{"1.5", fmt.Errorf("Minio is not compiled by Go >= 1.9.1.  Please recompile accordingly")},
+		{"0.1", fmt.Errorf("Minio is not compiled by Go >= 1.9.1.  Please recompile accordingly")},
 		{".1", fmt.Errorf("Malformed version: .1")},
 		{"somejunk", fmt.Errorf("Malformed version: somejunk")},
 	}
