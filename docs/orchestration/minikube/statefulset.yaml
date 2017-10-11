@@ -54,7 +54,7 @@ spec:
           value: "minio"
         - name: MINIO_SECRET_KEY
           value: "minio123"
-        image: minio/minio:RELEASE.2017-08-05T00-00-53Z
+        image: minio/minio:RELEASE.2017-09-29T19-16-56Z
         imagePullPolicy: IfNotPresent
         args: ["server", "http://minio-0.minio.default.svc.cluster.local/data", "http://minio-1.minio.default.svc.cluster.local/data", "http://minio-2.minio.default.svc.cluster.local/data", "http://minio-3.minio.default.svc.cluster.local/data"]
         ports:
