@@ -1,17 +1,17 @@
-# Deploy Minio on DC/OS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 在 DC/OS上部署minio [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-To deploy Minio on DC/OS, you can use our [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/6).
+要在DC/OS上部署Minio，可以使用我们的 [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/6).
 
-## 1. Prerequisites
+## 1. 前提条件
 
-  - DC/OS 1.9 or later
-  - [Marathon-LB](https://dcos.io/docs/1.9/usage/service-discovery/marathon-lb/usage/) must be installed and running
-  - Identify [IP of the public agent](https://dcos.io/docs/1.9/administration/locate-public-agent/) where Marathon-LB or an available hostname configured to point to the public agent(s) where Marathon-LB is running.
+  - DC/OS 1.9或更新版本
+  - [Marathon-LB](https://dcos.io/docs/1.9/usage/service-discovery/marathon-lb/usage/) 必须安装并启动。
+  - 识别Marathon-LB或者一个指向Marathon-LB的public agent(s)的可用主机名的 [IP of the public agent](https://dcos.io/docs/1.9/administration/locate-public-agent/) 。
 
 
-## 2. Setting up Minio 
+## 2. 设置Minio 
 
-You can install Minio Universe package using the DC/OS GUI or CLI. 
+你可以使用DC/OS GUI或者CLI安装Minio Universe package。
 
 ### Minio installation on DC/OS GUI 
 - Visit the DC/OS admin page, and click on Universe on the left menu bar. Then click on the Packages tab and search for Minio, click on the ```Install``` button on the right hand side.
