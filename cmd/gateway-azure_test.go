@@ -48,6 +48,9 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"accept-encoding":          "gzip",
 		"content-encoding":         "gzip",
 		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X_test_key":    "value",
+		"X-Amz-Meta-X__test__key":  "value",
+		"X-Amz-Meta-X-Test__key":   "value",
 		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
@@ -55,14 +58,29 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	// Only X-Amz-Meta- prefixed entries will be returned in
 	// Metadata (without the prefix!)
 	expectedHeaders := map[string]string{
-		"Hdr":             "value",
-		"x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
-		"x_minio_matdesc": "{}",
-		"x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+		"Hdr":              "value",
+		"X__test__key":     "value",
+		"X____test____key": "value",
+		"X_Test____key":    "value",
+		"X_Amz_Key":        "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X_Amz_Matdesc":    "{}",
+		"X_Amz_Iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	meta, _ := s3MetaToAzureProperties(headers)
+	meta, _, err := s3MetaToAzureProperties(headers)
+	if err != nil {
+		t.Fatalf("Test failed, with %s", err)
+	}
 	if !reflect.DeepEqual(map[string]string(meta), expectedHeaders) {
 		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, meta)
+	}
+	headers = map[string]string{
+		"invalid--meta": "value",
+	}
+	_, _, err = s3MetaToAzureProperties(headers)
+	if err = errorCause(err); err != nil {
+		if _, ok := err.(UnsupportedMetadata); !ok {
+			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
+		}
 	}
 }
 
@@ -70,13 +88,21 @@ func TestAzurePropertiesToS3Meta(t *testing.T) {
 	// Just one testcase. Adding more test cases does not add value to the testcase
 	// as azureToS3Metadata() just adds a prefix.
 	metadata := map[string]string{
-		"First-Name":      "myname",
-		"x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
-		"x_minio_matdesc": "{}",
-		"x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+		"first_name":       "myname",
+		"x_test_key":       "value",
+		"x_test__key":      "value",
+		"x__test__key":     "value",
+		"x____test____key": "value",
+		"x_amz_key":        "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x_amz_matdesc":    "{}",
+		"x_amz_iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedMeta := map[string]string{
 		"X-Amz-Meta-First-Name":    "myname",
+		"X-Amz-Meta-X-Test-Key":    "value",
+		"X-Amz-Meta-X-Test_key":    "value",
+		"X-Amz-Meta-X_test_key":    "value",
+		"X-Amz-Meta-X__test__key":  "value",
 		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
