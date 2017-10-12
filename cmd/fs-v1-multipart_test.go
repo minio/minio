@@ -226,6 +226,72 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	}
 }
 
+// TestCompleteMultipartUploadFaultyDisk - test CompleteMultipartUpload with faulty disks
+func TestCompleteMultipartUpload(t *testing.T) {
+	// Prepare for tests
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer os.RemoveAll(disk)
+	obj := initFSObjects(disk, t)
+
+	fs := obj.(*fsObjects)
+	bucketName := "bucket"
+	objectName := "object"
+	data := []byte("12345")
+
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
+		t.Fatal("Cannot create bucket, err: ", err)
+	}
+
+	uploadID, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	if err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+
+	md5Hex := getMD5Hash(data)
+
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+
+	parts := []completePart{{PartNumber: 1, ETag: md5Hex}}
+
+	if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+}
+
+// TestCompleteMultipartUploadFaultyDisk - test CompleteMultipartUpload with faulty disks
+func TestAbortMultipartUpload(t *testing.T) {
+	// Prepare for tests
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer os.RemoveAll(disk)
+	obj := initFSObjects(disk, t)
+
+	fs := obj.(*fsObjects)
+	bucketName := "bucket"
+	objectName := "object"
+	data := []byte("12345")
+
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
+		t.Fatal("Cannot create bucket, err: ", err)
+	}
+
+	uploadID, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	if err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+
+	md5Hex := getMD5Hash(data)
+
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+
+	if err := fs.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+}
+
 // TestListMultipartUploadsFaultyDisk - test ListMultipartUploads with faulty disks
 func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	// Prepare for tests
