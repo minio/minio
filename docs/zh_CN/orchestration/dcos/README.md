@@ -13,31 +13,31 @@
 
 你可以使用DC/OS GUI或者CLI安装Minio Universe package。
 
-### Minio installation on DC/OS GUI 
-- Visit the DC/OS admin page, and click on Universe on the left menu bar. Then click on the Packages tab and search for Minio, click on the ```Install``` button on the right hand side.
+### 使用DC/OS GUI安装Minio
+- 访问DC/OS admin页面，然后点击左边栏的Universe,然后点击Packages页签，搜索Minio,点击左边栏的```Install```按钮。 
 
-- Click on the `Install Package` button for the single-click default installation. This installs Minio server instance with factory defaults. You can reach your Minio server at `host:9000` where `host` is IP address or hostname of public-agent where Marathon-LB is installed. `minio` and `minio123` are the default access key and secret keys respectively.
+- 点击按钮`Install Package`进行一键安装。你可以通过`host:9000`访问你的Minio server,其中`host`是Marathon-LB所在服务器的IP或者主机名。 `minio` 和 `minio123` 分别是默认的access key和secret key。
 
-- For more information on advanced installation of Minio on DC/OS GUI, look [here](https://github.com/dcos/examples/blob/master/minio/1.9/README.md#minio-installation-using-gui).
+- 更多关于自定义安装的内容，请看[这里](https://github.com/dcos/zh_CN/examples/blob/master/minio/1.9/README.md#minio-installation-using-gui).
 
-### Minio installation on DC/OS CLI
+### 使用DC/OS CLI安装Minio
 
-To install Minio package via CLI, type
+使用命令行安装, 输入
 
 ```bash
 $ dcos package install minio
 ```
 
-## 3. Uninstalling Minio
+## 3. 卸载Minio
 
-To uninstall Minio package via CLI, type
+你确定要这么做吗，如果你真要这么做，我们也不会像国内的软件那么无赖。如需卸载，请输入
 
 ```bash
 $ dcos package uninstall minio
 ```
 
-### Explore Further
+### 了解更多
 
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
 - [DC/OS Project](https://docs.mesosphere.com/)
 
