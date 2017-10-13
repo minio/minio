@@ -55,7 +55,7 @@ func readDir(dirPath string) (entries []string, err error) {
 			// Stat symbolic link and follow to get the final value.
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 				var st os.FileInfo
-				st, err = osStat((path.Join(dirPath, fi.Name())))
+				st, err = os.Stat((path.Join(dirPath, fi.Name())))
 				if err != nil {
 					errorIf(err, "Unable to stat path %s", path.Join(dirPath, fi.Name()))
 					continue

@@ -19,10 +19,9 @@
 package disk
 
 import (
+	"os"
 	"syscall"
 	"unsafe"
-
-	os2 "github.com/minio/minio/pkg/x/os"
 )
 
 var (
@@ -44,7 +43,7 @@ var (
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
 func GetInfo(path string) (info Info, err error) {
 	// Stat to know if the path exists.
-	if _, err = os2.Stat(path); err != nil {
+	if _, err = os.Stat(path); err != nil {
 		return Info{}, err
 	}
 

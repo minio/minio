@@ -62,7 +62,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	defer os.RemoveAll(tmpPath)
 
 	// Stat to get permissions bits.
-	st, err := osStat(path.Join(tmpPath, testCase.volName))
+	st, err := os.Stat(path.Join(tmpPath, testCase.volName))
 	if err != nil {
 		t.Fatalf("Stat failed with %s expected to pass.", err)
 	}

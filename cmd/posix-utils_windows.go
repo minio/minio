@@ -19,16 +19,8 @@
 package cmd
 
 import (
-	"os"
 	"strings"
-
-	os2 "github.com/minio/minio/pkg/x/os"
 )
-
-// Wrapper around safe stat implementation to avoid windows bugs.
-func osStat(name string) (os.FileInfo, error) {
-	return os2.Stat(name)
-}
 
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.

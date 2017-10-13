@@ -23,11 +23,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	os2 "github.com/minio/minio/pkg/x/os"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -126,7 +126,7 @@ func saveFileConfig(filename string, v interface{}) error {
 // decoder format according to the filename extension. If no
 // extension is provided, json will be selected by default.
 func loadFileConfig(filename string, v interface{}) error {
-	if _, err := os2.Stat(filename); err != nil {
+	if _, err := os.Stat(filename); err != nil {
 		return err
 	}
 	fileData, err := ioutil.ReadFile(filename)

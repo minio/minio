@@ -46,7 +46,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Check if config v1 is removed from filesystem
-	if _, err := osStat(configPath); err == nil || !os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); err == nil || !os.IsNotExist(err) {
 		t.Fatal("Config V1 file is not purged")
 	}
 

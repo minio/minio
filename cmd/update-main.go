@@ -110,8 +110,9 @@ func getModTime(path string) (t time.Time, err error) {
 		return t, fmt.Errorf("Unable to get absolute path of %s. %s", path, err)
 	}
 
-	// Get Stat info
-	fi, err := osStat(absPath)
+	// Version is minio non-standard, we will use minio binary's
+	// ModTime as release time.
+	fi, err := os.Stat(absPath)
 	if err != nil {
 		return t, fmt.Errorf("Unable to get ModTime of %s. %s", absPath, err)
 	}
@@ -141,7 +142,7 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 //     "/.dockerenv":      "file",
 //
 func IsDocker() bool {
-	_, err := osStat("/.dockerenv")
+	_, err := os.Stat("/.dockerenv")
 	if os.IsNotExist(err) {
 		return false
 	}

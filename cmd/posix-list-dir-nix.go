@@ -75,12 +75,12 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 		case syscall.DT_REG:
 			entries = append(entries, name)
 		case syscall.DT_LNK, syscall.DT_UNKNOWN:
-			// If its symbolic link, follow the link using osStat()
+			// If its symbolic link, follow the link using os.Stat()
 
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to OsStat().
 			var fi os.FileInfo
-			fi, err = osStat(path.Join(dirPath, name))
+			fi, err = os.Stat(path.Join(dirPath, name))
 			if err != nil {
 				// If file does not exist, we continue and skip it.
 				// Could happen if it was deleted in the middle while

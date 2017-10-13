@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
-
-	os2 "github.com/minio/minio/pkg/x/os"
 )
 
 var (
@@ -54,7 +52,7 @@ func lockedOpenFile(path string, flag int, perm os.FileMode, lockType uint32) (*
 		return nil, err
 	}
 
-	st, err := os2.Stat(path)
+	st, err := os.Stat(path)
 	if err != nil {
 		f.Close()
 		return nil, err
