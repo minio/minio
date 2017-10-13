@@ -55,31 +55,37 @@ const metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure
 //
 // Header names are canonicalized as in http.Header.
 func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata,
-	storage.BlobProperties) {
-
-	// Azure does not permit user-defined metadata key names to
-	// contain hyphens. So we map hyphens to underscores for
-	// encryption headers. More such headers may be added in the
-	// future.
-	gatewayHeaders := map[string]string{
-		"X-Amz-Meta-X-Amz-Key":     "X-Amz-Meta-x_minio_key",
-		"X-Amz-Meta-X-Amz-Matdesc": "X-Amz-Meta-x_minio_matdesc",
-		"X-Amz-Meta-X-Amz-Iv":      "X-Amz-Meta-x_minio_iv",
+	storage.BlobProperties, error) {
+	for k := range s3Metadata {
+		if strings.Contains(k, "--") {
+			return storage.BlobMetadata{}, storage.BlobProperties{}, traceError(UnsupportedMetadata{})
+		}
 	}
 
+	// Encoding technique for each key is used here is as follows
+	// Each '-' is converted to '_'
+	// Each '_' is converted to '__'
+	// With this basic assumption here are some of the expected
+	// translations for these keys.
+	// i: 'x-S3cmd_attrs' -> o: 'x_s3cmd__attrs' (mixed)
+	// i: 'x__test__value' -> o: 'x____test____value' (double '_')
+	encodeKey := func(key string) string {
+		tokens := strings.Split(key, "_")
+		for i := range tokens {
+			tokens[i] = strings.Replace(tokens[i], "-", "_", -1)
+		}
+		return strings.Join(tokens, "__")
+	}
 	var blobMeta storage.BlobMetadata = make(map[string]string)
 	var props storage.BlobProperties
 	for k, v := range s3Metadata {
 		k = http.CanonicalHeaderKey(k)
-		if nk, ok := gatewayHeaders[k]; ok {
-			k = nk
-		}
 		switch {
 		case strings.HasPrefix(k, "X-Amz-Meta-"):
 			// Strip header prefix, to let Azure SDK
 			// handle it for storage.
 			k = strings.Replace(k, "X-Amz-Meta-", "", 1)
-			blobMeta[k] = v
+			blobMeta[encodeKey(k)] = v
 
 		// All cases below, extract common metadata that is
 		// accepted by S3 into BlobProperties for setting on
@@ -100,7 +106,7 @@ func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata
 			props.ContentType = v
 		}
 	}
-	return blobMeta, props
+	return blobMeta, props, nil
 }
 
 // azurePropertiesToS3Meta converts Azure metadata/properties to S3
@@ -108,22 +114,26 @@ func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata
 // `.GetMetadata()` lower-cases all header keys, so this is taken into
 // account by this function.
 func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProperties) map[string]string {
-	// Remap underscores to hyphens to restore encryption
-	// headers. See s3MetaToAzureProperties for details.
-	gatewayHeaders := map[string]string{
-		"X-Amz-Meta-x_minio_key":     "X-Amz-Meta-X-Amz-Key",
-		"X-Amz-Meta-x_minio_matdesc": "X-Amz-Meta-X-Amz-Matdesc",
-		"X-Amz-Meta-x_minio_iv":      "X-Amz-Meta-X-Amz-Iv",
+	// Decoding technique for each key is used here is as follows
+	// Each '_' is converted to '-'
+	// Each '__' is converted to '_'
+	// With this basic assumption here are some of the expected
+	// translations for these keys.
+	// i: 'x_s3cmd__attrs' -> o: 'x-s3cmd_attrs' (mixed)
+	// i: 'x____test____value' -> o: 'x__test__value' (double '_')
+	decodeKey := func(key string) string {
+		tokens := strings.Split(key, "__")
+		for i := range tokens {
+			tokens[i] = strings.Replace(tokens[i], "_", "-", -1)
+		}
+		return strings.Join(tokens, "_")
 	}
 
 	s3Metadata := make(map[string]string)
 	for k, v := range meta {
 		// k's `x-ms-meta-` prefix is already stripped by
 		// Azure SDK, so we add the AMZ prefix.
-		k = "X-Amz-Meta-" + k
-		if nk, ok := gatewayHeaders[k]; ok {
-			k = nk
-		}
+		k = "X-Amz-Meta-" + decodeKey(k)
 		k = http.CanonicalHeaderKey(k)
 		s3Metadata[k] = v
 	}
@@ -514,7 +524,10 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	delete(metadata, "etag")
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
-	blob.Metadata, blob.Properties = s3MetaToAzureProperties(metadata)
+	blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
 	err = blob.CreateBlockBlobFromReader(data, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
@@ -533,7 +546,10 @@ func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metada
 func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
-	azureMeta, props := s3MetaToAzureProperties(metadata)
+	azureMeta, props, err := s3MetaToAzureProperties(metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
+	}
 	destBlob.Metadata = azureMeta
 	err = destBlob.Copy(srcBlobURL, nil)
 	if err != nil {
@@ -587,10 +603,6 @@ func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID stri
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	if metadata == nil {
-		metadata = make(map[string]string)
-	}
-
 	uploadID = mustGetAzureUploadID()
 	if err = a.checkUploadIDExists(bucket, object, uploadID); err == nil {
 		return "", traceError(errors.New("Upload ID name collision"))
@@ -778,7 +790,10 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 	if len(metadata.Metadata) > 0 {
-		objBlob.Metadata, objBlob.Properties = s3MetaToAzureProperties(metadata.Metadata)
+		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(metadata.Metadata)
+		if err != nil {
+			return objInfo, azureToObjectError(err, bucket, object)
+		}
 		err = objBlob.SetProperties(nil)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
