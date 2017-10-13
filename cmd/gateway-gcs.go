@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -37,6 +38,14 @@ import (
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
+)
+
+var (
+	// Project ID format is not valid.
+	errGCSInvalidProjectID = errors.New("GCS project id is either empty or invalid")
+
+	// Project ID not found
+	errGCSProjectIDNotFound = errors.New("unknown project id")
 )
 
 const (

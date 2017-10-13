@@ -26,12 +26,6 @@ func (a gatewayUnsupported) CopyObjectPart(srcBucket, srcObject, destBucket, des
 	return info, traceError(NotImplemented{})
 }
 
-// AnonPutObject creates a new object anonymously with the incoming data,
-func (a gatewayUnsupported) AnonPutObject(bucket, object string, size int64, data io.Reader,
-	metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-	return ObjectInfo{}, traceError(NotImplemented{})
-}
-
 // HealBucket - Not relevant.
 func (a gatewayUnsupported) HealBucket(bucket string) error {
 	return traceError(NotImplemented{})
@@ -56,4 +50,27 @@ func (a gatewayUnsupported) ListObjectsHeal(bucket, prefix, marker, delimiter st
 func (a gatewayUnsupported) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
 	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
 	return lmi, traceError(NotImplemented{})
+}
+
+// AnonListObjects - List objects anonymously
+func (a gatewayUnsupported) AnonListObjects(bucket string, prefix string, marker string, delimiter string,
+	maxKeys int) (loi ListObjectsInfo, err error) {
+	return loi, traceError(NotImplemented{})
+}
+
+// AnonListObjectsV2 - List objects in V2 mode, anonymously
+func (a gatewayUnsupported) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int,
+	fetchOwner bool, startAfter string) (loi ListObjectsV2Info, err error) {
+	return loi, traceError(NotImplemented{})
+}
+
+// AnonGetBucketInfo - Get bucket metadata anonymously.
+func (a gatewayUnsupported) AnonGetBucketInfo(bucket string) (bi BucketInfo, err error) {
+	return bi, traceError(NotImplemented{})
+}
+
+// AnonPutObject creates a new object anonymously with the incoming data,
+func (a gatewayUnsupported) AnonPutObject(bucket, object string, size int64, data io.Reader,
+	metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+	return ObjectInfo{}, traceError(NotImplemented{})
 }
