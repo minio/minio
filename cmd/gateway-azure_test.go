@@ -82,6 +82,14 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
 	}
+
+	headers = map[string]string{
+		"Content-MD5": "d41d8cd98f00b204e9800998ecf8427e",
+	}
+	_, props, _ := s3MetaToAzureProperties(headers)
+	if props.ContentMD5 != headers["Content-MD5"] {
+		t.Fatalf("Test failed, expected %s, got %s", headers["Content-MD5"], props.ContentMD5)
+	}
 }
 
 func TestAzurePropertiesToS3Meta(t *testing.T) {
