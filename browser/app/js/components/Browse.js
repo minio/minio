@@ -44,6 +44,7 @@ import * as actions from '../actions'
 import * as utils from '../utils'
 import * as mime from '../mime'
 import { minioBrowserPrefix } from '../constants'
+import { minioServerPrefix } from '../constants'
 import CopyToClipboard from 'react-copy-to-clipboard'
 import storage from 'local-storage-fallback'
 import InfiniteScroll from 'react-infinite-scroller';
@@ -153,7 +154,7 @@ export default class Browse extends React.Component {
       // Download the selected file.
       web.CreateURLToken()
         .then(res => {
-          let url = `${window.location.origin}/minio/download/${currentBucket}/${encPrefix}?token=${res.token}`
+          let url = `${window.location.origin}${minioServerPrefix}/download/${currentBucket}/${encPrefix}?token=${res.token}`
           window.location = url
         })
         .catch(err => dispatch(actions.showAlert({
@@ -424,7 +425,7 @@ export default class Browse extends React.Component {
 
     web.CreateURLToken()
       .then(res => {
-        let requestUrl = location.origin + "/minio/zip?token=" + res.token
+        let requestUrl = location.origin + minioServerPrefix + "/zip?token=" + res.token
 
         this.xhr = new XMLHttpRequest()
         dispatch(actions.downloadSelected(requestUrl, req, this.xhr))
@@ -493,7 +494,7 @@ export default class Browse extends React.Component {
                                 settingsFunc={ this.showSettings.bind(this) }
                                 logoutFunc={ this.logout.bind(this) } />
     } else {
-      loginButton = <a className='btn btn-danger' href='/minio/login'>Login</a>
+      loginButton = <a className='btn btn-danger' href={ minioBrowserPrefix + '/login' }>Login</a>
     }
 
     if (web.LoggedIn()) {

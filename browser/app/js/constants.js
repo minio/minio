@@ -16,8 +16,13 @@
 
 // File for all the browser constants.
 
+import roots from '../config/constants'
+
 // minioBrowserPrefix absolute path.
-export const minioBrowserPrefix = '/minio'
+export const minioBrowserRootlessPrefix = roots.browserRoot
+export const minioBrowserPrefix = `/${minioBrowserRootlessPrefix}`
+export const minioServerRootlessPrefix = roots.serverRoot
+export const minioServerPrefix = `/${minioServerRootlessPrefix}`
 export const READ_ONLY = 'readonly'
 export const WRITE_ONLY = 'writeonly'
 export const READ_WRITE = 'readwrite'

@@ -18,6 +18,9 @@ var webpack = require('webpack')
 var path = require('path')
 var CopyWebpackPlugin = require('copy-webpack-plugin')
 var purify = require("purifycss-webpack-plugin")
+var HtmlWebpackPlugin = require('html-webpack-plugin');
+
+var roots = require(path.resolve(__dirname, 'app/config/constants'))
 
 var exports = {
   context: __dirname,
@@ -60,8 +63,7 @@ var exports = {
       {from: 'app/img/browsers/chrome.png'},
       {from: 'app/img/browsers/firefox.png'},
       {from: 'app/img/browsers/safari.png'},
-      {from: 'app/img/logo.svg'},
-      {from: 'app/index.html'}
+      {from: 'app/img/logo.svg'}
     ]),
     new webpack.DefinePlugin({
         'process.env.NODE_ENV': '"production"'
@@ -73,6 +75,12 @@ var exports = {
             "app/index.html",
             "app/js/*.js"
         ]
+    }),
+    new HtmlWebpackPlugin({
+      filename: 'index.html',
+      template: __dirname + '/app/index.html',
+      inject: false,
+      minioBrowserRoot: '/' + roots.browserRoot
     })
   ]
 }
