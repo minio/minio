@@ -29,6 +29,7 @@ import (
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
@@ -549,7 +550,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
-	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	if objectLock.GetLock(globalObjectTimeout) != nil {
@@ -558,7 +558,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	defer objectLock.Unlock()
 
-	objInfo, err := objectAPI.PutObject(bucket, object, NewHashReader(fileBody, fileSize, metadata["etag"], sha256sum), metadata)
+	hashReader, err := hash.NewReader(fileBody, fileSize, "", "")
+	if err != nil {
+		errorIf(err, "Unable to initialize hashReader.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

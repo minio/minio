@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -65,7 +67,9 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"obj2", "obj2", nil},
 	}
 	for _, object := range testObjects {
-		_, err = obj.PutObject(testBuckets[0], object.name, NewHashReader(bytes.NewBufferString(object.content), int64(len(object.content)), object.meta["etag"], ""), object.meta)
+		md5Bytes := md5.Sum([]byte(object.content))
+		_, err = obj.PutObject(testBuckets[0], object.name, mustGetHashReader(t, bytes.NewBufferString(object.content),
+			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), object.meta)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -550,7 +554,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 					t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 				}
 				if result.Objects[j].ETag == "" {
-					t.Errorf("Test %d: %s: Expected md5sum to be not empty, but found empty instead", i+1, instanceType)
+					t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead", i+1, instanceType)
 				}
 
 			}
@@ -607,7 +611,7 @@ func BenchmarkListObjects(b *testing.B) {
 	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(bucket, key, NewHashReader(bytes.NewBufferString(key), int64(len(key)), "", ""), nil)
+		_, err = obj.PutObject(bucket, key, mustGetHashReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), nil)
 		if err != nil {
 			b.Fatal(err)
 		}

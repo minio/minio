@@ -943,7 +943,7 @@ func TestHealObjectHandler(t *testing.T) {
 	}
 
 	_, err = adminTestBed.objLayer.PutObject(bucketName, objName,
-		NewHashReader(bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""), nil)
+		mustGetHashReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("Failed to create %s - %v", objName, err)
 	}
@@ -1083,7 +1083,7 @@ func TestHealUploadHandler(t *testing.T) {
 	// Upload a part.
 	partID := 1
 	_, err = adminTestBed.objLayer.PutObjectPart(bucketName, objName, uploadID,
-		partID, NewHashReader(bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""))
+		partID, mustGetHashReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""))
 	if err != nil {
 		t.Fatalf("Failed to upload part %d of %s/%s - %v", partID,
 			bucketName, objName, err)

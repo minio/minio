@@ -17,13 +17,13 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"io"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -113,7 +113,12 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	objInfo, err := xl.PutObject(dstBucket, dstObject, NewHashReader(pipeReader, length, metadata["etag"], ""), metadata)
+	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	if err != nil {
+		return oi, toObjectErr(traceError(err), dstBucket, dstObject)
+	}
+
+	objInfo, err := xl.PutObject(dstBucket, dstObject, hashReader, metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -424,7 +429,7 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
@@ -523,8 +528,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		// Compute the path of current part
 		tempErasureObj := pathJoin(uniqueID, partName)
 
-		// Calculate the size of the current part. AllowEmptyPart will always be true
-		// if this is the first part and false otherwise.
+		// Calculate the size of the current part.
 		var curPartSize int64
 		curPartSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx)
 		if err != nil {
@@ -533,6 +537,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
+		var curPartReader io.Reader
 		if curPartSize > 0 {
 			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, storage.disks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 			if pErr != nil {
@@ -540,7 +545,13 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 			}
 		}
 
-		file, erasureErr := storage.CreateFile(io.LimitReader(reader, curPartSize), minioMetaTmpBucket,
+		if curPartSize < data.Size() {
+			curPartReader = io.LimitReader(reader, curPartSize)
+		} else {
+			curPartReader = reader
+		}
+
+		file, erasureErr := storage.CreateFile(curPartReader, minioMetaTmpBucket,
 			tempErasureObj, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
@@ -555,44 +566,20 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		// Update the total written size
 		sizeWritten += file.Size
 
-		// allowEmpty creating empty earsure file only when this is the first part. This flag is useful
-		// when size == -1 because in this case, we are not able to predict how many parts we will have.
-		allowEmpty := partIdx == 1
-		if file.Size > 0 || allowEmpty {
-			for i := range partsMetadata {
-				partsMetadata[i].AddObjectPart(partIdx, partName, "", file.Size)
-				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
-			}
+		for i := range partsMetadata {
+			partsMetadata[i].AddObjectPart(partIdx, partName, "", file.Size)
+			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
 		}
 
-		// If we didn't write anything or we know that the next part doesn't have any
-		// data to write, we should quit this loop immediately
-		if file.Size == 0 {
+		// We wrote everything, break out.
+		if sizeWritten == data.Size() {
 			break
 		}
-
-		// Check part size for the next index.
-		var partSize int64
-		partSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx+1)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
-		if partSize == 0 {
-			break
-		}
-	}
-
-	if sizeWritten < data.Size() {
-		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
-
-	if err = data.Verify(); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-	metadata["etag"] = hex.EncodeToString(data.MD5())
+	metadata["etag"] = data.MD5HexString()
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {

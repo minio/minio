@@ -164,7 +164,7 @@ var errMalformedEncoding = errors.New("malformed chunked encoding")
 //
 // NewChunkedReader is not needed by normal applications. The http package
 // automatically decodes chunking when reading response bodies.
-func newSignV4ChunkedReader(req *http.Request) (io.Reader, APIErrorCode) {
+func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
 	seedSignature, region, seedDate, errCode := calculateSeedSignature(req)
 	if errCode != ErrNone {
 		return nil, errCode
@@ -240,6 +240,10 @@ func (cs chunkState) String() string {
 
 	}
 	return stateString
+}
+
+func (cr *s3ChunkedReader) Close() (err error) {
+	return nil
 }
 
 // Read - implements `io.Reader`, which transparently decodes

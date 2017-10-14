@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio/pkg/hash"
 )
 
 const (
@@ -469,8 +470,12 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	defer objLock.Unlock()
 
 	// write object to path
-	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, ncPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
+	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
+	if err != nil {
+		errorIf(err, "Unable to write bucket notification configuration.")
+		return err
+	}
+	_, err = obj.PutObject(minioMetaBucket, ncPath, hashReader, nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		return err
@@ -496,12 +501,19 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	defer objLock.Unlock()
 
 	// write object to path
-	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, lcPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
+	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		return err
 	}
-	return err
+
+	// write object to path
+	_, err = obj.PutObject(minioMetaBucket, lcPath, hashReader, nil)
+	if err != nil {
+		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		return err
+	}
+	return nil
 }
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.

@@ -34,6 +34,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/hash"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -521,8 +522,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	delete(metadata, "etag")
+func (a *azureObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(metadata)
 	if err != nil {
@@ -531,12 +531,6 @@ func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metada
 	err = blob.CreateBlockBlobFromReader(data, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
-	}
-	if err = data.Verify(); err != nil {
-		errorIf(err, "Verification of uploaded object data failed against client provided checksums.")
-		derr := blob.Delete(nil)
-		errorIf(derr, "Failed to delete blob when cleaning up a bad blob upload.")
-		return ObjectInfo{}, azureToObjectError(traceError(err))
 	}
 	return a.GetObjectInfo(bucket, object)
 }
@@ -624,7 +618,7 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error) {
 	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
 		return info, err
 	}
@@ -633,7 +627,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		return info, err
 	}
 
-	etag := data.md5Sum
+	etag := data.MD5HexString()
 	if etag == "" {
 		// Generate random ETag.
 		etag = azureToS3ETag(getMD5Hash([]byte(mustGetUUID())))
@@ -657,13 +651,6 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 			return info, azureToObjectError(traceError(err), bucket, object)
 		}
 		subPartNumber++
-	}
-	if err = data.Verify(); err != nil {
-		errorIf(err, "Verification of uploaded object data failed against client provided checksums.")
-		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
-		derr := blob.Delete(nil)
-		errorIf(derr, "Failed to delete blob when cleaning up a bad blob upload.")
-		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 
 	info.PartNumber = partID

@@ -183,7 +183,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	sha256sum := ""
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), dataLen, md5Hex, sha256sum))
+	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum))
 	if !isSameType(errorCause(err), BucketNotFound{}) {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -212,7 +212,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, "")); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -249,7 +249,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, "")); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -283,7 +283,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, "")); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -317,7 +317,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, sha256sum)); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, sha256sum)); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 

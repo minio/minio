@@ -190,10 +190,11 @@ func logIf(level logrus.Level, source string, err error, msg string, data ...int
 		switch err.(type) {
 		case BucketNotFound, BucketNotEmpty, BucketExists:
 			ok = true
-		case ObjectNotFound, ObjectExistsAsDirectory, BucketPolicyNotFound, InvalidUploadID, BadDigest:
+		case ObjectNotFound, ObjectExistsAsDirectory:
+			ok = true
+		case BucketPolicyNotFound, InvalidUploadID:
 			ok = true
 		}
-
 		return ok
 	}
 

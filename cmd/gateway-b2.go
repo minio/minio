@@ -30,6 +30,7 @@ import (
 
 	b2 "github.com/minio/blazer/base"
 	"github.com/minio/minio-go/pkg/policy"
+	h2 "github.com/minio/minio/pkg/hash"
 )
 
 // Supported bucket types by B2 backend.
@@ -371,13 +372,13 @@ const (
 // being uploaded. Note that the content length is the size of the file plus 40
 // of the original size of the reader.
 //
-// newB2Reader implements a B2 compatible reader by wrapping the HashReader into
+// newB2Reader implements a B2 compatible reader by wrapping the hash.Reader into
 // a new io.Reader which will emit out the sha1 hex digits at io.EOF.
 // It also means that your overall content size is now original size + 40 bytes.
-// Additionally this reader also verifies Hash encapsulated inside HashReader
+// Additionally this reader also verifies Hash encapsulated inside hash.Reader
 // at io.EOF if the verification failed we return an error and do not send
 // the content to server.
-func newB2Reader(r *HashReader, size int64) *B2Reader {
+func newB2Reader(r *h2.Reader, size int64) *B2Reader {
 	return &B2Reader{
 		r:        r,
 		size:     size,
@@ -385,13 +386,13 @@ func newB2Reader(r *HashReader, size int64) *B2Reader {
 	}
 }
 
-// B2Reader - is a Reader wraps the HashReader which will emit out the sha1
+// B2Reader - is a Reader wraps the hash.Reader which will emit out the sha1
 // hex digits at io.EOF. It also means that your overall content size is
 // now original size + 40 bytes. Additionally this reader also verifies
-// Hash encapsulated inside HashReader at io.EOF if the verification
+// Hash encapsulated inside hash.Reader at io.EOF if the verification
 // failed we return an error and do not send the content to server.
 type B2Reader struct {
-	r        *HashReader
+	r        *h2.Reader
 	size     int64
 	sha1Hash hash.Hash
 
@@ -408,10 +409,6 @@ func (nb *B2Reader) Read(p []byte) (int, error) {
 	// Read into hash to update the on going checksum.
 	n, err := io.TeeReader(nb.r, nb.sha1Hash).Read(p)
 	if err == io.EOF {
-		// Verify checksum at io.EOF
-		if err = nb.r.Verify(); err != nil {
-			return n, err
-		}
 		// Stream is not corrupted on this end
 		// now fill in the last 40 bytes of sha1 hex
 		// so that the server can verify the stream on
@@ -424,7 +421,7 @@ func (nb *B2Reader) Read(p []byte) (int, error) {
 }
 
 // PutObject uploads the single upload to B2 backend by using *b2_upload_file* API, uploads upto 5GiB.
-func (l *b2Objects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (ObjectInfo, error) {
+func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, metadata map[string]string) (ObjectInfo, error) {
 	var objInfo ObjectInfo
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
@@ -432,7 +429,6 @@ func (l *b2Objects) PutObject(bucket string, object string, data *HashReader, me
 	}
 	contentType := metadata["content-type"]
 	delete(metadata, "content-type")
-	delete(metadata, "etag")
 
 	var u *b2.URL
 	u, err = bkt.GetUploadURL(l.ctx)
@@ -550,7 +546,7 @@ func (l *b2Objects) CopyObjectPart(srcBucket string, srcObject string, destBucke
 }
 
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *HashReader) (pi PartInfo, err error) {
+func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *h2.Reader) (pi PartInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return pi, err

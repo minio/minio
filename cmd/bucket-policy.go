@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"io"
 	"sync"
+
+	"github.com/minio/minio/pkg/hash"
 )
 
 const (
@@ -214,11 +216,18 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	// Acquire a write lock on policy config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer objLock.Unlock()
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", ""), nil); err != nil {
+
+	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
+	if err != nil {
+		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		return errorCause(err)
+	}
+
+	if _, err = objAPI.PutObject(minioMetaBucket, policyPath, hashReader, nil); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}

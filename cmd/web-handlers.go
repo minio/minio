@@ -36,6 +36,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
@@ -541,8 +542,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer objectLock.Unlock()
 
-	sha256sum := ""
-	objInfo, err := objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
+	hashReader, err := hash.NewReader(r.Body, size, "", "")
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
+
+	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1071,7 +1077,7 @@ func toWebAPIError(err error) APIError {
 		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:
 		return getAPIError(ErrInvalidBucketName)
-	case BadDigest:
+	case hash.BadDigest:
 		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
 		return getAPIError(ErrIncompleteBody)
