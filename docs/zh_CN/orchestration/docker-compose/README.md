@@ -1,17 +1,17 @@
-# Deploy Minio on Docker Compose [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 使用Docker Compose部署Minio [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Docker Compose allows defining and running single host, multi-container Docker applications.
+Docker Compose允许定义和运行单主机，多容器Docker应用程序。
 
-With Compose, you use a Compose file to configure Minio services. Then, using a single command, you can create and launch all the Distributed Minio instances from your configuration. Distributed Minio instances will be deployed in multiple containers on the same host. This is a great way to set up development, testing, and staging environments, based on Distributed Minio. 
+使用Compose，您可以使用Compose文件来配置Minio服务。 然后，使用单个命令，您可以通过你的配置创建并启动所有分布式Minio实例。 分布式Minio实例将部署在同一主机上的多个容器中。 这是建立基于分布式Minio的开发，测试和分期环境的好方法。
 
-## 1. Prerequisites
+## 1. 前提条件
 
-* Familiarity with [Docker Compose](https://docs.docker.com/compose/overview/).
-* Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
+* 熟悉 [Docker Compose](https://docs.docker.com/compose/overview/).
+* Docker已经在本机安装，从[这里](https://www.docker.com/community-edition#/download)下载相关的安装器。
 
-## 2. Run Distributed Minio on Docker Compose
+## 2. 在Docker Compose上运行分布式Minio
 
-To deploy Distributed Minio on Docker Compose, please download [docker-compose.yaml](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/docker-compose.yaml?raw=true) to your current working directory. Note that Docker Compose pulls the Minio Docker image, so there is no need to explicitly download Minio binary. Then run one of the below commands
+在Docker Compose上部署分布式Minio,请下载[docker-compose.yaml](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/docker-compose.yaml?raw=true)到你的当前工作目录。Docker Compose会pull Minio Docker Image,所以你不需要手动去下载Minio binary。然后运行下面的命令
 
 ### GNU/Linux and macOS
 
@@ -27,23 +27,23 @@ docker-compose.exe pull
 docker-compose.exe up
 ```
 
-Each instance is now accessible on the host at ports 9001 through 9004, proceed to access the Web browser at http://127.0.0.1:9001/
+现在每个实例都可以访问，端口从9001到9004，请在浏览器中访问http://127.0.0.1:9001/
 
-### Notes
+### 注意事项
 
-* By default the Docker Compose file uses the Docker image for latest Minio server release. You can change the image tag to pull a specific [Minio Docker image](https://hub.docker.com/r/minio/minio/).
+* 默认情况下Docker Compose file使用的是最新版的Minio server的Docker镜像，你可以修改image tag来拉取指定版本的[Minio Docker image](https://hub.docker.com/r/minio/minio/).
 
-* There are 4 minio distributed instances created by default. You can add more Minio services (up to total 16) to your Minio Compose deployment. To add a service
-  * Replicate a service definition and change the name of the new service appropriately.
-  * Update the command section in each service.
-  * Update the port number to exposed for the new service. Also, make sure the port assigned for the new service is not already being used on the host.
+* 默认情况下会创建4个minio实例，你可以添加更多的Minio服务（最多总共16个）到你的Minio Comose deployment。添加一个服务
+  * 复制服务定义并适当地更改新服务的名称。
+  * 更新每个服务中的命令部分。
+  * 更新要为新服务公开的端口号。 另外，请确保分配给新服务的端口尚未使用。
 
-  Read more about distributed Minio [here](https://docs.minio.io/docs/distributed-minio-quickstart-guide).
+  关于分布式Minio的更多资料，请访问[这里](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide).
 
-* Minio services in the Docker compose file expose ports 9001 to 9004. This allows multiple services to run on a host.
+* Docker compose file中的Minio服务使用的端口是9001到9004，这允许多个服务在主机上运行。
 
-### Explore Further
-- [Overview of Docker Compose](https://docs.docker.com/compose/overview/)
-- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
-- [Deploy Minio on Docker Swarm](https://docs.minio.io/docs/deploy-minio-on-docker-swarm)
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+### 了解更多
+- [Docker Compose概述](https://docs.docker.com/compose/overview/)
+- [Minio Docker快速入门](https://docs.minio.io/docs/zh_CN/minio-docker-quickstart-guide)
+- [使用Docker Swarm部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)
+- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)

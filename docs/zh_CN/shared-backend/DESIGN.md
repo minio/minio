@@ -1,9 +1,9 @@
-Introduction [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+介绍 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 ------------
 
-This feature allows Minio to serve a shared NAS drive across multiple Minio instances. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default.
+该特性可以让多个Minio实例使用一个共享的NAS存储，而且不需要做什么特殊的设置。文件默认已经做了同步以及加锁。
 
-Motivation
+目的
 ----------
 
 Since Minio instances serve the purpose of a single tenant there is an increasing requirement where users want to run multiple Minio instances on a same backend which is managed by an existing NAS (NFS, GlusterFS, Other distributed filesystems) rather than a local disk. This feature is implemented also with minimal disruption in mind for the user and overall UI.

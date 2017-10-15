@@ -1,52 +1,52 @@
-# Deploy Minio on Kubernetes [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 使用Kubernetes部署Minio [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Kubernetes concepts like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. There are multiple options to deploy Minio on Kubernetes, you can choose the one that suits you the most.
+Kubernetes的部署和状态集提供了在独立，分布式或共享模式下部署Minio服务器的完美平台。 在Kubernetes上部署Minio有多种选择，您可以选择最适合您的。
 
-- Minio [Helm](https://helm.sh) Chart offers a customizable and easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
+- Minio [Helm](https://helm.sh) Chart通过一个简单的命令即可提供自定义而且简单的Minio部署。更多关于Minio Helm部署的资料，请访问[这里](#prerequisites).
 
-- You can also explore Kubernetes [Minio example](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/README.md) to deploy Minio using `.yaml` files.
+- 你也可以浏览Kubernetes [Minio示例](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/README.md) ，通过`.yaml`文件来部署Minio。
 
-- If you'd like to get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
+- 如果您想在Kubernetes上开始使用Minio，而无需创建真正的容器集群，您也可以使用Minikube [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md)。
 
 <a name="prerequisites"></a>
-## 1. Prerequisites
+## 1. 前提条件
 
-* Kubernetes 1.4+ with Beta APIs enabled for default standalone mode.
-* Kubernetes 1.5+ with Beta APIs enabled to run Minio in [distributed mode](#distributed-minio).
-* PV provisioner support in the underlying infrastructure.
-* Helm package manager [installed](https://github.com/kubernetes/helm#install) on your Kubernetes cluster.
+* 默认standaline模式下，需要开启Beta API的Kubernetes 1.4+。
+* [distributed 模式](#distributed-minio)，需要开启Beta API的Kubernetes 1.5+。
+* 底层支持PV provisioner。
+* 你的K8s集群里需要有Helm package manager [installed](https://github.com/kubernetes/helm#install)。
 
-## 2. Deploy Minio using Helm Chart
+## 2. 使用Helm Chart部署Minio
 
-Install Minio chart by
+安装 Minio chart
 
 ```bash
 $ helm install stable/minio
 ```
-Above command deploys Minio on the Kubernetes cluster in the default configuration. Below section lists all the configurable parameters of the Minio chart and their default values.
+以上命令以默认配置在Kubernetes群集上部署Minio。 以下部分列出了Minio图表的所有可配置参数及其默认值。
 
-### Configuration
+### 配置
 
-| Parameter                  | Description                         | Default                                                 |
+| 参数                  | 描述                         | 默认值                                                 |
 |----------------------------|-------------------------------------|---------------------------------------------------------|
-| `image`                    | Minio image name                    | `minio/minio`                                           |
-| `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2017-08-05T00-00-53Z`|
+| `image`                    | Minio镜像名称                | `minio/minio`                                           |
+| `imageTag`                 | Minio镜像tag. 可选值在 [这里](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2017-08-05T00-00-53Z`|
 | `imagePullPolicy`          | Image pull policy                   | `Always`                                                |
-| `mode`                     | Minio server mode (`standalone`, `shared` or `distributed`)| `standalone`                     |
-| `numberOfNodes`            | Number of nodes (applicable only for Minio distributed mode). Should be 4 <= x <= 16 | `4`    |
-| `accessKey`                | Default access key                  | `AKIAIOSFODNN7EXAMPLE`                                  |
-| `secretKey`                | Default secret key                  | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`              |
-| `configPath`               | Default config file location        | `~/.minio`                                              |
-| `mountPath`                | Default mount location for persistent drive| `/export`                                        |
+| `mode`                     | Minio server模式 (`standalone`, `shared` 或者 `distributed`)| `standalone`                     |
+| `numberOfNodes`            | 节点数 (仅对分布式模式生效). 可选值 4 <= x <= 16 | `4`    |
+| `accessKey`                | 默认access key                  | `AKIAIOSFODNN7EXAMPLE`                                  |
+| `secretKey`                | 默认secret key                  | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`              |
+| `configPath`               | 默认配置文件路径         | `~/.minio`                                              |
+| `mountPath`                | 默认挂载路径| `/export`                                        |
 | `serviceType`              | Kubernetes service type             | `LoadBalancer`                                          |
-| `servicePort`              | Kubernetes port where service is exposed| `9000`                                              |
-| `persistence.enabled`      | Use persistent volume to store data | `true`                                                  |
-| `persistence.size`         | Size of persistent volume claim     | `10Gi`                                                  |
-| `persistence.storageClass` | Type of persistent volume claim     | `generic`                                               |
-| `persistence.accessMode`   | ReadWriteOnce or ReadOnly           | `ReadWriteOnce`                                         |
-| `resources`                | CPU/Memory resource requests/limits | Memory: `256Mi`, CPU: `100m`                            |
+| `servicePort`              | Kubernetes端口 | `9000`                                              |
+| `persistence.enabled`      | 是否使用持久卷存储数据 | `true`                                                  |
+| `persistence.size`         | 持久卷大小     | `10Gi`                                                  |
+| `persistence.storageClass` | 持久卷类型    | `generic`                                               |
+| `persistence.accessMode`   | ReadWriteOnce 或者 ReadOnly           | `ReadWriteOnce`                                         |
+| `resources`                | CPU/Memory 资源需求/限制 | Memory: `256Mi`, CPU: `100m`                            |
 
-You can specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
+你可以通过`--set key=value[,key=value]`给`helm install`。 比如,
 
 ```bash
 $ helm install --name my-release \
@@ -54,101 +54,102 @@ $ helm install --name my-release \
     stable/minio
 ```
 
-The above command deploys Minio server with a 100Gi backing persistent volume.
+上述命令部署了一个带上100G持久卷的Minio服务。
 
-Alternately, you can provide a YAML file that specifies parameter values while installing the chart. For example,
+或者，您可以提供一个YAML文件，用于在安装chart时指定参数值。 例如，
 
 ```bash
 $ helm install --name my-release -f values.yaml stable/minio
 ```
 
-### Distributed Minio
+### 分布式Minio
 
-This chart provisions a Minio server in standalone mode, by default. To provision Minio server in [distributed mode](https://docs.minio.io/docs/distributed-minio-quickstart-guide), set the `mode` field to `distributed`,
+默认情况下，此图表以独立模式提供Minio服务器。 要在[分布式模式](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide)中配置Minio服务器，请将`mode`字段设置为`distributed`,
 
 ```bash
 $ helm install --set mode=distributed stable/minio
 ```
 
-This provisions Minio server in distributed mode with 4 nodes. To change the number of nodes in your distributed Minio server, set the `numberOfNodes` field,
+上述命令部署了个带有4个节点的分布式Minio服务器。 要更改分布式Minio服务器中的节点数，请设置`numberOfNodes`属性。
+
 
 ```bash
 $ helm install --set mode=distributed,numberOfNodes=8 stable/minio
 ```
 
-This provisions Minio server in distributed mode with 8 nodes. Note that the `numberOfNodes` value should be an integer between 4 and 16 (inclusive).
+上述命令部署了个带有8个节点的分布式Minio服务器。注意一下，`numberOfNodes`取值范围是[4,16]。
 
-#### StatefulSet [limitations](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations) applicable to distributed Minio
+#### StatefulSet [限制](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations)，适用于分布式Minio
 
-* StatefulSets need persistent storage, so the `persistence.enabled` flag is ignored when `mode` is set to `distributed`.
-* When uninstalling a distributed Minio release, you'll need to manually delete volumes associated with the StatefulSet.
+* StatefulSets需要持久化存储，所以如果 `mode`设成 `distributed`的话，`persistence.enabled`参数不生效。
+* 卸载分布式Minio版本时，需要手动删除与StatefulSet关联的卷。
 
 ### Shared Minio
 
-To provision Minio servers in [shared mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md), set the `mode` field to `shared`,
+如需采用[shared mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md)部署Minio, 将`mode` 设为`shared`,
 
 ```bash
 $ helm install --set mode=shared stable/minio
 ```
 
-This provisions 4 Minio server nodes backed by single storage. To change the number of nodes in your shared Minio deployment, set the `numberOfNodes` field,
+上述命令规定了4个Minio服务器节点，一个存储。 要更改共享的Minio部署中的节点数，请设置`numberOfNodes`字段，
 
 ```bash
 $ helm install --set mode=shared,numberOfNodes=8 stable/minio
 ```
 
-This provisions Minio server in shared mode with 8 nodes.
+上述命令规定了Minio服务有8个节点，采用shared模式。
 
-### Persistence
+### 持久化
 
-This chart provisions a PersistentVolumeClaim and mounts corresponding persistent volume to default location `/export`. You'll need physical storage available in the Kubernetes cluster for this to work. If you'd rather use `emptyDir`, disable PersistentVolumeClaim by:
+这里规定了PersistentVolumeClaim并将相应的持久卷挂载到默认位置`/export`。 您需要Kubernetes集群中的物理存储才能使其工作。 如果您宁愿使用`emptyDir`，请通过以下方式禁用PersistentVolumeClaim：
 
 ```bash
 $ helm install --set persistence.enabled=false stable/minio
 ```
 
-> *"An emptyDir volume is first created when a Pod is assigned to a Node, and exists as long as that Pod is running on that node. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted forever."*
+> *"当Pod分配给节点时，首先创建一个emptyDir卷，只要该节点上的Pod正在运行，它就会存在。 当某个Pod由于任何原因从节点中删除时，emptyDir中的数据将永久删除。"*
 
-## 3. Updating Minio Release using Helm
+## 3. 使用Helm更新Minio版本
 
-You can update an existing Minio Helm Release to use a newer Minio Docker image. To do this, use the `helm upgrade` command:
+您可以更新现有的Minio Helm Release以使用较新的Minio Docker镜像。 为此，请使用`helm upgrade`命令：
 
 ```bash
 $ helm upgrade --set imageTag=<replace-with-minio-docker-image-tag> <helm-release-name> stable/minio
 ```
 
-On successful update, you should see the output below
+如果更新成功，你可以看到下面的输出信息
 
 ```bash
 Release "your-helm-release" has been upgraded. Happy Helming!
 ```
 
-## 4. Uninstalling the Chart
+## 4. 卸载Chart
 
-Assuming your release is named as `my-release`, delete it using the command:
+假设你的版本被命名为`my-release`，使用下面的命令删除它：
 
 ```bash
 $ helm delete my-release
 ```
 
-The command removes all the Kubernetes components associated with the chart and deletes the release.
+该命令删除与chart关联的所有Kubernetes组件，并删除该release。
 
-### Notes
+### 提示
 
-* An instance of a chart running in a Kubernetes cluster is called a release. Helm automatically assigns a unique release name after installing the chart. You can also set your preferred name by:
+* 在Kubernetes群集中运行的chart的实例称为release。 安装chart后，Helm会自动分配唯一的release名称。 你也可以通过下面的命令设置你心仪的名称：
 
 ```bash
 $ helm install --name my-release stable/minio
 ```
 
-* To override the default keys, pass the access and secret keys as arguments to helm install.
+* 为了覆盖默认的秘钥，可在运行helm install时将access key和secret key做为参数传进去。
 
 ```bash
 $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
     stable/minio
 ```
 
-### Explore Further
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Kubernetes Documentation](https://kubernetes.io/docs/home/)
+### 了解更多
+- [Minio纠删码快速入门](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+- [Kubernetes文档](https://kubernetes.io/docs/home/)
 - [Helm package manager for kubernetes](https://helm.sh/)
