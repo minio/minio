@@ -37,7 +37,16 @@ mc ls myazure
 ```
 
 ### Known limitations
-[Limitations](https://github.com/minio/minio/blob/master/docs/gateway/azure-limitations.md)
+Gateway inherits the following Azure limitations:
+
+- Only read-only bucket policy supported at bucket level, all other variations will return API Notimplemented error.
+- Bucket names with "." in the bucket name are not supported.
+- Non-empty buckets get removed on a DeleteBucket() call.
+- _List Multipart Uploads_ and _List Object parts_ always returns empty list. i.e Client will need to remember all the parts that it has uploaded and use it for _Complete Multipart Upload_
+
+Other limitations:
+
+- Bucket notification APIs are not supported.
 
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)

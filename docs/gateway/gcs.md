@@ -53,7 +53,16 @@ mc ls mygcs
 ```
 
 ### Known limitations
-[Limitations](https://github.com/minio/minio/blob/master/docs/gateway/gcs-limitations.md)
+
+Gateway inherits the following GCS limitations:
+
+- Maximum number of multipart parts per upload is 1024.
+- Only read-only or write-only bucket policy supported at bucket level, all other variations will return API Notimplemented error.
+- _List Multipart Uploads_ and _List Object parts_ always returns empty list. i.e Client will need to remember all the parts that it has uploaded and use it for _Complete Multipart Upload_
+
+Other limitations:
+
+- Bucket notification APIs are not supported.
 
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
