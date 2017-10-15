@@ -1,51 +1,49 @@
-# Cloud Native Deployment of Minio on Kubernetes [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 使用Kubernetes做Minio的云原生部署 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-## Table of Contents
+## 目录
+- [前提条件](#前提条件)
+- [Minio独立模式部署](#Minio独立模式部署)
+    - [Minio快速入门](#standalone-quickstart)
+    - [创建持久卷声明](#create-persistent-volume-claim)
+    - [创建Minio的部署](#create-minio-deployment)
+    - [创建负载均衡服务](#create-minio-service)
+  - [更新已有的Minio部署](#update-existing-minio-deployment)
+  - [资源清理](#standalone-resource-cleanup)
 
-- [Prerequisites](#prerequisites)
-- [Minio Standalone Server Deployment](#minio-standalone-server-deployment)
-    - [Standalone Quickstart](#standalone-quickstart)
-    - [Create Persistent Volume Claim](#create-persistent-volume-claim)
-    - [Create Deployment](#create-minio-deployment)
-    - [Create LoadBalancer Service](#create-minio-service)
-  - [Update existing Minio Deployment](#update-existing-minio-deployment)
-  - [Resource cleanup](#standalone-resource-cleanup)
+- [Minio分布式部署](#minio-distributed-server-deployment)
+    - [分布式快速入门](#distributed-quickstart)
+    - [创建Minio Headless Service](#create-minio-headless-service)
+    - [创建 Minio Statefulset](#create-minio-statefulset)
+    - [创建负载均衡服务](#create-minio-service)
+  - [更新已存在的Minio StatefulSet](#update-existing-minio-statefulset)
+  - [资源清理](#distributed-resource-cleanup)
 
-- [Minio Distributed Server Deployment](#minio-distributed-server-deployment)
-    - [Distributed Quickstart](#distributed-quickstart)
-    - [Create Minio Headless Service](#create-minio-headless-service)
-    - [Create Minio Statefulset](#create-minio-statefulset)
-    - [Create LoadBalancer Service](#create-minio-service)
-  - [Update existing Minio StatefulSet](#update-existing-minio-statefulset)
-  - [Resource cleanup](#distributed-resource-cleanup)
+- [Minio GCS 网关部署](#minio-gcs-gateway-deployment)
+    - [GCS网关快速入门](#gcs-gateway-quickstart)
+    - [创建 GCS 凭证](#create-gcs-credentials-secret)
+    - [创建 Minio GCS网关部署](#create-minio-gcs-gateway-deployment)
+    - [创建 Minio负载均衡服务](#create-minio-loadbalancer-service)
+    - [更新现有Minio GCS部署](#update-existing-minio-gcs-deployment)
+  - [资源清理](#gcs-gateway-resource-cleanup) 
 
-- [Minio GCS Gateway Deployment](#minio-gcs-gateway-deployment)
-    - [GCS Gateway Quickstart](#gcs-gateway-quickstart)
-    - [Create GCS Credentials Secret](#create-gcs-credentials-secret)
-    - [Create Minio GCS Gateway Deployment](#create-minio-gcs-gateway-deployment)
-    - [Create Minio LoadBalancer Service](#create-minio-loadbalancer-service)
-    - [Update Existing Minio GCS Deployment](#update-existing-minio-gcs-deployment)
-  - [Resource cleanup](#gcs-gateway-resource-cleanup) 
+## 前提条件
 
-## Prerequisites
+运行该示例，你需要安装并运行Kubernetes版本>=1.4的集群，而且已经安装 [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) 命令行工具。请访问
+[getting started guides](https://kubernetes.io/docs/getting-started-guides/)获取响应平台的安装指导。
+## Minio Standalone模式部署
 
-To run this example, you need Kubernetes version >=1.4 cluster installed and running, and that you have installed the [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) command line tool in your path. Please see the
-[getting started guides](https://kubernetes.io/docs/getting-started-guides/) for installation instructions for your platform.
+以下部分描述了如何在Kubernetes上部署一个独立的 [Minio](https://minio.io/) 服务。部署使用的是Docker Hub上的 [官方Minio Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) 。
 
-## Minio Standalone Server Deployment
-
-The following section describes the process to deploy standalone [Minio](https://minio.io/) server on Kubernetes. The deployment uses the [official Minio Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
-
-This section uses following core components of Kubernetes:
+此部分使用了以下Kubernetes的核心组件:
 
 - [_Pods_](https://kubernetes.io/docs/user-guide/pods/)
 - [_Services_](https://kubernetes.io/docs/user-guide/services/)
 - [_Deployments_](https://kubernetes.io/docs/user-guide/deployments/)
 - [_Persistent Volume Claims_](https://kubernetes.io/docs/user-guide/persistent-volumes/#persistentvolumeclaims)
 
-### Standalone Quickstart
+### Minio独立模式快速入门
 
-Run the below commands to get started quickly
+运行下面的命令快速启动
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-pvc.yaml?raw=true
@@ -53,27 +51,25 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-service.yaml?raw=true
 ```
 
-### Create Persistent Volume Claim
+### 创建持久卷声明
 
-Minio needs persistent storage to store objects. If there is no
-persistent storage, the data stored in Minio instance will be stored in the container file system and will be wiped off as soon as the container restarts.
+Minio需要持久卷来存储对象。如果没有持久卷，Minio实例中的数据将会存到容器的文件系统中，而且在容器重启时会被清除的干干净净。
+创建一个持久卷声明（PVC），为Minio实例请求存储。Kubernetes寻找与群集中的PVC请求匹配的PV，并自动将其绑定到PVC。
 
-Create a persistent volume claim (PVC) to request storage for the Minio instance. Kubernetes looks out for PVs matching the PVC request in the cluster and binds it to the PVC automatically.
-
-This is the PVC description.
+这是一个PVC的描述
 
 ```sh
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  # This name uniquely identifies the PVC. Will be used in deployment below.
+  # 此名称唯一标识PVC。 将在以下部署中使用。
   name: minio-pv-claim
   annotations:
     volume.alpha.kubernetes.io/storage-class: anything
   labels:
     app: minio-storage-claim
 spec:
-  # Read more about access modes here: http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
+  # 关于 access modes的更多细节，访问这里: http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
   accessModes:
     - ReadWriteOnce
   resources:
@@ -82,18 +78,18 @@ spec:
       storage: 10Gi
 ```
 
-Create the PersistentVolumeClaim
+创建一个持久卷声明
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-pvc.yaml?raw=true
 persistentvolumeclaim "minio-pv-claim" created
 ```
 
-### Create Minio Deployment
+### 创建Minio的部署
 
-A deployment encapsulates replica sets and pods — so, if a pod goes down, replication controller makes sure another pod comes up automatically. This way you won’t need to bother about pod failures and will have a stable Minio service available.
+部署封装了副本集和pod - 因此，如果pod掉线，复制控制器会确保另一个pod自动出现。 这样，您就不必担心pod失败，并且可以提供稳定的Minio服务。
 
-This is the deployment description.
+这是一个部署的描述
 
 ```sh
 apiVersion: extensions/v1beta1
@@ -138,18 +134,19 @@ spec:
           mountPath: "/data"
 ```
 
-Create the Deployment
+创建一个部署
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-deployment.yaml?raw=true
 deployment "minio-deployment" created
 ```
 
-### Create Minio Service
+### 创建Miniio服务
 
-Now that you have a Minio deployment running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
+现在您正在运行Minio部署，您可能希望在内部（集群内）访问它，或者将其作为服务暴露在外部（集群外部，也可能是公共Internet）IP地址，具体取决于用例。 您可以使用服务来实现此目的。 有三种主要的服务类型 - 默认类型是ClusterIP，它将集群内部的连接暴露给服务。 NodePort和LoadBalancer是向外部流量提供服务的两种类型。
 
-In this example, we expose the Minio Deployment by creating a LoadBalancer service. This is the service description.
+在此示例中，我们通过创建LoadBalancer服务来公开Minio部署。 
+这是服务描述。
 
 ```sh
 apiVersion: v1
@@ -165,14 +162,14 @@ spec:
   selector:
     app: minio
 ```
-Create the Minio service
+创建Minio服务
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-service.yaml?raw=true
 service "minio-service" created
 ```
 
-The `LoadBalancer` service takes couple of minutes to launch. To check if the service was created successfully, run the command
+`LoadBalancer` 服务需要几分钟才能启动。 要检查服务是否已成功创建，请运行命令
 
 ```sh
 kubectl get svc minio-service
@@ -180,23 +177,23 @@ NAME            CLUSTER-IP     EXTERNAL-IP       PORT(S)          AGE
 minio-service   10.55.248.23   104.199.249.165   9000:31852/TCP   1m
 ```
 
-### Update existing Minio Deployment
+### 更新已有的Minio部署
 
-You can update an existing Minio deployment to use a newer Minio release. To do this, use the `kubectl set image` command:
+您可以更新现有的Minio部署以使用较新的Minio版本。 为此，请使用`kubectl set image`命令：
 
 ```sh
 kubectl set image deployment/minio-deployment minio=<replace-with-new-minio-image>
 ```
 
-Kubernetes will restart the deployment to update the image. You will get a message as shown below, on successful update:
+Kubernetes将重新启动部署以更新镜像。 成功更新后，您将收到以下消息：
 
 ```
 deployment "minio-deployment" image updated
 ```
 
-### Standalone Resource cleanup
+### 独立模式资源清理
 
-You can cleanup the cluster using
+你可以清理集群占用的资源，请运行：
 
 ```sh
 kubectl delete deployment minio-deployment \
@@ -204,19 +201,19 @@ kubectl delete deployment minio-deployment \
 && kubectl delete svc minio-service
 ```
 
-## Minio Distributed Server Deployment
+## Minio分布式服务部署
 
-The following document describes the process to deploy [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide) server on Kubernetes. This example uses the [official Minio Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
+以下文档介绍了在Kubernetes上部署[分布式Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide)服务器的过程。 本示例使用Docker Hub的[官方Minio Docker镜像](https://hub.docker.com/r/minio/minio/~/dockerfile/)。
 
-This example uses following core components of Kubernetes:
+此示例使用以下Kubernetes的核心组件：
 
 - [_Pods_](https://kubernetes.io/docs/concepts/workloads/pods/pod/)
 - [_Services_](https://kubernetes.io/docs/concepts/services-networking/service/)
 - [_Statefulsets_](https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/)
 
-### Distributed Quickstart
+### 分布式快速入门
 
-Run the below commands to get started quickly
+运行下面的命令快速启动
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-headless-service.yaml?raw=true
@@ -224,11 +221,11 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-service.yaml?raw=true
 ```
 
-### Create Minio Headless Service
+###创建Minio Headless服务
 
-Headless Service controls the domain within which StatefulSets are created. The domain managed by this Service takes the form: `$(service name).$(namespace).svc.cluster.local` (where “cluster.local” is the cluster domain), and the pods in this domain take the form: `$(pod-name-{i}).$(service name).$(namespace).svc.cluster.local`. This is required to get a DNS resolvable URL for each of the pods created within the Statefulset.
+Headless服务控制在其中创建StatefulSets的域。此服务管理的域采用以下格式：`$(service name).$(namespace).svc.cluster.local`（其中“cluster.local”是集群域），此域中的pod采用形式: `$(pod-name-{i}).$(service name).$(namespace).svc.cluster.local`。这里需要DNS来解析在Statefulset中创建的每个pods的URL。
 
-This is the Headless service description.
+这是Headless service的描述。
 
 ```sh
 apiVersion: v1
@@ -246,18 +243,18 @@ spec:
     app: minio
 ```
 
-Create the Headless Service
+创建Headless服务
 
 ```sh
 $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-headless-service.yaml?raw=true
 service "minio" created
 ```
 
-### Create Minio Statefulset
+###创建 Minio Statefulset
 
-A StatefulSet provides a deterministic name and a unique identity to each pod, making it easy to deploy stateful distributed applications. To launch distributed Minio you need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating pods. StatefulSets offer a perfect way to handle this requirement.
+StatefulSet为每个pod提供确定性名称和唯一身份，从而轻松部署有状态的分布式应用程序。 要启动分布式Minio，您需要将驱动器位置作为参数传递到minio服务的命令。 然后，您需要在所有参与的pod上运行相同的命令。 StatefulSets提供了一个完美的方式来处理这个要求。
 
-This is the Statefulset description.
+这是Statefulset的描述。
 
 ```sh
 apiVersion: apps/v1beta1
@@ -311,18 +308,19 @@ spec:
           storage: 10Gi
 ```
 
-Create the Statefulset
+创建Statefulset
 
 ```sh
 $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-statefulset.yaml?raw=true
 statefulset "minio" created
 ```
 
-### Create Minio Service
+### 创建Minio服务
 
-Now that you have a Minio statefulset running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
+现在您已经运行了Minio statefulset，您可能希望在内部（集群内）访问它，或将其作为服务暴露在外部（集群外，也可能是公用Internet）的IP地址，具体取决于用例。 您可以使用服务来实现此目的。 有三种主要的服务类型 - 默认类型是ClusterIP，它将集群内部的连接暴露给服务。 NodePort和LoadBalancer是向外部流量提供服务的两种类型。
 
-In this example, we expose the Minio Deployment by creating a LoadBalancer service. This is the service description.
+在此示例中，我们通过创建LoadBalancer服务来公开Minio部署。
+ 这是服务描述。
 
 ```sh
 apiVersion: v1
@@ -338,14 +336,14 @@ spec:
   selector:
     app: minio
 ```
-Create the Minio service
+创建Minio service
 
 ```sh
 $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-service.yaml?raw=true
 service "minio-service" created
 ```
 
-The `LoadBalancer` service takes couple of minutes to launch. To check if the service was created successfully, run the command
+`LoadBalancer` 服务需要几分钟才能启动。 要检查服务是否已成功创建，请运行命令
 
 ```sh
 $ kubectl get svc minio-service
@@ -353,20 +351,20 @@ NAME            CLUSTER-IP     EXTERNAL-IP       PORT(S)          AGE
 minio-service   10.55.248.23   104.199.249.165   9000:31852/TCP   1m
 ```
 
-### Update existing Minio StatefulSet
-You can update an existing Minio StatefulSet to use a newer Minio release. To do this, use the `kubectl patch statefulset` command:
+###更新已经存在的Minio StatefulSet
+您可以更新现有的Minio StatefulSet以使用较新的Minio版本。 为此，请使用`kubectl patch statefulset`命令：
 
 ```sh
 kubectl patch statefulset minio --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"<replace-with-new-minio-image>"}]'
 ```
 
-On successful update, you should see the output below
+成功更新后，您应该会看到下面的输出
 
 ```
 statefulset "minio" patched
 ```
 
-Then delete all the pods in your StatefulSet one by one as shown below. Kubernetes will restart those pods for you, using the new image. 
+然后如下所示，逐一删除StatefulSet中的所有pod。 Kubernetes将使用新的镜像为您重新启动那些pod。
 
 ```sh
 kubectl delete minio-0
@@ -374,64 +372,63 @@ kubectl delete minio-0
 
 ### Resource cleanup
 
-You can cleanup the cluster using
+你可以使用以下命令清理集群
 ```sh
 kubectl delete statefulset minio \
 &&  kubectl delete svc minio \
 && kubectl delete svc minio-service
 ```
 
-## Minio GCS Gateway Deployment
+## Minio GCS网关部署
 
-The following section describes the process to deploy [Minio](https://minio.io/) GCS Gateway on Kubernetes. The deployment uses the [official Minio Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
+以下部分介绍在Kubernetes上部署[Minio](https://minio.io/)GCS Gateway的过程。 部署使用Docker Hub的[官方Minio Docker映像](https://hub.docker.com/r/minio/minio/~/dockerfile/)。
 
-This section uses following core components of Kubernetes:
+此示例使用以下Kubernetes的核心组件：
 
 - [_Secrets_](https://kubernetes.io/docs/concepts/configuration/secret/)
 - [_Services_](https://kubernetes.io/docs/user-guide/services/)
 - [_Deployments_](https://kubernetes.io/docs/user-guide/deployments/)
 
-### GCS Gateway Quickstart
+### GCS 网关快速入门
 
-Create the Google Cloud Service credentials file using the steps mentioned [here](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#create-service-account-key-for-gcs-and-get-the-credentials-file). 
+按照 [这里](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#create-service-account-key-for-gcs-and-get-the-credentials-file)描述的步骤创建Google云服务认证凭据文件。
 
-Use the path of file generated above to create a Kubernetes `secret`.
+使用上面生成的文件来创建一个Kubernetes`secret`。
 
 ```sh
 kubectl create secret generic gcs-credentials --from-file=/path/to/gcloud/credentials/application_default_credentials.json
 ```
 
-Then download the `minio-gcs-gateway-deployment.yaml` file
+下载 `minio-gcs-gateway-deployment.yaml` 
 
 ```sh
 wget https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-gcs-gateway-deployment.yaml?raw=true
 ```
 
-Update the section `gcp_project_id` with your GCS project ID. Then run
+使用你的GCS  project ID更新 `gcp_project_id`部分的内容，然后运行 
 
 ```sh
 kubectl create -f minio-gcs-gateway-deployment.yaml
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-gcs-gateway-service.yaml?raw=true
 ```
 
-### Create GCS Credentials Secret
+### Create GCS凭据
 
-A `secret` is intended to hold sensitive information, such as passwords, OAuth tokens, and ssh keys. Putting this information in a secret is safer and more flexible than putting it verbatim in a pod definition or in a docker image.
+`凭据`旨在保存敏感信息，例如密码，OAuth令牌和ssh密钥。 将这些信息放在一个凭据中比将其逐字地放在pod定义或docker镜像中更安全，更灵活。
 
-Create the Google Cloud Service credentials file using the steps mentioned [here](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#create-service-account-key-for-gcs-and-get-the-credentials-file). 
+按照 [这里](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#create-service-account-key-for-gcs-and-get-the-credentials-file)描述的步骤创建Google云服务认证凭据文件。
 
-Use the path of file generated above to create a Kubernetes `secret`.
+使用上面生成的文件来创建一个Kubernetes`secret`。
 
 ```sh
 kubectl create secret generic gcs-credentials --from-file=/path/to/gcloud/credentials/application_default_credentials.json
 ```
 
-### Create Minio GCS Gateway Deployment
+### 创建 Minio GCS Gateway 部署
 
-A deployment encapsulates replica sets and pods — so, if a pod goes down, replication controller makes sure another pod comes up automatically. This way you won’t need to bother about pod failures and will have a stable Minio service available.
+部署封装了副本集和pod - 因此，如果pod掉线，复制控制器会确保另一个pod自动出现。 这样，您就不必担心pod失败，并且可以提供稳定的Minio服务。
 
-Minio Gateway uses GCS as its storage backend and need to use a GCP `projectid` to identify your credentials. Update the section `gcp_project_id` with your
-GCS project ID. This is the deployment description.
+Minio Gateway使用GCS作为其存储后端，需要使用GCP“projectid”来识别您的凭据。 使用GCS项目ID更新“gcp_project_id”部分。 这是部署描述。
 
 ```sh
 apiVersion: extensions/v1beta1
@@ -481,18 +478,18 @@ spec:
           readOnly: true
 ```
 
-Create the Deployment
+创建部署
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-gcs-gateway-deployment.yaml?raw=true
 deployment "minio-deployment" created
 ```
 
-### Create Minio LoadBalancer Service
+### 创建Minio LoadBalancer服务
 
-Now that you have a Minio deployment running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
+现在您正在运行Minio，您可能希望在内部（集群内）访问它，或者将其作为服务暴露在外部（集群外部，也可能是公共Internet）IP地址，具体取决于用例。 您可以使用服务来实现此目的。 有三种主要的服务类型 - 默认类型是ClusterIP，它将集群内部的连接暴露给服务。 NodePort和LoadBalancer是向外部流量提供服务的两种类型。
 
-In this example, we expose the Minio Deployment by creating a LoadBalancer service. This is the service description.
+在此示例中，我们通过创建LoadBalancer服务来暴露Minio。 这是服务描述。
 
 ```sh
 apiVersion: v1
@@ -508,14 +505,14 @@ spec:
   selector:
     app: minio
 ```
-Create the Minio service
+创建Minio服务
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-gcs-gateway-service.yaml?raw=true
 service "minio-service" created
 ```
 
-The `LoadBalancer` service takes couple of minutes to launch. To check if the service was created successfully, run the command
+`LoadBalancer`服务需要几分钟才能启动。 要检查服务是否已成功创建，请运行命令
 
 ```sh
 kubectl get svc minio-service
@@ -523,23 +520,22 @@ NAME            CLUSTER-IP     EXTERNAL-IP       PORT(S)          AGE
 minio-service   10.55.248.23   104.199.249.165   9000:31852/TCP   1m
 ```
 
-### Update Existing Minio GCS Deployment
+### 更新现有的Minio GCS部署
 
-You can update an existing Minio deployment to use a newer Minio release. To do this, use the `kubectl set image` command:
+您可以更新现有的Minio部署以使用较新的Minio版本。 为此，请使用`kubectl set image`命令：
 
 ```sh
 kubectl set image deployment/minio-deployment minio=<replace-with-new-minio-image>
 ```
 
-Kubernetes will restart the deployment to update the image. You will get a message as shown below, on successful update:
-
+Kubernetes将重新启动部署以更新镜像。 成功更新后，您将收到以下消息：
 ```
 deployment "minio-deployment" image updated
 ```
 
-### GCS Gateway Resource Cleanup
+### GCS网关资源清理
 
-You can cleanup the cluster using
+你可以使用下面的命令清理集群
 
 ```sh
 kubectl delete deployment minio-deployment \
