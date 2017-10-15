@@ -10,7 +10,7 @@ minio server --config-dir /etc/minio /data
 ```
 
 ### 证书目录
-TLS证书存在``${HOME}/.minio/certs``目录下，你需要将证书放在该目录下来启用`HTTPS` 。如果你是一个乐学上进的好青年，这里有一本免费的秘籍传授一你: [如何使用TLS安全的访问minio](http://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS证书存在``${HOME}/.minio/certs``目录下，你需要将证书放在该目录下来启用`HTTPS` 。如果你是一个乐学上进的好青年，这里有一本免费的秘籍传授一你: [如何使用TLS安全的访问minio](http://docs.minio.io/docs/zh_CN/how-to-secure-access-to-minio-server-with-tls).
 
 以下是一个带来TLS证书的Minio server的目录结构。
 

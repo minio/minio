@@ -150,6 +150,6 @@ $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
 ```
 
 ### 了解更多
-- [Minio纠删码快速入门](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
 - [Kubernetes文档](https://kubernetes.io/docs/home/)
 - [Helm package manager for kubernetes](https://helm.sh/)

@@ -61,7 +61,7 @@ minio.exe server M:\export
 
 ## 3. 验证
 
-为了验证部署是否成功，可能通过浏览器或者[`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide)访问Minio。你应该可以从各个Minio节点访问上传的文件。
+为了验证部署是否成功，可能通过浏览器或者[`mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)访问Minio。你应该可以从各个Minio节点访问上传的文件。
 
 ## 了解更多
 - [使用`mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)
