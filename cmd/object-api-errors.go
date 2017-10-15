@@ -366,13 +366,6 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
-// NotSupported If a feature is not supported
-type NotSupported struct{}
-
-func (e NotSupported) Error() string {
-	return "Not Supported"
-}
-
 // PolicyNesting - policy nesting conflict.
 type PolicyNesting struct{}
 

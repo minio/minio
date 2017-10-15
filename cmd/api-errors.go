@@ -114,7 +114,6 @@ const (
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
-	ErrNotSupported
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
@@ -748,8 +747,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:
 		apiErr = ErrEntityTooSmall
-	case NotSupported:
-		apiErr = ErrNotSupported
 	case NotImplemented:
 		apiErr = ErrNotImplemented
 	case PolicyNotFound:
