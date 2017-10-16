@@ -84,11 +84,11 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	}
 
 	headers = map[string]string{
-		"Content-MD5": "d41d8cd98f00b204e9800998ecf8427e",
+		"content-md5": "Dce7bmCX61zvxzP5QmfelQ==",
 	}
 	_, props, _ := s3MetaToAzureProperties(headers)
-	if props.ContentMD5 != headers["Content-MD5"] {
-		t.Fatalf("Test failed, expected %s, got %s", headers["Content-MD5"], props.ContentMD5)
+	if props.ContentMD5 != headers["content-md5"] {
+		t.Fatalf("Test failed, expected %s, got %s", headers["content-md5"], props.ContentMD5)
 	}
 }
 
