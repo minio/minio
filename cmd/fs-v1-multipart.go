@@ -777,6 +777,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return oi, toObjectErr(err, minioMetaMultipartBucket, fsMetaPathMultipart)
 	}
 
+	partSize := int64(-1) // Used later to ensure that all parts sizes are same.
 	// Validate all parts and then commit to disk.
 	for i, part := range parts {
 		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
@@ -798,6 +799,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				PartSize:   fsMeta.Parts[partIdx].Size,
 				PartETag:   part.ETag,
 			})
+		}
+		if partSize == -1 {
+			partSize = fsMeta.Parts[partIdx].Size
+		}
+		// TODO: Make necessary changes in future as explained in the below comment.
+		// All parts except the last part has to be of same size. We are introducing this
+		// check to see if any clients break. If clients do not break then we can optimize
+		// multipart PutObjectPart by writing the part at the right offset using pwrite()
+		// so that we don't need to do background append at all. i.e by the time we get
+		// CompleteMultipartUpload we already have the full file available which can be
+		// renamed to the main name-space.
+		if (i < len(parts)-1) && partSize != fsMeta.Parts[partIdx].Size {
+			fs.rwPool.Close(fsMetaPathMultipart)
+			return oi, traceError(PartsSizeUnequal{})
 		}
 	}
 
