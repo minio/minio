@@ -825,11 +825,6 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 	}, nil
 }
 
-// CopyObjectPart - copy part of object to other bucket and object
-func (l *gcsGateway) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	return PartInfo{}, traceError(NotSupported{})
-}
-
 // Checks if minio.sys.tmp/multipart/v1/<upload-id>/gcs.json exists, returns
 // an object layer compatible error upon any error.
 func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID string) error {
