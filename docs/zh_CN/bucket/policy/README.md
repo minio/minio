@@ -1,13 +1,13 @@
-## Access Policy
+## 访问策略
 
-This package implements parsing and validating bucket access policies based on Access Policy Language specification - http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
+该包实现基于访问策略语言规范（Access Policy Language specification）的解析和验证存储桶访问策略 - http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 
-### Supports following effects.
+### 支持以下效果
 
     Allow
     Deny
 
-### Supports following set of operations.
+### 支持以下操作
 
     s3:GetObject
     s3:ListBucket
@@ -18,7 +18,7 @@ This package implements parsing and validating bucket access policies based on A
     s3:ListBucketMultipartUploads
     s3:ListMultipartUploadParts
 
-### Supports following conditions.
+### 支持下列条件
 
     StringEquals
     StringNotEquals
@@ -27,13 +27,13 @@ This package implements parsing and validating bucket access policies based on A
     IpAddress
     NotIpAddress
 
-Supported applicable condition keys for each conditions.
+每个条件支持的key
 
     s3:prefix
     s3:max-keys
     aws:Referer
     aws:SourceIp
 
-### Nested policy support.
+### 是否支持嵌套策略
 
-Nested policies are not allowed.
+不支持嵌套策略

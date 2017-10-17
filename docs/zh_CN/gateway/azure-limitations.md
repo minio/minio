@@ -1,19 +1,17 @@
-## Minio Azure Gateway Limitations
+## Minio Azure网关限制
 
-Gateway inherits the following Azure limitations:
+网关继承了下列Azure限制:
 
-- Maximum Multipart part size is 100MB.
-- Maximum Multipart object size is 10000*100 MB = 1TB
-- No support for prefix based bucket policies. Only top level bucket policy is supported.
-- Gateway restart implies all the ongoing multipart uploads must be restarted.
-  i.e clients must again start with NewMultipartUpload
+- 最大的Multipart part size是100MB.
+- 最大的对象大小是10000*100 MB = 1TB
+- 不支持针对前缀的存储桶策略，仅支持顶层存储桶策略。
+- 网关重启意味着正在进行的multipart上传也需要重新启动，即客户端必须再一次运行NewMultipartUpload。
+这是因为S3客户端在NewMultipartUpload中发送元数据，但Azure希望在CompleteMultipartUpload（Azure术语中的PutBlockList）中设置元数据。
   This is because S3 clients send metadata in NewMultipartUpload but Azure expects metadata to
-  be set during CompleteMultipartUpload (PutBlockList in Azure terminology). We store the metadata
-  sent by the client during NewMultipartUpload in memory so that it can be set on Azure later during
-  CompleteMultipartUpload. When the gateway is restarted this information is lost.
-- Bucket names with "." in the bucket name is not supported.
-- Non-empty buckets get removed on a DeleteBucket() call.
+  be set during CompleteMultipartUpload (PutBlockList in Azure terminology). 在NewMultipartUpload期间，我们将客户端发送的元数据存储在内存中，以便以后可以在CompleteMultipartUpload中将其设置在Azure上。如果网关穗启，这些信息也会丢失。
+- 存储桶名称不支持以 "."开始。
+- 调用DeleteBucket() 可删除非空存储桶。
 
-Other limitations:
-- Current implementation of ListMultipartUploads is incomplete. Right now it returns if the object with name "prefix" has any uploaded parts.
-- Bucket notification not supported.
+其它限制:
+- 目前ListMultipartUploads实现不完整，只要存在任意上传的parts,就会返回。
+- 不支持存储桶通知。

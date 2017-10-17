@@ -1,43 +1,43 @@
-# Minio Server `config.json` (v18) Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio Server `config.json` (v18) 指南 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio server stores all its configuration data in `${HOME}/.minio/config.json` file by default. Following sections provide detailed explanation of each fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
+Minio server在默认情况下会将所有配置信息存到 `${HOME}/.minio/config.json` 文件中。 以下部分提供每个字段的详细说明以及如何自定义它们。一个完整的 `config.json` 在 [这里](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
-## Configuration Directory
-The default configuration directory is `${HOME}/.minio`. You can override the default configuration directory using `--config-dir` command-line option. Minio server generates a new `config.json` with auto-generated access credentials when its started for the first time.
+## 配置目录
+默认的配置目录是 `${HOME}/.minio`，你可以使用`--config-dir`命令行选项重写之。  You can override the default configuration directory using `--config-dir` command-line option. Minio server在首次启动时会生成一个新的`config.json`，里面带有自动生成的访问凭据。 
 
 ```sh
 minio server --config-dir /etc/minio /data
 ```
 
-### Certificate Directory
-TLS certificates are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](http://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
+### 证书目录
+TLS证书存在``${HOME}/.minio/certs``目录下，你需要将证书放在该目录下来启用`HTTPS` 。如果你是一个乐学上进的好青年，这里有一本免费的秘籍传授一你: [如何使用TLS安全的访问minio](http://docs.minio.io/docs/zh_CN/how-to-secure-access-to-minio-server-with-tls).
 
-Following is the directory structure for Minio server with TLS certificates.
+以下是一个带来TLS证书的Minio server的目录结构。
 
 ```sh
 $ tree ~/.minio
 /home/user1/.minio
 ├── certs
-│   ├── CAs
-│   ├── private.key
-│   └── public.crt
+│   ├── CAs
+│   ├── private.key
+│   └── public.crt
 └── config.json
 ```
 
-### Configuration Fields
-#### Version
-|Field|Type|Description|
+### 配置参数
+#### 版本
+|参数|类型|描述|
 |:---|:---|:---|
-|``version``|_string_| `version` determines the configuration file format. Any older version will be automatically be migrated to the latest version upon startup. [DO NOT EDIT THIS FIELD MANUALLY]|
+|``version``|_string_| `version`决定了配置文件的格式，任何老版本都会在启动时自动迁移到新版本中。 [请勿手动修改]|
 
-#### Credential
-|Field|Type|Description|
+#### 凭据
+|参数|类型|描述|
 |:---|:---|:---|
-|``credential``| | Auth credential for object storage and web access.|
-|``credential.accessKey`` | _string_ | Access key of minimum 5 characters in length. You may override this field with `MINIO_ACCESS_KEY` environment variable.|
-|``credential.secretKey`` | _string_ | Secret key of minimum 8 characters in length. You may override this field with `MINIO_SECRET_KEY` environment variable.|
+|``credential``| |对象存储和Web访问的验证凭据。|
+|``credential.accessKey`` | _string_ | Access key长度最小是5个字符，你可以通过 `MINIO_ACCESS_KEY`环境变量进行修改|
+|``credential.secretKey`` | _string_ | Secret key长度最小是8个字符，你可以通过`MINIO_SECRET_KEY`环境变量进行修改|
 
-Example:
+示例:
 
 ```sh
 export MINIO_ACCESS_KEY=admin
@@ -45,52 +45,52 @@ export MINIO_SECRET_KEY=password
 minio server /data
 ```
 
-#### Region
-|Field|Type|Description|
+#### 区域（Region）
+|参数|类型|描述|
 |:---|:---|:---|
-|``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS S3's default region. You may override this field with `MINIO_REGION` environment variable. If you are unsure leave it unset.|
+|``region``| _string_ | `region`描述的是服务器的物理位置，默认是`us-east-1`（美国东区1）,这也是亚马逊S3的默认区域。你可以通过`MINIO_REGION` 环境变量进行修改。如果不了解这块，建议不要随意修改|
 
-Example:
+示例:
 
 ```sh
-export MINIO_REGION="my_region"
+export MINIO_REGION="中国华北一区"
 minio server /data
 ```
 
-#### Browser
-|Field|Type|Description|
+#### 浏览器
+|参数|类型|描述|
 |:---|:---|:---|
-|``browser``| _string_ | Enable or disable access to web UI. By default it is set to `on`. You may override this field with ``MINIO_BROWSER`` environment variable.|
+|``browser``| _string_ | 开启或关闭浏览器访问，默认是开启的，你可以通过``MINIO_BROWSER``环境变量进行修改|
 
-Example:
+示例:
 
 ```sh
 export MINIO_BROWSER=off
 minio server /data
 ```
 
-#### Logger
-|Field|Type|Description|
+#### 日志记录
+|参数|类型|描述|
 |:---|:---|:---|
-|``logger ``| |Server logs errors and fatal messages via logger. You may enable one or more loggers at the same time.|
-|``logger.console``| |Send log messages to console.|
-|``logger.console.enable``| _bool_ | Enable or disable console logger. Default is set to _true_.|
-|``logger.file``| |Send log message to a file.|
-|``logger.file.enable``| _bool_ | Enable or disable file logger. Default is set to _false_.|
-|``logger.file.filename``| _string_ | Path and name of the log file. Example: _/var/log/minio.log_ |
+|``logger ``| |服务通过logger记录error或者fatal(致命)错误，你可以同时开启多个logge。|
+|``logger.console``| |将日志信息发送到控制台|
+|``logger.console.enable``| _bool_ | 是否开启控制台日志输出，默认是开启|
+|``logger.file``| |发送日志信息到文件|
+|``logger.file.enable``| _bool_ | 是否开启文件日志记录，默认是关闭。|
+|``logger.file.filename``| _string_ |文件日志的输出路径， 比如: _/var/log/minio.log_ |
 
-#### Notify
-|Field|Type|Description|
+#### 通知
+|参数|类型|描述|
 |:---|:---|:---|
-|``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
-|``notify.amqp``| |[Configure to publish Minio events via AMQP target.](http://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
-|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](http://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
-|``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
-|``notify.redis``| |[Configure to publish Minio events via Redis target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
-|``notify.nats``| |[Configure to publish Minio events via NATS target.](http://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
-|``notify.postgresql``| |[Configure to publish Minio events via PostgreSQL target.](http://docs.minio.io/docs/minio-bucket-notification-guide#PostgreSQL)|
-|``notify.kafka``| |[Configure to publish Minio events via Apache Kafka target.](http://docs.minio.io/docs/minio-bucket-notification-guide#apache-kafka)|
-|``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](http://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
+|``notify``| |通知通过以下方式开启存储桶事件通知，用于lambda计算|
+|``notify.amqp``| |[通过AMQP发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#AMQP)|
+|``notify.mqtt``| |[通过MQTT发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#MQTT)|
+|``notify.elasticsearch``| |[通过Elasticsearch发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#Elasticsearch)|
+|``notify.redis``| |[通过Redis发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#Redis)|
+|``notify.nats``| |[通过NATS发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#NATS)|
+|``notify.postgresql``| |[通过PostgreSQL发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#PostgreSQL)|
+|``notify.kafka``| |[通过Apache Kafka发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#apache-kafka)|
+|``notify.webhook``| |[通过Webhooks发布Minio事件](http://docs.minio.io/docs/zh_CN/minio-bucket-notification-guide#webhooks)|
 
-## Explore Further
+## 了解更多
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
