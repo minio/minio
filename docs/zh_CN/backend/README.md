@@ -1,6 +1,6 @@
-## Backends
+## 后端
 
-Minio currently implements two types of backends.
+Minio目前支持两种类型的后端。
 
 |    Minio    | FS | Erasure | Stability |
 |:-----------:|:----:|:----:|:---:|
