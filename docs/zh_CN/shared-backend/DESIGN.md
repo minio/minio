@@ -1,27 +1,30 @@
-Introduction [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+介绍 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 ------------
 
-This feature allows Minio to serve a shared NAS drive across multiple Minio instances. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default.
+该特性可以让多个Minio实例使用一个共享的NAS存储，而且不需要做什么特殊的设置。文件默认已经做了同步以及加锁。
 
-Motivation
+目的
 ----------
 
-Since Minio instances serve the purpose of a single tenant there is an increasing requirement where users want to run multiple Minio instances on a same backend which is managed by an existing NAS (NFS, GlusterFS, Other distributed filesystems) rather than a local disk. This feature is implemented also with minimal disruption in mind for the user and overall UI.
+由于Minio的设计理念是为单租户场景服务，所以用户希望采用在一个存储后端上运行多个Minio实例，这个存储后端可能是一个已有的NAS。Minio支持这种共享存储后端的特性，而且不需要用户做额外的设置。
 
-Restrictions
+
+限制
 ------------
 
-* A PutObject() is blocked and waits if another GetObject() is in progress.
+* 如果正在执行GetObject()，则PutObject()会阻塞并等待。
+* 如果正在执行PutObject()或者GetObject()，则CompleteMultipartUpload()会阻塞并等待。
+* 无法
 * A CompleteMultipartUpload() is blocked and waits if another PutObject() or GetObject() is in progress.
-* Cannot run FS mode as a remote disk RPC.
+* 无法运行FS模式作为remote disk RPC。
 
-## How To Run?
+## 如何运行?
 
-Running Minio instances on shared backend is no different than running on a stand-alone disk. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default. Following examples will clarify this further for each operating system of your choice:
+运行共享存储后端的Minio和直接运行在一块独立磁盘的Minio没有啥区别，不需要做额外设置来开启这个特性。访问NAS上的文件默认就会加锁和同步。以下示例将对您选择的每个操作系统上的操作进行阐述：
 
 ### Ubuntu 16.04 LTS
 
-Example 1: Start Minio instance on a shared backend mounted and available at `/path/to/nfs-volume`.
+示例1: 运行Minio实例在持载在`/path/to/nfs-volume`路径下的共享后端存储。
 
 On linux server1
 ```shell
@@ -35,7 +38,7 @@ minio server /path/to/nfs-volume
 
 ### Windows 2012 Server
 
-Example 1: Start Minio instance on a shared backend mounted and available at `\\remote-server\cifs`.
+示例1: 运行Minio实例在持载在`\\remote-server\cifs`路径下的共享后端存储。 
 
 On windows server1
 ```cmd
@@ -47,7 +50,7 @@ On windows server2
 minio.exe server \\remote-server\cifs\data
 ```
 
-Alternatively if `\\remote-server\cifs` is mounted as `D:\` drive.
+或者共享存储挂载在`D:\`盘.
 
 On windows server1
 ```cmd
@@ -59,26 +62,27 @@ On windows server2
 minio.exe server D:\data
 ```
 
-Architecture
+架构
 ------------------
 
 ## POSIX/Win32 Locks
 
 ### Lock process
 
-With in the same Minio instance locking is handled by existing in-memory namespace locks (**sync.RWMutex** et. al).  To synchronize locks between many Minio instances we leverage POSIX `fcntl()` locks on Unixes and on Windows `LockFileEx()` Win32 API. Requesting write lock block if there are any read locks held by neighboring Minio instance on the same path. So does the read lock if there are any active write locks in-progress.
+在同一个Minio实例中，lock由现有的内存命名空间锁（** sync.RWMutex **等）处理。 为了在许多Minio实例之间同步锁，我们利用Unix上的POSIX`fcntl（）`锁定和Windows`LockFileEx（）`Win32 API）。 如果相邻Minio实例在同一路径上有任何读锁，则写锁请求会被阻塞。 如果有正在进行的写锁，读锁也是如此。
 
 ### Unlock process
 
-Unlocking happens on filesystems locks by just closing the file descriptor (fd) which was initially requested for lock operation. Closing the fd tells the kernel to relinquish all the locks held on the path by the current process. This gets trickier when there are many readers on the same path by the same process, it would mean that closing an fd relinquishes locks for all concurrent readers as well. To properly manage this situation a simple fd reference count is implemented, the same fd is shared between many readers. When readers start closing on the fd we start reducing the reference count, once reference count has reached zero we can be sure that there are no more readers active. So we proceed and close the underlying file descriptor which would relinquish the read lock held on the path.
 
-This doesn't apply for the writes because there is always one writer and many readers for any unique object.
+关闭文件描述符（fd）就会将之前获得的锁释放。关闭fd将告诉内核放弃当前进程在路径上保留的所有锁。当相同进程在同一路径上有多个读操作时，这会变得更加棘手，这意味着关闭一个fd也会为所有并发读释放锁。 为了正确地处理这种情况，实现了简单的fd引用计数，多个读操作之间共享相同的fd。 当读操作开始关闭fd时，我们开始减少引用计数，一旦引用计数达到零，我们可以确保没有更多的活跃读操作。 所以我们继续关闭底层文件描述符，这将放弃在路径上保留的读锁。
 
-## Handling Concurrency.
+这个不适用于写操作，因为对于每个对象总是有一个写和多个读。
 
-An example here shows how the contention is handled with GetObject().
+## 处理并发。
 
-GetObject() holds a read lock on `fs.json`.
+这里的一个例子显示了如何使用GetObject()处理争用。
+
+GetObject()持有`fs.json`的一个读锁。
 
 ```go
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
@@ -95,7 +99,8 @@ GetObject() holds a read lock on `fs.json`.
 ... after successful copy operation unlocks the read lock ...
 ```
 
-A concurrent PutObject is requested on the same object, PutObject() attempts a write lock on `fs.json`.
+对同一个对象的并发PutObject操作
+在同一个对象上请求一个并发的PutObject, PutObject()尝试获取一个`fs.json`上的写锁。
 
 ```go
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
@@ -107,30 +112,30 @@ A concurrent PutObject is requested on the same object, PutObject() attempts a w
 	defer wlk.Close()
 ```
 
-Now from the above snippet the following code one can notice that until the GetObject() returns writing to the client. Following portion of the code will block.
+现在从上面的代码片段可以看到，直到GetObject()返回。 以下部分代码将被阻塞。
 
 ```go
 	wlk, err := fs.rwPool.Create(fsMetaPath)
 ```
 
-This restriction is needed so that corrupted data is not returned to the client in between I/O. The logic works vice-versa as well an on-going PutObject(), GetObject() would wait for the PutObject() to complete.
+这咱限制是必须的，以避免给客户端返回损坏的数据。反之亦然，PutObject(),GetObject()也会等待PutObject()完成之后再执行。
 
-### Caveats (concurrency)
+### 警告 (并发)
 
-Consider for example 3 servers sharing the same backend
+假设有3个Minio服务共享一个存储后端
 
-On minio1
+minio1
 
-- DeleteObject(object1) --> lock acquired on `fs.json` while object1 is being deleted.
+- DeleteObject(object1) --> 在object1删除操作时持有`fs.json`的锁。
 
-On minio2
+minio2
 
-- PutObject(object1) --> lock waiting until DeleteObject finishes.
+- PutObject(object1) --> 等DeleteObject完毕后进行锁定。
 
-On minio3
+minio3
 
 - PutObject(object1) --> (concurrent request during PutObject minio2 checking if `fs.json` exists)
 
-Once lock is acquired the minio2 validates if the file really exists to avoid obtaining lock on an fd which is already deleted. But this situation calls for a race with a third server which is also attempting to write the same file before the minio2 can validate if the file exists. It might be potentially possible `fs.json` is created so the lock acquired by minio2 might be invalid and can lead to a potential inconsistency.
+一旦获取到锁之后，minio2验证文件是否真的存在，以避免获得已被删除的fd的锁。但是这种情况与minio3存在竞争，因为minio3也在尝试写同一个文件。这就存在一种可能，`fs.json`已经被创建了，所以minio2获得的锁就无效，这样就可能会导致数据不一致。
 
-This is a known problem and cannot be solved by POSIX fcntl locks. These are considered to be the limits of shared filesystem.
+这是一种已知的问题，而且没办法通过POSIX fcntl锁来解决。这种情况是共享存储后端的限制，请你知晓。

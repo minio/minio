@@ -1,10 +1,10 @@
-# Management REST API
+# 管理REST API
 
-## Authentication
+## 认证
 - AWS signatureV4
-- We use "minio" as region. Here region is set only for signature calculation.
+- 我们使用“minio”作为区域。 这里区域仅用于签名计算。
 
-## List of management APIs
+##管理接口
 - Service
   - Restart
   - Status
@@ -16,7 +16,7 @@
 
 - Healing
 
-### Service Management APIs
+### 服务管理接口
 * Restart
   - POST /?service
   - x-minio-operation: restart
@@ -70,7 +70,7 @@
     ```
 
 
-### Lock Management APIs
+### 锁管理API
 * ListLocks
   - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
   - x-minio-operation: list
@@ -124,7 +124,7 @@
     - ErrInvalidObjectName
     - ErrInvalidDuration
 
-### Healing
+### 修复
 
 * ListBucketsHeal
   - GET /?heal

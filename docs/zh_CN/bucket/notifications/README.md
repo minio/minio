@@ -960,4 +960,4 @@ mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
+*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
