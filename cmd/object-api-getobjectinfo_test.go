@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,9 +67,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
 		{"test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
-		// Test case with existing bucket but object name set to a directory (Test number 12).
-		{"test-getobjectinfo", "Asia/", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/"}, false},
-		// Valid case with existing object (Test number 14).
+		// Valid case with existing object (Test number 12).
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {

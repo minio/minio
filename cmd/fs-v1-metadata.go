@@ -91,6 +91,11 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		}
 	}
 
+	if hasSuffix(object, slashSeparator) {
+		m.Meta["etag"] = emptyETag // For directories etag is d41d8cd98f00b204e9800998ecf8427e
+		m.Meta["content-type"] = "application/octet-stream"
+	}
+
 	objInfo := ObjectInfo{
 		Bucket: bucket,
 		Name:   object,
@@ -101,7 +106,11 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	if fi != nil {
 		objInfo.ModTime = fi.ModTime()
 		objInfo.Size = fi.Size()
-		objInfo.IsDir = fi.IsDir()
+		if fi.IsDir() {
+			// Directory is always 0 bytes in S3 API, treat it as such.
+			objInfo.Size = 0
+			objInfo.IsDir = fi.IsDir()
+		}
 	}
 
 	// Extract etag from metadata.
