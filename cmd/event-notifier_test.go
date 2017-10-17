@@ -462,11 +462,9 @@ func TestListenBucketNotification(t *testing.T) {
 	}
 
 	// Create a new notification event channel.
-	nEventCh := make(chan []NotificationEvent)
-	// Close the listener channel.
-	defer close(nEventCh)
+	nListenCh := newListenChan()
 	// Add events channel for listener.
-	if err := globalEventNotifier.AddListenerChan(listenARN, nEventCh); err != nil {
+	if err := globalEventNotifier.AddListenerChan(listenARN, nListenCh); err != nil {
 		t.Fatalf("Test Setup error: %v", err)
 	}
 	// Remove listen channel after the writer has closed or the
@@ -489,7 +487,7 @@ func TestListenBucketNotification(t *testing.T) {
 	// Wait for the event notification here, if nothing is received within 30 seconds,
 	// test error will be fired
 	select {
-	case n := <-nEventCh:
+	case n := <-nListenCh.dataCh:
 		// Check that received event
 		if len(n) == 0 {
 			t.Fatal("Unexpected error occurred")
@@ -497,9 +495,7 @@ func TestListenBucketNotification(t *testing.T) {
 		if n[0].S3.Object.Key != objectName {
 			t.Fatalf("Received wrong object name in notification, expected %s, received %s", n[0].S3.Object.Key, objectName)
 		}
-		break
 	case <-time.After(3 * time.Second):
-		break
 	}
 
 }
