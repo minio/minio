@@ -116,3 +116,77 @@ func TestErasureCreateFile(t *testing.T) {
 		setup.Remove()
 	}
 }
+
+// Benchmarks
+
+func benchmarkErasureWrite(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
+	setup, err := newErasureTestSetup(data, parity, blockSizeV1)
+	if err != nil {
+		b.Fatalf("failed to create test setup: %v", err)
+	}
+	defer setup.Remove()
+	storage, err := NewErasureStorage(setup.disks, data, parity)
+	if err != nil {
+		b.Fatalf("failed to create ErasureStorage: %v", err)
+	}
+	buffer := make([]byte, blockSizeV1, 2*blockSizeV1)
+	content := make([]byte, size)
+
+	for i := 0; i < dataDown; i++ {
+		storage.disks[i] = OfflineDisk
+	}
+	for i := data; i < data+parityDown; i++ {
+		storage.disks[i] = OfflineDisk
+	}
+
+	b.ResetTimer()
+	b.SetBytes(size)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := storage.CreateFile(bytes.NewReader(content), "testbucket", "object", buffer, DefaultBitrotAlgorithm, data+1)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkErasureWriteQuick(b *testing.B) {
+	const size = 12 * 1024 * 1024
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 1, 0, size, b) })
+}
+
+func BenchmarkErasureWrite_4_64KB(b *testing.B) {
+	const size = 64 * 1024
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureWrite(2, 2, 1, 0, size, b) })
+}
+
+func BenchmarkErasureWrite_8_20MB(b *testing.B) {
+	const size = 20 * 1024 * 1024
+	b.Run(" 0000|0000 ", func(b *testing.B) { benchmarkErasureWrite(4, 4, 0, 0, size, b) })
+	b.Run(" 0000|X000 ", func(b *testing.B) { benchmarkErasureWrite(4, 4, 0, 1, size, b) })
+	b.Run(" X000|0000 ", func(b *testing.B) { benchmarkErasureWrite(4, 4, 1, 0, size, b) })
+	b.Run(" 0000|XXX0 ", func(b *testing.B) { benchmarkErasureWrite(4, 4, 0, 3, size, b) })
+	b.Run(" XXX0|0000 ", func(b *testing.B) { benchmarkErasureWrite(4, 4, 3, 0, size, b) })
+}
+
+func BenchmarkErasureWrite_12_30MB(b *testing.B) {
+	const size = 30 * 1024 * 1024
+	b.Run(" 000000|000000 ", func(b *testing.B) { benchmarkErasureWrite(6, 6, 0, 0, size, b) })
+	b.Run(" 000000|X00000 ", func(b *testing.B) { benchmarkErasureWrite(6, 6, 0, 1, size, b) })
+	b.Run(" X00000|000000 ", func(b *testing.B) { benchmarkErasureWrite(6, 6, 1, 0, size, b) })
+	b.Run(" 000000|XXXXX0 ", func(b *testing.B) { benchmarkErasureWrite(6, 6, 0, 5, size, b) })
+	b.Run(" XXXXX0|000000 ", func(b *testing.B) { benchmarkErasureWrite(6, 6, 5, 0, size, b) })
+}
+
+func BenchmarkErasureWrite_16_40MB(b *testing.B) {
+	const size = 40 * 1024 * 1024
+	b.Run(" 00000000|00000000 ", func(b *testing.B) { benchmarkErasureWrite(8, 8, 0, 0, size, b) })
+	b.Run(" 00000000|X0000000 ", func(b *testing.B) { benchmarkErasureWrite(8, 8, 0, 1, size, b) })
+	b.Run(" X0000000|00000000 ", func(b *testing.B) { benchmarkErasureWrite(8, 8, 1, 0, size, b) })
+	b.Run(" 00000000|XXXXXXX0 ", func(b *testing.B) { benchmarkErasureWrite(8, 8, 0, 7, size, b) })
+	b.Run(" XXXXXXX0|00000000 ", func(b *testing.B) { benchmarkErasureWrite(8, 8, 7, 0, size, b) })
+}
