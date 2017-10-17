@@ -2,29 +2,29 @@
 
 ## 目录
 - [前提条件](#前提条件)
-- [Minio独立模式部署](#Minio独立模式部署)
-    - [Minio快速入门](#standalone-quickstart)
-    - [创建持久卷声明](#create-persistent-volume-claim)
-    - [创建Minio的部署](#create-minio-deployment)
-    - [创建负载均衡服务](#create-minio-service)
-  - [更新已有的Minio部署](#update-existing-minio-deployment)
-  - [资源清理](#standalone-resource-cleanup)
+- [Minio独立模式部署](#Minio-Standalone模式部署)
+    - [Minio独立模式快速入门](#Minio独立模式快速入门)
+    - [创建持久卷声明](#Minio独立模式快速入门)
+    - [创建Minio的部署](#创建Minio的部署)
+    - [创建Miniio服务](#创建Miniio服务)
+  - [更新已有的Minio部署](#更新已有的Minio部署)
+  - [独立模式资源清理](#独立模式资源清理)
 
-- [Minio分布式部署](#minio-distributed-server-deployment)
-    - [分布式快速入门](#distributed-quickstart)
-    - [创建Minio Headless Service](#create-minio-headless-service)
-    - [创建 Minio Statefulset](#create-minio-statefulset)
-    - [创建负载均衡服务](#create-minio-service)
-  - [更新已存在的Minio StatefulSet](#update-existing-minio-statefulset)
-  - [资源清理](#distributed-resource-cleanup)
+- [Minio分布式服务部署](#Minio分布式服务部署)
+    - [分布式快速入门](#分布式快速入门)
+    - [创建Minio Headless服务](#创建Minio-Headless服务)
+    - [创建Minio Statefulset](#创建Minio-Statefulset)
+    - [创建负载均衡服务](#创建负载均衡服务)
+  - [更新已存在的Minio StatefulSet](#更新已存在的Minio-StatefulSet)
+  - [分布式模式资源清理](#分布式模式资源清理)
 
-- [Minio GCS 网关部署](#minio-gcs-gateway-deployment)
-    - [GCS网关快速入门](#gcs-gateway-quickstart)
-    - [创建 GCS 凭证](#create-gcs-credentials-secret)
-    - [创建 Minio GCS网关部署](#create-minio-gcs-gateway-deployment)
-    - [创建 Minio负载均衡服务](#create-minio-loadbalancer-service)
-    - [更新现有Minio GCS部署](#update-existing-minio-gcs-deployment)
-  - [资源清理](#gcs-gateway-resource-cleanup) 
+- [Minio GCS 网关部署](#Minio-GCS网关部署)
+    - [GCS 网关快速入门](#GCS-网关快速入门)
+    - [创建GCS凭据](#创建GCS凭据)
+    - [创建Minio GCS Gateway部署](#创建Minio-GCS-Gateway部署)
+    - [创建Minio LoadBalancer服务](#创建Minio-LoadBalancer服务)
+    - [更新现有的Minio GCS部署](#更新现有的Minio-GCS部署)
+  - [GCS网关资源清理](#GCS网关资源清理) 
 
 ## 前提条件
 
@@ -250,7 +250,7 @@ $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestratio
 service "minio" created
 ```
 
-###创建 Minio Statefulset
+###创建Minio Statefulset
 
 StatefulSet为每个pod提供确定性名称和唯一身份，从而轻松部署有状态的分布式应用程序。 要启动分布式Minio，您需要将驱动器位置作为参数传递到minio服务的命令。 然后，您需要在所有参与的pod上运行相同的命令。 StatefulSets提供了一个完美的方式来处理这个要求。
 
@@ -315,7 +315,7 @@ $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestratio
 statefulset "minio" created
 ```
 
-### 创建Minio服务
+### 创建负载均衡服务
 
 现在您已经运行了Minio statefulset，您可能希望在内部（集群内）访问它，或将其作为服务暴露在外部（集群外，也可能是公用Internet）的IP地址，具体取决于用例。 您可以使用服务来实现此目的。 有三种主要的服务类型 - 默认类型是ClusterIP，它将集群内部的连接暴露给服务。 NodePort和LoadBalancer是向外部流量提供服务的两种类型。
 
@@ -370,7 +370,7 @@ statefulset "minio" patched
 kubectl delete minio-0
 ```
 
-### Resource cleanup
+### 分布式模式资源清理
 
 你可以使用以下命令清理集群
 ```sh
@@ -412,7 +412,7 @@ kubectl create -f minio-gcs-gateway-deployment.yaml
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-gcs-gateway-service.yaml?raw=true
 ```
 
-### Create GCS凭据
+### 创建GCS凭据
 
 `凭据`旨在保存敏感信息，例如密码，OAuth令牌和ssh密钥。 将这些信息放在一个凭据中比将其逐字地放在pod定义或docker镜像中更安全，更灵活。
 
@@ -424,7 +424,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 kubectl create secret generic gcs-credentials --from-file=/path/to/gcloud/credentials/application_default_credentials.json
 ```
 
-### 创建 Minio GCS Gateway 部署
+### 创建Minio GCS Gateway部署
 
 部署封装了副本集和pod - 因此，如果pod掉线，复制控制器会确保另一个pod自动出现。 这样，您就不必担心pod失败，并且可以提供稳定的Minio服务。
 
