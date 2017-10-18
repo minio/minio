@@ -476,12 +476,15 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 
 		// Create a new entry in memory of size.
 		newBuffer, err = xl.objCache.Create(path.Join(bucket, object), data.Size())
-		// Ignore error if cache is full, proceed to write the object.
-		if err != nil && err != objcache.ErrCacheFull {
-			// For any other error return here.
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		if err == nil {
+			// Cache incoming data into a buffer
+			reader = io.TeeReader(data, newBuffer)
+		} else {
+			// Return errors other than ErrCacheFull
+			if err != objcache.ErrCacheFull {
+				return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+			}
 		}
-		reader = io.TeeReader(data, newBuffer)
 	}
 
 	// Initialize parts metadata
