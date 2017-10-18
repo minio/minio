@@ -744,7 +744,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		if removeObjectDir {
 			basePath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket)
 			derr := fsDeleteFile(basePath, pathJoin(basePath, object))
-			errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+			if derr = errorCause(derr); derr != nil {
+				// In parallel execution, CompleteMultipartUpload could have deleted temporary
+				// state files/directory, it is safe to ignore errFileNotFound
+				if derr != errFileNotFound {
+					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+				}
+			}
 		}
 		objectMPartPathLock.Unlock()
 	}()
@@ -979,7 +985,13 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 		if removeObjectDir {
 			basePath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket)
 			derr := fsDeleteFile(basePath, pathJoin(basePath, object))
-			errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+			if derr = errorCause(derr); derr != nil {
+				// In parallel execution, AbortMultipartUpload could have deleted temporary
+				// state files/directory, it is safe to ignore errFileNotFound
+				if derr != errFileNotFound {
+					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+				}
+			}
 		}
 		objectMPartPathLock.Unlock()
 	}()
