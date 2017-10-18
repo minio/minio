@@ -93,6 +93,9 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 }
 
 func isAuthTokenValid(tokenString string) bool {
+	if tokenString == "" {
+		return false
+	}
 	var claims jwtgo.StandardClaims
 	jwtToken, err := jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
 	if err != nil {
