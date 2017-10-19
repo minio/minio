@@ -33,59 +33,23 @@ func (e SiaServiceError) Error() string {
 
 // Also: SiaErrorDaemon is a valid code
 
-var siaErrorUnableToClearAnyCachedFiles = &SiaServiceError{
-	Code:    "SiaErrorUnableToClearAnyCachedFiles",
-	Message: "Unable to clear any files from cache.",
-}
-var siaErrorDeterminingCacheSize = &SiaServiceError{
-	Code:    "SiaErrorDeterminingCacheSize",
-	Message: "Unable to determine total size of files in cache.",
-}
-var siaErrorDatabaseDeleteError = &SiaServiceError{
-	Code:    "SiaErrorDatabaseDeleteError",
-	Message: "Failed to delete a record in the cache database.",
-}
-var siaErrorDatabaseCreateError = &SiaServiceError{
-	Code:    "SiaErrorDatabaseCreateError",
-	Message: "Failed to create a table in the cache database.",
-}
-var siaErrorDatabaseCantBeOpened = &SiaServiceError{
-	Code:    "SiaErrorDatabaseCantBeOpened",
-	Message: "The cache database could not be opened.",
-}
-var siaErrorDatabaseInsertError = &SiaServiceError{
-	Code:    "SiaErrorDatabaseInsertError",
-	Message: "Failed to insert a record in the cache database.",
-}
-var siaErrorDatabaseUpdateError = &SiaServiceError{
-	Code:    "SiaErrorDatabaseUpdateError",
-	Message: "Failed to update a record in the cache database.",
-}
-var siaErrorDatabaseSelectError = &SiaServiceError{
-	Code:    "SiaErrorDatabaseSelectError",
-	Message: "Failed to select records in the cache database.",
-}
 var siaErrorUnknown = &SiaServiceError{
 	Code:    "SiaErrorUnknown",
 	Message: "An unknown error has occurred.",
-}
-var siaErrorFailedToDeleteCachedFile = &SiaServiceError{
-	Code:    "SiaFailedToDeleteCachedFile",
-	Message: "Failed to delete cached file. Check permissions.",
 }
 var siaErrorObjectDoesNotExistInBucket = &SiaServiceError{
 	Code:    "SiaErrorObjectDoesNotExistInBucket",
 	Message: "Object does not exist in bucket.",
 }
-var siaErrorBucketNotEmpty = &SiaServiceError{
-	Code:    "SiaErrorBucketNotEmpty",
-	Message: "Bucket is not empty.",
-}
 var siaErrorObjectAlreadyExists = &SiaServiceError{
 	Code:    "SiaErrorObjectAlreadyExists",
-	Message: "Object does not exist in bucket.",
+	Message: "Object already exists in bucket.",
 }
-var siaErrorInvalidBucketPolicy = &SiaServiceError{
-	Code:    "SiaErrorInvalidBucketPolicy",
-	Message: "An invalid bucket policy has been specified.",
+var siaErrorInvalidObjectName = &SiaServiceError{
+	Code:    "SiaErrorInvalidObjectName",
+	Message: "Object name not suitable for Sia.",
+}
+var siaErrorNotImplemented = &SiaServiceError{
+	Code:    "SiaErrorNotImplemented",
+	Message: "Not Implemented",
 }

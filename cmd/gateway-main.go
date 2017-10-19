@@ -158,14 +158,9 @@ FLAGS:
   {{end}}{{end}}
 
 ENVIRONMENT VARIABLES: (Default values in parenthesis)
-  SIA_MANAGER_DELAY_SEC:     The number of seconds to delay between cache/db management operations. (30)
-  SIA_UPLOAD_CHECK_FREQ_MS:  The time in milliseconds to wait between checks with Sia network to determine if file has completed uploading. (3000)
-  SIA_CACHE_MAX_SIZE_BYTES:  The maximum allowed size of the cache directory in bytes. (10000000000)
-  SIA_CACHE_PURGE_AFTER_SEC: The number of seconds since the time a file was last downloaded before removing that file from the cache. (86400)
   SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. 	(127.0.0.1:9980)
   SIA_CACHE_DIR:             The name of the Sia cache directory. (.sia_cache)
-  SIA_DB_FILE:               The name of the Sia cache database file. (.sia.db)
-  SIA_BACKGROUND_UPLOAD:     Whether or not Minio should return immediately on put requests, before objects exist on Sia, and allow Sia upload to run in background. (0)
+  SIA_ROOT_DIR:				 The root directory on Sia where all buckets and objects will be stored. ()
   SIA_DEBUG:                 A flag for enabling debug messages to be printed to the screen. [0=Off, 1=On] Useful for developers only. (0)
 
 EXAMPLES:
