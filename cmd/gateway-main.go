@@ -246,7 +246,7 @@ const (
 // - Backblaze B2.
 // - Sia Decentralized Private Cloud.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, err error) {
+func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, error) {
 	switch backendType {
 	case azureBackend:
 		return newAzureLayer(arg)
@@ -263,8 +263,6 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, e
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 		return newB2Gateway()
 	case siaBackend:
-		// FIXME: The following print command is temporary and
-		// will be removed when B2 is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 		return newSiaGateway()
 	default:

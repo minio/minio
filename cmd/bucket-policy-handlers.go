@@ -27,7 +27,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -37,8 +36,7 @@ const maxAccessPolicySize = 20 * humanize.KiByte
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.
-func bucketPolicyEvalStatements(action string, resource string, conditions map[string]set.StringSet,
-	statements []policy.Statement) bool {
+func bucketPolicyEvalStatements(action string, resource string, conditions map[string]set.StringSet, statements []policyStatement) bool {
 	for _, statement := range statements {
 		if bucketPolicyMatchStatement(action, resource, conditions, statement) {
 			if statement.Effect == "Allow" {
@@ -54,8 +52,7 @@ func bucketPolicyEvalStatements(action string, resource string, conditions map[s
 }
 
 // Verify if action, resource and conditions match input policy statement.
-func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet,
-	statement policy.Statement) bool {
+func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet, statement policyStatement) bool {
 	// Verify if action, resource and condition match in given statement.
 	return (bucketPolicyActionMatch(action, statement) &&
 		bucketPolicyResourceMatch(resource, statement) &&
@@ -63,7 +60,7 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 }
 
 // Verify if given action matches with policy statement.
-func bucketPolicyActionMatch(action string, statement policy.Statement) bool {
+func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 	return !statement.Actions.FuncMatch(actionMatch, action).IsEmpty()
 }
 
@@ -98,7 +95,7 @@ func isIPInCIDR(cidr, ip string) bool {
 }
 
 // Verify if given resource matches with policy statement.
-func bucketPolicyResourceMatch(resource string, statement policy.Statement) bool {
+func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
 	// the resource rule for object could contain "*" wild card.
 	// the requested object can be given access based on the already set bucket policy if
 	// the match is successful.
@@ -107,7 +104,7 @@ func bucketPolicyResourceMatch(resource string, statement policy.Statement) bool
 }
 
 // Verify if given condition matches with policy statement.
-func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement policy.Statement) bool {
+func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement policyStatement) bool {
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
@@ -303,10 +300,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Delete bucket access policy, by passing an empty policy
 	// struct.
-	err = persistAndNotifyBucketPolicyChange(bucket, policyChange{
-		true, policy.BucketAccessPolicy{},
-	}, objAPI)
-	if err != nil {
+	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketPolicyNotFound:
 			writeErrorResponse(w, ErrNoSuchBucketPolicy, r.URL)
