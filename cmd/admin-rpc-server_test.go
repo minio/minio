@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -30,18 +31,21 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
+
+	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	adminServer := adminCmd{}
-	creds := serverConfig.GetCredential()
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
-	reply := LoginRPCReply{}
-	err = adminServer.Login(&args, &reply)
+	err = adminServer.Login(&args, &LoginRPCReply{})
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)
 	}
@@ -51,7 +55,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		<-globalServiceSignalCh
 	}()
 
-	ga := AuthRPCArgs{AuthToken: reply.AuthToken}
+	ga := AuthRPCArgs{AuthToken: token}
 	genReply := AuthRPCReply{}
 	switch cmd {
 	case restartCmd:
@@ -75,7 +79,7 @@ func TestReInitDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Initializing objectLayer for HealFormatHandler.
 	_, xlDirs, xlErr := initTestXLObjLayer()
@@ -90,21 +94,25 @@ func TestReInitDisks(t *testing.T) {
 	// Setup admin rpc server for an XL backend.
 	globalIsXL = true
 	adminServer := adminCmd{}
+
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
-	reply := LoginRPCReply{}
-	err = adminServer.Login(&args, &reply)
+	err = adminServer.Login(&args, &LoginRPCReply{})
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken: reply.AuthToken,
+		AuthToken: token,
 	}
 	authReply := AuthRPCReply{}
 
@@ -113,12 +121,15 @@ func TestReInitDisks(t *testing.T) {
 		t.Errorf("Expected to pass, but failed with %v", err)
 	}
 
+	token, err = authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Negative test case with admin rpc server setup for FS.
 	globalIsXL = false
 	fsAdminServer := adminCmd{}
 	fsArgs := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -129,7 +140,7 @@ func TestReInitDisks(t *testing.T) {
 	}
 
 	authArgs = AuthRPCArgs{
-		AuthToken: fsReply.AuthToken,
+		AuthToken: token,
 	}
 	authReply = AuthRPCReply{}
 	// Attempt ReInitDisks service on a FS backend.
@@ -149,13 +160,18 @@ func TestGetConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
+
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -166,7 +182,7 @@ func TestGetConfig(t *testing.T) {
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken: reply.AuthToken,
+		AuthToken: token,
 	}
 
 	configReply := ConfigReply{}
@@ -193,13 +209,16 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -214,7 +233,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	tmpFileName := mustGetUUID()
 	wArgs := WriteConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
-			AuthToken: reply.AuthToken,
+			AuthToken: token,
 		},
 		TmpFileName: tmpFileName,
 		Buf:         buf,
@@ -231,7 +250,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 
 	cArgs := CommitConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
-			AuthToken: reply.AuthToken,
+			AuthToken: token,
 		},
 		FileName: tmpFileName,
 	}

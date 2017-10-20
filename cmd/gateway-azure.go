@@ -17,54 +17,148 @@
 package cmd
 
 import (
-	"crypto/md5"
+	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/sha256-simd"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
+const azureBlockSize = 100 * humanize.MiByte
+const metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 
-// Canonicalize the metadata headers, without this azure-sdk calculates
-// incorrect signature. This attempt to canonicalize is to convert
-// any HTTP header which is of form say `accept-encoding` should be
-// converted to `Accept-Encoding` in its canonical form.
-// Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
-// defined metadata to have X-Ms-Meta prefix.
-func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
-	newHeaders = make(map[string]string)
-	for k, v := range headers {
-		k = http.CanonicalHeaderKey(k)
-		if strings.HasPrefix(k, "X-Amz-Meta") {
-			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
+// s3MetaToAzureProperties converts metadata meant for S3 PUT/COPY
+// object into Azure data structures - BlobMetadata and
+// BlobProperties.
+//
+// BlobMetadata contains user defined key-value pairs and each key is
+// automatically prefixed with `X-Ms-Meta-` by the Azure SDK. S3
+// user-metadata is translated to Azure metadata by removing the
+// `X-Amz-Meta-` prefix.
+//
+// BlobProperties contains commonly set metadata for objects such as
+// Content-Encoding, etc. Such metadata that is accepted by S3 is
+// copied into BlobProperties.
+//
+// Header names are canonicalized as in http.Header.
+func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata,
+	storage.BlobProperties, error) {
+	for k := range s3Metadata {
+		if strings.Contains(k, "--") {
+			return storage.BlobMetadata{}, storage.BlobProperties{}, traceError(UnsupportedMetadata{})
 		}
-		newHeaders[k] = v
 	}
-	return newHeaders
+
+	// Encoding technique for each key is used here is as follows
+	// Each '-' is converted to '_'
+	// Each '_' is converted to '__'
+	// With this basic assumption here are some of the expected
+	// translations for these keys.
+	// i: 'x-S3cmd_attrs' -> o: 'x_s3cmd__attrs' (mixed)
+	// i: 'x__test__value' -> o: 'x____test____value' (double '_')
+	encodeKey := func(key string) string {
+		tokens := strings.Split(key, "_")
+		for i := range tokens {
+			tokens[i] = strings.Replace(tokens[i], "-", "_", -1)
+		}
+		return strings.Join(tokens, "__")
+	}
+	var blobMeta storage.BlobMetadata = make(map[string]string)
+	var props storage.BlobProperties
+	for k, v := range s3Metadata {
+		k = http.CanonicalHeaderKey(k)
+		switch {
+		case strings.HasPrefix(k, "X-Amz-Meta-"):
+			// Strip header prefix, to let Azure SDK
+			// handle it for storage.
+			k = strings.Replace(k, "X-Amz-Meta-", "", 1)
+			blobMeta[encodeKey(k)] = v
+
+		// All cases below, extract common metadata that is
+		// accepted by S3 into BlobProperties for setting on
+		// Azure - see
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPUT.html
+		case k == "Cache-Control":
+			props.CacheControl = v
+		case k == "Content-Disposition":
+			props.ContentDisposition = v
+		case k == "Content-Encoding":
+			props.ContentEncoding = v
+		case k == "Content-Length":
+			// assume this doesn't fail
+			props.ContentLength, _ = strconv.ParseInt(v, 10, 64)
+		case k == "Content-MD5":
+			props.ContentMD5 = v
+		case k == "Content-Type":
+			props.ContentType = v
+		}
+	}
+	return blobMeta, props, nil
 }
 
-// Prefix user metadata with "X-Amz-Meta-".
-// client.GetBlobMetadata() already strips "X-Ms-Meta-"
-func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
-	newMeta = make(map[string]string)
-
-	for k, v := range meta {
-		k = "X-Amz-Meta-" + k
-		newMeta[k] = v
+// azurePropertiesToS3Meta converts Azure metadata/properties to S3
+// metadata. It is the reverse of s3MetaToAzureProperties. Azure's
+// `.GetMetadata()` lower-cases all header keys, so this is taken into
+// account by this function.
+func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProperties) map[string]string {
+	// Decoding technique for each key is used here is as follows
+	// Each '_' is converted to '-'
+	// Each '__' is converted to '_'
+	// With this basic assumption here are some of the expected
+	// translations for these keys.
+	// i: 'x_s3cmd__attrs' -> o: 'x-s3cmd_attrs' (mixed)
+	// i: 'x____test____value' -> o: 'x__test__value' (double '_')
+	decodeKey := func(key string) string {
+		tokens := strings.Split(key, "__")
+		for i := range tokens {
+			tokens[i] = strings.Replace(tokens[i], "_", "-", -1)
+		}
+		return strings.Join(tokens, "_")
 	}
-	return newMeta
+
+	s3Metadata := make(map[string]string)
+	for k, v := range meta {
+		// k's `x-ms-meta-` prefix is already stripped by
+		// Azure SDK, so we add the AMZ prefix.
+		k = "X-Amz-Meta-" + decodeKey(k)
+		k = http.CanonicalHeaderKey(k)
+		s3Metadata[k] = v
+	}
+
+	// Add each property from BlobProperties that is supported by
+	// S3 PUT/COPY common metadata.
+	if props.CacheControl != "" {
+		s3Metadata["Cache-Control"] = props.CacheControl
+	}
+	if props.ContentDisposition != "" {
+		s3Metadata["Content-Disposition"] = props.ContentDisposition
+	}
+	if props.ContentEncoding != "" {
+		s3Metadata["Content-Encoding"] = props.ContentEncoding
+	}
+	if props.ContentLength != 0 {
+		s3Metadata["Content-Length"] = fmt.Sprintf("%d", props.ContentLength)
+	}
+	if props.ContentMD5 != "" {
+		s3Metadata["Content-MD5"] = props.ContentMD5
+	}
+	if props.ContentType != "" {
+		s3Metadata["Content-Type"] = props.ContentType
+	}
+	return s3Metadata
 }
 
 // Append "-1" to etag so that clients do not interpret it as MD5.
@@ -72,38 +166,10 @@ func azureToS3ETag(etag string) string {
 	return canonicalizeETag(etag) + "-1"
 }
 
-// To store metadata during NewMultipartUpload which will be used after
-// CompleteMultipartUpload to call SetBlobMetadata.
-type azureMultipartMetaInfo struct {
-	meta map[string]map[string]string
-	*sync.Mutex
-}
-
-// Return metadata map of the multipart object.
-func (a *azureMultipartMetaInfo) get(key string) map[string]string {
-	a.Lock()
-	defer a.Unlock()
-	return a.meta[key]
-}
-
-// Set metadata map for the multipart object.
-func (a *azureMultipartMetaInfo) set(key string, value map[string]string) {
-	a.Lock()
-	defer a.Unlock()
-	a.meta[key] = value
-}
-
-// Delete metadata map for the multipart object.
-func (a *azureMultipartMetaInfo) del(key string) {
-	a.Lock()
-	defer a.Unlock()
-	delete(a.meta, key)
-}
-
 // azureObjects - Implements Object layer for Azure blob storage.
 type azureObjects struct {
-	client   storage.BlobStorageClient // Azure sdk client
-	metaInfo azureMultipartMetaInfo
+	gatewayUnsupported
+	client storage.BlobStorageClient // Azure sdk client
 }
 
 // Convert azure errors to minio object layer errors.
@@ -144,6 +210,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketNameInvalid{Bucket: bucket}
 	case "RequestBodyTooLarge":
 		err = PartTooBig{}
+	case "InvalidMetadata":
+		err = UnsupportedMetadata{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:
@@ -158,6 +226,68 @@ func azureToObjectError(err error, params ...string) error {
 	}
 	e.e = err
 	return e
+}
+
+// mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
+func mustGetAzureUploadID() string {
+	var id [8]byte
+
+	n, err := io.ReadFull(rand.Reader, id[:])
+	if err != nil {
+		panic(fmt.Errorf("unable to generate upload ID for azure. %s", err))
+	}
+	if n != len(id) {
+		panic(fmt.Errorf("insufficient random data (expected: %d, read: %d)", len(id), n))
+	}
+
+	return fmt.Sprintf("%x", id[:])
+}
+
+// checkAzureUploadID - returns error in case of given string is upload ID.
+func checkAzureUploadID(uploadID string) (err error) {
+	if len(uploadID) != 16 {
+		return traceError(MalformedUploadID{uploadID})
+	}
+
+	if _, err = hex.DecodeString(uploadID); err != nil {
+		return traceError(MalformedUploadID{uploadID})
+	}
+
+	return nil
+}
+
+// Encode partID, subPartNumber, uploadID and md5Hex to blockID.
+func azureGetBlockID(partID, subPartNumber int, uploadID, md5Hex string) string {
+	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%05d.%02d.%s.%s", partID, subPartNumber, uploadID, md5Hex)))
+}
+
+// Parse blockID into partID, subPartNumber and md5Hex.
+func azureParseBlockID(blockID string) (partID, subPartNumber int, uploadID, md5Hex string, err error) {
+	var blockIDBytes []byte
+	if blockIDBytes, err = base64.StdEncoding.DecodeString(blockID); err != nil {
+		return
+	}
+
+	tokens := strings.Split(string(blockIDBytes), ".")
+	if len(tokens) != 4 {
+		err = fmt.Errorf("invalid block id '%s'", string(blockIDBytes))
+		return
+	}
+
+	if partID, err = strconv.Atoi(tokens[0]); err != nil || partID <= 0 {
+		err = fmt.Errorf("invalid part number in block id '%s'", string(blockIDBytes))
+		return
+	}
+
+	if subPartNumber, err = strconv.Atoi(tokens[1]); err != nil || subPartNumber <= 0 {
+		err = fmt.Errorf("invalid sub-part number in block id '%s'", string(blockIDBytes))
+		return
+	}
+
+	uploadID = tokens[2]
+	md5Hex = tokens[3]
+
+	return
 }
 
 // Inits azure blob storage client and returns AzureObjects.
@@ -179,13 +309,10 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	if err != nil {
 		return &azureObjects{}, err
 	}
+	c.HTTPClient = &http.Client{Transport: newCustomHTTPTransport()}
 
 	return &azureObjects{
 		client: c.GetBlobService(),
-		metaInfo: azureMultipartMetaInfo{
-			meta:  make(map[string]map[string]string),
-			Mutex: &sync.Mutex{},
-		},
 	}, nil
 }
 
@@ -202,13 +329,25 @@ func (a *azureObjects) StorageInfo() (si StorageInfo) {
 
 // MakeBucketWithLocation - Create a new container on azure backend.
 func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
-	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
+	container := a.client.GetContainerReference(bucket)
+	err := container.Create(&storage.CreateContainerOptions{
+		Access: storage.ContainerAccessTypePrivate,
+	})
 	return azureToObjectError(traceError(err), bucket)
 }
 
 // GetBucketInfo - Get bucket metadata..
 func (a *azureObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
-	// Azure does not have an equivalent call, hence use ListContainers.
+	// Verify if bucket (container-name) is valid.
+	// IsValidBucketName has same restrictions as container names mentioned
+	// in azure documentation, so we will simply use the same function here.
+	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
+	if !IsValidBucketName(bucket) {
+		return bi, traceError(BucketNameInvalid{Bucket: bucket})
+	}
+
+	// Azure does not have an equivalent call, hence use
+	// ListContainers with prefix
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
 		Prefix: bucket,
 	})
@@ -250,74 +389,80 @@ func (a *azureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 
 // DeleteBucket - delete a container on azure, uses Azure equivalent DeleteContainer.
 func (a *azureObjects) DeleteBucket(bucket string) error {
-	return azureToObjectError(traceError(a.client.DeleteContainer(bucket)), bucket)
+	container := a.client.GetContainerReference(bucket)
+	return azureToObjectError(traceError(container.Delete(nil)), bucket)
 }
 
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
 // and marker, uses Azure equivalent ListBlobs.
 func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
-	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
-		Prefix:     prefix,
-		Marker:     marker,
-		Delimiter:  delimiter,
-		MaxResults: uint(maxKeys),
-	})
-	if err != nil {
-		return result, azureToObjectError(traceError(err), bucket, prefix)
-	}
-	result.IsTruncated = resp.NextMarker != ""
-	result.NextMarker = resp.NextMarker
-	for _, object := range resp.Blobs {
-		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
-		if e != nil {
-			continue
-		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:          bucket,
-			Name:            object.Name,
-			ModTime:         t,
-			Size:            object.Properties.ContentLength,
-			ETag:            azureToS3ETag(object.Properties.Etag),
-			ContentType:     object.Properties.ContentType,
-			ContentEncoding: object.Properties.ContentEncoding,
+	var objects []ObjectInfo
+	var prefixes []string
+	container := a.client.GetContainerReference(bucket)
+	for len(objects) == 0 && len(prefixes) == 0 {
+		resp, err := container.ListBlobs(storage.ListBlobsParameters{
+			Prefix:     prefix,
+			Marker:     marker,
+			Delimiter:  delimiter,
+			MaxResults: uint(maxKeys),
 		})
+		if err != nil {
+			return result, azureToObjectError(traceError(err), bucket, prefix)
+		}
+
+		for _, object := range resp.Blobs {
+			if strings.HasPrefix(object.Name, globalMinioSysTmp) {
+				continue
+			}
+			objects = append(objects, ObjectInfo{
+				Bucket:          bucket,
+				Name:            object.Name,
+				ModTime:         time.Time(object.Properties.LastModified),
+				Size:            object.Properties.ContentLength,
+				ETag:            azureToS3ETag(object.Properties.Etag),
+				ContentType:     object.Properties.ContentType,
+				ContentEncoding: object.Properties.ContentEncoding,
+			})
+		}
+
+		// Remove minio.sys.tmp prefix.
+		for _, prefix := range resp.BlobPrefixes {
+			if prefix != globalMinioSysTmp {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+
+		marker = resp.NextMarker
+		if resp.NextMarker == "" {
+			break
+		}
 	}
-	result.Prefixes = resp.BlobPrefixes
+
+	result.Objects = objects
+	result.Prefixes = prefixes
+	result.NextMarker = marker
+	result.IsTruncated = (marker != "")
 	return result, nil
 }
 
 // ListObjectsV2 - list all blobs in Azure bucket filtered by prefix
-func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
-	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
-		Prefix:     prefix,
-		Marker:     continuationToken,
-		Delimiter:  delimiter,
-		MaxResults: uint(maxKeys),
-	})
+func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	marker := continuationToken
+	if startAfter != "" {
+		marker = startAfter
+	}
+
+	var resultV1 ListObjectsInfo
+	resultV1, err = a.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return result, azureToObjectError(traceError(err), bucket, prefix)
+		return result, err
 	}
-	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
-	if resp.NextMarker != "" {
-		result.IsTruncated = true
-		result.NextContinuationToken = resp.NextMarker
-	}
-	for _, object := range resp.Blobs {
-		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
-		if e != nil {
-			continue
-		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:          bucket,
-			Name:            object.Name,
-			ModTime:         t,
-			Size:            object.Properties.ContentLength,
-			ETag:            azureToS3ETag(object.Properties.Etag),
-			ContentType:     object.Properties.ContentType,
-			ContentEncoding: object.Properties.ContentEncoding,
-		})
-	}
-	result.Prefixes = resp.BlobPrefixes
+
+	result.Objects = resultV1.Objects
+	result.Prefixes = resultV1.Prefixes
+	result.ContinuationToken = continuationToken
+	result.NextContinuationToken = resultV1.NextMarker
+	result.IsTruncated = (resultV1.NextMarker != "")
 	return result, nil
 }
 
@@ -328,17 +473,20 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, f
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
-	byteRange := fmt.Sprintf("%d-", startOffset)
+	blobRange := &storage.BlobRange{Start: uint64(startOffset)}
 	if length > 0 && startOffset > 0 {
-		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
+		blobRange.End = uint64(startOffset + length - 1)
 	}
 
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	var rc io.ReadCloser
 	var err error
 	if startOffset == 0 && length == 0 {
-		rc, err = a.client.GetBlob(bucket, object)
+		rc, err = blob.Get(nil)
 	} else {
-		rc, err = a.client.GetBlobRange(bucket, object, byteRange, nil)
+		rc, err = blob.GetRange(&storage.GetBlobRangeOptions{
+			Range: blobRange,
+		})
 	}
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
@@ -351,94 +499,64 @@ func (a *azureObjects) GetObject(bucket, object string, startOffset int64, lengt
 // GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
 // uses zure equivalent GetBlobProperties.
 func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	blobMeta, err := a.client.GetBlobMetadata(bucket, object)
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	err = blob.GetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 
-	meta := azureToS3Metadata(blobMeta)
-
-	prop, err := a.client.GetBlobProperties(bucket, object)
-	if err != nil {
-		return objInfo, azureToObjectError(traceError(err), bucket, object)
-	}
-	t, err := time.Parse(time.RFC1123, prop.LastModified)
-	if err != nil {
-		return objInfo, traceError(err)
-	}
-
-	if prop.ContentEncoding != "" {
-		meta["Content-Encoding"] = prop.ContentEncoding
-	}
-	meta["Content-Type"] = prop.ContentType
-
+	meta := azurePropertiesToS3Meta(blob.Metadata, blob.Properties)
 	objInfo = ObjectInfo{
-		Bucket:      bucket,
-		UserDefined: meta,
-		ETag:        azureToS3ETag(prop.Etag),
-		ModTime:     t,
-		Name:        object,
-		Size:        prop.ContentLength,
+		Bucket:          bucket,
+		UserDefined:     meta,
+		ETag:            azureToS3ETag(blob.Properties.Etag),
+		ModTime:         time.Time(blob.Properties.LastModified),
+		Name:            object,
+		Size:            blob.Properties.ContentLength,
+		ContentType:     blob.Properties.ContentType,
+		ContentEncoding: blob.Properties.ContentEncoding,
 	}
-
 	return objInfo, nil
 }
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	var sha256Writer hash.Hash
-	var md5sumWriter hash.Hash
-
-	var writers []io.Writer
-
-	md5sum := metadata["etag"]
+func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	delete(metadata, "etag")
-
-	teeReader := data
-
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
-
-	if md5sum != "" {
-		md5sumWriter = md5.New()
-		writers = append(writers, md5sumWriter)
-	}
-
-	if len(writers) > 0 {
-		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
-	}
-
-	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, s3ToAzureHeaders(metadata))
+	err = blob.CreateBlockBlobFromReader(data, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-
-	if md5sum != "" {
-		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
-		if newMD5sum != md5sum {
-			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, azureToObjectError(traceError(BadDigest{md5sum, newMD5sum}))
-		}
+	if err = data.Verify(); err != nil {
+		errorIf(err, "Verification of uploaded object data failed against client provided checksums.")
+		derr := blob.Delete(nil)
+		errorIf(derr, "Failed to delete blob when cleaning up a bad blob upload.")
+		return ObjectInfo{}, azureToObjectError(traceError(err))
 	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
-		}
-	}
-
 	return a.GetObjectInfo(bucket, object)
 }
 
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent CopyBlob API.
 func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	err = a.client.CopyBlob(destBucket, destObject, a.client.GetBlobURL(srcBucket, srcObject))
+	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
+	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
+	azureMeta, props, err := s3MetaToAzureProperties(metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
+	}
+	destBlob.Metadata = azureMeta
+	err = destBlob.Copy(srcBlobURL, nil)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
+	}
+	destBlob.Properties = props
+	err = destBlob.SetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
 	}
@@ -448,252 +566,244 @@ func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject s
 // DeleteObject - Deletes a blob on azure container, uses Azure
 // equivalent DeleteBlob API.
 func (a *azureObjects) DeleteObject(bucket, object string) error {
-	err := a.client.DeleteBlob(bucket, object, nil)
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	err := blob.Delete(nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
 	return nil
 }
 
-// ListMultipartUploads - Incomplete implementation, for now just return the prefix if it is an incomplete upload.
-// FIXME: Full ListMultipartUploads is not supported yet. It is supported just enough to help our client libs to
-// support re-uploads. a.client.ListBlobs() can be made to return entries which include uncommitted blobs using
-// which we need to filter out the committed blobs to get the list of uncommitted blobs.
+// ListMultipartUploads - It's decided not to support List Multipart Uploads, hence returning empty result.
 func (a *azureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
-	result.MaxUploads = maxUploads
-	result.Prefix = prefix
-	result.Delimiter = delimiter
-	meta := a.metaInfo.get(prefix)
-	if meta == nil {
-		// In case minio was restarted after NewMultipartUpload and before CompleteMultipartUpload we expect
-		// the client to do a fresh upload so that any metadata like content-type are sent again in the
-		// NewMultipartUpload.
-		return result, nil
-	}
-	result.Uploads = []uploadMetadata{{prefix, prefix, UTCNow(), "", nil}}
+	// It's decided not to support List Multipart Uploads, hence returning empty result.
 	return result, nil
+}
+
+type azureMultipartMetadata struct {
+	Name     string            `json:"name"`
+	Metadata map[string]string `json:"metadata"`
+}
+
+func getAzureMetadataObjectName(objectName, uploadID string) string {
+	return fmt.Sprintf(metadataObjectNameTemplate, uploadID, sha256.Sum256([]byte(objectName)))
+}
+
+func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID string) (err error) {
+	blob := a.client.GetContainerReference(bucketName).GetBlobReference(
+		getAzureMetadataObjectName(objectName, uploadID))
+	err = blob.GetMetadata(nil)
+	err = azureToObjectError(traceError(err), bucketName, objectName)
+	oerr := ObjectNotFound{bucketName, objectName}
+	if errorCause(err) == oerr {
+		err = traceError(InvalidUploadID{})
+	}
+	return err
 }
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	// Azure doesn't return a unique upload ID and we use object name in place of it. Azure allows multiple uploads to
-	// co-exist as long as the user keeps the blocks uploaded (in block blobs) unique amongst concurrent upload attempts.
-	// Each concurrent client, keeps its own blockID list which it can commit.
-	uploadID = object
-	if metadata == nil {
-		// Store an empty map as a placeholder else ListObjectParts/PutObjectPart will not work properly.
-		metadata = make(map[string]string)
-	} else {
-		metadata = s3ToAzureHeaders(metadata)
+	uploadID = mustGetAzureUploadID()
+	if err = a.checkUploadIDExists(bucket, object, uploadID); err == nil {
+		return "", traceError(errors.New("Upload ID name collision"))
 	}
-	a.metaInfo.set(uploadID, metadata)
+	metadataObject := getAzureMetadataObjectName(object, uploadID)
+
+	var jsonData []byte
+	if jsonData, err = json.Marshal(azureMultipartMetadata{Name: object, Metadata: metadata}); err != nil {
+		return "", traceError(err)
+	}
+
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
+	err = blob.CreateBlockBlobFromReader(bytes.NewBuffer(jsonData), nil)
+	if err != nil {
+		return "", azureToObjectError(traceError(err), bucket, metadataObject)
+	}
+
 	return uploadID, nil
 }
 
-// CopyObjectPart - Not implemented.
-func (a *azureObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	return info, traceError(NotImplemented{})
-}
-
-// Encode partID+md5Hex to a blockID.
-func azureGetBlockID(partID int, md5Hex string) string {
-	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%.5d.%s", partID, md5Hex)))
-}
-
-// Decode blockID to partID+md5Hex.
-func azureParseBlockID(blockID string) (int, string, error) {
-	idByte, err := base64.StdEncoding.DecodeString(blockID)
-	if err != nil {
-		return 0, "", traceError(err)
-	}
-	idStr := string(idByte)
-	splitRes := strings.Split(idStr, ".")
-	if len(splitRes) != 2 {
-		return 0, "", traceError(errUnexpected)
-	}
-	partID, err := strconv.Atoi(splitRes[0])
-	if err != nil {
-		return 0, "", traceError(err)
-	}
-	return partID, splitRes[1], nil
-}
-
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
-	if meta := a.metaInfo.get(uploadID); meta == nil {
-		return info, traceError(InvalidUploadID{})
-	}
-	var sha256Writer hash.Hash
-	var md5sumWriter hash.Hash
-	var etag string
-
-	var writers []io.Writer
-
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (info PartInfo, err error) {
+	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
+		return info, err
 	}
 
-	if md5Hex != "" {
-		md5sumWriter = md5.New()
-		writers = append(writers, md5sumWriter)
-		etag = md5Hex
-	} else {
+	if err = checkAzureUploadID(uploadID); err != nil {
+		return info, err
+	}
+
+	etag := data.md5Sum
+	if etag == "" {
 		// Generate random ETag.
 		etag = getMD5Hash([]byte(mustGetUUID()))
 	}
 
-	teeReader := data
+	subPartSize, subPartNumber := int64(azureBlockSize), 1
+	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
+		// Allow to create zero sized part.
+		if remainingSize == 0 && subPartNumber > 1 {
+			break
+		}
 
-	if len(writers) > 0 {
-		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
+		if remainingSize < subPartSize {
+			subPartSize = remainingSize
+		}
+
+		id := azureGetBlockID(partID, subPartNumber, uploadID, etag)
+		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+		err = blob.PutBlockWithLength(id, uint64(subPartSize), io.LimitReader(data, subPartSize), nil)
+		if err != nil {
+			return info, azureToObjectError(traceError(err), bucket, object)
+		}
+		subPartNumber++
 	}
-
-	id := azureGetBlockID(partID, etag)
-	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
-	if err != nil {
+	if err = data.Verify(); err != nil {
+		errorIf(err, "Verification of uploaded object data failed against client provided checksums.")
+		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+		derr := blob.Delete(nil)
+		errorIf(derr, "Failed to delete blob when cleaning up a bad blob upload.")
 		return info, azureToObjectError(traceError(err), bucket, object)
-	}
-
-	if md5Hex != "" {
-		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
-		if newMD5sum != md5Hex {
-			a.client.DeleteBlob(bucket, object, nil)
-			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5Hex, newMD5sum}))
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return PartInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
-		}
 	}
 
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = UTCNow()
-	info.Size = size
+	info.Size = data.Size()
 	return info, nil
 }
 
 // ListObjectParts - Use Azure equivalent GetBlockList.
 func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
-	result.Bucket = bucket
-	result.Object = object
-	result.UploadID = uploadID
-	result.MaxParts = maxParts
-
-	if meta := a.metaInfo.get(uploadID); meta == nil {
-		return result, nil
-	}
-	resp, err := a.client.GetBlockList(bucket, object, storage.BlockListTypeUncommitted)
-	if err != nil {
-		return result, azureToObjectError(traceError(err), bucket, object)
-	}
-	tmpMaxParts := 0
-	partCount := 0 // Used for figuring out IsTruncated.
-	nextPartNumberMarker := 0
-	for _, part := range resp.UncommittedBlocks {
-		if tmpMaxParts == maxParts {
-			// Also takes care of the case if maxParts = 0
-			break
-		}
-		partCount++
-		partID, md5Hex, err := azureParseBlockID(part.Name)
-		if err != nil {
-			return result, err
-		}
-		if partID <= partNumberMarker {
-			continue
-		}
-		result.Parts = append(result.Parts, PartInfo{
-			partID,
-			UTCNow(),
-			md5Hex,
-			part.Size,
-		})
-		tmpMaxParts++
-		nextPartNumberMarker = partID
-	}
-	if partCount < len(resp.UncommittedBlocks) {
-		result.IsTruncated = true
-		result.NextPartNumberMarker = nextPartNumberMarker
+	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
+		return result, err
 	}
 
+	// It's decided not to support List Object Parts, hence returning empty result.
 	return result, nil
 }
 
 // AbortMultipartUpload - Not Implemented.
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
-func (a *azureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	a.metaInfo.del(uploadID)
-	return nil
+func (a *azureObjects) AbortMultipartUpload(bucket, object, uploadID string) (err error) {
+	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
+		return err
+	}
+
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(
+		getAzureMetadataObjectName(object, uploadID))
+	return blob.Delete(nil)
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
 func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
-	meta := a.metaInfo.get(uploadID)
-	if meta == nil {
-		return objInfo, traceError(InvalidUploadID{uploadID})
+	metadataObject := getAzureMetadataObjectName(object, uploadID)
+	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
+		return objInfo, err
 	}
-	var blocks []storage.Block
-	for _, part := range uploadedParts {
-		blocks = append(blocks, storage.Block{
-			ID:     azureGetBlockID(part.PartNumber, part.ETag),
-			Status: storage.BlockStatusUncommitted,
-		})
+
+	if err = checkAzureUploadID(uploadID); err != nil {
+		return objInfo, err
 	}
-	err = a.client.PutBlockList(bucket, object, blocks)
+
+	var metadataReader io.Reader
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
+	if metadataReader, err = blob.Get(nil); err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, metadataObject)
+	}
+
+	var metadata azureMultipartMetadata
+	if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, metadataObject)
+	}
+
+	defer func() {
+		if err != nil {
+			return
+		}
+
+		blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
+		derr := blob.Delete(nil)
+		errorIf(derr, "unable to remove meta data object for upload ID %s", uploadID)
+	}()
+
+	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	resp, err := objBlob.GetBlockList(storage.BlockListTypeUncommitted, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	if len(meta) > 0 {
-		prop := storage.BlobHeaders{
-			ContentMD5:      meta["Content-Md5"],
-			ContentLanguage: meta["Content-Language"],
-			ContentEncoding: meta["Content-Encoding"],
-			ContentType:     meta["Content-Type"],
-			CacheControl:    meta["Cache-Control"],
+
+	getBlocks := func(partNumber int, etag string) (blocks []storage.Block, size int64, err error) {
+		for _, part := range resp.UncommittedBlocks {
+			var partID int
+			var readUploadID string
+			var md5Hex string
+			if partID, _, readUploadID, md5Hex, err = azureParseBlockID(part.Name); err != nil {
+				return nil, 0, err
+			}
+
+			if partNumber == partID && uploadID == readUploadID && etag == md5Hex {
+				blocks = append(blocks, storage.Block{
+					ID:     part.Name,
+					Status: storage.BlockStatusUncommitted,
+				})
+
+				size += part.Size
+			}
 		}
-		err = a.client.SetBlobProperties(bucket, object, prop)
+
+		if len(blocks) == 0 {
+			return nil, 0, InvalidPart{}
+		}
+
+		return blocks, size, nil
+	}
+
+	var allBlocks []storage.Block
+	partSizes := make([]int64, len(uploadedParts))
+	for i, part := range uploadedParts {
+		var blocks []storage.Block
+		var size int64
+		blocks, size, err = getBlocks(part.PartNumber, part.ETag)
+		if err != nil {
+			return objInfo, traceError(err)
+		}
+
+		allBlocks = append(allBlocks, blocks...)
+		partSizes[i] = size
+	}
+
+	// Error out if parts except last part sizing < 5MiB.
+	for i, size := range partSizes[:len(partSizes)-1] {
+		if size < globalMinPartSize {
+			return objInfo, traceError(PartTooSmall{
+				PartNumber: uploadedParts[i].PartNumber,
+				PartSize:   size,
+				PartETag:   uploadedParts[i].ETag,
+			})
+		}
+	}
+
+	err = objBlob.PutBlockList(allBlocks, nil)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+	if len(metadata.Metadata) > 0 {
+		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(metadata.Metadata)
+		if err != nil {
+			return objInfo, azureToObjectError(err, bucket, object)
+		}
+		err = objBlob.SetProperties(nil)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
-		err = a.client.SetBlobMetadata(bucket, object, nil, meta)
+		err = objBlob.SetMetadata(nil)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
 	}
-	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
-}
-
-// Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go
-func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
-	out := url.Values{}
-
-	if p.Prefix != "" {
-		out.Set("prefix", p.Prefix)
-	}
-	if p.Delimiter != "" {
-		out.Set("delimiter", p.Delimiter)
-	}
-	if p.Marker != "" {
-		out.Set("marker", p.Marker)
-	}
-	if p.Include != "" {
-		out.Set("include", p.Include)
-	}
-	if p.MaxResults != 0 {
-		out.Set("maxresults", fmt.Sprintf("%v", p.MaxResults))
-	}
-	if p.Timeout != 0 {
-		out.Set("timeout", fmt.Sprintf("%v", p.Timeout))
-	}
-
-	return out
 }
 
 // SetBucketPolicies - Azure supports three types of container policies:
@@ -725,20 +835,22 @@ func (a *azureObjects) SetBucketPolicies(bucket string, policyInfo policy.Bucket
 		AccessType:     storage.ContainerAccessTypeContainer,
 		AccessPolicies: nil,
 	}
-	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
+	container := a.client.GetContainerReference(bucket)
+	err := container.SetPermissions(perm, nil)
 	return azureToObjectError(traceError(err), bucket)
 }
 
 // GetBucketPolicies - Get the container ACL and convert it to canonical []bucketAccessPolicy
 func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
-	perm, err := a.client.GetContainerPermissions(bucket, 0, "")
+	container := a.client.GetContainerReference(bucket)
+	perm, err := container.GetPermissions(nil)
 	if err != nil {
 		return policy.BucketAccessPolicy{}, azureToObjectError(traceError(err), bucket)
 	}
 	switch perm.AccessType {
 	case storage.ContainerAccessTypePrivate:
-		// Do nothing
+		return policy.BucketAccessPolicy{}, traceError(PolicyNotFound{Bucket: bucket})
 	case storage.ContainerAccessTypeContainer:
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	default:
@@ -753,6 +865,7 @@ func (a *azureObjects) DeleteBucketPolicies(bucket string) error {
 		AccessType:     storage.ContainerAccessTypePrivate,
 		AccessPolicies: nil,
 	}
-	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
+	container := a.client.GetContainerReference(bucket)
+	err := container.SetPermissions(perm, nil)
 	return azureToObjectError(traceError(err))
 }

@@ -37,6 +37,13 @@ import (
 
 var serverPort uint32 = 60000
 
+// fail - as t.Fatalf() is not goroutine safe, this function behaves like t.Fatalf().
+func fail(t *testing.T, template string, args ...interface{}) {
+	fmt.Printf(template, args...)
+	fmt.Println()
+	t.Fail()
+}
+
 func getNextPort() string {
 	return strconv.Itoa(int(atomic.AddUint32(&serverPort, 1)))
 }
@@ -180,13 +187,12 @@ func TestIsHTTPMethod(t *testing.T) {
 
 func TestNewHTTPListener(t *testing.T) {
 	errMsg := ": no such host"
-	if runtime.GOOS == "windows" {
-		errMsg = ": No such host is known."
-	}
 
-	remoteAddrErrMsg := "listen tcp 93.184.216.34:9000: bind: cannot assign requested address"
+	remoteAddrErrMsg := "listen tcp 93.184.216.34:65432: bind: cannot assign requested address"
 	if runtime.GOOS == "windows" {
-		remoteAddrErrMsg = "listen tcp 93.184.216.34:9000: bind: The requested address is not valid in its context."
+		remoteAddrErrMsg = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
+	} else if runtime.GOOS == "darwin" {
+		remoteAddrErrMsg = "listen tcp 93.184.216.34:65432: bind: can't assign requested address"
 	}
 
 	tlsConfig := getTLSConfig(t)
@@ -202,14 +208,14 @@ func TestNewHTTPListener(t *testing.T) {
 		errorLogFunc           func(error, string, ...interface{})
 		expectedErr            error
 	}{
-		{[]string{"93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"example.org:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: missing port in address unknown-host")},
-		{[]string{"unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
-		{[]string{"localhost:9000", "93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"localhost:9000", "unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
-		{[]string{"localhost:" + getNextPort()}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
-		{[]string{"localhost:" + getNextPort()}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
+		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
+		{[]string{"example.org:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
+		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: address unknown-host: missing port in address")},
+		{[]string{"unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
+		{[]string{"localhost:65432", "93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
+		{[]string{"localhost:65432", "unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
+		{[]string{"localhost:0"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
+		{[]string{"localhost:0"}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
 	}
 
 	for _, testCase := range testCases {
@@ -251,21 +257,17 @@ func TestNewHTTPListener(t *testing.T) {
 func TestHTTPListenerStartClose(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	var casePorts []string
-	for i := 0; i < 6; i++ {
-		casePorts = append(casePorts, getNextPort())
-	}
 
 	testCases := []struct {
 		serverAddrs []string
 		tlsConfig   *tls.Config
 	}{
-		{[]string{"localhost:" + casePorts[0]}, nil},
-		{[]string{nonLoopBackIP + ":" + casePorts[1]}, nil},
-		{[]string{"127.0.0.1:" + casePorts[2], nonLoopBackIP + ":" + casePorts[2]}, nil},
-		{[]string{"localhost:" + casePorts[3]}, tlsConfig},
-		{[]string{nonLoopBackIP + ":" + casePorts[4]}, tlsConfig},
-		{[]string{"127.0.0.1:" + casePorts[5], nonLoopBackIP + ":" + casePorts[5]}, tlsConfig},
+		{[]string{"localhost:0"}, nil},
+		{[]string{nonLoopBackIP + ":0"}, nil},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil},
+		{[]string{"localhost:0"}, tlsConfig},
+		{[]string{nonLoopBackIP + ":0"}, tlsConfig},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig},
 	}
 
 	for i, testCase := range testCases {
@@ -283,8 +285,8 @@ func TestHTTPListenerStartClose(t *testing.T) {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
-		for _, serverAddr := range testCase.serverAddrs {
-			conn, err := net.Dial("tcp", serverAddr)
+		for _, serverAddr := range listener.Addrs() {
+			conn, err := net.Dial("tcp", serverAddr.String())
 			if err != nil {
 				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
@@ -393,10 +395,6 @@ func TestHTTPListenerAddrs(t *testing.T) {
 func TestHTTPListenerAccept(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	var casePorts []string
-	for i := 0; i < 6; i++ {
-		casePorts = append(casePorts, getNextPort())
-	}
 
 	testCases := []struct {
 		serverAddrs []string
@@ -404,12 +402,12 @@ func TestHTTPListenerAccept(t *testing.T) {
 		request     string
 		reply       string
 	}{
-		{[]string{"localhost:" + casePorts[0]}, nil, "GET / HTTP/1.0\n", "200 OK\n"},
-		{[]string{nonLoopBackIP + ":" + casePorts[1]}, nil, "POST / HTTP/1.0\n", "200 OK\n"},
-		{[]string{"127.0.0.1:" + casePorts[2], nonLoopBackIP + ":" + casePorts[2]}, nil, "CONNECT \n", "200 OK\n"},
-		{[]string{"localhost:" + casePorts[3]}, tlsConfig, "GET / HTTP/1.0\n", "200 OK\n"},
-		{[]string{nonLoopBackIP + ":" + casePorts[4]}, tlsConfig, "POST / HTTP/1.0\n", "200 OK\n"},
-		{[]string{"127.0.0.1:" + casePorts[5], nonLoopBackIP + ":" + casePorts[5]}, tlsConfig, "CONNECT \n", "200 OK\n"},
+		{[]string{"localhost:0"}, nil, "GET / HTTP/1.0\n", "200 OK\n"},
+		{[]string{nonLoopBackIP + ":0"}, nil, "POST / HTTP/1.0\n", "200 OK\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, "CONNECT \n", "200 OK\n"},
+		{[]string{"localhost:0"}, tlsConfig, "GET / HTTP/1.0\n", "200 OK\n"},
+		{[]string{nonLoopBackIP + ":0"}, tlsConfig, "POST / HTTP/1.0\n", "200 OK\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "CONNECT \n", "200 OK\n"},
 	}
 
 	for i, testCase := range testCases {
@@ -427,14 +425,14 @@ func TestHTTPListenerAccept(t *testing.T) {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
-		for _, serverAddr := range testCase.serverAddrs {
+		for _, serverAddr := range listener.Addrs() {
 			var conn net.Conn
 			var err error
 
 			if testCase.tlsConfig == nil {
-				conn, err = net.Dial("tcp", serverAddr)
+				conn, err = net.Dial("tcp", serverAddr.String())
 			} else {
-				conn, err = tls.Dial("tcp", serverAddr, &tls.Config{InsecureSkipVerify: true})
+				conn, err = tls.Dial("tcp", serverAddr.String(), &tls.Config{InsecureSkipVerify: true})
 			}
 			if err != nil {
 				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -482,10 +480,6 @@ func TestHTTPListenerAccept(t *testing.T) {
 func TestHTTPListenerAcceptPeekError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	var casePorts []string
-	for i := 0; i < 2; i++ {
-		casePorts = append(casePorts, getNextPort())
-	}
 	errorFunc := func(err error, template string, args ...interface{}) {
 		msg := fmt.Sprintf("error: %v.  ", err)
 		msg += fmt.Sprintf(template, args...)
@@ -497,8 +491,8 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 		tlsConfig   *tls.Config
 		request     string
 	}{
-		{[]string{"127.0.0.1:" + casePorts[0], nonLoopBackIP + ":" + casePorts[0]}, nil, "CONN"},
-		{[]string{"127.0.0.1:" + casePorts[1], nonLoopBackIP + ":" + casePorts[1]}, tlsConfig, "CONN"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, "CONN"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "CONN"},
 	}
 
 	for i, testCase := range testCases {
@@ -519,15 +513,15 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 		go func() {
 			serverConn, aerr := listener.Accept()
 			if aerr == nil {
-				t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+				fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 			}
 			if serverConn != nil {
-				t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+				fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 			}
 		}()
 
-		for _, serverAddr := range testCase.serverAddrs {
-			conn, err := net.Dial("tcp", serverAddr)
+		for _, serverAddr := range listener.Addrs() {
+			conn, err := net.Dial("tcp", serverAddr.String())
 			if err != nil {
 				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
@@ -546,10 +540,6 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 func TestHTTPListenerAcceptTLSError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	var casePorts []string
-	for i := 0; i < 1; i++ {
-		casePorts = append(casePorts, getNextPort())
-	}
 	errorFunc := func(err error, template string, args ...interface{}) {
 		msg := fmt.Sprintf("error: %v.  ", err)
 		msg += fmt.Sprintf(template, args...)
@@ -561,7 +551,7 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 		tlsConfig   *tls.Config
 		request     string
 	}{
-		{[]string{"127.0.0.1:" + casePorts[0], nonLoopBackIP + ":" + casePorts[0]}, tlsConfig, "GET / HTTP/1.0\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "GET / HTTP/1.0\n"},
 	}
 
 	for i, testCase := range testCases {
@@ -579,8 +569,8 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
-		for _, serverAddr := range testCase.serverAddrs {
-			conn, err := net.Dial("tcp", serverAddr)
+		for _, serverAddr := range listener.Addrs() {
+			conn, err := net.Dial("tcp", serverAddr.String())
 			if err != nil {
 				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
@@ -592,10 +582,10 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 			go func() {
 				serverConn, aerr := listener.Accept()
 				if aerr == nil {
-					t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+					fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 				}
 				if serverConn != nil {
-					t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+					fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 				}
 			}()
 
@@ -619,10 +609,6 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 func TestHTTPListenerAcceptError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	var casePorts []string
-	for i := 0; i < 3; i++ {
-		casePorts = append(casePorts, getNextPort())
-	}
 	errorFunc := func(err error, template string, args ...interface{}) {
 		msg := fmt.Sprintf("error: %v.  ", err)
 		msg += fmt.Sprintf(template, args...)
@@ -635,9 +621,9 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 		secureClient bool
 		request      string
 	}{
-		{[]string{"127.0.0.1:" + casePorts[0], nonLoopBackIP + ":" + casePorts[0]}, nil, false, "CONNECTION"},
-		{[]string{"127.0.0.1:" + casePorts[1], nonLoopBackIP + ":" + casePorts[1]}, tlsConfig, false, "CONNECTION"},
-		{[]string{"127.0.0.1:" + casePorts[2], nonLoopBackIP + ":" + casePorts[2]}, tlsConfig, true, "CONNECTION"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, false, "CONNECTION"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, false, "CONNECTION"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, true, "CONNECTION"},
 	}
 
 	for i, testCase := range testCases {
@@ -655,14 +641,14 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
-		for _, serverAddr := range testCase.serverAddrs {
+		for _, serverAddr := range listener.Addrs() {
 			var conn net.Conn
 			var err error
 
 			if testCase.secureClient {
-				conn, err = tls.Dial("tcp", serverAddr, &tls.Config{InsecureSkipVerify: true})
+				conn, err = tls.Dial("tcp", serverAddr.String(), &tls.Config{InsecureSkipVerify: true})
 			} else {
-				conn, err = net.Dial("tcp", serverAddr)
+				conn, err = net.Dial("tcp", serverAddr.String())
 			}
 			if err != nil {
 				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -675,10 +661,10 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 			go func() {
 				serverConn, aerr := listener.Accept()
 				if aerr == nil {
-					t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+					fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 				}
 				if serverConn != nil {
-					t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+					fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 				}
 			}()
 
@@ -699,23 +685,14 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 func TestHTTPListenerAcceptParallel(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	case1Port := getNextPort()
-	case2Port := getNextPort()
 
 	testCases := []struct {
 		serverAddrs []string
 		tlsConfig   *tls.Config
 		reply       string
 	}{
-		{[]string{"127.0.0.1:" + case1Port, nonLoopBackIP + ":" + case1Port}, nil, "200 OK\n"},
-		{[]string{"127.0.0.1:" + case2Port, nonLoopBackIP + ":" + case2Port}, tlsConfig, "200 OK\n"},
-	}
-
-	// As t.Fatalf() is not goroutine safe, use this closure.
-	fail := func(template string, args ...interface{}) {
-		fmt.Printf(template, args...)
-		fmt.Println()
-		t.Fail()
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, "200 OK\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "200 OK\n"},
 	}
 
 	connect := func(i int, serverAddr string, secure bool, delay bool, request, reply string) {
@@ -728,49 +705,48 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			conn, err = net.Dial("tcp", serverAddr)
 		}
 		if err != nil {
-			fail("Test %d: error: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
 		if delay {
 			if _, err = io.WriteString(conn, request[:3]); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 			time.Sleep(1 * time.Second)
 			if _, err = io.WriteString(conn, request[3:]); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 		} else {
 			if _, err = io.WriteString(conn, request); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 		}
 
 		received, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
-			fail("Test %d: reply read: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: reply read: expected = <nil>, got = %v", i+1, err)
 		}
 		if received != reply {
-			fail("Test %d: reply: expected = %v, got = %v", i+1, reply, received)
+			fail(t, "Test %d: reply: expected = %v, got = %v", i+1, reply, received)
 		}
 
 		conn.Close()
 	}
 
 	handleConnection := func(i int, wg *sync.WaitGroup, serverConn net.Conn, request, reply string) {
-		wg.Add(1)
 		defer wg.Done()
 
 		received, err := bufio.NewReader(serverConn).ReadString('\n')
 		if err != nil {
-			fail("Test %d: request read: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: request read: expected = <nil>, got = %v", i+1, err)
 		}
 
 		if received != request {
-			fail("Test %d: request: expected = %v, got = %v", i+1, request, received)
+			fail(t, "Test %d: request: expected = %v, got = %v", i+1, request, received)
 		}
 
 		if _, err := io.WriteString(serverConn, reply); err != nil {
-			fail("Test %d: reply send: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: reply send: expected = <nil>, got = %v", i+1, err)
 		}
 
 		serverConn.Close()
@@ -791,9 +767,9 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
-		for _, serverAddr := range testCase.serverAddrs {
-			go connect(i, serverAddr, testCase.tlsConfig != nil, true, "GET /1 HTTP/1.0\n", testCase.reply)
-			go connect(i, serverAddr, testCase.tlsConfig != nil, false, "GET /2 HTTP/1.0\n", testCase.reply)
+		for _, serverAddr := range listener.Addrs() {
+			go connect(i, serverAddr.String(), testCase.tlsConfig != nil, true, "GET /1 HTTP/1.0\n", testCase.reply)
+			go connect(i, serverAddr.String(), testCase.tlsConfig != nil, false, "GET /2 HTTP/1.0\n", testCase.reply)
 
 			var wg sync.WaitGroup
 
@@ -801,17 +777,58 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test %d: accept: expected = <nil>, got = %v", i+1, err)
 			}
+			wg.Add(1)
 			go handleConnection(i, &wg, serverConn, "GET /2 HTTP/1.0\n", testCase.reply)
 
 			serverConn, err = listener.Accept()
 			if err != nil {
 				t.Fatalf("Test %d: accept: expected = <nil>, got = %v", i+1, err)
 			}
+			wg.Add(1)
 			go handleConnection(i, &wg, serverConn, "GET /1 HTTP/1.0\n", testCase.reply)
 
 			wg.Wait()
 		}
 
 		listener.Close()
+	}
+}
+
+type myTimeoutErr struct {
+	timeout bool
+}
+
+func (m *myTimeoutErr) Error() string { return fmt.Sprintf("myTimeoutErr: %v", m.timeout) }
+func (m *myTimeoutErr) Timeout() bool { return m.timeout }
+
+// Test for ignoreErr helper function
+func TestIgnoreErr(t *testing.T) {
+	testCases := []struct {
+		err  error
+		want bool
+	}{
+		{
+			err:  io.EOF,
+			want: true,
+		},
+		{
+			err:  &net.OpError{Err: &myTimeoutErr{timeout: true}},
+			want: true,
+		},
+		{
+			err:  &net.OpError{Err: &myTimeoutErr{timeout: false}},
+			want: false,
+		},
+		{
+			err:  io.ErrUnexpectedEOF,
+			want: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		if actual := ignoreErr(tc.err); actual != tc.want {
+			t.Errorf("Test case %d: Expected %v but got %v for %v", i+1,
+				tc.want, actual, tc.err)
+		}
 	}
 }

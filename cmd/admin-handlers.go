@@ -181,8 +181,14 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Update local credentials in memory.
-	serverConfig.SetCredential(creds)
+	prevCred := serverConfig.SetCredential(creds)
+
+	// Save credentials to config file
 	if err = serverConfig.Save(); err != nil {
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
+		errorIf(err, "Unable to update the config with new credentials.")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -973,6 +979,24 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	var config serverConfigV19
+	err = json.Unmarshal(configBytes, &config)
+
+	if err != nil {
+		errorIf(err, "Failed to unmarshal config from request body.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if globalIsEnvCreds {
+		creds := serverConfig.GetCredential()
+		if config.Credential.AccessKey != creds.AccessKey ||
+			config.Credential.SecretKey != creds.SecretKey {
+			writeErrorResponse(w, ErrAdminCredentialsMismatch, r.URL)
+			return
+		}
+	}
+
 	// Write config received from request onto a temporary file on
 	// all nodes.
 	tmpFileName := fmt.Sprintf(minioConfigTmpFormat, mustGetUUID())
@@ -989,7 +1013,10 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// bucket name and wouldn't conflict with normal object
 	// operations.
 	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
-	configLock.Lock()
+	if configLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer configLock.Unlock()
 
 	// Rename the temporary config file to config.json

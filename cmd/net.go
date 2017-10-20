@@ -26,7 +26,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -65,12 +67,44 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 
 // getHostIP4 returns IPv4 address of given host.
 func getHostIP4(host string) (ipList set.StringSet, err error) {
-	ipList = set.NewStringSet()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ipList, err
+	var ips []net.IP
+
+	if ips, err = net.LookupIP(host); err != nil {
+		// return err if not Docker or Kubernetes
+		// We use IsDocker() method to check for Docker Swarm environment
+		// as there is no reliable way to clearly identify Swarm from
+		// Docker environment.
+		if !IsDocker() && !IsKubernetes() {
+			return ipList, err
+		}
+
+		// channel to indicate completion of host resolution
+		doneCh := make(chan struct{})
+		// Indicate retry routine to exit cleanly, upon this function return.
+		defer close(doneCh)
+		// Mark the starting time
+		startTime := time.Now()
+		// wait for hosts to resolve in exponentialbackoff manner
+		for _ = range newRetryTimerSimple(doneCh) {
+			// Retry infinitely on Kubernetes and Docker swarm.
+			// This is needed as the remote hosts are sometime
+			// not available immediately.
+			if ips, err = net.LookupIP(host); err == nil {
+				break
+			}
+			// time elapsed
+			timeElapsed := time.Since(startTime)
+			// log error only if more than 1s elapsed
+			if timeElapsed > time.Second {
+				// log the message to console about the host not being
+				// resolveable.
+				errorIf(err, "Unable to resolve host %s (%s)", host,
+					humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
+			}
+		}
 	}
 
+	ipList = set.NewStringSet()
 	for _, ip := range ips {
 		if ip.To4() != nil {
 			ipList.Add(ip.String())
@@ -141,16 +175,20 @@ func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
 		ipList = []string{host}
 	}
 
-	scheme := httpScheme
-	if globalIsSSL {
-		scheme = httpsScheme
-	}
-
 	for _, ip := range ipList {
-		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s:%s", scheme, ip, port))
+		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), ip, port))
 	}
 
 	return apiEndpoints
+}
+
+// isHostIPv4 - helper for validating if the provided arg is an ip address.
+func isHostIPv4(ipAddress string) bool {
+	host, _, err := net.SplitHostPort(ipAddress)
+	if err != nil {
+		host = ipAddress
+	}
+	return net.ParseIP(host) != nil
 }
 
 // checkPortAvailability - check if given port is already in use.
@@ -198,17 +236,19 @@ func extractHostPort(hostAddr string) (string, string, error) {
 		return "", "", errors.New("unable to process empty address")
 	}
 
+	// Simplify the work of url.Parse() and always send a url with
+	if !strings.HasPrefix(hostAddr, "http://") && !strings.HasPrefix(hostAddr, "https://") {
+		hostAddr = "//" + hostAddr
+	}
+
 	// Parse address to extract host and scheme field
 	u, err := url.Parse(hostAddr)
 	if err != nil {
-		// Ignore scheme not present error
-		if !strings.Contains(err.Error(), "missing protocol scheme") {
-			return "", "", err
-		}
-	} else {
-		addr = u.Host
-		scheme = u.Scheme
+		return "", "", err
 	}
+
+	addr = u.Host
+	scheme = u.Scheme
 
 	// Use the given parameter again if url.Parse()
 	// didn't return any useful result.

@@ -35,6 +35,12 @@ func (ls *lockStat) lockGranted() {
 	ls.granted++
 }
 
+// lockTimedOut - updates lock stat when a lock is timed out.
+func (ls *lockStat) lockTimedOut() {
+	ls.blocked--
+	ls.total--
+}
+
 // lockRemoved - updates lock stat when a lock is removed, by Unlock
 // or ForceUnlock.
 func (ls *lockStat) lockRemoved(granted bool) {

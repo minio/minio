@@ -305,6 +305,15 @@ func (e ObjectTooSmall) Error() string {
 	return "size of the object less than what is expected"
 }
 
+// OperationTimedOut - a timeout occurred.
+type OperationTimedOut struct {
+	Path string
+}
+
+func (e OperationTimedOut) Error() string {
+	return "Operation timed out: " + e.Path
+}
+
 /// Multipart related errors.
 
 // MalformedUploadID malformed upload id.
@@ -332,6 +341,13 @@ func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag."
 }
 
+// PartsSizeUnequal - All parts except the last part should be of the same size
+type PartsSizeUnequal struct{}
+
+func (e PartsSizeUnequal) Error() string {
+	return "All parts except the last part should be of the same size"
+}
+
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
 	PartSize   int64
@@ -357,13 +373,6 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
-// NotSupported If a feature is not supported
-type NotSupported struct{}
-
-func (e NotSupported) Error() string {
-	return "Not Supported"
-}
-
 // PolicyNesting - policy nesting conflict.
 type PolicyNesting struct{}
 
@@ -376,6 +385,13 @@ type PolicyNotFound GenericError
 
 func (e PolicyNotFound) Error() string {
 	return "Policy not found"
+}
+
+// UnsupportedMetadata - unsupported metadata
+type UnsupportedMetadata struct{}
+
+func (e UnsupportedMetadata) Error() string {
+	return "Unsupported headers in Metadata"
 }
 
 // Check if error type is IncompleteBody.

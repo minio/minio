@@ -127,7 +127,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -262,7 +262,10 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
@@ -278,7 +281,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, "")
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, "", ""), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -286,7 +289,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, "")
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", ""), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -300,7 +303,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", sha256sum), metadata)
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, ErrAccessDenied, r.URL)
@@ -397,6 +400,9 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
@@ -604,11 +610,7 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// PutBucket does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
-	if s3Error == ErrInvalidRegion {
-		// Clients like boto3 send putBucket() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
-	}
+	s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion())
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -626,7 +628,10 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
@@ -718,6 +723,13 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 	// gateway backends.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
+	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
+	// does not throw an error.
+	if maxKeys < 0 {
+		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
+		return
+	}
+
 	listObjects := objectAPI.ListObjects
 	if reqAuthType == authTypeAnonymous {
 		listObjects = objectAPI.AnonListObjects
@@ -798,22 +810,21 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateGatewayListObjectsV2Args(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsV2Info object to be
 	// serialized as XML and sent as S3 compatible response body.
-	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, fetchOwner, delimiter, maxKeys)
+	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
 		errorIf(err, "Unable to list objects. Args to listObjectsV2 are bucket=%s, prefix=%s, token=%s, delimiter=%s", bucket, prefix, token, delimiter)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.ContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
-
+	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
 }

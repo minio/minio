@@ -118,3 +118,10 @@ func isSysErrHandleInvalid(err error) bool {
 	}
 	return false
 }
+
+func isSysErrCrossDevice(err error) bool {
+	if e, ok := err.(*os.LinkError); ok {
+		return e.Err == syscall.EXDEV
+	}
+	return false
+}

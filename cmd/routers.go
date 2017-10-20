@@ -91,12 +91,14 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		setHTTPStatsHandler,
 		// Limits all requests size to a maximum fixed limit
 		setRequestSizeLimitHandler,
+		// Limits all header sizes to a maximum fixed limit
+		setRequestHeaderSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 		setCrossDomainPolicy,
 		// Redirect some pre-defined browser request paths to a static location prefix.
 		setBrowserRedirectHandler,
 		// Validates if incoming request is for restricted buckets.
-		setPrivateBucketHandler,
+		setReservedBucketHandler,
 		// Adds cache control for all browser requests.
 		setBrowserCacheControlHandler,
 		// Validates all incoming requests to have a valid date header.

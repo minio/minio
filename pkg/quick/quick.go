@@ -92,12 +92,7 @@ func (d config) Save(filename string) error {
 func (d config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-
-	if err := loadFileConfig(filename, d.data); err != nil {
-		return err
-	}
-
-	return nil
+	return loadFileConfig(filename, d.data)
 }
 
 // Data - grab internal data map for reading

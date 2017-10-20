@@ -128,7 +128,7 @@ type initiator struct {
 // copyObjectResult container for copy object response.
 type copyObjectResult struct {
 	ETag         string
-	LastModified string // time string format "2006-01-02T15:04:05.000Z"
+	LastModified time.Time // time string format "2006-01-02T15:04:05.000Z"
 }
 
 // ObjectPart container for particular part of an object.

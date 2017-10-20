@@ -53,7 +53,12 @@ const (
 	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	globalMinioModeGatewayS3       = "mode-gateway-s3"
 	globalMinioModeGatewayGCS      = "mode-gateway-gcs"
+	globalMinioModeGatewayB2       = "mode-gateway-b2"
 	globalMinioModeGatewaySia      = "mode-gateway-sia"
+
+	// globalMinioSysTmp prefix is used in Azure/GCS gateway for save metadata sent by Initialize Multipart Upload API.
+	globalMinioSysTmp = "minio.sys.tmp/"
+
 	// Add new global values here.
 )
 
@@ -65,8 +70,13 @@ const (
 	// Limit memory allocation to store multipart data
 	maxFormMemory = int64(5 * humanize.MiByte)
 
-	// The maximum allowed difference between the request generation time and the server processing time
-	globalMaxSkewTime = 15 * time.Minute
+	// The maximum allowed time difference between the incoming request
+	// date and server date during signature verification.
+	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
+
+	// Default Read/Write timeouts for each connection.
+	globalConnReadTimeout  = 15 * time.Minute // Timeout after 15 minutes of no data sent by the client.
+	globalConnWriteTimeout = 15 * time.Minute // Timeout after 15 minutes if no data received by the client.
 )
 
 var (
@@ -137,12 +147,14 @@ var (
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
 	// Add new variable global values here.
-)
 
-var (
-	// Keeps the connection active by waiting for following amount of time.
-	// Primarily used in ListenBucketNotification.
-	globalSNSConnAlive = 5 * time.Second
+	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
+	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
+	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
+
+	// Keep connection active for clients actively using ListenBucketNotification.
+	globalSNSConnAlive = 5 * time.Second // Send a whitespace every 5 seconds.
 )
 
 // global colors.

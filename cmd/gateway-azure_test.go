@@ -43,33 +43,71 @@ func TestAzureToS3ETag(t *testing.T) {
 }
 
 // Test canonical metadata.
-func TestS3ToAzureHeaders(t *testing.T) {
+func TestS3MetaToAzureProperties(t *testing.T) {
 	headers := map[string]string{
-		"accept-encoding":  "gzip",
-		"content-encoding": "gzip",
-		"X-Amz-Meta-Hdr":   "value",
+		"accept-encoding":          "gzip",
+		"content-encoding":         "gzip",
+		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X_test_key":    "value",
+		"X-Amz-Meta-X__test__key":  "value",
+		"X-Amz-Meta-X-Test__key":   "value",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
+	// Only X-Amz-Meta- prefixed entries will be returned in
+	// Metadata (without the prefix!)
 	expectedHeaders := map[string]string{
-		"Accept-Encoding":  "gzip",
-		"Content-Encoding": "gzip",
-		"X-Ms-Meta-Hdr":    "value",
+		"Hdr":              "value",
+		"X__test__key":     "value",
+		"X____test____key": "value",
+		"X_Test____key":    "value",
+		"X_Amz_Key":        "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X_Amz_Matdesc":    "{}",
+		"X_Amz_Iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	actualHeaders := s3ToAzureHeaders(headers)
-	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
-		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, actualHeaders)
+	meta, _, err := s3MetaToAzureProperties(headers)
+	if err != nil {
+		t.Fatalf("Test failed, with %s", err)
+	}
+	if !reflect.DeepEqual(map[string]string(meta), expectedHeaders) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, meta)
+	}
+	headers = map[string]string{
+		"invalid--meta": "value",
+	}
+	_, _, err = s3MetaToAzureProperties(headers)
+	if err = errorCause(err); err != nil {
+		if _, ok := err.(UnsupportedMetadata); !ok {
+			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
+		}
 	}
 }
 
-func TestAzureToS3Metadata(t *testing.T) {
+func TestAzurePropertiesToS3Meta(t *testing.T) {
 	// Just one testcase. Adding more test cases does not add value to the testcase
 	// as azureToS3Metadata() just adds a prefix.
 	metadata := map[string]string{
-		"First-Name": "myname",
+		"first_name":       "myname",
+		"x_test_key":       "value",
+		"x_test__key":      "value",
+		"x__test__key":     "value",
+		"x____test____key": "value",
+		"x_amz_key":        "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x_amz_matdesc":    "{}",
+		"x_amz_iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedMeta := map[string]string{
-		"X-Amz-Meta-First-Name": "myname",
+		"X-Amz-Meta-First-Name":    "myname",
+		"X-Amz-Meta-X-Test-Key":    "value",
+		"X-Amz-Meta-X-Test_key":    "value",
+		"X-Amz-Meta-X_test_key":    "value",
+		"X-Amz-Meta-X__test__key":  "value",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	actualMeta := azureToS3Metadata(metadata)
+	actualMeta := azurePropertiesToS3Meta(metadata, storage.BlobProperties{})
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
 		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
@@ -133,15 +171,17 @@ func TestAzureToObjectError(t *testing.T) {
 // Test azureGetBlockID().
 func TestAzureGetBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		partID        int
+		subPartNumber int
+		uploadID      string
+		md5           string
+		blockID       string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ=="},
+		{2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw=="},
 	}
 	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partID, test.md5)
+		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.uploadID, test.md5)
 		if blockID != test.blockID {
 			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
@@ -151,26 +191,35 @@ func TestAzureGetBlockID(t *testing.T) {
 // Test azureParseBlockID().
 func TestAzureParseBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		blockID       string
+		partID        int
+		subPartNumber int
+		uploadID      string
+		md5           string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ==", 1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e"},
+		{"MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw==", 2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273"},
 	}
 	for _, test := range testCases {
-		partID, md5, err := azureParseBlockID(test.blockID)
+		partID, subPartNumber, uploadID, md5, err := azureParseBlockID(test.blockID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if partID != test.partID {
 			t.Fatalf("%d not equal to %d", partID, test.partID)
 		}
+		if subPartNumber != test.subPartNumber {
+			t.Fatalf("%d not equal to %d", subPartNumber, test.subPartNumber)
+		}
+		if uploadID != test.uploadID {
+			t.Fatalf("%s not equal to %s", uploadID, test.uploadID)
+		}
 		if md5 != test.md5 {
 			t.Fatalf("%s not equal to %s", md5, test.md5)
 		}
 	}
-	_, _, err := azureParseBlockID("junk")
+
+	_, _, _, _, err := azureParseBlockID("junk")
 	if err == nil {
 		t.Fatal("Expected azureParseBlockID() to return error")
 	}
@@ -184,16 +233,30 @@ func TestAzureListBlobsGetParameters(t *testing.T) {
 	expectedURLValues.Set("prefix", "test")
 	expectedURLValues.Set("delimiter", "_")
 	expectedURLValues.Set("marker", "marker")
-	expectedURLValues.Set("include", "hello")
+	expectedURLValues.Set("include", "metadata")
 	expectedURLValues.Set("maxresults", "20")
 	expectedURLValues.Set("timeout", "10")
 
-	setBlobParameters := storage.ListBlobsParameters{"test", "_", "marker", "hello", 20, 10}
+	setBlobParameters := storage.ListBlobsParameters{
+		Prefix:     "test",
+		Delimiter:  "_",
+		Marker:     "marker",
+		Include:    &storage.IncludeBlobDataset{Metadata: true},
+		MaxResults: 20,
+		Timeout:    10,
+	}
 
 	// Test values set 2
 	expectedURLValues1 := url.Values{}
 
-	setBlobParameters1 := storage.ListBlobsParameters{"", "", "", "", 0, 0}
+	setBlobParameters1 := storage.ListBlobsParameters{
+		Prefix:     "",
+		Delimiter:  "",
+		Marker:     "",
+		Include:    nil,
+		MaxResults: 0,
+		Timeout:    0,
+	}
 
 	testCases := []struct {
 		name string
@@ -251,5 +314,31 @@ func TestAnonErrToObjectErr(t *testing.T) {
 				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestCheckAzureUploadID(t *testing.T) {
+	invalidUploadIDs := []string{
+		"123456789abcdefg",
+		"hello world",
+		"0x1234567890",
+		"1234567890abcdef1234567890abcdef",
+	}
+
+	for _, uploadID := range invalidUploadIDs {
+		if err := checkAzureUploadID(uploadID); err == nil {
+			t.Fatalf("%s: expected: <error>, got: <nil>", uploadID)
+		}
+	}
+
+	validUploadIDs := []string{
+		"1234567890abcdef",
+		"1122334455667788",
+	}
+
+	for _, uploadID := range validUploadIDs {
+		if err := checkAzureUploadID(uploadID); err != nil {
+			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
+		}
 	}
 }

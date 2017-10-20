@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"path/filepath"
 	"time"
 )
@@ -245,46 +244,49 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
+//
 // - disks which have all parts specified in the latest xl.json.
+//
 // - errs updated to have errFileNotFound in place of disks that had
-// missing parts.
-// - non-nil error if any of the online disks failed during
-// calculating blake2b checksum.
-func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
+//   missing or corrupted parts.
+//
+// - non-nil error if any of the disks failed unexpectedly (i.e. error
+//   other than file not found and not a checksum error).
+func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
+	object string) ([]StorageAPI, []error, error) {
+
 	availableDisks := make([]StorageAPI, len(onlineDisks))
-	for diskIndex, onlineDisk := range onlineDisks {
-		if onlineDisk == nil {
+	buffer := []byte{}
+
+	for i, onlineDisk := range onlineDisks {
+		if onlineDisk == OfflineDisk {
 			continue
 		}
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
-		for _, part := range partsMetadata[diskIndex].Parts {
-			// compute blake2b sum of part.
+		for _, part := range partsMetadata[i].Parts {
 			partPath := filepath.Join(object, part.Name)
-			checkSumInfo := partsMetadata[diskIndex].Erasure.GetCheckSumInfo(part.Name)
-			hash := newHash(checkSumInfo.Algorithm)
-			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
-			if hErr == errFileNotFound {
-				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = nil
-				break
-			}
+			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
+			verifier := NewBitrotVerifier(checksumInfo.Algorithm, checksumInfo.Hash)
 
-			if hErr != nil && hErr != errFileNotFound {
+			// verification happens even if a 0-length
+			// buffer is passed
+			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
+			if hErr != nil {
+				_, isCorrupted := hErr.(hashMismatchError)
+				if isCorrupted || hErr == errFileNotFound {
+					errs[i] = errFileNotFound
+					availableDisks[i] = OfflineDisk
+					break
+				}
 				return nil, nil, traceError(hErr)
 			}
+		}
 
-			blakeSum := hex.EncodeToString(blakeBytes)
-			// if blake2b sum doesn't match for a part
-			// then this disk is outdated and needs
-			// healing.
-			if blakeSum != checkSumInfo.Hash {
-				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = nil
-				break
-			}
-			availableDisks[diskIndex] = onlineDisk
+		if errs[i] == nil {
+			// All parts verified, mark it as all data available.
+			availableDisks[i] = onlineDisk
 		}
 	}
 

@@ -122,7 +122,7 @@ func isValidEndpointURL(endpointURL url.URL) error {
 	if endpointURL.Path != "/" && endpointURL.Path != "" {
 		return ErrInvalidArgument("Endpoint url cannot have fully qualified paths.")
 	}
-	if strings.Contains(endpointURL.Host, ".amazonaws.com") {
+	if strings.Contains(endpointURL.Host, ".s3.amazonaws.com") {
 		if !s3utils.IsAmazonEndpoint(endpointURL) {
 			return ErrInvalidArgument("Amazon S3 endpoint should be 's3.amazonaws.com'.")
 		}
@@ -211,4 +211,42 @@ func getDefaultLocation(u url.URL, regionOverride string) (location string) {
 	}
 	// Default to location to 'us-east-1'.
 	return "us-east-1"
+}
+
+var supportedHeaders = []string{
+	"content-type",
+	"cache-control",
+	"content-encoding",
+	"content-disposition",
+	// Add more supported headers here.
+}
+
+// cseHeaders is list of client side encryption headers
+var cseHeaders = []string{
+	"X-Amz-Iv",
+	"X-Amz-Key",
+	"X-Amz-Matdesc",
+}
+
+// isStandardHeader returns true if header is a supported header and not a custom header
+func isStandardHeader(headerKey string) bool {
+	for _, header := range supportedHeaders {
+		if strings.Compare(strings.ToLower(headerKey), header) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// isCSEHeader returns true if header is a client side encryption header.
+func isCSEHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
+	for _, h := range cseHeaders {
+		header := strings.ToLower(h)
+		if (header == key) ||
+			(("x-amz-meta-" + header) == key) {
+			return true
+		}
+	}
+	return false
 }

@@ -173,7 +173,9 @@ func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
 
@@ -294,6 +296,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
+	targetServer := GetLocalPeer(globalEndpoints)
 	accountID := fmt.Sprintf("%d", UTCNow().UnixNano())
 	accountARN := fmt.Sprintf(
 		"%s:%s:%s:%s-%s",
@@ -301,8 +304,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		serverConfig.GetRegion(),
 		accountID,
 		snsTypeMinio,
-		globalMinioAddr,
+		targetServer,
 	)
+
 	var filterRules []filterRule
 
 	for _, prefix := range prefixes {
@@ -355,7 +359,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// nEventCh
 	lc := listenerConfig{
 		TopicConfig:  *topicCfg,
-		TargetServer: globalMinioAddr,
+		TargetServer: targetServer,
 	}
 
 	err = AddBucketListenerConfig(bucket, &lc, objAPI)
@@ -386,7 +390,9 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
 
@@ -427,7 +433,9 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalOperationTimeout) != nil {
+		return
+	}
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
 

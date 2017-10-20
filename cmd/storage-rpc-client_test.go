@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -127,11 +126,11 @@ func TestStorageErr(t *testing.T) {
 			err:         fmt.Errorf("%s", io.ErrUnexpectedEOF.Error()),
 		},
 		{
-			expectedErr: errDiskNotFound,
+			expectedErr: errDiskNotFoundFromNetError,
 			err:         &net.OpError{},
 		},
 		{
-			expectedErr: errDiskNotFound,
+			expectedErr: errDiskNotFoundFromRPCShutdown,
 			err:         rpc.ErrShutdown,
 		},
 		{
@@ -220,8 +219,8 @@ type TestRPCStorageSuite struct {
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
-func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
-	s.testServer = StartTestStorageRPCServer(c, s.serverType, 1)
+func (s *TestRPCStorageSuite) SetUpSuite(t *testing.T) {
+	s.testServer = StartTestStorageRPCServer(t, s.serverType, 1)
 	listenAddress := s.testServer.Server.Listener.Addr().String()
 
 	for _, ep := range s.testServer.Disks {
@@ -237,9 +236,8 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 }
 
 // No longer used with gocheck, but used in explicit teardown code in
-// each test function. // Called implicitly by "gopkg.in/check.v1"
-// after all tests are run.
-func (s *TestRPCStorageSuite) TearDownSuite(c *testing.T) {
+// each test function. Called implicitly by after all tests are run.
+func (s *TestRPCStorageSuite) TearDownSuite(t *testing.T) {
 	s.testServer.Stop()
 }
 
@@ -380,7 +378,7 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 			t.Errorf("Expected `Hello, world`, got %s", string(buf))
 		}
 		buf1 := make([]byte, 5)
-		n, err := storageDisk.ReadFile("myvol", "file1", 4, buf1)
+		n, err := storageDisk.ReadFile("myvol", "file1", 4, buf1, nil)
 		if err != nil {
 			t.Error("Unable to initiate ReadFile", err)
 		}
@@ -391,15 +389,15 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 			t.Errorf("Expected %s, got %s", string(buf[4:9]), string(buf1))
 		}
 
-		blakeHash := func(s string) string {
-			k := blake2b.Sum512([]byte(s))
-			return hex.EncodeToString(k[:])
+		blakeHash := func(b []byte) []byte {
+			k := blake2b.Sum512(b)
+			return k[:]
 		}
+		verifier := NewBitrotVerifier(BLAKE2b512, blakeHash(buf))
 		buf2 := make([]byte, 2)
-		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1,
-			buf2, HashBlake2b, blakeHash(string(buf)))
+		n, err = storageDisk.ReadFile("myvol", "file1", 1, buf2, verifier)
 		if err != nil {
-			t.Error("Error in ReadFileWithVerify", err)
+			t.Error("Error in ReadFile with bitrot verification", err)
 		}
 		if n != 2 {
 			t.Errorf("Expected `2`, got %d", n)

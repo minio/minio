@@ -30,9 +30,15 @@ func (s *Share) buildPath() string {
 // Create this share under the associated account.
 // If a share with the same name already exists, the operation fails.
 //
-// See https://msdn.microsoft.com/en-us/library/azure/dn167008.aspx
-func (s *Share) Create() error {
-	headers, err := s.fsc.createResource(s.buildPath(), resourceShare, mergeMDIntoExtraHeaders(s.Metadata, nil))
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/Create-Share
+func (s *Share) Create(options *FileRequestOptions) error {
+	extraheaders := map[string]string{}
+	if s.Properties.Quota > 0 {
+		extraheaders["x-ms-share-quota"] = strconv.Itoa(s.Properties.Quota)
+	}
+
+	params := prepareOptions(options)
+	headers, err := s.fsc.createResource(s.buildPath(), resourceShare, params, mergeMDIntoExtraHeaders(s.Metadata, extraheaders), []int{http.StatusCreated})
 	if err != nil {
 		return err
 	}
@@ -45,17 +51,23 @@ func (s *Share) Create() error {
 // it does not exist. Returns true if the share is newly created or false if
 // the share already exists.
 //
-// See https://msdn.microsoft.com/en-us/library/azure/dn167008.aspx
-func (s *Share) CreateIfNotExists() (bool, error) {
-	resp, err := s.fsc.createResourceNoClose(s.buildPath(), resourceShare, nil)
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/Create-Share
+func (s *Share) CreateIfNotExists(options *FileRequestOptions) (bool, error) {
+	extraheaders := map[string]string{}
+	if s.Properties.Quota > 0 {
+		extraheaders["x-ms-share-quota"] = strconv.Itoa(s.Properties.Quota)
+	}
+
+	params := prepareOptions(options)
+	resp, err := s.fsc.createResourceNoClose(s.buildPath(), resourceShare, params, extraheaders)
 	if resp != nil {
-		defer resp.body.Close()
+		defer readAndCloseBody(resp.body)
 		if resp.statusCode == http.StatusCreated || resp.statusCode == http.StatusConflict {
 			if resp.statusCode == http.StatusCreated {
 				s.updateEtagAndLastModified(resp.headers)
 				return true, nil
 			}
-			return false, s.FetchAttributes()
+			return false, s.FetchAttributes(nil)
 		}
 	}
 
@@ -66,18 +78,18 @@ func (s *Share) CreateIfNotExists() (bool, error) {
 // and directories contained within it are later deleted during garbage
 // collection.  If the share does not exist the operation fails
 //
-// See https://msdn.microsoft.com/en-us/library/azure/dn689090.aspx
-func (s *Share) Delete() error {
-	return s.fsc.deleteResource(s.buildPath(), resourceShare)
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/Delete-Share
+func (s *Share) Delete(options *FileRequestOptions) error {
+	return s.fsc.deleteResource(s.buildPath(), resourceShare, options)
 }
 
 // DeleteIfExists operation marks this share for deletion if it exists.
 //
-// See https://msdn.microsoft.com/en-us/library/azure/dn689090.aspx
-func (s *Share) DeleteIfExists() (bool, error) {
-	resp, err := s.fsc.deleteResourceNoClose(s.buildPath(), resourceShare)
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/Delete-Share
+func (s *Share) DeleteIfExists(options *FileRequestOptions) (bool, error) {
+	resp, err := s.fsc.deleteResourceNoClose(s.buildPath(), resourceShare, options)
 	if resp != nil {
-		defer resp.body.Close()
+		defer readAndCloseBody(resp.body)
 		if resp.statusCode == http.StatusAccepted || resp.statusCode == http.StatusNotFound {
 			return resp.statusCode == http.StatusAccepted, nil
 		}
@@ -97,8 +109,10 @@ func (s *Share) Exists() (bool, error) {
 }
 
 // FetchAttributes retrieves metadata and properties for this share.
-func (s *Share) FetchAttributes() error {
-	headers, err := s.fsc.getResourceHeaders(s.buildPath(), compNone, resourceShare, http.MethodHead)
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/get-share-properties
+func (s *Share) FetchAttributes(options *FileRequestOptions) error {
+	params := prepareOptions(options)
+	headers, err := s.fsc.getResourceHeaders(s.buildPath(), compNone, resourceShare, params, http.MethodHead)
 	if err != nil {
 		return err
 	}
@@ -130,9 +144,9 @@ func (s *Share) ServiceClient() *FileServiceClient {
 // are case-insensitive so case munging should not matter to other
 // applications either.
 //
-// See https://msdn.microsoft.com/en-us/library/azure/dd179414.aspx
-func (s *Share) SetMetadata() error {
-	headers, err := s.fsc.setResourceHeaders(s.buildPath(), compMetadata, resourceShare, mergeMDIntoExtraHeaders(s.Metadata, nil))
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/set-share-metadata
+func (s *Share) SetMetadata(options *FileRequestOptions) error {
+	headers, err := s.fsc.setResourceHeaders(s.buildPath(), compMetadata, resourceShare, mergeMDIntoExtraHeaders(s.Metadata, nil), options)
 	if err != nil {
 		return err
 	}
@@ -148,15 +162,17 @@ func (s *Share) SetMetadata() error {
 // are case-insensitive so case munging should not matter to other
 // applications either.
 //
-// See https://msdn.microsoft.com/en-us/library/azure/mt427368.aspx
-func (s *Share) SetProperties() error {
-	if s.Properties.Quota < 1 || s.Properties.Quota > 5120 {
-		return fmt.Errorf("invalid value %v for quota, valid values are [1, 5120]", s.Properties.Quota)
+// See https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/Set-Share-Properties
+func (s *Share) SetProperties(options *FileRequestOptions) error {
+	extraheaders := map[string]string{}
+	if s.Properties.Quota > 0 {
+		if s.Properties.Quota > 5120 {
+			return fmt.Errorf("invalid value %v for quota, valid values are [1, 5120]", s.Properties.Quota)
+		}
+		extraheaders["x-ms-share-quota"] = strconv.Itoa(s.Properties.Quota)
 	}
 
-	headers, err := s.fsc.setResourceHeaders(s.buildPath(), compProperties, resourceShare, map[string]string{
-		"x-ms-share-quota": strconv.Itoa(s.Properties.Quota),
-	})
+	headers, err := s.fsc.setResourceHeaders(s.buildPath(), compProperties, resourceShare, extraheaders, options)
 	if err != nil {
 		return err
 	}

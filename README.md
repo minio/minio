@@ -1,4 +1,5 @@
-# Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio Quickstart Guide
+[![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio) [![Snap Status](https://build.snapcraft.io/badge/minio/minio.svg)](https://build.snapcraft.io/user/minio/minio)
 
 Minio is an object storage server released under Apache License v2.0. It is compatible with Amazon S3 cloud storage service. It is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. Size of an object can range from a few KBs to a maximum of 5TB.
 
@@ -8,31 +9,29 @@ Minio server is light enough to be bundled with the application stack, similar t
 ### Stable
 ```
 docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /export
+docker run -p 9000:9000 minio/minio server /data
 ```
 
 ### Edge
 ```
 docker pull minio/minio:edge
-docker run -p 9000:9000 minio/minio:edge server /export
+docker run -p 9000:9000 minio/minio:edge server /data
 ```
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
 ## macOS
 ### Homebrew
 Install minio packages using [Homebrew](http://brew.sh/)
-
 ```sh
 brew install minio/stable/minio
-minio server ~/Photos
+minio server /data
 ```
 #### Note
-If you previously installed minio using `brew install minio` then reinstall minio from `minio/stable/minio` official repo. Homebrew builds are unstable due to golang 1.8 bugs.
-
-```
-brew uninstall minio 
+If you previously installed minio using `brew install minio` then it is recommended that you reinstall minio from `minio/stable/minio` official repo instead.
+```sh
+brew uninstall minio
 brew install minio/stable/minio
-```  
+```
 
 ### Binary Download
 | Platform| Architecture | URL|
@@ -40,7 +39,7 @@ brew install minio/stable/minio
 |Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
-./minio server ~/Photos
+./minio server /data
 ```
 
 ## GNU/Linux
@@ -48,13 +47,24 @@ chmod 755 minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
-|         |32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio |
-|         |32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio |
-|         |64-bit ARM|https://dl.minio.io/server/minio/release/linux-arm64/minio |
-|         |32-bit ARMv6|https://dl.minio.io/server/minio/release/linux-arm6vl/minio |
 ```sh
 chmod +x minio
-./minio server ~/Photos
+./minio server /data
+```
+
+### Snap
+You can install the latest `minio` [snap](https://snapcraft.io), and help testing the most recent changes of the master branch in [all the supported Linux distros](https://snapcraft.io/docs/core/install) with:
+
+```sh
+sudo snap install minio --edge
+```
+
+Every time a new version of `minio` is pushed to the store, you will get it updated automatically.
+
+You will need to allow the minio snap to observe mounts in the system:
+
+```sh
+sudo snap connect minio:mount-observe
 ```
 
 ## Microsoft Windows
@@ -62,7 +72,6 @@ chmod +x minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
-|                 |32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```
@@ -76,15 +85,6 @@ pkg install minio
 sysrc minio_enable=yes
 sysrc minio_disks=/home/user/Photos
 service minio start
-```
-
-### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio |
-```sh
-chmod 755 minio
-./minio server ~/Photos
 ```
 
 ## Install from Source

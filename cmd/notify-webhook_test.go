@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"testing"
 
@@ -51,14 +52,14 @@ func TestNewWebHookNotify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	_, err = newWebhookNotify("1")
 	if err == nil {
 		t.Fatal("Unexpected should fail")
 	}
 
-	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:xxx"})
+	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:80"})
 	_, err = newWebhookNotify("10")
 	if err != nil {
 		t.Fatal("Unexpected should not fail with lookupEndpoint", err)
@@ -105,7 +106,7 @@ func TestLookupEndpoint(t *testing.T) {
 		},
 		{
 			endpoint: server.URL,
-			err:      fmt.Errorf("Unexpected response from webhook server %s: (400 Bad Request)", server.URL),
+			err:      fmt.Errorf("Unable to lookup webhook endpoint %s response(400 Bad Request)", server.URL),
 		},
 	}
 	for _, test := range testCases {

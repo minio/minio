@@ -84,17 +84,33 @@ func (c Client) presignURL(method string, bucketName string, objectName string, 
 }
 
 // PresignedGetObject - Returns a presigned URL to access an object
-// without credentials. Expires maximum is 7days - ie. 604800 and
-// minimum is 1. Additionally you can override a set of response
-// headers using the query parameters.
+// data without credentials. URL can have a maximum expiry of
+// upto 7days or a minimum of 1sec. Additionally you can override
+// a set of response headers using the query parameters.
 func (c Client) PresignedGetObject(bucketName string, objectName string, expires time.Duration, reqParams url.Values) (u *url.URL, err error) {
 	return c.presignURL("GET", bucketName, objectName, expires, reqParams)
 }
 
-// PresignedPutObject - Returns a presigned URL to upload an object without credentials.
-// Expires maximum is 7days - ie. 604800 and minimum is 1.
+// PresignedHeadObject - Returns a presigned URL to access object
+// metadata without credentials. URL can have a maximum expiry of
+// upto 7days or a minimum of 1sec. Additionally you can override
+// a set of response headers using the query parameters.
+func (c Client) PresignedHeadObject(bucketName string, objectName string, expires time.Duration, reqParams url.Values) (u *url.URL, err error) {
+	return c.presignURL("HEAD", bucketName, objectName, expires, reqParams)
+}
+
+// PresignedPutObject - Returns a presigned URL to upload an object
+// without credentials. URL can have a maximum expiry of upto 7days
+// or a minimum of 1sec.
 func (c Client) PresignedPutObject(bucketName string, objectName string, expires time.Duration) (u *url.URL, err error) {
 	return c.presignURL("PUT", bucketName, objectName, expires, nil)
+}
+
+// Presign - returns a presigned URL for any http method of your choice
+// along with custom request params. URL can have a maximum expiry of
+// upto 7days or a minimum of 1sec.
+func (c Client) Presign(method string, bucketName string, objectName string, expires time.Duration, reqParams url.Values) (u *url.URL, err error) {
+	return c.presignURL(method, bucketName, objectName, expires, reqParams)
 }
 
 // PresignedPostPolicy - Returns POST urlString, form data to upload an object.

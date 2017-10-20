@@ -17,19 +17,15 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
-	"hash"
 	"io"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
-	"github.com/minio/sha256-simd"
 )
 
 // list all errors which can be ignored in object operations.
@@ -98,7 +94,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		// Rename atomically `xl.json` from tmp location to destination for each disk.
-		if onlineDisks, err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
+		if _, err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
@@ -117,7 +113,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	objInfo, err := xl.PutObject(dstBucket, dstObject, NewHashReader(pipeReader, length, metadata["etag"], ""), metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -245,11 +241,11 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	var totalBytesRead int64
-
-	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
-
-	// Read from all parts.
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	checksums := make([][]byte, len(storage.disks))
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -265,33 +261,24 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 
 		// Get the checksums of the current part.
-		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo HashAlgo
-		for index, disk := range onlineDisks {
-			// Disk is not found skip the checksum.
-			if disk == nil {
-				checkSums[index] = ""
+		var algorithm BitrotAlgorithm
+		for index, disk := range storage.disks {
+			if disk == OfflineDisk {
 				continue
 			}
-			ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
-			checkSums[index] = ckSumInfo.Hash
-			// Set checksum algo only once, while it is possible to have
-			// different algos per block because of our `xl.json`.
-			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo == "" {
-				ckSumAlgo = ckSumInfo.Algorithm
-			}
+			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
+			algorithm = checksumInfo.Algorithm
+			checksums[index] = checksumInfo.Hash
 		}
 
-		// Start erasure decoding and writing to the client.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
+		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize)
 		if err != nil {
 			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
 		}
 
 		// Track total bytes read from disk and written to the client.
-		totalBytesRead += n
+		totalBytesRead += file.Size
 
 		// partOffset will be valid only for the first part, hence reset it to 0 for
 		// the remaining parts.
@@ -437,23 +424,28 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
-	if isObjectDir(object, size) {
+	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
 		if xl.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 		}
-		return dirObjectInfo(bucket, object, size, metadata), nil
+		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
 	}
 
 	// Validate put object input args.
 	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
 		return ObjectInfo{}, err
+	}
+
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return ObjectInfo{}, toObjectErr(traceError(errInvalidArgument))
 	}
 
 	// Check if an object is present as one of the parent dir.
@@ -471,53 +463,29 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	writers := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
-	}
+	// Limit the reader to its provided size if specified.
+	var reader io.Reader = data
 
 	// Proceed to set the cache.
 	var newBuffer io.WriteCloser
 
 	// If caching is enabled, proceed to set the cache.
-	if size > 0 && xl.objCacheEnabled {
+	if data.Size() > 0 && xl.objCacheEnabled {
 		// PutObject invalidates any previously cached object in memory.
 		xl.objCache.Delete(path.Join(bucket, object))
 
 		// Create a new entry in memory of size.
-		newBuffer, err = xl.objCache.Create(path.Join(bucket, object), size)
+		newBuffer, err = xl.objCache.Create(path.Join(bucket, object), data.Size())
 		if err == nil {
-			// Create a multi writer to write to both memory and client response.
-			writers = append(writers, newBuffer)
-		}
-		// Ignore error if cache is full, proceed to write the object.
-		if err != nil && err != objcache.ErrCacheFull {
-			// For any other error return here.
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+			// Cache incoming data into a buffer
+			reader = io.TeeReader(data, newBuffer)
+		} else {
+			// Return errors other than ErrCacheFull
+			if err != objcache.ErrCacheFull {
+				return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+			}
 		}
 	}
-
-	mw := io.MultiWriter(writers...)
-
-	// Limit the reader to its provided size if specified.
-	var limitDataReader io.Reader
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending
-		// more data than the set content size.
-		limitDataReader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		limitDataReader = data
-	}
-
-	// Tee reader combines incoming data stream and md5, data read from input stream is written to md5.
-	teeReader := io.TeeReader(limitDataReader, mw)
 
 	// Initialize parts metadata
 	partsMetadata := make([]xlMetaV1, len(xl.storageDisks))
@@ -540,6 +508,14 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Total size of the written object
 	var sizeWritten int64
 
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Alloc additional space for parity blocks created while erasure codinga
+	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize)
+
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
 		// Compute part name
@@ -547,10 +523,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Compute the path of current part
 		tempErasureObj := pathJoin(uniqueID, partName)
 
-		// Calculate the size of the current part, if size is unknown, curPartSize wil be unknown too.
-		// allowEmptyPart will always be true if this is the first part and false otherwise.
+		// Calculate the size of the current part. AllowEmptyPart will always be true
+		// if this is the first part and false otherwise.
 		var curPartSize int64
-		curPartSize, err = getPartSizeFromIdx(size, globalPutPartSize, partIdx)
+		curPartSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -558,61 +534,46 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		if curPartSize > 0 {
-			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, storage.disks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 			if pErr != nil {
 				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
 			}
 		}
 
-		// partReader streams at most maximum part size
-		partReader := io.LimitReader(teeReader, globalPutPartSize)
-
-		// Allow creating empty earsure file only when this is the first part. This flag is useful
-		// when size == -1 because in this case, we are not able to predict how many parts we will have.
-		allowEmptyPart := partIdx == 1
-
-		var partSizeWritten int64
-		var checkSums []string
-		var erasureErr error
-
-		// Erasure code data and write across all disks.
-		onlineDisks, partSizeWritten, checkSums, erasureErr = erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
+		file, erasureErr := storage.CreateFile(io.LimitReader(reader, curPartSize), minioMetaTmpBucket,
+			tempErasureObj, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
 
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
-		if partSizeWritten < int64(curPartSize) {
+		if file.Size < curPartSize {
 			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 
 		// Update the total written size
-		sizeWritten += partSizeWritten
+		sizeWritten += file.Size
 
-		// If erasure stored some data in the loop or created an empty file
-		if partSizeWritten > 0 || allowEmptyPart {
-			for index := range partsMetadata {
-				// Add the part to xl.json.
-				partsMetadata[index].AddObjectPart(partIdx, partName, "", partSizeWritten)
-				// Add part checksum info to xl.json.
-				partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
-					Name:      partName,
-					Hash:      checkSums[index],
-					Algorithm: bitRotAlgo,
-				})
+		// allowEmpty creating empty earsure file only when this is the first part. This flag is useful
+		// when size == -1 because in this case, we are not able to predict how many parts we will have.
+		allowEmpty := partIdx == 1
+		if file.Size > 0 || allowEmpty {
+			for i := range partsMetadata {
+				partsMetadata[i].AddObjectPart(partIdx, partName, "", file.Size)
+				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
 			}
 		}
 
 		// If we didn't write anything or we know that the next part doesn't have any
 		// data to write, we should quit this loop immediately
-		if partSizeWritten == 0 {
+		if file.Size == 0 {
 			break
 		}
 
 		// Check part size for the next index.
 		var partSize int64
-		partSize, err = getPartSizeFromIdx(size, globalPutPartSize, partIdx+1)
+		partSize, err = calculatePartSizeFromIdx(data.Size(), globalPutPartSize, partIdx+1)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -621,25 +582,17 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// For size == -1, perhaps client is sending in chunked encoding
-	// set the size as size that was actually written.
-	if size == -1 {
-		size = sizeWritten
-	} else {
-		// Check if stored data satisfies what is asked
-		if sizeWritten < size {
-			return ObjectInfo{}, traceError(IncompleteBody{})
-		}
+	if sizeWritten < data.Size() {
+		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
 
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["etag"]) == 0 {
-		metadata["etag"] = newMD5Hex
+	if err = data.Verify(); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+	metadata["etag"] = hex.EncodeToString(data.MD5())
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
@@ -647,22 +600,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
 				metadata["content-type"] = content.ContentType
 			}
-		}
-	}
-
-	// md5Hex representation.
-	md5Hex := metadata["etag"]
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			// Returns md5 mismatch.
-			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
 		}
 	}
 
@@ -686,7 +623,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
 		partsMetadata[index].Meta = metadata
-		partsMetadata[index].Stat.Size = size
+		partsMetadata[index].Stat.Size = sizeWritten
 		partsMetadata[index].Stat.ModTime = modTime
 	}
 
@@ -696,14 +633,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Rename the successfully written temporary object to final location.
-	onlineDisks, err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum)
-	if err != nil {
+	if _, err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Once we have successfully renamed the object, Close the buffer which would
 	// save the object on cache.
-	if size > 0 && xl.objCacheEnabled && newBuffer != nil {
+	if sizeWritten > 0 && xl.objCacheEnabled && newBuffer != nil {
 		newBuffer.Close()
 	}
 

@@ -1,4 +1,4 @@
-FROM alpine:3.5
+FROM golang:1.9.1-alpine3.6
 
 MAINTAINER Minio Inc <dev@minio.io>
 
@@ -8,9 +8,11 @@ ENV CGO_ENABLED 0
 
 WORKDIR /go/src/github.com/minio/
 
+COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
+
 RUN  \
-     apk add --no-cache ca-certificates && \
-     apk add --no-cache --virtual .build-deps git go musl-dev && \
+     apk add --no-cache ca-certificates curl && \
+     apk add --no-cache --virtual .build-deps git && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      go get -v -d github.com/minio/minio && \
      cd /go/src/github.com/minio/minio && \
@@ -19,12 +21,11 @@ RUN  \
 
 EXPOSE 9000
 
-COPY buildscripts/docker-entrypoint.sh /usr/bin/
-
-RUN chmod +x /usr/bin/docker-entrypoint.sh
-
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/export"]
+
+HEALTHCHECK --interval=30s --timeout=5s \
+    CMD /usr/bin/healthcheck.sh
 
 CMD ["minio"]

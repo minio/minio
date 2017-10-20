@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	// Minio requires at least Go v1.7
-	minGoVersion        = "1.7"
+	// Minio requires at least Go v1.9.1
+	minGoVersion        = "1.9.1"
 	goVersionConstraint = ">= " + minGoVersion
 )
 
@@ -51,7 +51,7 @@ func checkGoVersion(goVersionStr string) error {
 	}
 
 	if !constraint.Check(goVersion) {
-		return fmt.Errorf("Minio is not compiled by Go %s.  Please recompile accordingly.",
+		return fmt.Errorf("Minio is not compiled by Go %s.  Please recompile accordingly",
 			goVersionConstraint)
 	}
 

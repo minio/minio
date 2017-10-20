@@ -23,26 +23,6 @@ import (
 	"time"
 )
 
-// Login handler implements JWT login token generator, which upon login request
-// along with username and password is generated.
-func (br *browserPeerAPIHandlers) Login(args *LoginRPCArgs, reply *LoginRPCReply) error {
-	// Validate LoginRPCArgs
-	if err := args.IsValid(); err != nil {
-		return err
-	}
-
-	// Authenticate using JWT.
-	token, err := authenticateWeb(args.Username, args.Password)
-	if err != nil {
-		return err
-	}
-
-	// Return the token.
-	reply.AuthToken = token
-
-	return nil
-}
-
 // SetAuthPeerArgs - Arguments collection for SetAuth RPC call
 type SetAuthPeerArgs struct {
 	// For Auth
@@ -69,11 +49,14 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 	}
 
 	// Update credentials in memory
-	serverConfig.SetCredential(args.Creds)
+	prevCred := serverConfig.SetCredential(args.Creds)
 
 	// Save credentials to config file
 	if err := serverConfig.Save(); err != nil {
-		errorIf(err, "Error updating config file with new credentials sent from browser RPC.")
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
+		errorIf(err, "Unable to update the config with new credentials sent from browser RPC.")
 		return err
 	}
 

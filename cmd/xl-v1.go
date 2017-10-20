@@ -231,10 +231,11 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 	// Sort so that the first element is the smallest.
 	validDisksInfo := sortValidDisksInfo(disksInfo)
+	// If there are no valid disks, set total and free disks to 0
 	if len(validDisksInfo) == 0 {
 		return StorageInfo{
-			Total: -1,
-			Free:  -1,
+			Total: 0,
+			Free:  0,
 		}
 	}
 
@@ -242,8 +243,8 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
 	storageInfo := StorageInfo{
-		Total: validDisksInfo[0].Total * int64(onlineDisks) / 2,
-		Free:  validDisksInfo[0].Free * int64(onlineDisks) / 2,
+		Total: validDisksInfo[0].Total * uint64(onlineDisks) / 2,
+		Free:  validDisksInfo[0].Free * uint64(onlineDisks) / 2,
 	}
 
 	storageInfo.Backend.Type = Erasure

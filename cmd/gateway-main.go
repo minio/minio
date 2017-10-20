@@ -122,7 +122,29 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
       $ {{.HelpName}} mygcsprojectid
+`
 
+const b2GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: B2 account id.
+     MINIO_SECRET_KEY: B2 application key.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for B2 backend.
+      $ export MINIO_ACCESS_KEY=accountID
+      $ export MINIO_SECRET_KEY=applicationKey
 `
 
 const siaGatewayTemplate = `NAME:
@@ -134,17 +156,18 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-
 ENVIRONMENT VARIABLES: (Default values in parenthesis)
-  SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. 	(127.0.0.1:9980)
+  ACCESS:
+     MINIO_ACCESS_KEY: Custom sia access key
+     MINIO_SECRET_KEY: Sia password
+
+  SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. (127.0.0.1:9980)
   SIA_CACHE_DIR:             The name of the Sia cache directory. (.sia_cache)
-  SIA_ROOT_DIR:				 The root directory on Sia where all buckets and objects will be stored. ()
-  SIA_DEBUG:                 A flag for enabling debug messages to be printed to the screen. [0=Off, 1=On] Useful for developers only. (0)
+  SIA_ROOT_DIR:		     The root directory on Sia where all buckets and objects will be stored. ()
 
 EXAMPLES:
   1. Start minio gateway server for Sia backend.
       $ {{.HelpName}}
-
 `
 
 var (
@@ -165,6 +188,7 @@ var (
 		Flags:              append(serverFlags, globalFlags...),
 		HideHelpCommand:    true,
 	}
+
 	gcsBackendCmd = cli.Command{
 		Name:               "gcs",
 		Usage:              "Google Cloud Storage.",
@@ -182,12 +206,21 @@ var (
 		HideHelpCommand:    true,
 	}
 
+	b2BackendCmd = cli.Command{
+		Name:               "b2",
+		Usage:              "Backblaze B2.",
+		Action:             b2GatewayMain,
+		CustomHelpTemplate: b2GatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	}
+
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "Start object storage gateway.",
 		Flags:           append(serverFlags, globalFlags...),
 		HideHelpCommand: true,
-		Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd, siaBackendCmd},
+		Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd, b2BackendCmd, siaBackendCmd},
 	}
 )
 
@@ -198,6 +231,7 @@ const (
 	azureBackend gatewayBackend = "azure"
 	s3Backend    gatewayBackend = "s3"
 	gcsBackend   gatewayBackend = "gcs"
+	b2Backend    gatewayBackend = "b2"
 	siaBackend   gatewayBackend = "sia"
 	// Add more backends here.
 )
@@ -208,6 +242,7 @@ const (
 // - Azure Blob Storage.
 // - AWS S3.
 // - Google Cloud Storage.
+// - Backblaze B2.
 // - Sia Decentralized Private Cloud.
 // - Add your favorite backend here.
 func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, err error) {
@@ -220,21 +255,19 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, e
 		// FIXME: The following print command is temporary and
 		// will be removed when gcs is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-		gw, err = newGCSGateway(arg)
+		return newGCSGateway(arg)
+	case b2Backend:
+		// FIXME: The following print command is temporary and
+		// will be removed when B2 is ready for production use.
+		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+		return newB2Gateway()
 	case siaBackend:
-		log.Println(colorYellow("\n               *** Warning: Sia Not Ready for Production ***"))
-		gw, err = newSiaGateway(arg)
-
+		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+		return newSiaGateway()
 	default:
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
-
-	if err = initBucketPoliciesGW(gw); err != nil {
-		return nil, err
-
-	}
-
-	return gw, nil
+	return gw, err
 }
 
 // Return endpoint.
@@ -328,6 +361,17 @@ func gcsGatewayMain(ctx *cli.Context) {
 	gatewayMain(ctx, gcsBackend)
 }
 
+func b2GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "b2", 1)
+	}
+
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), ctx.Args().First()), "Invalid argument")
+
+	gatewayMain(ctx, b2Backend)
+}
+
 // Handler for 'minio gateway sia' command line
 func siaGatewayMain(ctx *cli.Context) {
 	if ctx.Args().Present() && ctx.Args().First() == "help" {
@@ -400,7 +444,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		// Redirect some pre-defined browser request paths to a static location prefix.
 		setBrowserRedirectHandler,
 		// Validates if incoming request is for restricted buckets.
-		setPrivateBucketHandler,
+		setReservedBucketHandler,
 		// Adds cache control for all browser requests.
 		setBrowserCacheControlHandler,
 		// Validates all incoming requests to have a valid date header.
@@ -442,6 +486,8 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 			mode = globalMinioModeGatewayGCS
 		case s3Backend:
 			mode = globalMinioModeGatewayS3
+		case b2Backend:
+			mode = globalMinioModeGatewayB2
 		case siaBackend:
 			mode = globalMinioModeGatewaySia
 		}

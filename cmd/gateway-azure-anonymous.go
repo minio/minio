@@ -24,10 +24,50 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
+
+// Copied from github.com/Azure/azure-sdk-for-go/storage/container.go
+func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
+	out := url.Values{}
+
+	if p.Prefix != "" {
+		out.Set("prefix", p.Prefix)
+	}
+	if p.Delimiter != "" {
+		out.Set("delimiter", p.Delimiter)
+	}
+	if p.Marker != "" {
+		out.Set("marker", p.Marker)
+	}
+	if p.Include != nil {
+		addString := func(datasets []string, include bool, text string) []string {
+			if include {
+				datasets = append(datasets, text)
+			}
+			return datasets
+		}
+
+		include := []string{}
+		include = addString(include, p.Include.Snapshots, "snapshots")
+		include = addString(include, p.Include.Metadata, "metadata")
+		include = addString(include, p.Include.UncommittedBlobs, "uncommittedblobs")
+		include = addString(include, p.Include.Copy, "copy")
+		fullInclude := strings.Join(include, ",")
+		out.Set("include", fullInclude)
+	}
+	if p.MaxResults != 0 {
+		out.Set("maxresults", fmt.Sprintf("%v", p.MaxResults))
+	}
+	if p.Timeout != 0 {
+		out.Set("timeout", fmt.Sprintf("%v", p.Timeout))
+	}
+
+	return out
+}
 
 // Make anonymous HTTP request to azure endpoint.
 func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, error) {
@@ -73,7 +113,8 @@ func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, 
 
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
 func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
-	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
+	url, err := url.Parse(blobURL)
 	if err != nil {
 		return bucketInfo, azureToObjectError(traceError(err))
 	}
@@ -92,18 +133,13 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 	if err != nil {
 		return bucketInfo, traceError(err)
 	}
+
 	bucketInfo = BucketInfo{
 		Name:    bucket,
 		Created: t,
 	}
-	return bucketInfo, nil
-}
 
-// AnonPutObject - SendPUT request without authentication.
-// This is needed when clients send PUT requests on objects that can be uploaded without auth.
-func (a *azureObjects) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	// azure doesn't support anonymous put
-	return ObjectInfo{}, traceError(NotImplemented{})
+	return bucketInfo, nil
 }
 
 // AnonGetObject - SendGET request without authentication.
@@ -116,7 +152,8 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 		h.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
 	}
 
-	resp, err := azureAnonRequest(httpGET, a.client.GetBlobURL(bucket, object), h)
+	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
+	resp, err := azureAnonRequest(httpGET, blobURL, h)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
@@ -133,7 +170,8 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
 func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	resp, err := azureAnonRequest(httpHEAD, a.client.GetBlobURL(bucket, object), nil)
+	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
+	resp, err := azureAnonRequest(httpHEAD, blobURL, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
@@ -184,7 +222,8 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	q.Set("restype", "container")
 	q.Set("comp", "list")
 
-	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
+	url, err := url.Parse(blobURL)
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
@@ -210,14 +249,10 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	result.IsTruncated = listResp.NextMarker != ""
 	result.NextMarker = listResp.NextMarker
 	for _, object := range listResp.Blobs {
-		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
-		if e != nil {
-			continue
-		}
 		result.Objects = append(result.Objects, ObjectInfo{
 			Bucket:          bucket,
 			Name:            object.Name,
-			ModTime:         t,
+			ModTime:         time.Time(object.Properties.LastModified),
 			Size:            object.Properties.ContentLength,
 			ETag:            object.Properties.Etag,
 			ContentType:     object.Properties.ContentType,
@@ -229,7 +264,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     continuationToken,
@@ -241,7 +276,8 @@ func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken strin
 	q.Set("restype", "container")
 	q.Set("comp", "list")
 
-	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
+	url, err := url.Parse(blobURL)
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
@@ -270,14 +306,10 @@ func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken strin
 		result.NextContinuationToken = listResp.NextMarker
 	}
 	for _, object := range listResp.Blobs {
-		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
-		if e != nil {
-			continue
-		}
 		result.Objects = append(result.Objects, ObjectInfo{
 			Bucket:          bucket,
 			Name:            object.Name,
-			ModTime:         t,
+			ModTime:         time.Time(object.Properties.LastModified),
 			Size:            object.Properties.ContentLength,
 			ETag:            canonicalizeETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,

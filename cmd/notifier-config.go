@@ -235,10 +235,7 @@ func (n *notifier) Validate() error {
 	if err := n.MySQL.Validate(); err != nil {
 		return err
 	}
-	if err := n.MQTT.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return n.MQTT.Validate()
 }
 
 func (n *notifier) SetAMQPByID(accountID string, amqpn amqpNotify) {

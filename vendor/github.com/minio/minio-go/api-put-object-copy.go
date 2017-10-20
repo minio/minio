@@ -16,57 +16,7 @@
 
 package minio
 
-import (
-	"net/http"
-
-	"github.com/minio/minio-go/pkg/s3utils"
-)
-
-// CopyObject - copy a source object into a new object with the provided name in the provided bucket
-func (c Client) CopyObject(bucketName string, objectName string, objectSource string, cpCond CopyConditions) error {
-	// Input validation.
-	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
-		return err
-	}
-	if err := s3utils.CheckValidObjectName(objectName); err != nil {
-		return err
-	}
-	if objectSource == "" {
-		return ErrInvalidArgument("Object source cannot be empty.")
-	}
-
-	// customHeaders apply headers.
-	customHeaders := make(http.Header)
-	for _, cond := range cpCond.conditions {
-		customHeaders.Set(cond.key, cond.value)
-	}
-
-	// Set copy source.
-	customHeaders.Set("x-amz-copy-source", s3utils.EncodePath(objectSource))
-
-	// Execute PUT on objectName.
-	resp, err := c.executeMethod("PUT", requestMetadata{
-		bucketName:   bucketName,
-		objectName:   objectName,
-		customHeader: customHeaders,
-	})
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-	if resp != nil {
-		if resp.StatusCode != http.StatusOK {
-			return httpRespToErrorResponse(resp, bucketName, objectName)
-		}
-	}
-
-	// Decode copy response on success.
-	cpObjRes := copyObjectResult{}
-	err = xmlDecoder(resp.Body, &cpObjRes)
-	if err != nil {
-		return err
-	}
-
-	// Return nil on success.
-	return nil
+// CopyObject - copy a source object into a new object
+func (c Client) CopyObject(dst DestinationInfo, src SourceInfo) error {
+	return c.ComposeObject(dst, []SourceInfo{src})
 }

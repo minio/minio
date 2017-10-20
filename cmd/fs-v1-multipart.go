@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"os"
 	pathutil "path"
@@ -28,7 +26,13 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/sha256-simd"
+)
+
+const (
+	// Expiry duration after which the multipart uploads are deemed stale.
+	fsMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	// Cleanup interval when the stale multipart cleanup is initiated.
+	fsMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 )
 
 // Returns if the prefix is a multipart upload.
@@ -36,7 +40,7 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)
 	_, err := fsStatFile(uploadsIDPath)
 	if err != nil {
-		if err == errFileNotFound {
+		if errorCause(err) == errFileNotFound {
 			return false
 		}
 		errorIf(err, "Unable to access uploads.json "+uploadsIDPath)
@@ -58,11 +62,11 @@ func (fs fsObjects) deleteUploadsJSON(bucket, object, uploadID string) error {
 
 // Removes the uploadID, called either by CompleteMultipart of AbortMultipart. If the resuling uploads
 // slice is empty then we remove/purge the file.
-func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.LockedFile) error {
+func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.LockedFile) (bool, error) {
 	uploadIDs := uploadsV1{}
 	_, err := uploadIDs.ReadFrom(rwlk)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Removes upload id from the uploads list.
@@ -71,12 +75,12 @@ func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.L
 	// Check this is the last entry.
 	if uploadIDs.IsEmpty() {
 		// No more uploads left, so we delete `uploads.json` file.
-		return fs.deleteUploadsJSON(bucket, object, uploadID)
+		return true, fs.deleteUploadsJSON(bucket, object, uploadID)
 	} // else not empty
 
 	// Write update `uploads.json`.
 	_, err = uploadIDs.WriteTo(rwlk)
-	return err
+	return false, err
 }
 
 // Adds a new uploadID if no previous `uploads.json` is
@@ -111,7 +115,9 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucketName, objectName))
-	objectMPartPathLock.RLock()
+	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
+		return nil, false, traceError(err)
+	}
 	defer objectMPartPathLock.RUnlock()
 
 	uploadsPath := pathJoin(bucketName, objectName, uploadsJSONFile)
@@ -158,8 +164,8 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 	return uploads, end, nil
 }
 
-// listMultipartUploads - lists all multipart uploads.
-func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+// listMultipartUploadsCleanup - lists all multipart uploads. Called by fs.cleanupStaleMultipartUpload()
+func (fs fsObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
 	result := ListMultipartsInfo{}
 	recursive := true
 	if delimiter == slashSeparator {
@@ -302,17 +308,10 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	return result, nil
 }
 
-// ListMultipartUploads - lists all the pending multipart uploads on a
-// bucket. Additionally takes 'prefix, keyMarker, uploadIDmarker and a
-// delimiter' which allows us to list uploads match a particular
-// prefix or lexically starting from 'keyMarker' or delimiting the
-// output to get a directory like listing.
-//
-// Implements S3 compatible ListMultipartUploads API. The resulting
-// ListMultipartsInfo structure is unmarshalled directly into XML and
-// replied back to the client.
-func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	if err := checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter, fs); err != nil {
+// ListMultipartUploads - lists all the uploadIDs for the specified object.
+// We do not support prefix based listing.
+func (fs fsObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	if err := checkListMultipartArgs(bucket, object, keyMarker, uploadIDMarker, delimiter, fs); err != nil {
 		return lmi, err
 	}
 
@@ -320,7 +319,35 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		return lmi, toObjectErr(err, bucket)
 	}
 
-	return fs.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	result := ListMultipartsInfo{}
+
+	result.IsTruncated = true
+	result.MaxUploads = maxUploads
+	result.KeyMarker = keyMarker
+	result.Prefix = object
+	result.Delimiter = delimiter
+
+	uploads, _, err := fs.listMultipartUploadIDs(bucket, object, uploadIDMarker, maxUploads)
+	if err != nil {
+		return lmi, err
+	}
+
+	result.NextKeyMarker = object
+	// Loop through all the received uploads fill in the multiparts result.
+	for _, upload := range uploads {
+		uploadID := upload.UploadID
+		result.Uploads = append(result.Uploads, upload)
+		result.NextUploadIDMarker = uploadID
+	}
+
+	result.IsTruncated = len(uploads) == maxUploads
+
+	if !result.IsTruncated {
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
+	}
+
+	return result, nil
 }
 
 // newMultipartUpload - wrapper for initializing a new multipart
@@ -387,7 +414,9 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	objectMPartPathLock.Lock()
+	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+		return "", err
+	}
 	defer objectMPartPathLock.Unlock()
 
 	return fs.newMultipartUpload(bucket, object, meta)
@@ -429,7 +458,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, NewHashReader(pipeReader, length, "", ""))
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -444,7 +473,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
+func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return pi, err
 	}
@@ -453,10 +482,17 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return pi, toObjectErr(err, bucket)
 	}
 
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return pi, toObjectErr(traceError(errInvalidArgument))
+	}
+
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	objectMPartPathLock.Lock()
+	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+		return pi, err
+	}
 	defer objectMPartPathLock.Unlock()
 
 	// Disallow any parallel abort or complete multipart operations.
@@ -491,36 +527,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := uploadID + "." + mustGetUUID() + "." + partSuffix
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-	hashWriters := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		hashWriters = append(hashWriters, sha256Writer)
-	}
-	multiWriter := io.MultiWriter(hashWriters...)
-
-	// Limit the reader to its provided size if specified.
-	var limitDataReader io.Reader
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending more data than the set content size.
-		limitDataReader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		limitDataReader = data
-	}
-
-	teeReader := io.TeeReader(limitDataReader, multiWriter)
 	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
+	if size := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
-	buf := make([]byte, int(bufSize))
+	buf := make([]byte, bufSize)
 
 	fsPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tmpPartPath)
-	bytesWritten, cErr := fsCreateFile(fsPartPath, teeReader, buf, size)
+	bytesWritten, cErr := fsCreateFile(fsPartPath, data, buf, data.Size())
 	if cErr != nil {
 		fsRemoveFile(fsPartPath)
 		return pi, toObjectErr(cErr, minioMetaTmpBucket, tmpPartPath)
@@ -528,7 +542,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < size {
+	if bytesWritten < data.Size() {
 		fsRemoveFile(fsPartPath)
 		return pi, traceError(IncompleteBody{})
 	}
@@ -538,25 +552,17 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// delete.
 	defer fsRemoveFile(fsPartPath)
 
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			return pi, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return pi, traceError(SHA256Mismatch{})
-		}
+	if err = data.Verify(); err != nil {
+		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
 	}
 
 	partPath := pathJoin(bucket, object, uploadID, partSuffix)
 	// Lock the part so that another part upload with same part-number gets blocked
 	// while the part is getting appended in the background.
 	partLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, partPath)
-	partLock.Lock()
+	if err = partLock.GetLock(globalOperationTimeout); err != nil {
+		return pi, err
+	}
 
 	fsNSPartPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, partPath)
 	if err = fsRenameFile(fsPartPath, fsNSPartPath); err != nil {
@@ -565,7 +571,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Save the object part info in `fs.json`.
-	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
+	md5Hex := hex.EncodeToString(data.MD5())
+	fsMeta.AddObjectPart(partID, partSuffix, md5Hex, data.Size())
 	if _, err = fsMeta.WriteTo(rwlk); err != nil {
 		partLock.Unlock()
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
@@ -591,7 +598,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime(),
-		ETag:         newMD5Hex,
+		ETag:         md5Hex,
 		Size:         fi.Size(),
 	}, nil
 }
@@ -676,6 +683,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		return lpi, err
 	}
 
+	// Check if bucket exists
 	if _, err := fs.statBucketDir(bucket); err != nil {
 		return lpi, toObjectErr(err, bucket)
 	}
@@ -683,7 +691,9 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	objectMPartPathLock.RLock()
+	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
+		return lpi, traceError(err)
+	}
 	defer objectMPartPathLock.RUnlock()
 
 	listPartsInfo, err := fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
@@ -691,7 +701,6 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		return lpi, toObjectErr(err, bucket, object)
 	}
 
-	// Success.
 	return listPartsInfo, nil
 }
 
@@ -722,12 +731,29 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	uploadIDPath := pathJoin(bucket, object, uploadID)
+	var removeObjectDir bool
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	objectMPartPathLock.Lock()
-	defer objectMPartPathLock.Unlock()
+	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+		return oi, err
+	}
+
+	defer func() {
+		if removeObjectDir {
+			basePath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket)
+			derr := fsDeleteFile(basePath, pathJoin(basePath, object))
+			if derr = errorCause(derr); derr != nil {
+				// In parallel execution, CompleteMultipartUpload could have deleted temporary
+				// state files/directory, it is safe to ignore errFileNotFound
+				if derr != errFileNotFound {
+					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+				}
+			}
+		}
+		objectMPartPathLock.Unlock()
+	}()
 
 	fsMetaPathMultipart := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPathMultipart)
@@ -757,6 +783,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return oi, toObjectErr(err, minioMetaMultipartBucket, fsMetaPathMultipart)
 	}
 
+	partSize := int64(-1) // Used later to ensure that all parts sizes are same.
 	// Validate all parts and then commit to disk.
 	for i, part := range parts {
 		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
@@ -778,6 +805,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				PartSize:   fsMeta.Parts[partIdx].Size,
 				PartETag:   part.ETag,
 			})
+		}
+		if partSize == -1 {
+			partSize = fsMeta.Parts[partIdx].Size
+		}
+		// TODO: Make necessary changes in future as explained in the below comment.
+		// All parts except the last part has to be of same size. We are introducing this
+		// check to see if any clients break. If clients do not break then we can optimize
+		// multipart PutObjectPart by writing the part at the right offset using pwrite()
+		// so that we don't need to do background append at all. i.e by the time we get
+		// CompleteMultipartUpload we already have the full file available which can be
+		// renamed to the main name-space.
+		if (i < len(parts)-1) && partSize != fsMeta.Parts[partIdx].Size {
+			fs.rwPool.Close(fsMetaPathMultipart)
+			return oi, traceError(PartsSizeUnequal{})
 		}
 	}
 
@@ -841,7 +882,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			// No need to hold a lock, this is a unique file and will be only written
 			// to one one process per uploadID per minio process.
 			var wfile *os.File
-			wfile, err = os.OpenFile(preparePath(fsTmpObjPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+			wfile, err = os.OpenFile((fsTmpObjPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 			if err != nil {
 				reader.Close()
 				fs.rwPool.Close(fsMetaPathMultipart)
@@ -894,7 +935,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Remove entry from `uploads.json`.
-	if err = fs.removeUploadID(bucket, object, uploadID, rwlk); err != nil {
+	removeObjectDir, err = fs.removeUploadID(bucket, object, uploadID, rwlk)
+	if err != nil {
 		return oi, toObjectErr(err, minioMetaMultipartBucket, pathutil.Join(bucket, object))
 	}
 
@@ -929,13 +971,30 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	}
 
 	uploadIDPath := pathJoin(bucket, object, uploadID)
+	var removeObjectDir bool
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
-	objectMPartPathLock.Lock()
-	defer objectMPartPathLock.Unlock()
+	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+
+	defer func() {
+		if removeObjectDir {
+			basePath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket)
+			derr := fsDeleteFile(basePath, pathJoin(basePath, object))
+			if derr = errorCause(derr); derr != nil {
+				// In parallel execution, AbortMultipartUpload could have deleted temporary
+				// state files/directory, it is safe to ignore errFileNotFound
+				if derr != errFileNotFound {
+					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+				}
+			}
+		}
+		objectMPartPathLock.Unlock()
+	}()
 
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, fsMetaJSONFile)
 	if _, err := fs.rwPool.Open(fsMetaPath); err != nil {
@@ -972,9 +1031,68 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	}
 
 	// Remove entry from `uploads.json`.
-	if err = fs.removeUploadID(bucket, object, uploadID, rwlk); err != nil {
+	removeObjectDir, err = fs.removeUploadID(bucket, object, uploadID, rwlk)
+	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
 	return nil
+}
+
+// Removes multipart uploads if any older than `expiry` duration in a given bucket.
+func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Duration) (err error) {
+	var lmi ListMultipartsInfo
+	var st os.FileInfo
+	for {
+		// List multipart uploads in a bucket 1000 at a time
+		prefix := ""
+		lmi, err = fs.listMultipartUploadsCleanup(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
+		if err != nil {
+			errorIf(err, "Unable to list uploads")
+			return err
+		}
+
+		// Remove uploads (and its parts) older than expiry duration.
+		for _, upload := range lmi.Uploads {
+			uploadIDPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, upload.Object, upload.UploadID)
+			if st, err = fsStatDir(uploadIDPath); err != nil {
+				errorIf(err, "Failed to lookup uploads directory path %s", uploadIDPath)
+				continue
+			}
+			if time.Since(st.ModTime()) > expiry {
+				fs.AbortMultipartUpload(bucket, upload.Object, upload.UploadID)
+			}
+		}
+
+		// No more incomplete uploads remain, break and return.
+		if !lmi.IsTruncated {
+			break
+		}
+	}
+
+	return nil
+}
+
+// Removes multipart uploads if any older than `expiry` duration
+// on all buckets for every `cleanupInterval`, this function is
+// blocking and should be run in a go-routine.
+func (fs fsObjects) cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+	ticker := time.NewTicker(cleanupInterval)
+	for {
+		select {
+		case <-doneCh:
+			// Stop the timer.
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			bucketInfos, err := fs.ListBuckets()
+			if err != nil {
+				errorIf(err, "Unable to list buckets")
+				continue
+			}
+			for _, bucketInfo := range bucketInfos {
+				fs.cleanupStaleMultipartUpload(bucketInfo.Name, expiry)
+			}
+		}
+	}
 }

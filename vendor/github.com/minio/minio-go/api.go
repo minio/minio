@@ -19,6 +19,7 @@ package minio
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
@@ -87,7 +88,7 @@ type Client struct {
 // Global constants.
 const (
 	libraryName    = "minio-go"
-	libraryVersion = "2.1.0"
+	libraryVersion = "4.0.0"
 )
 
 // User Agent should always following the below style.
@@ -190,6 +191,31 @@ func redirectHeaders(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// getRegionFromURL - parse region from URL if present.
+func getRegionFromURL(u url.URL) (region string) {
+	region = ""
+	if s3utils.IsGoogleEndpoint(u) {
+		return
+	} else if s3utils.IsAmazonChinaEndpoint(u) {
+		// For china specifically we need to set everything to
+		// cn-north-1 for now, there is no easier way until AWS S3
+		// provides a cleaner compatible API across "us-east-1" and
+		// China region.
+		return "cn-north-1"
+	} else if s3utils.IsAmazonGovCloudEndpoint(u) {
+		// For us-gov specifically we need to set everything to
+		// us-gov-west-1 for now, there is no easier way until AWS S3
+		// provides a cleaner compatible API across "us-east-1" and
+		// Gov cloud region.
+		return "us-gov-west-1"
+	}
+	parts := s3utils.AmazonS3Host.FindStringSubmatch(u.Host)
+	if len(parts) > 1 {
+		region = parts[1]
+	}
+	return region
+}
+
 func privateNew(endpoint string, creds *credentials.Credentials, secure bool, region string) (*Client, error) {
 	// construct endpoint.
 	endpointURL, err := getEndpointURL(endpoint, secure)
@@ -211,11 +237,14 @@ func privateNew(endpoint string, creds *credentials.Credentials, secure bool, re
 
 	// Instantiate http client and bucket location cache.
 	clnt.httpClient = &http.Client{
-		Transport:     http.DefaultTransport,
+		Transport:     defaultMinioTransport,
 		CheckRedirect: redirectHeaders,
 	}
 
 	// Sets custom region, if region is empty bucket location cache is used automatically.
+	if region == "" {
+		region = getRegionFromURL(clnt.endpointURL)
+	}
 	clnt.region = region
 
 	// Instantiate bucket location cache.
@@ -466,9 +495,11 @@ var successStatus = []int{
 // executeMethod - instantiates a given method, and retries the
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
-func (c Client) executeMethod(method string, metadata requestMetadata) (res *http.Response, err error) {
+func (c Client) executeMethod(ctx context.Context, method string, metadata requestMetadata) (res *http.Response, err error) {
 	var isRetryable bool     // Indicates if request can be retried.
 	var bodySeeker io.Seeker // Extracted seeker from io.Reader.
+	var reqRetry = MaxRetry  // Indicates how many times we can retry the request
+
 	if metadata.contentBody != nil {
 		// Check if body is seekable then it is retryable.
 		bodySeeker, isRetryable = metadata.contentBody.(io.Seeker)
@@ -476,6 +507,11 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		case os.Stdin, os.Stdout, os.Stderr:
 			isRetryable = false
 		}
+		// Retry only when reader is seekable
+		if !isRetryable {
+			reqRetry = 1
+		}
+
 		// Figure out if the body can be closed - if yes
 		// we will definitely close it upon the function
 		// return.
@@ -494,7 +530,7 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 	// Blank indentifier is kept here on purpose since 'range' without
 	// blank identifiers is only supported since go1.4
 	// https://golang.org/doc/go1.4#forrange.
-	for _ = range c.newRetryTimer(MaxRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
+	for range c.newRetryTimer(reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
 		// Retry executes the following function body if request has an
 		// error until maxRetries have been exhausted, retry attempts are
 		// performed after waiting for a given period of time in a
@@ -517,6 +553,8 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 			}
 			return nil, err
 		}
+		// Add context to request
+		req = req.WithContext(ctx)
 
 		// Initiate the request.
 		res, err = c.do(req)
@@ -562,9 +600,14 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		// Additionally we should only retry if bucketLocation and custom
 		// region is empty.
 		if metadata.bucketLocation == "" && c.region == "" {
-			if res.StatusCode == http.StatusBadRequest && errResponse.Region != "" {
-				c.bucketLocCache.Set(metadata.bucketName, errResponse.Region)
-				continue // Retry.
+			if errResponse.Code == "AuthorizationHeaderMalformed" || errResponse.Code == "InvalidRegion" {
+				if metadata.bucketName != "" && errResponse.Region != "" {
+					// Gather Cached location only if bucketName is present.
+					if _, cachedLocationError := c.bucketLocCache.Get(metadata.bucketName); cachedLocationError != false {
+						c.bucketLocCache.Set(metadata.bucketName, errResponse.Region)
+						continue // Retry.
+					}
+				}
 			}
 		}
 
@@ -616,17 +659,8 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 		return nil, err
 	}
 
-	// Go net/http notoriously closes the request body.
-	// - The request Body, if non-nil, will be closed by the underlying Transport, even on errors.
-	// This can cause underlying *os.File seekers to fail, avoid that
-	// by making sure to wrap the closer as a nop.
-	var body io.ReadCloser
-	if metadata.contentBody != nil {
-		body = ioutil.NopCloser(metadata.contentBody)
-	}
-
 	// Initialize a new HTTP request for the method.
-	req, err = http.NewRequest(method, targetURL.String(), body)
+	req, err = http.NewRequest(method, targetURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -678,6 +712,16 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 		req.Header.Set(k, v[0])
 	}
 
+	// Go net/http notoriously closes the request body.
+	// - The request Body, if non-nil, will be closed by the underlying Transport, even on errors.
+	// This can cause underlying *os.File seekers to fail, avoid that
+	// by making sure to wrap the closer as a nop.
+	if metadata.contentLength == 0 {
+		req.Body = nil
+	} else {
+		req.Body = ioutil.NopCloser(metadata.contentBody)
+	}
+
 	// Set incoming content-length.
 	req.ContentLength = metadata.contentLength
 	if req.ContentLength <= -1 {
@@ -686,7 +730,7 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 	}
 
 	// set md5Sum for content protection.
-	if metadata.contentMD5Bytes != nil {
+	if len(metadata.contentMD5Bytes) > 0 {
 		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(metadata.contentMD5Bytes))
 	}
 
@@ -699,7 +743,10 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 	case signerType.IsV2():
 		// Add signature version '2' authorization header.
 		req = s3signer.SignV2(*req, accessKeyID, secretAccessKey)
-	case signerType.IsStreamingV4() && method == "PUT":
+	case metadata.objectName != "" && method == "PUT" && metadata.customHeader.Get("X-Amz-Copy-Source") == "" && !c.secure:
+		// Streaming signature is used by default for a PUT object request. Additionally we also
+		// look if the initialized client is secure, if yes then we don't need to perform
+		// streaming signature.
 		req = s3signer.StreamingSignV4(req, accessKeyID,
 			secretAccessKey, sessionToken, location, metadata.contentLength, time.Now().UTC())
 	default:

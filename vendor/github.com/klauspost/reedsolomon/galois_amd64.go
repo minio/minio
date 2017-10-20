@@ -5,10 +5,6 @@
 
 package reedsolomon
 
-import (
-	"github.com/klauspost/cpuid"
-)
-
 //go:noescape
 func galMulSSSE3(low, high, in, out []byte)
 
@@ -21,7 +17,10 @@ func galMulAVX2Xor(low, high, in, out []byte)
 //go:noescape
 func galMulAVX2(low, high, in, out []byte)
 
-// This is what the assembler rountes does in blocks of 16 bytes:
+//go:noescape
+func sSE2XorSlice(in, out []byte)
+
+// This is what the assembler routines do in blocks of 16 bytes:
 /*
 func galMulSSSE3(low, high, in, out []byte) {
 	for n, input := range in {
@@ -40,12 +39,12 @@ func galMulSSSE3Xor(low, high, in, out []byte) {
 }
 */
 
-func galMulSlice(c byte, in, out []byte) {
+func galMulSlice(c byte, in, out []byte, ssse3, avx2 bool) {
 	var done int
-	if cpuid.CPU.AVX2() {
+	if avx2 {
 		galMulAVX2(mulTableLow[c][:], mulTableHigh[c][:], in, out)
 		done = (len(in) >> 5) << 5
-	} else if cpuid.CPU.SSSE3() {
+	} else if ssse3 {
 		galMulSSSE3(mulTableLow[c][:], mulTableHigh[c][:], in, out)
 		done = (len(in) >> 4) << 4
 	}
@@ -58,12 +57,12 @@ func galMulSlice(c byte, in, out []byte) {
 	}
 }
 
-func galMulSliceXor(c byte, in, out []byte) {
+func galMulSliceXor(c byte, in, out []byte, ssse3, avx2 bool) {
 	var done int
-	if cpuid.CPU.AVX2() {
+	if avx2 {
 		galMulAVX2Xor(mulTableLow[c][:], mulTableHigh[c][:], in, out)
 		done = (len(in) >> 5) << 5
-	} else if cpuid.CPU.SSSE3() {
+	} else if ssse3 {
 		galMulSSSE3Xor(mulTableLow[c][:], mulTableHigh[c][:], in, out)
 		done = (len(in) >> 4) << 4
 	}
@@ -72,6 +71,21 @@ func galMulSliceXor(c byte, in, out []byte) {
 		mt := mulTable[c]
 		for i := done; i < len(in); i++ {
 			out[i] ^= mt[in[i]]
+		}
+	}
+}
+
+// slice galois add
+func sliceXor(in, out []byte, sse2 bool) {
+	var done int
+	if sse2 {
+		sSE2XorSlice(in, out)
+		done = (len(in) >> 4) << 4
+	}
+	remain := len(in) - done
+	if remain > 0 {
+		for i := done; i < len(in); i++ {
+			out[i] ^= in[i]
 		}
 	}
 }

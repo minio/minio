@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package cmd
 import (
 	"io/ioutil"
 	"net"
+	"sync"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/streadway/amqp"
@@ -51,23 +52,29 @@ func (a *amqpNotify) Validate() error {
 	return nil
 }
 
+// amqpConn implements a reconnecting amqp conn extending *amqp.Connection,
+// also provides additional protection for such a mutation.
 type amqpConn struct {
+	sync.Mutex
+	conn   *amqp.Connection
 	params amqpNotify
-	*amqp.Connection
 }
 
 // dialAMQP - dials and returns an amqpConnection instance,
 // for sending notifications. Returns error if amqp logger
 // is not enabled.
-func dialAMQP(amqpL amqpNotify) (ac amqpConn, e error) {
+func dialAMQP(amqpL amqpNotify) (*amqpConn, error) {
 	if !amqpL.Enable {
-		return ac, errNotifyNotEnabled
+		return nil, errNotifyNotEnabled
 	}
 	conn, err := amqp.Dial(amqpL.URL)
 	if err != nil {
-		return ac, err
+		return nil, err
 	}
-	return amqpConn{Connection: conn, params: amqpL}, nil
+	return &amqpConn{
+		conn:   conn,
+		params: amqpL,
+	}, nil
 }
 
 func newAMQPNotify(accountID string) (*logrus.Logger, error) {
@@ -94,31 +101,51 @@ func newAMQPNotify(accountID string) (*logrus.Logger, error) {
 	return amqpLog, nil
 }
 
-// Fire is called when an event should be sent to the message broker.
-func (q amqpConn) Fire(entry *logrus.Entry) error {
-	ch, err := q.Connection.Channel()
+// Returns true if the error represents a closed
+// network error.
+func isAMQPClosedNetworkErr(err error) bool {
+	// Any other error other than connection closed, return.
+	if neterr, ok := err.(*net.OpError); ok &&
+		neterr.Err.Error() == "use of closed network connection" {
+		return true
+	} else if err == amqp.ErrClosed {
+		return true
+	}
+	return false
+}
+
+// Channel is a wrapper implementation of amqp.Connection.Channel()
+// which implements transparent reconnection.
+func (q *amqpConn) Channel() (*amqp.Channel, error) {
+	q.Lock()
+	ch, err := q.conn.Channel()
+	q.Unlock()
 	if err != nil {
-		// Any other error other than connection closed, return.
-		isClosedErr := false
-		if neterr, ok := err.(*net.OpError); ok &&
-			neterr.Err.Error() == "use of closed network connection" {
-			isClosedErr = true
-		} else if err == amqp.ErrClosed {
-			isClosedErr = true
-		}
-		if !isClosedErr {
-			return err
+		if !isAMQPClosedNetworkErr(err) {
+			return nil, err
 		}
 		// Attempt to connect again.
 		var conn *amqp.Connection
 		conn, err = amqp.Dial(q.params.URL)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ch, err = conn.Channel()
 		if err != nil {
-			return err
+			return nil, err
 		}
+		q.Lock()
+		q.conn = conn
+		q.Unlock()
+	}
+	return ch, nil
+}
+
+// Fire is called when an event should be sent to the message broker.
+func (q *amqpConn) Fire(entry *logrus.Entry) error {
+	ch, err := q.Channel()
+	if err != nil {
+		return err
 	}
 	defer ch.Close()
 
@@ -158,7 +185,7 @@ func (q amqpConn) Fire(entry *logrus.Entry) error {
 }
 
 // Levels is available logging levels.
-func (q amqpConn) Levels() []logrus.Level {
+func (q *amqpConn) Levels() []logrus.Level {
 	return []logrus.Level{
 		logrus.InfoLevel,
 	}
