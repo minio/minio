@@ -513,7 +513,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *HashReader, me
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	// Alloc additional space for parity blocks created while erasure codinga
+	// Alloc additional space for parity blocks created while erasure coding
 	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize)
 
 	// Read data and split into parts - similar to multipart mechanism
