@@ -63,13 +63,13 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	// Attempt to successfully load notification config.
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
-	if err != nil && err != errNoSuchNotifications {
+	if err != nil && errorCause(err) != errNoSuchNotifications {
 		errorIf(err, "Unable to read notification configuration.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	// For no notifications we write a dummy XML.
-	if err == errNoSuchNotifications {
+	if errorCause(err) == errNoSuchNotifications {
 		// Complies with the s3 behavior in this regard.
 		nConfig = &notificationConfig{}
 	}
