@@ -81,6 +81,108 @@
 			"revisionTime": "2017-09-13T22:19:17Z"
 		},
 		{
+			"checksumSHA1": "6uV5aKsgFYjrbDiNczM7GB2mU94=",
+			"path": "github.com/NebulousLabs/Sia/api",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "4VtV9Y/POIVtrYkSLEvKJL0UD/c=",
+			"path": "github.com/NebulousLabs/Sia/build",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "zpZ4pHoRIA/tbYAwa6jDgJS4prc=",
+			"path": "github.com/NebulousLabs/Sia/crypto",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "VcMOvbRYfNwkXE5pCd6q4oyUtXA=",
+			"path": "github.com/NebulousLabs/Sia/encoding",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "cUJlcV9jFEvFXCX4NcfpOVfP0Y4=",
+			"path": "github.com/NebulousLabs/Sia/modules",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "R1AVrCmA6u268btyZMe7vI+E25Y=",
+			"path": "github.com/NebulousLabs/Sia/modules/renter",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "cZAchdFqvFljDTmBiyfqQAhkSDs=",
+			"path": "github.com/NebulousLabs/Sia/modules/renter/contractor",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "297F4rCjmTcAaVCKZssMW5PNqWk=",
+			"path": "github.com/NebulousLabs/Sia/modules/renter/hostdb",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "cYzHd/vXhJj5ZFbamEngPyvPiYU=",
+			"path": "github.com/NebulousLabs/Sia/modules/renter/hostdb/hosttree",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "Prc8G4jR0WiZcnmgYbL3udJTa9w=",
+			"path": "github.com/NebulousLabs/Sia/modules/renter/proto",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "q9qaKKwMX6MF205C6S2T7WhwobY=",
+			"path": "github.com/NebulousLabs/Sia/persist",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "lyOzCweTAZFozKJ1VrsO93DIMbM=",
+			"path": "github.com/NebulousLabs/Sia/sync",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "ZBpck5E1bbIy0rnYywCLwercvEY=",
+			"path": "github.com/NebulousLabs/Sia/types",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
+		},
+		{
+			"checksumSHA1": "565HJanNKXq45ouz6Yu1DXToLM0=",
+			"path": "github.com/NebulousLabs/bolt",
+			"revision": "a22e934a4cae79ba990bd8aa3bc5bdd34f4ef61e",
+			"revisionTime": "2017-08-23T22:24:46Z"
+		},
+		{
+			"checksumSHA1": "H8Hq367L0F+0UKZJTXt8bI0zex8=",
+			"path": "github.com/NebulousLabs/entropy-mnemonics",
+			"revision": "7b01a644a63680b90de22bacfb11d832e944eaab",
+			"revisionTime": "2017-03-16T01:29:07Z"
+		},
+		{
+			"checksumSHA1": "lJu971+H7OnvKkGXYFpMRPlgnEs=",
+			"path": "github.com/NebulousLabs/fastrand",
+			"revision": "60b615657d85339c105efb2170327a2d948d4b17",
+			"revisionTime": "2017-05-12T20:08:28Z"
+		},
+		{
+			"checksumSHA1": "F0mjT+rUgzNUvB3Bk/2kmKKnlQ4=",
+			"path": "github.com/NebulousLabs/merkletree",
+			"revision": "24b134f7c440c210a319d35b542278b9f7f9b5e5",
+			"revisionTime": "2017-08-21T02:32:33Z"
+		},
+		{
 			"path": "github.com/Sirupsen/logrus",
 			"revision": "32055c351ea8b00b96d70f28db48d9840feaf0ec",
 			"revisionTime": "2016-07-12T20:17:32-04:00"
@@ -254,6 +356,12 @@
 			"path": "github.com/hashicorp/go-version",
 			"revision": "7e3c02b30806fa5779d3bdfc152ce4c6f40e7b38",
 			"revisionTime": "2016-01-19T13:13:26-08:00"
+		},
+		{
+			"checksumSHA1": "gKyBj05YkfuLFruAyPZ4KV9nFp8=",
+			"path": "github.com/julienschmidt/httprouter",
+			"revision": "975b5c4c7c21c0e3d2764200bf2aa8e34657ae6e",
+			"revisionTime": "2017-04-30T22:20:11Z"
 		},
 		{
 			"path": "github.com/klauspost/cpuid",
@@ -487,6 +595,25 @@
 			"path": "go.uber.org/atomic",
 			"revision": "3b8db5e93c4c02efbc313e17b2e796b0914a01fb",
 			"revisionTime": "2016-12-15T19:56:52Z"
+		},
+		{
+			"checksumSHA1": "i3dNaI+oCYeDGIsNj7LwecTsIAs=",
+			"path": "golang.org/x/crypto/ed25519",
+			"revision": "2faea1465de239e4babd8f5905cc25b781712442",
+			"revisionTime": "2017-07-23T05:00:11Z"
+		},
+		{
+			"checksumSHA1": "LXFcVx8I587SnWmKycSDEq9yvK8=",
+			"path": "golang.org/x/crypto/ed25519/internal/edwards25519",
+			"revision": "2faea1465de239e4babd8f5905cc25b781712442",
+			"revisionTime": "2017-07-23T05:00:11Z"
+		},
+		{
+			"checksumSHA1": "GRDX508ZNSjrly80GO+ckI6kztA=",
+			"origin": "github.com/NebulousLabs/Sia/vendor/golang.org/x/crypto/twofish",
+			"path": "golang.org/x/crypto/twofish",
+			"revision": "141f7b2717f46d8080dd55d3a0cafdcb1931d2f7",
+			"revisionTime": "2017-08-31T03:48:44Z"
 		},
 		{
 			"path": "golang.org/x/net/context",
