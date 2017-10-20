@@ -156,12 +156,14 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-
 ENVIRONMENT VARIABLES: (Default values in parenthesis)
-  SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. 	(127.0.0.1:9980)
+  ACCESS:
+     MINIO_ACCESS_KEY: Custom sia access key
+     MINIO_SECRET_KEY: Sia password
+
+  SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. (127.0.0.1:9980)
   SIA_CACHE_DIR:             The name of the Sia cache directory. (.sia_cache)
-  SIA_ROOT_DIR:				 The root directory on Sia where all buckets and objects will be stored. ()
-  SIA_DEBUG:                 A flag for enabling debug messages to be printed to the screen. [0=Off, 1=On] Useful for developers only. (0)
+  SIA_ROOT_DIR:		     The root directory on Sia where all buckets and objects will be stored. ()
 
 EXAMPLES:
   1. Start minio gateway server for Sia backend.
@@ -264,7 +266,7 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, e
 		// FIXME: The following print command is temporary and
 		// will be removed when B2 is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-		return newSiaGateway(arg)
+		return newSiaGateway()
 	default:
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
@@ -395,12 +397,9 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
-	// Sia doesn't need envs
-	if gatewayBackend(backendType) != siaBackend {
-		// Validate if we have access, secret set through environment.
-		if !globalIsEnvCreds {
-			fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
-		}
+	// Validate if we have access, secret set through environment.
+	if !globalIsEnvCreds {
+		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
 	}
 
 	// Create certs path.
