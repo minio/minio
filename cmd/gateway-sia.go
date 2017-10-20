@@ -29,12 +29,12 @@ import (
 )
 
 type siaObjects struct {
-	Fs                 *fsObjects     // Filesystem layer.
-	Daemon             *SiaDaemon     // Daemon layer.
-	SiadAddress        string         // Address and port of Sia Daemon.
-	CacheDir           string         // Temporary storage location for file transfers.
-	SiaRootDir         string         // Root directory to store files on Sia.
-	DebugMode          bool           // Whether or not debug mode is enabled.
+	Fs          *fsObjects // Filesystem layer.
+	Daemon      *SiaDaemon // Daemon layer.
+	SiadAddress string     // Address and port of Sia Daemon.
+	CacheDir    string     // Temporary storage location for file transfers.
+	SiaRootDir  string     // Root directory to store files on Sia.
+	DebugMode   bool       // Whether or not debug mode is enabled.
 }
 
 // Convert Sia errors to minio object layer errors.
@@ -62,8 +62,8 @@ func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
 // newSiaGateway returns Sia gatewaylayer
 func newSiaGateway(host string) (GatewayLayer, error) {
 	sia := &siaObjects{
-		SiadAddress:        host,
-		DebugMode:          false,
+		SiadAddress: host,
+		DebugMode:   false,
 	}
 
 	sia.loadSiaEnv()
@@ -149,7 +149,7 @@ func (s *siaObjects) syncBuckets() error {
 	s.debugmsg("Gateway.syncBuckets")
 
 	// We use the filesystem layer to store new buckets, since Sia doesn't use "buckets".
-	// However, we should check Sia network to detect existing buckets, and add those 
+	// However, we should check Sia network to detect existing buckets, and add those
 	// locally if they don't already exist.
 
 	sia_buckets, siaErr := s.Daemon.ListBuckets()
@@ -170,7 +170,7 @@ func (s *siaObjects) syncBuckets() error {
 				continue
 			}
 		}
-		if (!found) {
+		if !found {
 			s.debugmsg(fmt.Sprintf("    s.Fs.MakeBucketWithLocation - bucket: %s", siaBkt.Name))
 			err = s.Fs.MakeBucketWithLocation(siaBkt.Name, "")
 			if err != nil {
@@ -238,7 +238,7 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	loi.NextMarker = ""
 
 	var root string
-	if (s.Daemon.SiaRootDir == "") {
+	if s.Daemon.SiaRootDir == "" {
 		root = ""
 	} else {
 		root = s.Daemon.SiaRootDir + "/"
@@ -255,11 +255,11 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 		}
 
 		loi.Objects = append(loi.Objects, ObjectInfo{
-			Bucket:  bucket,
-			Name:    name,
+			Bucket: bucket,
+			Name:   name,
 			//ModTime: sobj.Queued,
-			Size:    int64(siaObj.Filesize),
-			ETag:    etag,
+			Size: int64(siaObj.Filesize),
+			ETag: etag,
 			//ContentType:     object.Properties.ContentType,
 			//ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -299,7 +299,7 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 	s.debugmsg("Gateway.GetObjectInfo")
 
 	// Can't delegate to object layer. File may not be on local filesystem.
-	
+
 	sobjInfo, siaErr := s.Daemon.GetObjectInfo(bucket, object)
 	if siaErr != nil {
 		return objInfo, siaToObjectError(siaErr)
@@ -332,9 +332,9 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 	// SiaFileInfo object is passed in, which implements os.FileInfo interface.
 	// This allows the following function to read file size from it without checking file.
 	siaFileInfo := SiaFileInfo{
-		FileName:    object,
-		FileSize:    int64(sobjInfo.Filesize),
-		FileIsDir:   false,
+		FileName:  object,
+		FileSize:  int64(sobjInfo.Filesize),
+		FileIsDir: false,
 	}
 	return fsMeta.ToObjectInfo(bucket, object, siaFileInfo), nil
 }
@@ -362,7 +362,7 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 		return objInfo, e
 	}
 	siaErr := s.Daemon.PutObject(bucket, object, size, srcFile)
-	
+
 	// Delete the temporary copy
 	s.debugmsg("    s.Fs.PutObject")
 	s.Fs.DeleteObject(bucket, object)

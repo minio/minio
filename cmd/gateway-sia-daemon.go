@@ -22,18 +22,18 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/NebulousLabs/Sia/api"
 )
 
 // SiaDaemon represents the Sia Daemon between Minio and Sia network
 type SiaDaemon struct {
-	SiadAddress       string       // Address of siad daemon API. (e.g., "127.0.0.1:9980")
-	CacheDir          string       // Cache directory for downloads.
-	SiaRootDir        string       // Root directory to store files on Sia.
-	DebugMode         bool         // Whether or not debug mode is enabled.
+	SiadAddress string // Address of siad daemon API. (e.g., "127.0.0.1:9980")
+	CacheDir    string // Cache directory for downloads.
+	SiaRootDir  string // Root directory to store files on Sia.
+	DebugMode   bool   // Whether or not debug mode is enabled.
 }
 
 // SiaObjectInfo represents object info stored on Sia
@@ -86,13 +86,13 @@ func (o SiaFileInfo) Sys() interface{} {
 	return o.FileSys
 }
 
-// newSiaDaemon creates a new Sia Daemon 
+// newSiaDaemon creates a new Sia Daemon
 func newSiaDaemon(siadAddress string, cacheDir string, siaRootDir string, debug bool) (*SiaDaemon, error) {
 	daemon := &SiaDaemon{
-		SiadAddress:       siadAddress,
-		CacheDir:          cacheDir,
-		SiaRootDir:        siaRootDir,
-		DebugMode:         debug,
+		SiadAddress: siadAddress,
+		CacheDir:    cacheDir,
+		SiaRootDir:  siaRootDir,
+		DebugMode:   debug,
 	}
 
 	return daemon, nil
@@ -189,7 +189,7 @@ func (daemon *SiaDaemon) ListRenterFiles(bucket string) (siaObjs []SiaObjectInfo
 		daemon.debugmsg(fmt.Sprintf("    file: %s", f.SiaPath))
 		if strings.HasPrefix(f.SiaPath, prefix) {
 			daemon.debugmsg(fmt.Sprintf("        matches prefix: %s", prefix))
-			sobjs = append(sobjs, SiaObjectInfo {
+			sobjs = append(sobjs, SiaObjectInfo{
 				SiaPath:        f.SiaPath,
 				Filesize:       f.Filesize,
 				Renewing:       f.Renewing,
@@ -200,7 +200,7 @@ func (daemon *SiaDaemon) ListRenterFiles(bucket string) (siaObjs []SiaObjectInfo
 		}
 	}
 
-	return sobjs, nil;
+	return sobjs, nil
 }
 
 // ListBuckets will detect and return existing buckets on Sia.
@@ -231,10 +231,10 @@ func (daemon *SiaDaemon) ListBuckets() (buckets []BucketInfo, e *SiaServiceError
 		}
 	}
 
-	for k, _ := range m {
+	for k := range m {
 		buckets = append(buckets, BucketInfo{
-			Name: k,})
-    	daemon.debugmsg(fmt.Sprintf("    bucket: %s", k))
+			Name: k})
+		daemon.debugmsg(fmt.Sprintf("    bucket: %s", k))
 	}
 
 	return buckets, nil
@@ -302,10 +302,10 @@ func (daemon *SiaDaemon) GetObjectInfo(bucket string, objectName string) (soi Si
 	for _, sObj := range sObjs {
 		if sObj.SiaPath == sia_path {
 			// Object found
-			return sObj, nil;
+			return sObj, nil
 		}
 	}
-	
+
 	// Object not found
 	return soi, siaErrorObjectDoesNotExistInBucket
 }
@@ -342,10 +342,10 @@ func (daemon *SiaDaemon) isSiaFileAvailable(bucket string, objectName string) (b
 	for _, sObj := range sObjs {
 		if sObj.SiaPath == sia_path {
 			// Object found
-			return sObj.Available, nil;
+			return sObj.Available, nil
 		}
 	}
-	
+
 	// Object not found
 	return false, &SiaServiceError{Code: "SiaErrorDaemon", Message: "File not in Sia renter list"}
 }
