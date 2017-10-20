@@ -237,8 +237,16 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	loi.IsTruncated = false
 	loi.NextMarker = ""
 
+	var root string
+	if (s.Daemon.SiaRootDir == "") {
+		root = ""
+	} else {
+		root = s.Daemon.SiaRootDir + "/"
+	}
+
 	for _, siaObj := range siaObjs {
-		pre := s.Daemon.SiaRootDir + "/" + bucket + "/"
+
+		pre := root + bucket + "/"
 		name := strings.TrimPrefix(siaObj.SiaPath, pre)
 
 		etag, err := s.Fs.getObjectETag(bucket, name)
@@ -276,7 +284,14 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 		}
 	}
 
-	return s.Fs.GetObject(bucket, key, startOffset, length, writer)
+	s.debugmsg("    s.Fs.GetObject")
+	err := s.Fs.GetObject(bucket, key, startOffset, length, writer)
+
+	// Delete the cached copy when done
+	s.debugmsg("    s.Fs.DeleteObject")
+	s.Fs.DeleteObject(bucket, key)
+
+	return err
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
