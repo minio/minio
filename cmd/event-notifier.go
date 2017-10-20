@@ -101,12 +101,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 			host = localIP4.ToSlice()[0]
 		}
 
-		scheme := httpScheme
-		if globalIsSSL {
-			scheme = httpsScheme
-		}
-
-		return fmt.Sprintf("%s://%s:%s", scheme, host, globalMinioPort)
+		return fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), host, globalMinioPort)
 	}
 
 	// Fetch the region.
@@ -370,7 +365,9 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.RLock()
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+		return nil, err
+	}
 	defer objLock.RUnlock()
 
 	var buffer bytes.Buffer
@@ -413,7 +410,9 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.RLock()
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+		return nil, err
+	}
 	defer objLock.RUnlock()
 
 	var buffer bytes.Buffer
@@ -454,12 +453,14 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.Lock()
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, ncPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
+	_, err = obj.PutObject(minioMetaBucket, ncPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		return err
@@ -479,12 +480,14 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.Lock()
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, lcPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
+	_, err = obj.PutObject(minioMetaBucket, lcPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket listener configuration to object layer.")
 	}
@@ -502,7 +505,9 @@ func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	return objAPI.DeleteObject(minioMetaBucket, ncPath)
 }
@@ -514,7 +519,9 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	return objAPI.DeleteObject(minioMetaBucket, lcPath)
 }

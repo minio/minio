@@ -17,12 +17,11 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/minio/minio/pkg/disk"
 )
-
-const invalidToken = "invalidToken"
 
 type testStorageRPCServer struct {
 	configDir string
@@ -78,7 +77,7 @@ func errorIfInvalidToken(t *testing.T, err error) {
 func TestStorageRPCInvalidToken(t *testing.T) {
 	st := createTestStorageServer(t)
 	defer removeRoots(st.diskDirs)
-	defer removeAll(st.configDir)
+	defer os.RemoveAll(st.configDir)
 
 	storageRPC := st.stServer
 

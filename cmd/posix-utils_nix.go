@@ -18,33 +18,8 @@
 
 package cmd
 
-import "os"
-
-// osStat returns a FileInfo structure describing the named file.
-// If there is an error, it will be of type *PathError.
-func osStat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
-
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
 	return !(len(volname) < 3 || len(volname) > 63)
-}
-
-// mkdirAll creates a directory named path,
-// along with any necessary parents, and returns nil,
-// or else returns an error. The permission bits perm are used
-// for all directories that mkdirAll creates. If path is already
-// a directory, mkdirAll does nothing and returns nil.
-func mkdirAll(path string, perm os.FileMode) error {
-	return os.MkdirAll(path, perm)
-}
-
-// removeAll removes path and any children it contains.
-// It removes everything it can but returns the first error
-// it encounters.  If the path does not exist, RemoveAll
-// returns nil (no error).
-func removeAll(path string) error {
-	return os.RemoveAll(path)
 }

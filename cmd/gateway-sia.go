@@ -17,28 +17,70 @@
 package cmd
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
+	"regexp"
 	"strings"
+	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
+	"github.com/NebulousLabs/Sia/api"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 type siaObjects struct {
-	Fs          *fsObjects // Filesystem layer.
-	Daemon      *SiaDaemon // Daemon layer.
-	SiadAddress string     // Address and port of Sia Daemon.
-	CacheDir    string     // Temporary storage location for file transfers.
-	SiaRootDir  string     // Root directory to store files on Sia.
-	DebugMode   bool       // Whether or not debug mode is enabled.
+	gatewayUnsupported
+	Address  string // Address and port of Sia Daemon.
+	CacheDir string // Temporary storage location for file transfers.
+	RootDir  string // Root directory to store files on Sia.
+	password string // Sia password for uploading content in authenticated manner.
+}
+
+// SiaServiceError is a custom error type used by Sia cache layer
+type SiaServiceError struct {
+	Code    string
+	Message string
+}
+
+func (e SiaServiceError) Error() string {
+	return fmt.Sprintf("Sia Error: %s",
+		e.Message)
+}
+
+// Also: SiaErrorDaemon is a valid code
+var siaErrorUnknown = &SiaServiceError{
+	Code:    "SiaErrorUnknown",
+	Message: "An unknown error has occurred.",
+}
+
+var siaErrorObjectDoesNotExistInBucket = &SiaServiceError{
+	Code:    "SiaErrorObjectDoesNotExistInBucket",
+	Message: "Object does not exist in bucket.",
+}
+
+var siaErrorObjectAlreadyExists = &SiaServiceError{
+	Code:    "SiaErrorObjectAlreadyExists",
+	Message: "Object already exists in bucket.",
+}
+
+var siaErrorInvalidObjectName = &SiaServiceError{
+	Code:    "SiaErrorInvalidObjectName",
+	Message: "Object name not suitable for Sia.",
+}
+
+var siaErrorNotImplemented = &SiaServiceError{
+	Code:    "SiaErrorNotImplemented",
+	Message: "Not Implemented",
 }
 
 // Convert Sia errors to minio object layer errors.
-func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
+func siaToObjectError(err *SiaServiceError, params ...string) error {
 	if err == nil {
 		return nil
 	}
@@ -59,177 +101,210 @@ func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
 	}
 }
 
-// newSiaGateway returns Sia gatewaylayer
-func newSiaGateway(host string) (GatewayLayer, error) {
-	sia := &siaObjects{
-		SiadAddress: host,
-		DebugMode:   false,
-	}
+// User-supplied password, cached.
+var apiPassword string
 
-	sia.loadSiaEnv()
-
-	// If host is specified on command line, override the ENV
-	if host != "" {
-		sia.SiadAddress = host
-	}
-
-	// If SiadAddress not provided on command line or ENV, default to:
-	if sia.SiadAddress == "" {
-		sia.SiadAddress = "127.0.0.1:9980"
-	}
-
-	fmt.Printf("\nSia Gateway Configuration:\n")
-	fmt.Printf("  Debug Mode: %v\n", sia.DebugMode)
-	fmt.Printf("  Sia Daemon API Address: %s\n", sia.SiadAddress)
-	fmt.Printf("  Sia Root Directory: %s\n", sia.SiaRootDir)
-	fmt.Printf("  Sia Cache Directory: %s\n", sia.CacheDir)
-
-	// Create the daemon layer
-	d, err := newSiaDaemon(sia.SiadAddress, sia.CacheDir, sia.SiaRootDir, sia.DebugMode)
-	if err != nil {
-		return nil, err
-	}
-	sia.Daemon = d
-
-	// Create the filesystem layer
-	f, err := newFSObjectLayer(sia.CacheDir)
-	if err != nil {
-		return nil, err
-	}
-
-	fso, ok := f.(*fsObjects)
-	if !ok {
-		return nil, errors.New("Invalid type")
-	}
-	sia.Fs = fso
-
-	// Sync Sia buckets with Filesystem buckets
-	err = sia.syncBuckets()
-	if err != nil {
-		return sia, err
-	}
-
-	return sia, nil
+// non2xx returns true for non-success HTTP status codes.
+func non2xx(code int) bool {
+	return code < 200 || code > 299
 }
 
-// loadSiaEnv will attempt to load Sia config from ENV
-func (s *siaObjects) loadSiaEnv() {
-	tmp := os.Getenv("SIA_DAEMON_ADDR")
-	if tmp != "" {
-		s.SiadAddress = tmp
-	}
-
-	tmp = os.Getenv("SIA_CACHE_DIR")
-	if tmp != "" {
-		s.CacheDir = tmp
-	} else {
-		s.CacheDir = ".sia_cache"
-	}
-
-	tmp = os.Getenv("SIA_ROOT_DIR")
-	if tmp != "" {
-		s.SiaRootDir = tmp
-	}
-
-	tmp = os.Getenv("SIA_DEBUG")
-	if tmp != "" {
-		i, err := strconv.ParseInt(tmp, 10, 64)
-		if err == nil {
-			if i == 0 {
-				s.DebugMode = false
-			} else {
-				s.DebugMode = true
-			}
-		}
-	}
-}
-
-// syncBuckets will attempt to sync Sia buckets with filesystem buckets
-func (s *siaObjects) syncBuckets() error {
-	s.debugmsg("Gateway.syncBuckets")
-
-	// We use the filesystem layer to store new buckets, since Sia doesn't use "buckets".
-	// However, we should check Sia network to detect existing buckets, and add those
-	// locally if they don't already exist.
-
-	sia_buckets, siaErr := s.Daemon.ListBuckets()
-	if siaErr != nil {
-		return siaToObjectError(siaErr)
-	}
-
-	fs_buckets, err := s.Fs.ListBuckets()
+// decodeError returns the api.Error from a API response. This method should
+// only be called if the response's status code is non-2xx. The error returned
+// may not be of type api.Error in the event of an error unmarshalling the
+// JSON.
+func decodeError(resp *http.Response) error {
+	var apiErr api.Error
+	err := json.NewDecoder(resp.Body).Decode(&apiErr)
 	if err != nil {
 		return err
 	}
+	return apiErr
+}
 
-	for _, siaBkt := range sia_buckets {
-		found := false
-		for _, fsBkt := range fs_buckets {
-			if siaBkt.Name == fsBkt.Name {
-				found = true
-				continue
-			}
-		}
-		if !found {
-			s.debugmsg(fmt.Sprintf("    s.Fs.MakeBucketWithLocation - bucket: %s", siaBkt.Name))
-			err = s.Fs.MakeBucketWithLocation(siaBkt.Name, "")
-			if err != nil {
-				return err
-			}
-		}
+// apiGet wraps a GET request with a status code check, such that if the GET does
+// not return 2xx, the error will be read and returned. The response body is
+// not closed.
+func apiGet(addr, call, apiPassword string) (*http.Response, error) {
+	if host, port, _ := net.SplitHostPort(addr); host == "" {
+		addr = net.JoinHostPort("localhost", port)
+	}
+	resp, err := api.HttpGETAuthenticated("http://"+addr+call, apiPassword)
+	if err != nil {
+		return nil, errors.New("no response from daemon")
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, errors.New("API call not recognized: " + call)
+	}
+	if non2xx(resp.StatusCode) {
+		err := decodeError(resp)
+		resp.Body.Close()
+		return nil, err
+	}
+	return resp, nil
+}
+
+// apiPost wraps a POST request with a status code check, such that if the POST
+// does not return 2xx, the error will be read and returned. The response body
+// is not closed.
+func apiPost(addr, call, vals, apiPassword string) (*http.Response, error) {
+	if host, port, _ := net.SplitHostPort(addr); host == "" {
+		addr = net.JoinHostPort("localhost", port)
 	}
 
+	resp, err := api.HttpPOSTAuthenticated("http://"+addr+call, vals, apiPassword)
+	if err != nil {
+		return nil, errors.New("no response from daemon")
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, errors.New("API call not recognized: " + call)
+	}
+
+	if non2xx(resp.StatusCode) {
+		err := decodeError(resp)
+		resp.Body.Close()
+		return nil, err
+	}
+	return resp, nil
+}
+
+// post makes an API call and discards the response. An error is returned if
+// the response status is not 2xx.
+func post(addr, call, vals, apiPassword string) error {
+	resp, err := apiPost(addr, call, vals, apiPassword)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
+}
+
+// getAPI makes a GET API call and decodes the response. An error is returned
+// if the response status is not 2xx.
+func getAPI(addr string, call string, apiPassword string, obj interface{}) error {
+	resp, err := apiGet(addr, call, apiPassword)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return errors.New("expecting a response, but API returned status code 204 No Content")
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(obj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// get makes an API call and discards the response. An error is returned if the
+// response status is not 2xx.
+func get(addr, call, apiPassword string) error {
+	resp, err := apiGet(addr, call, apiPassword)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// newSiaGateway returns Sia gatewaylayer
+func newSiaGateway() (GatewayLayer, error) {
+	sia := &siaObjects{
+		Address:  os.Getenv("SIA_DAEMON_ADDR"),
+		CacheDir: os.Getenv("SIA_CACHE_DIR"),
+		RootDir:  os.Getenv("SIA_ROOT_DIR"),
+		password: os.Getenv("MINIO_SECRET_KEY"),
+	}
+
+	// If Address not provided on command line or ENV, default to:
+	if sia.Address == "" {
+		sia.Address = "127.0.0.1:9980"
+	}
+
+	fmt.Printf("\nSia Gateway Configuration:\n")
+	fmt.Printf("  Sia Daemon API Address: %s\n", sia.Address)
+	fmt.Printf("  Sia Root Directory: %s\n", sia.RootDir)
+	fmt.Printf("  Sia Cache Directory: %s\n", sia.CacheDir)
+	return sia, nil
 }
 
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (s *siaObjects) Shutdown() error {
-	s.debugmsg("Gateway.Shutdown")
 	return nil
 }
 
 // StorageInfo is not relevant to Sia backend.
 func (s *siaObjects) StorageInfo() (si StorageInfo) {
-	s.debugmsg("Gateway.StorageInfo")
 	return si
 }
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
-	s.debugmsg(fmt.Sprintf("Gateway.MakeBucketWithLocation(%s, %s)", bucket, location))
-	return s.Fs.MakeBucketWithLocation(bucket, location)
+	return nil
 }
 
 // GetBucketInfo gets bucket metadata.
-func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
-	s.debugmsg("Gateway.GetBucketInfo")
-	return s.Fs.GetBucketInfo(bucket)
+func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, err error) {
+	buckets, err := s.ListBuckets()
+	if err != nil {
+		return bi, err
+	}
+	for _, binfo := range buckets {
+		if binfo.Name == bucket {
+			return binfo, nil
+		}
+	}
+	return bi, traceError(BucketNotFound{Bucket: bucket})
 }
 
-// ListBuckets lists all Sia buckets
-func (s *siaObjects) ListBuckets() (buckets []BucketInfo, e error) {
-	s.debugmsg("Gateway.ListBuckets")
-
-	// Sync'd Sia buckets with filesystem buckets at startup
-
-	fs_buckets, err := s.Fs.ListBuckets()
-	if err != nil {
-		return buckets, err
+// ListBuckets will detect and return existing buckets on Sia.
+func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
+	sObjs, serr := s.listRenterFiles("")
+	if serr != nil {
+		return buckets, serr
 	}
 
-	return fs_buckets, nil
+	m := make(set.StringSet)
+
+	var prefix string
+	if s.RootDir != "" {
+		prefix = s.RootDir + "/"
+	}
+
+	for _, sObj := range sObjs {
+		if strings.HasPrefix(sObj.SiaPath, prefix) {
+			siaObj := strings.TrimPrefix(sObj.SiaPath, prefix)
+			idx := strings.Index(siaObj, "/")
+			if idx > 0 {
+				m.Add(siaObj[0:idx])
+			}
+		}
+	}
+
+	for _, bktName := range m.ToSlice() {
+		buckets = append(buckets, BucketInfo{
+			Name:    bktName,
+			Created: timeSentinel,
+		})
+	}
+
+	return buckets, nil
 }
 
 // DeleteBucket deletes a bucket on Sia
 func (s *siaObjects) DeleteBucket(bucket string) error {
-	s.debugmsg("Gateway.DeleteBucket")
-	return s.Fs.DeleteBucket(bucket)
+	return traceError(BucketNotEmpty{})
 }
 
-func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	s.debugmsg("Gateway.ListObjects")
-	siaObjs, siaErr := s.Daemon.ListRenterFiles(bucket)
+func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	siaObjs, siaErr := s.listRenterFiles(bucket)
 	if siaErr != nil {
 		return loi, siaToObjectError(siaErr)
 	}
@@ -238,251 +313,213 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	loi.NextMarker = ""
 
 	var root string
-	if s.Daemon.SiaRootDir == "" {
-		root = ""
-	} else {
-		root = s.Daemon.SiaRootDir + "/"
+
+	if s.RootDir != "" {
+		root = s.RootDir + "/"
 	}
 
-	for _, siaObj := range siaObjs {
-
-		pre := root + bucket + "/"
-		name := strings.TrimPrefix(siaObj.SiaPath, pre)
-
-		etag, err := s.Fs.getObjectETag(bucket, name)
-		if err != nil {
-			return loi, err
+	for _, sObj := range siaObjs {
+		name := strings.TrimPrefix(sObj.SiaPath, pathJoin(root, bucket, "/"))
+		if strings.HasPrefix(name, prefix) {
+			loi.Objects = append(loi.Objects, ObjectInfo{
+				Bucket: bucket,
+				Name:   name,
+				Size:   int64(sObj.Filesize),
+				IsDir:  false,
+			})
 		}
-
-		loi.Objects = append(loi.Objects, ObjectInfo{
-			Bucket: bucket,
-			Name:   name,
-			//ModTime: sobj.Queued,
-			Size: int64(siaObj.Filesize),
-			ETag: etag,
-			//ContentType:     object.Properties.ContentType,
-			//ContentEncoding: object.Properties.ContentEncoding,
-		})
 	}
-
 	return loi, nil
 }
 
-func (s *siaObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
-	s.debugmsg("Gateway.ListObjectsV2")
-	return loi, nil
-}
-
-func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	s.debugmsg(fmt.Sprintf("Gateway.GetObject %s %s startOffset: %d, length: %d", bucket, key, startOffset, length))
-
-	// Only deal with daemon on first chunk
-	if startOffset == 0 {
-		siaErr := s.Daemon.GuaranteeObjectIsInCache(bucket, key)
-		if siaErr != nil {
-			return siaToObjectError(siaErr)
-		}
+func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+	if !s.isValidObjectName(object) {
+		return traceError(ObjectNameInvalid{bucket, object})
 	}
 
-	s.debugmsg("    s.Fs.GetObject")
-	err := s.Fs.GetObject(bucket, key, startOffset, length, writer)
+	dstFile, err := filepath.Abs( pathJoin(s.CacheDir, mustGetUUID()) )
+	if err != nil {
+		return err
+	}
+	defer fsRemoveFile(dstFile)
 
-	// Delete the cached copy when done
-	s.debugmsg("    s.Fs.DeleteObject")
-	s.Fs.DeleteObject(bucket, key)
+	var siaObj = pathJoin(s.RootDir, bucket, object)
+	if err = get(s.Address, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(dstFile), s.password); err != nil {
+		return err
+	}
+
+	reader, size, err := fsOpenFile(dstFile, startOffset)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	bufSize := int64(readSizeV1)
+	if length > 0 && bufSize > length {
+		bufSize = length
+	}
+
+	// For negative length we read everything.
+	if length < 0 {
+		length = size - startOffset
+	}
+
+	// Reply back invalid range if the input offset and length fall out of range.
+	if startOffset > size || startOffset+length > size {
+		return traceError(InvalidRange{startOffset, length, size})
+	}
+
+	// Allocate a staging buffer.
+	buf := make([]byte, int(bufSize))
+
+	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
 
 	return err
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
-	s.debugmsg("Gateway.GetObjectInfo")
-
-	// Can't delegate to object layer. File may not be on local filesystem.
-
-	sobjInfo, siaErr := s.Daemon.GetObjectInfo(bucket, object)
-	if siaErr != nil {
-		return objInfo, siaToObjectError(siaErr)
+	var siaObj = pathJoin(s.RootDir, bucket, object)
+	sObjs, serr := s.listRenterFiles(bucket)
+	if serr != nil {
+		return objInfo, serr
 	}
 
-	fsMeta := fsMetaV1{}
-	fsMetaPath := pathJoin(s.Fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-
-	// Read `fs.json` to perhaps contend with
-	// parallel Put() operations.
-	rlk, err := s.Fs.rwPool.Open(fsMetaPath)
-	if err == nil {
-		// Read from fs metadata only if it exists.
-		defer s.Fs.rwPool.Close(fsMetaPath)
-		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
-			// `fs.json` can be empty due to previously failed
-			// PutObject() transaction, if we arrive at such
-			// a situation we just ignore and continue.
-			if errorCause(rerr) != io.EOF {
-				return objInfo, toObjectErr(rerr, bucket, object)
-			}
+	for _, sObj := range sObjs {
+		if sObj.SiaPath == siaObj {
+			// Metadata about sia objects is just quite minimal
+			// there is nothing else sia provides other than size.
+			return ObjectInfo{
+				Bucket: bucket,
+				Name:   object,
+				Size:   int64(sObj.Filesize),
+				IsDir:  false,
+			}, nil
 		}
 	}
 
-	// Ignore if `fs.json` is not available, this is true for pre-existing data.
-	if err != nil && err != errFileNotFound {
-		return objInfo, toObjectErr(traceError(err), bucket, object)
+	return objInfo, traceError(ObjectNotFound{bucket, object})
+}
+
+func (s *siaObjects) isSiaFileAvailable(bucket string, object string) bool {
+	var siaObj = pathJoin(s.RootDir, bucket, object)
+	sObjs, serr := s.listRenterFiles(bucket)
+	if serr != nil {
+		return false
 	}
 
-	// SiaFileInfo object is passed in, which implements os.FileInfo interface.
-	// This allows the following function to read file size from it without checking file.
-	siaFileInfo := SiaFileInfo{
-		FileName:  object,
-		FileSize:  int64(sobjInfo.Filesize),
-		FileIsDir: false,
+	for _, sObj := range sObjs {
+		if sObj.SiaPath == siaObj {
+			// Object found
+			return sObj.Available
+		}
 	}
-	return fsMeta.ToObjectInfo(bucket, object, siaFileInfo), nil
+	return false
+}
+
+func (s *siaObjects) waitTillSiaUploadCompletes(bucket string, object string) *SiaServiceError {
+	for {
+		if s.isSiaFileAvailable(bucket, object) {
+			return nil
+		}
+		time.Sleep(3 * time.Second)
+	}
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, e error) {
-	s.debugmsg("Gateway.PutObject")
-
+func (s *siaObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// Check the object's name first
-	if !s.Daemon.ApproveObjectName(object) {
+	if !s.isValidObjectName(object) {
 		return objInfo, siaToObjectError(siaErrorInvalidObjectName, bucket, object)
 	}
 
-	// Temporarily copy to local filesystem
-	s.debugmsg("    s.Fs.PutObject")
-	oi, e := s.Fs.PutObject(bucket, object, size, data, metadata, sha256sum)
-	if e != nil {
-		return objInfo, e
+	bufSize := int64(readSizeV1)
+	if size := data.Size(); size > 0 && bufSize > size {
+		bufSize = size
+	}
+	buf := make([]byte, int(bufSize))
+
+	var srcFile string
+	if srcFile, err = filepath.Abs( pathJoin(s.CacheDir, mustGetUUID()) ); err != nil {
+		return objInfo, err
+	}
+	defer fsRemoveFile(srcFile)
+
+	if _, err = fsCreateFile(srcFile, data, buf, data.Size()); err != nil {
+		return objInfo, err
 	}
 
-	// Upload to Sia
-	srcFile := pathJoin(s.CacheDir, bucket, object)
-	srcFile, e = filepath.Abs(srcFile)
-	if e != nil {
-		return objInfo, e
+	if err = data.Verify(); err != nil {
+		return objInfo, err
 	}
-	siaErr := s.Daemon.PutObject(bucket, object, size, srcFile)
 
-	// Delete the temporary copy
-	s.debugmsg("    s.Fs.PutObject")
-	s.Fs.DeleteObject(bucket, object)
-
-	if siaErr != nil {
-		return objInfo, siaToObjectError(siaErr, bucket, object)
+	var siaObj = pathJoin(s.RootDir, bucket, object)
+	if err = post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password); err != nil {
+		return objInfo, err
 	}
-	return oi, e
-}
 
-// CopyObject copies a blob from source container to destination container.
-func (s *siaObjects) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string, metadata map[string]string) (objInfo ObjectInfo, e error) {
-	s.debugmsg("Gateway.CopyObject")
-	return objInfo, siaErrorNotImplemented
+	// Need to wait for upload to complete
+	s.waitTillSiaUploadCompletes(bucket, object)
+
+	return objInfo, nil
 }
 
 // DeleteObject deletes a blob in bucket
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
-	s.debugmsg("Gateway.DeleteObject")
-	siaErr := s.Daemon.DeleteObject(bucket, object)
-	if siaErr != nil {
-		return siaToObjectError(siaErr)
+	// Tell Sia daemon to delete the object
+	var siaObj = pathJoin(s.RootDir, bucket, object)
+	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
+}
+
+// siaObjectInfo represents object info stored on Sia
+type siaObjectInfo struct {
+	SiaPath        string
+	Filesize       uint64
+	Renewing       bool
+	Available      bool
+	Redundancy     float64
+	UploadProgress float64
+}
+
+// isValidObjectName returns whether or not the objectName provided is suitable for Sia
+func (s *siaObjects) isValidObjectName(objectName string) bool {
+	reg, _ := regexp.Compile("[^a-zA-Z0-9., _+-]+")
+	return objectName == reg.ReplaceAllString(objectName, "")
+}
+
+// ListObjects will return a list of existing objects in the bucket provided
+func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, e *SiaServiceError) {
+	// Get list of all renter files
+	var rf api.RenterFiles
+	derr := getAPI(s.Address, "/renter/files", s.password, &rf)
+	if derr != nil {
+		return siaObjs, &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
-	return s.Fs.DeleteObject(bucket, object)
-}
-
-// ListMultipartUploads lists all multipart uploads.
-func (s *siaObjects) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	s.debugmsg("Gateway.ListMultipartUploads")
-	return s.Fs.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
-}
-
-// NewMultipartUpload upload object in multiple parts
-func (s *siaObjects) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
-	s.debugmsg("Gateway.NewMultipartUpload")
-	return s.Fs.NewMultipartUpload(bucket, object, metadata)
-}
-
-// CopyObjectPart copy part of object to other bucket and object
-func (s *siaObjects) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	s.debugmsg("Gateway.CopyObjectPart")
-	return s.Fs.CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset, length)
-}
-
-// PutObjectPart puts a part of object in bucket
-func (s *siaObjects) PutObjectPart(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
-	s.debugmsg("Gateway.PutObjectPart")
-	return s.Fs.PutObjectPart(bucket, object, uploadID, partID, size, data, md5Hex, sha256sum)
-}
-
-// ListObjectParts returns all object parts for specified object in specified bucket
-func (s *siaObjects) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, e error) {
-	s.debugmsg("Gateway.ListObjectParts")
-	return s.Fs.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
-}
-
-// AbortMultipartUpload aborts a ongoing multipart upload
-func (s *siaObjects) AbortMultipartUpload(bucket string, object string, uploadID string) error {
-	s.debugmsg("Gateway.AbortMultipartUpload")
-	return s.Fs.AbortMultipartUpload(bucket, object, uploadID)
-}
-
-// CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (oi ObjectInfo, e error) {
-	s.debugmsg("Gateway.CompleteMultipartUpload")
-	oi, err := s.Fs.CompleteMultipartUpload(bucket, object, uploadID, uploadedParts)
-	if err != nil {
-		return oi, err
+	var prefix string
+	var root string
+	if s.RootDir == "" {
+		root = ""
+	} else {
+		root = s.RootDir + "/"
+	}
+	if bucket == "" {
+		prefix = root
+	} else {
+		prefix = root + bucket + "/"
 	}
 
-	absCacheDir, err := filepath.Abs(s.CacheDir)
-	if err != nil {
-		return oi, err
+	for _, f := range rf.Files {
+		if strings.HasPrefix(f.SiaPath, prefix) {
+			siaObjs = append(siaObjs, siaObjectInfo{
+				SiaPath:        f.SiaPath,
+				Filesize:       f.Filesize,
+				Renewing:       f.Renewing,
+				Available:      f.Available,
+				Redundancy:     f.Redundancy,
+				UploadProgress: f.UploadProgress,
+			})
+		}
 	}
-
-	srcFile := pathJoin(absCacheDir, bucket, object)
-	fi, err := os.Stat(srcFile)
-	if err != nil {
-		return oi, err
-	}
-
-	siaErr := s.Daemon.PutObject(bucket, object, fi.Size(), srcFile)
-
-	// Delete temporary copy
-	s.Fs.DeleteObject(bucket, object)
-
-	if siaErr != nil {
-		return oi, siaToObjectError(siaErr)
-	}
-
-	return oi, nil
-}
-
-// SetBucketPolicies sets policy on bucket
-func (s *siaObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	s.debugmsg("Gateway.SetBucketPolicies")
-
-	// Per Harshavardhana on 10/19/2017, if Sia doesn't support policies, gateway shouldn't either.
-	return siaToObjectError(siaErrorNotImplemented)
-}
-
-// GetBucketPolicies will get policy on bucket
-func (s *siaObjects) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e error) {
-	s.debugmsg("Gateway.GetBucketPolicies")
-
-	// Per Harshavardhana on 10/19/2017, if Sia doesn't support policies, gateway shouldn't either.
-	return bal, siaToObjectError(siaErrorNotImplemented)
-}
-
-// DeleteBucketPolicies deletes all policies on bucket
-func (s *siaObjects) DeleteBucketPolicies(bucket string) error {
-	s.debugmsg("Gateway.DeleteBucketPolicies")
-
-	// Per Harshavardhana on 10/19/2017, if Sia doesn't support policies, gateway shouldn't either.
-	return siaToObjectError(siaErrorNotImplemented)
-}
-
-func (s *siaObjects) debugmsg(str string) {
-	if s.DebugMode {
-		fmt.Println(str)
-	}
+	return siaObjs, nil
 }

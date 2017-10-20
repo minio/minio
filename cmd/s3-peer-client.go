@@ -41,12 +41,13 @@ type s3Peers []s3Peer
 // slice. The urls slice is assumed to be non-empty and free of nil
 // values.
 func makeS3Peers(endpoints EndpointList) (s3PeerList s3Peers) {
+	localAddr := GetLocalPeer(endpoints)
 	s3PeerList = append(s3PeerList, s3Peer{
-		globalMinioAddr,
+		localAddr,
 		&localBucketMetaState{ObjectAPI: newObjectLayerFn},
 	})
 
-	hostSet := set.CreateStringSet(globalMinioAddr)
+	hostSet := set.CreateStringSet(localAddr)
 	cred := serverConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, s3Path)
 	for _, host := range GetRemotePeers(endpoints) {
@@ -56,17 +57,17 @@ func makeS3Peers(endpoints EndpointList) (s3PeerList s3Peers) {
 		hostSet.Add(host)
 		s3PeerList = append(s3PeerList, s3Peer{
 			addr: host,
-			bmsClient: &remoteBucketMetaState{newAuthRPCClient(authConfig{
-				accessKey:       cred.AccessKey,
-				secretKey:       cred.SecretKey,
-				serverAddr:      host,
-				serviceEndpoint: serviceEndpoint,
-				secureConn:      globalIsSSL,
-				serviceName:     "S3",
-			})},
+			bmsClient: &remoteBucketMetaState{
+				newAuthRPCClient(authConfig{
+					accessKey:       cred.AccessKey,
+					secretKey:       cred.SecretKey,
+					serverAddr:      host,
+					serviceEndpoint: serviceEndpoint,
+					secureConn:      globalIsSSL,
+					serviceName:     "S3",
+				})},
 		})
 	}
-
 	return s3PeerList
 }
 

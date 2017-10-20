@@ -70,6 +70,14 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	}
 
+	if objInfo.ContentType != "" {
+		w.Header().Set("Content-Type", objInfo.ContentType)
+	}
+
+	if objInfo.ContentEncoding != "" {
+		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
+	}
+
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		w.Header().Set(k, v)

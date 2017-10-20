@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func TestHealMsg(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to initialize test config", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 	storageDisks, fsDirs := prepareXLStorageDisks(t)
 	errs := make([]error, len(storageDisks))
 	defer removeRoots(fsDirs)

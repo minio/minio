@@ -238,13 +238,13 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return ErrRequestNotReadyYet
 	}
 
-	if UTCNow().Sub(pSignValues.Date) > time.Duration(pSignValues.Expires) {
+	if UTCNow().Sub(pSignValues.Date) > pSignValues.Expires {
 		return ErrExpiredPresignRequest
 	}
 
 	// Save the date and expires.
 	t := pSignValues.Date
-	expireSeconds := int(time.Duration(pSignValues.Expires) / time.Second)
+	expireSeconds := int(pSignValues.Expires / time.Second)
 
 	// Construct the query.
 	query.Set("X-Amz-Date", t.Format(iso8601Format))

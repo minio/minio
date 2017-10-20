@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -30,7 +28,6 @@ import (
 	"syscall"
 
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/sha256-simd"
 )
 
 // fsObjects - Implements fs object layer.
@@ -62,17 +59,17 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	// optimizing all other calls. Create minio meta volume,
 	// if it doesn't exist yet.
 	metaBucketPath := pathJoin(fsPath, minioMetaBucket)
-	if err := mkdirAll(metaBucketPath, 0777); err != nil {
+	if err := os.MkdirAll(metaBucketPath, 0777); err != nil {
 		return err
 	}
 
 	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
-	if err := mkdirAll(metaTmpPath, 0777); err != nil {
+	if err := os.MkdirAll(metaTmpPath, 0777); err != nil {
 		return err
 	}
 
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	return mkdirAll(metaMultipartPath, 0777)
+	return os.MkdirAll(metaMultipartPath, 0777)
 
 }
 
@@ -89,7 +86,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := osStat(preparePath(fsPath))
+	fi, err := os.Stat((fsPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -97,13 +94,13 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		err = mkdirAll(fsPath, 0777)
+		err = os.MkdirAll(fsPath, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	di, err := getDiskInfo(preparePath(fsPath))
+	di, err := getDiskInfo((fsPath))
 	if err != nil {
 		return nil, err
 	}
@@ -157,19 +154,24 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
+	// Start background process to cleanup old files in `.minio.sys`.
+	go fs.cleanupStaleMultipartUploads(fsMultipartCleanupInterval, fsMultipartExpiry, globalServiceDoneCh)
+
 	// Return successfully initialized object layer.
 	return fs, nil
 }
 
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
+	fs.fsFormatRlk.Close()
+
 	// Cleanup and delete tmp uuid.
 	return fsRemoveAll(pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := getDiskInfo(preparePath(fs.fsPath))
+	info, err := getDiskInfo((fs.fsPath))
 	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
 	storageInfo := StorageInfo{
 		Total: info.Total,
@@ -199,7 +201,7 @@ func (fs fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	st, err := fsStatDir(bucketDir)
+	st, err := fsStatVolume(bucketDir)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +230,7 @@ func (fs fsObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 		return bi, toObjectErr(err, bucket)
 	}
 
-	// As osStat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
+	// As os.Stat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
 	createdTime := st.ModTime()
 	return BucketInfo{
 		Name:    bucket,
@@ -242,7 +244,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
-	entries, err := readDir(preparePath(fs.fsPath))
+	entries, err := readDir((fs.fsPath))
 	if err != nil {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}
@@ -253,21 +255,18 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 			continue
 		}
 		var fi os.FileInfo
-		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
+		fi, err = fsStatVolume(pathJoin(fs.fsPath, entry))
+		// There seems like no practical reason to check for errors
+		// at this point, if there are indeed errors we can simply
+		// just ignore such buckets and list only those which
+		// return proper Stat information instead.
 		if err != nil {
-			// If the directory does not exist, skip the entry.
-			if errorCause(err) == errVolumeNotFound {
-				continue
-			} else if errorCause(err) == errVolumeAccessDenied {
-				// Skip the entry if its a file.
-				continue
-			}
-			return nil, err
+			// Ignore any errors returned here.
+			continue
 		}
-
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
-			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
+			// As os.Stat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
 			Created: fi.ModTime(),
 		})
 	}
@@ -362,7 +361,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	objInfo, err := fs.PutObject(dstBucket, dstObject, NewHashReader(pipeReader, length, metadata["etag"], ""), metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -380,7 +379,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
-	if err = checkGetObjArgs(bucket, object); err != nil {
+	if err = checkBucketAndObjectNamesFS(bucket, object); err != nil {
 		return err
 	}
 
@@ -396,6 +395,12 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	// Writer cannot be nil.
 	if writer == nil {
 		return toObjectErr(traceError(errUnexpected), bucket, object)
+	}
+
+	// If its a directory request, we return an empty body.
+	if hasSuffix(object, slashSeparator) {
+		_, err = writer.Write([]byte(""))
+		return toObjectErr(traceError(err), bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
@@ -441,6 +446,15 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
+	if hasSuffix(object, slashSeparator) {
+		// Directory call needs to arrive with object ending with "/".
+		fi, err := fsStatDir(pathJoin(fs.fsPath, bucket, object))
+		if err != nil {
+			return oi, toObjectErr(err, bucket, object)
+		}
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	}
+
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 
 	// Read `fs.json` to perhaps contend with
@@ -473,9 +487,25 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
+// Checks bucket and object name validity, returns nil if both are valid.
+func checkBucketAndObjectNamesFS(bucket, object string) error {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return traceError(BucketNameInvalid{Bucket: bucket})
+	}
+	// Verify if object is valid.
+	if len(object) == 0 {
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	if !IsValidObjectPrefix(object) {
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	return nil
+}
+
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
-	if err := checkGetObjArgs(bucket, object); err != nil {
+	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
 		return oi, err
 	}
 
@@ -492,13 +522,14 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error
 func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
-		if p == "." {
+		if p == "." || p == "/" {
 			return false
 		}
 		if _, err := fsStatFile(pathJoin(fs.fsPath, bucket, p)); err == nil {
-			// If there is already a file at prefix "p" return error.
+			// If there is already a file at prefix "p", return true.
 			return true
 		}
+
 		// Check if there is a file as one of the parent paths.
 		return isParentDirObject(path.Dir(p))
 	}
@@ -509,7 +540,12 @@ func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
+func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+	// No metadata is set, allocate a new one.
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
+
 	var err error
 
 	// Validate if bucket name is valid and exists.
@@ -517,15 +553,25 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
+	fsMeta := newFSMetaV1()
+	fsMeta.Meta = metadata
+
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
-	if isObjectDir(object, size) {
+	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 		}
-		return dirObjectInfo(bucket, object, size, metadata), nil
+		if err = fsMkdirAll(pathJoin(fs.fsPath, bucket, object)); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		var fi os.FileInfo
+		if fi, err = fsStatDir(pathJoin(fs.fsPath, bucket, object)); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
@@ -537,13 +583,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
-	// No metadata is set, allocate a new one.
-	if metadata == nil {
-		metadata = make(map[string]string)
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < 0 {
+		return ObjectInfo{}, traceError(errInvalidArgument)
 	}
-
-	fsMeta := newFSMetaV1()
-	fsMeta.Meta = metadata
 
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
@@ -569,37 +612,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// so that cleaning it up will be easy if the server goes down.
 	tempObj := mustGetUUID()
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	hashWriters := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		hashWriters = append(hashWriters, sha256Writer)
-	}
-	multiWriter := io.MultiWriter(hashWriters...)
-
-	// Limit the reader to its provided size if specified.
-	var limitDataReader io.Reader
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending more data than the set content size.
-		limitDataReader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		limitDataReader = data
-	}
-
 	// Allocate a buffer to Read() from request body
 	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
+	if size := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
 	buf := make([]byte, int(bufSize))
-	teeReader := io.TeeReader(limitDataReader, multiWriter)
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(fsTmpObjPath, teeReader, buf, size)
+	bytesWritten, err := fsCreateFile(fsTmpObjPath, data, buf, data.Size())
 	if err != nil {
 		fsRemoveFile(fsTmpObjPath)
 		errorIf(err, "Failed to create object %s/%s", bucket, object)
@@ -608,7 +628,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < size {
+	if bytesWritten < data.Size() {
 		fsRemoveFile(fsTmpObjPath)
 		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
@@ -618,27 +638,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// nothing to delete.
 	defer fsRemoveFile(fsTmpObjPath)
 
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["etag"]) == 0 {
-		metadata["etag"] = newMD5Hex
+	if err = data.Verify(); err != nil { // verify MD5 and SHA256
+		return ObjectInfo{}, traceError(err)
 	}
 
-	// md5Hex representation.
-	md5Hex := metadata["etag"]
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			// Returns md5 mismatch.
-			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
-		}
-	}
+	metadata["etag"] = hex.EncodeToString(data.MD5())
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
@@ -666,7 +670,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
-	if err := checkDelObjArgs(bucket, object); err != nil {
+	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
 		return err
 	}
 
@@ -747,14 +751,24 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 	// Read from fs metadata only if it exists.
 	defer fs.rwPool.Close(fsMetaPath)
 
-	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	// Fetch the size of the underlying file.
+	fi, err := rlk.LockedFile.Stat()
 	if err != nil {
-		// `fs.json` can be empty due to previously failed
-		// PutObject() transaction, if we arrive at such
-		// a situation we just ignore and continue.
-		if errorCause(err) != io.EOF {
-			return "", toObjectErr(err, bucket, entry)
-		}
+		return "", toObjectErr(traceError(err), bucket, entry)
+	}
+
+	// `fs.json` can be empty due to previously failed
+	// PutObject() transaction, if we arrive at such
+	// a situation we just ignore and continue.
+	if fi.Size() == 0 {
+		return "", nil
+	}
+
+	// Wrap the locked file in a ReadAt() backend section reader to
+	// make sure the underlying offsets don't move.
+	fsMetaBuf, err := ioutil.ReadAll(io.NewSectionReader(rlk.LockedFile, 0, fi.Size()))
+	if err != nil {
+		return "", traceError(err)
 	}
 
 	// Check if FS metadata is valid, if not return error.
@@ -803,16 +817,30 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	// Convert entry to ObjectInfo
 	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
-		if hasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Name = entry
-			objInfo.IsDir = true
-			return
+		// Protect the entry from concurrent deletes, or renames.
+		objectLock := globalNSMutex.NewNSLock(bucket, entry)
+		if err = objectLock.GetRLock(globalListingTimeout); err != nil {
+			return ObjectInfo{}, err
 		}
 
-		// Protect reading `fs.json`.
-		objectLock := globalNSMutex.NewNSLock(bucket, entry)
-		objectLock.RLock()
+		if hasSuffix(entry, slashSeparator) {
+			var fi os.FileInfo
+			fi, err = fsStatDir(pathJoin(fs.fsPath, bucket, entry))
+			objectLock.RUnlock()
+			if err != nil {
+				return objInfo, err
+			}
+			// Success.
+			return ObjectInfo{
+				// Object name needs to be full path.
+				Name:    entry,
+				Bucket:  bucket,
+				Size:    fi.Size(),
+				ModTime: fi.ModTime(),
+				IsDir:   fi.IsDir(),
+			}, nil
+		}
+
 		var etag string
 		etag, err = fs.getObjectETag(bucket, entry)
 		objectLock.RUnlock()
@@ -874,6 +902,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
+			errorIf(err, "Unable to fetch object info for %s", walkResult.entry)
 			return loi, nil
 		}
 		nextMarker = objInfo.Name

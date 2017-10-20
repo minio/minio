@@ -455,7 +455,6 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 
 		// verify response for V2 signed HTTP request.
 		reqV2, err := newTestSignedRequestV2("GET", u, 0, nil, testCase.accessKey, testCase.secretKey)
-
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -632,8 +631,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	for i := 0; i < 10; i++ {
 		objectName := "test-object-" + strconv.Itoa(i)
 		// uploading the object.
-		_, err = obj.PutObject(bucketName, objectName, int64(len(contentBytes)), bytes.NewBuffer(contentBytes),
-			make(map[string]string), sha256sum)
+		_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewBuffer(contentBytes), int64(len(contentBytes)), "", sha256sum), nil)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object %d:  Error uploading object: <ERROR> %v", i, err)
@@ -649,6 +647,17 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 		}
 
 		return objectIdentifierList
+	}
+	getDeleteErrorList := func(objects []ObjectIdentifier) (deleteErrorList []DeleteError) {
+		for _, obj := range objects {
+			deleteErrorList = append(deleteErrorList, DeleteError{
+				Code:    errorCodeResponse[ErrAccessDenied].Code,
+				Message: errorCodeResponse[ErrAccessDenied].Description,
+				Key:     obj.ObjectName,
+			})
+		}
+
+		return deleteErrorList
 	}
 
 	requestList := []DeleteObjectsRequest{
@@ -669,6 +678,10 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	// errorRequest := encodeResponse(requestList[1])
 	errorResponse := generateMultiDeleteResponse(requestList[1].Quiet, requestList[1].Objects, nil)
 	encodedErrorResponse := encodeResponse(errorResponse)
+
+	anonRequest := encodeResponse(requestList[0])
+	anonResponse := generateMultiDeleteResponse(requestList[0].Quiet, nil, getDeleteErrorList(requestList[0].Objects))
+	encodedAnonResponse := encodeResponse(anonResponse)
 
 	testCases := []struct {
 		bucket             string
@@ -718,15 +731,32 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 			expectedContent:    encodedErrorResponse,
 			expectedRespStatus: http.StatusOK,
 		},
+		// Test case - 5.
+		// Anonymous user access denied response
+		// Currently anonymous users cannot delete multiple objects in Minio server
+		{
+			bucket:             bucketName,
+			objects:            anonRequest,
+			accessKey:          "",
+			secretKey:          "",
+			expectedContent:    encodedAnonResponse,
+			expectedRespStatus: http.StatusOK,
+		},
 	}
 
 	for i, testCase := range testCases {
 		var req *http.Request
 		var actualContent []byte
 
-		// Indicating that all parts are uploaded and initiating completeMultipartUpload.
-		req, err = newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", bucketName),
-			int64(len(testCase.objects)), bytes.NewReader(testCase.objects), testCase.accessKey, testCase.secretKey)
+		// Generate a signed or anonymous request based on the testCase
+		if testCase.accessKey != "" {
+			req, err = newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", bucketName),
+				int64(len(testCase.objects)), bytes.NewReader(testCase.objects), testCase.accessKey, testCase.secretKey)
+		} else {
+			req, err = newTestRequest("POST", getDeleteMultipleObjectsURL("", bucketName),
+				int64(len(testCase.objects)), bytes.NewReader(testCase.objects))
+		}
+
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for DeleteMultipleObjects: <ERROR> %v", err)
 		}
@@ -752,8 +782,6 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
 		}
 	}
-
-	// Currently anonymous user cannot delete multiple objects in Minio server, hence no test case is required.
 
 	// HTTP request to test the case of `objectLayer` being set to `nil`.
 	// There is no need to use an existing bucket or valid input for creating the request,

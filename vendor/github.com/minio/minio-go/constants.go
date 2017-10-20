@@ -18,9 +18,17 @@ package minio
 
 /// Multipart upload defaults.
 
-// miniPartSize - minimum part size 64MiB per object after which
+// absMinPartSize - absolute minimum part size (5 MiB) below which
+// a part in a multipart upload may not be uploaded.
+const absMinPartSize = 1024 * 1024 * 5
+
+// minPartSize - minimum part size 64MiB per object after which
 // putObject behaves internally as multipart.
 const minPartSize = 1024 * 1024 * 64
+
+// copyPartSize - default (and maximum) part size to copy in a
+// copy-object request (5GiB)
+const copyPartSize = 1024 * 1024 * 1024 * 5
 
 // maxPartsCount - maximum number of parts for a single multipart session.
 const maxPartsCount = 10000
@@ -37,16 +45,12 @@ const maxSinglePutObjectSize = 1024 * 1024 * 1024 * 5
 // Multipart operation.
 const maxMultipartPutObjectSize = 1024 * 1024 * 1024 * 1024 * 5
 
-// optimalReadBufferSize - optimal buffer 5MiB used for reading
-// through Read operation.
-const optimalReadBufferSize = 1024 * 1024 * 5
-
 // unsignedPayload - value to be set to X-Amz-Content-Sha256 header when
 // we don't want to sign the request payload
 const unsignedPayload = "UNSIGNED-PAYLOAD"
 
 // Total number of parallel workers used for multipart operation.
-var totalWorkers = 3
+const totalWorkers = 4
 
 // Signature related constants.
 const (

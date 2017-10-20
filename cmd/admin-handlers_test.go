@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -182,7 +183,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminXLTestBed) TearDown() {
-	removeAll(atb.configPath)
+	os.RemoveAll(atb.configPath)
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
 }
@@ -942,7 +943,7 @@ func TestHealObjectHandler(t *testing.T) {
 	}
 
 	_, err = adminTestBed.objLayer.PutObject(bucketName, objName,
-		int64(len("hello")), bytes.NewReader([]byte("hello")), nil, "")
+		NewHashReader(bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("Failed to create %s - %v", objName, err)
 	}
@@ -1082,7 +1083,7 @@ func TestHealUploadHandler(t *testing.T) {
 	// Upload a part.
 	partID := 1
 	_, err = adminTestBed.objLayer.PutObjectPart(bucketName, objName, uploadID,
-		partID, int64(len("hello")), bytes.NewReader([]byte("hello")), "", "")
+		partID, NewHashReader(bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""))
 	if err != nil {
 		t.Fatalf("Failed to upload part %d of %s/%s - %v", partID,
 			bucketName, objName, err)
@@ -1363,7 +1364,7 @@ func TestWriteSetConfigResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 	testCases := []struct {
 		status bool
 		errs   []error

@@ -77,6 +77,20 @@ func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	return ErrNone
 }
 
+// Escape encodedQuery string into unescaped list of query params, returns error
+// if any while unescaping the values.
+func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error) {
+	for _, query := range strings.Split(encodedQuery, "&") {
+		var unescapedQuery string
+		unescapedQuery, err = url.QueryUnescape(query)
+		if err != nil {
+			return nil, err
+		}
+		unescapedQueries = append(unescapedQueries, unescapedQuery)
+	}
+	return unescapedQueries, nil
+}
+
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
 // returns ErrNone if matches. S3 errors otherwise.
@@ -92,38 +106,38 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		encodedQuery = tokens[1]
 	}
 
-	queries := strings.Split(encodedQuery, "&")
-	var filteredQueries []string
-	var gotSignature string
-	var expires string
-	var accessKey string
-	var err error
-	for _, query := range queries {
-		keyval := strings.Split(query, "=")
+	var (
+		filteredQueries []string
+		gotSignature    string
+		expires         string
+		accessKey       string
+		err             error
+	)
+
+	var unescapedQueries []string
+	unescapedQueries, err = unescapeQueries(encodedQuery)
+	if err != nil {
+		errorIf(err, "Unable to unescape (%s)", encodedQuery)
+		return ErrInvalidQueryParams
+	}
+
+	// Extract the necessary values from presigned query, construct a list of new filtered queries.
+	for _, query := range unescapedQueries {
+		keyval := strings.SplitN(query, "=", 2)
 		switch keyval[0] {
 		case "AWSAccessKeyId":
-			accessKey, err = url.QueryUnescape(keyval[1])
+			accessKey = keyval[1]
 		case "Signature":
-			gotSignature, err = url.QueryUnescape(keyval[1])
+			gotSignature = keyval[1]
 		case "Expires":
-			expires, err = url.QueryUnescape(keyval[1])
+			expires = keyval[1]
 		default:
-			unescapedQuery, qerr := url.QueryUnescape(query)
-			if qerr == nil {
-				filteredQueries = append(filteredQueries, unescapedQuery)
-			} else {
-				err = qerr
-			}
-		}
-		// Check if the query unescaped properly.
-		if err != nil {
-			errorIf(err, "Unable to unescape query values", queries)
-			return ErrInvalidQueryParams
+			filteredQueries = append(filteredQueries, query)
 		}
 	}
 
-	// Invalid access key.
-	if accessKey == "" {
+	// Invalid values returns error.
+	if accessKey == "" || gotSignature == "" || expires == "" {
 		return ErrInvalidQueryParams
 	}
 
@@ -217,7 +231,13 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		encodedQuery = tokens[1]
 	}
 
-	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
+	unescapedQueries, err := unescapeQueries(encodedQuery)
+	if err != nil {
+		errorIf(err, "Unable to unescape (%s)", encodedQuery)
+		return ErrInvalidQueryParams
+	}
+
+	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)
 	if v2Auth != expectedAuth {
 		return ErrSignatureDoesNotMatch
 	}
@@ -234,14 +254,14 @@ func calculateSignatureV2(stringToSign string, secret string) string {
 // Return signature-v2 for the presigned request.
 func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
 	cred := serverConfig.GetCredential()
-	stringToSign := presignV2STS(method, encodedResource, encodedQuery, headers, expires)
+	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, expires)
 	return calculateSignatureV2(stringToSign, cred.SecretKey)
 }
 
 // Return signature-v2 authrization header.
 func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	cred := serverConfig.GetCredential()
-	stringToSign := signV2STS(method, encodedResource, encodedQuery, headers)
+	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, "")
 	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
 	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKey, signature)
 }
@@ -267,7 +287,7 @@ func canonicalizedAmzHeadersV2(headers http.Header) string {
 }
 
 // Return canonical resource string.
-func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
+func canonicalizedResourceV2(encodedResource, encodedQuery string) string {
 	queries := strings.Split(encodedQuery, "&")
 	keyval := make(map[string]string)
 	for _, query := range queries {
@@ -280,6 +300,7 @@ func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 		}
 		keyval[key] = val
 	}
+
 	var canonicalQueries []string
 	for _, key := range resourceList {
 		val, ok := keyval[key]
@@ -290,26 +311,31 @@ func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 			canonicalQueries = append(canonicalQueries, key)
 			continue
 		}
-		// Resources values should be unescaped
-		unescapedVal, err := url.QueryUnescape(val)
-		if err != nil {
-			errorIf(err, "Unable to unescape query value (query = `%s`, value = `%s`)", key, val)
-			continue
-		}
-		canonicalQueries = append(canonicalQueries, key+"="+unescapedVal)
+		canonicalQueries = append(canonicalQueries, key+"="+val)
 	}
-	if len(canonicalQueries) == 0 {
-		return encodedPath
+
+	// The queries will be already sorted as resourceList is sorted, if canonicalQueries
+	// is empty strings.Join returns empty.
+	canonicalQuery := strings.Join(canonicalQueries, "&")
+	if canonicalQuery != "" {
+		return encodedResource + "?" + canonicalQuery
 	}
-	// the queries will be already sorted as resourceList is sorted.
-	return encodedPath + "?" + strings.Join(canonicalQueries, "&")
+	return encodedResource
 }
 
-// Return string to sign for authz header calculation.
-func signV2STS(method string, encodedResource string, encodedQuery string, headers http.Header) string {
+// Return string to sign under two different conditions.
+// - if expires string is set then string to sign includes date instead of the Date header.
+// - if expires string is empty then string to sign includes date header instead.
+func getStringToSignV2(method string, encodedResource, encodedQuery string, headers http.Header, expires string) string {
 	canonicalHeaders := canonicalizedAmzHeadersV2(headers)
 	if len(canonicalHeaders) > 0 {
 		canonicalHeaders += "\n"
+	}
+
+	date := expires // Date is set to expires date for presign operations.
+	if date == "" {
+		// If expires date is empty then request header Date is used.
+		date = headers.Get("Date")
 	}
 
 	// From the Amazon docs:
@@ -317,41 +343,16 @@ func signV2STS(method string, encodedResource string, encodedQuery string, heade
 	// StringToSign = HTTP-Verb + "\n" +
 	// 	 Content-Md5 + "\n" +
 	//	 Content-Type + "\n" +
-	//	 Date + "\n" +
+	//	 Date/Expires + "\n" +
 	//	 CanonicalizedProtocolHeaders +
 	//	 CanonicalizedResource;
 	stringToSign := strings.Join([]string{
 		method,
 		headers.Get("Content-MD5"),
 		headers.Get("Content-Type"),
-		headers.Get("Date"),
+		date,
 		canonicalHeaders,
-	}, "\n") + canonicalizedResourceV2(encodedResource, encodedQuery)
+	}, "\n")
 
-	return stringToSign
-}
-
-// Return string to sign for pre-sign signature calculation.
-func presignV2STS(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
-	canonicalHeaders := canonicalizedAmzHeadersV2(headers)
-	if len(canonicalHeaders) > 0 {
-		canonicalHeaders += "\n"
-	}
-
-	// From the Amazon docs:
-	//
-	// StringToSign = HTTP-Verb + "\n" +
-	// 	 Content-Md5 + "\n" +
-	//	 Content-Type + "\n" +
-	//	 Expires + "\n" +
-	//	 CanonicalizedProtocolHeaders +
-	//	 CanonicalizedResource;
-	stringToSign := strings.Join([]string{
-		method,
-		headers.Get("Content-MD5"),
-		headers.Get("Content-Type"),
-		expires,
-		canonicalHeaders,
-	}, "\n") + canonicalizedResourceV2(encodedResource, encodedQuery)
-	return stringToSign
+	return stringToSign + canonicalizedResourceV2(encodedResource, encodedQuery)
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,14 @@
 package cmd
 
 import (
-	"net/http"
+	"testing"
 	"time"
-
-	. "gopkg.in/check.v1"
 )
 
-type VersionSuite struct{}
-
-var _ = Suite(&VersionSuite{})
-
-func (s *VersionSuite) TestVersion(c *C) {
-	_, err := time.Parse(Version, http.TimeFormat)
-	c.Assert(err, NotNil)
+func TestVersion(t *testing.T) {
+	Version = "2017-05-07T06:37:49Z"
+	_, err := time.Parse(time.RFC3339, Version)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

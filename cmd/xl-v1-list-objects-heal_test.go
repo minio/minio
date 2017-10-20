@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -34,7 +35,7 @@ func TestListObjectsHeal(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Create an instance of xl backend
 	xl, fsDirs, err := prepareXL()
@@ -55,14 +56,14 @@ func TestListObjectsHeal(t *testing.T) {
 
 	// Put 5 objects under sane dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i), int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i), NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
 	}
 	// Put 500 objects under unsane/subdir dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i), int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i), NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
@@ -151,7 +152,7 @@ func TestListUploadsHeal(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// Remove config directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Create an instance of XL backend.
 	xl, fsDirs, err := prepareXL()
@@ -180,7 +181,7 @@ func TestListUploadsHeal(t *testing.T) {
 	// Upload a part.
 	data := bytes.Repeat([]byte("a"), 1024)
 	_, err = xl.PutObjectPart(bucketName, objName, uploadID, 1,
-		int64(len(data)), bytes.NewReader(data), "", "")
+		NewHashReader(bytes.NewReader(data), int64(len(data)), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}

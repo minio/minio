@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -222,7 +223,7 @@ func TestQueueARN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	testCases := []struct {
 		queueARN string
@@ -299,7 +300,7 @@ func TestQueueARN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	testCases = []struct {
 		queueARN string
@@ -332,7 +333,7 @@ func TestUnmarshalSQSARN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	testCases := []struct {
 		queueARN string
@@ -392,7 +393,7 @@ func TestUnmarshalSQSARN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	testCases = []struct {
 		queueARN string

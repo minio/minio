@@ -29,8 +29,8 @@ import (
 	mux "github.com/gorilla/mux"
 )
 
-// supportedGetReqParams - supported request parameters for GET presigned request.
-var supportedGetReqParams = map[string]string{
+// supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
+var supportedHeadGetReqParams = map[string]string{
 	"response-expires":             "Expires",
 	"response-content-type":        "Content-Type",
 	"response-cache-control":       "Cache-Control",
@@ -39,13 +39,29 @@ var supportedGetReqParams = map[string]string{
 	"response-content-disposition": "Content-Disposition",
 }
 
-// setGetRespHeaders - set any requested parameters as response headers.
-func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
+// setHeadGetRespHeaders - set any requested parameters as response headers.
+func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
-		if header, ok := supportedGetReqParams[k]; ok {
+		if header, ok := supportedHeadGetReqParams[k]; ok {
 			w.Header()[header] = v
 		}
 	}
+}
+
+// getSourceIPAddress - get the source ip address of the request.
+func getSourceIPAddress(r *http.Request) string {
+	var ip string
+	// Attempt to get ip from standard headers.
+	// Do not support X-Forwarded-For because it is easy to spoof.
+	ip = r.Header.Get("X-Real-Ip")
+	parsedIP := net.ParseIP(ip)
+	// Skip non valid IP address.
+	if parsedIP != nil {
+		return ip
+	}
+	// Default to remote address if headers not set.
+	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
@@ -54,10 +70,11 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 //   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
 func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
-		//we care about the bucket as a whole, not a particular resource
+		// We care about the bucket as a whole, not a particular resource.
 		resource := "/" + bucket
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -95,7 +112,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if objectLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -149,7 +169,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -215,7 +235,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if objectLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
+		return
+	}
 	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -236,6 +259,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
@@ -325,7 +351,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// - if source and destination are different
 	// it is the sole mutating state.
 	objectDWLock := globalNSMutex.NewNSLock(dstBucket, dstObject)
-	objectDWLock.Lock()
+	if objectDWLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectDWLock.Unlock()
 
 	// if source and destination are different, we have to hold
@@ -335,9 +364,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Hold read locks on source object only if we are
 		// going to read data from source object.
 		objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-		objectSRLock.RLock()
+		if objectSRLock.GetRLock(globalObjectTimeout) != nil {
+			writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+			return
+		}
 		defer objectSRLock.RUnlock()
-
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
@@ -367,7 +398,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
 	}
+
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects.
 	if !isMetadataReplace(r.Header) && cpSrcDstSame {
@@ -494,7 +527,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
@@ -505,13 +541,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 		// Create anonymous object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -520,7 +557,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, metadata["etag"], sha256sum), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -528,7 +565,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -539,7 +576,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
 		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object. %s", r.URL.Path)
@@ -658,7 +695,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Hold read locks on source object only if we are
 	// going to read data from source object.
 	objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-	objectSRLock.RLock()
+	if objectSRLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectSRLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
@@ -791,13 +831,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -806,7 +847,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(reader, size, incomingMD5, sha256sum))
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -814,7 +855,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -825,7 +866,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if !skipContentSha256Cksum(r) {
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
@@ -955,7 +996,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Hold write lock on the object.
 	destLock := globalNSMutex.NewNSLock(bucket, object)
-	destLock.Lock()
+	if destLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer destLock.Unlock()
 
 	objInfo, err := objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)

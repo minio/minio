@@ -20,5 +20,9 @@ package disk
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
 func getFSType(fstype [16]int8) string {
-	return b2s(fstype[:])
+	b := make([]byte, len(fstype[:]))
+	for i, v := range fstype[:] {
+		b[i] = byte(v)
+	}
+	return string(b)
 }

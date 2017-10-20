@@ -114,8 +114,9 @@ const (
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
-	ErrNotSupported
 	ErrBucketAlreadyExists
+	ErrMetadataTooLarge
+	ErrUnsupportedMetadata
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -128,6 +129,7 @@ const (
 	ErrFilterNameSuffix
 	ErrFilterValueInvalid
 	ErrOverlappingConfigs
+	ErrUnsupportedNotification
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -143,6 +145,8 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
+	ErrOperationTimedOut
+	ErrPartsSizeUnequal
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -150,6 +154,7 @@ const (
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
+	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 )
 
@@ -551,6 +556,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrUnsupportedNotification: {
+		Code:           "UnsupportedNotification",
+		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidCopyPartRange: {
 		Code:           "InvalidArgument",
 		Description:    "The x-amz-copy-source-range value must be of the form bytes=first-last where first and last are the zero-based offsets of the first and last bytes to copy",
@@ -572,7 +582,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	/// Minio extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
-		Description:    "Storage backend has reached its minimum free disk threshold. Please delete few objects to proceed.",
+		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrObjectExistsAsDirectory: {
@@ -625,12 +635,36 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminCredentialsMismatch: {
+		Code:           "XMinioAdminCredentialsMismatch",
+		Description:    "Credentials in config mismatch with server environment variables",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-
+	ErrOperationTimedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
+	ErrMetadataTooLarge: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedMetadata: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers are not supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPartsSizeUnequal: {
+		Code:           "XMinioPartsSizeUnequal",
+		Description:    "All parts except the last part should be of the same size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -719,14 +753,16 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:
 		apiErr = ErrEntityTooSmall
-	case NotSupported:
-		apiErr = ErrNotSupported
 	case NotImplemented:
 		apiErr = ErrNotImplemented
 	case PolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case PartTooBig:
 		apiErr = ErrEntityTooLarge
+	case UnsupportedMetadata:
+		apiErr = ErrUnsupportedMetadata
+	case PartsSizeUnequal:
+		apiErr = ErrPartsSizeUnequal
 	default:
 		apiErr = ErrInternalError
 	}

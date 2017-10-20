@@ -91,6 +91,11 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		}
 	}
 
+	if hasSuffix(object, slashSeparator) {
+		m.Meta["etag"] = emptyETag // For directories etag is d41d8cd98f00b204e9800998ecf8427e
+		m.Meta["content-type"] = "application/octet-stream"
+	}
+
 	objInfo := ObjectInfo{
 		Bucket: bucket,
 		Name:   object,
@@ -101,7 +106,11 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	if fi != nil {
 		objInfo.ModTime = fi.ModTime()
 		objInfo.Size = fi.Size()
-		objInfo.IsDir = fi.IsDir()
+		if fi.IsDir() {
+			// Directory is always 0 bytes in S3 API, treat it as such.
+			objInfo.Size = 0
+			objInfo.IsDir = fi.IsDir()
+		}
 	}
 
 	// Extract etag from metadata.
@@ -264,7 +273,7 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-	rlk, err := lock.RLockedOpenFile(preparePath(fsFormatPath))
+	rlk, err := lock.RLockedOpenFile((fsFormatPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			// If format.json not found then
@@ -296,7 +305,7 @@ func createFormatFS(fsPath string) error {
 
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	lk, err := lock.TryLockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return traceError(err)
 	}

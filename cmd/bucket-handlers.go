@@ -35,7 +35,7 @@ import (
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
-func enforceBucketPolicy(bucket, action, resource, referer string, queryParams url.Values) (s3Error APIErrorCode) {
+func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
 	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
@@ -75,6 +75,8 @@ func enforceBucketPolicy(bucket, action, resource, referer string, queryParams u
 	if referer != "" {
 		conditionKeyMap["referer"] = set.CreateStringSet(referer)
 	}
+	// Add request source Ip to conditionKeyMap.
+	conditionKeyMap["ip"] = set.CreateStringSet(sourceIP)
 
 	// Validate action, resource and conditions with current policy statements.
 	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
@@ -240,9 +242,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
+	var authError APIErrorCode
+	if authError = checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); authError != ErrNone {
+		// In the event access is denied, a 200 response should still be returned
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+		if authError != ErrAccessDenied {
+			writeErrorResponse(w, authError, r.URL)
+			return
+		}
 	}
 
 	// Content-Length is required and should be non-zero
@@ -284,14 +291,26 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	for index, object := range deleteObjects.Objects {
 		wg.Add(1)
 		go func(i int, obj ObjectIdentifier) {
-			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
-			objectLock.Lock()
-			defer objectLock.Unlock()
 			defer wg.Done()
+			// If the request is denied access, each item
+			// should be marked as 'AccessDenied'
+			if authError == ErrAccessDenied {
+				dErrs[i] = PrefixAccessDenied{
+					Bucket: bucket,
+					Object: obj.ObjectName,
+				}
+				return
+			}
+			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
+			if timedOutErr := objectLock.GetLock(globalObjectTimeout); timedOutErr != nil {
+				dErrs[i] = timedOutErr
+			} else {
+				defer objectLock.Unlock()
 
-			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
-			if dErr != nil {
-				dErrs[i] = dErr
+				dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
+				if dErr != nil {
+					dErrs[i] = dErr
+				}
 			}
 		}(index, object)
 	}
@@ -363,11 +382,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// PutBucket does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
-	if s3Error == ErrInvalidRegion {
-		// Clients like boto3 send putBucket() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
-	}
+	s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion())
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -391,7 +406,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
@@ -536,18 +554,23 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
-	objInfo, err := objectAPI.PutObject(bucket, object, fileSize, fileBody, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, NewHashReader(fileBody, fileSize, metadata["etag"], sha256sum), metadata)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	port := r.Header.Get("X-Forward-Proto")
+	location := getObjectLocation(r.Host, port, bucket, object)
 	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
-	w.Header().Set("Location", getObjectLocation(bucket, object))
+	w.Header().Set("Location", location)
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, err := net.SplitHostPort(r.RemoteAddr)
@@ -580,7 +603,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			Bucket:   objInfo.Bucket,
 			Key:      objInfo.Name,
 			ETag:     `"` + objInfo.ETag + `"`,
-			Location: getObjectLocation(objInfo.Bucket, objInfo.Name),
+			Location: location,
 		})
 		writeResponse(w, http.StatusCreated, resp, "application/xml")
 	case "200":
@@ -612,7 +635,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.RLock()
+	if bucketLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
+		return
+	}
 	defer bucketLock.RUnlock()
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
@@ -642,7 +668,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Attempt to delete bucket.

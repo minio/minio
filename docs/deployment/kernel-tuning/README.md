@@ -57,13 +57,13 @@ Proper scheduler configuration makes sure Minio process gets adequate CPU time. 
 - *`sched_min_granularity_ns`*: This parameter decides the minimum time a task will be be allowed to run on CPU before being pre-empted out. We recommend setting it to 10ms.
 
 ```sh
-sysctl -w kernel.sched_min_granularity_ns=10
+sysctl -w kernel.sched_min_granularity_ns=10000000
 ```
 
 - *`sched_wakeup_granularity_ns`*: Lowering this parameter improves wake-up latency and throughput for latency critical tasks, particularly when a short duty cycle load component must compete with CPU bound components.
 
 ```sh
-sysctl -w kernel.sched_wakeup_granularity_ns=15
+sysctl -w kernel.sched_wakeup_granularity_ns=15000000
 ```
 
 ## Tuning Disks

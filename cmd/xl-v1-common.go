@@ -16,7 +16,9 @@
 
 package cmd
 
-import "path"
+import (
+	"path"
+)
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
@@ -33,11 +35,11 @@ func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
-		if p == "." {
+		if p == "." || p == "/" {
 			return false
 		}
 		if xl.isObject(bucket, p) {
-			// If there is already a file at prefix "p" return error.
+			// If there is already a file at prefix "p", return true.
 			return true
 		}
 		// Check if there is a file as one of the parent paths.

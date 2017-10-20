@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"path"
 	"testing"
 )
@@ -43,7 +44,7 @@ func (s *TestRPCS3PeerSuite) SetUpSuite(t *testing.T) {
 func (s *TestRPCS3PeerSuite) TearDownSuite(t *testing.T) {
 	s.testServer.Stop()
 	removeRoots(s.disks)
-	removeAll(s.testServer.Root)
+	os.RemoveAll(s.testServer.Root)
 }
 
 func TestS3PeerRPC(t *testing.T) {

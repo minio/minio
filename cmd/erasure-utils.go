@@ -18,71 +18,10 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
-	"hash"
 	"io"
-	"sync"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/sha256-simd"
-	"golang.org/x/crypto/blake2b"
 )
-
-// newHashWriters - inititialize a slice of hashes for the disk count.
-func newHashWriters(diskCount int, algo HashAlgo) []hash.Hash {
-	hashWriters := make([]hash.Hash, diskCount)
-	for index := range hashWriters {
-		hashWriters[index] = newHash(algo)
-	}
-	return hashWriters
-}
-
-// newHash - gives you a newly allocated hash depending on the input algorithm.
-func newHash(algo HashAlgo) (h hash.Hash) {
-	switch algo {
-	case HashSha256:
-		// sha256 checksum specially on ARM64 platforms or whenever
-		// requested as dictated by `xl.json` entry.
-		h = sha256.New()
-	case HashBlake2b:
-		// ignore the error, because New512 without a key never fails
-		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
-	// Add new hashes here.
-	default:
-		// Default to blake2b.
-		// ignore the error, because New512 without a key never fails
-		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
-	}
-	return h
-}
-
-// Hash buffer pool is a pool of reusable
-// buffers used while checksumming a stream.
-var hashBufferPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, readSizeV1)
-		return &b
-	},
-}
-
-// hashSum calculates the hash of the entire path and returns.
-func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	// Fetch a new staging buffer from the pool.
-	bufp := hashBufferPool.Get().(*[]byte)
-	defer hashBufferPool.Put(bufp)
-
-	// Copy entire buffer to writer.
-	if err := copyBuffer(writer, disk, volume, path, *bufp); err != nil {
-		return nil, err
-	}
-
-	// Return the final hash sum.
-	return writer.Sum(nil), nil
-}
 
 // getDataBlockLen - get length of data blocks from encoded blocks.
 func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
@@ -165,58 +104,4 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 // DataBlocks. The extra space will have 0-padding.
 func getChunkSize(blockSize int64, dataBlocks int) int64 {
 	return (blockSize + int64(dataBlocks) - 1) / int64(dataBlocks)
-}
-
-// copyBuffer - copies from disk, volume, path to input writer until either EOF
-// is reached at volume, path or an error occurs. A success copyBuffer returns
-// err == nil, not err == EOF. Because copyBuffer is defined to read from path
-// until EOF. It does not treat an EOF from ReadFile an error to be reported.
-// Additionally copyBuffer stages through the provided buffer; otherwise if it
-// has zero length, returns error.
-func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, buf []byte) error {
-	// Error condition of zero length buffer.
-	if buf != nil && len(buf) == 0 {
-		return errors.New("empty buffer in readBuffer")
-	}
-
-	// Starting offset for Reading the file.
-	var startOffset int64
-
-	// Read until io.EOF.
-	for {
-		n, err := disk.ReadFile(volume, path, startOffset, buf)
-		if n > 0 {
-			m, wErr := writer.Write(buf[:n])
-			if wErr != nil {
-				return wErr
-			}
-			if int64(m) != n {
-				return io.ErrShortWrite
-			}
-		}
-		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
-			}
-			return err
-		}
-		// Progress the offset.
-		startOffset += n
-	}
-
-	// Success.
-	return nil
-}
-
-// bitRotVerifier - type representing bit-rot verification process for
-// a single under-lying object (currently whole files)
-type bitRotVerifier struct {
-	// has the bit-rot verification been done?
-	isVerified bool
-	// is the data free of bit-rot?
-	hasBitRot bool
-	// hashing algorithm
-	algo HashAlgo
-	// hex-encoded expected raw-hash value
-	checkSum string
 }

@@ -28,12 +28,6 @@ func toGCSPublicURL(bucket, object string) string {
 	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object)
 }
 
-// AnonPutObject creates a new object anonymously with the incoming data,
-func (l *gcsGateway) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-
-	return ObjectInfo{}, NotImplemented{}
-}
-
 // AnonGetObject - Get object anonymously
 func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
 	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)
@@ -112,7 +106,7 @@ func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
 	// Request V1 List Object to the backend
 	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {
@@ -135,8 +129,14 @@ func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, er
 		return bucketInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
+	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
+	if err != nil {
+		return bucketInfo, traceError(err)
+	}
+
 	// Last-Modified date being returned by GCS
 	return BucketInfo{
-		Name: bucket,
+		Name:    bucket,
+		Created: t,
 	}, nil
 }

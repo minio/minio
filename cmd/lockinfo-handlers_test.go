@@ -33,13 +33,17 @@ func TestListLocksInfo(t *testing.T) {
 	// Take 10 read locks on bucket1/prefix1/obj1
 	for i := 0; i < 10; i++ {
 		readLk := globalNSMutex.NewNSLock("bucket1", "prefix1/obj1")
-		readLk.RLock()
+		if readLk.GetRLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
+			t.Errorf("Failed to get read lock on iteration %d", i)
+		}
 	}
 
 	// Take write locks on bucket1/prefix/obj{11..19}
 	for i := 0; i < 10; i++ {
 		wrLk := globalNSMutex.NewNSLock("bucket1", fmt.Sprintf("prefix1/obj%d", 10+i))
-		wrLk.Lock()
+		if wrLk.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
+			t.Errorf("Failed to get write lock on iteration %d", i)
+		}
 	}
 
 	testCases := []struct {

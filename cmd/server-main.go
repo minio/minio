@@ -52,8 +52,8 @@ FLAGS:
   {{end}}{{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
-     MINIO_SECRET_KEY: Custom password or secret key of 8 to 40 characters in length.
+     MINIO_ACCESS_KEY: Custom username or access key of minimum 5 characters in length.
+     MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
@@ -91,6 +91,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	var setupType SetupType
 	var err error
+
 	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
@@ -192,6 +193,8 @@ func serverMain(ctx *cli.Context) {
 	initGlobalAdminPeers(globalEndpoints)
 
 	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer.ReadTimeout = globalConnReadTimeout
+	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	globalHTTPServer.ErrorLogFunc = errorIf

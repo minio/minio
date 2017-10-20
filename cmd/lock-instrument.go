@@ -178,6 +178,38 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string,
 	return nil
 }
 
+// Change the state of the lock from Blocked to none.
+func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string, readLock bool) error {
+	_, ok := n.debugLockMap[param]
+	if !ok {
+		return traceError(LockInfoVolPathMissing{param.volume, param.path})
+	}
+
+	// Check whether lock info entry for the given `opsID` exists.
+	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
+	if !ok {
+		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+	}
+
+	// Check whether lockSource is same.
+	if lockInfo.lockSource != lockSource {
+		return traceError(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+	}
+
+	// Status of the lock should be set to "Blocked".
+	if lockInfo.status != blockedStatus {
+		return traceError(LockInfoStateNotBlocked{param.volume, param.path, opsID})
+	}
+	// Clear the status by removing the entry for the given `opsID`.
+	delete(n.debugLockMap[param].lockInfo, opsID)
+
+	// Update global lock stats.
+	n.counters.lockTimedOut()
+	// Update (volume, path) lock stats.
+	n.debugLockMap[param].counters.lockTimedOut()
+	return nil
+}
+
 // deleteLockInfoEntry - Deletes the lock information for given (volume, path).
 // Called when nsLk.ref count is 0.
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {

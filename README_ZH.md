@@ -1,4 +1,4 @@
-# Minio 快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio 快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio) [![Snap Status](https://build.snapcraft.io/badge/minio/minio.svg)](https://build.snapcraft.io/user/minio/minio)
 
 Minio是一个对象存储服务，基于Apache License v2.0协议. 它完全兼容亚马逊的S3云储存服务，非常适合于存储很多非结构化的数据，例如图片、视频、日志文件、备份数据和容器/虚拟机镜像等，而一个对象文件可以是任意大小，从几kb到最大5T不等。 
 
@@ -9,13 +9,8 @@ Minio是一个非常轻量的服务,可以很简单的和其他应用的结合�
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio|
-||32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio|
-||32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio|
-||64-bit ARM|https://dl.minio.io/server/minio/release/linux-arm64/minio|
-||32-bit ARMv6|https://dl.minio.io/server/minio/release/linux-arm6vl/minio|
 |Apple OS X|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio|
 |Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe|
-||32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe|
 |FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio|
 
 ### Homebrew 安装
@@ -47,7 +42,7 @@ $ go get -u github.com/minio/minio
 
 $ chmod +x minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
@@ -75,7 +70,7 @@ SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 $ chmod 755 minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
@@ -139,7 +134,7 @@ $ docker run -p 9000:9000 minio/minio
 
 $ chmod 755 minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE

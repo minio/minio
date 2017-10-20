@@ -72,11 +72,10 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	}{
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err := obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -220,11 +219,10 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err := obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1054,12 +1052,11 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength,
-			bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName,
+			NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1170,11 +1167,10 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1407,7 +1403,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to look for copied object part: <ERROR> %s", i+1, instanceType, err)
 			}
-			if len(results.Parts) != 1 {
+			if instanceType != FSTestStr && len(results.Parts) != 1 {
 				t.Fatalf("Test %d: %s: Expected only one entry returned %d entries", i+1, instanceType, len(results.Parts))
 			}
 		}
@@ -1512,11 +1508,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// used for anonymous HTTP request test.
 		{bucketName, anonObject, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -2158,8 +2153,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
-			bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID,
+			NewHashReader(bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""))
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -2513,8 +2508,8 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	}
 	// Iterating over createPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
-			bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID,
+			NewHashReader(bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""))
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -2657,7 +2652,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, "")
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -2818,6 +2813,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
+
 	err = preSignV2(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
@@ -3306,6 +3302,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 			instanceType, bucketName, mpartResp.UploadID)
 	}
 
+	req.Header = http.Header{}
 	err = preSignV2(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
@@ -3361,8 +3358,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	uploadIDCopy := uploadID
 
 	// create an object Part, will be used to test list object parts.
-	_, err = obj.PutObjectPart(bucketName, testObject, uploadID, 1, int64(len("hello")), bytes.NewReader([]byte("hello")),
-		"5d41402abc4b2a76b9719d911017c592", "")
+	_, err = obj.PutObjectPart(bucketName, testObject, uploadID, 1, NewHashReader(bytes.NewReader([]byte("hello")), int64(len("hello")), "5d41402abc4b2a76b9719d911017c592", ""))
 	if err != nil {
 		t.Fatalf("Minio %s : %s.", instanceType, err)
 	}
@@ -3551,4 +3547,57 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` sets the Object Layer to `nil` and calls the handler.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+}
+
+// TestGetSourceIPAddress - check the source ip of a request is parsed correctly.
+func TestGetSourceIPAddress(t *testing.T) {
+	testCases := []struct {
+		request    *http.Request
+		expectedIP string
+	}{
+		{
+			// Test Case 1. Use only RemoteAddr as host and port.
+			request: &http.Request{
+				RemoteAddr: "127.0.0.1:9000",
+			},
+			expectedIP: "127.0.0.1",
+		},
+		{
+			// Test Case 2. Use both RemoteAddr and single header.
+			request: &http.Request{
+				RemoteAddr: "127.0.0.1:9000",
+				Header: map[string][]string{
+					"X-Real-Ip": {"54.240.143.0"},
+				},
+			},
+			expectedIP: "54.240.143.0", // Use headers before RemoteAddr.
+		},
+		{
+			// Test Case 3. Use both RemoteAddr and several header vals.
+			// Check that first val in header is used.
+			request: &http.Request{
+				RemoteAddr: "127.0.0.1:9000",
+				Header: map[string][]string{
+					"X-Real-Ip": {"54.240.143.0", "54.240.143.188"},
+				},
+			},
+			expectedIP: "54.240.143.0",
+		},
+		{
+			// Test Case 4. Use header and corrupt header value.
+			request: &http.Request{
+				RemoteAddr: "127.0.0.1:9000",
+				Header: map[string][]string{
+					"X-Real-Ip": {"54.240.143.188", "corrupt"},
+				},
+			},
+			expectedIP: "54.240.143.188",
+		},
+	}
+	for i, test := range testCases {
+		receivedIP := getSourceIPAddress(test.request)
+		if test.expectedIP != receivedIP {
+			t.Fatalf("Case %d: Expected the IP to be `%s`, but instead got `%s`", i+1, test.expectedIP, receivedIP)
+		}
+	}
 }

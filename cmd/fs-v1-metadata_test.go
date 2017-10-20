@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestFSV1MetadataObjInfo(t *testing.T) {
 // TestReadFSMetadata - readFSMetadata testing with a healthy and faulty disk
 func TestReadFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
@@ -51,9 +52,7 @@ func TestReadFSMetadata(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -77,7 +76,7 @@ func TestReadFSMetadata(t *testing.T) {
 // TestWriteFSMetadata - tests of writeFSMetadata with healthy disk.
 func TestWriteFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
@@ -88,9 +87,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 

@@ -275,9 +275,25 @@ func getLocation(r *http.Request) string {
 	return path.Clean(r.URL.Path) // Clean any trailing slashes.
 }
 
-// getObjectLocation gets the relative URL for an object
-func getObjectLocation(bucketName string, key string) string {
-	return "/" + bucketName + "/" + key
+// returns "https" if the tls boolean is true, "http" otherwise.
+func getURLScheme(tls bool) string {
+	if tls {
+		return httpsScheme
+	}
+	return httpScheme
+}
+
+// getObjectLocation gets the fully qualified URL of an object.
+func getObjectLocation(host, proto, bucket, object string) string {
+	if proto == "" {
+		proto = getURLScheme(globalIsSSL)
+	}
+	u := url.URL{
+		Host:   host,
+		Path:   path.Join(slashSeparator, bucket, object),
+		Scheme: proto,
+	}
+	return u.String()
 }
 
 // generates ListBucketsResponse from array of BucketInfo which can be
@@ -291,7 +307,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.Format(timeFormatAMZLong)
+		listbucket.CreationDate = bucket.Created.UTC().Format(timeFormatAMZLong)
 		listbucket.HealBucketInfo = bucket.HealBucketInfo
 		listbuckets = append(listbuckets, listbucket)
 	}

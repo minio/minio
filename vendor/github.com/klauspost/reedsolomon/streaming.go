@@ -145,8 +145,8 @@ type rsStream struct {
 // the number of data shards and parity shards that
 // you want to use. You can reuse this encoder.
 // Note that the maximum number of data shards is 256.
-func NewStream(dataShards, parityShards int) (StreamEncoder, error) {
-	enc, err := New(dataShards, parityShards)
+func NewStream(dataShards, parityShards int, o ...Option) (StreamEncoder, error) {
+	enc, err := New(dataShards, parityShards, o...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +161,8 @@ func NewStream(dataShards, parityShards int) (StreamEncoder, error) {
 // the number of data shards and parity shards given.
 //
 // This functions as 'NewStream', but allows you to enable CONCURRENT reads and writes.
-func NewStreamC(dataShards, parityShards int, conReads, conWrites bool) (StreamEncoder, error) {
-	enc, err := New(dataShards, parityShards)
+func NewStreamC(dataShards, parityShards int, conReads, conWrites bool, o ...Option) (StreamEncoder, error) {
+	enc, err := New(dataShards, parityShards, o...)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func trimShards(in [][]byte, size int) [][]byte {
 
 func readShards(dst [][]byte, in []io.Reader) error {
 	if len(in) != len(dst) {
-		panic("internal error: in and dst size does not match")
+		panic("internal error: in and dst size do not match")
 	}
 	size := -1
 	for i := range in {
@@ -291,7 +291,7 @@ func readShards(dst [][]byte, in []io.Reader) error {
 
 func writeShards(out []io.Writer, in [][]byte) error {
 	if len(out) != len(in) {
-		panic("internal error: in and out size does not match")
+		panic("internal error: in and out size do not match")
 	}
 	for i := range in {
 		if out[i] == nil {
@@ -318,7 +318,7 @@ type readResult struct {
 // cReadShards reads shards concurrently
 func cReadShards(dst [][]byte, in []io.Reader) error {
 	if len(in) != len(dst) {
-		panic("internal error: in and dst size does not match")
+		panic("internal error: in and dst size do not match")
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(in))
@@ -366,7 +366,7 @@ func cReadShards(dst [][]byte, in []io.Reader) error {
 // cWriteShards writes shards concurrently
 func cWriteShards(out []io.Writer, in [][]byte) error {
 	if len(out) != len(in) {
-		panic("internal error: in and out size does not match")
+		panic("internal error: in and out size do not match")
 	}
 	var errs = make(chan error, len(out))
 	var wg sync.WaitGroup
@@ -450,8 +450,9 @@ var ErrReconstructMismatch = errors.New("valid shards and fill shards are mutual
 // If there are too few shards to reconstruct the missing
 // ones, ErrTooFewShards will be returned.
 //
-// The reconstructed shard set is complete, but integrity is not verified.
-// Use the Verify function to check if data set is ok.
+// The reconstructed shard set is complete when explicitly asked for all missing shards.
+// However its integrity is not automatically verified.
+// Use the Verify function to check in case the data set is complete.
 func (r rsStream) Reconstruct(valid []io.Reader, fill []io.Writer) error {
 	if len(valid) != r.r.Shards {
 		return ErrTooFewShards
@@ -461,9 +462,13 @@ func (r rsStream) Reconstruct(valid []io.Reader, fill []io.Writer) error {
 	}
 
 	all := createSlice(r.r.Shards, r.bs)
+	reconDataOnly := true
 	for i := range valid {
 		if valid[i] != nil && fill[i] != nil {
 			return ErrReconstructMismatch
+		}
+		if i >= r.r.DataShards && fill[i] != nil {
+			reconDataOnly = false
 		}
 	}
 
@@ -482,7 +487,11 @@ func (r rsStream) Reconstruct(valid []io.Reader, fill []io.Writer) error {
 		read += shardSize(all)
 		all = trimShards(all, shardSize(all))
 
-		err = r.r.Reconstruct(all)
+		if reconDataOnly {
+			err = r.r.ReconstructData(all) // just reconstruct missing data shards
+		} else {
+			err = r.r.Reconstruct(all) //  reconstruct all missing shards
+		}
 		if err != nil {
 			return err
 		}

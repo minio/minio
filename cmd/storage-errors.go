@@ -37,8 +37,14 @@ var errUnformattedDisk = errors.New("unformatted disk found")
 // errDiskFull - cannot create volume or files when disk is full.
 var errDiskFull = errors.New("disk path full")
 
-// errDiskNotFount - cannot find the underlying configured disk anymore.
+// errDiskNotFound - cannot find the underlying configured disk anymore.
 var errDiskNotFound = errors.New("disk not found")
+
+// errDiskNotFoundFromNetError - cannot find the underlying configured disk anymore due to network error.
+var errDiskNotFoundFromNetError = errors.New("disk not found from net error")
+
+// errDiskNotFoundFromShutdown - cannot find the underlying configured disk anymore due to rpc shutdown.
+var errDiskNotFoundFromRPCShutdown = errors.New("disk not found from rpc shutdown")
 
 // errFaultyRemoteDisk - remote disk is faulty.
 var errFaultyRemoteDisk = errors.New("remote disk is faulty")
@@ -76,6 +82,9 @@ var errFileAccessDenied = errors.New("file access denied")
 // errBitrotHashAlgoInvalid - the algo for bit-rot hash
 // verification is empty or invalid.
 var errBitrotHashAlgoInvalid = errors.New("bit-rot hash algorithm is invalid")
+
+// errCrossDeviceLink - rename across devices not allowed.
+var errCrossDeviceLink = errors.New("Rename across devices not allowed, please fix your backend configuration")
 
 // hashMisMatchError - represents a bit-rot hash verification failure
 // error.

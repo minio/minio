@@ -19,7 +19,7 @@ getdeps: checks
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
-verifiers: getdeps vet fmt lint cyclo spelling
+verifiers: getdeps vet fmt lint cyclo deadcode spelling
 
 vet:
 	@echo "Running $@"
@@ -46,7 +46,8 @@ cyclo:
 	@${GOPATH}/bin/gocyclo -over 100 pkg
 
 deadcode:
-	@${GOPATH}/bin/deadcode
+	@echo "Running $@"
+	@${GOPATH}/bin/deadcode -test $(shell go list ./...) || true
 
 spelling:
 	@${GOPATH}/bin/misspell -error `find cmd/`
@@ -56,10 +57,12 @@ spelling:
 # Builds minio, runs the verifiers then runs the tests.
 check: test
 test: verifiers build
-	@echo "Running all minio testing"
+	@echo "Running unit tests"
 	@go test $(GOFLAGS) .
 	@go test $(GOFLAGS) github.com/minio/minio/cmd...
 	@go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@echo "Verifying build"
+	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 coverage: build
 	@echo "Running all coverage for minio"

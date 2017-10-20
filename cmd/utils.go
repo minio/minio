@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -187,7 +188,7 @@ func dumpRequest(r *http.Request) string {
 
 // isFile - returns whether given path is a file or not.
 func isFile(path string) bool {
-	if fi, err := osStat(path); err == nil {
+	if fi, err := os.Stat(path); err == nil {
 		return fi.Mode().IsRegular()
 	}
 

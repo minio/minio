@@ -29,8 +29,8 @@ type TestRPCBrowserPeerSuite struct {
 }
 
 // Setting up the test suite and starting the Test server.
-func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
-	s.testServer = StartTestBrowserPeerRPCServer(c, s.serverType)
+func (s *TestRPCBrowserPeerSuite) SetUpSuite(t *testing.T) {
+	s.testServer = StartTestBrowserPeerRPCServer(t, s.serverType)
 	s.testAuthConf = authConfig{
 		serverAddr:      s.testServer.Server.Listener.Addr().String(),
 		accessKey:       s.testServer.AccessKey,
@@ -40,10 +40,9 @@ func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
 	}
 }
 
-// No longer used with gocheck, but used in explicit teardown code in
-// each test function. // Called implicitly by "gopkg.in/check.v1"
-// after all tests are run.
-func (s *TestRPCBrowserPeerSuite) TearDownSuite(c *testing.T) {
+// TeatDownSuite - called implicitly by after all tests are run in
+// browser peer rpc suite.
+func (s *TestRPCBrowserPeerSuite) TearDownSuite(t *testing.T) {
 	s.testServer.Stop()
 }
 
@@ -91,9 +90,12 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	// Validate for failure in login handler with previous credentials.
 	rclient = newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rargs := &LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -105,20 +107,18 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 		}
 	}
 
+	token, err = authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Validate for success in loing handled with valid credetnails.
 	rargs = &LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
 	rreply = &LoginRPCReply{}
-	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)
-	if err != nil {
+	if err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply); err != nil {
 		t.Fatal(err)
-	}
-	// Validate all the replied fields after successful login.
-	if rreply.AuthToken == "" {
-		t.Fatalf("Generated token cannot be empty %s", errInvalidToken)
 	}
 }
