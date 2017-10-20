@@ -636,7 +636,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 	etag := data.md5Sum
 	if etag == "" {
 		// Generate random ETag.
-		etag = getMD5Hash([]byte(mustGetUUID()))
+		etag = azureToS3ETag(getMD5Hash([]byte(mustGetUUID())))
 	}
 
 	subPartSize, subPartNumber := int64(azureBlockSize), 1
