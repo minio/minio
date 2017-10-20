@@ -24,7 +24,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -73,6 +75,9 @@ const (
 
 	// The cleanup routine deletes files older than 2 weeks in minio.sys.tmp
 	gcsMultipartExpiry = time.Hour * 24 * 14
+
+	// Project ID key in credentials.json
+	gcsProjectIDKey = "project_id"
 )
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
@@ -257,11 +262,34 @@ type gcsGateway struct {
 
 const googleStorageEndpoint = "storage.googleapis.com"
 
+// Returns projectID from the GOOGLE_APPLICATION_CREDENTIALS file.
+func gcsParseProjectID(credsFile string) (projectID string, err error) {
+	contents, err := ioutil.ReadFile(credsFile)
+	if err != nil {
+		return projectID, err
+	}
+	googleCreds := make(map[string]string)
+	if err = json.Unmarshal(contents, &googleCreds); err != nil {
+		return projectID, err
+	}
+	return googleCreds[gcsProjectIDKey], err
+}
+
 // newGCSGateway returns gcs gatewaylayer
 func newGCSGateway(projectID string) (GatewayLayer, error) {
 	ctx := context.Background()
 
-	err := checkGCSProjectID(ctx, projectID)
+	var err error
+	if projectID == "" {
+		// If project ID is not provided on command line, we figure it out
+		// from the credentials.json file.
+		projectID, err = gcsParseProjectID(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = checkGCSProjectID(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}

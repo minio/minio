@@ -99,13 +99,13 @@ const gcsGatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} PROJECTID
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [PROJECTID]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PROJECTID:
-  GCS project id, there are no defaults this is mandatory.
+  GCS project-id should be provided if GOOGLE_APPLICATION_CREDENTIALS environmental variable is not set.
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -114,6 +114,9 @@ ENVIRONMENT VARIABLES:
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+  GCS credentials file:
+     GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
 
 EXAMPLES:
   1. Start minio gateway server for GCS backend.
@@ -319,7 +322,12 @@ func gcsGatewayMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 
-	if !isValidGCSProjectIDFormat(ctx.Args().First()) {
+	projectID := ctx.Args().First()
+	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		errorIf(errGCSProjectIDNotFound, "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")
+		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+	}
+	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		errorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
