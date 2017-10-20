@@ -213,8 +213,14 @@ func (daemon *SiaDaemon) ListBuckets() (buckets []BucketInfo, e *SiaServiceError
 	}
 
 	var m map[string]int
+	m = make(map[string]int)
 
-	prefix := daemon.SiaRootDir + "/"
+	var prefix string
+	if daemon.SiaRootDir == "" {
+		prefix = ""
+	} else {
+		prefix = daemon.SiaRootDir + "/"
+	}
 
 	for _, sObj := range sObjs {
 		if strings.HasPrefix(sObj.SiaPath, prefix) {
@@ -247,7 +253,11 @@ func (daemon *SiaDaemon) GuaranteeObjectIsInCache(bucket string, objectName stri
 
 	// Is file already in cache?
 	file_cache := filepath.Join(daemon.CacheDir, bucket, objectName)
-	_, serr := os.Stat(file_cache)
+	abs_file_cache, err := filepath.Abs(file_cache)
+	if err != nil {
+		return siaErrorUnknown
+	}
+	_, serr := os.Stat(abs_file_cache)
 	if serr == nil {
 		// File exists in cache
 		daemon.debugmsg("    Object already stored locally.")
@@ -257,12 +267,18 @@ func (daemon *SiaDaemon) GuaranteeObjectIsInCache(bucket string, objectName stri
 	// Object not in cache, must download from Sia.
 	daemon.debugmsg("    Object not stored locally. Fetching from Sia.")
 
-	file_sia := daemon.SiaRootDir + "/" + bucket + "/" + objectName
+	var root string
+	if daemon.SiaRootDir == "" {
+		root = ""
+	} else {
+		root = daemon.SiaRootDir + "/"
+	}
+	file_sia := root + bucket + "/" + objectName
 
 	// Make sure bucket path exists in cache directory
 	os.Mkdir(filepath.Join(daemon.CacheDir, bucket), 0744)
 
-	derr := get(daemon.SiadAddress, "/renter/download/"+file_sia+"?destination="+url.QueryEscape(file_cache))
+	derr := get(daemon.SiadAddress, "/renter/download/"+file_sia+"?destination="+url.QueryEscape(abs_file_cache))
 	if derr != nil {
 		daemon.debugmsg(fmt.Sprintf("    Error: %s", derr))
 		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
