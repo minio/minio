@@ -826,7 +826,7 @@ func TestIgnoreErr(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		if actual := ignoreErr(tc.err); actual != tc.want {
+		if actual := isRoutineNetErr(tc.err); actual != tc.want {
 			t.Errorf("Test case %d: Expected %v but got %v for %v", i+1,
 				tc.want, actual, tc.err)
 		}

@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -89,13 +90,19 @@ type httpListener struct {
 	errorLogFunc           func(error, string, ...interface{}) // function to be called on errors.
 }
 
-// ignoreErr returns true if error is due to a network timeout or
-// io.EOF and false otherwise
-func ignoreErr(err error) bool {
+// isRoutineNetErr returns true if error is due to a network timeout,
+// connect reset or io.EOF and false otherwise
+func isRoutineNetErr(err error) bool {
 	if nErr, ok := err.(*net.OpError); ok {
+		// Check if the error is a tcp connection reset
+		if syscallErr, ok := nErr.Err.(*os.SyscallError); ok {
+			if errno, ok := syscallErr.Err.(syscall.Errno); ok {
+				return errno == syscall.ECONNRESET
+			}
+		}
+		// Check if the error is a timeout
 		return nErr.Timeout()
 	}
-
 	return err == io.EOF
 }
 
@@ -138,7 +145,7 @@ func (listener *httpListener) start() {
 				// speed up loading of a web page. Peek may also fail due to network
 				// saturation on a transport with read timeout set. All other kind of
 				// errors should be logged for further investigation. Thanks @brendanashworth.
-				if !ignoreErr(err) {
+				if !isRoutineNetErr(err) {
 					listener.errorLogFunc(err,
 						"Error in reading from new connection %s at server %s",
 						bufconn.RemoteAddr(), bufconn.LocalAddr())
@@ -182,7 +189,7 @@ func (listener *httpListener) start() {
 			// Peek bytes of maximum length of all HTTP methods.
 			data, err := bufconn.Peek(methodMaxLen)
 			if err != nil {
-				if listener.errorLogFunc != nil {
+				if !isRoutineNetErr(err) && listener.errorLogFunc != nil {
 					listener.errorLogFunc(err,
 						"Error in reading from new TLS connection %s at server %s",
 						bufconn.RemoteAddr(), bufconn.LocalAddr())
