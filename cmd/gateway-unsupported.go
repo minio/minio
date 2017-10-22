@@ -16,7 +16,9 @@
 
 package cmd
 
-import "io"
+import (
+	"github.com/minio/minio/pkg/hash"
+)
 
 type gatewayUnsupported struct{}
 
@@ -70,7 +72,7 @@ func (a gatewayUnsupported) AnonGetBucketInfo(bucket string) (bi BucketInfo, err
 }
 
 // AnonPutObject creates a new object anonymously with the incoming data,
-func (a gatewayUnsupported) AnonPutObject(bucket, object string, size int64, data io.Reader,
-	metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+func (a gatewayUnsupported) AnonPutObject(bucket, object string, data *hash.Reader,
+	metadata map[string]string) (ObjectInfo, error) {
 	return ObjectInfo{}, traceError(NotImplemented{})
 }

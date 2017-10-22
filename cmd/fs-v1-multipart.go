@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -458,7 +458,12 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, NewHashReader(pipeReader, length, "", ""))
+	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	if err != nil {
+		return pi, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, hashReader)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -473,7 +478,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
+func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return pi, err
 	}
@@ -552,10 +557,6 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	// delete.
 	defer fsRemoveFile(fsPartPath)
 
-	if err = data.Verify(); err != nil {
-		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
-	}
-
 	partPath := pathJoin(bucket, object, uploadID, partSuffix)
 	// Lock the part so that another part upload with same part-number gets blocked
 	// while the part is getting appended in the background.
@@ -570,9 +571,10 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
+	md5hex := data.MD5HexString()
+
 	// Save the object part info in `fs.json`.
-	md5Hex := hex.EncodeToString(data.MD5())
-	fsMeta.AddObjectPart(partID, partSuffix, md5Hex, data.Size())
+	fsMeta.AddObjectPart(partID, partSuffix, md5hex, data.Size())
 	if _, err = fsMeta.WriteTo(rwlk); err != nil {
 		partLock.Unlock()
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
@@ -598,7 +600,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime(),
-		ETag:         md5Hex,
+		ETag:         md5hex,
 		Size:         fi.Size(),
 	}, nil
 }

@@ -28,6 +28,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // GetObjectHandler - GET Object
@@ -257,9 +258,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Make sure we hex encode md5sum here.
-	metadata["etag"] = hex.EncodeToString(md5Bytes)
-
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	if objectLock.GetLock(globalOperationTimeout) != nil {
@@ -268,20 +266,30 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	defer objectLock.Unlock()
 
-	var objInfo ObjectInfo
+	var (
+		// Make sure we hex encode md5sum here.
+		md5hex    = hex.EncodeToString(md5Bytes)
+		sha256hex = ""
+		putObject = objectAPI.PutObject
+		reader    = r.Body
+	)
+
 	switch reqAuthType {
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	case authTypeAnonymous:
-		// Create anonymous object.
-		objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, "")
+		putObject = objectAPI.AnonPutObject
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		reader, s3Error := newSignV4ChunkedReader(r)
+		var s3Error APIErrorCode
+		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, "", ""), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -289,27 +297,24 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", ""), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-
-		sha256sum := ""
 		if !skipContentSha256Cksum(r) {
-			sha256sum = getContentSha256Cksum(r)
+			sha256hex = getContentSha256Cksum(r)
 		}
+	}
 
-		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", sha256sum), metadata)
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	objInfo, err := putObject(bucket, object, hashReader, metadata)
 	if err != nil {
 		errorIf(err, "Unable to save an object %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

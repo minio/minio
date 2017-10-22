@@ -20,11 +20,10 @@ import (
 	"io"
 	"net/http"
 
-	"encoding/hex"
-
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // s3ToObjectError converts Minio errors to minio object layer errors.
@@ -84,7 +83,7 @@ func s3ToObjectError(err error, params ...string) error {
 			Object: object,
 		}
 	case "XAmzContentSHA256Mismatch":
-		err = SHA256Mismatch{}
+		err = hash.SHA256Mismatch{}
 	case "NoSuchUpload":
 		err = InvalidUploadID{}
 	case "EntityTooSmall":
@@ -343,17 +342,8 @@ func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	sha256sumBytes, err := hex.DecodeString(data.sha256Sum)
-	if err != nil {
-		return objInfo, s3ToObjectError(traceError(err), bucket, object)
-	}
-	md5sumBytes, err := hex.DecodeString(metadata["etag"])
-	if err != nil {
-		return objInfo, s3ToObjectError(traceError(err), bucket, object)
-	}
-	delete(metadata, "etag")
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
+func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
@@ -472,18 +462,8 @@ func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
-	md5HexBytes, err := hex.DecodeString(data.md5Sum)
-	if err != nil {
-		return pi, s3ToObjectError(traceError(err), bucket, object)
-	}
-
-	sha256sumBytes, err := hex.DecodeString(data.sha256Sum)
-	if err != nil {
-		return pi, err
-	}
-
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), md5HexBytes, sha256sumBytes)
+func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5(), data.SHA256())
 	if err != nil {
 		return pi, s3ToObjectError(traceError(err), bucket, object)
 	}

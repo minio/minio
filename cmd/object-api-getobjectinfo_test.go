@@ -33,7 +33,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
-	_, err = obj.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", NewHashReader(bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil)
+	_, err = obj.PutObject("test-getobjectinfo", "Asia/asiapics.jpg", mustGetHashReader(t, bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}

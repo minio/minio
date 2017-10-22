@@ -27,6 +27,7 @@ import (
 	"strconv"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -287,6 +288,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 // Extract metadata relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Metadata-Directive.
 func getCpObjMetadataFromHeader(header http.Header, defaultMeta map[string]string) (map[string]string, error) {
+	// Make sure to remove saved etag if any, CopyObject calculates a new one.
+	delete(defaultMeta, "etag")
+
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isMetadataReplace(header) {
@@ -389,12 +393,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	defaultMeta := objInfo.UserDefined
-
-	// Make sure to remove saved etag, CopyObject calculates a new one.
-	delete(defaultMeta, "etag")
-
-	newMetadata, err := getCpObjMetadataFromHeader(r.Header, defaultMeta)
+	newMetadata, err := getCpObjMetadataFromHeader(r.Header, objInfo.UserDefined)
 	if err != nil {
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
@@ -520,11 +519,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Make sure we hex encode md5sum here.
-	metadata["etag"] = hex.EncodeToString(md5Bytes)
-
-	sha256sum := ""
-
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	if objectLock.GetLock(globalObjectTimeout) != nil {
@@ -533,7 +527,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	defer objectLock.Unlock()
 
-	var objInfo ObjectInfo
+	var (
+		md5hex    = hex.EncodeToString(md5Bytes)
+		sha256hex = ""
+		reader    = r.Body
+	)
+
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -547,17 +546,15 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		// Create anonymous object.
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		reader, s3Error := newSignV4ChunkedReader(r)
+		var s3Error APIErrorCode
+		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, metadata["etag"], sha256sum), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -565,7 +562,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -573,11 +569,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if !skipContentSha256Cksum(r) {
-			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
+			sha256hex = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	}
+
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Create the object..
+	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create an object. %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -821,9 +824,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	var partInfo PartInfo
-	incomingMD5 := hex.EncodeToString(md5Bytes)
-	sha256sum := ""
+	var (
+		md5hex    = hex.EncodeToString(md5Bytes)
+		sha256hex = ""
+		reader    = r.Body
+	)
+
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -831,23 +837,20 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), getSourceIPAddress(r), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		// No need to verify signature, anonymous request access is already allowed.
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		reader, s3Error := newSignV4ChunkedReader(r)
+		var s3Error APIErrorCode
+		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(reader, size, incomingMD5, sha256sum))
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -855,7 +858,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -864,10 +866,19 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		if !skipContentSha256Cksum(r) {
-			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
+			sha256hex = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	}
+
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
+	if err != nil {
+		errorIf(err, "Unable to create object part.")
+		// Verify if the underlying error is signature mismatch.
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	partInfo, err := objectAPI.PutObjectPart(bucket, object, uploadID, partID, hashReader)
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
 		// Verify if the underlying error is signature mismatch.

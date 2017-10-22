@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +26,7 @@ import (
 	"sort"
 	"syscall"
 
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -361,7 +361,12 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	objInfo, err := fs.PutObject(dstBucket, dstObject, NewHashReader(pipeReader, length, metadata["etag"], ""), metadata)
+	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	if err != nil {
+		return oi, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	objInfo, err := fs.PutObject(dstBucket, dstObject, hashReader, metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -540,7 +545,7 @@ func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (fs fsObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -588,6 +593,8 @@ func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, me
 		return ObjectInfo{}, traceError(errInvalidArgument)
 	}
 
+	metadata["etag"] = data.MD5HexString()
+
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
@@ -617,6 +624,7 @@ func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, me
 	if size := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
+
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
 	bytesWritten, err := fsCreateFile(fsTmpObjPath, data, buf, data.Size())
@@ -637,12 +645,6 @@ func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, me
 	// failure. If PutObject succeeds, then there would be
 	// nothing to delete.
 	defer fsRemoveFile(fsTmpObjPath)
-
-	if err = data.Verify(); err != nil { // verify MD5 and SHA256
-		return ObjectInfo{}, traceError(err)
-	}
-
-	metadata["etag"] = hex.EncodeToString(data.MD5())
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -555,7 +555,12 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, NewHashReader(pipeReader, length, "", ""))
+	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	if err != nil {
+		return pi, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, hashReader)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -572,7 +577,7 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, xl); err != nil {
 		return pi, err
 	}
@@ -651,10 +656,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, traceError(IncompleteBody{})
 	}
 
-	if err = data.Verify(); err != nil {
-		return pi, toObjectErr(err, bucket, object)
-	}
-
 	// post-upload check (write) lock
 	postUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
@@ -693,9 +694,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = UTCNow()
 
+	md5hex := data.MD5HexString()
+
 	// Add the current part.
-	md5Hex := hex.EncodeToString(data.MD5())
-	xlMeta.AddObjectPart(partID, partSuffix, md5Hex, file.Size)
+	xlMeta.AddObjectPart(partID, partSuffix, md5hex, file.Size)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -727,7 +729,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime,
-		ETag:         md5Hex,
+		ETag:         md5hex,
 		Size:         fi.Size,
 	}, nil
 }
@@ -942,6 +944,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["etag"] = s3MD5
+
 	uploadIDPath = path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
 
