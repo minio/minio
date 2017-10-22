@@ -25,23 +25,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-// Test azureToS3ETag.
-func TestAzureToS3ETag(t *testing.T) {
-	tests := []struct {
-		etag     string
-		expected string
-	}{
-		{`"etag"`, `etag-1`},
-		{"etag", "etag-1"},
-	}
-	for i, test := range tests {
-		got := azureToS3ETag(test.etag)
-		if got != test.expected {
-			t.Errorf("test %d: got:%s expected:%s", i+1, got, test.expected)
-		}
-	}
-}
-
 // Test canonical metadata.
 func TestS3MetaToAzureProperties(t *testing.T) {
 	headers := map[string]string{
