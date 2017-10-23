@@ -337,7 +337,7 @@ type PartTooSmall struct {
 }
 
 func (e PartTooSmall) Error() string {
-	return fmt.Sprintf("Part size for %d should be atleast 5MB", e.PartNumber)
+	return fmt.Sprintf("Part size for %d should be at least 5MB", e.PartNumber)
 }
 
 // PartTooBig returned if size of part is bigger than the allowed limit.
