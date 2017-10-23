@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -577,7 +578,7 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, data hash.Reader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, xl); err != nil {
 		return pi, err
 	}
@@ -694,10 +695,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = UTCNow()
 
-	md5hex := data.MD5HexString()
+	etag := hex.EncodeToString(data.Etag())
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, md5hex, file.Size)
+	xlMeta.AddObjectPart(partID, partSuffix, etag, file.Size)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -729,7 +730,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime,
-		ETag:         md5hex,
+		ETag:         etag,
 		Size:         fi.Size,
 	}, nil
 }

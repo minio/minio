@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -747,7 +748,7 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, metadata map[string]string) (ObjectInfo, error) {
+func (l *gcsGateway) PutObject(bucket string, key string, data hash.Reader, metadata map[string]string) (ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -851,11 +852,11 @@ func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID str
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, data *hash.Reader) (PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, data hash.Reader) (PartInfo, error) {
 	if err := l.checkUploadIDExists(bucket, key, uploadID); err != nil {
 		return PartInfo{}, err
 	}
-	etag := data.MD5HexString()
+	etag := hex.EncodeToString(data.Etag())
 	if etag == "" {
 		// Generate random ETag.
 		etag = getMD5Hash([]byte(mustGetUUID()))

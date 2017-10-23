@@ -522,7 +522,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) PutObject(bucket, object string, data hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(metadata)
 	if err != nil {
@@ -618,7 +618,7 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data hash.Reader) (info PartInfo, err error) {
 	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
 		return info, err
 	}
@@ -627,7 +627,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		return info, err
 	}
 
-	etag := data.MD5HexString()
+	etag := hex.EncodeToString(data.Etag())
 	if etag == "" {
 		// Generate random ETag.
 		etag = azureToS3ETag(getMD5Hash([]byte(mustGetUUID())))

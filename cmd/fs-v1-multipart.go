@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -478,7 +479,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data hash.Reader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return pi, err
 	}
@@ -571,10 +572,10 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
-	md5hex := data.MD5HexString()
+	etag := hex.EncodeToString(data.Etag())
 
 	// Save the object part info in `fs.json`.
-	fsMeta.AddObjectPart(partID, partSuffix, md5hex, data.Size())
+	fsMeta.AddObjectPart(partID, partSuffix, etag, data.Size())
 	if _, err = fsMeta.WriteTo(rwlk); err != nil {
 		partLock.Unlock()
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
@@ -600,7 +601,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime(),
-		ETag:         md5hex,
+		ETag:         etag,
 		Size:         fi.Size(),
 	}, nil
 }

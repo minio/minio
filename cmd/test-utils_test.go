@@ -130,7 +130,7 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 		2 // CRLF
 }
 
-func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *hash.Reader {
+func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) hash.Reader {
 	hr, err := hash.NewReader(data, size, md5hex, sha256hex)
 	if err != nil {
 		t.Fatal(err)

@@ -24,8 +24,8 @@ import (
 )
 
 // AnonPutObject creates a new object anonymously with the incoming data,
-func (l *s3Objects) AnonPutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, e error) {
-	oi, err := l.anonClient.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
+func (l *s3Objects) AnonPutObject(bucket string, object string, data hash.Reader, metadata map[string]string) (objInfo ObjectInfo, e error) {
+	oi, err := l.anonClient.PutObject(bucket, object, data, data.Size(), data.MD5, data.SHA256, toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
