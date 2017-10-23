@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -571,7 +572,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
-	md5hex := data.MD5HexString()
+	md5hex := hex.EncodeToString(data.MD5Current())
 
 	// Save the object part info in `fs.json`.
 	fsMeta.AddObjectPart(partID, partSuffix, md5hex, data.Size())

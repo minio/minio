@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -593,8 +594,6 @@ func (fs fsObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		return ObjectInfo{}, traceError(errInvalidArgument)
 	}
 
-	metadata["etag"] = data.MD5HexString()
-
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
@@ -633,6 +632,8 @@ func (fs fsObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		errorIf(err, "Failed to create object %s/%s", bucket, object)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	metadata["etag"] = hex.EncodeToString(data.MD5Current())
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.

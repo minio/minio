@@ -52,13 +52,8 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string) (*Reader, er
 	if err != nil {
 		return nil, err
 	}
-	var (
-		md5Hash    hash.Hash
-		sha256Hash hash.Hash
-	)
-	if len(md5sum) != 0 {
-		md5Hash = md5.New()
-	}
+
+	var sha256Hash hash.Hash
 	if len(sha256sum) != 0 {
 		sha256Hash = sha256.New()
 	}
@@ -68,7 +63,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string) (*Reader, er
 		sha256sum:  sha256sum,
 		src:        io.LimitReader(src, size),
 		size:       size,
-		md5Hash:    md5Hash,
+		md5Hash:    md5.New(),
 		sha256Hash: sha256Hash,
 	}, nil
 }
@@ -76,9 +71,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string) (*Reader, er
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.src.Read(p)
 	if n > 0 {
-		if r.md5Hash != nil {
-			r.md5Hash.Write(p[:n])
-		}
+		r.md5Hash.Write(p[:n])
 		if r.sha256Hash != nil {
 			r.sha256Hash.Write(p[:n])
 		}
@@ -104,6 +97,14 @@ func (r *Reader) MD5() []byte {
 	return r.md5sum
 }
 
+// MD5Current - returns byte md5 value of the current state
+// of the md5 hash after reading the incoming content.
+// NOTE: Calling this function multiple times might yield
+// different results if they are intermixed with Reader.
+func (r *Reader) MD5Current() []byte {
+	return r.md5Hash.Sum(nil)
+}
+
 // SHA256 - returns byte sha256 value
 func (r *Reader) SHA256() []byte {
 	return r.sha256sum
@@ -122,12 +123,12 @@ func (r *Reader) SHA256HexString() string {
 // Verify verifies if the computed MD5 sum and SHA256 sum are
 // equal to the ones specified when creating the Reader.
 func (r *Reader) Verify() error {
-	if r.sha256Hash != nil {
+	if r.sha256Hash != nil && len(r.sha256sum) > 0 {
 		if sum := r.sha256Hash.Sum(nil); !bytes.Equal(r.sha256sum, sum) {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}
 		}
 	}
-	if r.md5Hash != nil {
+	if len(r.md5sum) > 0 {
 		if sum := r.md5Hash.Sum(nil); !bytes.Equal(r.md5sum, sum) {
 			return BadDigest{hex.EncodeToString(r.md5sum), hex.EncodeToString(sum)}
 		}

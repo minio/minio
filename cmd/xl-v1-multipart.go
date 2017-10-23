@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -694,7 +695,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = UTCNow()
 
-	md5hex := data.MD5HexString()
+	md5hex := hex.EncodeToString(data.MD5Current())
 
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, md5hex, file.Size)

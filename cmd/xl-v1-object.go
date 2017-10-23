@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"io"
 	"path"
 	"strconv"
@@ -579,7 +580,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
-	metadata["etag"] = data.MD5HexString()
+	metadata["etag"] = hex.EncodeToString(data.MD5Current())
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
