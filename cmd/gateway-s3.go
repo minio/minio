@@ -342,8 +342,8 @@ func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
+func (l *s3Objects) PutObject(bucket string, object string, data hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5, data.SHA256, toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
@@ -462,8 +462,8 @@ func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5(), data.SHA256())
+func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data hash.Reader) (pi PartInfo, e error) {
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5, data.SHA256)
 	if err != nil {
 		return pi, s3ToObjectError(traceError(err), bucket, object)
 	}

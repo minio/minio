@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"io"
 	"path"
 	"strconv"
@@ -429,7 +430,7 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(bucket string, object string, data hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
@@ -579,7 +580,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
-	metadata["etag"] = data.MD5HexString()
+	metadata["etag"] = hex.EncodeToString(data.Etag())
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {

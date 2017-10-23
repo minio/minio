@@ -34,11 +34,11 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.MD5HexString() != "e2fc714c4727ee9395f324cd2e7f331f" {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
+	if hex.EncodeToString(r.MD5) != "e2fc714c4727ee9395f324cd2e7f331f" {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5))
 	}
-	if r.SHA256HexString() != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
-		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
+	if hex.EncodeToString(r.SHA256) != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
+		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", hex.EncodeToString(r.SHA256))
 	}
 	if r.Size() != 4 {
 		t.Errorf("Expected size 4, got %d", r.Size())
@@ -47,12 +47,12 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(r.MD5(), expectedMD5) {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
+	if !bytes.Equal(r.MD5, expectedMD5) {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5))
 	}
 	expectedSHA256, err := hex.DecodeString("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
-	if !bytes.Equal(r.SHA256(), expectedSHA256) {
-		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
+	if !bytes.Equal(r.SHA256, expectedSHA256) {
+		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", hex.EncodeToString(r.SHA256))
 	}
 }
 
@@ -128,7 +128,10 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		},
 		// Nested hash reader NewReader() will fail.
 		{
-			src:     &Reader{src: bytes.NewReader([]byte("abcd"))},
+			src: func() io.Reader {
+				r, _ := NewReader(bytes.NewReader([]byte("abcd")), 0, "", "")
+				return r
+			}(),
 			size:    4,
 			success: false,
 		},
@@ -147,6 +150,50 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		}
 		if err == nil && !testCase.success {
 			t.Errorf("Test %d: Expected error, but got success", i+1)
+		}
+	}
+}
+
+var gatewayReaderTests = []struct {
+	md5Sum, sha256Sum string
+	size              int64
+}{
+	{md5Sum: "", sha256Sum: "", size: 10},
+	{md5Sum: "", sha256Sum: "", size: 12},
+	{md5Sum: "e2fc714c4727ee9395f324cd2e7f331f", sha256Sum: "", size: 1024},
+	{md5Sum: "", sha256Sum: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", size: 20},
+	{md5Sum: "e2fc714c4727ee9395f324cd2e7f331f", sha256Sum: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", size: 17},
+	{md5Sum: "", sha256Sum: "", size: -1},
+	{md5Sum: "", sha256Sum: "", size: -2},
+}
+
+func TestNewGatewayReader(t *testing.T) {
+	for i, test := range gatewayReaderTests {
+		reader, err := NewGatewayReader(bytes.NewReader(make([]byte, 1024)), test.size, test.md5Sum, test.sha256Sum)
+		if err != nil {
+			t.Fatalf("Test %d: failed to create reader %v", i, err)
+		}
+		if test.size >= 0 && reader.Size() != test.size {
+			t.Errorf("Test %d: invalid size - got: %d want: %d", i, reader.Size(), test.size)
+		}
+		if test.size < 0 && reader.Size() != -1 {
+			t.Errorf("Test %d: invalid size - got: %d want: %d", i, reader.Size(), -1)
+		}
+		if etag := hex.EncodeToString(reader.Etag()); etag != test.md5Sum {
+			t.Errorf("Test %d: invalid etag - got: %s want: %s", i, etag, test.md5Sum)
+		}
+	}
+}
+
+func TestNewGatewayReading(t *testing.T) {
+	for i, test := range gatewayReaderTests {
+		src := bytes.NewReader(make([]byte, 100+int64(i)+test.size))
+		reader, err := NewGatewayReader(src, test.size, test.md5Sum, test.sha256Sum)
+		if err != nil {
+			t.Fatalf("Test %d: failed to create reader %v", i, err)
+		}
+		if n, _ := io.Copy(ioutil.Discard, reader); test.size >= 0 && n != test.size {
+			t.Errorf("Test %d: gateway reader reads wrong number of bytes got: %d want: %d", i, n, test.size)
 		}
 	}
 }

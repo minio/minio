@@ -72,7 +72,7 @@ func (a gatewayUnsupported) AnonGetBucketInfo(bucket string) (bi BucketInfo, err
 }
 
 // AnonPutObject creates a new object anonymously with the incoming data,
-func (a gatewayUnsupported) AnonPutObject(bucket, object string, data *hash.Reader,
+func (a gatewayUnsupported) AnonPutObject(bucket, object string, data hash.Reader,
 	metadata map[string]string) (ObjectInfo, error) {
 	return ObjectInfo{}, traceError(NotImplemented{})
 }
