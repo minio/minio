@@ -317,6 +317,22 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 	return storageDisks, nil
 }
 
+// Wrap disks into retryable disks.
+func initRetryableStorageDisks(disks []StorageAPI, retryUnit, retryCap time.Duration) (outDisks []StorageAPI) {
+	// Initialize the disk into a retryable-disks wrapper.
+	outDisks = make([]StorageAPI, len(disks))
+	for i, disk := range disks {
+		outDisks[i] = &retryStorage{
+			remoteStorage:    disk,
+			maxRetryAttempts: globalStorageRetryThreshold,
+			retryUnit:        retryUnit,
+			retryCap:         retryCap,
+			offlineTimestamp: UTCNow(), // Set timestamp to prevent immediate marking as offline
+		}
+	}
+	return
+}
+
 // Format disks before initialization of object layer.
 func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
 	if len(endpoints) == 0 {
@@ -327,39 +343,22 @@ func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks [
 	}
 
 	// Retryable disks before formatting, we need to have a larger
-	// retry window so that we wait enough amount of time before
-	// the disks come online.
-	retryDisks := make([]StorageAPI, len(storageDisks))
-	for i, storage := range storageDisks {
-		retryDisks[i] = &retryStorage{
-			remoteStorage:    storage,
-			maxRetryAttempts: globalStorageInitRetryThreshold,
-			retryUnit:        time.Second,
-			retryCap:         time.Second * 30, // 30 seconds.
-			offlineTimestamp: UTCNow(),
-		}
-	}
+	// retry window (30 seconds, with once-per-second retries) so
+	// that we wait enough amount of time before the disks come
+	// online.
+	retryDisks := initRetryableStorageDisks(storageDisks, time.Second, time.Second*30)
 
-	// Start retry loop retrying until disks are formatted properly, until we have reached
-	// a conditional quorum of formatted disks.
+	// Start retry loop retrying until disks are formatted
+	// properly, until we have reached a conditional quorum of
+	// formatted disks.
 	err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize the disk into a formatted disks wrapper.
-	formattedDisks = make([]StorageAPI, len(storageDisks))
-	for i, storage := range storageDisks {
-		// After formatting is done we need a smaller time
-		// window and lower retry value before formatting.
-		formattedDisks[i] = &retryStorage{
-			remoteStorage:    storage,
-			maxRetryAttempts: globalStorageRetryThreshold,
-			retryUnit:        time.Millisecond,
-			retryCap:         time.Millisecond * 5, // 5 milliseconds.
-			offlineTimestamp: UTCNow(),             // Set timestamp to prevent immediate marking as offline
-		}
-	}
+	// Initialize the disk into a formatted disks wrapper. This
+	// uses a shorter retry window (5ms with once-per-ms retries)
+	formattedDisks = initRetryableStorageDisks(storageDisks, time.Millisecond, time.Millisecond*5)
 
 	// Success.
 	return formattedDisks, nil

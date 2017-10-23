@@ -838,15 +838,19 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Wrap into retrying disks
+	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
+		time.Millisecond, time.Millisecond*5)
+
 	// Heal format.json on available storage.
-	err = healFormatXL(bootstrapDisks)
+	err = healFormatXL(retryingDisks)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Instantiate new object layer with newly formatted storage.
-	newObjectAPI, err := newXLObjects(bootstrapDisks)
+	newObjectAPI, err := newXLObjects(retryingDisks)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
