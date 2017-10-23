@@ -162,7 +162,7 @@ ENVIRONMENT VARIABLES: (Default values in parenthesis)
      MINIO_SECRET_KEY: Sia password
 
   SIA_DAEMON_ADDR:           The address and port of your Sia Daemon instance. (127.0.0.1:9980)
-  SIA_CACHE_DIR:             The name of the Sia cache directory. (.sia_cache)
+  SIA_TEMP_DIR:             The name of the local Sia temporary storage directory. (.sia_temp)
   SIA_ROOT_DIR:		     The root directory on Sia where all buckets and objects will be stored. ()
 
 EXAMPLES:

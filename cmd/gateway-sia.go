@@ -37,7 +37,7 @@ import (
 type siaObjects struct {
 	gatewayUnsupported
 	Address  string // Address and port of Sia Daemon.
-	CacheDir string // Temporary storage location for file transfers.
+	TempDir string // Temporary storage location for file transfers.
 	RootDir  string // Root directory to store files on Sia.
 	password string // Sia password for uploading content in authenticated manner.
 }
@@ -217,7 +217,7 @@ func get(addr, call, apiPassword string) error {
 func newSiaGateway() (GatewayLayer, error) {
 	sia := &siaObjects{
 		Address:  os.Getenv("SIA_DAEMON_ADDR"),
-		CacheDir: os.Getenv("SIA_CACHE_DIR"),
+		TempDir: os.Getenv("SIA_TEMP_DIR"),
 		RootDir:  os.Getenv("SIA_ROOT_DIR"),
 		password: os.Getenv("MINIO_SECRET_KEY"),
 	}
@@ -227,10 +227,15 @@ func newSiaGateway() (GatewayLayer, error) {
 		sia.Address = "127.0.0.1:9980"
 	}
 
+	// If local Sia temp directory not specified, default to:
+	if sia.TempDir == "" {
+		sia.TempDir = ".sia_temp"
+	}
+
 	fmt.Printf("\nSia Gateway Configuration:\n")
 	fmt.Printf("  Sia Daemon API Address: %s\n", sia.Address)
 	fmt.Printf("  Sia Root Directory: %s\n", sia.RootDir)
-	fmt.Printf("  Sia Cache Directory: %s\n", sia.CacheDir)
+	fmt.Printf("  Sia Temp Directory: %s\n", sia.TempDir)
 	return sia, nil
 }
 
@@ -337,7 +342,7 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 		return traceError(ObjectNameInvalid{bucket, object})
 	}
 
-	dstFile, err := filepath.Abs( pathJoin(s.CacheDir, mustGetUUID()) )
+	dstFile, err := filepath.Abs( pathJoin(s.TempDir, mustGetUUID()) )
 	if err != nil {
 		return err
 	}
@@ -440,7 +445,7 @@ func (s *siaObjects) PutObject(bucket string, object string, data *HashReader, m
 	buf := make([]byte, int(bufSize))
 
 	var srcFile string
-	if srcFile, err = filepath.Abs( pathJoin(s.CacheDir, mustGetUUID()) ); err != nil {
+	if srcFile, err = filepath.Abs( pathJoin(s.TempDir, mustGetUUID()) ); err != nil {
 		return objInfo, err
 	}
 	defer fsRemoveFile(srcFile)
@@ -483,7 +488,7 @@ type siaObjectInfo struct {
 
 // isValidObjectName returns whether or not the objectName provided is suitable for Sia
 func (s *siaObjects) isValidObjectName(objectName string) bool {
-	reg, _ := regexp.Compile("[^a-zA-Z0-9., _+-]+")
+	reg, _ := regexp.Compile("[^a-zA-Z0-9., _\\/+-]+")
 	return objectName == reg.ReplaceAllString(objectName, "")
 }
 
