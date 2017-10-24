@@ -381,9 +381,9 @@ func TestServiceSetCreds(t *testing.T) {
 	for i, testCase := range testCases {
 		// Set or unset environement keys
 		if !testCase.EnvKeysSet {
-			globalIsEnvCreds = false
+			globalEnvConfig.Credential = nil
 		} else {
-			globalIsEnvCreds = true
+			globalEnvConfig.Credential = &credential{}
 		}
 
 		// Construct setCreds request body

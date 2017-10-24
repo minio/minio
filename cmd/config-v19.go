@@ -163,24 +163,10 @@ func newServerConfigV19() *serverConfigV19 {
 	return srvCfg
 }
 
-// newConfig - initialize a new server config, saves env parameters if
-// found, otherwise use default parameters
+// newConfig - initialize a new server config
 func newConfig() error {
 	// Initialize server config.
 	srvCfg := newServerConfigV19()
-
-	// If env is set override the credentials from config file.
-	if globalIsEnvCreds {
-		srvCfg.SetCredential(globalActiveCred)
-	}
-
-	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(globalIsBrowserEnabled)
-	}
-
-	if globalIsEnvRegion {
-		srvCfg.SetRegion(globalServerRegion)
-	}
 
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
@@ -244,20 +230,13 @@ func checkDupJSONKeys(json string) error {
 	return doCheckDupJSONKeys(rootKey, config)
 }
 
-// getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfigV19, error) {
-	srvCfg := &serverConfigV19{
-		Region:  globalMinioDefaultRegion,
-		Browser: true,
-	}
+// getValidConfig - returns server configuration
+func getConfig() (*serverConfigV19, error) {
+	srvCfg := &serverConfigV19{}
 
 	configFile := getConfigFile()
 	if _, err := quick.Load(configFile, srvCfg); err != nil {
 		return nil, err
-	}
-
-	if srvCfg.Version != v19 {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v19, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys
@@ -269,61 +248,43 @@ func getValidConfig() (*serverConfigV19, error) {
 		return nil, err
 	}
 
-	// Validate credential fields only when
-	// they are not set via the environment
-
-	// Error out if global is env credential is not set and config has invalid credential
-	if !globalIsEnvCreds && !srvCfg.Credential.IsValid() {
-		return nil, errors.New("invalid credential in config file " + configFile)
-	}
-
-	// Validate logger field
-	if err = srvCfg.Logger.Validate(); err != nil {
-		return nil, err
-	}
-
-	// Validate notify field
-	if err = srvCfg.Notify.Validate(); err != nil {
-		return nil, err
-	}
-
 	return srvCfg, nil
+}
+
+func validateConfig(srvCfg *serverConfigV19) error {
+	if srvCfg.Version != v19 {
+		return fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v19, srvCfg.Version)
+	}
+
+	if !srvCfg.Credential.IsValid() {
+		return errors.New("invalid credential")
+	}
+
+	if err := srvCfg.Logger.Validate(); err != nil {
+		return err
+	}
+
+	return srvCfg.Notify.Validate()
 }
 
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
 func loadConfig() error {
-	srvCfg, err := getValidConfig()
+	srvCfg, err := getConfig()
 	if err != nil {
 		return err
 	}
 
-	// If env is set override the credentials from config file.
-	if globalIsEnvCreds {
-		srvCfg.SetCredential(globalActiveCred)
-	}
+	envConfigApply(srvCfg, globalEnvConfig)
 
-	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(globalIsBrowserEnabled)
-	}
-
-	if globalIsEnvRegion {
-		srvCfg.SetRegion(globalServerRegion)
+	if err := validateConfig(srvCfg); err != nil {
+		return err
 	}
 
 	// hold the mutex lock before a new config is assigned.
 	serverConfigMu.Lock()
 	serverConfig = srvCfg
-	if !globalIsEnvCreds {
-		globalActiveCred = serverConfig.GetCredential()
-	}
-	if !globalIsEnvBrowser {
-		globalIsBrowserEnabled = serverConfig.GetBrowser()
-	}
-	if !globalIsEnvRegion {
-		globalServerRegion = serverConfig.GetRegion()
-	}
-	serverConfigMu.Unlock()
+	defer serverConfigMu.Unlock()
 
 	return nil
 }

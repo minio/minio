@@ -147,7 +147,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 
 	// Avoid setting new credentials when they are already passed
 	// by the environment.
-	if globalIsEnvCreds {
+	if globalEnvConfig.Credential != nil {
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
@@ -988,7 +988,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if globalIsEnvCreds {
+	if globalEnvConfig.Credential != nil {
 		creds := serverConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||
 			config.Credential.SecretKey != creds.SecretKey {

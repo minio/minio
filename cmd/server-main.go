@@ -110,18 +110,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 }
 
-func serverHandleEnvVars() {
-	// Handle common environment variables.
-	handleCommonEnvVars()
-
-	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
-		// region Envs are set globally.
-		globalIsEnvRegion = true
-		globalServerRegion = serverRegion
-	}
-
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -138,7 +126,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleCmdArgs(ctx)
 
 	// Handle all server environment vars.
-	serverHandleEnvVars()
+	handleCommonEnvVars()
 
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")

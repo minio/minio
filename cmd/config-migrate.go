@@ -142,7 +142,7 @@ func migrateConfig() error {
 		}
 		fallthrough
 	case "18":
-		// Migrate version '17' to '18'.
+		// Migrate version '18' to '19'.
 		if err = migrateV18ToV19(); err != nil {
 			return err
 		}
