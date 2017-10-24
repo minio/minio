@@ -5,8 +5,8 @@ Minio Gateway adds Amazon S3 compatibility to Microsoft Azure Blob Storage.
 ### Using Docker
 ```
 docker run -p 9000:9000 --name azure-s3 \
- -e "MINIO_ACCESS_KEY=azureaccountname" \
- -e "MINIO_SECRET_KEY=azureaccountkey" \
+ -e "MINIO_ACCESS_KEY=azurestorageaccountname" \
+ -e "MINIO_SECRET_KEY=azurestorageaccountkey" \
  minio/minio gateway azure
 ```
 

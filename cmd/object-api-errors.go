@@ -93,21 +93,12 @@ func toObjectErr(err error, params ...string) error {
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}
-	case errContentSHA256Mismatch:
-		err = SHA256Mismatch{}
 	}
 	if ok {
 		e.e = err
 		return e
 	}
 	return err
-}
-
-// SHA256Mismatch - when content sha256 does not match with what was sent from client.
-type SHA256Mismatch struct{}
-
-func (e SHA256Mismatch) Error() string {
-	return "sha256 computed does not match with what is expected"
 }
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
@@ -198,16 +189,6 @@ type BucketExists GenericError
 
 func (e BucketExists) Error() string {
 	return "Bucket exists: " + e.Bucket
-}
-
-// BadDigest - Content-MD5 you specified did not match what we received.
-type BadDigest struct {
-	ExpectedMD5   string
-	CalculatedMD5 string
-}
-
-func (e BadDigest) Error() string {
-	return "Bad digest: Expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
 }
 
 // UnsupportedDelimiter - unsupported delimiter.

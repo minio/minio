@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/hash"
 )
 
 func errResponse(code string) minio.ErrorResponse {
@@ -75,7 +76,7 @@ func TestS3ToObjectError(t *testing.T) {
 		},
 		{
 			inputErr:    errResponse("XAmzContentSHA256Mismatch"),
-			expectedErr: SHA256Mismatch{},
+			expectedErr: hash.SHA256Mismatch{},
 		},
 		{
 			inputErr:    errResponse("EntityTooSmall"),

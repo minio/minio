@@ -491,7 +491,7 @@ func TestHealObjectXL(t *testing.T) {
 
 	var uploadedParts []completePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(bytes.NewReader(data), int64(len(data)), "", ""))
+		pInfo, err1 := obj.PutObjectPart(bucket, object, uploadID, partID, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""))
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}

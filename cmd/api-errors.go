@@ -19,6 +19,8 @@ package cmd
 import (
 	"encoding/xml"
 	"net/http"
+
+	"github.com/minio/minio/pkg/hash"
 )
 
 // APIError structure
@@ -681,8 +683,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	switch err {
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
-	case errContentSHA256Mismatch:
-		apiErr = ErrContentSHA256Mismatch
 	case errDataTooLarge:
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
@@ -701,7 +701,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	switch err.(type) {
 	case StorageFull:
 		apiErr = ErrStorageFull
-	case BadDigest:
+	case hash.BadDigest:
 		apiErr = ErrBadDigest
 	case AllAccessDisabled:
 		apiErr = ErrAllAccessDisabled
@@ -747,7 +747,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooSmall
 	case SignatureDoesNotMatch:
 		apiErr = ErrSignatureDoesNotMatch
-	case SHA256Mismatch:
+	case hash.SHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
 	case ObjectTooLarge:
 		apiErr = ErrEntityTooLarge

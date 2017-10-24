@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 
@@ -177,5 +179,32 @@ func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
 
 	if got := fromMinioClientListBucketResultToV2Info("testbucket", listBucketResult); !reflect.DeepEqual(got, listBucketV2Info) {
 		t.Errorf("fromMinioClientListBucketResultToV2Info() = %v, want %v", got, listBucketV2Info)
+	}
+}
+
+// Test for gcsParseProjectID
+func TestGCSParseProjectID(t *testing.T) {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	contents := `
+{
+  "type": "service_account",
+  "project_id": "miniotesting"
+}
+`
+	f.WriteString(contents)
+	projectID, err := gcsParseProjectID(f.Name())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if projectID != "miniotesting" {
+		t.Errorf(`Expected projectID value to be "miniotesting"`)
 	}
 }

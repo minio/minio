@@ -53,6 +53,7 @@ import (
 	"github.com/fatih/color"
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio/pkg/hash"
 )
 
 // Tests should initNSLock only once.
@@ -127,6 +128,14 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 		2 + // CRLF
 		chunkDataSize +
 		2 // CRLF
+}
+
+func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *hash.Reader {
+	hr, err := hash.NewReader(data, size, md5hex, sha256hex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hr
 }
 
 // calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)
@@ -1975,6 +1984,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
+
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 

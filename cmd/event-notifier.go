@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio/pkg/hash"
 )
 
 const (
@@ -377,18 +378,24 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errNoSuchNotifications
+			return nil, traceError(errNoSuchNotifications)
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
 
+	// if `notifications.xml` is empty we should return NoSuchNotifications.
+	if buffer.Len() == 0 {
+		return nil, traceError(errNoSuchNotifications)
+	}
+
 	// Unmarshal notification bytes.
 	notificationConfigBytes := buffer.Bytes()
 	notificationCfg := &notificationConfig{}
-	if err = xml.Unmarshal(notificationConfigBytes, &notificationCfg); err != nil {
-		return nil, err
+	// Unmarshal notification bytes only if we read data.
+	if err = xml.Unmarshal(notificationConfigBytes, notificationCfg); err != nil {
+		return nil, traceError(err)
 	}
 
 	// Return success.
@@ -418,23 +425,27 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	var buffer bytes.Buffer
 	err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1, &buffer)
 	if err != nil {
-		// 'notification.xml' not found return
+		// 'listener.json' not found return
 		// 'errNoSuchNotifications'.  This is default when no
-		// bucket listeners are found on the bucket.
-		if isErrObjectNotFound(err) {
-			return nil, errNoSuchNotifications
+		// bucket listeners are found on the bucket
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
+			return nil, traceError(errNoSuchNotifications)
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
 
-	// Unmarshal notification bytes.
+	// if `listener.json` is empty we should return NoSuchNotifications.
+	if buffer.Len() == 0 {
+		return nil, traceError(errNoSuchNotifications)
+	}
+
 	var lCfg []listenerConfig
 	lConfigBytes := buffer.Bytes()
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
 		errorIf(err, "Unable to unmarshal listener config from JSON.")
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	// Return success.
@@ -459,8 +470,12 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	defer objLock.Unlock()
 
 	// write object to path
-	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, ncPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
+	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
+	if err != nil {
+		errorIf(err, "Unable to write bucket notification configuration.")
+		return err
+	}
+	_, err = obj.PutObject(minioMetaBucket, ncPath, hashReader, nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		return err
@@ -486,12 +501,19 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	defer objLock.Unlock()
 
 	// write object to path
-	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, lcPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
+	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		return err
 	}
-	return err
+
+	// write object to path
+	_, err = obj.PutObject(minioMetaBucket, lcPath, hashReader, nil)
+	if err != nil {
+		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		return err
+	}
+	return nil
 }
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
