@@ -50,6 +50,9 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if !bytes.Equal(r.MD5(), expectedMD5) {
 		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
 	}
+	if !bytes.Equal(r.MD5Current(), expectedMD5) {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5Current()))
+	}
 	expectedSHA256, err := hex.DecodeString("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
 	if !bytes.Equal(r.SHA256(), expectedSHA256) {
 		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
