@@ -20,11 +20,84 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/pkg/hash"
 )
+
+const (
+	s3Backend = "s3"
+)
+
+func init() {
+	const s3GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENDPOINT:
+  S3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of S3 storage.
+     MINIO_SECRET_KEY: Password or secret key of S3 storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for AWS S3 backend.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for S3 backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+      $ {{.HelpName}} https://play.minio.io:9000
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               s3Backend,
+		Usage:              "Amazon Simple Storage Service (S3).",
+		Action:             s3GatewayMain,
+		CustomHelpTemplate: s3GatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway s3' command line.
+func s3GatewayMain(ctx *cli.Context) {
+	// Validate gateway arguments.
+	host := ctx.Args().First()
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+
+	startGateway(ctx, &S3Gateway{host})
+}
+
+// S3Gateway implements Gateway.
+type S3Gateway struct {
+	host string
+}
+
+// Name implements Gateway interface.
+func (g *S3Gateway) Name() string {
+	return s3Backend
+}
+
+// NewGatewayLayer returns s3 gatewaylayer.
+func (g *S3Gateway) NewGatewayLayer() (GatewayLayer, error) {
+	return newS3GatewayLayer(g.host)
+}
 
 // s3ToObjectError converts Minio errors to minio object layer errors.
 func s3ToObjectError(err error, params ...string) error {
@@ -101,8 +174,8 @@ type s3Objects struct {
 	anonClient *minio.Core
 }
 
-// newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(host string) (GatewayLayer, error) {
+// newS3GatewayLayer returns s3 gatewaylayer
+func newS3GatewayLayer(host string) (GatewayLayer, error) {
 	var err error
 	var endpoint string
 	var secure = true
