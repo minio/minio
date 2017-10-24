@@ -567,6 +567,12 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 
 // writeErrorRespone writes error headers
 func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL) {
+	switch errorCode {
+	case ErrSlowDown, ErrServerNotInitialized, ErrReadQuorum, ErrWriteQuorum:
+		// Set retry-after header to indicate user-agents to retry request after 120secs.
+		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
+		w.Header().Set("Retry-After", "120")
+	}
 	apiError := getAPIError(errorCode)
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(apiError, reqURL.Path)

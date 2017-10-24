@@ -85,6 +85,8 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 
 	// List of some generic handlers which are applied for all incoming requests.
 	var handlerFns = []HandlerFunc{
+		// Ratelimit the incoming requests using a token bucket algorithm
+		setRateLimitHandler,
 		// Validate all the incoming paths.
 		setPathValidityHandler,
 		// Network statistics
