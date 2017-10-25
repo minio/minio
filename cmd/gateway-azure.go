@@ -101,7 +101,7 @@ func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata
 		case k == "Content-Length":
 			// assume this doesn't fail
 			props.ContentLength, _ = strconv.ParseInt(v, 10, 64)
-		case k == "Content-MD5":
+		case k == "Content-Md5":
 			props.ContentMD5 = v
 		case k == "Content-Type":
 			props.ContentType = v
