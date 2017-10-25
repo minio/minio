@@ -16,7 +16,9 @@
 
 package cmd
 
-import router "github.com/gorilla/mux"
+import (
+	router "github.com/gorilla/mux"
+)
 
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
@@ -39,63 +41,63 @@ func registerAPIRouter(mux *router.Router) {
 	/// Object operations
 
 	// HeadObject
-	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(api.HeadObjectHandler)
+	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.HeadObjectHandler))
 	// CopyObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 	// PutObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 	// ListObjectPxarts
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.ListObjectPartsHandler)).Queries("uploadId", "{uploadId:.*}")
 	// CompleteMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.CompleteMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
 	// NewMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.NewMultipartUploadHandler)).Queries("uploads", "")
 	// AbortMultipartUpload
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.AbortMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
 	// GetObject
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
+	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectHandler))
 	// CopyObject
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
+	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectHandler))
 	// PutObject
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
+	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectHandler))
 	// DeleteObject
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
+	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.DeleteObjectHandler))
 
 	/// Bucket operations
 
 	// GetBucketLocation
-	bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
 	// GetBucketPolicy
-	bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
 	// GetBucketNotification
-	bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketNotificationHandler)).Queries("notification", "")
 	// ListenBucketNotification
-	bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListenBucketNotificationHandler)).Queries("events", "{events:.*}")
 	// ListMultipartUploads
-	bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
 	// ListObjectsV2
-	bucket.Methods("GET").HandlerFunc(api.ListObjectsV2Handler).Queries("list-type", "2")
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
 	// ListObjectsV1 (Legacy)
-	bucket.Methods("GET").HandlerFunc(api.ListObjectsV1Handler)
+	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
 	// PutBucketPolicy
-	bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
 	// PutBucketNotification
-	bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
+	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
 	// PutBucket
-	bucket.Methods("PUT").HandlerFunc(api.PutBucketHandler)
+	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketHandler))
 	// HeadBucket
-	bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+	bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
 	// PostPolicy
-	bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(api.PostPolicyBucketHandler)
+	bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
 	// DeleteMultipleObjects
-	bucket.Methods("POST").HandlerFunc(api.DeleteMultipleObjectsHandler)
+	bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler))
 	// DeleteBucketPolicy
-	bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
+	bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
 	// DeleteBucket
-	bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketHandler)
+	bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
 
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
+	apiRouter.Methods("GET").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
 }
