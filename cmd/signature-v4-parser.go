@@ -20,6 +20,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // credentialHeader data type represents structured form of Credential
@@ -57,7 +59,7 @@ func parseCredentialHeader(credElement string) (ch credentialHeader, aec APIErro
 	if len(credElements) != 5 {
 		return ch, ErrCredMalformed
 	}
-	if !isAccessKeyValid(credElements[0]) {
+	if !auth.IsAccessKeyValid(credElements[0]) {
 		return ch, ErrInvalidAccessKeyID
 	}
 	// Save access key id.

@@ -16,7 +16,11 @@
 
 package cmd
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/minio/minio/pkg/auth"
+)
 
 /////////////////// Config V1 ///////////////////
 type configV1 struct {
@@ -92,8 +96,8 @@ type configV3 struct {
 	Addr string `json:"address"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV3 `json:"logger"`
@@ -122,8 +126,8 @@ type configV4 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV4 `json:"logger"`
@@ -179,8 +183,8 @@ type configV5 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV5 `json:"logger"`
@@ -209,8 +213,8 @@ type configV6 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV6 `json:"logger"`
@@ -246,8 +250,8 @@ type serverConfigV7 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV6 `json:"logger"`
@@ -265,8 +269,8 @@ type serverConfigV8 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV6 `json:"logger"`
@@ -284,8 +288,8 @@ type serverConfigV9 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV6 `json:"logger"`
@@ -310,8 +314,8 @@ type serverConfigV10 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV7 `json:"logger"`
@@ -338,8 +342,8 @@ type serverConfigV11 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV7 `json:"logger"`
@@ -354,8 +358,8 @@ type serverConfigV12 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger loggerV7 `json:"logger"`
@@ -370,8 +374,8 @@ type serverConfigV13 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -386,9 +390,9 @@ type serverConfigV14 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -403,9 +407,9 @@ type serverConfigV15 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -420,9 +424,9 @@ type serverConfigV16 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -439,9 +443,9 @@ type serverConfigV17 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -458,9 +462,9 @@ type serverConfigV18 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`

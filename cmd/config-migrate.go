@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -190,7 +191,7 @@ func migrateV2ToV3() error {
 		return nil
 	}
 
-	cred, err := createCredential(cv2.Credentials.AccessKey, cv2.Credentials.SecretKey)
+	cred, err := auth.CreateCredentials(cv2.Credentials.AccessKey, cv2.Credentials.SecretKey)
 	if err != nil {
 		return fmt.Errorf("Invalid credential in V2 configuration file. %v", err)
 	}

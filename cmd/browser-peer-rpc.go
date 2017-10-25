@@ -21,6 +21,8 @@ import (
 	"path"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // SetAuthPeerArgs - Arguments collection for SetAuth RPC call
@@ -29,7 +31,7 @@ type SetAuthPeerArgs struct {
 	AuthRPCArgs
 
 	// New credentials that receiving peer should update to.
-	Creds credential
+	Creds auth.Credentials
 }
 
 // SetAuthPeer - Update to new credentials sent from a peer Minio
@@ -64,7 +66,7 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 }
 
 // Sends SetAuthPeer RPCs to all peers in the Minio cluster
-func updateCredsOnPeers(creds credential) map[string]error {
+func updateCredsOnPeers(creds auth.Credentials) map[string]error {
 	// Get list of peer addresses (from globalS3Peers)
 	peers := []string{}
 	for _, p := range globalS3Peers {

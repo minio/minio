@@ -24,6 +24,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jwtreq "github.com/dgrijalva/jwt-go/request"
+	"github.com/minio/minio/pkg/auth"
 )
 
 const (
@@ -47,7 +48,7 @@ var (
 )
 
 func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
-	passedCredential, err := createCredential(accessKey, secretKey)
+	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
 	if err != nil {
 		return "", err
 	}

@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 func testAuthenticate(authType string, t *testing.T) {
@@ -28,11 +30,7 @@ func testAuthenticate(authType string, t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 	defer os.RemoveAll(testPath)
-	// Create access and secret keys in length, 300 and 600
-	cred, err := getNewCredential(300, 600)
-	if err != nil {
-		t.Fatalf("unable to get new credential, %v", err)
-	}
+	cred := auth.MustGetNewCredentials()
 	serverConfig.SetCredential(cred)
 
 	// Define test cases.
@@ -42,9 +40,9 @@ func testAuthenticate(authType string, t *testing.T) {
 		expectedErr error
 	}{
 		// Access key (less than 5 chrs) too small.
-		{"user", cred.SecretKey, errInvalidAccessKeyLength},
+		{"user", cred.SecretKey, auth.ErrInvalidAccessKeyLength},
 		// Secret key (less than 8 chrs) too small.
-		{cred.AccessKey, "pass", errInvalidSecretKeyLength},
+		{cred.AccessKey, "pass", auth.ErrInvalidSecretKeyLength},
 		// Authentication error.
 		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.
