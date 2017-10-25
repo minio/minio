@@ -1060,7 +1060,6 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 	if err != nil {
 		return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(err), bucket)
 	}
-
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	for _, r := range rules {
 		if r.Entity != storage.AllUsers || r.Role == storage.RoleOwner {
@@ -1073,7 +1072,10 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyWriteOnly, bucket, "")
 		}
 	}
-
+	// Return NoSuchBucketPolicy error, when policy is not set
+	if len(policyInfo.Statements) == 0 {
+		return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(PolicyNotFound{}), bucket)
+	}
 	return policyInfo, nil
 }
 
