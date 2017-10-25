@@ -21,7 +21,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+
+	httptracer "github.com/minio/minio/pkg/handlers"
 )
 
 // Parses location constraint from the incoming reader.
@@ -239,4 +242,20 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 	}
 
 	return filePart, fileName, fileSize, formValues, nil
+}
+
+// Log headers and body.
+func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
+	if !globalHTTPTrace {
+		return f
+	}
+	return httptracer.TraceReqHandlerFunc(f, os.Stdout, true)
+}
+
+// Log only the headers.
+func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
+	if !globalHTTPTrace {
+		return f
+	}
+	return httptracer.TraceReqHandlerFunc(f, os.Stdout, false)
 }

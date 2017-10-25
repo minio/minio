@@ -427,7 +427,6 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		// invalid/unsupported signatures.
 		setAuthHandler,
 		// Add new handlers here.
-
 	}
 
 	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
