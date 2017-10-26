@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -82,6 +83,26 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 		setConfigDir(configDirAbs)
 	}
+
+	// Set address.
+	{
+		address := ctx.String("address")
+		if address == "" {
+			address = ctx.GlobalString("address")
+		}
+
+		var err error
+		globalServerHost, err = parseServerHost(address)
+		fatalIf(err, "Invalid address ‘%v’ in command line argument.", address)
+
+		if runtime.GOOS == "darwin" {
+			// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+			// to IPv6 address ie minio will start listening on IPv6 address whereas another
+			// (non-)minio process is listening on IPv4 of given port.
+			// To avoid this error sutiation we check for port availability only for macOS.
+			fatalIf(checkPortAvailability(globalServerHost.PortNumber.String()), "Port %v already in use", globalServerHost.PortNumber)
+		}
+	}
 }
 
 func handleCommonEnvVars() {
@@ -114,6 +135,12 @@ func handleCommonEnvVars() {
 		// if browser is turned off or on.
 		globalIsEnvBrowser = true
 		globalIsBrowserEnabled = bool(browserFlag)
+	}
+
+	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
+		// region Envs are set globally.
+		globalIsEnvRegion = true
+		globalServerRegion = serverRegion
 	}
 
 	globalHTTPTrace = os.Getenv("MINIO_HTTP_TRACE") != ""

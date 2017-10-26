@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"regexp"
@@ -42,9 +41,6 @@ import (
 )
 
 var (
-	// Project ID format is not valid.
-	errGCSInvalidProjectID = errors.New("GCS project id is either empty or invalid")
-
 	// Project ID not found
 	errGCSProjectIDNotFound = errors.New("unknown project id")
 )
@@ -125,21 +121,6 @@ EXAMPLES:
 	})
 }
 
-// Handler for 'minio gateway gcs' command line.
-func gcsGatewayMain(ctx *cli.Context) {
-	projectID := ctx.Args().First()
-	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		errorIf(errGCSProjectIDNotFound, "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")
-		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
-	}
-	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
-		errorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
-		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
-	}
-
-	startGateway(ctx, &GCSGateway{projectID})
-}
-
 // GCSGateway implements Gateway.
 type GCSGateway struct {
 	projectID string
@@ -154,6 +135,63 @@ func (g *GCSGateway) Name() string {
 func (g *GCSGateway) NewGatewayLayer() (GatewayLayer, error) {
 	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 	return newGCSGatewayLayer(g.projectID)
+}
+
+// Handler for 'minio gateway gcs' command line.
+func gcsGatewayMain(ctx *cli.Context) {
+	if len(ctx.Args()) > 1 {
+		log.Println("too many arguments")
+		cli.ShowCommandHelpAndExit(ctx, gcsBackend, 1)
+	}
+
+	if ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, gcsBackend, 1)
+	}
+
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
+
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
+
+	var projectID string
+	if len(ctx.Args()) == 1 {
+		projectID = strings.TrimSpace(ctx.Args().First())
+		if !isValidGCSProjectIDFormat(projectID) {
+			fatalIf(errors.New("project ID format error"), "Invalid command line arguments %v", ctx.Args())
+		}
+	}
+
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	if projectID == "" {
+		// Get project ID from configuration file set in GOOGLE_APPLICATION_CREDENTIALS environment variable.
+		credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		if credFile == "" {
+			fatalIf(errors.New("empty filepath"), "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")
+		}
+
+		file, err := os.Open(credFile)
+		if err != nil {
+			fatalIf(err, "unable to open GOOGLE_APPLICATION_CREDENTIALS file %v", credFile)
+		}
+		googleCreds := make(map[string]string)
+		if err = json.NewDecoder(file).Decode(&googleCreds); err != nil {
+			fatalIf(err, "unable to parse JSON in open GOOGLE_APPLICATION_CREDENTIALS file %v", credFile)
+		}
+		file.Close()
+
+		projectID = googleCreds[gcsProjectIDKey]
+		if !isValidGCSProjectIDFormat(projectID) {
+			fatalIf(errors.New("project ID format error"), "invalid value of JSON field %v in GOOGLE_APPLICATION_CREDENTIALS file %v", gcsProjectIDKey, credFile)
+		}
+	}
+
+	startGateway(&GCSGateway{projectID}, quietFlag)
 }
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
@@ -338,34 +376,11 @@ type gcsGateway struct {
 
 const googleStorageEndpoint = "storage.googleapis.com"
 
-// Returns projectID from the GOOGLE_APPLICATION_CREDENTIALS file.
-func gcsParseProjectID(credsFile string) (projectID string, err error) {
-	contents, err := ioutil.ReadFile(credsFile)
-	if err != nil {
-		return projectID, err
-	}
-	googleCreds := make(map[string]string)
-	if err = json.Unmarshal(contents, &googleCreds); err != nil {
-		return projectID, err
-	}
-	return googleCreds[gcsProjectIDKey], err
-}
-
 // newGCSGatewayLayer returns gcs gatewaylayer
 func newGCSGatewayLayer(projectID string) (GatewayLayer, error) {
 	ctx := context.Background()
 
-	var err error
-	if projectID == "" {
-		// If project ID is not provided on command line, we figure it out
-		// from the credentials.json file.
-		projectID, err = gcsParseProjectID(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err = checkGCSProjectID(ctx, projectID)
+	err := checkGCSProjectID(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}

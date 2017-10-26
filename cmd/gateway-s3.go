@@ -74,19 +74,10 @@ EXAMPLES:
 	})
 }
 
-// Handler for 'minio gateway s3' command line.
-func s3GatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
-	host := ctx.Args().First()
-	// Validate gateway arguments.
-	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
-
-	startGateway(ctx, &S3Gateway{host})
-}
-
 // S3Gateway implements Gateway.
 type S3Gateway struct {
-	host string
+	endpoint string
+	secure   bool
 }
 
 // Name implements Gateway interface.
@@ -96,7 +87,41 @@ func (g *S3Gateway) Name() string {
 
 // NewGatewayLayer returns s3 gatewaylayer.
 func (g *S3Gateway) NewGatewayLayer() (GatewayLayer, error) {
-	return newS3GatewayLayer(g.host)
+	return newS3GatewayLayer(g.endpoint, g.secure)
+}
+
+// Handler for 'minio gateway s3' command line.
+func s3GatewayMain(ctx *cli.Context) {
+	if len(ctx.Args()) > 1 {
+		log.Println("too many arguments")
+		cli.ShowCommandHelpAndExit(ctx, s3Backend, 1)
+	}
+
+	if ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, s3Backend, 1)
+	}
+
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
+
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
+
+	endpoint := "s3.amazonaws.com"
+	secure := true
+	if len(ctx.Args()) == 1 {
+		var err error
+		endpoint, secure, err = parseGatewayEndpoint(ctx.Args().First())
+		fatalIf(err, "Invalid command line arguments %v", ctx.Args())
+	}
+
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	startGateway(&S3Gateway{endpoint, secure}, quietFlag)
 }
 
 // s3ToObjectError converts Minio errors to minio object layer errors.
@@ -175,25 +200,7 @@ type s3Objects struct {
 }
 
 // newS3GatewayLayer returns s3 gatewaylayer
-func newS3GatewayLayer(host string) (GatewayLayer, error) {
-	var err error
-	var endpoint string
-	var secure = true
-
-	// Validate host parameters.
-	if host != "" {
-		// Override default params if the host is provided
-		endpoint, secure, err = parseGatewayEndpoint(host)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Default endpoint parameters
-	if endpoint == "" {
-		endpoint = "s3.amazonaws.com"
-	}
-
+func newS3GatewayLayer(endpoint string, secure bool) (GatewayLayer, error) {
 	creds := serverConfig.GetCredential()
 
 	// Initialize minio client object.

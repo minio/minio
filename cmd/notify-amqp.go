@@ -17,38 +17,42 @@
 package cmd
 
 import (
+	"errors"
 	"io/ioutil"
 	"net"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	xnet "github.com/minio/minio/pkg/net"
 	"github.com/streadway/amqp"
 )
 
 // amqpNotify - represents logrus compatible AMQP hook.
 // All fields represent AMQP configuration details.
 type amqpNotify struct {
-	Enable       bool   `json:"enable"`
-	URL          string `json:"url"`
-	Exchange     string `json:"exchange"`
-	RoutingKey   string `json:"routingKey"`
-	ExchangeType string `json:"exchangeType"`
-	DeliveryMode uint8  `json:"deliveryMode"`
-	Mandatory    bool   `json:"mandatory"`
-	Immediate    bool   `json:"immediate"`
-	Durable      bool   `json:"durable"`
-	Internal     bool   `json:"internal"`
-	NoWait       bool   `json:"noWait"`
-	AutoDeleted  bool   `json:"autoDeleted"`
+	Enable       bool     `json:"enable"`
+	URL          xnet.URL `json:"url"`
+	Exchange     string   `json:"exchange"`
+	RoutingKey   string   `json:"routingKey"`
+	ExchangeType string   `json:"exchangeType"`
+	DeliveryMode uint8    `json:"deliveryMode"`
+	Mandatory    bool     `json:"mandatory"`
+	Immediate    bool     `json:"immediate"`
+	Durable      bool     `json:"durable"`
+	Internal     bool     `json:"internal"`
+	NoWait       bool     `json:"noWait"`
+	AutoDeleted  bool     `json:"autoDeleted"`
 }
 
 func (a *amqpNotify) Validate() error {
 	if !a.Enable {
 		return nil
 	}
-	if _, err := checkURL(a.URL); err != nil {
-		return err
+
+	if a.URL.IsEmpty() {
+		return errors.New("empty URL")
 	}
+
 	return nil
 }
 
@@ -67,7 +71,7 @@ func dialAMQP(amqpL amqpNotify) (*amqpConn, error) {
 	if !amqpL.Enable {
 		return nil, errNotifyNotEnabled
 	}
-	conn, err := amqp.Dial(amqpL.URL)
+	conn, err := amqp.Dial(amqpL.URL.String())
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +130,7 @@ func (q *amqpConn) Channel() (*amqp.Channel, error) {
 		}
 		// Attempt to connect again.
 		var conn *amqp.Connection
-		conn, err = amqp.Dial(q.params.URL)
+		conn, err = amqp.Dial(q.params.URL.String())
 		if err != nil {
 			return nil, err
 		}

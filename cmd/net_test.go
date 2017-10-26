@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -25,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio-go/pkg/set"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 func TestMustSplitHostPort(t *testing.T) {
@@ -227,126 +227,40 @@ func TestCheckPortAvailability(t *testing.T) {
 	}
 }
 
-func TestCheckLocalServerAddr(t *testing.T) {
+func TestParseServerHost(t *testing.T) {
 	testCases := []struct {
-		serverAddr  string
-		expectedErr error
+		address      string
+		expectedHost *xnet.Host
+		expectedErr  error
 	}{
-		{":54321", nil},
-		{"localhost:54321", nil},
-		{"0.0.0.0:9000", nil},
-		{"", fmt.Errorf("missing port in address")},
-		{"localhost", fmt.Errorf("address localhost: missing port in address")},
-		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
-		{":0", fmt.Errorf("port number must be between 1 to 65535")},
-		{":-10", fmt.Errorf("port number must be between 1 to 65535")},
-	}
-
-	for _, testCase := range testCases {
-		err := CheckLocalServerAddr(testCase.serverAddr)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
-		}
-	}
-}
-
-func TestExtractHostPort(t *testing.T) {
-	testCases := []struct {
-		addr        string
-		host        string
-		port        string
-		expectedErr error
-	}{
-		{"", "", "", errors.New("unable to process empty address")},
-		{"localhost:9000", "localhost", "9000", nil},
-		{"http://:9000/", "", "9000", nil},
-		{"http://8.8.8.8:9000/", "8.8.8.8", "9000", nil},
-		{"https://facebook.com:9000/", "facebook.com", "9000", nil},
+		{":54321", xnet.MustParseHost("0.0.0.0:54321"), nil},
+		{"localhost:54321", xnet.MustParseHost("localhost:54321"), nil},
+		{"0.0.0.0:9000", xnet.MustParseHost("0.0.0.0:9000"), nil},
+		{"", nil, fmt.Errorf("invalid hostname")},
+		{"localhost", nil, fmt.Errorf("port number missing")},
+		{"example.org:54321", nil, fmt.Errorf("host in server address should be this server")},
+		{":0", nil, fmt.Errorf("port number must be non-zero")},
+		{":-10", nil, fmt.Errorf("port must be between 0 to 65535")},
 	}
 
 	for i, testCase := range testCases {
-		host, port, err := extractHostPort(testCase.addr)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("Test %d: should succeed but failed with err: %v", i+1, err)
-			}
-			if host != testCase.host {
-				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.host, host)
-			}
-			if port != testCase.port {
-				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.port, port)
+		host, err := parseServerHost(testCase.address)
+		if err != nil {
+			if testCase.expectedErr == nil {
+				t.Fatalf("test %v: error: expected = <nil>, got = %v", i+1, err)
 			}
 
-		}
-		if testCase.expectedErr != nil {
-			if err == nil {
-				t.Fatalf("Test %d:, should fail but succeeded.", i+1)
-			}
-			if testCase.expectedErr.Error() != err.Error() {
-				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
-			}
-		}
-	}
-}
-
-func TestSameLocalAddrs(t *testing.T) {
-	testCases := []struct {
-		addr1       string
-		addr2       string
-		sameAddr    bool
-		expectedErr error
-	}{
-		{"", "", false, errors.New("unable to process empty address")},
-		{":9000", ":9000", true, nil},
-		{"localhost:9000", ":9000", true, nil},
-		{"localhost:9000", "http://localhost:9000", true, nil},
-		{"http://localhost:9000", ":9000", true, nil},
-		{"http://localhost:9000", "http://localhost:9000", true, nil},
-		{"http://8.8.8.8:9000", "http://localhost:9000", false, nil},
-	}
-
-	for i, testCase := range testCases {
-		sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
-		if testCase.expectedErr != nil && err == nil {
-			t.Fatalf("Test %d: should fail but succeeded", i+1)
-		}
-		if testCase.expectedErr == nil && err != nil {
-			t.Fatalf("Test %d: should succeed but failed with %v", i+1, err)
-		}
-		if err == nil {
-			if sameAddr != testCase.sameAddr {
-				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.sameAddr, sameAddr)
+			if err.Error() != testCase.expectedErr.Error() {
+				t.Fatalf("test %v: error: expected = %v, got = %v", i+1, testCase.expectedErr, err)
 			}
 		} else {
-			if err.Error() != testCase.expectedErr.Error() {
-				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
+			if testCase.expectedErr != nil {
+				t.Fatalf("test %v: error: expected = %v, got = <nil>", i+1, testCase.expectedErr)
 			}
-		}
-	}
-}
-func TestIsHostIPv4(t *testing.T) {
-	testCases := []struct {
-		args           string
-		expectedResult bool
-	}{
-		{"localhost", false},
-		{"localhost:9000", false},
-		{"example.com", false},
-		{"http://192.168.1.0", false},
-		{"http://192.168.1.0:9000", false},
-		{"192.168.1.0", true},
-	}
 
-	for _, testCase := range testCases {
-		ret := isHostIPv4(testCase.args)
-		if testCase.expectedResult != ret {
-			t.Fatalf("expected: %v , got: %v", testCase.expectedResult, ret)
+			if !reflect.DeepEqual(host, testCase.expectedHost) {
+				t.Fatalf("test %v: host: expected = %#v, got = %#v", i+1, testCase.expectedHost, host)
+			}
 		}
 	}
 }

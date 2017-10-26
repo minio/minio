@@ -56,6 +56,7 @@ import (
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Tests should initNSLock only once.
@@ -308,10 +309,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	// initialize peer rpc
-	host, port := mustSplitHostPort(testServer.Server.Listener.Addr().String())
-	globalMinioHost = host
-	globalMinioPort = port
-	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
+	globalServerHost = xnet.MustParseHost(testServer.Server.Listener.Addr().String())
 	initGlobalS3Peers(testServer.Disks)
 
 	return testServer
@@ -2347,16 +2345,6 @@ func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 	}
 
 	return endpoints
-}
-
-func getEndpointsLocalAddr(endpoints EndpointList) string {
-	for _, endpoint := range endpoints {
-		if endpoint.IsLocal && endpoint.Type() == URLEndpointType {
-			return endpoint.Host
-		}
-	}
-
-	return globalMinioHost + ":" + globalMinioPort
 }
 
 // fetches a random number between range min-max.

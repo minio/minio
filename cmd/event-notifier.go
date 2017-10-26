@@ -96,13 +96,8 @@ type eventData struct {
 // input request metadata which completed successfully.
 func newNotificationEvent(event eventData) NotificationEvent {
 	getResponseOriginEndpointKey := func() string {
-		host := globalMinioHost
-		if host == "" {
-			// FIXME: Send FQDN or hostname of this machine than sending IP address.
-			host = localIP4.ToSlice()[0]
-		}
-
-		return fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), host, globalMinioPort)
+		// FIXME: Send FQDN or hostname of this machine than sending IP address.
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), globalServerHost)
 	}
 
 	// Fetch the region.

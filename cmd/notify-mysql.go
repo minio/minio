@@ -56,12 +56,14 @@ package cmd
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/go-sql-driver/mysql"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 const (
@@ -112,11 +114,11 @@ type mySQLNotify struct {
 	// uses the values below if no connection string is specified
 	// - however the connection string method offers more
 	// flexibility.
-	Host     string `json:"host"`
-	Port     string `json:"port"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Database string `json:"database"`
+	Host     xnet.URL `json:"host"`
+	Port     string   `json:"port"`
+	User     string   `json:"user"`
+	Password string   `json:"password"`
+	Database string   `json:"database"`
 }
 
 func (m *mySQLNotify) Validate() error {
@@ -126,10 +128,8 @@ func (m *mySQLNotify) Validate() error {
 	if m.Format != formatNamespace && m.Format != formatAccess {
 		return errMysqlFormat
 	}
-	if m.DsnString == "" {
-		if _, err := checkURL(m.Host); err != nil {
-			return err
-		}
+	if m.DsnString == "" && m.Host.IsEmpty() {
+		return errors.New("empty Host")
 	}
 	if m.Table == "" {
 		return errMysqlTable
@@ -158,7 +158,7 @@ func dialMySQL(msql mySQLNotify) (mc mySQLConn, e error) {
 			User:   msql.User,
 			Passwd: msql.Password,
 			Net:    "tcp",
-			Addr:   msql.Host + ":" + msql.Port,
+			Addr:   msql.Host.String() + ":" + msql.Port,
 			DBName: msql.Database,
 		}
 		dsnStr = config.FormatDSN()

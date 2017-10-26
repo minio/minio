@@ -56,12 +56,14 @@ package cmd
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	xnet "github.com/minio/minio/pkg/net"
 
 	// Register postgres driver
 	_ "github.com/lib/pq"
@@ -120,11 +122,11 @@ type postgreSQLNotify struct {
 	// The values below, if non-empty are appended to
 	// ConnectionString above. Default values are shown in
 	// comments below (implicitly used by the library).
-	Host     string `json:"host"`     // default: localhost
-	Port     string `json:"port"`     // default: 5432
-	User     string `json:"user"`     // default: user running minio
-	Password string `json:"password"` // default: no password
-	Database string `json:"database"` // default: same as user
+	Host     xnet.URL `json:"host"`     // default: localhost
+	Port     string   `json:"port"`     // default: 5432
+	User     string   `json:"user"`     // default: user running minio
+	Password string   `json:"password"` // default: no password
+	Database string   `json:"database"` // default: same as user
 }
 
 func (p *postgreSQLNotify) Validate() error {
@@ -134,10 +136,8 @@ func (p *postgreSQLNotify) Validate() error {
 	if p.Format != formatNamespace && p.Format != formatAccess {
 		return errPGFormatError
 	}
-	if p.ConnectionString == "" {
-		if _, err := checkURL(p.Host); err != nil {
-			return err
-		}
+	if p.ConnectionString == "" && p.Host.IsEmpty() {
+		return errors.New("empty Host")
 	}
 	if p.Table == "" {
 		return errPGTableError
@@ -160,8 +160,8 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pc pgConn, e error) {
 
 	// collect connection params
 	params := []string{pgN.ConnectionString}
-	if pgN.Host != "" {
-		params = append(params, "host="+pgN.Host)
+	if !pgN.Host.IsEmpty() {
+		params = append(params, "host="+pgN.Host.String())
 	}
 	if pgN.Port != "" {
 		params = append(params, "port="+pgN.Port)

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 /////////////////// Config V1 ///////////////////
@@ -150,31 +151,31 @@ type loggerV5 struct {
 		Level  string `json:"level"`
 	} `json:"syslog"`
 	AMQP struct {
-		Enable       bool   `json:"enable"`
-		Level        string `json:"level"`
-		URL          string `json:"url"`
-		Exchange     string `json:"exchange"`
-		RoutingKey   string `json:"routingKey"`
-		ExchangeType string `json:"exchangeType"`
-		Mandatory    bool   `json:"mandatory"`
-		Immediate    bool   `json:"immediate"`
-		Durable      bool   `json:"durable"`
-		Internal     bool   `json:"internal"`
-		NoWait       bool   `json:"noWait"`
-		AutoDeleted  bool   `json:"autoDeleted"`
+		Enable       bool     `json:"enable"`
+		Level        string   `json:"level"`
+		URL          xnet.URL `json:"url"`
+		Exchange     string   `json:"exchange"`
+		RoutingKey   string   `json:"routingKey"`
+		ExchangeType string   `json:"exchangeType"`
+		Mandatory    bool     `json:"mandatory"`
+		Immediate    bool     `json:"immediate"`
+		Durable      bool     `json:"durable"`
+		Internal     bool     `json:"internal"`
+		NoWait       bool     `json:"noWait"`
+		AutoDeleted  bool     `json:"autoDeleted"`
 	} `json:"amqp"`
 	ElasticSearch struct {
-		Enable bool   `json:"enable"`
-		Level  string `json:"level"`
-		URL    string `json:"url"`
-		Index  string `json:"index"`
+		Enable bool     `json:"enable"`
+		Level  string   `json:"level"`
+		URL    xnet.URL `json:"url"`
+		Index  string   `json:"index"`
 	} `json:"elasticsearch"`
 	Redis struct {
-		Enable   bool   `json:"enable"`
-		Level    string `json:"level"`
-		Addr     string `json:"address"`
-		Password string `json:"password"`
-		Key      string `json:"key"`
+		Enable   bool      `json:"enable"`
+		Level    string    `json:"level"`
+		Addr     xnet.Host `json:"address"`
+		Password string    `json:"password"`
+		Key      string    `json:"key"`
 	} `json:"redis"`
 }
 
@@ -326,14 +327,14 @@ type serverConfigV10 struct {
 
 // natsNotifyV1 - structure was valid until config V 11
 type natsNotifyV1 struct {
-	Enable       bool   `json:"enable"`
-	Address      string `json:"address"`
-	Subject      string `json:"subject"`
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	Token        string `json:"token"`
-	Secure       bool   `json:"secure"`
-	PingInterval int64  `json:"pingInterval"`
+	Enable       bool      `json:"enable"`
+	Address      xnet.Host `json:"address"`
+	Subject      string    `json:"subject"`
+	Username     string    `json:"username"`
+	Password     string    `json:"password"`
+	Token        string    `json:"token"`
+	Secure       bool      `json:"secure"`
+	PingInterval int64     `json:"pingInterval"`
 }
 
 // serverConfigV11 server configuration version '11' which is like

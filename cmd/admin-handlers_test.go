@@ -33,6 +33,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 var configJSON = []byte(`{
@@ -298,7 +299,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Setting up a go routine to simulate ServerMux's
@@ -358,7 +359,7 @@ func TestServiceSetCreds(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := serverConfig.GetCredential()
@@ -440,7 +441,7 @@ func TestListLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
@@ -1213,7 +1214,7 @@ func TestGetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for get-config mgmt REST API.
@@ -1242,7 +1243,7 @@ func TestSetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// SetConfigHandler restarts minio setup - need to start a
@@ -1284,7 +1285,7 @@ func TestAdminServerInfo(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
+	globalServerHost = xnet.MustParseHost("127.0.0.1:9000")
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for set-config mgmt REST API.

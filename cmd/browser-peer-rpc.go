@@ -86,7 +86,7 @@ func updateCredsOnPeers(creds auth.Credentials) map[string]error {
 
 			// Exclude self to avoid race with
 			// invalidating the RPC token.
-			if peers[ix] == globalMinioAddr {
+			if peers[ix] == globalServerHost.String() {
 				errs[ix] = nil
 				return
 			}

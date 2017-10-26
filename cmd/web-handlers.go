@@ -416,7 +416,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		// Save the current creds when failed to update.
 		serverConfig.SetCredential(prevCred)
 
-		errsMap[globalMinioAddr] = err
+		errsMap[globalServerHost.String()] = err
 	}
 
 	// Log all the peer related error messages, and populate the
@@ -429,7 +429,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// If we were unable to update locally, we return an error to the user/browser.
-	if errsMap[globalMinioAddr] != nil {
+	if errsMap[globalServerHost.String()] != nil {
 		// Since the error message may be very long to display
 		// on the browser, we tell the user to check the
 		// server logs.

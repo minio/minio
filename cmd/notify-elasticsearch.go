@@ -18,11 +18,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	xnet "github.com/minio/minio/pkg/net"
 	"gopkg.in/olivere/elastic.v5"
 )
 
@@ -35,10 +37,10 @@ var (
 
 // elasticQueue is a elasticsearch event notification queue.
 type elasticSearchNotify struct {
-	Enable bool   `json:"enable"`
-	Format string `json:"format"`
-	URL    string `json:"url"`
-	Index  string `json:"index"`
+	Enable bool     `json:"enable"`
+	Format string   `json:"format"`
+	URL    xnet.URL `json:"url"`
+	Index  string   `json:"index"`
 }
 
 func (e *elasticSearchNotify) Validate() error {
@@ -48,12 +50,15 @@ func (e *elasticSearchNotify) Validate() error {
 	if e.Format != formatNamespace && e.Format != formatAccess {
 		return errESFormat
 	}
-	if _, err := checkURL(e.URL); err != nil {
-		return err
+
+	if e.URL.IsEmpty() {
+		return errors.New("empty URL")
 	}
+
 	if e.Index == "" {
 		return errESIndex
 	}
+
 	return nil
 }
 
@@ -68,7 +73,7 @@ func dialElastic(esNotify elasticSearchNotify) (*elastic.Client, error) {
 		return nil, errNotifyNotEnabled
 	}
 	return elastic.NewClient(
-		elastic.SetURL(esNotify.URL),
+		elastic.SetURL(esNotify.URL.String()),
 		elastic.SetSniff(false),
 		elastic.SetMaxRetries(10),
 	)

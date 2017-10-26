@@ -19,16 +19,16 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
+	"path"
 	"strings"
 	"syscall"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
 	miniohttp "github.com/minio/minio/pkg/http"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 var (
@@ -68,89 +68,74 @@ func MustRegisterGatewayCommand(cmd cli.Command) {
 	}
 }
 
-// Return endpoint.
-func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
-	schemeSpecified := len(strings.Split(arg, "://")) > 1
-	if !schemeSpecified {
-		// Default connection will be "secure".
-		arg = "https://" + arg
+// parseGatewayEndpoint - parses given argument and returns endpoint and flag to use TLS for the endpoint.
+// arg must be in the form of [{http|https}://]SERVER[:PORT][/]
+func parseGatewayEndpoint(arg string) (endpoint string, secure bool, err error) {
+	endpoint = strings.TrimSpace(arg)
+	if endpoint == "" {
+		return endpoint, secure, errors.New("empty endpoint given")
 	}
 
-	u, err := url.Parse(arg)
+	if tokens := strings.SplitN(endpoint, "://", 2); len(tokens) > 1 {
+		if tokens[0] != "http" && tokens[0] != "https" {
+			return endpoint, secure, fmt.Errorf("invalid scheme in endpoint %v", arg)
+		}
+	} else {
+		if !strings.HasPrefix(tokens[0], "http:") && !strings.HasPrefix(tokens[0], "https:") {
+			// Add secure http scheme
+			endpoint = "https://" + endpoint
+		}
+	}
+
+	u, err := xnet.ParseURL(endpoint)
 	if err != nil {
-		return "", false, err
+		return endpoint, secure, err
 	}
 
-	switch u.Scheme {
-	case "http":
-		return u.Host, false, nil
-	case "https":
-		return u.Host, true, nil
-	default:
-		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
+	urlPath := u.Path
+	if urlPath != "" {
+		urlPath = path.Clean(u.Path)
 	}
-}
-
-// Validate gateway arguments.
-func validateGatewayArguments(serverAddr, endpointAddr string) error {
-	if err := CheckLocalServerAddr(serverAddr); err != nil {
-		return err
+	if !((urlPath == "" || urlPath == "/") &&
+		u.User == nil && u.Opaque == "" && u.ForceQuery == false && u.RawQuery == "" && u.Fragment == "") {
+		return endpoint, secure, fmt.Errorf("invalid endpoint format %v", arg)
 	}
 
-	if runtime.GOOS == "darwin" {
-		_, port := mustSplitHostPort(serverAddr)
-		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
-		// to IPv6 address i.e minio will start listening on IPv6 address whereas another
-		// (non-)minio process is listening on IPv4 of given port.
-		// To avoid this error situation we check for port availability only for macOS.
-		if err := checkPortAvailability(port); err != nil {
-			return err
+	endpoint = u.Host
+	if u.Scheme == "https" {
+		secure = true
+	}
+
+	host := xnet.MustParseHost(u.Host)
+	if !host.IsPortSet {
+		if secure {
+			host.PortNumber = 443
+		} else {
+			host.PortNumber = 80
 		}
 	}
 
-	if endpointAddr != "" {
-		// Reject the endpoint if it points to the gateway handler itself.
-		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
-		if err != nil {
-			return err
-		}
-		if sameTarget {
-			return errors.New("endpoint points to the local gateway")
-		}
+	isLocal, err := isLocalHost(host.Host)
+	if err != nil {
+		return endpoint, secure, err
 	}
-	return nil
+	if isLocal && globalServerHost.PortNumber == host.PortNumber {
+		return endpoint, secure, fmt.Errorf("endpoint %v points to this gateway itself", arg)
+	}
+
+	return endpoint, secure, nil
 }
 
 // Handler for 'minio gateway <name>'.
-func startGateway(ctx *cli.Context, gw Gateway) {
-	// Get quiet flag from command line argument.
-	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
-	if quietFlag {
-		log.EnableQuiet()
-	}
-
-	// Fetch address option
-	gatewayAddr := ctx.GlobalString("address")
-	if gatewayAddr == ":"+globalMinioPort {
-		gatewayAddr = ctx.String("address")
-	}
-
-	// Handle common command args.
-	handleCommonCmdArgs(ctx)
-
-	// Handle common env vars.
-	handleCommonEnvVars()
-
-	// Validate if we have access, secret set through environment.
-	gatewayName := gw.Name()
+func startGateway(gw Gateway, quietFlag bool) {
 	if !globalIsEnvCreds {
-		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", gatewayName), "")
+		fatalIf(errors.New("missing keys"), "Access and secret keys must be set through environment variables for gateway %v", gw.Name())
 	}
 
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
-	// Initialize gateway config.
+	// Initialize server config.
 	initConfig()
 
 	// Enable loggers as per configuration file.
@@ -164,11 +149,16 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL certificate file")
 
-	initNSLock(false) // Enable local namespace lock.
-
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
+	if !quietFlag {
+		// Check for new updates from dl.minio.io.
+		mode := globalMinioModeGatewayPrefix + gw.Name()
+		checkUpdate(mode)
 	}
+
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
+
+	initNSLock(false) // Enable local namespace lock.
 
 	newObject, err := gw.NewGatewayLayer()
 	fatalIf(err, "Unable to initialize gateway layer")
@@ -209,9 +199,13 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 		// Add new handlers here.
 	}
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
-
-	// Start server, automatically configures TLS if certs are available.
+	handler := registerHandlers(router, handlerFns...)
+	globalHTTPServer = miniohttp.NewServer([]string{globalServerHost.String()}, handler, globalTLSCertificate)
+	globalHTTPServer.ReadTimeout = globalConnReadTimeout
+	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
+	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
+	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
+	globalHTTPServer.ErrorLogFunc = errorIf
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
@@ -223,15 +217,12 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	// Print gateway startup message.
 	// Prints the formatted startup message once object layer is initialized.
-	if !quietFlag {
-		mode := globalMinioModeGatewayPrefix + gatewayName
-		// Check update mode.
-		checkUpdate(mode)
+	printGatewayStartupMessage(getAPIEndpoints(globalServerHost.String()), gw.Name())
 
-		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
-	}
+	// Set uptime time after object layer has initialized.
+	globalBootTime = UTCNow()
 
 	handleSignals()
 }

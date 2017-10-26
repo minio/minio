@@ -28,6 +28,8 @@ import (
 	"net/rpc"
 	"sync"
 	"time"
+
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // defaultDialTimeout is used for non-secure connection.
@@ -65,8 +67,9 @@ func (rpcClient *RPCClient) dial() (netRPCClient *rpc.Client, err error) {
 
 	var conn net.Conn
 	if rpcClient.secureConn {
-		var hostname string
-		if hostname, _, err = net.SplitHostPort(rpcClient.serverAddr); err != nil {
+		var host *xnet.Host
+		host, err = xnet.ParseHost(rpcClient.serverAddr)
+		if err != nil {
 			err = &net.OpError{
 				Op:   "dial-http",
 				Net:  rpcClient.serverAddr + rpcClient.serviceEndpoint,
@@ -78,7 +81,7 @@ func (rpcClient *RPCClient) dial() (netRPCClient *rpc.Client, err error) {
 		}
 
 		// ServerName in tls.Config needs to be specified to support SNI certificates.
-		conn, err = tls.Dial("tcp", rpcClient.serverAddr, &tls.Config{ServerName: hostname, RootCAs: globalRootCAs})
+		conn, err = tls.Dial("tcp", rpcClient.serverAddr, &tls.Config{ServerName: host.Host, RootCAs: globalRootCAs})
 	} else {
 		// Dial with a timeout.
 		conn, err = net.DialTimeout("tcp", rpcClient.serverAddr, defaultDialTimeout)

@@ -17,10 +17,10 @@
 package cmd
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/minio/cli"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Test RegisterGatewayCommand
@@ -46,63 +46,44 @@ func TestRegisterGatewayCommand(t *testing.T) {
 
 // Test parseGatewayEndpoint
 func TestParseGatewayEndpoint(t *testing.T) {
+	tmpGlobalServerHost := globalServerHost
+	defer func() {
+		globalServerHost = tmpGlobalServerHost
+	}()
+	globalServerHost = xnet.MustParseHost("0.0.0.0:10000")
+
 	testCases := []struct {
-		arg         string
-		endPoint    string
-		secure      bool
-		errReturned bool
+		arg       string
+		endpoint  string
+		secure    bool
+		expectErr bool
 	}{
+		{"s3.amazonaws.com", "s3.amazonaws.com", true, false},
+		{"play.minio.io:9000", "play.minio.io:9000", true, false},
 		{"http://127.0.0.1:9000", "127.0.0.1:9000", false, false},
 		{"https://127.0.0.1:9000", "127.0.0.1:9000", true, false},
 		{"http://play.minio.io:9000", "play.minio.io:9000", false, false},
 		{"https://play.minio.io:9000", "play.minio.io:9000", true, false},
+		{"http://127.0.0.1:10000", "", false, true},
 		{"ftp://127.0.0.1:9000", "", false, true},
 		{"ftp://play.minio.io:9000", "", false, true},
-		{"play.minio.io:9000", "play.minio.io:9000", true, false},
 	}
 
-	for i, test := range testCases {
-		endPoint, secure, err := parseGatewayEndpoint(test.arg)
-		errReturned := err != nil
+	for i, testCase := range testCases {
+		endpoint, secure, err := parseGatewayEndpoint(testCase.arg)
+		expectErr := (err != nil)
 
-		if endPoint != test.endPoint ||
-			secure != test.secure ||
-			errReturned != test.errReturned {
-			t.Errorf("Test %d: expected %s,%t,%t got %s,%t,%t",
-				i+1, test.endPoint, test.secure, test.errReturned,
-				endPoint, secure, errReturned)
+		if expectErr != testCase.expectErr {
+			t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
-	}
-}
 
-// Test validateGatewayArguments
-func TestValidateGatewayArguments(t *testing.T) {
-	nonLoopBackIPs := localIP4.FuncMatch(func(ip string, matchString string) bool {
-		return !strings.HasPrefix(ip, "127.")
-	}, "")
-	if len(nonLoopBackIPs) == 0 {
-		t.Fatalf("No non-loop back IP address found for this host")
-	}
-	nonLoopBackIP := nonLoopBackIPs.ToSlice()[0]
-
-	testCases := []struct {
-		serverAddr   string
-		endpointAddr string
-		valid        bool
-	}{
-		{":9000", "http://localhost:9001", true},
-		{":9000", "http://google.com", true},
-		{"123.123.123.123:9000", "http://localhost:9000", false},
-		{":9000", "http://localhost:9000", false},
-		{":9000", nonLoopBackIP + ":9000", false},
-	}
-	for i, test := range testCases {
-		err := validateGatewayArguments(test.serverAddr, test.endpointAddr)
-		if test.valid && err != nil {
-			t.Errorf("Test %d expected not to return error but got %s", i+1, err)
-		}
-		if !test.valid && err == nil {
-			t.Errorf("Test %d expected to fail but it did not", i+1)
+		if !testCase.expectErr {
+			if endpoint != testCase.endpoint {
+				t.Fatalf("test %v: endpoint: expected: %v, got: %v", i+1, testCase.endpoint, endpoint)
+			}
+			if secure != testCase.secure {
+				t.Fatalf("test %v: secure: expected: %v, got: %v", i+1, testCase.secure, secure)
+			}
 		}
 	}
 }

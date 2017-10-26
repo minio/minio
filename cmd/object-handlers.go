@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -28,6 +27,7 @@ import (
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/hash"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -49,20 +49,23 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	}
 }
 
-// getSourceIPAddress - get the source ip address of the request.
-func getSourceIPAddress(r *http.Request) string {
-	var ip string
-	// Attempt to get ip from standard headers.
-	// Do not support X-Forwarded-For because it is easy to spoof.
-	ip = r.Header.Get("X-Real-Ip")
-	parsedIP := net.ParseIP(ip)
-	// Skip non valid IP address.
-	if parsedIP != nil {
-		return ip
+// getSourceHost - get the source ip address of the request.
+func getSourceHost(r *http.Request) *xnet.Host {
+	// Get IP address of the client who initiated this request.
+
+	// If minio is running under a proxy, get client IP from 'X-Real-Ip` header.
+	// Do not use spoofed `X-Forwarded-For` header.
+	s := r.Header.Get("X-Real-Ip")
+	if s == "" {
+		s = r.RemoteAddr
 	}
-	// Default to remote address if headers not set.
-	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
-	return ip
+
+	host, err := xnet.ParseHost(s)
+	if err != nil {
+		host = &xnet.Host{}
+	}
+
+	return host
 }
 
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
@@ -73,9 +76,9 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
 		// We care about the bucket as a whole, not a particular resource.
 		resource := "/" + bucket
-		sourceIP := getSourceIPAddress(r)
+		host := getSourceHost(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
-			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), host.Host, r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -196,12 +199,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writer.Write(nil)
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object accessed via a GET request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedGet,
@@ -209,8 +207,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -267,12 +265,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object accessed via a HEAD request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedHead,
@@ -280,8 +273,8 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -423,12 +416,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCopy,
@@ -436,8 +424,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -540,9 +528,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		sourceIP := getSourceIPAddress(r)
+		host := getSourceHost(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), host.Host, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -589,12 +577,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedPut,
@@ -602,8 +585,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -837,8 +820,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		host := getSourceHost(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), getSourceIPAddress(r), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), host.Host, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -1045,12 +1029,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCompleteMultipartUpload,
@@ -1058,8 +1037,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 

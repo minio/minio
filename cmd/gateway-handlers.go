@@ -19,7 +19,6 @@ package cmd
 import (
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"strconv"
 
@@ -159,12 +158,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		writer.Write(nil)
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object accessed via a GET request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedGet,
@@ -172,8 +166,8 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -324,12 +318,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedPut,
@@ -337,8 +326,8 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 
@@ -412,12 +401,7 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
+	host := getSourceHost(r)
 	// Notify object accessed via a HEAD request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedHead,
@@ -425,8 +409,8 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 }
 

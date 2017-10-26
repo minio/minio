@@ -3596,9 +3596,9 @@ func TestGetSourceIPAddress(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		receivedIP := getSourceIPAddress(test.request)
-		if test.expectedIP != receivedIP {
-			t.Fatalf("Case %d: Expected the IP to be `%s`, but instead got `%s`", i+1, test.expectedIP, receivedIP)
+		host := getSourceHost(test.request)
+		if test.expectedIP != host.Host {
+			t.Fatalf("Case %d: Expected the IP to be `%s`, but instead got `%s`", i+1, test.expectedIP, host.Host)
 		}
 	}
 }

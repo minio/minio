@@ -20,6 +20,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Validates makeS3Peers, fetches all peers based on list of storage
@@ -52,7 +54,7 @@ func TestMakeS3Peers(t *testing.T) {
 
 	// execute tests
 	for i, testCase := range testCases {
-		globalMinioAddr = testCase.gMinioAddr
+		globalServerHost = xnet.MustParseHost(testCase.gMinioAddr)
 		s3peers := makeS3Peers(testCase.eps)
 		referencePeers := getPeersHelper(s3peers)
 		if !reflect.DeepEqual(testCase.peers, referencePeers) {

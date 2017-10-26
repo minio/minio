@@ -17,11 +17,11 @@
 package cmd
 
 import (
+	"errors"
 	"io/ioutil"
-	"net"
 
 	"github.com/Sirupsen/logrus"
-
+	xnet "github.com/minio/minio/pkg/net"
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
@@ -37,7 +37,7 @@ type kafkaNotify struct {
 	Enable bool `json:"enable"`
 
 	// List of Kafka brokers in `addr:host` format.
-	Brokers []string `json:"brokers"`
+	Brokers []xnet.Host `json:"brokers"`
 
 	// Topic to which event notifications should be sent.
 	Topic string `json:"topic"`
@@ -52,8 +52,8 @@ func (k *kafkaNotify) Validate() error {
 	}
 	// Validate all specified brokers.
 	for _, brokerAddr := range k.Brokers {
-		if _, _, err := net.SplitHostPort(brokerAddr); err != nil {
-			return err
+		if brokerAddr.IsEmpty() {
+			return errors.New("empty broker address")
 		}
 	}
 	return nil
@@ -83,7 +83,12 @@ func dialKafka(kn kafkaNotify) (kc kafkaConn, e error) {
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
 
-	p, err := sarama.NewSyncProducer(kn.Brokers, config)
+	brokers := []string{}
+	for _, broker := range kn.Brokers {
+		brokers = append(brokers, broker.String())
+	}
+
+	p, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		return kc, kkErrFunc("Failed to start producer: %v", err)
 	}
