@@ -162,11 +162,6 @@ func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProper
 	return s3Metadata
 }
 
-// Append "-1" to etag so that clients do not interpret it as MD5.
-func azureToS3ETag(etag string) string {
-	return canonicalizeETag(etag) + "-1"
-}
-
 // azureObjects - Implements Object layer for Azure blob storage.
 type azureObjects struct {
 	gatewayUnsupported
@@ -420,7 +415,7 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 				Name:            object.Name,
 				ModTime:         time.Time(object.Properties.LastModified),
 				Size:            object.Properties.ContentLength,
-				ETag:            azureToS3ETag(object.Properties.Etag),
+				ETag:            toS3ETag(object.Properties.Etag),
 				ContentType:     object.Properties.ContentType,
 				ContentEncoding: object.Properties.ContentEncoding,
 			})
@@ -510,7 +505,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	objInfo = ObjectInfo{
 		Bucket:          bucket,
 		UserDefined:     meta,
-		ETag:            azureToS3ETag(blob.Properties.Etag),
+		ETag:            toS3ETag(blob.Properties.Etag),
 		ModTime:         time.Time(blob.Properties.LastModified),
 		Name:            object,
 		Size:            blob.Properties.ContentLength,
@@ -629,8 +624,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 
 	etag := data.MD5HexString()
 	if etag == "" {
-		// Generate random ETag.
-		etag = azureToS3ETag(getMD5Hash([]byte(mustGetUUID())))
+		etag = genETag()
 	}
 
 	subPartSize, subPartNumber := int64(azureBlockSize), 1

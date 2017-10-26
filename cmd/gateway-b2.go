@@ -264,7 +264,7 @@ func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, del
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        file.Info.ID,
+				ETag:        toS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -299,7 +299,7 @@ func (l *b2Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter s
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        file.Info.ID,
+				ETag:        toS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -346,7 +346,7 @@ func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        fi.ID,
+		ETag:        toS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -452,7 +452,7 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        fi.ID,
+		ETag:        toS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -566,7 +566,7 @@ func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string,
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: UTCNow(),
-		ETag:         sha1,
+		ETag:         toS3ETag(sha1),
 		Size:         data.Size(),
 	}, nil
 }
@@ -597,7 +597,7 @@ func (l *b2Objects) ListObjectParts(bucket string, object string, uploadID strin
 	for _, part := range partsList {
 		lpi.Parts = append(lpi.Parts, PartInfo{
 			PartNumber: part.Number,
-			ETag:       part.SHA1,
+			ETag:       toS3ETag(part.SHA1),
 			Size:       part.Size,
 		})
 	}
@@ -627,7 +627,9 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 		if i+1 != uploadedPart.PartNumber {
 			return oi, b2ToObjectError(traceError(InvalidPart{}), bucket, object, uploadID)
 		}
-		hashes[uploadedPart.PartNumber] = uploadedPart.ETag
+
+		// Trim "-1" suffix in ETag as PutObjectPart() treats B2 returned SHA1 as ETag.
+		hashes[uploadedPart.PartNumber] = strings.TrimSuffix(uploadedPart.ETag, "-1")
 	}
 
 	if _, err = bkt.File(uploadID, object).CompileParts(0, hashes).FinishLargeFile(l.ctx); err != nil {
