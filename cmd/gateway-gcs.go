@@ -30,16 +30,15 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/oauth2/google"
-
 	"cloud.google.com/go/storage"
-	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v1"
-	"google.golang.org/api/googleapi"
-	"google.golang.org/api/iterator"
-
+	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
+	"golang.org/x/oauth2/google"
+	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 )
 
 var (
@@ -78,7 +77,84 @@ const (
 
 	// Project ID key in credentials.json
 	gcsProjectIDKey = "project_id"
+
+	gcsBackend = "gcs"
 )
+
+func init() {
+	const gcsGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [PROJECTID]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+PROJECTID:
+  GCS project-id should be provided if GOOGLE_APPLICATION_CREDENTIALS environmental variable is not set.
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of GCS.
+     MINIO_SECRET_KEY: Password or secret key of GCS.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+  GCS credentials file:
+     GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
+
+EXAMPLES:
+  1. Start minio gateway server for GCS backend.
+      $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+      (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} mygcsprojectid
+
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               gcsBackend,
+		Usage:              "Google Cloud Storage.",
+		Action:             gcsGatewayMain,
+		CustomHelpTemplate: gcsGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway gcs' command line.
+func gcsGatewayMain(ctx *cli.Context) {
+	projectID := ctx.Args().First()
+	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		errorIf(errGCSProjectIDNotFound, "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")
+		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+	}
+	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
+		errorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
+		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+	}
+
+	startGateway(ctx, &GCSGateway{projectID})
+}
+
+// GCSGateway implements Gateway.
+type GCSGateway struct {
+	projectID string
+}
+
+// Name returns the name of gcs gatewaylayer.
+func (g *GCSGateway) Name() string {
+	return gcsBackend
+}
+
+// NewGatewayLayer returns gcs gatewaylayer.
+func (g *GCSGateway) NewGatewayLayer() (GatewayLayer, error) {
+	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+	return newGCSGatewayLayer(g.projectID)
+}
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
 // used for debugging purposes.
@@ -275,8 +351,8 @@ func gcsParseProjectID(credsFile string) (projectID string, err error) {
 	return googleCreds[gcsProjectIDKey], err
 }
 
-// newGCSGateway returns gcs gatewaylayer
-func newGCSGateway(projectID string) (GatewayLayer, error) {
+// newGCSGatewayLayer returns gcs gatewaylayer
+func newGCSGatewayLayer(projectID string) (GatewayLayer, error) {
 	ctx := context.Background()
 
 	var err error

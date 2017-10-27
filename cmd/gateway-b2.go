@@ -29,6 +29,7 @@ import (
 	"time"
 
 	b2 "github.com/minio/blazer/base"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	h2 "github.com/minio/minio/pkg/hash"
 )
@@ -37,7 +38,64 @@ import (
 const (
 	bucketTypePrivate  = "allPrivate"
 	bucketTypeReadOnly = "allPublic"
+	b2Backend          = "b2"
 )
+
+func init() {
+	const b2GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: B2 account id.
+     MINIO_SECRET_KEY: B2 application key.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for B2 backend.
+      $ export MINIO_ACCESS_KEY=accountID
+      $ export MINIO_SECRET_KEY=applicationKey
+      $ {{.HelpName}}
+
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               b2Backend,
+		Usage:              "Backblaze B2.",
+		Action:             b2GatewayMain,
+		CustomHelpTemplate: b2GatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway b2' command line.
+func b2GatewayMain(ctx *cli.Context) {
+	startGateway(ctx, &B2Gateway{})
+}
+
+// B2Gateway implements Gateway.
+type B2Gateway struct{}
+
+// Name implements Gateway interface.
+func (g *B2Gateway) Name() string {
+	return b2Backend
+}
+
+// NewGatewayLayer returns b2 gateway layer, implements GatewayLayer interface to
+// talk to B2 remote backend.
+func (g *B2Gateway) NewGatewayLayer() (GatewayLayer, error) {
+	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+	return newB2GatewayLayer()
+}
 
 // b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
@@ -49,9 +107,8 @@ type b2Objects struct {
 	ctx        context.Context
 }
 
-// newB2Gateway returns b2 gateway layer, implements GatewayLayer interface to
-// talk to B2 remote backend.
-func newB2Gateway() (GatewayLayer, error) {
+// newB2GatewayLayer returns b2 gateway layer.
+func newB2GatewayLayer() (GatewayLayer, error) {
 	ctx := context.Background()
 	creds := serverConfig.GetCredential()
 

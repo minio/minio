@@ -33,13 +33,86 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 )
 
-const globalAzureAPIVersion = "2016-05-31"
-const azureBlockSize = 100 * humanize.MiByte
-const metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
+const (
+	globalAzureAPIVersion      = "2016-05-31"
+	azureBlockSize             = 100 * humanize.MiByte
+	metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
+	azureBackend               = "azure"
+)
+
+func init() {
+	const azureGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENDPOINT:
+  Azure server endpoint. Default ENDPOINT is https://core.windows.net
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of Azure storage.
+     MINIO_SECRET_KEY: Password or secret key of Azure storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for Azure Blob Storage backend.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}} https://azure.example.com
+
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               azureBackend,
+		Usage:              "Microsoft Azure Blob Storage.",
+		Action:             azureGatewayMain,
+		CustomHelpTemplate: azureGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway azure' command line.
+func azureGatewayMain(ctx *cli.Context) {
+	// Validate gateway arguments.
+	host := ctx.Args().First()
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+
+	startGateway(ctx, &AzureGateway{host})
+}
+
+// AzureGateway implements Gateway.
+type AzureGateway struct {
+	host string
+}
+
+// Name implements Gateway interface.
+func (g *AzureGateway) Name() string {
+	return azureBackend
+}
+
+// NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
+func (g *AzureGateway) NewGatewayLayer() (GatewayLayer, error) {
+	return newAzureLayer(g.host)
+}
 
 // s3MetaToAzureProperties converts metadata meant for S3 PUT/COPY
 // object into Azure data structures - BlobMetadata and

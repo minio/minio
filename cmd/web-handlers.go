@@ -728,20 +728,10 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 
 func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
 	// FIXME: remove this code when S3 layer for gateway and server is unified.
-	var policyInfo policy.BucketAccessPolicy
-	var err error
-
-	switch layer := objAPI.(type) {
-	case *s3Objects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *azureObjects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *gcsGateway:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	default:
-		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
+	if layer, ok := objAPI.(GatewayLayer); ok {
+		return layer.GetBucketPolicies(bucketName)
 	}
-	return policyInfo, err
+	return readBucketAccessPolicy(objAPI, bucketName)
 }
 
 // GetBucketPolicy - get bucket policy for the requested prefix.
