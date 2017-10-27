@@ -469,8 +469,13 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimite
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+	// startOffset cannot be negative.
+	if startOffset < 0 {
+		return toObjectErr(traceError(errUnexpected), bucket, object)
+	}
+
 	blobRange := &storage.BlobRange{Start: uint64(startOffset)}
-	if length > 0 && startOffset > 0 {
+	if length > 0 {
 		blobRange.End = uint64(startOffset + length - 1)
 	}
 
