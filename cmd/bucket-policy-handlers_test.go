@@ -25,6 +25,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -32,8 +33,8 @@ import (
 func TestBucketPolicyResourceMatch(t *testing.T) {
 
 	// generates statement with given resource..
-	generateStatement := func(resource string) policyStatement {
-		statement := policyStatement{}
+	generateStatement := func(resource string) policy.Statement {
+		statement := policy.Statement{}
 		statement.Resources = set.CreateStringSet([]string{resource}...)
 		return statement
 	}
@@ -45,7 +46,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 
 	testCases := []struct {
 		resourceToMatch       string
-		statement             policyStatement
+		statement             policy.Statement
 		expectedResourceMatch bool
 	}{
 		// Test case 1-4.
@@ -85,7 +86,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 }
 
 // TestBucketPolicyActionMatch - Test validates whether given action on the
-// bucket/object matches the allowed actions in policyStatement.
+// bucket/object matches the allowed actions in policy.Statement.
 // This test preserves the allowed actions for all 3 sets of policies, that is read-write,read-only, write-only.
 // The intention of the test is to catch any changes made to allowed action for on eof the above 3 major policy groups mentioned.
 func TestBucketPolicyActionMatch(t *testing.T) {
@@ -94,7 +95,7 @@ func TestBucketPolicyActionMatch(t *testing.T) {
 
 	testCases := []struct {
 		action         string
-		statement      policyStatement
+		statement      policy.Statement
 		expectedResult bool
 	}{
 		// s3:GetBucketLocation is the action necessary to be present in the bucket policy to allow
@@ -843,28 +844,28 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 
 // TestBucketPolicyConditionMatch - Tests to validate whether bucket policy conditions match.
 func TestBucketPolicyConditionMatch(t *testing.T) {
-	// obtain the inner map[string]set.StringSet for policyStatement.Conditions.
+	// obtain the inner map[string]set.StringSet for policy.Statement.Conditions.
 	getInnerMap := func(key2, value string) map[string]set.StringSet {
 		innerMap := make(map[string]set.StringSet)
 		innerMap[key2] = set.CreateStringSet(value)
 		return innerMap
 	}
 
-	// obtain policyStatement with Conditions set.
-	getStatementWithCondition := func(key1, key2, value string) policyStatement {
+	// obtain policy.Statement with Conditions set.
+	getStatementWithCondition := func(key1, key2, value string) policy.Statement {
 		innerMap := getInnerMap(key2, value)
 		// to set policyStatment.Conditions .
-		conditions := make(map[string]map[string]set.StringSet)
+		conditions := make(policy.ConditionMap)
 		conditions[key1] = innerMap
 		// new policy statement.
-		statement := policyStatement{}
+		statement := policy.Statement{}
 		// set the condition.
 		statement.Conditions = conditions
 		return statement
 	}
 
 	testCases := []struct {
-		statementCondition policyStatement
+		statementCondition policy.Statement
 		condition          map[string]set.StringSet
 
 		expectedMatch bool
