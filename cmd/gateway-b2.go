@@ -79,6 +79,10 @@ EXAMPLES:
 
 // Handler for 'minio gateway b2' command line.
 func b2GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, b2Backend, 1)
+	}
+
 	startGateway(ctx, &B2Gateway{})
 }
 
