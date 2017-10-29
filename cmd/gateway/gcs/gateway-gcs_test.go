@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-package cmd
+package gcs
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
-	"github.com/minio/minio-go"
 	"github.com/minio/minio/pkg/errors"
 	"google.golang.org/api/googleapi"
+
+	miniogo "github.com/minio/minio-go"
+	minio "github.com/minio/minio/cmd"
 )
 
 func TestToGCSPageToken(t *testing.T) {
@@ -140,7 +143,7 @@ func TestIsGCSMarker(t *testing.T) {
 // Test for gcsMultipartMetaName.
 func TestGCSMultipartMetaName(t *testing.T) {
 	uploadID := "a"
-	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, gcsMinioMultipartMeta)
+	expected := path.Join(gcsMinioMultipartPathV1, uploadID, gcsMinioMultipartMeta)
 	got := gcsMultipartMetaName(uploadID)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)
@@ -154,7 +157,7 @@ func TestGCSMultipartDataName(t *testing.T) {
 		etag       = "b"
 		partNumber = 1
 	)
-	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, fmt.Sprintf("%05d.%s", partNumber, etag))
+	expected := path.Join(gcsMinioMultipartPathV1, uploadID, fmt.Sprintf("%05d.%s", partNumber, etag))
 	got := gcsMultipartDataName(uploadID, partNumber, etag)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)
@@ -163,23 +166,23 @@ func TestGCSMultipartDataName(t *testing.T) {
 
 func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
 
-	listBucketResult := minio.ListBucketResult{
+	listBucketResult := miniogo.ListBucketResult{
 		IsTruncated:    false,
 		Marker:         "testMarker",
 		NextMarker:     "testMarker2",
-		CommonPrefixes: []minio.CommonPrefix{{Prefix: "one"}, {Prefix: "two"}},
-		Contents:       []minio.ObjectInfo{{Key: "testobj", ContentType: ""}},
+		CommonPrefixes: []miniogo.CommonPrefix{{Prefix: "one"}, {Prefix: "two"}},
+		Contents:       []miniogo.ObjectInfo{{Key: "testobj", ContentType: ""}},
 	}
 
-	listBucketV2Info := ListObjectsV2Info{
+	listBucketV2Info := minio.ListObjectsV2Info{
 		Prefixes:              []string{"one", "two"},
-		Objects:               []ObjectInfo{{Name: "testobj", Bucket: "testbucket", UserDefined: map[string]string{"Content-Type": ""}}},
+		Objects:               []minio.ObjectInfo{{Name: "testobj", Bucket: "testbucket", UserDefined: map[string]string{"Content-Type": ""}}},
 		IsTruncated:           false,
 		ContinuationToken:     "testMarker",
 		NextContinuationToken: "testMarker2",
 	}
 
-	if got := fromMinioClientListBucketResultToV2Info("testbucket", listBucketResult); !reflect.DeepEqual(got, listBucketV2Info) {
+	if got := minio.FromMinioClientListBucketResultToV2Info("testbucket", listBucketResult); !reflect.DeepEqual(got, listBucketV2Info) {
 		t.Errorf("fromMinioClientListBucketResultToV2Info() = %v, want %v", got, listBucketV2Info)
 	}
 }
@@ -242,14 +245,14 @@ func TestGCSToObjectError(t *testing.T) {
 		{
 			[]string{"bucket"},
 			errors.Trace(fmt.Errorf("storage: bucket doesn't exist")),
-			BucketNotFound{
+			minio.BucketNotFound{
 				Bucket: "bucket",
 			},
 		},
 		{
 			[]string{"bucket", "object"},
 			errors.Trace(fmt.Errorf("storage: object doesn't exist")),
-			ObjectNotFound{
+			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -257,7 +260,7 @@ func TestGCSToObjectError(t *testing.T) {
 		{
 			[]string{"bucket", "object", "uploadID"},
 			errors.Trace(fmt.Errorf("storage: object doesn't exist")),
-			InvalidUploadID{
+			minio.InvalidUploadID{
 				UploadID: "uploadID",
 			},
 		},
@@ -283,7 +286,9 @@ func TestGCSToObjectError(t *testing.T) {
 					Message: "You already own this bucket. Please select another name.",
 				}},
 			}),
-			BucketAlreadyOwnedByYou{Bucket: "bucket"},
+			minio.BucketAlreadyOwnedByYou{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket", "object"},
@@ -293,7 +298,9 @@ func TestGCSToObjectError(t *testing.T) {
 					Message: "Sorry, that name is not available. Please try a different one.",
 				}},
 			}),
-			BucketAlreadyExists{Bucket: "bucket"},
+			minio.BucketAlreadyExists{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket", "object"},
@@ -302,7 +309,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "conflict",
 				}},
 			}),
-			BucketNotEmpty{Bucket: "bucket"},
+			minio.BucketNotEmpty{Bucket: "bucket"},
 		},
 		{
 			[]string{"bucket"},
@@ -311,7 +318,9 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "notFound",
 				}},
 			}),
-			BucketNotFound{Bucket: "bucket"},
+			minio.BucketNotFound{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket", "object"},
@@ -320,7 +329,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "notFound",
 				}},
 			}),
-			ObjectNotFound{
+			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -332,7 +341,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "invalid",
 				}},
 			}),
-			BucketNameInvalid{
+			minio.BucketNameInvalid{
 				Bucket: "bucket",
 			},
 		},
@@ -343,7 +352,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "forbidden",
 				}},
 			}),
-			PrefixAccessDenied{
+			minio.PrefixAccessDenied{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -355,7 +364,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "keyInvalid",
 				}},
 			}),
-			PrefixAccessDenied{
+			minio.PrefixAccessDenied{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -367,7 +376,7 @@ func TestGCSToObjectError(t *testing.T) {
 					Reason: "required",
 				}},
 			}),
-			PrefixAccessDenied{
+			minio.PrefixAccessDenied{
 				Bucket: "bucket",
 				Object: "object",
 			},

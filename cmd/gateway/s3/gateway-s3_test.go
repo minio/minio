@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-package cmd
+package s3
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
-	minio "github.com/minio/minio-go"
-	errors2 "github.com/minio/minio/pkg/errors"
+	miniogo "github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+
+	minio "github.com/minio/minio/cmd"
 )
 
-func errResponse(code string) minio.ErrorResponse {
-	return minio.ErrorResponse{
+func errResponse(code string) miniogo.ErrorResponse {
+	return miniogo.ErrorResponse{
 		Code: code,
 	}
 }
@@ -39,41 +41,41 @@ func TestS3ToObjectError(t *testing.T) {
 	}{
 		{
 			inputErr:    errResponse("BucketAlreadyOwnedByYou"),
-			expectedErr: BucketAlreadyOwnedByYou{},
+			expectedErr: minio.BucketAlreadyOwnedByYou{},
 		},
 		{
 			inputErr:    errResponse("BucketNotEmpty"),
-			expectedErr: BucketNotEmpty{},
+			expectedErr: minio.BucketNotEmpty{},
 		},
 		{
 			inputErr:    errResponse("InvalidBucketName"),
-			expectedErr: BucketNameInvalid{},
+			expectedErr: minio.BucketNameInvalid{},
 		},
 		{
 			inputErr:    errResponse("NoSuchBucketPolicy"),
-			expectedErr: PolicyNotFound{},
+			expectedErr: minio.PolicyNotFound{},
 		},
 		{
 			inputErr:    errResponse("NoSuchBucket"),
-			expectedErr: BucketNotFound{},
+			expectedErr: minio.BucketNotFound{},
 		},
-		// with empty Object in minio.ErrorRepsonse, NoSuchKey
+		// with empty Object in miniogo.ErrorRepsonse, NoSuchKey
 		// is interpreted as BucketNotFound
 		{
 			inputErr:    errResponse("NoSuchKey"),
-			expectedErr: BucketNotFound{},
+			expectedErr: minio.BucketNotFound{},
 		},
 		{
 			inputErr:    errResponse("NoSuchUpload"),
-			expectedErr: InvalidUploadID{},
+			expectedErr: minio.InvalidUploadID{},
 		},
 		{
 			inputErr:    errResponse("XMinioInvalidObjectName"),
-			expectedErr: ObjectNameInvalid{},
+			expectedErr: minio.ObjectNameInvalid{},
 		},
 		{
 			inputErr:    errResponse("AccessDenied"),
-			expectedErr: PrefixAccessDenied{},
+			expectedErr: minio.PrefixAccessDenied{},
 		},
 		{
 			inputErr:    errResponse("XAmzContentSHA256Mismatch"),
@@ -81,7 +83,7 @@ func TestS3ToObjectError(t *testing.T) {
 		},
 		{
 			inputErr:    errResponse("EntityTooSmall"),
-			expectedErr: PartTooSmall{},
+			expectedErr: minio.PartTooSmall{},
 		},
 		{
 			inputErr:    nil,
@@ -89,34 +91,37 @@ func TestS3ToObjectError(t *testing.T) {
 		},
 		// Special test case for NoSuchKey with object name
 		{
-			inputErr: minio.ErrorResponse{
+			inputErr: miniogo.ErrorResponse{
 				Code: "NoSuchKey",
 			},
-			expectedErr: ObjectNotFound{},
-			bucket:      "bucket",
-			object:      "obbject",
+			expectedErr: minio.ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			},
+			bucket: "bucket",
+			object: "object",
 		},
 
 		// N B error values that aren't of expected types
 		// should be left untouched.
 		// Special test case for error that is not of type
-		// minio.ErrorResponse
+		// miniogo.ErrorResponse
 		{
-			inputErr:    errors.New("not a minio.ErrorResponse"),
-			expectedErr: errors.New("not a minio.ErrorResponse"),
+			inputErr:    fmt.Errorf("not a minio.ErrorResponse"),
+			expectedErr: fmt.Errorf("not a minio.ErrorResponse"),
 		},
 		// Special test case for error value that is not of
 		// type (*Error)
 		{
-			inputErr:    errors.New("not a *Error"),
-			expectedErr: errors.New("not a *Error"),
+			inputErr:    fmt.Errorf("not a *Error"),
+			expectedErr: fmt.Errorf("not a *Error"),
 		},
 	}
 
 	for i, tc := range testCases {
-		actualErr := s3ToObjectError(tc.inputErr, tc.bucket, tc.object)
-		if e, ok := actualErr.(*errors2.Error); ok && e.Cause != tc.expectedErr {
-			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e.Cause)
+		actualErr := minio.ErrorRespToObjectError(errors.Trace(tc.inputErr), tc.bucket, tc.object)
+		if e, ok := actualErr.(*errors.Error); ok && e.Cause.Error() != tc.expectedErr.Error() {
+			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e)
 		}
 	}
 }

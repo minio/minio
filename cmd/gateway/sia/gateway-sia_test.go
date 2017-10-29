@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package sia
 
 import (
 	"testing"

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package azure
 
 import (
 	"encoding/xml"
@@ -29,6 +29,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/minio/minio/pkg/errors"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/container.go
@@ -113,21 +115,21 @@ func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, 
 }
 
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
-func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo minio.BucketInfo, err error) {
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
 	url, err := url.Parse(blobURL)
 	if err != nil {
 		return bucketInfo, azureToObjectError(errors.Trace(err))
 	}
 	url.RawQuery = "restype=container"
-	resp, err := azureAnonRequest(httpHEAD, url.String(), nil)
+	resp, err := azureAnonRequest(http.MethodHead, url.String(), nil)
 	if err != nil {
 		return bucketInfo, azureToObjectError(errors.Trace(err), bucket)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
+		return bucketInfo, azureToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
@@ -135,12 +137,10 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 		return bucketInfo, errors.Trace(err)
 	}
 
-	bucketInfo = BucketInfo{
+	return minio.BucketInfo{
 		Name:    bucket,
 		Created: t,
-	}
-
-	return bucketInfo, nil
+	}, nil
 }
 
 // AnonGetObject - SendGET request without authentication.
@@ -154,14 +154,14 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 	}
 
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
-	resp, err := azureAnonRequest(httpGET, blobURL, h)
+	resp, err := azureAnonRequest(http.MethodGet, blobURL, h)
 	if err != nil {
 		return azureToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return azureToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	_, err = io.Copy(writer, resp.Body)
@@ -170,16 +170,16 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
-func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
-	resp, err := azureAnonRequest(httpHEAD, blobURL, nil)
+	resp, err := azureAnonRequest(http.MethodHead, blobURL, nil)
 	if err != nil {
 		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return objInfo, azureToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	var contentLength int64
@@ -187,7 +187,7 @@ func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectI
 	if contentLengthStr != "" {
 		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
 		if err != nil {
-			return objInfo, azureToObjectError(errors.Trace(errUnexpected), bucket, object)
+			return objInfo, azureToObjectError(errors.Trace(fmt.Errorf("Unexpected error")), bucket, object)
 		}
 	}
 
@@ -211,7 +211,7 @@ func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectI
 }
 
 // AnonListObjects - Use Azure equivalent ListBlobs.
-func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     marker,
@@ -230,7 +230,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	}
 	url.RawQuery = q.Encode()
 
-	resp, err := azureAnonRequest(httpGET, url.String(), nil)
+	resp, err := azureAnonRequest(http.MethodGet, url.String(), nil)
 	if err != nil {
 		return result, azureToObjectError(errors.Trace(err))
 	}
@@ -250,7 +250,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	result.IsTruncated = listResp.NextMarker != ""
 	result.NextMarker = listResp.NextMarker
 	for _, object := range listResp.Blobs {
-		result.Objects = append(result.Objects, ObjectInfo{
+		result.Objects = append(result.Objects, minio.ObjectInfo{
 			Bucket:          bucket,
 			Name:            object.Name,
 			ModTime:         time.Time(object.Properties.LastModified),
@@ -265,7 +265,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     continuationToken,
@@ -307,12 +307,12 @@ func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, deli
 		result.NextContinuationToken = listResp.NextMarker
 	}
 	for _, object := range listResp.Blobs {
-		result.Objects = append(result.Objects, ObjectInfo{
+		result.Objects = append(result.Objects, minio.ObjectInfo{
 			Bucket:          bucket,
 			Name:            object.Name,
 			ModTime:         time.Time(object.Properties.LastModified),
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            minio.CanonicalizeETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
