@@ -86,15 +86,15 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
-			"checksumSHA1": "J+kVue/HTH4sELlqMO4z0tx9DiA=",
-			"path": "github.com/boltdb/bolt",
-			"revision": "e9cf4fae01b5a8ff89d0ec6b32f0d9c9f79aefdd",
-			"revisionTime": "2017-01-31T19:20:18Z"
-		},
-		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"
+		},
+		{
+			"checksumSHA1": "LhRQthBRjkXhfPEo9sk1s5Y47iI=",
+			"path": "github.com/coreos/bbolt",
+			"revision": "3eac9d3bd834d07cf6b83b780a750cd10c16597a",
+			"revisionTime": "2017-09-28T16:33:06Z"
 		},
 		{
 			"checksumSHA1": "/5cvgU+J4l7EhMXTK76KaCAfOuU=",

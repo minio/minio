@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/boltdb/bolt"
+	bolt "github.com/coreos/bbolt"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/hash"
 
