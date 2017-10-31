@@ -28,6 +28,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Implement a dummy flush writer.
@@ -181,7 +183,7 @@ func TestGetBucketNotificationHandler(t *testing.T) {
 }
 
 func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	// declare sample configs
 	filterRules := []filterRule{
 		{
@@ -254,7 +256,7 @@ func TestPutBucketNotificationHandler(t *testing.T) {
 }
 
 func testPutBucketNotificationHandler(obj ObjectLayer, instanceType,
-	bucketName string, apiRouter http.Handler, credentials credential,
+	bucketName string, apiRouter http.Handler, credentials auth.Credentials,
 	t *testing.T) {
 
 	// declare sample configs
@@ -344,7 +346,7 @@ func TestListenBucketNotificationNilHandler(t *testing.T) {
 }
 
 func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	// get random bucket name.
 	randBucket := getRandomBucketName()
 
@@ -371,7 +373,7 @@ func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucke
 }
 
 func testRemoveNotificationConfig(obj ObjectLayer, instanceType,
-	bucketName string, apiRouter http.Handler, credentials credential,
+	bucketName string, apiRouter http.Handler, credentials auth.Credentials,
 	t *testing.T) {
 
 	invalidBucket := "Invalid\\Bucket"

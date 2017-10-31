@@ -54,6 +54,7 @@ import (
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -1962,7 +1963,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 
 // function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
 type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string,
-	apiRouter http.Handler, credentials credential, t *testing.T)
+	apiRouter http.Handler, credentials auth.Credentials, t *testing.T)
 
 // Regular object test type.
 type objTestType func(obj ObjectLayer, instanceType string, t TestErrHandler)

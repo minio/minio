@@ -36,6 +36,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -368,7 +369,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	cred := mustGetNewCredential()
+	cred := auth.MustGetNewCredentials()
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = browser.UIVersion
@@ -399,7 +400,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
-	creds, err := createCredential(args.AccessKey, args.SecretKey)
+	creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
 	if err != nil {
 		return toJSONError(err)
 	}
@@ -1016,13 +1017,13 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidAccessKeyLength {
+	} else if err == auth.ErrInvalidAccessKeyLength {
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidSecretKeyLength {
+	} else if err == auth.ErrInvalidSecretKeyLength {
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,

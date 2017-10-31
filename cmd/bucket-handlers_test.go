@@ -24,6 +24,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Wrapper for calling GetBucketPolicy HTTP handler tests for both XL multiple disks and single node setup.
@@ -32,7 +34,7 @@ func TestGetBucketLocationHandler(t *testing.T) {
 }
 
 func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	initBucketPolicies(obj)
 
 	// test cases with sample input and expected output.
@@ -177,7 +179,7 @@ func TestHeadBucketHandler(t *testing.T) {
 }
 
 func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	initBucketPolicies(obj)
 
 	// test cases with sample input and expected output.
@@ -284,7 +286,7 @@ func TestListMultipartUploadsHandler(t *testing.T) {
 
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
 func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	initBucketPolicies(obj)
 
 	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
@@ -522,7 +524,7 @@ func TestListBucketsHandler(t *testing.T) {
 
 // testListBucketsHandler - Tests validate listing of buckets.
 func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	testCases := []struct {
 		bucketName         string
@@ -615,7 +617,7 @@ func TestAPIDeleteMultipleObjectsHandler(t *testing.T) {
 }
 
 func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	initBucketPolicies(obj)
 
 	var err error
@@ -805,7 +807,7 @@ func TestIsBucketActionAllowed(t *testing.T) {
 }
 
 func testIsBucketActionAllowedHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	testCases := []struct {
 		// input.

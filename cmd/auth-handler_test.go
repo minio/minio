@@ -23,6 +23,8 @@ import (
 	"net/url"
 	"os"
 	"testing"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Test get request auth type.
@@ -327,7 +329,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 	defer os.RemoveAll(path)
 
-	creds, err := createCredential("myuser", "mypassword")
+	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
 		t.Fatalf("unable create credential, %s", err)
 	}

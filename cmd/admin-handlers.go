@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 const (
@@ -168,7 +170,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 		return
 	}
 
-	creds, err := createCredential(req.Username, req.Password)
+	creds, err := auth.CreateCredentials(req.Username, req.Password)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

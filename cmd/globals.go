@@ -25,6 +25,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/minio/minio/pkg/auth"
 	miniohttp "github.com/minio/minio/pkg/http"
 )
 
@@ -142,7 +143,7 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred         credential
+	globalActiveCred         auth.Credentials
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
 	// Add new variable global values here.

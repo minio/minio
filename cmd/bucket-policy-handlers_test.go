@@ -27,6 +27,7 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Tests validate Bucket policy resource matcher.
@@ -248,7 +249,7 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	initBucketPolicies(obj)
 
 	bucketName1 := fmt.Sprintf("%s-1", bucketName)
@@ -455,7 +456,7 @@ func TestGetBucketPolicyHandler(t *testing.T) {
 
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
 func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	// initialize bucket policy.
 	initBucketPolicies(obj)
 
@@ -644,7 +645,7 @@ func TestDeleteBucketPolicyHandler(t *testing.T) {
 
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
 func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	// initialize bucket policy.
 	initBucketPolicies(obj)
 

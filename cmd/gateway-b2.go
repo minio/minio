@@ -31,6 +31,7 @@ import (
 	b2 "github.com/minio/blazer/base"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/auth"
 	h2 "github.com/minio/minio/pkg/hash"
 )
 
@@ -101,7 +102,7 @@ func (g *B2Gateway) NewGatewayLayer() (GatewayLayer, error) {
 type b2Objects struct {
 	gatewayUnsupported
 	mu         sync.Mutex
-	creds      credential
+	creds      auth.Credentials
 	b2Client   *b2.B2
 	anonClient *http.Client
 	ctx        context.Context
