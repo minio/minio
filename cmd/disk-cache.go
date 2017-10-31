@@ -13,6 +13,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/hash"
 
 	"encoding/json"
 )
@@ -386,10 +387,7 @@ func (c diskCache) Delete(bucket, object string) (err error) {
 	if err = os.Remove(c.encodedPath(bucket, object)); err != nil {
 		return err
 	}
-	if err = os.Remove(c.encodedMetaPath(bucket, object)); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(c.encodedMetaPath(bucket, object))
 }
 
 // Update atime for the cached object.
@@ -486,10 +484,10 @@ type cacheObjects struct {
 	// Object functions pointing to the corresponding functions of backend implementation.
 	GetObjectFn         func(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	GetObjectInfoFn     func(bucket, object string) (objInfo ObjectInfo, err error)
-	PutObjectFn         func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
+	PutObjectFn         func(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	AnonGetObjectFn     func(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	AnonGetObjectInfoFn func(bucket, object string) (objInfo ObjectInfo, err error)
-	AnonPutObjectFn     func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
+	AnonPutObjectFn     func(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 }
 
 // Common function for GetObject and AnonGetObject
@@ -616,20 +614,28 @@ func (c cacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, erro
 }
 
 // Common code for PutObject and PutObjectInfo
-func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string, anonReq bool) (ObjectInfo, error) {
+func (c cacheObjects) putObject(bucket, object string, r *hash.Reader, metadata map[string]string, anonReq bool) (ObjectInfo, error) {
 	putObjectFn := c.PutObjectFn
 	if anonReq {
 		putObjectFn = c.AnonPutObjectFn
 	}
 
+	size := r.Size()
 	cachedObj, err := c.dcache.Put(size)
 	if err == errDiskFull {
-		return putObjectFn(bucket, object, size, r, metadata, sha256sum)
+		return putObjectFn(bucket, object, r, metadata)
 	}
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	objInfo, err := putObjectFn(bucket, object, size, io.TeeReader(r, cachedObj), metadata, sha256sum)
+	teeReader := io.TeeReader(r, cachedObj)
+	hashReader, err := hash.NewReader(teeReader, size, r.MD5HexString(), r.SHA256HexString())
+	if err != nil {
+		errNoCommit := c.dcache.NoCommit(cachedObj)
+		errorIf(errNoCommit, "Error while discarding temporary cache file for %s/%s", bucket, object)
+		return ObjectInfo{}, err
+	}
+	objInfo, err := putObjectFn(bucket, object, hashReader, metadata)
 	if err != nil {
 		errNoCommit := c.dcache.NoCommit(cachedObj)
 		errorIf(errNoCommit, "Error while discarding temporary cache file for %s/%s", bucket, object)
@@ -646,13 +652,13 @@ func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, 
 }
 
 // PutObject - caches the uploaded object.
-func (c cacheObjects) PutObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-	return c.putObject(bucket, object, size, r, metadata, sha256sum, false)
+func (c cacheObjects) PutObject(bucket, object string, r *hash.Reader, metadata map[string]string) (ObjectInfo, error) {
+	return c.putObject(bucket, object, r, metadata, false)
 }
 
 // AnonPutObject - anonymous version of PutObject.
-func (c cacheObjects) AnonPutObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-	return c.putObject(bucket, object, size, r, metadata, sha256sum, true)
+func (c cacheObjects) AnonPutObject(bucket, object string, r *hash.Reader, metadata map[string]string) (ObjectInfo, error) {
+	return c.putObject(bucket, object, r, metadata, true)
 }
 
 // Returns cachedObjects for use by Server.
@@ -670,8 +676,8 @@ func newServerCacheObjects(dir string, maxUsage, expiry int) (*cacheObjects, err
 		GetObjectInfoFn: func(bucket, object string) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(bucket, object)
 		},
-		PutObjectFn: func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-			return newObjectLayerFn().PutObject(bucket, object, size, data, metadata, sha256sum)
+		PutObjectFn: func(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+			return newObjectLayerFn().PutObject(bucket, object, data, metadata)
 		},
 		AnonGetObjectFn: func(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 			return NotImplemented{}
@@ -679,7 +685,7 @@ func newServerCacheObjects(dir string, maxUsage, expiry int) (*cacheObjects, err
 		AnonGetObjectInfoFn: func(bucket, object string) (ObjectInfo, error) {
 			return ObjectInfo{}, NotImplemented{}
 		},
-		AnonPutObjectFn: func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+		AnonPutObjectFn: func(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 			return objInfo, NotImplemented{}
 		},
 	}, nil

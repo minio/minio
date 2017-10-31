@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -188,7 +189,7 @@ func dumpRequest(r *http.Request) string {
 
 // isFile - returns whether given path is a file or not.
 func isFile(path string) bool {
-	if fi, err := osStat(path); err == nil {
+	if fi, err := os.Stat(path); err == nil {
 		return fi.Mode().IsRegular()
 	}
 
@@ -229,6 +230,7 @@ func toS3ETag(etag string) string {
 
 	return etag
 }
+
 // isNetworkOrHostDown - if there was a network error or if the host is down.
 func isNetworkOrHostDown(err error) bool {
 	if err == nil {
