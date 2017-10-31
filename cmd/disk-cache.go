@@ -256,11 +256,13 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) (err error)
 	}
 	defer objectLock.Unlock()
 
-	encPath := c.encodedPath(bucket, object)
-	if err = os.Rename(f.Name(), encPath); err != nil {
+	// close cache file and move to cache-dir
+	fileName := f.Name()
+	if err = f.Close(); err != nil {
 		return err
 	}
-	if err = f.Close(); err != nil {
+	encPath := c.encodedPath(bucket, object)
+	if err = os.Rename(fileName, encPath); err != nil {
 		return err
 	}
 	metaPath := c.encodedMetaPath(bucket, object)
