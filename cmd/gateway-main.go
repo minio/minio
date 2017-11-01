@@ -144,7 +144,8 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	// Validate if we have access, secret set through environment.
 	gatewayName := gw.Name()
 	if !globalIsEnvCreds {
-		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", gatewayName), "")
+		errorIf(errors.New("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
+		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
 	// Create certs path.
