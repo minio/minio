@@ -289,7 +289,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	/// Verify finally if signature is same.
 
 	// Get canonical request.
-	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method)
+	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, encodedQuery, req.URL.Path, req.Method)
 
 	// Get string to sign from canonical request.
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, pSignValues.Credential.getScope())

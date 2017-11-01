@@ -569,7 +569,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if !skipContentSha256Cksum(r) {
-			sha256hex = r.Header.Get("X-Amz-Content-Sha256")
+			sha256hex = getContentSha256Cksum(r)
 		}
 	}
 
@@ -866,7 +866,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		if !skipContentSha256Cksum(r) {
-			sha256hex = r.Header.Get("X-Amz-Content-Sha256")
+			sha256hex = getContentSha256Cksum(r)
 		}
 	}
 
