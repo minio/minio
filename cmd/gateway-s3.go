@@ -76,9 +76,12 @@ EXAMPLES:
 
 // Handler for 'minio gateway s3' command line.
 func s3GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, s3Backend, 1)
+	}
+
 	// Validate gateway arguments.
 	host := ctx.Args().First()
-	// Validate gateway arguments.
 	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
 	startGateway(ctx, &S3Gateway{host})

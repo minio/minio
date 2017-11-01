@@ -167,10 +167,6 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
-	}
-
 	newObject, err := gw.NewGatewayLayer()
 	fatalIf(err, "Unable to initialize gateway layer")
 

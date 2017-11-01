@@ -127,6 +127,10 @@ EXAMPLES:
 
 // Handler for 'minio gateway gcs' command line.
 func gcsGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, gcsBackend, 1)
+	}
+
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		errorIf(errGCSProjectIDNotFound, "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")

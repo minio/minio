@@ -91,9 +91,12 @@ EXAMPLES:
 
 // Handler for 'minio gateway azure' command line.
 func azureGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, azureBackend, 1)
+	}
+
 	// Validate gateway arguments.
 	host := ctx.Args().First()
-	// Validate gateway arguments.
 	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
 	startGateway(ctx, &AzureGateway{host})
