@@ -18,30 +18,34 @@ package cmd
 
 import (
 	"crypto/tls"
+	"errors"
 	"io/ioutil"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 type mqttNotify struct {
-	Enable   bool   `json:"enable"`
-	Broker   string `json:"broker"`
-	Topic    string `json:"topic"`
-	QoS      int    `json:"qos"`
-	ClientID string `json:"clientId"`
-	User     string `json:"username"`
-	Password string `json:"password"`
+	Enable   bool     `json:"enable"`
+	Broker   xnet.URL `json:"broker"`
+	Topic    string   `json:"topic"`
+	QoS      int      `json:"qos"`
+	ClientID string   `json:"clientId"`
+	User     string   `json:"username"`
+	Password string   `json:"password"`
 }
 
 func (m *mqttNotify) Validate() error {
 	if !m.Enable {
 		return nil
 	}
-	if _, err := checkURL(m.Broker); err != nil {
-		return err
+
+	if m.Broker.IsEmpty() {
+		return errors.New("empty Broker")
 	}
+
 	return nil
 }
 
@@ -63,7 +67,7 @@ func dialMQTT(mqttL mqttNotify) (mc mqttConn, e error) {
 		KeepAlive:            30 * time.Second,
 		TLSConfig:            tls.Config{RootCAs: globalRootCAs},
 	}
-	connOpts.AddBroker(mqttL.Broker)
+	connOpts.AddBroker(mqttL.Broker.String())
 	client := MQTT.NewClient(connOpts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		return mc, token.Error()

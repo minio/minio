@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -236,16 +235,13 @@ type adminPeers []adminPeer
 
 // makeAdminPeers - helper function to construct a collection of adminPeer.
 func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
-	thisPeer := globalMinioAddr
-	if globalMinioHost == "" {
-		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
-	}
+	thisPeer := globalServerHost.String()
 	adminPeerList = append(adminPeerList, adminPeer{
 		thisPeer,
 		localAdminClient{},
 	})
 
-	hostSet := set.CreateStringSet(globalMinioAddr)
+	hostSet := set.CreateStringSet(thisPeer)
 	cred := serverConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, adminPath)
 	for _, host := range GetRemotePeers(endpoints) {

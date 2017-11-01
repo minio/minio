@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -193,18 +192,6 @@ func isFile(path string) bool {
 	}
 
 	return false
-}
-
-// checkURL - checks if passed address correspond
-func checkURL(urlStr string) (*url.URL, error) {
-	if urlStr == "" {
-		return nil, errors.New("Address cannot be empty")
-	}
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, fmt.Errorf("`%s` invalid: %s", urlStr, err.Error())
-	}
-	return u, nil
 }
 
 // UTCNow - returns current UTC time.

@@ -19,11 +19,11 @@ package cmd
 import (
 	"crypto/x509"
 	"fmt"
-	"net/url"
 	"runtime"
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Documentation links, these are part of message printing code.
@@ -75,26 +75,16 @@ func printStartupMessage(apiEndPoints []string) {
 // banner.  Returns a new list of API endpoints.
 func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 	newAPIEndpoints = make([]string, len(apiEndpoints))
+
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
-		url, err := url.Parse(apiEndpoint)
-		if err != nil {
-			newAPIEndpoints[i] = apiEndpoint
-			continue
+		if u, err := xnet.ParseURL(apiEndpoint); err == nil {
+			apiEndpoint = u.String()
 		}
-		host, port := mustSplitHostPort(url.Host)
-		// For standard HTTP(s) ports such as "80" and "443"
-		// apiEndpoints should only be host without port.
-		switch {
-		case url.Scheme == "http" && port == "80":
-			fallthrough
-		case url.Scheme == "https" && port == "443":
-			url.Host = host
-			newAPIEndpoints[i] = url.String()
-		default:
-			newAPIEndpoints[i] = apiEndpoint
-		}
+
+		newAPIEndpoints[i] = apiEndpoint
 	}
+
 	return newAPIEndpoints
 }
 

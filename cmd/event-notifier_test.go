@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Test InitEventNotifier with faulty disks
@@ -248,10 +250,7 @@ func (s *TestPeerRPCServerData) Setup(t *testing.T) {
 	s.testServer = StartTestPeersRPCServer(t, s.serverType)
 
 	// setup port and minio addr
-	host, port := mustSplitHostPort(s.testServer.Server.Listener.Addr().String())
-	globalMinioHost = host
-	globalMinioPort = port
-	globalMinioAddr = getEndpointsLocalAddr(s.testServer.endpoints)
+	globalServerHost = xnet.MustParseHost(s.testServer.Server.Listener.Addr().String())
 
 	// initialize the peer client(s)
 	initGlobalS3Peers(s.testServer.Disks)
@@ -339,7 +338,7 @@ func TestInitEventNotifier(t *testing.T) {
 		{
 			TopicConfig: topicConfig{ServiceConfig: sampleSvcCfg,
 				TopicARN: "testlARN"},
-			TargetServer: globalMinioAddr,
+			TargetServer: globalServerHost.String(),
 		},
 	}
 
@@ -383,7 +382,7 @@ func TestInitEventNotifier(t *testing.T) {
 	if lcfg == nil {
 		t.Error("Bucket listener was not present for ", bucketName)
 	}
-	if len(lcfg) != 1 || lcfg[0].TargetServer != globalMinioAddr || lcfg[0].TopicConfig.TopicARN != "testlARN" {
+	if len(lcfg) != 1 || lcfg[0].TargetServer != globalServerHost.String() || lcfg[0].TopicConfig.TopicARN != "testlARN" {
 		t.Error("Unexpected listener config found - ", lcfg[0])
 	}
 	if globalEventNotifier.GetInternalTarget("testlARN") == nil {
@@ -428,7 +427,7 @@ func TestListenBucketNotification(t *testing.T) {
 			},
 			listenARN,
 		},
-		TargetServer: globalMinioAddr,
+		TargetServer: globalServerHost.String(),
 	}
 
 	// write listener config to storage layer
@@ -529,7 +528,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 		"arn:minio:sqs:%s:%s:listen-%s",
 		serverConfig.GetRegion(),
 		accountID,
-		globalMinioAddr,
+		globalServerHost.String(),
 	)
 
 	// Make topic configuration
@@ -555,7 +554,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 	}
 	sampleListenerCfg := &listenerConfig{
 		TopicConfig:  sampleTopicCfg,
-		TargetServer: globalMinioAddr,
+		TargetServer: globalServerHost.String(),
 	}
 	testCases := []struct {
 		lCfg        *listenerConfig

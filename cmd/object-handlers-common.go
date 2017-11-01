@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -242,8 +241,7 @@ func deleteObject(obj ObjectLayer, bucket, object string, r *http.Request) (err 
 		return err
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, _ := net.SplitHostPort(r.RemoteAddr)
+	host := getSourceHost(r)
 
 	// Notify object deleted event.
 	eventNotify(eventData{
@@ -254,8 +252,8 @@ func deleteObject(obj ObjectLayer, bucket, object string, r *http.Request) (err 
 		},
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      host.Host,
+		Port:      host.PortNumber.String(),
 	})
 
 	return nil

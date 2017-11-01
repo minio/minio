@@ -27,6 +27,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/minio/minio/pkg/auth"
 	miniohttp "github.com/minio/minio/pkg/http"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // minio configuration related constants.
@@ -101,12 +102,8 @@ var (
 	// Maximum size of internal objects parts
 	globalPutPartSize = int64(64 * 1024 * 1024)
 
-	// Minio local server address (in `host:port` format)
-	globalMinioAddr = ""
-	// Minio default port, can be changed through command line.
-	globalMinioPort = "9000"
-	// Holds the host that was passed using --address
-	globalMinioHost = ""
+	// Server address passed by command line argument.
+	globalServerHost *xnet.Host
 
 	// Peer communication struct
 	globalS3Peers = s3Peers{}

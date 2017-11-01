@@ -147,19 +147,19 @@ func isValidQueueID(queueARN string) bool {
 
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
 		amqpN := serverConfig.Notify.GetAMQPByID(sqsARN.AccountID)
-		return amqpN.Enable && amqpN.URL != ""
+		return amqpN.Enable && !amqpN.URL.IsEmpty()
 	} else if isMQTTQueue(sqsARN) {
 		mqttN := serverConfig.Notify.GetMQTTByID(sqsARN.AccountID)
-		return mqttN.Enable && mqttN.Broker != ""
+		return mqttN.Enable && !mqttN.Broker.IsEmpty()
 	} else if isNATSQueue(sqsARN) {
 		natsN := serverConfig.Notify.GetNATSByID(sqsARN.AccountID)
-		return natsN.Enable && natsN.Address != ""
+		return natsN.Enable && !natsN.Address.IsEmpty()
 	} else if isElasticQueue(sqsARN) { // Elastic queue.
 		elasticN := serverConfig.Notify.GetElasticSearchByID(sqsARN.AccountID)
-		return elasticN.Enable && elasticN.URL != ""
+		return elasticN.Enable && !elasticN.URL.IsEmpty()
 	} else if isRedisQueue(sqsARN) { // Redis queue.
 		redisN := serverConfig.Notify.GetRedisByID(sqsARN.AccountID)
-		return redisN.Enable && redisN.Addr != ""
+		return redisN.Enable && !redisN.Addr.IsEmpty()
 	} else if isPostgreSQLQueue(sqsARN) {
 		pgN := serverConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
@@ -174,7 +174,7 @@ func isValidQueueID(queueARN string) bool {
 			kafkaN.Topic != "")
 	} else if isWebhookQueue(sqsARN) {
 		webhookN := serverConfig.Notify.GetWebhookByID(sqsARN.AccountID)
-		return webhookN.Enable && webhookN.Endpoint != ""
+		return webhookN.Enable && !webhookN.Endpoint.IsEmpty()
 	}
 	return false
 }

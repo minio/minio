@@ -20,16 +20,15 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // IPv4 addresses of local host.
@@ -182,15 +181,6 @@ func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
 	return apiEndpoints
 }
 
-// isHostIPv4 - helper for validating if the provided arg is an ip address.
-func isHostIPv4(ipAddress string) bool {
-	host, _, err := net.SplitHostPort(ipAddress)
-	if err != nil {
-		host = ipAddress
-	}
-	return net.ParseIP(host) != nil
-}
-
 // checkPortAvailability - check if given port is already in use.
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
@@ -227,66 +217,14 @@ func checkPortAvailability(port string) (err error) {
 	return nil
 }
 
-// extractHostPort - extracts host/port from many address formats
-// such as, ":9000", "localhost:9000", "http://localhost:9000/"
-func extractHostPort(hostAddr string) (string, string, error) {
-	var addr, scheme string
-
-	if hostAddr == "" {
-		return "", "", errors.New("unable to process empty address")
-	}
-
-	// Simplify the work of url.Parse() and always send a url with
-	if !strings.HasPrefix(hostAddr, "http://") && !strings.HasPrefix(hostAddr, "https://") {
-		hostAddr = "//" + hostAddr
-	}
-
-	// Parse address to extract host and scheme field
-	u, err := url.Parse(hostAddr)
-	if err != nil {
-		return "", "", err
-	}
-
-	addr = u.Host
-	scheme = u.Scheme
-
-	// Use the given parameter again if url.Parse()
-	// didn't return any useful result.
-	if addr == "" {
-		addr = hostAddr
-		scheme = "http"
-	}
-
-	// At this point, addr can be one of the following form:
-	//	":9000"
-	//	"localhost:9000"
-	//	"localhost" <- in this case, we check for scheme
-
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		if !strings.Contains(err.Error(), "missing port in address") {
-			return "", "", err
-		}
-
-		host = addr
-
-		switch scheme {
-		case "https":
-			port = "443"
-		case "http":
-			port = "80"
-		default:
-			return "", "", errors.New("unable to guess port from scheme")
-		}
-	}
-
-	return host, port, nil
-}
-
 // isLocalHost - checks if the given parameter
 // correspond to one of the local IP of the
 // current machine
 func isLocalHost(host string) (bool, error) {
+	if host == net.IPv4zero.String() {
+		return true, nil
+	}
+
 	hostIPs, err := getHostIP4(host)
 	if err != nil {
 		return false, err
@@ -297,80 +235,35 @@ func isLocalHost(host string) (bool, error) {
 	return isLocal, nil
 }
 
-// sameLocalAddrs - returns true if two addresses, even with different
-// formats, point to the same machine, e.g:
-//   ':9000' and 'http://localhost:9000/' will return true
-func sameLocalAddrs(addr1, addr2 string) (bool, error) {
+// parseServerHost - checks if address is valid and local host.
+func parseServerHost(address string) (*xnet.Host, error) {
+	if strings.HasPrefix(address, ":") {
+		address = "0.0.0.0" + address
+	}
 
-	// Extract host & port from given parameters
-	host1, port1, err := extractHostPort(addr1)
+	host, err := xnet.ParseHost(address)
 	if err != nil {
-		return false, err
-	}
-	host2, port2, err := extractHostPort(addr2)
-	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	var addr1Local, addr2Local bool
-
-	if host1 == "" {
-		// If empty host means it is localhost
-		addr1Local = true
-	} else {
-		// Host not empty, check if it is local
-		if addr1Local, err = isLocalHost(host1); err != nil {
-			return false, err
-		}
+	if !host.IsPortSet {
+		return nil, errors.New("port number missing")
 	}
 
-	if host2 == "" {
-		// If empty host means it is localhost
-		addr2Local = true
-	} else {
-		// Host not empty, check if it is local
-		if addr2Local, err = isLocalHost(host2); err != nil {
-			return false, err
-		}
-	}
-
-	// If both of addresses point to the same machine, check if
-	// have the same port
-	if addr1Local && addr2Local {
-		if port1 == port2 {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// CheckLocalServerAddr - checks if serverAddr is valid and local host.
-func CheckLocalServerAddr(serverAddr string) error {
-	host, port, err := net.SplitHostPort(serverAddr)
-	if err != nil {
-		return err
-	}
-
-	// Check whether port is a valid port number.
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return fmt.Errorf("invalid port number")
-	} else if p < 1 || p > 65535 {
-		return fmt.Errorf("port number must be between 1 to 65535")
-	}
-
-	// 0.0.0.0 is a wildcard address and refers to local network
-	// addresses. I.e, 0.0.0.0:9000 like ":9000" refers to port
-	// 9000 on localhost.
-	if host != "" && host != net.IPv4zero.String() {
-		isLocalHost, err := isLocalHost(host)
+	// No need to check if host is '0.0.0.0'
+	if host.Host != net.IPv4zero.String() {
+		isLocalHost, err := isLocalHost(host.Host)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !isLocalHost {
-			return fmt.Errorf("host in server address should be this server")
+			return nil, errors.New("host in server address should be this server")
 		}
 	}
 
-	return nil
+	if host.PortNumber == 0 {
+		return nil, errors.New("port number must be non-zero")
+	}
+
+	return host, nil
 }

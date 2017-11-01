@@ -89,19 +89,10 @@ EXAMPLES:
 	})
 }
 
-// Handler for 'minio gateway azure' command line.
-func azureGatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
-	host := ctx.Args().First()
-	// Validate gateway arguments.
-	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
-
-	startGateway(ctx, &AzureGateway{host})
-}
-
 // AzureGateway implements Gateway.
 type AzureGateway struct {
-	host string
+	endpoint string
+	secure   bool
 }
 
 // Name implements Gateway interface.
@@ -111,7 +102,41 @@ func (g *AzureGateway) Name() string {
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *AzureGateway) NewGatewayLayer() (GatewayLayer, error) {
-	return newAzureLayer(g.host)
+	return newAzureLayer(g.endpoint, g.secure)
+}
+
+// Handler for 'minio gateway azure' command line.
+func azureGatewayMain(ctx *cli.Context) {
+	if len(ctx.Args()) > 1 {
+		log.Println("too many arguments")
+		cli.ShowCommandHelpAndExit(ctx, azureBackend, 1)
+	}
+
+	if ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, azureBackend, 1)
+	}
+
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
+
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
+
+	endpoint := storage.DefaultBaseURL
+	secure := true
+	if len(ctx.Args()) == 1 {
+		var err error
+		endpoint, secure, err = parseGatewayEndpoint(ctx.Args().First())
+		fatalIf(err, "Invalid command line arguments %v", ctx.Args())
+	}
+
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	startGateway(&AzureGateway{endpoint, secure}, quietFlag)
 }
 
 // s3MetaToAzureProperties converts metadata meant for S3 PUT/COPY
@@ -360,19 +385,7 @@ func azureParseBlockID(blockID string) (partID, subPartNumber int, uploadID, md5
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(host string) (GatewayLayer, error) {
-	var err error
-	var endpoint = storage.DefaultBaseURL
-	var secure = true
-
-	// If user provided some parameters
-	if host != "" {
-		endpoint, secure, err = parseGatewayEndpoint(host)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+func newAzureLayer(endpoint string, secure bool) (GatewayLayer, error) {
 	creds := serverConfig.GetCredential()
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {

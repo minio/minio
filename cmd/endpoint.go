@@ -17,17 +17,16 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/mountinfo"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.
@@ -43,7 +42,7 @@ const (
 
 // Endpoint - any type of endpoint.
 type Endpoint struct {
-	*url.URL
+	*xnet.URL
 	IsLocal bool
 }
 
@@ -85,12 +84,28 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		return path == "" || path == "/" || path == `\`
 	}
 
+	// guessURLStyleError - check whether wrongly formatted URL style value
+	guessURLStyleError := func(s string) error {
+		if strings.HasPrefix(s, "http:") || strings.HasPrefix(s, "https:") {
+			return fmt.Errorf("endpoint URL format must be {http|https}://SERVER[:{1..65535}]/PATH")
+		}
+
+		tokens := strings.Split(s, "/")
+		if h, err := xnet.ParseHost(tokens[0]); err == nil {
+			if h.IsPortSet {
+				return fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
+			}
+		}
+
+		return nil
+	}
+
 	if isEmptyPath(arg) {
 		return ep, fmt.Errorf("empty or root endpoint is not supported")
 	}
 
 	var isLocal bool
-	u, err := url.Parse(arg)
+	u, err := xnet.ParseURL(arg)
 	if err == nil && u.Host != "" {
 		// URL style of endpoint.
 		// Valid URL style endpoint is
@@ -101,47 +116,29 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 
-		var host, port string
-		host, port, err = net.SplitHostPort(u.Host)
-		if err != nil {
-			if !strings.Contains(err.Error(), "missing port in address") {
-				return ep, fmt.Errorf("invalid URL endpoint format: %s", err)
-			}
-
-			host = u.Host
-		} else {
-			var p int
-			p, err = strconv.Atoi(port)
-			if err != nil {
-				return ep, fmt.Errorf("invalid URL endpoint format: invalid port number")
-			} else if p < 1 || p > 65535 {
-				return ep, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")
-			}
-		}
-
-		if host == "" {
-			return ep, fmt.Errorf("invalid URL endpoint format: empty host name")
-		}
-
-		// As this is path in the URL, we should use path package, not filepath package.
-		// On MS Windows, filepath.Clean() converts into Windows path style ie `/foo` becomes `\foo`
-		u.Path = path.Clean(u.Path)
 		if isEmptyPath(u.Path) {
 			return ep, fmt.Errorf("empty or root path is not supported in URL endpoint")
 		}
 
-		isLocal, err = isLocalHost(host)
-		if err != nil {
+		var h *xnet.Host
+		if h, err = xnet.ParseHost(u.Host); err != nil {
+			return ep, fmt.Errorf("invalid URL endpoint format: %s", err)
+		}
+
+		if isLocal, err = isLocalHost(h.Host); err != nil {
 			return ep, err
 		}
 	} else {
-		// Only check if the arg is an ip address and ask for scheme since its absent.
-		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as
-		// /mnt/export1. So we go ahead and start the minio server in FS modes in these cases.
-		if isHostIPv4(arg) {
-			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
+		// path.Clean() is used on purpose because in MS Windows filepath.Clean() converts
+		// `/` into `\` ie `/foo` becomes `\foo`
+		arg = path.Clean(arg)
+
+		// Check whether wrongly formatted URL style
+		if err = guessURLStyleError(arg); err != nil {
+			return ep, err
 		}
-		u = &url.URL{Path: path.Clean(arg)}
+
+		u = &xnet.URL{Path: arg}
 		isLocal = true
 	}
 
@@ -246,72 +243,67 @@ func checkCrossDeviceMounts(endpoints EndpointList) (err error) {
 }
 
 // CreateEndpoints - validates and creates new endpoints for given args.
-func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, SetupType, error) {
+func CreateEndpoints(serverHost *xnet.Host, args ...string) (*xnet.Host, EndpointList, SetupType, error) {
 	var endpoints EndpointList
 	var setupType SetupType
 	var err error
 
-	// Check whether serverAddr is valid for this host.
-	if err = CheckLocalServerAddr(serverAddr); err != nil {
-		return serverAddr, endpoints, setupType, err
+	if len(args) == 0 {
+		return serverHost, endpoints, setupType, errors.New("empty endpoint arguments")
 	}
-
-	_, serverAddrPort := mustSplitHostPort(serverAddr)
 
 	// For single arg, return FS setup.
 	if len(args) == 1 {
 		var endpoint Endpoint
 		endpoint, err = NewEndpoint(args[0])
 		if err != nil {
-			return serverAddr, endpoints, setupType, err
+			return serverHost, endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
-			return serverAddr, endpoints, setupType, fmt.Errorf("use path style endpoint for FS setup")
+			return serverHost, endpoints, setupType, fmt.Errorf("use path style endpoint for FS setup")
 		}
 		endpoints = append(endpoints, endpoint)
 		setupType = FSSetupType
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(endpoints); err != nil {
-			return serverAddr, endpoints, setupType, err
+			return serverHost, endpoints, setupType, err
 		}
-		return serverAddr, endpoints, setupType, nil
+		return serverHost, endpoints, setupType, nil
 	}
 
 	// Convert args to endpoints
 	if endpoints, err = NewEndpointList(args...); err != nil {
-		return serverAddr, endpoints, setupType, err
+		return serverHost, endpoints, setupType, err
 	}
 
 	// Check for cross device mounts if any.
 	if err = checkCrossDeviceMounts(endpoints); err != nil {
-		return serverAddr, endpoints, setupType, err
+		return serverHost, endpoints, setupType, err
 	}
 
 	// Return XL setup when all endpoints are path style.
 	if endpoints[0].Type() == PathEndpointType {
 		setupType = XLSetupType
-		return serverAddr, endpoints, setupType, nil
+		return serverHost, endpoints, setupType, nil
 	}
 
 	// Here all endpoints are URL style.
 	endpointPathSet := set.NewStringSet()
 	localEndpointCount := 0
 	localServerAddrSet := set.NewStringSet()
-	localPortSet := set.NewStringSet()
+	localPortSet := make(map[xnet.Port]struct{})
 
 	for _, endpoint := range endpoints {
 		endpointPathSet.Add(endpoint.Path)
 		if endpoint.IsLocal {
 			localServerAddrSet.Add(endpoint.Host)
 
-			var port string
-			_, port, err = net.SplitHostPort(endpoint.Host)
-			if err != nil {
-				port = serverAddrPort
+			host := xnet.MustParseHost(endpoint.Host)
+			if !host.IsPortSet {
+				host.PortNumber = serverHost.PortNumber
 			}
-
-			localPortSet.Add(port)
+			localPortSet[host.PortNumber] = struct{}{}
 
 			localEndpointCount++
 		}
@@ -319,23 +311,19 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 
 	// No local endpoint found.
 	if localEndpointCount == 0 {
-		return serverAddr, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
+		return serverHost, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
 	}
 
 	// Check whether same path is not used in endpoints of a host.
 	{
 		pathIPMap := make(map[string]set.StringSet)
 		for _, endpoint := range endpoints {
-			var host string
-			host, _, err = net.SplitHostPort(endpoint.Host)
-			if err != nil {
-				host = endpoint.Host
-			}
-			hostIPSet, _ := getHostIP4(host)
+			host := xnet.MustParseHost(endpoint.Host)
+			hostIPSet, _ := getHostIP4(host.Host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
 					err = fmt.Errorf("path '%s' can not be served by different port on same address", endpoint.Path)
-					return serverAddr, endpoints, setupType, err
+					return serverHost, endpoints, setupType, err
 				}
 
 				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
@@ -345,16 +333,16 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 		}
 	}
 
-	// Check whether serverAddrPort matches at least in one of port used in local endpoints.
+	// Check whether serverHost.PortNumber matches at least in one of port used in local endpoints.
 	{
-		if !localPortSet.Contains(serverAddrPort) {
+		if _, found := localPortSet[serverHost.PortNumber]; !found {
 			if len(localPortSet) > 1 {
 				err = fmt.Errorf("port number in server address must match with one of the port in local endpoints")
 			} else {
 				err = fmt.Errorf("server address and local endpoint have different ports")
 			}
 
-			return serverAddr, endpoints, setupType, err
+			return serverHost, endpoints, setupType, err
 		}
 	}
 
@@ -368,13 +356,13 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 				//
 				// In this case, we bind to 0.0.0.0 ie to all interfaces.
 				// The actual way to do is bind to only IPs in uniqueLocalHosts.
-				serverAddr = net.JoinHostPort("", serverAddrPort)
+				serverHost.Host = "0.0.0.0"
 			}
 
 			endpointPaths := endpointPathSet.ToSlice()
 			endpoints, _ = NewEndpointList(endpointPaths...)
 			setupType = XLSetupType
-			return serverAddr, endpoints, setupType, nil
+			return serverHost, endpoints, setupType, nil
 		}
 
 		// Eventhough all endpoints are local, but those endpoints use different ports.
@@ -383,12 +371,8 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 		// This is DistXL setup.
 		// Check whether local server address are not 127.x.x.x
 		for _, localServerAddr := range localServerAddrSet.ToSlice() {
-			host, _, err := net.SplitHostPort(localServerAddr)
-			if err != nil {
-				host = localServerAddr
-			}
-
-			ipList, err := getHostIP4(host)
+			host := xnet.MustParseHost(localServerAddr)
+			ipList, err := getHostIP4(host.Host)
 			fatalIf(err, "unexpected error when resolving host '%s'", host)
 
 			// Filter ipList by IPs those start with '127.'.
@@ -399,24 +383,24 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 			// If loop back IP is found and ipList contains only loop back IPs, then error out.
 			if len(loopBackIPs) > 0 && len(loopBackIPs) == len(ipList) {
 				err = fmt.Errorf("'%s' resolves to loopback address is not allowed for distributed XL", localServerAddr)
-				return serverAddr, endpoints, setupType, err
+				return serverHost, endpoints, setupType, err
 			}
 		}
 	}
 
 	// Add missing port in all endpoints.
 	for i := range endpoints {
-		_, port, err := net.SplitHostPort(endpoints[i].Host)
-		if err != nil {
-			endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
-		} else if endpoints[i].IsLocal && serverAddrPort != port {
-			// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
+		host := xnet.MustParseHost(endpoints[i].Host)
+		if !host.IsPortSet {
+			endpoints[i].Host = endpoints[i].Host + ":" + serverHost.PortNumber.String()
+		} else if endpoints[i].IsLocal && serverHost.PortNumber != host.PortNumber {
+			// If endpoint is local, but port is different than serverHost.PortNumber, then make it as remote.
 			endpoints[i].IsLocal = false
 		}
 	}
 
 	setupType = DistXLSetupType
-	return serverAddr, endpoints, setupType, nil
+	return serverHost, endpoints, setupType, nil
 }
 
 // GetLocalPeer - returns local peer value, returns globalMinioAddr
@@ -437,7 +421,7 @@ func GetLocalPeer(endpoints EndpointList) (localPeer string) {
 	if peerSet.IsEmpty() {
 		// If local peer is empty can happen in FS or Erasure coded mode.
 		// then set the value to globalMinioAddr instead.
-		return globalMinioAddr
+		return globalServerHost.String()
 	}
 	return peerSet.ToSlice()[0]
 }
@@ -452,7 +436,8 @@ func GetRemotePeers(endpoints EndpointList) []string {
 
 		peer := endpoint.Host
 		if endpoint.IsLocal {
-			if _, port := mustSplitHostPort(peer); port == globalMinioPort {
+			host := xnet.MustParseHost(peer)
+			if host.PortNumber == globalServerHost.PortNumber {
 				continue
 			}
 		}

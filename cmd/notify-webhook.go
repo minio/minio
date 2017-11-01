@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -28,26 +29,27 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 type webhookNotify struct {
-	Enable   bool   `json:"enable"`
-	Endpoint string `json:"endpoint"`
+	Enable   bool     `json:"enable"`
+	Endpoint xnet.URL `json:"endpoint"`
 }
 
 func (w *webhookNotify) Validate() error {
 	if !w.Enable {
 		return nil
 	}
-	if _, err := checkURL(w.Endpoint); err != nil {
-		return err
+	if w.Endpoint.IsEmpty() {
+		return errors.New("empty Endpoint")
 	}
 	return nil
 }
 
 type httpConn struct {
 	*http.Client
-	Endpoint string
+	Endpoint xnet.URL
 }
 
 // isNetErrorIgnored - is network error ignored.
@@ -131,11 +133,11 @@ func lookupEndpoint(urlStr string) error {
 // Initializes new webhook logrus notifier.
 func newWebhookNotify(accountID string) (*logrus.Logger, error) {
 	rNotify := serverConfig.Notify.GetWebhookByID(accountID)
-	if rNotify.Endpoint == "" {
+	if rNotify.Endpoint.IsEmpty() {
 		return nil, errInvalidArgument
 	}
 
-	if err := lookupEndpoint(rNotify.Endpoint); err != nil {
+	if err := lookupEndpoint(rNotify.Endpoint.String()); err != nil {
 		return nil, err
 	}
 
@@ -175,7 +177,7 @@ func (n httpConn) Fire(entry *logrus.Entry) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", n.Endpoint, body)
+	req, err := http.NewRequest("POST", n.Endpoint.String(), body)
 	if err != nil {
 		return err
 	}

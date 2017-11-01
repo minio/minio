@@ -221,31 +221,6 @@ func TestStartProfiler(t *testing.T) {
 	}
 }
 
-// TestCheckURL tests valid url.
-func TestCheckURL(t *testing.T) {
-	testCases := []struct {
-		urlStr     string
-		shouldPass bool
-	}{
-		{"", false},
-		{":", false},
-		{"http://localhost/", true},
-		{"http://127.0.0.1/", true},
-		{"proto://myhostname/path", true},
-	}
-
-	// Validates fetching local address.
-	for i, testCase := range testCases {
-		_, err := checkURL(testCase.urlStr)
-		if testCase.shouldPass && err != nil {
-			t.Errorf("Test %d: expected to pass but got an error: %v\n", i+1, err)
-		}
-		if !testCase.shouldPass && err == nil {
-			t.Errorf("Test %d: expected to fail but passed.", i+1)
-		}
-	}
-}
-
 // Testing dumping request function.
 func TestDumpRequest(t *testing.T) {
 	req, err := http.NewRequest("GET", "http://localhost:9000?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=USWUXHGYZQYFYFFIT3RE%2F20170529%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20170529T190139Z&X-Amz-Expires=600&X-Amz-Signature=19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d&X-Amz-SignedHeaders=host&prefix=Hello%2AWorld%2A", nil)

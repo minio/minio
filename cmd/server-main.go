@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 
 	"github.com/minio/cli"
@@ -31,7 +30,7 @@ import (
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
-		Value: ":" + globalMinioPort,
+		Value: ":9000",
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
@@ -85,23 +84,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	// Server address.
-	serverAddr := ctx.String("address")
-	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
-
 	var setupType SetupType
 	var err error
 
-	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
-	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	if runtime.GOOS == "darwin" {
-		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
-		// to IPv6 address ie minio will start listening on IPv6 address whereas another
-		// (non-)minio process is listening on IPv4 of given port.
-		// To avoid this error sutiation we check for port availability only for macOS.
-		fatalIf(checkPortAvailability(globalMinioPort), "Port %d already in use", globalMinioPort)
-	}
+	globalServerHost, globalEndpoints, setupType, err = CreateEndpoints(globalServerHost, ctx.Args()...)
+	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", globalServerHost, ctx.Args())
 
 	globalIsXL = (setupType == XLSetupType)
 	globalIsDistXL = (setupType == DistXLSetupType)
@@ -113,13 +100,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 func serverHandleEnvVars() {
 	// Handle common environment variables.
 	handleCommonEnvVars()
-
-	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
-		// region Envs are set globally.
-		globalIsEnvRegion = true
-		globalServerRegion = serverRegion
-	}
-
 }
 
 // serverMain handler called for 'minio server' command.
@@ -192,7 +172,7 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{globalServerHost.String()}, handler, globalTLSCertificate)
 	globalHTTPServer.ReadTimeout = globalConnReadTimeout
 	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
@@ -217,7 +197,7 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(globalMinioAddr)
+	apiEndpoints := getAPIEndpoints(globalServerHost.String())
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.

@@ -466,7 +466,6 @@ func TestLockServers(t *testing.T) {
 		}
 	}
 
-	globalMinioHost = ""
 	testCases := []struct {
 		isDistXL         bool
 		endpoints        EndpointList

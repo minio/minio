@@ -78,11 +78,6 @@ EXAMPLES:
 	})
 }
 
-// Handler for 'minio gateway b2' command line.
-func b2GatewayMain(ctx *cli.Context) {
-	startGateway(ctx, &B2Gateway{})
-}
-
 // B2Gateway implements Gateway.
 type B2Gateway struct{}
 
@@ -96,6 +91,31 @@ func (g *B2Gateway) Name() string {
 func (g *B2Gateway) NewGatewayLayer() (GatewayLayer, error) {
 	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 	return newB2GatewayLayer()
+}
+
+// Handler for 'minio gateway b2' command line.
+func b2GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() {
+		if ctx.Args().First() != "help" {
+			log.Println("too many arguments")
+		}
+
+		cli.ShowCommandHelpAndExit(ctx, b2Backend, 1)
+	}
+
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
+
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
+
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	startGateway(&B2Gateway{}, quietFlag)
 }
 
 // b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
@@ -421,8 +441,7 @@ func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 // For more reference - https://www.backblaze.com/b2/docs/uploading.html
 //
 const (
-	sha1NoVerify = "do_not_verify"
-	sha1AtEOF    = "hex_digits_at_end"
+	sha1AtEOF = "hex_digits_at_end"
 )
 
 // With the second option mentioned above, you append the 40-character hex sha1

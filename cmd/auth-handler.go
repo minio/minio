@@ -126,9 +126,9 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 
 	if reqAuthType == authTypeAnonymous && policyAction != "" {
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		sourceIP := getSourceIPAddress(r)
+		host := getSourceHost(r)
 		return enforceBucketPolicy(bucket, policyAction, r.URL.Path,
-			r.Referer(), sourceIP, r.URL.Query())
+			r.Referer(), host.Host, r.URL.Query())
 	}
 
 	// By default return ErrAccessDenied
