@@ -211,3 +211,21 @@ func checkURL(urlStr string) (*url.URL, error) {
 func UTCNow() time.Time {
 	return time.Now().UTC()
 }
+
+// genETag - generate UUID based ETag
+func genETag() string {
+	return toS3ETag(getMD5Hash([]byte(mustGetUUID())))
+}
+
+// toS3ETag - return checksum to ETag
+func toS3ETag(etag string) string {
+	etag = canonicalizeETag(etag)
+
+	if !strings.HasSuffix(etag, "-1") {
+		// Tools like s3cmd uses ETag as checksum of data to validate.
+		// Append "-1" to indicate ETag is not a checksum.
+		etag += "-1"
+	}
+
+	return etag
+}

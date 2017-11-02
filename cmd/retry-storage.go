@@ -24,10 +24,6 @@ import (
 
 const (
 	// Attempt to retry only this many number of times before
-	// giving up on the remote disk entirely during initialization.
-	globalStorageInitRetryThreshold = 4
-
-	// Attempt to retry only this many number of times before
 	// giving up on the remote disk entirely after initialization.
 	globalStorageRetryThreshold = 1
 

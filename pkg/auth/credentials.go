@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package cmd
+package auth
 
 import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
+	"fmt"
 )
 
 const (
@@ -48,12 +48,12 @@ const (
 
 // Common errors generated for access and secret key validation.
 var (
-	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be minimum 5 characters in length")
-	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be minimum 8 characters in length")
+	ErrInvalidAccessKeyLength = fmt.Errorf("access key must be minimum %v or more characters long", accessKeyMinLen)
+	ErrInvalidSecretKeyLength = fmt.Errorf("secret key must be minimum %v or more characters long", secretKeyMinLen)
 )
 
-// isAccessKeyValid - validate access key for right length.
-func isAccessKeyValid(accessKey string) bool {
+// IsAccessKeyValid - validate access key for right length.
+func IsAccessKeyValid(accessKey string) bool {
 	return len(accessKey) >= accessKeyMinLen
 }
 
@@ -62,67 +62,62 @@ func isSecretKeyValid(secretKey string) bool {
 	return len(secretKey) >= secretKeyMinLen
 }
 
-// credential container for access and secret keys.
-type credential struct {
+// Credentials holds access and secret keys.
+type Credentials struct {
 	AccessKey string `json:"accessKey,omitempty"`
 	SecretKey string `json:"secretKey,omitempty"`
 }
 
 // IsValid - returns whether credential is valid or not.
-func (cred credential) IsValid() bool {
-	return isAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey)
+func (cred Credentials) IsValid() bool {
+	return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey)
 }
 
-// Equals - returns whether two credentials are equal or not.
-func (cred credential) Equal(ccred credential) bool {
+// Equal - returns whether two credentials are equal or not.
+func (cred Credentials) Equal(ccred Credentials) bool {
 	if !ccred.IsValid() {
 		return false
 	}
 	return cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1
 }
 
-// createCredential returns new credentials from the given access key and secret key.
-// It returns an error if the access key or secret key are too long or short.
-func createCredential(accessKey, secretKey string) (credential, error) {
-	if !isAccessKeyValid(accessKey) {
-		return credential{}, errInvalidAccessKeyLength
+// MustGetNewCredentials generates and returns new credential.
+func MustGetNewCredentials() (cred Credentials) {
+	readBytes := func(size int) (data []byte) {
+		data = make([]byte, size)
+		if n, err := rand.Read(data); err != nil {
+			panic(err)
+		} else if n != size {
+			panic(fmt.Errorf("not enough data read. expected: %v, got: %v", size, n))
+		}
+		return
 	}
-	if !isSecretKeyValid(secretKey) {
-		return credential{}, errInvalidSecretKeyLength
-	}
-	return credential{
-		AccessKey: accessKey,
-		SecretKey: secretKey,
-	}, nil
-}
 
-// Initialize a new credential object
-func getNewCredential(accessKeyLen, secretKeyLen int) (cred credential, err error) {
-	keyBytes := make([]byte, accessKeyLen)
-	_, err = rand.Read(keyBytes)
-	if err != nil {
-		return cred, err
-	}
-	for i := 0; i < accessKeyLen; i++ {
+	// Generate access key.
+	keyBytes := readBytes(accessKeyMaxLen)
+	for i := 0; i < accessKeyMaxLen; i++ {
 		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
-	accessKey := string(keyBytes)
+	cred.AccessKey = string(keyBytes)
 
 	// Generate secret key.
-	keyBytes = make([]byte, secretKeyLen)
-	_, err = rand.Read(keyBytes)
-	if err != nil {
-		return cred, err
-	}
-	secretKey := string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyLen])
-	cred, err = createCredential(accessKey, secretKey)
+	keyBytes = readBytes(secretKeyMaxLen)
+	cred.SecretKey = string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
 
-	return cred, err
+	return cred
 }
 
-func mustGetNewCredential() credential {
-	// Generate Minio credentials with Minio key max lengths.
-	cred, err := getNewCredential(accessKeyMaxLen, secretKeyMaxLen)
-	fatalIf(err, "Unable to generate new credentials.")
-	return cred
+// CreateCredentials returns new credential with the given access key and secret key.
+// Error is returned if given access key or secret key are invalid length.
+func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error) {
+	if !IsAccessKeyValid(accessKey) {
+		return cred, ErrInvalidAccessKeyLength
+	}
+	if !isSecretKeyValid(secretKey) {
+		return cred, ErrInvalidSecretKeyLength
+	}
+
+	cred.AccessKey = accessKey
+	cred.SecretKey = secretKey
+	return cred, nil
 }

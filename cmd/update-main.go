@@ -169,6 +169,20 @@ func IsKubernetes() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
+// IsBOSH returns true if minio is deployed from a bosh package
+func IsBOSH() bool {
+	// "/var/vcap/bosh" exists in BOSH deployed instance.
+	_, err := os.Stat("/var/vcap/bosh")
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	// Log error, as we will not propagate it to caller
+	errorIf(err, "Error in BOSH check.")
+
+	return err == nil
+}
+
 // Minio Helm chart uses DownwardAPIFile to write pod label info to /podinfo/labels
 // More info: https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/#store-pod-fields
 // Check if this is Helm package installation and report helm chart version
@@ -233,6 +247,9 @@ func getUserAgent(mode string) string {
 	if IsDocker() {
 		uaAppend("; ", "docker")
 	}
+	if IsBOSH() {
+		uaAppend("; ", "bosh")
+	}
 	if IsSourceBuild() {
 		uaAppend("; ", "source")
 	}
@@ -254,6 +271,11 @@ func getUserAgent(mode string) string {
 		if helmChartVersion != "" {
 			uaAppend(" Minio/helm-", helmChartVersion)
 		}
+	}
+
+	pcfTileVersion := os.Getenv("MINIO_PCF_TILE_VERSION")
+	if pcfTileVersion != "" {
+		uaAppend(" Minio/pcf-tile-", pcfTileVersion)
 	}
 
 	return strings.Join(userAgentParts, "")

@@ -91,18 +91,6 @@ func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Ad
 	return clnt, nil
 }
 
-// redirectHeaders copies all headers when following a redirect URL.
-// This won't be needed anymore from go 1.8 (https://github.com/golang/go/issues/4800)
-func redirectHeaders(req *http.Request, via []*http.Request) error {
-	if len(via) == 0 {
-		return nil
-	}
-	for key, val := range via[0].Header {
-		req.Header[key] = val
-	}
-	return nil
-}
-
 func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
 	// construct endpoint.
 	endpointURL, err := getEndpointURL(endpoint, secure)
@@ -120,8 +108,7 @@ func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Ad
 		endpointURL: *endpointURL,
 		// Instantiate http client and bucket location cache.
 		httpClient: &http.Client{
-			Transport:     http.DefaultTransport,
-			CheckRedirect: redirectHeaders,
+			Transport: http.DefaultTransport,
 		},
 	}
 

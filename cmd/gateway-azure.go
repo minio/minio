@@ -33,13 +33,86 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 )
 
-const globalAzureAPIVersion = "2016-05-31"
-const azureBlockSize = 100 * humanize.MiByte
-const metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
+const (
+	globalAzureAPIVersion      = "2016-05-31"
+	azureBlockSize             = 100 * humanize.MiByte
+	metadataObjectNameTemplate = globalMinioSysTmp + "multipart/v1/%s.%x/azure.json"
+	azureBackend               = "azure"
+)
+
+func init() {
+	const azureGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENDPOINT:
+  Azure server endpoint. Default ENDPOINT is https://core.windows.net
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of Azure storage.
+     MINIO_SECRET_KEY: Password or secret key of Azure storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for Azure Blob Storage backend.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}} https://azure.example.com
+
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               azureBackend,
+		Usage:              "Microsoft Azure Blob Storage.",
+		Action:             azureGatewayMain,
+		CustomHelpTemplate: azureGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway azure' command line.
+func azureGatewayMain(ctx *cli.Context) {
+	// Validate gateway arguments.
+	host := ctx.Args().First()
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+
+	startGateway(ctx, &AzureGateway{host})
+}
+
+// AzureGateway implements Gateway.
+type AzureGateway struct {
+	host string
+}
+
+// Name implements Gateway interface.
+func (g *AzureGateway) Name() string {
+	return azureBackend
+}
+
+// NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
+func (g *AzureGateway) NewGatewayLayer() (GatewayLayer, error) {
+	return newAzureLayer(g.host)
+}
 
 // s3MetaToAzureProperties converts metadata meant for S3 PUT/COPY
 // object into Azure data structures - BlobMetadata and
@@ -101,7 +174,7 @@ func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata
 		case k == "Content-Length":
 			// assume this doesn't fail
 			props.ContentLength, _ = strconv.ParseInt(v, 10, 64)
-		case k == "Content-MD5":
+		case k == "Content-Md5":
 			props.ContentMD5 = v
 		case k == "Content-Type":
 			props.ContentType = v
@@ -160,11 +233,6 @@ func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProper
 		s3Metadata["Content-Type"] = props.ContentType
 	}
 	return s3Metadata
-}
-
-// Append "-1" to etag so that clients do not interpret it as MD5.
-func azureToS3ETag(etag string) string {
-	return canonicalizeETag(etag) + "-1"
 }
 
 // azureObjects - Implements Object layer for Azure blob storage.
@@ -420,7 +488,7 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 				Name:            object.Name,
 				ModTime:         time.Time(object.Properties.LastModified),
 				Size:            object.Properties.ContentLength,
-				ETag:            azureToS3ETag(object.Properties.Etag),
+				ETag:            toS3ETag(object.Properties.Etag),
 				ContentType:     object.Properties.ContentType,
 				ContentEncoding: object.Properties.ContentEncoding,
 			})
@@ -474,8 +542,13 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimite
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+	// startOffset cannot be negative.
+	if startOffset < 0 {
+		return toObjectErr(traceError(errUnexpected), bucket, object)
+	}
+
 	blobRange := &storage.BlobRange{Start: uint64(startOffset)}
-	if length > 0 && startOffset > 0 {
+	if length > 0 {
 		blobRange.End = uint64(startOffset + length - 1)
 	}
 
@@ -510,7 +583,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	objInfo = ObjectInfo{
 		Bucket:          bucket,
 		UserDefined:     meta,
-		ETag:            azureToS3ETag(blob.Properties.Etag),
+		ETag:            toS3ETag(blob.Properties.Etag),
 		ModTime:         time.Time(blob.Properties.LastModified),
 		Name:            object,
 		Size:            blob.Properties.ContentLength,
@@ -629,8 +702,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 
 	etag := data.MD5HexString()
 	if etag == "" {
-		// Generate random ETag.
-		etag = azureToS3ETag(getMD5Hash([]byte(mustGetUUID())))
+		etag = genETag()
 	}
 
 	subPartSize, subPartNumber := int64(azureBlockSize), 1

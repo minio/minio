@@ -293,3 +293,22 @@ func TestDumpRequest(t *testing.T) {
 		t.Fatalf("Expected %#v, got %#v", expectedHeader, res.Header)
 	}
 }
+
+// Test toS3ETag()
+func TestToS3ETag(t *testing.T) {
+	testCases := []struct {
+		etag         string
+		expectedETag string
+	}{
+		{`"8019e762"`, `8019e762-1`},
+		{"5d57546eeb86b3eba68967292fba0644", "5d57546eeb86b3eba68967292fba0644-1"},
+		{`"8019e762-1"`, `8019e762-1`},
+		{"5d57546eeb86b3eba68967292fba0644-1", "5d57546eeb86b3eba68967292fba0644-1"},
+	}
+	for i, testCase := range testCases {
+		etag := toS3ETag(testCase.etag)
+		if etag != testCase.expectedETag {
+			t.Fatalf("test %v: expected: %v, got: %v", i+1, testCase.expectedETag, etag)
+		}
+	}
+}

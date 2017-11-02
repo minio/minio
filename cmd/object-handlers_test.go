@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Type to capture different modifications to API request to simulate failure cases.
@@ -51,7 +52,7 @@ func TestAPIHeadObjectHandler(t *testing.T) {
 }
 
 func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	objectName := "test-object"
 	// set of byte data for PutObject.
 	// object has to be created before running tests for HeadObject.
@@ -197,7 +198,7 @@ func TestAPIGetObjectHandler(t *testing.T) {
 }
 
 func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	objectName := "test-object"
 	// set of byte data for PutObject.
 	// object has to be created before running tests for GetObject.
@@ -470,7 +471,7 @@ func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
 }
 
 func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
 	bytesDataLen := 65 * humanize.KiByte
@@ -784,7 +785,7 @@ func TestAPIPutObjectHandler(t *testing.T) {
 }
 
 func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	// register event notifier.
 	err := initEventNotifier(obj)
@@ -1023,7 +1024,7 @@ func TestAPICopyObjectPartHandlerSanity(t *testing.T) {
 }
 
 func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
 	// register event notifier.
@@ -1138,7 +1139,7 @@ func TestAPICopyObjectPartHandler(t *testing.T) {
 }
 
 func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
 	// register event notifier.
@@ -1468,7 +1469,7 @@ func TestAPICopyObjectHandler(t *testing.T) {
 }
 
 func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
 	// object used for anonymous HTTP request test.
@@ -1886,7 +1887,7 @@ func TestAPINewMultipartHandler(t *testing.T) {
 }
 
 func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object-new-multipart"
 	rec := httptest.NewRecorder()
@@ -2032,7 +2033,7 @@ func TestAPINewMultipartHandlerParallel(t *testing.T) {
 }
 
 func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	// used for storing the uploadID's parsed on concurrent HTTP requests for NewMultipart upload on the same object.
 	testUploads := struct {
 		sync.Mutex
@@ -2092,7 +2093,7 @@ func TestAPICompleteMultipartHandler(t *testing.T) {
 }
 
 func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	var err error
 	// register event notifier.
@@ -2447,7 +2448,7 @@ func TestAPIAbortMultipartHandler(t *testing.T) {
 }
 
 func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	var err error
 	// register event notifier.
@@ -2616,7 +2617,7 @@ func TestAPIDeleteObjectHandler(t *testing.T) {
 }
 
 func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	// register event notifier.
 	err := initEventNotifier(obj)
@@ -2783,7 +2784,7 @@ func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
 }
 
 func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
@@ -2850,7 +2851,7 @@ func TestAPIPutObjectPartHandlerStreaming(t *testing.T) {
 }
 
 func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
@@ -2938,7 +2939,7 @@ func TestAPIPutObjectPartHandler(t *testing.T) {
 }
 
 func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 
 	// Initiate Multipart upload for testing PutObjectPartHandler.
 	testObject := "testobject"
@@ -3255,7 +3256,7 @@ func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
 }
 
 func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
@@ -3343,7 +3344,7 @@ func TestAPIListObjectPartsHandler(t *testing.T) {
 }
 
 func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+	credentials auth.Credentials, t *testing.T) {
 	testObject := "testobject"
 
 	// PutObjectPart API HTTP Handler has to be tested in isolation,

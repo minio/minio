@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Check for updates and print a notification message
@@ -95,7 +96,7 @@ func handleCommonEnvVars() {
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey != "" && secretKey != "" {
-		cred, err := createCredential(accessKey, secretKey)
+		cred, err := auth.CreateCredentials(accessKey, secretKey)
 		fatalIf(err, "Invalid access/secret Key set in environment.")
 
 		// credential Envs are set globally.

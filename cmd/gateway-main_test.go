@@ -19,7 +19,30 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/minio/cli"
 )
+
+// Test RegisterGatewayCommand
+func TestRegisterGatewayCommand(t *testing.T) {
+	var err error
+
+	cmd := cli.Command{Name: "test"}
+	err = RegisterGatewayCommand(cmd)
+	if err != nil {
+		t.Errorf("RegisterGatewayCommand got unexpected error: %s", err)
+	}
+
+	// Should returns 'duplicated' error
+	err = RegisterGatewayCommand(cmd)
+	if err == nil {
+		t.Errorf("RegisterGatewayCommand twice with same name should return error")
+	} else {
+		if err.Error() != "duplicate gateway: test" {
+			t.Errorf("RegisterGatewayCommand got unexpected error: %s", err)
+		}
+	}
+}
 
 // Test parseGatewayEndpoint
 func TestParseGatewayEndpoint(t *testing.T) {

@@ -482,7 +482,7 @@ export const uploadFile = (file, xhr) => {
     }))
 
     xhr.onload = function(event) {
-      if (xhr.status == 401 || xhr.status == 403 || xhr.status == 500) {
+      if (xhr.status == 401 || xhr.status == 403) {
         setShowAbortModal(false)
         dispatch(stopUpload({
           slug
@@ -490,6 +490,16 @@ export const uploadFile = (file, xhr) => {
         dispatch(showAlert({
           type: 'danger',
           message: 'Unauthorized request.'
+        }))
+      }
+      if (xhr.status == 500) {
+        setShowAbortModal(false)
+        dispatch(stopUpload({
+          slug
+        }))
+        dispatch(showAlert({
+          type: 'danger',
+          message: xhr.responseText
         }))
       }
       if (xhr.status == 200) {

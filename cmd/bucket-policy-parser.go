@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
 
-var conditionKeyActionMap = map[string]set.StringSet{
-	"s3:prefix":   set.CreateStringSet("s3:ListBucket"),
-	"s3:max-keys": set.CreateStringSet("s3:ListBucket"),
+var emptyBucketPolicy = policy.BucketAccessPolicy{}
+
+var conditionKeyActionMap = policy.ConditionKeyMap{
+	"s3:prefix": set.CreateStringSet("s3:ListBucket", "s3:ListBucketMultipartUploads"),
+	"s3:max-keys": set.CreateStringSet("s3:ListBucket", "s3:ListBucketMultipartUploads",
+		"s3:ListMultipartUploadParts"),
 }
 
 // supportedActionMap - lists all the actions supported by minio.
@@ -49,41 +53,16 @@ var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys", "aw
 // supportedEffectMap - supported effects.
 var supportedEffectMap = set.CreateStringSet("Allow", "Deny")
 
-// Statement - minio policy statement
-type policyStatement struct {
-	Actions    set.StringSet                       `json:"Action"`
-	Conditions map[string]map[string]set.StringSet `json:"Condition,omitempty"`
-	Effect     string
-	Principal  interface{}   `json:"Principal"`
-	Resources  set.StringSet `json:"Resource"`
-	Sid        string
-}
-
-// bucketPolicy - collection of various bucket policy statements.
-type bucketPolicy struct {
-	Version    string            // date in YYYY-MM-DD format
-	Statements []policyStatement `json:"Statement"`
-}
-
-// Stringer implementation for the bucket policies.
-func (b bucketPolicy) String() string {
-	bbytes, err := json.Marshal(&b)
-	if err != nil {
-		errorIf(err, "Unable to marshal bucket policy into JSON %#v", b)
-		return ""
-	}
-	return string(bbytes)
-}
-
 // isValidActions - are actions valid.
 func isValidActions(actions set.StringSet) (err error) {
 	// Statement actions cannot be empty.
-	if len(actions) == 0 {
+	if actions.IsEmpty() {
 		err = errors.New("Action list cannot be empty")
 		return err
 	}
 	if unsupportedActions := actions.Difference(supportedActionMap); !unsupportedActions.IsEmpty() {
-		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document", unsupportedActions)
+		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document",
+			unsupportedActions)
 		return err
 	}
 	return nil
@@ -106,7 +85,7 @@ func isValidEffect(effect string) (err error) {
 // isValidResources - are valid resources.
 func isValidResources(resources set.StringSet) (err error) {
 	// Statement resources cannot be empty.
-	if len(resources) == 0 {
+	if resources.IsEmpty() {
 		err = errors.New("Resource list cannot be empty")
 		return err
 	}
@@ -124,60 +103,17 @@ func isValidResources(resources set.StringSet) (err error) {
 	return nil
 }
 
-// Parse principals parses a incoming json. Handles cases for
-// these three combinations.
-// - "Principal": "*",
-// - "Principal": { "AWS" : "*" }
-// - "Principal": { "AWS" : [ "*" ]}
-func parsePrincipals(principal interface{}) set.StringSet {
-	principals, ok := principal.(map[string]interface{})
-	if !ok {
-		var principalStr string
-		principalStr, ok = principal.(string)
-		if ok {
-			return set.CreateStringSet(principalStr)
-		}
-	} // else {
-	var principalStrs []string
-	for _, p := range principals {
-		principalStr, isStr := p.(string)
-		if !isStr {
-			principalsAdd, isInterface := p.([]interface{})
-			if !isInterface {
-				principalStrsAddr, isStrs := p.([]string)
-				if !isStrs {
-					continue
-				}
-				principalStrs = append(principalStrs, principalStrsAddr...)
-			} else {
-				for _, pa := range principalsAdd {
-					var pstr string
-					pstr, isStr = pa.(string)
-					if !isStr {
-						continue
-					}
-					principalStrs = append(principalStrs, pstr)
-				}
-			}
-			continue
-		} // else {
-		principalStrs = append(principalStrs, principalStr)
-	}
-	return set.CreateStringSet(principalStrs...)
-}
-
 // isValidPrincipals - are valid principals.
-func isValidPrincipals(principal interface{}) (err error) {
-	principals := parsePrincipals(principal)
-	// Statement principal should have a value.
-	if len(principals) == 0 {
-		err = errors.New("Principal cannot be empty")
-		return err
+func isValidPrincipals(principal policy.User) (err error) {
+	if principal.AWS.IsEmpty() {
+		return errors.New("Principal cannot be empty")
 	}
-	if unsuppPrincipals := principals.Difference(set.CreateStringSet([]string{"*"}...)); !unsuppPrincipals.IsEmpty() {
+	if diff := principal.AWS.Difference(set.CreateStringSet("*")); !diff.IsEmpty() {
 		// Minio does not support or implement IAM, "*" is the only valid value.
-		// Amazon s3 doc on principals: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Principal
-		err = fmt.Errorf("Unsupported principals found: ‘%#v’, please validate your policy document", unsuppPrincipals)
+		// Amazon s3 doc on principal:
+		// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Principal
+		err = fmt.Errorf("Unsupported principals found: ‘%#v’, please validate your policy document",
+			diff)
 		return err
 	}
 	return nil
@@ -185,7 +121,7 @@ func isValidPrincipals(principal interface{}) (err error) {
 
 // isValidConditions - returns nil if the given conditions valid and
 // corresponding error otherwise.
-func isValidConditions(actions set.StringSet, conditions map[string]map[string]set.StringSet) (err error) {
+func isValidConditions(actions set.StringSet, conditions policy.ConditionMap) (err error) {
 	// Verify conditions should be valid. Validate if only
 	// supported condition keys are present and return error
 	// otherwise.
@@ -239,7 +175,7 @@ func resourcePrefix(resource string) string {
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
 // - Resources are validated against the given set of Actions.
 // -
-func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIErrorCode {
+func checkBucketPolicyResources(bucket string, bucketPolicy policy.BucketAccessPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
 	var resourceMap = set.NewStringSet()
@@ -294,27 +230,27 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 
 // parseBucketPolicy - parses and validates if bucket policy is of
 // proper JSON and follows allowed restrictions with policy standards.
-func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err error) {
+func parseBucketPolicy(bucketPolicyReader io.Reader, bktPolicy *policy.BucketAccessPolicy) (err error) {
 	// Parse bucket policy reader.
 	decoder := json.NewDecoder(bucketPolicyReader)
-	if err = decoder.Decode(&policy); err != nil {
+	if err = decoder.Decode(bktPolicy); err != nil {
 		return err
 	}
 
 	// Policy version cannot be empty.
-	if len(policy.Version) == 0 {
+	if len(bktPolicy.Version) == 0 {
 		err = errors.New("Policy version cannot be empty")
 		return err
 	}
 
 	// Policy statements cannot be empty.
-	if len(policy.Statements) == 0 {
+	if len(bktPolicy.Statements) == 0 {
 		err = errors.New("Policy statement cannot be empty")
 		return err
 	}
 
 	// Loop through all policy statements and validate entries.
-	for _, statement := range policy.Statements {
+	for _, statement := range bktPolicy.Statements {
 		// Statement effect should be valid.
 		if err := isValidEffect(statement.Effect); err != nil {
 			return err
@@ -339,19 +275,20 @@ func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err 
 
 	// Separate deny and allow statements, so that we can apply deny
 	// statements in the beginning followed by Allow statements.
-	var denyStatements []policyStatement
-	var allowStatements []policyStatement
-	for _, statement := range policy.Statements {
+	var denyStatements []policy.Statement
+	var allowStatements []policy.Statement
+	for _, statement := range bktPolicy.Statements {
 		if statement.Effect == "Deny" {
 			denyStatements = append(denyStatements, statement)
 			continue
 		}
+
 		// else if statement.Effect == "Allow"
 		allowStatements = append(allowStatements, statement)
 	}
 
 	// Deny statements are enforced first once matched.
-	policy.Statements = append(denyStatements, allowStatements...)
+	bktPolicy.Statements = append(denyStatements, allowStatements...)
 
 	// Return successfully parsed policy structure.
 	return nil

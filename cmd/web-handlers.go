@@ -36,6 +36,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -368,7 +369,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	cred := mustGetNewCredential()
+	cred := auth.MustGetNewCredentials()
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = browser.UIVersion
@@ -399,7 +400,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
-	creds, err := createCredential(args.AccessKey, args.SecretKey)
+	creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
 	if err != nil {
 		return toJSONError(err)
 	}
@@ -728,20 +729,10 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 
 func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
 	// FIXME: remove this code when S3 layer for gateway and server is unified.
-	var policyInfo policy.BucketAccessPolicy
-	var err error
-
-	switch layer := objAPI.(type) {
-	case *s3Objects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *azureObjects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *gcsGateway:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	default:
-		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
+	if layer, ok := objAPI.(GatewayLayer); ok {
+		return layer.GetBucketPolicies(bucketName)
 	}
-	return policyInfo, err
+	return readBucketAccessPolicy(objAPI, bucketName)
 }
 
 // GetBucketPolicy - get bucket policy for the requested prefix.
@@ -867,12 +858,14 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	if len(policyInfo.Statements) == 0 {
-		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
-		if err != nil {
+		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{
+			true, policy.BucketAccessPolicy{},
+		}, objectAPI); err != nil {
 			return toJSONError(err, args.BucketName)
 		}
 		return nil
 	}
+
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
 		return toJSONError(err)
@@ -1024,13 +1017,13 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidAccessKeyLength {
+	} else if err == auth.ErrInvalidAccessKeyLength {
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidSecretKeyLength {
+	} else if err == auth.ErrInvalidSecretKeyLength {
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,

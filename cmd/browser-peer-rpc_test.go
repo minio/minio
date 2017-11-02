@@ -19,6 +19,8 @@ package cmd
 import (
 	"path"
 	"testing"
+
+	"github.com/minio/minio/pkg/auth"
 )
 
 // API suite container common to both FS and XL.
@@ -61,7 +63,7 @@ func TestBrowserPeerRPC(t *testing.T) {
 // Tests for browser peer rpc.
 func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	// Construct RPC call arguments.
-	creds, err := createCredential("abcd1", "abcd1234")
+	creds, err := auth.CreateCredentials("abcd1", "abcd1234")
 	if err != nil {
 		t.Fatalf("unable to create credential. %v", err)
 	}

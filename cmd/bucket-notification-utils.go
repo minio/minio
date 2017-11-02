@@ -116,9 +116,13 @@ func checkARN(arn, arnType string) APIErrorCode {
 	if len(strs) != 6 {
 		return ErrARNNotification
 	}
-	if serverConfig.GetRegion() != "" {
+
+	// Server region is allowed to be empty by default,
+	// in such a scenario ARN region is not validating
+	// allowing all regions.
+	if sregion := serverConfig.GetRegion(); sregion != "" {
 		region := strs[3]
-		if region != serverConfig.GetRegion() {
+		if region != sregion {
 			return ErrRegionNotification
 		}
 	}
@@ -273,9 +277,13 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	if len(strs) != 6 {
 		return
 	}
-	if serverConfig.GetRegion() != "" {
+
+	// Server region is allowed to be empty by default,
+	// in such a scenario ARN region is not validating
+	// allowing all regions.
+	if sregion := serverConfig.GetRegion(); sregion != "" {
 		region := strs[3]
-		if region != serverConfig.GetRegion() {
+		if region != sregion {
 			return
 		}
 	}

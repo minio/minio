@@ -150,6 +150,12 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Convert the incoming ARNs properly to the GetRegion().
+	for i, queueConfig := range notificationCfg.QueueConfigs {
+		queueConfig.QueueARN = unmarshalSqsARN(queueConfig.QueueARN).String()
+		notificationCfg.QueueConfigs[i] = queueConfig
+	}
+
 	// Put bucket notification config.
 	err = PutBucketNotificationConfig(bucket, &notificationCfg, objectAPI)
 	if err != nil {

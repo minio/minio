@@ -32,6 +32,7 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/auth"
 )
 
 var configJSON = []byte(`{
@@ -263,7 +264,7 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 
 // getServiceCmdRequest - Constructs a management REST API request for service
 // subcommands for a given cmdType value.
-func getServiceCmdRequest(cmd cmdType, cred credential, body []byte) (*http.Request, error) {
+func getServiceCmdRequest(cmd cmdType, cred auth.Credentials, body []byte) (*http.Request, error) {
 	req, err := newTestRequest(cmd.apiMethod(), "/?service", 0, nil)
 	if err != nil {
 		return nil, err

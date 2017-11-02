@@ -29,7 +29,9 @@ import (
 	"time"
 
 	b2 "github.com/minio/blazer/base"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/auth"
 	h2 "github.com/minio/minio/pkg/hash"
 )
 
@@ -37,21 +39,77 @@ import (
 const (
 	bucketTypePrivate  = "allPrivate"
 	bucketTypeReadOnly = "allPublic"
+	b2Backend          = "b2"
 )
+
+func init() {
+	const b2GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: B2 account id.
+     MINIO_SECRET_KEY: B2 application key.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for B2 backend.
+      $ export MINIO_ACCESS_KEY=accountID
+      $ export MINIO_SECRET_KEY=applicationKey
+      $ {{.HelpName}}
+
+`
+
+	MustRegisterGatewayCommand(cli.Command{
+		Name:               b2Backend,
+		Usage:              "Backblaze B2.",
+		Action:             b2GatewayMain,
+		CustomHelpTemplate: b2GatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	})
+}
+
+// Handler for 'minio gateway b2' command line.
+func b2GatewayMain(ctx *cli.Context) {
+	startGateway(ctx, &B2Gateway{})
+}
+
+// B2Gateway implements Gateway.
+type B2Gateway struct{}
+
+// Name implements Gateway interface.
+func (g *B2Gateway) Name() string {
+	return b2Backend
+}
+
+// NewGatewayLayer returns b2 gateway layer, implements GatewayLayer interface to
+// talk to B2 remote backend.
+func (g *B2Gateway) NewGatewayLayer() (GatewayLayer, error) {
+	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+	return newB2GatewayLayer()
+}
 
 // b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	gatewayUnsupported
 	mu         sync.Mutex
-	creds      credential
+	creds      auth.Credentials
 	b2Client   *b2.B2
 	anonClient *http.Client
 	ctx        context.Context
 }
 
-// newB2Gateway returns b2 gateway layer, implements GatewayLayer interface to
-// talk to B2 remote backend.
-func newB2Gateway() (GatewayLayer, error) {
+// newB2GatewayLayer returns b2 gateway layer.
+func newB2GatewayLayer() (GatewayLayer, error) {
 	ctx := context.Background()
 	creds := serverConfig.GetCredential()
 
@@ -264,7 +322,7 @@ func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, del
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        file.Info.ID,
+				ETag:        toS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -299,7 +357,7 @@ func (l *b2Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter s
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        file.Info.ID,
+				ETag:        toS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -346,7 +404,7 @@ func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        fi.ID,
+		ETag:        toS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -452,7 +510,7 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        fi.ID,
+		ETag:        toS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -566,7 +624,7 @@ func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string,
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: UTCNow(),
-		ETag:         sha1,
+		ETag:         toS3ETag(sha1),
 		Size:         data.Size(),
 	}, nil
 }
@@ -597,7 +655,7 @@ func (l *b2Objects) ListObjectParts(bucket string, object string, uploadID strin
 	for _, part := range partsList {
 		lpi.Parts = append(lpi.Parts, PartInfo{
 			PartNumber: part.Number,
-			ETag:       part.SHA1,
+			ETag:       toS3ETag(part.SHA1),
 			Size:       part.Size,
 		})
 	}
@@ -627,7 +685,9 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 		if i+1 != uploadedPart.PartNumber {
 			return oi, b2ToObjectError(traceError(InvalidPart{}), bucket, object, uploadID)
 		}
-		hashes[uploadedPart.PartNumber] = uploadedPart.ETag
+
+		// Trim "-1" suffix in ETag as PutObjectPart() treats B2 returned SHA1 as ETag.
+		hashes[uploadedPart.PartNumber] = strings.TrimSuffix(uploadedPart.ETag, "-1")
 	}
 
 	if _, err = bkt.File(uploadID, object).CompileParts(0, hashes).FinishLargeFile(l.ctx); err != nil {

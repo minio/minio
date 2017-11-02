@@ -25,6 +25,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/minio/minio/pkg/auth"
 	miniohttp "github.com/minio/minio/pkg/http"
 )
 
@@ -50,10 +51,7 @@ const (
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
-	globalMinioModeGatewayAzure    = "mode-gateway-azure"
-	globalMinioModeGatewayS3       = "mode-gateway-s3"
-	globalMinioModeGatewayGCS      = "mode-gateway-gcs"
-	globalMinioModeGatewayB2       = "mode-gateway-b2"
+	globalMinioModeGatewayPrefix   = "mode-gateway-"
 
 	// globalMinioSysTmp prefix is used in Azure/GCS gateway for save metadata sent by Initialize Multipart Upload API.
 	globalMinioSysTmp = "minio.sys.tmp/"
@@ -145,7 +143,7 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred         credential
+	globalActiveCred         auth.Credentials
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
 	// Add new variable global values here.

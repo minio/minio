@@ -24,10 +24,12 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -56,8 +58,8 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	}
 
 	// Fetch bucket policy, if policy is not set return access denied.
-	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
+	p := globalBucketPolicies.GetBucketPolicy(bucket)
+	if reflect.DeepEqual(p, emptyBucketPolicy) {
 		return ErrAccessDenied
 	}
 
@@ -65,7 +67,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	arn := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(resource, "/"), "/")
 
 	// Get conditions for policy verification.
-	conditionKeyMap := make(map[string]set.StringSet)
+	conditionKeyMap := make(policy.ConditionKeyMap)
 	for queryParam := range queryParams {
 		conditionKeyMap[queryParam] = set.CreateStringSet(queryParams.Get(queryParam))
 	}
@@ -78,7 +80,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	conditionKeyMap["ip"] = set.CreateStringSet(sourceIP)
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
+	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, p.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
@@ -90,14 +92,14 @@ func isBucketActionAllowed(action, bucket, prefix string) bool {
 		return false
 	}
 
-	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
+	bp := globalBucketPolicies.GetBucketPolicy(bucket)
+	if reflect.DeepEqual(bp, emptyBucketPolicy) {
 		return false
 	}
 	resource := bucketARNPrefix + path.Join(bucket, prefix)
 	var conditionKeyMap map[string]set.StringSet
 	// Validate action, resource and conditions with current policy statements.
-	return bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements)
+	return bucketPolicyEvalStatements(action, resource, conditionKeyMap, bp.Statements)
 }
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -690,7 +692,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	_ = removeBucketPolicy(bucket, objectAPI)
 
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, policyChange{true, nil})
+	S3PeersUpdateBucketPolicy(bucket, policyChange{true, policy.BucketAccessPolicy{}})
 
 	// Delete notification config, if present - ignore any errors.
 	_ = removeNotificationConfig(bucket, objectAPI)

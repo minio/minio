@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"sync"
 
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
 )
@@ -42,9 +43,9 @@ type serverConfigV19 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential  `json:"credential"`
-	Region     string      `json:"region"`
-	Browser    BrowserFlag `json:"browser"`
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -79,7 +80,7 @@ func (s *serverConfigV19) GetRegion() string {
 }
 
 // SetCredentials set new credentials. SetCredential returns the previous credential.
-func (s *serverConfigV19) SetCredential(creds credential) (prevCred credential) {
+func (s *serverConfigV19) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -94,7 +95,7 @@ func (s *serverConfigV19) SetCredential(creds credential) (prevCred credential) 
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV19) GetCredential() credential {
+func (s *serverConfigV19) GetCredential() auth.Credentials {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -130,7 +131,7 @@ func (s *serverConfigV19) Save() error {
 func newServerConfigV19() *serverConfigV19 {
 	srvCfg := &serverConfigV19{
 		Version:    v19,
-		Credential: mustGetNewCredential(),
+		Credential: auth.MustGetNewCredentials(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
 		Logger:     &loggers{},
