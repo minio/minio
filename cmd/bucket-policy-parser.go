@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,10 @@ import (
 
 var emptyBucketPolicy = policy.BucketAccessPolicy{}
 
-var conditionKeyActionMap = map[string]set.StringSet{
-	"s3:prefix":   set.CreateStringSet("s3:ListBucket"),
-	"s3:max-keys": set.CreateStringSet("s3:ListBucket"),
+var conditionKeyActionMap = policy.ConditionKeyMap{
+	"s3:prefix": set.CreateStringSet("s3:ListBucket", "s3:ListBucketMultipartUploads"),
+	"s3:max-keys": set.CreateStringSet("s3:ListBucket", "s3:ListBucketMultipartUploads",
+		"s3:ListMultipartUploadParts"),
 }
 
 // supportedActionMap - lists all the actions supported by minio.
