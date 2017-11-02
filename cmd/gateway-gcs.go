@@ -192,11 +192,15 @@ func gcsToObjectError(err error, params ...string) error {
 
 	bucket := ""
 	object := ""
+	uploadID := ""
 	if len(params) >= 1 {
 		bucket = params[0]
 	}
 	if len(params) == 2 {
 		object = params[1]
+	}
+	if len(params) == 3 {
+		uploadID = params[2]
 	}
 
 	// in some cases just a plain error is being returned
@@ -208,9 +212,15 @@ func gcsToObjectError(err error, params ...string) error {
 		e.e = err
 		return e
 	case "storage: object doesn't exist":
-		err = ObjectNotFound{
-			Bucket: bucket,
-			Object: object,
+		if uploadID != "" {
+			err = InvalidUploadID{
+				UploadID: uploadID,
+			}
+		} else {
+			err = ObjectNotFound{
+				Bucket: bucket,
+				Object: object,
+			}
 		}
 		e.e = err
 		return e
@@ -923,7 +933,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 // an object layer compatible error upon any error.
 func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID string) error {
 	_, err := l.client.Bucket(bucket).Object(gcsMultipartMetaName(uploadID)).Attrs(l.ctx)
-	return gcsToObjectError(traceError(err), bucket, key)
+	return gcsToObjectError(traceError(err), bucket, key, uploadID)
 }
 
 // PutObjectPart puts a part of object in bucket
@@ -1009,7 +1019,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	partZeroAttrs, err := object.Attrs(l.ctx)
 	if err != nil {
-		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key, uploadID)
 	}
 
 	r, err := object.NewReader(l.ctx)
@@ -1036,9 +1046,26 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	}
 
 	var parts []*storage.ObjectHandle
-	for _, uploadedPart := range uploadedParts {
+	partSizes := make([]int64, len(uploadedParts))
+	for i, uploadedPart := range uploadedParts {
 		parts = append(parts, l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID,
 			uploadedPart.PartNumber, uploadedPart.ETag)))
+		partAttr, pErr := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, uploadedPart.PartNumber, uploadedPart.ETag)).Attrs(l.ctx)
+		if pErr != nil {
+			return ObjectInfo{}, gcsToObjectError(traceError(pErr), bucket, key, uploadID)
+		}
+		partSizes[i] = partAttr.Size
+	}
+
+	// Error out if parts except last part sizing < 5MiB.
+	for i, size := range partSizes[:len(partSizes)-1] {
+		if size < globalMinPartSize {
+			return ObjectInfo{}, traceError(PartTooSmall{
+				PartNumber: uploadedParts[i].PartNumber,
+				PartSize:   size,
+				PartETag:   uploadedParts[i].ETag,
+			})
+		}
 	}
 
 	// Returns name of the composed object.
