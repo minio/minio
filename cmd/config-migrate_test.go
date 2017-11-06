@@ -169,7 +169,7 @@ func TestServerConfigMigrateV2toV19(t *testing.T) {
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := v20
+	expectedVersion := configCurrentVersion
 	if serverConfig.Version != expectedVersion {
 		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
 	}
