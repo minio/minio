@@ -19,7 +19,8 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
-	"io/ioutil"
+	"io"
+	goioutil "io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -28,6 +29,7 @@ import (
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/ioutil"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -82,13 +84,6 @@ func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	return ErrNoSuchKey
 }
 
-// Simple way to convert a func to io.Writer type.
-type funcToWriter func([]byte) (int, error)
-
-func (f funcToWriter) Write(p []byte) (int, error) {
-	return f(p)
-}
-
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -129,6 +124,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, apiErr, r.URL)
 		return
 	}
+	if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+		writeErrorResponse(w, apiErr, r.URL)
+		return
+	}
 
 	// Get request range.
 	var hrange *httpRange
@@ -160,40 +159,41 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		length = hrange.getLength()
 	}
 
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, hrange)
-
-			// Set any additional requested response headers.
-			setHeadGetRespHeaders(w, r.URL.Query())
-
-			dataWritten = true
+	var writer io.Writer
+	writer = w
+	if IsSSECustomerRequest(r.Header) {
+		writer, err = DecryptRequest(writer, r, objInfo.UserDefined)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
 		}
-		return w.Write(p)
-	})
+		w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
+		w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
 
+		if startOffset != 0 || length < objInfo.Size {
+			writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-C requests with HTTP range are not supported yet
+			return
+		}
+		length = objInfo.EncryptedSize()
+	}
+
+	setObjectHeaders(w, objInfo, hrange)
+	setHeadGetRespHeaders(w, r.URL.Query())
+
+	httpWriter := ioutil.WriteOnClose(writer)
 	// Reads the object at startOffset and writes to mw.
-	if err = objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter); err != nil {
 		errorIf(err, "Unable to write to client.")
-		if !dataWritten {
-			// Error response only if no data has been written to client yet. i.e if
-			// partial data has already been written before an error
-			// occurred then no point in setting StatusCode and
-			// sending error XML.
+		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
 		return
 	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
+	if err = httpWriter.Close(); err != nil {
+		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// Get host and port from Request.RemoteAddr.
@@ -251,6 +251,15 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		writeErrorResponseHeadersOnly(w, apiErr)
 		return
+	}
+	if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+		writeErrorResponse(w, apiErr, r.URL)
+		return
+	} else if encrypted {
+		if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
+			writeErrorResponse(w, ErrSSEEncryptedObject, r.URL)
+			return
+		}
 	}
 
 	// Validate pre-conditions if any.
@@ -530,9 +539,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	var (
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
-		reader    = r.Body
+		reader    io.Reader
+		s3Err     APIErrorCode
 	)
-
+	reader = r.Body
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -541,31 +551,29 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		sourceIP := getSourceIPAddress(r)
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
+		if s3Err = enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path, r.Referer(), sourceIP, r.URL.Query()); s3Err != ErrNone {
+			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		var s3Error APIErrorCode
-		reader, s3Error = newSignV4ChunkedReader(r)
-		if s3Error != ErrNone {
+		reader, s3Err = newSignV4ChunkedReader(r)
+		if s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
+		s3Err = isReqAuthenticatedV2(r)
+		if s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
+		if s3Err = reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 		if !skipContentSha256Cksum(r) {
@@ -579,7 +587,20 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Create the object..
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		reader, err = EncryptRequest(hashReader, r, metadata)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		info := ObjectInfo{Size: size}
+		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+	}
+
 	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create an object. %s", r.URL.Path)
@@ -587,6 +608,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+	if IsSSECustomerRequest(r.Header) {
+		w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
+		w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
+	}
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.
@@ -627,6 +652,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		// SSE-C is not implemented for multipart operations yet
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
 	// Extract metadata that needs to be saved.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
@@ -663,6 +694,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		// SSE-C is not implemented for multipart operations yet
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -781,6 +818,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
+		return
+	}
+
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		// SSE-C is not implemented for multipart operations yet
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -977,7 +1020,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get upload id.
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
-	completeMultipartBytes, err := ioutil.ReadAll(r.Body)
+	completeMultipartBytes, err := goioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
 		writeErrorResponse(w, ErrInternalError, r.URL)

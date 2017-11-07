@@ -958,7 +958,6 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	}
 	// Make sure to close the object writer upon success.
 	w.Close()
-
 	return PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,
