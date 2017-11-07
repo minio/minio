@@ -91,6 +91,12 @@
 			"revisionTime": "2016-07-13T13:44:25+03:00"
 		},
 		{
+			"checksumSHA1": "LhRQthBRjkXhfPEo9sk1s5Y47iI=",
+			"path": "github.com/coreos/bbolt",
+			"revision": "3eac9d3bd834d07cf6b83b780a750cd10c16597a",
+			"revisionTime": "2017-09-28T16:33:06Z"
+		},
+		{
 			"checksumSHA1": "/5cvgU+J4l7EhMXTK76KaCAfOuU=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",

@@ -375,6 +375,13 @@ func (e UnsupportedMetadata) Error() string {
 	return "Unsupported headers in Metadata"
 }
 
+// BackendDown is returned for network errors or if the gateway's backend is down.
+type BackendDown struct{}
+
+func (e BackendDown) Error() string {
+	return "Backend down"
+}
+
 // Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errorCause(err)

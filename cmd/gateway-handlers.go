@@ -75,8 +75,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
+	if api.cache != nil {
+		getObjectInfo = api.cache.GetObjectInfo
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObjectInfo = objectAPI.AnonGetObjectInfo
+		if api.cache != nil {
+			getObjectInfo = api.cache.AnonGetObjectInfo
+		}
 	}
 	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
@@ -136,8 +142,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	getObject := objectAPI.GetObject
+	if api.cache != nil {
+		getObject = api.cache.GetObject
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObject = objectAPI.AnonGetObject
+		if api.cache != nil {
+			getObject = api.cache.AnonGetObject
+		}
 	}
 
 	// Reads the object at startOffset and writes to mw.
@@ -305,6 +317,14 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r)
+		}
+	}
+
+	if api.cache != nil {
+		if reqAuthType == authTypeAnonymous {
+			putObject = api.cache.AnonPutObject
+		} else {
+			putObject = api.cache.PutObject
 		}
 	}
 
@@ -930,7 +950,9 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		getBucketInfo = objectAPI.AnonGetBucketInfo
 	}
 
-	if _, err := getBucketInfo(bucket); err != nil {
+	_, err := getBucketInfo(bucket)
+	_, backendDown := errorCause(err).(BackendDown)
+	if err != nil && !backendDown {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

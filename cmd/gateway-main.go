@@ -174,6 +174,9 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	newObject, err := gw.NewGatewayLayer()
 	fatalIf(err, "Unable to initialize gateway layer")
 
+	globalCacheDir = ctx.String("cache-dir")
+	globalCacheMax = ctx.Int("cache-max")
+
 	router := mux.NewRouter().SkipClean(true)
 
 	// Register web router when its enabled.
