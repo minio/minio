@@ -46,7 +46,16 @@ var serverCmd = cli.Command{
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR1 [DIR2..]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64}
+
+DIR:
+  DIR points to a directory on a filesystem. When you want to combine
+  multiple drives into a single large system, pass one directory per
+  filesystem separated by space. You may also use a '...' convention
+  to abbreviate the directory arguments. Remote directories in a
+  distributed setup are encoded as HTTP(s) URIs.
+
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -82,6 +91,10 @@ EXAMPLES:
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
+
+  5. Start minio on a 64 drives.
+      $ {{.HelpName}} /mnt/export{1...64}
+
 `,
 }
 
@@ -96,7 +109,12 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 	var err error
 
-	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
+	if hasArgsWithEllipses(ctx.Args()...) {
+		globalMinioAddr, globalEndpoints, setupType, globalXLSets, globalXLPerSetDiskCount, err = CreateEndpointsFromEllipses(serverAddr, ctx.Args()...)
+	} else {
+		globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
+	}
+
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	if runtime.GOOS == "darwin" {
@@ -128,7 +146,7 @@ func serverHandleEnvVars() {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	if !ctx.Args().Present() || ctx.Args().First() == "help" {
+	if (!ctx.IsSet("sets") && !ctx.Args().Present()) || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
@@ -250,33 +268,61 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 		return newFSObjectLayer(endpoints[0].Path)
 	}
 
-	// Initialize storage disks.
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return nil, err
-	}
-
 	// Wait for formatting disks for XL backend.
-	var formattedDisks []StorageAPI
+	var formattedDisksSets [][]StorageAPI
 
 	// First disk argument check if it is local.
-	firstDisk := endpoints[0].IsLocal
-	formattedDisks, err = waitForFormatXLDisks(firstDisk, endpoints, storageDisks)
-	if err != nil {
+	for _, endpoints := range GetEndpointSets(endpoints, globalXLSets) {
+		var storageDisks []StorageAPI
+		// Initialize storage disks.
+		storageDisks, err = initStorageDisks(endpoints)
+		if err != nil {
+			return nil, err
+		}
+
+		var formattedDisks []StorageAPI
+		formattedDisks, err = waitForFormatXLDisks(endpoints[0].IsLocal, endpoints, storageDisks)
+		if err != nil {
+			return nil, err
+		}
+
+		// Cleanup objects that weren't successfully written into the namespace.
+		if err = houseKeeping(formattedDisks); err != nil {
+			return nil, err
+		}
+
+		formattedDisksSets = append(formattedDisksSets, formattedDisks)
+	}
+
+	// Once all disks are formatted in XL, proceed to initialize object layer.
+	var objAPI ObjectLayer
+	if len(formattedDisksSets) == 1 {
+		// Initialize XL object layer.
+		objAPI, err = newXLObjects(formattedDisksSets[0])
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var layers []*xlObjects
+		for _, storageDisks := range formattedDisksSets {
+			var obj ObjectLayer
+			if obj, err = newXLObjects(storageDisks); err != nil {
+				return nil, err
+			}
+			layers = append(layers, obj.(*xlObjects))
+		}
+		objAPI = newXLSets(layers)
+	}
+
+	// Initialize and load bucket policies.
+	if err = initBucketPolicies(objAPI); err != nil {
 		return nil, err
 	}
 
-	// Cleanup objects that weren't successfully written into the namespace.
-	if err = houseKeeping(storageDisks); err != nil {
+	// Initialize a new event notifier.
+	if err = initEventNotifier(objAPI); err != nil {
 		return nil, err
 	}
 
-	// Once XL formatted, initialize object layer.
-	newObject, err = newXLObjectLayer(formattedDisks)
-	if err != nil {
-		return nil, err
-	}
-
-	// XL initialized, return.
-	return newObject, nil
+	return objAPI, nil
 }

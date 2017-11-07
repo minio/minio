@@ -1642,19 +1642,16 @@ func getRandomDisks(N int) ([]string, error) {
 
 // initObjectLayer - Instantiates object layer and returns it.
 func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) {
-	storageDisks, err := initStorageDisks(endpoints)
+	objLayer, err := newObjectLayer(endpoints)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	objLayer, err := newXLObjectLayer(formattedDisks)
-	if err != nil {
-		return nil, nil, err
+	var formattedDisks []StorageAPI
+	// Disabling the cache for integration tests.
+	// Should use the object layer tests for validating cache.
+	if xl, ok := objLayer.(*xlObjects); ok {
+		formattedDisks = xl.storageDisks
 	}
 
 	// Success.
@@ -2388,7 +2385,6 @@ func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 		endpoints, err = NewEndpointList(args...)
 		fatalIf(err, "unable to create new endpoint list")
 	}
-
 	return endpoints
 }
 

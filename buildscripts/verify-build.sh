@@ -45,21 +45,30 @@ function start_minio_fs()
 {
     "${MINIO[@]}" server "${WORK_DIR}/fs-disk" >"$WORK_DIR/fs-minio.log" 2>&1 &
     minio_pid=$!
-    sleep 3
+    sleep 10
 
     echo "$minio_pid"
 }
 
-function start_minio_xl()
+function start_minio_erasure()
 {
-    "${MINIO[@]}" server "${WORK_DIR}/xl-disk1" "${WORK_DIR}/xl-disk2" "${WORK_DIR}/xl-disk3" "${WORK_DIR}/xl-disk4" >"$WORK_DIR/xl-minio.log" 2>&1 &
+    "${MINIO[@]}" server "${WORK_DIR}/erasure-disk1" "${WORK_DIR}/erasure-disk2" "${WORK_DIR}/erasure-disk3" "${WORK_DIR}/erasure-disk4" >"$WORK_DIR/erasure-minio.log" 2>&1 &
     minio_pid=$!
-    sleep 3
+    sleep 15
 
     echo "$minio_pid"
 }
 
-function start_minio_dist()
+function start_minio_erasure_sets()
+{
+    "${MINIO[@]}" server "${WORK_DIR}/erasure-disk-sets{1...32}" >"$WORK_DIR/erasure-minio-sets.log" 2>&1 &
+    minio_pid=$!
+    sleep 15
+
+    echo "$minio_pid"
+}
+
+function start_minio_dist_erasure()
 {
     declare -a minio_pids
     "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/dist-disk1" "http://127.0.0.1:9001${WORK_DIR}/dist-disk2" "http://127.0.0.1:9002${WORK_DIR}/dist-disk3" "http://127.0.0.1:9003${WORK_DIR}/dist-disk4" >"$WORK_DIR/dist-minio-9000.log" 2>&1 &
@@ -103,9 +112,8 @@ function run_test_fs()
     return "$rv"
 }
 
-function run_test_xl()
-{
-    minio_pid="$(start_minio_xl)"
+function run_test_erasure_sets() {
+    minio_pid="$(start_minio_erasure_sets)"
 
     (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
     rv=$?
@@ -114,16 +122,34 @@ function run_test_xl()
     sleep 3
 
     if [ "$rv" -ne 0 ]; then
-        cat "$WORK_DIR/xl-minio.log"
+        cat "$WORK_DIR/erasure-minio-sets.log"
     fi
-    rm -f "$WORK_DIR/xl-minio.log"
+    rm -f "$WORK_DIR/erasure-minio-sets.log"
 
     return "$rv"
 }
 
-function run_test_dist()
+function run_test_erasure()
 {
-    minio_pids=( $(start_minio_dist) )
+    minio_pid="$(start_minio_erasure)"
+
+    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
+    rv=$?
+
+    kill "$minio_pid"
+    sleep 3
+
+    if [ "$rv" -ne 0 ]; then
+        cat "$WORK_DIR/erasure-minio.log"
+    fi
+    rm -f "$WORK_DIR/erasure-minio.log"
+
+    return "$rv"
+}
+
+function run_test_dist_erasure()
+{
+    minio_pids=( $(start_minio_dist_erasure) )
 
     (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
     rv=$?
@@ -144,7 +170,7 @@ function run_test_dist()
         cat "$WORK_DIR/dist-minio-9003.log"
     fi
 
-    rm -f "$WORK_DIR/dist-minio-9000.log" "$WORK_DIR/dist-minio-9001.log" "$WORK_DIR/dist-minio-9002.log" "$WORK_DIR/dist-minio-9003.log" 
+    rm -f "$WORK_DIR/dist-minio-9000.log" "$WORK_DIR/dist-minio-9001.log" "$WORK_DIR/dist-minio-9002.log" "$WORK_DIR/dist-minio-9003.log"
 
    return "$rv"
 }
@@ -207,15 +233,22 @@ function main()
         exit 1
     fi
 
-    echo "Testing in XL setup"
-    if ! run_test_xl; then
+    echo "Testing in Erasure setup"
+    if ! run_test_erasure; then
         echo "FAILED"
         rm -fr "$WORK_DIR"
         exit 1
     fi
 
-    echo "Testing in Distribute XL setup"
-    if ! run_test_dist; then
+    echo "Testing in Distributed Erasure setup"
+    if ! run_test_dist_erasure; then
+        echo "FAILED"
+        rm -fr "$WORK_DIR"
+        exit 1
+    fi
+
+    echo "Testing in Erasure setup as sets"
+    if ! run_test_erasure_sets; then
         echo "FAILED"
         rm -fr "$WORK_DIR"
         exit 1

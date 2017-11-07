@@ -388,3 +388,46 @@ func TestGetRemotePeers(t *testing.T) {
 		}
 	}
 }
+
+// Tests create endpoint ellipses.
+func TestCreateEndpointEllipses(t *testing.T) {
+	testCases := []struct {
+		serverAddr string
+		args       []string
+		success    bool
+	}{
+		// Invalid input.
+		{"", []string{}, false},
+		// Range cannot be negative.
+		{":9000", []string{"/export1{-1...1}"}, false},
+		// Range cannot start bigger than end.
+		{":9000", []string{"/export1{64...1}"}, false},
+		// Duplicate disks not allowed.
+		{":9000", []string{"/export1{1...32}", "/export1{1...32}"}, false},
+		// Same host cannot export same disk on two ports - special case localhost.
+		{":9001", []string{"http://localhost:900{1...2}/export{1...64}"}, false},
+
+		// Valid inputs.
+		{":9000", []string{"/export1{1...64}"}, true},
+		{":9000", []string{"/export1{1...32}", "/export1{33...64}"}, true},
+		{":9001", []string{"http://localhost:9001/export{1...64}"}, true},
+	}
+
+	for _, testCase := range testCases {
+		_, endpoints, _, setSize, setDisksCount, err := CreateEndpointsFromEllipses(testCase.serverAddr, testCase.args...)
+		if err != nil && testCase.success {
+			t.Errorf("Expected success but failed instead %s", err)
+		}
+		if err == nil && !testCase.success {
+			t.Errorf("Expected failure but passed instead")
+		}
+		if err == nil {
+			setEndpoints := GetEndpointSets(endpoints, setSize)
+			for _, endpoints := range setEndpoints {
+				if len(endpoints) != setDisksCount {
+					t.Errorf("Expected endpoint set size %d, got %d", setSize, len(endpoints))
+				}
+			}
+		}
+	}
+}

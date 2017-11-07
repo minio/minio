@@ -93,6 +93,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 				lockMap:         make(map[string][]lockRequesterInfo),
 			},
 		}
+
 		globalLockServer = &localLockServer
 		clnts = append(clnts, &(localLockServer.ll))
 	}

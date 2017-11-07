@@ -74,6 +74,12 @@ const (
 )
 
 var (
+	// Indicates the total number of erasure coded sets configured.
+	globalXLSets int
+
+	// Indicates per set disk count.
+	globalXLPerSetDiskCount int
+
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistXL = false
 

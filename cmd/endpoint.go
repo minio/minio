@@ -45,7 +45,8 @@ const (
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
-	IsLocal bool
+	IsLocal  bool
+	SetIndex int
 }
 
 func (endpoint Endpoint) String() string {
@@ -487,4 +488,27 @@ func GetRemotePeers(endpoints EndpointList) []string {
 	}
 
 	return peerSet.ToSlice()
+}
+
+// GetEndpointSets - returns a sets of endpoints arranged accordingly
+// based on the set they belong to. This association is built looking
+// at setIndex value for each endpoint.
+func GetEndpointSets(endpoints EndpointList, setSize int) []EndpointList {
+	if setSize == 0 {
+		return []EndpointList{endpoints}
+	}
+
+	var setEndpoints []EndpointList
+	for i := 0; i < setSize; i++ {
+		var setEndpoint EndpointList
+		for _, endpoint := range endpoints {
+			if endpoint.SetIndex == i {
+				setEndpoint = append(setEndpoint, endpoint)
+			}
+		}
+		setEndpoints = append(setEndpoints, setEndpoint)
+	}
+
+	// Success.
+	return setEndpoints
 }
