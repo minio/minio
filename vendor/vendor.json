@@ -465,6 +465,13 @@
 			"revisionTime": "2017-03-21T23:07:31Z"
 		},
 		{
+			"checksumSHA1": "BYvROBsiyAXK4sq6yhDe8RgT4LM=",
+			"origin": "github.com/minio/minio/vendor/github.com/sirupsen/logrus",
+			"path": "github.com/sirupsen/logrus",
+			"revision": "89742aefa4b206dcf400792f3bd35b542998eb3b",
+			"revisionTime": "2017-08-22T13:27:46Z"
+		},
+		{
 			"checksumSHA1": "u0hXGADM3JDza8YjgiyNJpAJk8g=",
 			"path": "github.com/skyrings/skyring-common/tools/uuid",
 			"revision": "762fd2bfc12e766d90478d638255981ab1966a3d",

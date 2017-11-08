@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // ConsoleLogger - console logger which logs into stderr.

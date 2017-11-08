@@ -61,7 +61,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// Register postgres driver
 	_ "github.com/lib/pq"

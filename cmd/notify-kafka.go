@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
