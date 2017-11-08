@@ -30,6 +30,11 @@ func toGCSPublicURL(bucket, object string) string {
 
 // AnonGetObject - Get object anonymously
 func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)
 	if err != nil {
 		return gcsToObjectError(traceError(err), bucket, object)
@@ -57,6 +62,11 @@ func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return objInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	resp, err := http.Head(toGCSPublicURL(bucket, object))
 	if err != nil {
 		return objInfo, gcsToObjectError(traceError(err), bucket, object)
@@ -97,6 +107,11 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 
 // AnonListObjects - List objects anonymously
 func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
@@ -107,6 +122,10 @@ func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
 func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return ListObjectsV2Info{}, traceError(BucketNotFound{Bucket: bucket})
+	}
 	// Request V1 List Object to the backend
 	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {
@@ -118,6 +137,10 @@ func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimi
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return bucketInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
 	resp, err := http.Head(toGCSPublicURL(bucket, ""))
 	if err != nil {
 		return bucketInfo, gcsToObjectError(traceError(err))
