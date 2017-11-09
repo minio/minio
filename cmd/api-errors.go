@@ -120,6 +120,7 @@ const (
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
+	ErrMaximumExpires
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -724,6 +725,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioObjectTampered",
 		Description:    errObjectTampered.Error(),
 		HTTPStatusCode: http.StatusPartialContent,
+	},
+	ErrMaximumExpires: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
 }

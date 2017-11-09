@@ -750,6 +750,30 @@ func TestParsePreSignV4(t *testing.T) {
 			},
 			expectedErrCode: ErrNone,
 		},
+
+		// Test case - 9.
+		// Test case with value greater than 604800 in X-Amz-Expires header.
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// valid "X-Amz-Date" query.
+				"X-Amz-Date", queryTime.UTC().Format(iso8601Format),
+				// Invalid Expiry time greater than 7 days (604800 in seconds).
+				"X-Amz-Expires", getDurationStr(605000),
+				"X-Amz-Signature", "abcd",
+				"X-Amz-SignedHeaders", "host;x-amz-content-sha256;x-amz-date",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrMaximumExpires,
+		},
 	}
 
 	for i, testCase := range testCases {
