@@ -81,7 +81,7 @@ ReactDOM.render((
   <Provider store={ store } web={ web }>
     <Router history={ browserHistory }>
       <Route path='/' component={ App }>
-        <Route path='minio' component={ App }>
+        <Route path={ minioBrowserPrefix } component={ App }>
           <IndexRoute component={ Browse } onEnter={ authNeeded } />
           <Route path='login' component={ Login } onEnter={ authNotNeeded } />
           <Route path=':bucket' component={ Browse } onEnter={ authNeeded } />

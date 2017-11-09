@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,26 @@
  * limitations under the License.
  */
 
-// File for all the browser constants.
+package ioutil
 
-// minioBrowserPrefix absolute path.
-var p = window.location.pathname
-export const minioBrowserPrefix = p.slice(0, p.indexOf("/", 1))
+import (
+	goioutil "io/ioutil"
+	"testing"
+)
 
-export const READ_ONLY = 'readonly'
-export const WRITE_ONLY = 'writeonly'
-export const READ_WRITE = 'readwrite'
+func TestCloseOnWriter(t *testing.T) {
+	writer := WriteOnClose(goioutil.Discard)
+	if writer.HasWritten() {
+		t.Error("WriteOnCloser must not be marked as HasWritten")
+	}
+	writer.Write(nil)
+	if !writer.HasWritten() {
+		t.Error("WriteOnCloser must be marked as HasWritten")
+	}
+
+	writer = WriteOnClose(goioutil.Discard)
+	writer.Close()
+	if !writer.HasWritten() {
+		t.Error("WriteOnCloser must be marked as HasWritten")
+	}
+}

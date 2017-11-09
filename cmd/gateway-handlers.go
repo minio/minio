@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"io"
-	"io/ioutil"
+	goioutil "io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -29,6 +29,7 @@ import (
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/ioutil"
 )
 
 // GetObjectHandler - GET Object
@@ -118,32 +119,19 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, hrange)
-
-			// Set any additional requested response headers.
-			setHeadGetRespHeaders(w, r.URL.Query())
-
-			dataWritten = true
-		}
-		return w.Write(p)
-	})
 
 	getObject := objectAPI.GetObject
 	if reqAuthType == authTypeAnonymous {
 		getObject = objectAPI.AnonGetObject
 	}
 
+	setObjectHeaders(w, objInfo, hrange)
+	setHeadGetRespHeaders(w, r.URL.Query())
+	httpWriter := ioutil.WriteOnClose(w)
 	// Reads the object at startOffset and writes to mw.
-	if err = getObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = getObject(bucket, object, startOffset, length, httpWriter); err != nil {
 		errorIf(err, "Unable to write to client.")
-		if !dataWritten {
+		if !httpWriter.HasWritten() {
 			// Error response only if no data has been written to client yet. i.e if
 			// partial data has already been written before an error
 			// occurred then no point in setting StatusCode and
@@ -152,11 +140,11 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		return
 	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
+	if err = httpWriter.Close(); err != nil {
+		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// Get host and port from Request.RemoteAddr.
@@ -472,7 +460,7 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 	// Read access policy up to maxAccessPolicySize.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 	// bucket policies are limited to 20KB in size, using a limit reader.
-	policyBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
+	policyBytes, err := goioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
 		errorIf(err, "Unable to read from client.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

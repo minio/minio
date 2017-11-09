@@ -98,9 +98,9 @@ func newApp(name string) *cli.App {
 
 	// Register all commands.
 	registerCommand(serverCmd)
-	registerCommand(versionCmd)
-	registerCommand(updateCmd)
 	registerCommand(gatewayCmd)
+	registerCommand(updateCmd)
+	registerCommand(versionCmd)
 
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{

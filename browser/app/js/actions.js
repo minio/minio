@@ -465,7 +465,7 @@ export const uploadFile = (file, xhr) => {
   return (dispatch, getState) => {
     const {currentBucket, currentPath} = getState()
     const objectName = `${currentPath}${file.name}`
-    const uploadUrl = `${window.location.origin}/minio/upload/${currentBucket}/${objectName}`
+    const uploadUrl = `${window.location.origin}${minioBrowserPrefix}/upload/${currentBucket}/${objectName}`
     // The slug is a unique identifer for the file upload.
     const slug = `${currentBucket}-${currentPath}-${file.name}`
 

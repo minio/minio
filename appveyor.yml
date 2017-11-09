@@ -40,17 +40,19 @@ test_script:
   - mkdir build\coverage
   - go test -v -timeout 17m -race github.com/minio/minio/cmd...
   - go test -v -race github.com/minio/minio/pkg...
-  - go test -v -timeout 17m -coverprofile=build\coverage\coverage.txt -covermode=atomic github.com/minio/minio/cmd
+  # FIXME(aead): enable codecov after issue https://github.com/golang/go/issues/18468 is solved.
+  # - go test -v -timeout 17m -coverprofile=build\coverage\coverage.txt -covermode=atomic github.com/minio/minio/cmd
   - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
 
 after_test:
-  - go tool cover -html=build\coverage\coverage.txt -o build\coverage\coverage.html
-  - ps: Push-AppveyorArtifact build\coverage\coverage.txt
-  - ps: Push-AppveyorArtifact build\coverage\coverage.html
+  # FIXME(aead): enable codecov after issue https://github.com/golang/go/issues/18468 is solved.
+  # - go tool cover -html=build\coverage\coverage.txt -o build\coverage\coverage.html
+  # - ps: Push-AppveyorArtifact build\coverage\coverage.txt
+  # - ps: Push-AppveyorArtifact build\coverage\coverage.html
   # Upload coverage report.
-  - "SET PATH=C:\\Python34;C:\\Python34\\Scripts;%PATH%"
-  - pip install codecov
-  - codecov -X gcov -f "build\coverage\coverage.txt"
+  # - "SET PATH=C:\\Python34;C:\\Python34\\Scripts;%PATH%"
+  # - pip install codecov
+  # - codecov -X gcov -f "build\coverage\coverage.txt"
 
 # to disable deployment
 deploy: off
