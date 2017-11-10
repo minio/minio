@@ -2,7 +2,7 @@
 
 Minio Browser使用Json Web Token来验证JSON RPC请求。
 
-初使请求为用户提供的'AccessKey' 和 'SecretKey'生成一个token令牌
+初使请求为用户提供的`AccessKey`和 `SecretKey`生成一个token令牌
 
 <blockquote>
 目前这些令牌在10小时后到期，这是不可配置的。
@@ -26,7 +26,7 @@ JSON RPC命名空间是`Web`.
 #### 认证操作
 
 * Login - 等待用户名密码输入，成功回复一个新的Json Web Token（JWT）。
-* SetAuth - 使用新的“用户名，密码”更改访问凭据。
+* SetAuth - 使用新的用户名，密码更改访问凭据。
 * GetAuth - 从服务器获取当前的身份验证。
 
 #### Bucket/Object operations.

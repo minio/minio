@@ -72,7 +72,7 @@ minio server /data
 #### 日志记录
 |参数|类型|描述|
 |:---|:---|:---|
-|``logger ``| |服务通过logger记录error或者fatal(致命)错误，你可以同时开启多个logge。|
+|``logger ``| |服务通过logger记录error或者fatal(致命)错误，你可以同时开启多个logger。|
 |``logger.console``| |将日志信息发送到控制台|
 |``logger.console.enable``| _bool_ | 是否开启控制台日志输出，默认是开启|
 |``logger.file``| |发送日志信息到文件|

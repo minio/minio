@@ -1,6 +1,6 @@
 # Minio存储桶通知指南 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-存储桶（Bucket）如果发生改变,比如上传对象和删除对象，可以使用存储桶事件通知机制进行监控，并发布到以下目标:
+存储桶（Bucket）如果发生改变,比如上传对象和删除对象，可以使用存储桶事件通知机制进行监控，并通过以下方式发布出去:
 
 | Notification Targets|
 |:---|
@@ -16,8 +16,8 @@
 
 ## 前提条件
 
-* 从 [这里](http://docs.minio.io/docs/zh_CN/minio-quickstart-guide)下载并安装Minio Server.
-* 从[这里](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)下载并安装Minio Client.
+* 从[这里](http://docs.minio.io/docs/zh_CN/minio-quickstart-guide)下载并安装Minio Server。
+* 从[这里](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)下载并安装Minio Client。
 
 <a name="AMQP"></a>
 ## 使用AMQP发布Minio事件

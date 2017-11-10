@@ -97,7 +97,7 @@ go get -u github.com/minio/minio
 ```
 
 ## 使用Minio浏览器进行验证
-安装后使用浏览器访问http://127.0.0.1:9000，如果可以访问，则表示minio已经安装成功。
+安装后使用浏览器访问[http://127.0.0.1:9000](http://127.0.0.1:9000)，如果可以访问，则表示minio已经安装成功。
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.jpg?raw=true)
 

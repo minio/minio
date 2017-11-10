@@ -7,7 +7,7 @@
 - *`tcp_fin_timeout`* : 一个socket连接大约需要1.5KB的内存，关闭未使用的socket连接可以减少内存占用，避免出现内存泄露。即使另一方由于某种原因没有关闭socket连接，系统本身也会在到达超时时间时断开连接。 `tcp_fin_timeout`参数定义了内核保持sockets在FIN-WAIT-2状态的超时时间。我们建议设成20，你可以按下面的示例进行设置。
 
 ```sh
-`sysctl -w net.ipv4.tcp_fin_timeout=30`
+sysctl -w net.ipv4.tcp_fin_timeout=30
 ```
 
 - *`tcp_keepalive_probes`* : 这个参数定义了经过几次无回应的探测之后，认为连接断开了。你可以按下面的示例进行设置。
