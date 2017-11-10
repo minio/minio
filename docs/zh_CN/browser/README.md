@@ -2,7 +2,7 @@
 
 Minio Browser使用Json Web Token来验证JSON RPC请求。
 
-初使请求为用户提供的`AccessKey`和 `SecretKey`生成一个token令牌
+初使请求为用户提供的`AccessKey`和`SecretKey`生成一个token令牌
 
 <blockquote>
 目前这些令牌在10小时后到期，这是不可配置的。
