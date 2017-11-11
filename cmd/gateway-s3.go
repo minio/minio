@@ -447,9 +447,9 @@ func (l *s3Objects) DeleteObject(bucket string, object string) error {
 	return nil
 }
 
-// fromMinioClientUploadMetadata converts ObjectMultipartInfo to uploadMetadata
-func fromMinioClientUploadMetadata(omi minio.ObjectMultipartInfo) uploadMetadata {
-	return uploadMetadata{
+// fromMinioClientMultipartInfo converts ObjectMultipartInfo to MultipartInfo
+func fromMinioClientMultipartInfo(omi minio.ObjectMultipartInfo) MultipartInfo {
+	return MultipartInfo{
 		Object:    omi.Key,
 		UploadID:  omi.UploadID,
 		Initiated: omi.Initiated,
@@ -458,10 +458,10 @@ func fromMinioClientUploadMetadata(omi minio.ObjectMultipartInfo) uploadMetadata
 
 // fromMinioClientListMultipartsInfo converts minio ListMultipartUploadsResult to ListMultipartsInfo
 func fromMinioClientListMultipartsInfo(lmur minio.ListMultipartUploadsResult) ListMultipartsInfo {
-	uploads := make([]uploadMetadata, len(lmur.Uploads))
+	uploads := make([]MultipartInfo, len(lmur.Uploads))
 
 	for i, um := range lmur.Uploads {
-		uploads[i] = fromMinioClientUploadMetadata(um)
+		uploads[i] = fromMinioClientMultipartInfo(um)
 	}
 
 	commonPrefixes := make([]string, len(lmur.CommonPrefixes))
@@ -585,16 +585,16 @@ func (l *s3Objects) AbortMultipartUpload(bucket string, object string, uploadID 
 	return s3ToObjectError(traceError(err), bucket, object)
 }
 
-// toMinioClientCompletePart converts completePart to minio CompletePart
-func toMinioClientCompletePart(part completePart) minio.CompletePart {
+// toMinioClientCompletePart converts CompletePart to minio CompletePart
+func toMinioClientCompletePart(part CompletePart) minio.CompletePart {
 	return minio.CompletePart{
 		ETag:       part.ETag,
 		PartNumber: part.PartNumber,
 	}
 }
 
-// toMinioClientCompleteParts converts []completePart to minio []CompletePart
-func toMinioClientCompleteParts(parts []completePart) []minio.CompletePart {
+// toMinioClientCompleteParts converts []CompletePart to minio []CompletePart
+func toMinioClientCompleteParts(parts []CompletePart) []minio.CompletePart {
 	mparts := make([]minio.CompletePart, len(parts))
 	for i, part := range parts {
 		mparts[i] = toMinioClientCompletePart(part)
@@ -603,7 +603,7 @@ func toMinioClientCompleteParts(parts []completePart) []minio.CompletePart {
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-func (l *s3Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (oi ObjectInfo, e error) {
+func (l *s3Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, e error) {
 	err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, toMinioClientCompleteParts(uploadedParts))
 	if err != nil {
 		return oi, s3ToObjectError(traceError(err), bucket, object)

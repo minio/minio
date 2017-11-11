@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,8 +161,8 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 }
 
 // listMultipartUploadIDs - list all the upload ids from a marker up to 'count'.
-func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]uploadMetadata, bool, error) {
-	var uploads []uploadMetadata
+func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]MultipartInfo, bool, error) {
+	var uploads []MultipartInfo
 	// Read `uploads.json`.
 	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)
 	if err != nil {
@@ -179,7 +179,7 @@ func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count
 		}
 	}
 	for index < len(uploadsJSON.Uploads) {
-		uploads = append(uploads, uploadMetadata{
+		uploads = append(uploads, MultipartInfo{
 			Object:    objectName,
 			UploadID:  uploadsJSON.Uploads[index].UploadID,
 			Initiated: uploadsJSON.Uploads[index].Initiated,

@@ -263,13 +263,13 @@ func (e IncompleteBody) Error() string {
 
 // InvalidRange - invalid range typed error.
 type InvalidRange struct {
-	offsetBegin  int64
-	offsetEnd    int64
-	resourceSize int64
+	OffsetBegin  int64
+	OffsetEnd    int64
+	ResourceSize int64
 }
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.offsetBegin, e.offsetEnd, e.resourceSize)
+	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
 }
 
 // ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
@@ -375,7 +375,7 @@ func (e UnsupportedMetadata) Error() string {
 	return "Unsupported headers in Metadata"
 }
 
-// Check if error type is IncompleteBody.
+// isErrIncompleteBody - Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errorCause(err)
 	switch err.(type) {
@@ -385,7 +385,7 @@ func isErrIncompleteBody(err error) bool {
 	return false
 }
 
-// Check if error type is BucketPolicyNotFound.
+// isErrBucketPolicyNotFound - Check if error type is BucketPolicyNotFound.
 func isErrBucketPolicyNotFound(err error) bool {
 	err = errorCause(err)
 	switch err.(type) {
@@ -395,7 +395,7 @@ func isErrBucketPolicyNotFound(err error) bool {
 	return false
 }
 
-// Check if error type is ObjectNotFound.
+// isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	err = errorCause(err)
 	switch err.(type) {

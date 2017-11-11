@@ -49,7 +49,7 @@ type ObjectLayer interface {
 	PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
 	ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
 	AbortMultipartUpload(bucket, object, uploadID string) error
-	CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error)
+	CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Healing operations.
 	HealBucket(bucket string) error

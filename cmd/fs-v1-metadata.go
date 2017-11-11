@@ -359,15 +359,15 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 	}
 }
 
-// Return if the part info in uploadedParts and completeParts are same.
-func isPartsSame(uploadedParts []objectPartInfo, completeParts []completePart) bool {
-	if len(uploadedParts) != len(completeParts) {
+// Return if the part info in uploadedParts and CompleteParts are same.
+func isPartsSame(uploadedParts []objectPartInfo, CompleteParts []CompletePart) bool {
+	if len(uploadedParts) != len(CompleteParts) {
 		return false
 	}
 
-	for i := range completeParts {
-		if uploadedParts[i].Number != completeParts[i].PartNumber ||
-			uploadedParts[i].ETag != completeParts[i].ETag {
+	for i := range CompleteParts {
+		if uploadedParts[i].Number != CompleteParts[i].PartNumber ||
+			uploadedParts[i].ETag != CompleteParts[i].ETag {
 			return false
 		}
 	}
