@@ -188,7 +188,7 @@ func TestDecryptedSize(t *testing.T) {
 	for i, test := range decryptSSECustomerObjectInfoTests {
 		objInfo := ObjectInfo{Size: test.encsize}
 		objInfo.UserDefined = map[string]string{
-			ServerSideEncryptionKDF: SSEKeyDerivationHmacSha256,
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256,
 		}
 
 		size, err := objInfo.DecryptedSize()
@@ -241,13 +241,13 @@ func TestEncryptRequest(t *testing.T) {
 		if key, ok := test.metadata[SSECustomerKey]; ok {
 			t.Errorf("Test %d: Client provided key survived in metadata - key: %s", i, key)
 		}
-		if kdf, ok := test.metadata[ServerSideEncryptionKDF]; !ok {
+		if kdf, ok := test.metadata[ServerSideEncryptionSealAlgorithm]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionKDF must be part of metadata: %v", i, kdf)
 		}
 		if iv, ok := test.metadata[ServerSideEncryptionIV]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionIV must be part of metadata: %v", i, iv)
 		}
-		if mac, ok := test.metadata[ServerSideEncryptionKeyMAC]; !ok {
+		if mac, ok := test.metadata[ServerSideEncryptionSealedKey]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionKeyMAC must be part of metadata: %v", i, mac)
 		}
 	}
@@ -261,13 +261,13 @@ var decryptRequestTests = []struct {
 	{
 		header: map[string]string{
 			SSECustomerAlgorithm: "AES256",
-			SSECustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			SSECustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+			SSECustomerKey:       "MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=",
+			SSECustomerKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			ServerSideEncryptionKDF:    SSEKeyDerivationHmacSha256,
-			ServerSideEncryptionIV:     "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			ServerSideEncryptionKeyMAC: "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256,
+			ServerSideEncryptionIV:            "7nQqotA8xgrPx6QK7Ap3GCfjKitqJSrGP7xzgErSJlw=",
+			ServerSideEncryptionSealedKey:     "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA==",
 		},
 		shouldFail: false,
 	},
@@ -278,9 +278,9 @@ var decryptRequestTests = []struct {
 			SSECustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			ServerSideEncryptionKDF:    "HMAC-SHA3",
-			ServerSideEncryptionIV:     "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			ServerSideEncryptionKeyMAC: "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
+			ServerSideEncryptionSealAlgorithm: "HMAC-SHA3",
+			ServerSideEncryptionIV:            "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
+			ServerSideEncryptionSealedKey:     "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
 		},
 		shouldFail: true,
 	},
@@ -291,9 +291,9 @@ var decryptRequestTests = []struct {
 			SSECustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			ServerSideEncryptionKDF:    SSEKeyDerivationHmacSha256,
-			ServerSideEncryptionIV:     "RrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			ServerSideEncryptionKeyMAC: "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256,
+			ServerSideEncryptionIV:            "RrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
+			ServerSideEncryptionSealedKey:     "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
 		},
 		shouldFail: true,
 	},
@@ -304,9 +304,9 @@ var decryptRequestTests = []struct {
 			SSECustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			ServerSideEncryptionKDF:    SSEKeyDerivationHmacSha256,
-			ServerSideEncryptionIV:     "XAm0dRrJsEsyPb1UuFNezv1bl9ehxuYsgUVC/MUctE2k=",
-			ServerSideEncryptionKeyMAC: "SY5E9AvI2tI7/nUrUAssIGE32Hds4rR9z/CUuPqu5N4=",
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256,
+			ServerSideEncryptionIV:            "XAm0dRrJsEsyPb1UuFNezv1bl9ehxuYsgUVC/MUctE2k=",
+			ServerSideEncryptionSealedKey:     "SY5E9AvI2tI7/nUrUAssIGE32Hds4rR9z/CUuPqu5N4=",
 		},
 		shouldFail: true,
 	},
@@ -328,13 +328,13 @@ func TestDecryptRequest(t *testing.T) {
 		if key, ok := test.metadata[SSECustomerKey]; ok {
 			t.Errorf("Test %d: Client provided key survived in metadata - key: %s", i, key)
 		}
-		if kdf, ok := test.metadata[ServerSideEncryptionKDF]; ok && !test.shouldFail {
+		if kdf, ok := test.metadata[ServerSideEncryptionSealAlgorithm]; ok && !test.shouldFail {
 			t.Errorf("Test %d: ServerSideEncryptionKDF should not be part of metadata: %v", i, kdf)
 		}
 		if iv, ok := test.metadata[ServerSideEncryptionIV]; ok && !test.shouldFail {
 			t.Errorf("Test %d: ServerSideEncryptionIV should not be part of metadata: %v", i, iv)
 		}
-		if mac, ok := test.metadata[ServerSideEncryptionKeyMAC]; ok && !test.shouldFail {
+		if mac, ok := test.metadata[ServerSideEncryptionSealedKey]; ok && !test.shouldFail {
 			t.Errorf("Test %d: ServerSideEncryptionKeyMAC should not be part of metadata: %v", i, mac)
 		}
 	}
@@ -351,17 +351,17 @@ var decryptObjectInfoTests = []struct {
 		expErr:  ErrNone,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionKDF: SSEKeyDerivationHmacSha256}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{SSECustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
 		expErr:  ErrNone,
 	},
 	{
-		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{ServerSideEncryptionKDF: SSEKeyDerivationHmacSha256}},
+		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{SSECustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
 		expErr:  ErrNone,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionKDF: SSEKeyDerivationHmacSha256}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{},
 		expErr:  ErrSSEEncryptedObject,
 	},
@@ -371,7 +371,7 @@ var decryptObjectInfoTests = []struct {
 		expErr:  ErrInvalidEncryptionParameters,
 	},
 	{
-		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{ServerSideEncryptionKDF: SSEKeyDerivationHmacSha256}},
+		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{SSECustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
 		expErr:  ErrObjectTampered,
 	},

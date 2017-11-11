@@ -157,11 +157,11 @@ var containsReservedMetadataTests = []struct {
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{ServerSideEncryptionKDF: []string{SSEKeyDerivationHmacSha256}},
+		header:     http.Header{ServerSideEncryptionSealAlgorithm: []string{SSESealAlgorithmDareSha256}},
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{ServerSideEncryptionKeyMAC: []string{"mac"}},
+		header:     http.Header{ServerSideEncryptionSealedKey: []string{"mac"}},
 		shouldFail: true,
 	},
 	{

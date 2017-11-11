@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
@@ -63,45 +62,66 @@ const (
 	SSECustomerAlgorithmAES256 = "AES256"
 )
 
-// SSE-C key derivation:
-// H: Hash function, M: MAC function
+// SSE-C key derivation, key verification and key update:
+// H: Hash function [32 = |H(m)|]
+// AE: authenticated encryption scheme, AD: authenticated decryption scheme [m = AD(k, AE(k, m))]
 //
-// key     := 32 bytes              # client provided key
-// r       := H(random(32 bytes))   # saved as object metadata [ServerSideEncryptionIV]
-// key_mac := M(H(key), r)          # saved as object metadata [ServerSideEncryptionKeyMAC]
-// enc_key := M(key, key_mac)
+// Key derivation:
+// 	 Input:
+// 		key     := 32 bytes              # client provided key
+// 		Re, Rm  := 32 bytes, 32 bytes    # uniformly random
 //
+//   Seal:
+// 		k       := H(key || Re)          # object encryption key
+// 		r       := H(Rm)                 # save as object metadata [ServerSideEncryptionIV]
+//		KeK     := H(key || r)           # key encryption key
+// 		K       := AE(KeK, k)            # save as object metadata [ServerSideEncryptionSealedKey]
+// ------------------------------------------------------------------------------------------------
+// Key verification:
+// 	 Input:
+// 		key     := 32 bytes              # client provided key
+// 		r       := 32 bytes              # object metadata [ServerSideEncryptionIV]
+// 		K       := 32 bytes              # object metadata [ServerSideEncryptionSealedKey]
 //
-// SSE-C key verification:
-// H: Hash function, M: MAC function
+//   Open:
+//		KeK     := H(key || r)           # key encryption key
+//		k       := AD(Kek, K)            # object encryption key
+// -------------------------------------------------------------------------------------------------
+// Key update:
+// 	 Input:
+// 		key     := 32 bytes              # old client provided key
+// 		key'    := 32 bytes              # new client provided key
+// 		Rm      := 32 bytes              # uniformly random
+// 		r       := 32 bytes              # object metadata [ServerSideEncryptionIV]
+// 		K       := 32 bytes              # object metadata [ServerSideEncryptionSealedKey]
 //
-// key      := 32 bytes             # client provided key
-// r        := object metadata [ServerSideEncryptionIV]
-// key_mac  := object metadata [ServerSideEncryptionKeyMAC]
-// key_mac' := M(H(key), r)
-//
-// check:   key_mac != key_mac' => fail with invalid key
-//
-// enc_key  := M(key, key_mac')
+//   Update:
+//      1. open:
+//			KeK     := H(key || r)       # key encryption key
+//			k       := AD(Kek, K)        # object encryption key
+//      2. seal:
+//			r'      := H(Rm)			 # save as object metadata [ServerSideEncryptionIV]
+//			KeK'    := H(key' || r')	 # new key encryption key
+// 			K'      := AE(KeK', k)       # save as object metadata [ServerSideEncryptionSealedKey]
+
 const (
 	// ServerSideEncryptionIV is a 32 byte randomly generated IV used to derive an
-	// unique encryption key from the client provided key. The combination of this value
-	// and the client-provided key must be unique to provide the DARE tamper-proof property.
+	// unique key encryption key from the client provided key. The combination of this value
+	// and the client-provided key MUST be unique.
 	ServerSideEncryptionIV = ReservedMetadataPrefix + "Server-Side-Encryption-Iv"
 
-	// ServerSideEncryptionKDF is the combination of a hash and MAC function used to derive
-	// the SSE-C encryption key from the user-provided key.
-	ServerSideEncryptionKDF = ReservedMetadataPrefix + "Server-Side-Encryption-Kdf"
+	// ServerSideEncryptionSealAlgorithm identifies a combination of a cryptographic hash function and
+	// an authenticated en/decryption scheme to seal the object encryption key.
+	ServerSideEncryptionSealAlgorithm = ReservedMetadataPrefix + "Server-Side-Encryption-Seal-Algorithm"
 
-	// ServerSideEncryptionKeyMAC is the MAC of the hash of the client-provided key and the
-	// X-Minio-Server-Side-Encryption-Iv. This value must be used to verify that the client
-	// provided the correct key to follow S3 spec.
-	ServerSideEncryptionKeyMAC = ReservedMetadataPrefix + "Server-Side-Encryption-Key-Mac"
+	// ServerSideEncryptionSealedKey is the sealed object encryption key. The sealed key can be decrypted
+	// by the key encryption key derived from the client provided key and the server-side-encryption IV.
+	ServerSideEncryptionSealedKey = ReservedMetadataPrefix + "Server-Side-Encryption-Sealed-Key"
 )
 
-// SSEKeyDerivationHmacSha256 specifies SHA-256 as hash function and HMAC-SHA256 as MAC function
-// as the functions used to derive the SSE-C encryption keys from the client-provided key.
-const SSEKeyDerivationHmacSha256 = "HMAC-SHA256"
+// SSESealAlgorithmDareSha256 specifies DARE as authenticated en/decryption scheme and SHA256 as cryptographic
+// hash function.
+const SSESealAlgorithmDareSha256 = "DARE-SHA256"
 
 // IsSSECustomerRequest returns true if the given HTTP header
 // contains server-side-encryption with customer provided key fields.
@@ -161,31 +181,44 @@ func EncryptRequest(content io.Reader, r *http.Request, metadata map[string]stri
 	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
 
 	// security notice:
-	// Reusing a tuple (nonce, client provided key) will produce the same encryption key
-	// twice and breaks the tamper-proof property. However objects are still confidential.
-	// Therefore the nonce must be unique but need not to be undistinguishable from true
-	// randomness.
-	nonce := make([]byte, 32) // generate random nonce to derive encryption key
+	//  - If the first 32 bytes of the random value are ever repeated under the same client-provided
+	//    key the encrypted object will not be tamper-proof. [ P(coll) ~= 1 / 2^(256 / 2)]
+	//  - If the last 32 bytes of the random value are ever repeated under the same client-provided
+	//    key an adversary may be able to extract the object encryption key. This depends on the
+	//    authenticated en/decryption scheme. The DARE format will generate an 8 byte nonce which must
+	//    be repeated in addition to reveal the object encryption key.
+	//    [ P(coll) ~= 1 / 2^((256 + 64) / 2) ]
+	nonce := make([]byte, 64) // generate random values for key derivation
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
-	iv := sha256.Sum256(nonce) // hash output to not reveal any stat. weaknesses of the PRNG
+	sha := sha256.New() // derive object encryption key
+	sha.Write(key)
+	sha.Write(nonce[:32])
+	objectEncryptionKey := sha.Sum(nil)
 
-	keyHash := sha256.Sum256(key) // derive MAC of the client-provided key
-	mac := hmac.New(sha256.New, keyHash[:])
-	mac.Write(iv[:])
-	keyMAC := mac.Sum(nil)
+	iv := sha256.Sum256(nonce[32:]) // derive key encryption key
+	sha = sha256.New()
+	sha.Write(key)
+	sha.Write(iv[:])
+	keyEncryptionKey := sha.Sum(nil)
 
-	mac = hmac.New(sha256.New, key) // derive encryption key
-	mac.Write(keyMAC)
-	reader, err := sio.EncryptReader(content, sio.Config{Key: mac.Sum(nil)})
+	sealedKey := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
+	n, err := sio.Encrypt(sealedKey, bytes.NewReader(objectEncryptionKey), sio.Config{
+		Key: keyEncryptionKey,
+	})
+	if n != 64 || err != nil {
+		return nil, errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
+	}
+
+	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey})
 	if err != nil {
 		return nil, errInvalidSSEKey
 	}
 
 	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
-	metadata[ServerSideEncryptionKDF] = SSEKeyDerivationHmacSha256
-	metadata[ServerSideEncryptionKeyMAC] = base64.StdEncoding.EncodeToString(keyMAC)
+	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
+	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
 	return reader, nil
 }
 
@@ -198,35 +231,39 @@ func DecryptRequest(client io.Writer, r *http.Request, metadata map[string]strin
 	}
 	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
 
-	if metadata[ServerSideEncryptionKDF] != SSEKeyDerivationHmacSha256 { // currently HMAC-SHA256 is the only option
+	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 { // currently DARE-SHA256 is the only option
 		return nil, errObjectTampered
 	}
-	nonce, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
-	if err != nil || len(nonce) != 32 {
+	iv, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
+	if err != nil || len(iv) != 32 {
 		return nil, errObjectTampered
 	}
-	keyMAC, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionKeyMAC])
-	if err != nil || len(keyMAC) != 32 {
+	sealedKey, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionSealedKey])
+	if err != nil || len(sealedKey) != 64 {
 		return nil, errObjectTampered
 	}
 
-	keyHash := sha256.Sum256(key) // verify that client provided correct key
-	mac := hmac.New(sha256.New, keyHash[:])
-	mac.Write(nonce)
-	if !hmac.Equal(keyMAC, mac.Sum(nil)) {
-		return nil, errSSEKeyMismatch // client-provided key is wrong or object metadata was modified
+	sha := sha256.New() // derive key encryption key
+	sha.Write(key)
+	sha.Write(iv)
+	keyEncryptionKey := sha.Sum(nil)
+
+	objectEncryptionKey := bytes.NewBuffer(nil) // decrypt object encryption key
+	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
+		Key: keyEncryptionKey,
+	})
+	if n != 32 || err != nil {
+		return nil, errObjectTampered
 	}
 
-	mac = hmac.New(sha256.New, key) // derive decryption key
-	mac.Write(keyMAC)
-	writer, err := sio.DecryptWriter(client, sio.Config{Key: mac.Sum(nil)})
+	writer, err := sio.DecryptWriter(client, sio.Config{Key: objectEncryptionKey.Bytes()})
 	if err != nil {
 		return nil, errInvalidSSEKey
 	}
 
 	delete(metadata, ServerSideEncryptionIV)
-	delete(metadata, ServerSideEncryptionKDF)
-	delete(metadata, ServerSideEncryptionKeyMAC)
+	delete(metadata, ServerSideEncryptionSealAlgorithm)
+	delete(metadata, ServerSideEncryptionSealedKey)
 	return writer, nil
 }
 
@@ -235,10 +272,10 @@ func (o *ObjectInfo) IsEncrypted() bool {
 	if _, ok := o.UserDefined[ServerSideEncryptionIV]; ok {
 		return true
 	}
-	if _, ok := o.UserDefined[ServerSideEncryptionKDF]; ok {
+	if _, ok := o.UserDefined[ServerSideEncryptionSealAlgorithm]; ok {
 		return true
 	}
-	if _, ok := o.UserDefined[ServerSideEncryptionKeyMAC]; ok {
+	if _, ok := o.UserDefined[ServerSideEncryptionSealedKey]; ok {
 		return true
 	}
 	return false
