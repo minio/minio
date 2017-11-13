@@ -29,10 +29,10 @@ func GetInfo(path string) (info Info, err error) {
 	if err != nil {
 		return Info{}, err
 	}
-	fsReservedBlocks := uint64(s.Bfree) - uint64(s.Bavail)
+	reservedBlocks := uint64(s.Bfree) - uint64(s.Bavail)
 	info = Info{
-		Total:  uint64(s.Bsize) * (uint64(s.Blocks) - fsReservedBlocks),
-		Free:   uint64(s.Bsize) * uint64(s.Bavail),
+		Total:  uint64(s.Frsize) * (uint64(s.Blocks) - reservedBlocks),
+		Free:   uint64(s.Frsize) * uint64(s.Bavail),
 		Files:  uint64(s.Files),
 		Ffree:  uint64(s.Ffree),
 		FSType: getFSType(int64(s.Type)),

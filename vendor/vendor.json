@@ -590,10 +590,10 @@
 			"revisionTime": "2017-04-12T07:26:39Z"
 		},
 		{
-			"checksumSHA1": "ZVZBntvdoK/qUq/6uF8YMWmuMC4=",
+			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "ea9bcade75cb975a0b9738936568ab388b845617",
-			"revisionTime": "2017-03-08T18:50:27Z"
+			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
+			"revisionTime": "2017-11-09T13:50:42Z"
 		},
 		{
 			"checksumSHA1": "faFDXp++cLjLBlvsr+izZ+go1WU=",

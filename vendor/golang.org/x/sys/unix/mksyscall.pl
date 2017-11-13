@@ -70,7 +70,7 @@ if($ARGV[0] =~ /^-/) {
 }
 
 # Check that we are using the new build system if we should
-if($ENV{'GOOS'} eq "linux" || $ENV{'GOARCH'} ne "sparc64") {
+if($ENV{'GOOS'} eq "linux" && $ENV{'GOARCH'} ne "sparc64") {
 	if($ENV{'GOLANG_SYS_BUILD'} ne "docker") {
 		print STDERR "In the new build system, mksyscall should not be called directly.\n";
 		print STDERR "See README.md\n";
