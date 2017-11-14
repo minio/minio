@@ -94,12 +94,6 @@ install: build
 	@cp $(PWD)/minio $(GOPATH)/bin/minio
 	@echo "Check 'minio -h' for help."
 
-release: verifiers
-	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
-
-experimental: verifiers
-	@MINIO_RELEASE=EXPERIMENTAL ./buildscripts/build.sh
-
 clean:
 	@echo "Cleaning up all the generated files"
 	@find . -name '*.test' | xargs rm -fv
