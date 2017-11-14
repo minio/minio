@@ -558,7 +558,7 @@ func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secret
 	// Set the body equal to the created policy.
 	reader := bytes.NewReader(buf.Bytes())
 
-	req, err := http.NewRequest("POST", makeTestTargetURL(endPoint, bucketName, objectName, nil), reader)
+	req, err := http.NewRequest("POST", makeTestTargetURL(endPoint, bucketName, "", nil), reader)
 	if err != nil {
 		return nil, err
 	}
@@ -636,7 +636,7 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 	// Set the body equal to the created policy.
 	reader := bytes.NewReader(buf.Bytes())
 
-	req, err := http.NewRequest("POST", makeTestTargetURL(endPoint, bucketName, objectName, nil), reader)
+	req, err := http.NewRequest("POST", makeTestTargetURL(endPoint, bucketName, "", nil), reader)
 	if err != nil {
 		return nil, err
 	}
