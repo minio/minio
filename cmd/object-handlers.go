@@ -1026,7 +1026,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
-	complMultipartUpload := &completeMultipartUpload{}
+	complMultipartUpload := &CompleteMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
 		errorIf(err, "Unable to parse complete multipart upload XML.")
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
@@ -1036,13 +1036,13 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
-	if !sort.IsSorted(completedParts(complMultipartUpload.Parts)) {
+	if !sort.IsSorted(CompletedParts(complMultipartUpload.Parts)) {
 		writeErrorResponse(w, ErrInvalidPartOrder, r.URL)
 		return
 	}
 
 	// Complete parts.
-	var completeParts []completePart
+	var completeParts []CompletePart
 	for _, part := range complMultipartUpload.Parts {
 		part.ETag = canonicalizeETag(part.ETag)
 		completeParts = append(completeParts, part)

@@ -99,7 +99,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 	}
 	// Create a byte array of 5MiB.
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*humanize.MiByte/16)
-	completedParts := completeMultipartUpload{}
+	completedParts := CompleteMultipartUpload{}
 	for i := 1; i <= 10; i++ {
 		expectedETaghex := getMD5Hash(data)
 
@@ -111,7 +111,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 		if calcPartInfo.ETag != expectedETaghex {
 			t.Errorf("MD5 Mismatch")
 		}
-		completedParts.Parts = append(completedParts.Parts, completePart{
+		completedParts.Parts = append(completedParts.Parts, CompletePart{
 			PartNumber: i,
 			ETag:       calcPartInfo.ETag,
 		})

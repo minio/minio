@@ -216,7 +216,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	parts := []completePart{{PartNumber: 1, ETag: md5Hex}}
+	parts := []CompletePart{{PartNumber: 1, ETag: md5Hex}}
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); err != nil {
@@ -253,7 +253,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	parts := []completePart{{PartNumber: 1, ETag: md5Hex}}
+	parts := []CompletePart{{PartNumber: 1, ETag: md5Hex}}
 
 	if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); err != nil {
 		t.Fatal("Unexpected error ", err)

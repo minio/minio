@@ -381,7 +381,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 	}
 
 	// Complete multipart.
-	parts := []completePart{
+	parts := []CompletePart{
 		{ETag: etag1, PartNumber: 1},
 		{ETag: etag2, PartNumber: 2},
 	}

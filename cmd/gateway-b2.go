@@ -566,7 +566,7 @@ func (l *b2Objects) ListMultipartUploads(bucket string, prefix string, keyMarker
 		lmi.NextUploadIDMarker = nextMarker
 	}
 	for _, largeFile := range largeFiles {
-		lmi.Uploads = append(lmi.Uploads, uploadMetadata{
+		lmi.Uploads = append(lmi.Uploads, MultipartInfo{
 			Object:    largeFile.Name,
 			UploadID:  largeFile.ID,
 			Initiated: largeFile.Timestamp,
@@ -673,7 +673,7 @@ func (l *b2Objects) AbortMultipartUpload(bucket string, object string, uploadID 
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object, uses B2's LargeFile upload API.
-func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (oi ObjectInfo, err error) {
+func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return oi, err

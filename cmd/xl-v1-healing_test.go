@@ -489,13 +489,13 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
-	var uploadedParts []completePart
+	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
 		pInfo, err1 := obj.PutObjectPart(bucket, object, uploadID, partID, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""))
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
-		uploadedParts = append(uploadedParts, completePart{
+		uploadedParts = append(uploadedParts, CompletePart{
 			PartNumber: pInfo.PartNumber,
 			ETag:       pInfo.ETag,
 		})

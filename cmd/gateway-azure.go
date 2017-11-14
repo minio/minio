@@ -756,7 +756,7 @@ func (a *azureObjects) AbortMultipartUpload(bucket, object, uploadID string) (er
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
-func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error) {
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 	if err = a.checkUploadIDExists(bucket, object, uploadID); err != nil {
 		return objInfo, err

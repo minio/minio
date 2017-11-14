@@ -2730,8 +2730,8 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 	c.Assert(response2.StatusCode, http.StatusOK)
 
 	// Complete multipart upload
-	completeUploads := &completeMultipartUpload{
-		Parts: []completePart{
+	completeUploads := &CompleteMultipartUpload{
+		Parts: []CompletePart{
 			{
 				PartNumber: 1,
 				ETag:       response1.Header.Get("ETag"),
@@ -2745,7 +2745,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 
 	completeBytes, err := xml.Marshal(completeUploads)
 	c.Assert(err, nil)
-	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	// Indicating that all parts are uploaded and initiating CompleteMultipartUpload.
 	request, err = newTestSignedRequest("POST", getCompleteMultipartUploadURL(s.endPoint, bucketName, objectName, uploadID),
 		int64(len(completeBytes)), bytes.NewReader(completeBytes), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
@@ -2754,7 +2754,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 	c.Assert(err, nil)
 	// verify whether complete multipart was successful.
 	c.Assert(response.StatusCode, http.StatusOK)
-	var parts []completePart
+	var parts []CompletePart
 	for _, part := range completeUploads.Parts {
 		part.ETag = canonicalizeETag(part.ETag)
 		parts = append(parts, part)
