@@ -39,6 +39,7 @@ import (
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 var (
@@ -381,7 +382,9 @@ func newGCSGatewayLayer(projectID string) (GatewayLayer, error) {
 	}
 
 	// Initialize a GCS client.
-	client, err := storage.NewClient(ctx)
+	// Send user-agent in this format for Google to obtain usage insights while participating in the
+	// Google Cloud Technology Partners (https://cloud.google.com/partners/)
+	client, err := storage.NewClient(ctx, option.WithUserAgent(fmt.Sprintf("Minio/%s (GPN:Minio;)", Version)))
 	if err != nil {
 		return nil, err
 	}
