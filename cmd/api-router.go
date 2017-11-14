@@ -17,6 +17,7 @@
 package cmd
 
 import router "github.com/gorilla/mux"
+import "net/http"
 
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
@@ -87,9 +88,9 @@ func registerAPIRouter(mux *router.Router) {
 		// HeadBucket
 		bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
 		// PostPolicy
-		bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
+		bucket.Methods("POST").Path("/").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
 		// DeleteMultipleObjects
-		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler))
+		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
 		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
 		// DeleteBucket
@@ -99,5 +100,8 @@ func registerAPIRouter(mux *router.Router) {
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods("GET").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+	apiRouter.Methods("GET").Path("/").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+
+	// If none of the routes match.
+	apiRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }

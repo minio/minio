@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io"
+	"net/http"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
@@ -120,9 +121,9 @@ func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer) {
 		// HeadBucket
 		bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
 		// PostPolicy
-		bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
+		bucket.Methods("POST").Path("/").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
 		// DeleteMultipleObjects
-		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler))
+		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
 		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
 		// DeleteBucket
@@ -132,5 +133,8 @@ func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer) {
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods("GET").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+	apiRouter.Methods("GET").Path("/").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+
+	// If none of the routes match.
+	apiRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }

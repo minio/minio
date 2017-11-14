@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -441,10 +440,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Make sure that the URL  does not contain object name.
 	bucket := mux.Vars(r)["bucket"]
-	if bucket != filepath.Clean(r.URL.Path[1:]) {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
-		return
-	}
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength

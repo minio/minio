@@ -281,3 +281,9 @@ func getResource(path string, host string, domain string) (string, error) {
 	bucket := strings.TrimSuffix(host, "."+domain)
 	return slashSeparator + pathJoin(bucket, path), nil
 }
+
+// If none of the http routes match respond with MethodNotAllowed
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+	return
+}
