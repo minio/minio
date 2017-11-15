@@ -114,26 +114,30 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		size              int64
 		md5hex, sha256hex string
 		success           bool
+		expectedErr       error
 	}{
 		// Invalid md5sum NewReader() will fail.
 		{
-			src:     bytes.NewReader([]byte("abcd")),
-			size:    4,
-			md5hex:  "invalid-md5",
-			success: false,
+			src:         bytes.NewReader([]byte("abcd")),
+			size:        4,
+			md5hex:      "invalid-md5",
+			success:     false,
+			expectedErr: BadDigest{},
 		},
 		// Invalid sha256 NewReader() will fail.
 		{
-			src:       bytes.NewReader([]byte("abcd")),
-			size:      4,
-			sha256hex: "invalid-sha256",
-			success:   false,
+			src:         bytes.NewReader([]byte("abcd")),
+			size:        4,
+			sha256hex:   "invalid-sha256",
+			success:     false,
+			expectedErr: SHA256Mismatch{},
 		},
 		// Nested hash reader NewReader() will fail.
 		{
-			src:     &Reader{src: bytes.NewReader([]byte("abcd"))},
-			size:    4,
-			success: false,
+			src:         &Reader{src: bytes.NewReader([]byte("abcd"))},
+			size:        4,
+			success:     false,
+			expectedErr: errNestedReader,
 		},
 		// Expected inputs, NewReader() will succeed.
 		{
@@ -150,6 +154,9 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		}
 		if err == nil && !testCase.success {
 			t.Errorf("Test %d: Expected error, but got success", i+1)
+		}
+		if err != testCase.expectedErr {
+			t.Errorf("Test %d: Expected error %v, but got %v", i+1, testCase.expectedErr, err)
 		}
 	}
 }
