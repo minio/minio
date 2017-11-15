@@ -162,6 +162,7 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
+	ErrInvalidRequest
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -731,6 +732,15 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	// Generic Invalid-Request error. Should be used for response errors only for unlikely
+	// corner case errors for which introducing new APIErrorCode is not worth it. errorIf()
+	// should be used to log the error at the source of the error for debugging purposes.
+	ErrInvalidRequest: {
+		Code:           "InvalidRequest",
+		Description:    "Invalid Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	// Add your error structure here.
 }
 

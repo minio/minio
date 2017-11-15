@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io"
+	"net/http"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
@@ -62,69 +63,78 @@ func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer) {
 	// API Router
 	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 
-	// Bucket router
-	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
+	var routers []*router.Router
+	if globalDomainName != "" {
+		routers = append(routers, apiRouter.Host("{bucket:.+}."+globalDomainName).Subrouter())
+	}
+	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
-	/// Object operations
+	// Object operations
+	for _, bucket := range routers {
+		/// Object operations
 
-	// HeadObject
-	bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.HeadObjectHandler))
-	// CopyObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-	// PutObjectPart
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-	// ListObjectPxarts
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.ListObjectPartsHandler)).Queries("uploadId", "{uploadId:.*}")
-	// CompleteMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.CompleteMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
-	// NewMultipartUpload
-	bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.NewMultipartUploadHandler)).Queries("uploads", "")
-	// AbortMultipartUpload
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.AbortMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
-	// GetObject
-	bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectHandler))
-	// CopyObject
-	bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectHandler))
-	// PutObject
-	bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectHandler))
-	// DeleteObject
-	bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.DeleteObjectHandler))
+		// HeadObject
+		bucket.Methods("HEAD").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.HeadObjectHandler))
+		// CopyObjectPart
+		bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+		// PutObjectPart
+		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+		// ListObjectPxarts
+		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.ListObjectPartsHandler)).Queries("uploadId", "{uploadId:.*}")
+		// CompleteMultipartUpload
+		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.CompleteMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
+		// NewMultipartUpload
+		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.NewMultipartUploadHandler)).Queries("uploads", "")
+		// AbortMultipartUpload
+		bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.AbortMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
+		// GetObject
+		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectHandler))
+		// CopyObject
+		bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectHandler))
+		// PutObject
+		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectHandler))
+		// DeleteObject
+		bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(httpTraceAll(api.DeleteObjectHandler))
 
-	/// Bucket operations
+		/// Bucket operations
 
-	// GetBucketLocation
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
-	// GetBucketPolicy
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
-	// GetBucketNotification
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketNotificationHandler)).Queries("notification", "")
-	// ListenBucketNotification
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListenBucketNotificationHandler)).Queries("events", "{events:.*}")
-	// ListMultipartUploads
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
-	// ListObjectsV2
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
-	// ListObjectsV1 (Legacy)
-	bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
-	// PutBucketPolicy
-	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
-	// PutBucketNotification
-	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
-	// PutBucket
-	bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketHandler))
-	// HeadBucket
-	bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
-	// PostPolicy
-	bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
-	// DeleteMultipleObjects
-	bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler))
-	// DeleteBucketPolicy
-	bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
-	// DeleteBucket
-	bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
+		// GetBucketLocation
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
+		// GetBucketPolicy
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		// GetBucketNotification
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketNotificationHandler)).Queries("notification", "")
+		// ListenBucketNotification
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListenBucketNotificationHandler)).Queries("events", "{events:.*}")
+		// ListMultipartUploads
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
+		// ListObjectsV2
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
+		// ListObjectsV1 (Legacy)
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		// PutBucketPolicy
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		// PutBucketNotification
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
+		// PutBucket
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketHandler))
+		// HeadBucket
+		bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
+		// PostPolicy
+		bucket.Methods("POST").Path("/").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
+		// DeleteMultipleObjects
+		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
+		// DeleteBucketPolicy
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		// DeleteBucket
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
+	}
 
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods("GET").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+	apiRouter.Methods("GET").Path("/").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+
+	// If none of the routes match.
+	apiRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }
