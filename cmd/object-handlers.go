@@ -358,6 +358,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		// SSE-C is not implemented for CopyObject operations yet
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
