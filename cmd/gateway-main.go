@@ -154,8 +154,7 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize gateway config.
 	initConfig()
 
-	// Enable loggers as per configuration file.
-	enableLoggers()
+	enableConsoleLogger()
 
 	// Init the error tracing module.
 	initError()
