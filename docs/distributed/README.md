@@ -14,7 +14,7 @@ Distributed Minio provides protection against multiple node/drive failures and [
 
 A stand-alone Minio server would go down if the server hosting the disks goes offline. In contrast, a distributed Minio setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
 
-For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need atleast 5 nodes online to create new objects.
+For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need at least 5 nodes online to create new objects.
 
 ### Limits
 
