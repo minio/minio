@@ -26,6 +26,8 @@ import (
 	"io"
 )
 
+var errNestedReader = errors.New("Nesting of Reader detected, not allowed")
+
 // Reader writes what it reads from an io.Reader to an MD5 and SHA256 hash.Hash.
 // Reader verifies that the content of the io.Reader matches the expected checksums.
 type Reader struct {
@@ -40,17 +42,17 @@ type Reader struct {
 // SHA256 sum (if set) of the provided io.Reader at EOF.
 func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string) (*Reader, error) {
 	if _, ok := src.(*Reader); ok {
-		return nil, errors.New("Nesting of Reader detected, not allowed")
+		return nil, errNestedReader
 	}
 
 	sha256sum, err := hex.DecodeString(sha256Hex)
 	if err != nil {
-		return nil, err
+		return nil, SHA256Mismatch{}
 	}
 
 	md5sum, err := hex.DecodeString(md5Hex)
 	if err != nil {
-		return nil, err
+		return nil, BadDigest{}
 	}
 
 	var sha256Hash hash.Hash
