@@ -522,32 +522,6 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *check) {
 	if s.signer == signerV4 {
 		verifyError(c, response, "XAmzContentSHA256Mismatch", "The provided 'x-amz-content-sha256' header does not match what was computed.", http.StatusBadRequest)
 	}
-
-	// Change global value from 5 second to 100millisecond.
-	globalSNSConnAlive = 100 * time.Millisecond
-	req, err = newTestSignedRequest("GET",
-		getListenBucketNotificationURL(s.endPoint, bucketName,
-			[]string{}, []string{}, validEvents), 0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	client = http.Client{Transport: s.transport}
-	// execute the request.
-	response, err = client.Do(req)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusOK)
-	// FIXME: uncomment this in future when we have a code to read notifications from.
-	// go func() {
-	// 	buf := bytes.NewReader(tooByte)
-	// 	rreq, rerr := newTestSignedRequest("GET",
-	// 		getPutObjectURL(s.endPoint, bucketName, "myobject/1"),
-	// 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
-	// 	c.Assert(rerr, IsNil)
-	// 	client = http.Client{Transport: s.transport}
-	// 	// execute the request.
-	// 	resp, rerr := client.Do(rreq)
-	// 	c.Assert(rerr, IsNil)
-	// 	c.Assert(resp.StatusCode,  http.StatusOK)
-	// }()
-	response.Body.Close() // FIXME. Find a way to read from the returned body.
 }
 
 // Test deletes multple objects and verifies server resonse.

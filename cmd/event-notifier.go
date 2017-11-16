@@ -60,7 +60,7 @@ type internalNotifier struct {
 	// Connected listeners is a map of listener ARNs to channels
 	// on which the ListenBucket API handler go routine is waiting
 	// for events to send to a client.
-	connectedListeners map[string]chan []NotificationEvent
+	connectedListeners map[string]*listenChan
 
 	rwMutex *sync.RWMutex
 }
@@ -206,7 +206,7 @@ func (en eventNotifier) GetInternalTarget(arn string) *listenerLogger {
 }
 
 // Set a new sns target for an input sns ARN.
-func (en *eventNotifier) AddListenerChan(snsARN string, listenerCh chan []NotificationEvent) error {
+func (en *eventNotifier) AddListenerChan(snsARN string, listenerCh *listenChan) error {
 	if listenerCh == nil {
 		return errInvalidArgument
 	}
@@ -229,9 +229,9 @@ func (en *eventNotifier) SendListenerEvent(arn string, event []NotificationEvent
 	en.internal.rwMutex.Lock()
 	defer en.internal.rwMutex.Unlock()
 
-	ch, ok := en.internal.connectedListeners[arn]
+	listenChan, ok := en.internal.connectedListeners[arn]
 	if ok {
-		ch <- event
+		listenChan.sendNotificationEvent(event)
 	}
 	// If the channel is not present we ignore the event.
 	return nil
@@ -833,7 +833,7 @@ func initEventNotifier(objAPI ObjectLayer) error {
 			rwMutex:            &sync.RWMutex{},
 			targets:            listenTargets,
 			listenerConfigs:    lConfigs,
-			connectedListeners: make(map[string]chan []NotificationEvent),
+			connectedListeners: make(map[string]*listenChan),
 		},
 	}
 

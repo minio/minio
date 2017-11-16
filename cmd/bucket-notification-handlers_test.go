@@ -21,13 +21,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
+
+	"time"
 
 	"github.com/minio/minio/pkg/auth"
 )
@@ -113,7 +117,47 @@ func TestWriteNotification(t *testing.T) {
 	}
 }
 
-func TestSendBucketNotification(t *testing.T) {
+// testResponseWriter implements `http.ResponseWriter` that buffers
+// response body in a `bytes.Buffer` and returns error after `failCount`
+// calls to `Write` method
+type testResponseWriter struct {
+	mu        sync.Mutex
+	failCount int
+	buf       *bytes.Buffer
+	m         http.Header
+}
+
+func newTestResponseWriter(failAt int) *testResponseWriter {
+	return &testResponseWriter{
+		buf:       new(bytes.Buffer),
+		m:         make(http.Header),
+		failCount: failAt,
+	}
+}
+
+func (trw *testResponseWriter) Flush() {
+}
+
+func (trw *testResponseWriter) Write(p []byte) (int, error) {
+	trw.mu.Lock()
+	defer trw.mu.Unlock()
+
+	if trw.failCount == 0 {
+		return 0, errors.New("Custom error")
+	}
+	trw.failCount--
+
+	return trw.buf.Write(p)
+}
+
+func (trw *testResponseWriter) Header() http.Header {
+	return trw.m
+}
+
+func (trw *testResponseWriter) WriteHeader(i int) {
+}
+
+func TestListenChan(t *testing.T) {
 	// Initialize a new test config.
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
@@ -121,18 +165,8 @@ func TestSendBucketNotification(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	eventCh := make(chan []NotificationEvent)
-
-	// Create a Pipe with FlushWriter on the write-side and bufio.Scanner
-	// on the reader-side to receive notification over the listen channel in a
-	// synchronized manner.
-	pr, pw := io.Pipe()
-	fw := newFlushWriter(pw)
-	scanner := bufio.NewScanner(pr)
-	// Start a go-routine to wait for notification events.
-	go func(listenerCh <-chan []NotificationEvent) {
-		sendBucketNotification(fw, listenerCh)
-	}(eventCh)
+	// Create a listen channel to manage notifications
+	nListenCh := newListenChan()
 
 	// Construct notification events to be passed on the events channel.
 	var events []NotificationEvent
@@ -142,37 +176,68 @@ func TestSendBucketNotification(t *testing.T) {
 		ObjectCreatedCopy,
 		ObjectCreatedCompleteMultipartUpload,
 	}
+
 	for _, evType := range evTypes {
 		events = append(events, newNotificationEvent(eventData{
 			Type: evType,
 		}))
 	}
-	// Send notification events to the channel on which sendBucketNotification
-	// is waiting on.
-	eventCh <- events
 
-	// Read from the pipe connected to the ResponseWriter.
-	scanner.Scan()
-	notificationBytes := scanner.Bytes()
-
-	// Close the read-end and send an empty notification event on the channel
-	// to signal sendBucketNotification to terminate.
-	pr.Close()
-	eventCh <- []NotificationEvent{}
-	close(eventCh)
-
-	// Checking if the notification are the same as those sent over the channel.
-	var notifications map[string][]NotificationEvent
-	err = json.Unmarshal(notificationBytes, &notifications)
-	if err != nil {
-		t.Fatal("Failed to Unmarshal notification")
-	}
-	records := notifications["Records"]
-	for i, rec := range records {
-		if rec.EventName == evTypes[i].String() {
-			continue
+	// Send notification events one-by-one
+	go func() {
+		for _, event := range events {
+			nListenCh.sendNotificationEvent([]NotificationEvent{event})
 		}
-		t.Errorf("Failed to receive %d event %s", i, evTypes[i].String())
+	}()
+
+	// Create a http.ResponseWriter that fails after len(events)
+	// number of times
+	trw := newTestResponseWriter(len(events))
+
+	// Wait for all (4) notification events to be received
+	nListenCh.waitForListener(trw)
+
+	// Used to read JSON-formatted event stream line-by-line
+	scanner := bufio.NewScanner(trw.buf)
+	var records map[string][]NotificationEvent
+	for i := 0; scanner.Scan(); i++ {
+		err = json.Unmarshal(scanner.Bytes(), &records)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal json %v", err)
+		}
+
+		nEvent := records["Records"][0]
+		if nEvent.EventName != evTypes[i].String() {
+			t.Errorf("notification event name mismatch, expected %s but got %s", evTypes[i], nEvent.EventName)
+		}
+	}
+}
+
+func TestSendNotificationEvent(t *testing.T) {
+	// This test verifies that sendNotificationEvent function
+	// returns once listenChan.doneCh is closed
+
+	l := newListenChan()
+	testCh := make(chan struct{})
+	timeout := 5 * time.Second
+
+	go func() {
+		// Send one empty notification event on listenChan
+		events := []NotificationEvent{NotificationEvent{}}
+		l.sendNotificationEvent(events)
+		testCh <- struct{}{}
+	}()
+
+	// close l.doneCh to signal client exiting from
+	// ListenBucketNotification API call
+	close(l.doneCh)
+
+	select {
+	case <-time.After(timeout):
+		t.Fatalf("sendNotificationEvent didn't return after %v seconds", timeout)
+	case <-testCh:
+		// If we reach this case, sendNotificationEvent
+		// returned on closing l.doneCh
 	}
 }
 
