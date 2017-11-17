@@ -26,8 +26,8 @@ import (
 	"path"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/sirupsen/logrus"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats"
 )

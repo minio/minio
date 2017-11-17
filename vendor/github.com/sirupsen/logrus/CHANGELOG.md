@@ -1,3 +1,50 @@
+# 1.0.3
+
+* Replace example files with testable examples
+
+# 1.0.2
+
+* bug: quote non-string values in text formatter (#583)
+* Make (*Logger) SetLevel a public method
+
+# 1.0.1
+
+* bug: fix escaping in text formatter (#575)
+
+# 1.0.0
+
+* Officially changed name to lower-case
+* bug: colors on Windows 10 (#541)
+* bug: fix race in accessing level (#512)
+
+# 0.11.5
+
+* feature: add writer and writerlevel to entry (#372)
+
+# 0.11.4
+
+* bug: fix undefined variable on solaris (#493)
+
+# 0.11.3
+
+* formatter: configure quoting of empty values (#484)
+* formatter: configure quoting character (default is `"`) (#484)
+* bug: fix not importing io correctly in non-linux environments (#481)
+
+# 0.11.2
+
+* bug: fix windows terminal detection (#476)
+
+# 0.11.1
+
+* bug: fix tty detection with custom out (#471)
+
+# 0.11.0
+
+* performance: Use bufferpool to allocate (#370)
+* terminal: terminal detection for app-engine (#343)
+* feature: exit handler (#375)
+
 # 0.10.0
 
 * feature: Add a test hook (#180)
