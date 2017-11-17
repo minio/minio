@@ -222,3 +222,92 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 		buf.Reset()
 	}
 }
+
+// Benchmarks
+
+func benchmarkErasureRead(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
+	setup, err := newErasureTestSetup(data, parity, blockSizeV1)
+	if err != nil {
+		b.Fatalf("failed to create test setup: %v", err)
+	}
+	defer setup.Remove()
+	storage, err := NewErasureStorage(setup.disks, data, parity)
+	if err != nil {
+		b.Fatalf("failed to create ErasureStorage: %v", err)
+	}
+
+	content := make([]byte, size)
+	buffer := make([]byte, blockSizeV1, 2*blockSizeV1)
+	file, err := storage.CreateFile(bytes.NewReader(content), "testbucket", "object", buffer, DefaultBitrotAlgorithm, data+1)
+	if err != nil {
+		b.Fatalf("failed to create erasure test file: %v", err)
+	}
+	checksums := file.Checksums
+
+	for i := 0; i < dataDown; i++ {
+		storage.disks[i] = OfflineDisk
+	}
+	for i := data; i < data+parityDown; i++ {
+		storage.disks[i] = OfflineDisk
+	}
+
+	b.ResetTimer()
+	b.SetBytes(size)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if file, err = storage.ReadFile(bytes.NewBuffer(content[:0]), "testbucket", "object", 0, size, size, checksums, DefaultBitrotAlgorithm, blockSizeV1); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkErasureReadQuick(b *testing.B) {
+	const size = 12 * 1024 * 1024
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 0, size, b) })
+	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 1, size, b) })
+}
+
+func BenchmarkErasureRead_4_64KB(b *testing.B) {
+	const size = 64 * 1024
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 0, size, b) })
+	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 1, size, b) })
+	b.Run(" 00|XX ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 2, size, b) })
+	b.Run(" XX|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 2, 0, size, b) })
+}
+
+func BenchmarkErasureRead_8_20MB(b *testing.B) {
+	const size = 20 * 1024 * 1024
+	b.Run(" 0000|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 0, size, b) })
+	b.Run(" 0000|X000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 1, size, b) })
+	b.Run(" X000|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 1, 0, size, b) })
+	b.Run(" X000|X000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 1, 1, size, b) })
+	b.Run(" 0000|XXXX ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 4, size, b) })
+	b.Run(" XX00|XX00 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 2, 2, size, b) })
+	b.Run(" XXXX|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 4, 0, size, b) })
+}
+
+func BenchmarkErasureRead_12_30MB(b *testing.B) {
+	const size = 30 * 1024 * 1024
+	b.Run(" 000000|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 0, size, b) })
+	b.Run(" 000000|X00000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 1, size, b) })
+	b.Run(" X00000|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 1, 0, size, b) })
+	b.Run(" X00000|X00000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 1, 1, size, b) })
+	b.Run(" 000000|XXXXXX ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 6, size, b) })
+	b.Run(" XXX000|XXX000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 3, 3, size, b) })
+	b.Run(" XXXXXX|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 6, 0, size, b) })
+}
+
+func BenchmarkErasureRead_16_40MB(b *testing.B) {
+	const size = 40 * 1024 * 1024
+	b.Run(" 00000000|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 0, size, b) })
+	b.Run(" 00000000|X0000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 1, size, b) })
+	b.Run(" X0000000|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 1, 0, size, b) })
+	b.Run(" X0000000|X0000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 1, 1, size, b) })
+	b.Run(" 00000000|XXXXXXXX ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 8, size, b) })
+	b.Run(" XXXX0000|XXXX0000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 4, 4, size, b) })
+	b.Run(" XXXXXXXX|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 8, 0, size, b) })
+}
