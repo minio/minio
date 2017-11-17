@@ -23,116 +23,48 @@ import (
 	"github.com/minio/minio/pkg/hash"
 )
 
+var toAPIErrorCodeTests = []struct {
+	err     error
+	errCode APIErrorCode
+}{
+	{err: hash.BadDigest{}, errCode: ErrBadDigest},
+	{err: hash.SHA256Mismatch{}, errCode: ErrContentSHA256Mismatch},
+	{err: IncompleteBody{}, errCode: ErrIncompleteBody},
+	{err: ObjectExistsAsDirectory{}, errCode: ErrObjectExistsAsDirectory},
+	{err: BucketNameInvalid{}, errCode: ErrInvalidBucketName},
+	{err: BucketExists{}, errCode: ErrBucketAlreadyOwnedByYou},
+	{err: ObjectNotFound{}, errCode: ErrNoSuchKey},
+	{err: ObjectNameInvalid{}, errCode: ErrInvalidObjectName},
+	{err: InvalidUploadID{}, errCode: ErrNoSuchUpload},
+	{err: InvalidPart{}, errCode: ErrInvalidPart},
+	{err: InsufficientReadQuorum{}, errCode: ErrReadQuorum},
+	{err: InsufficientWriteQuorum{}, errCode: ErrWriteQuorum},
+	{err: UnsupportedDelimiter{}, errCode: ErrNotImplemented},
+	{err: InvalidMarkerPrefixCombination{}, errCode: ErrNotImplemented},
+	{err: InvalidUploadIDKeyCombination{}, errCode: ErrNotImplemented},
+	{err: MalformedUploadID{}, errCode: ErrNoSuchUpload},
+	{err: PartTooSmall{}, errCode: ErrEntityTooSmall},
+	{err: BucketNotEmpty{}, errCode: ErrBucketNotEmpty},
+	{err: BucketNotFound{}, errCode: ErrNoSuchBucket},
+	{err: StorageFull{}, errCode: ErrStorageFull},
+	{err: NotImplemented{}, errCode: ErrNotImplemented},
+	{err: errSignatureMismatch, errCode: ErrSignatureDoesNotMatch},
+
+	// SSE-C errors
+	{err: errInsecureSSERequest, errCode: ErrInsecureSSECustomerRequest},
+	{err: errInvalidSSEAlgorithm, errCode: ErrInvalidSSECustomerAlgorithm},
+	{err: errMissingSSEKey, errCode: ErrMissingSSECustomerKey},
+	{err: errInvalidSSEKey, errCode: ErrInvalidSSECustomerKey},
+	{err: errMissingSSEKeyMD5, errCode: ErrMissingSSECustomerKeyMD5},
+	{err: errSSEKeyMD5Mismatch, errCode: ErrSSECustomerKeyMD5Mismatch},
+	{err: errObjectTampered, errCode: ErrObjectTampered},
+
+	{err: nil, errCode: ErrNone},
+	{err: errors.New("Custom error"), errCode: ErrInternalError}, // Case where err type is unknown.
+}
+
 func TestAPIErrCode(t *testing.T) {
-	testCases := []struct {
-		err     error
-		errCode APIErrorCode
-	}{
-		// Valid cases.
-		{
-			hash.BadDigest{},
-			ErrBadDigest,
-		},
-		{
-			hash.SHA256Mismatch{},
-			ErrContentSHA256Mismatch,
-		},
-		{
-			IncompleteBody{},
-			ErrIncompleteBody,
-		},
-		{
-			ObjectExistsAsDirectory{},
-			ErrObjectExistsAsDirectory,
-		},
-		{
-			BucketNameInvalid{},
-			ErrInvalidBucketName,
-		},
-		{
-			BucketExists{},
-			ErrBucketAlreadyOwnedByYou,
-		},
-		{
-			ObjectNotFound{},
-			ErrNoSuchKey,
-		},
-		{
-			ObjectNameInvalid{},
-			ErrInvalidObjectName,
-		},
-		{
-			InvalidUploadID{},
-			ErrNoSuchUpload,
-		},
-		{
-			InvalidPart{},
-			ErrInvalidPart,
-		},
-		{
-			InsufficientReadQuorum{},
-			ErrReadQuorum,
-		},
-		{
-			InsufficientWriteQuorum{},
-			ErrWriteQuorum,
-		},
-		{
-			UnsupportedDelimiter{},
-			ErrNotImplemented,
-		},
-		{
-			InvalidMarkerPrefixCombination{},
-			ErrNotImplemented,
-		},
-		{
-			InvalidUploadIDKeyCombination{},
-			ErrNotImplemented,
-		},
-		{
-			MalformedUploadID{},
-			ErrNoSuchUpload,
-		},
-		{
-			PartTooSmall{},
-			ErrEntityTooSmall,
-		},
-		{
-			BucketNotEmpty{},
-			ErrBucketNotEmpty,
-		},
-		{
-			BucketNotFound{},
-			ErrNoSuchBucket,
-		},
-		{
-			StorageFull{},
-			ErrStorageFull,
-		},
-		{
-			NotImplemented{},
-			ErrNotImplemented,
-		},
-		{
-			errSignatureMismatch,
-			ErrSignatureDoesNotMatch,
-		}, // End of all valid cases.
-
-		// Case where err is nil.
-		{
-			nil,
-			ErrNone,
-		},
-
-		// Case where err type is unknown.
-		{
-			errors.New("Custom error"),
-			ErrInternalError,
-		},
-	}
-
-	// Validate all the errors with their API error codes.
-	for i, testCase := range testCases {
+	for i, testCase := range toAPIErrorCodeTests {
 		errCode := toAPIErrorCode(testCase.err)
 		if errCode != testCase.errCode {
 			t.Errorf("Test %d: Expected error code %d, got %d", i+1, testCase.errCode, errCode)

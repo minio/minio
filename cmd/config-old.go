@@ -472,3 +472,21 @@ type serverConfigV18 struct {
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
+
+// serverConfigV19 server configuration version '19' which is like
+// version '18' except it adds support for MQTT notifications.
+type serverConfigV19 struct {
+	sync.RWMutex
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}

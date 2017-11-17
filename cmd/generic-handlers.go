@@ -108,6 +108,40 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 	return false
 }
 
+// ReservedMetadataPrefix is the prefix of a metadata key which
+// is reserved and for internal use only.
+const ReservedMetadataPrefix = "X-Minio-Internal-"
+
+type reservedMetadataHandler struct {
+	http.Handler
+}
+
+func filterReservedMetadata(h http.Handler) http.Handler {
+	return reservedMetadataHandler{h}
+}
+
+// ServeHTTP fails if the request contains at least one reserved header which
+// would be treated as metadata.
+func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if containsReservedMetadata(r.Header) {
+		writeErrorResponse(w, ErrUnsupportedMetadata, r.URL)
+		return
+	}
+	h.Handler.ServeHTTP(w, r)
+}
+
+// containsReservedMetadata returns true if the http.Header contains
+// keys which are treated as metadata but are reserved for internal use
+// and must not set by clients
+func containsReservedMetadata(header http.Header) bool {
+	for key := range header {
+		if strings.HasPrefix(key, ReservedMetadataPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // Reserved bucket.
 const (
 	minioReservedBucket     = "minio"
@@ -405,11 +439,6 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
-	}
-	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == httpPUT && r.URL.Path == "/" && r.Header.Get(minioAdminOpHeader) == "" {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
 	}
 
 	// Serve HTTP.

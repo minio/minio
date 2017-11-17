@@ -144,3 +144,38 @@ func TestIsHTTPHeaderSizeTooLarge(t *testing.T) {
 		}
 	}
 }
+
+var containsReservedMetadataTests = []struct {
+	header     http.Header
+	shouldFail bool
+}{
+	{
+		header: http.Header{"X-Minio-Key": []string{"value"}},
+	},
+	{
+		header:     http.Header{ServerSideEncryptionIV: []string{"iv"}},
+		shouldFail: true,
+	},
+	{
+		header:     http.Header{ServerSideEncryptionSealAlgorithm: []string{SSESealAlgorithmDareSha256}},
+		shouldFail: true,
+	},
+	{
+		header:     http.Header{ServerSideEncryptionSealedKey: []string{"mac"}},
+		shouldFail: true,
+	},
+	{
+		header:     http.Header{ReservedMetadataPrefix + "Key": []string{"value"}},
+		shouldFail: true,
+	},
+}
+
+func TestContainsReservedMetadata(t *testing.T) {
+	for i, test := range containsReservedMetadataTests {
+		if contains := containsReservedMetadata(test.header); contains && !test.shouldFail {
+			t.Errorf("Test %d: contains reserved header but should not fail", i)
+		} else if !contains && test.shouldFail {
+			t.Errorf("Test %d: does not contain reserved header but failed", i)
+		}
+	}
+}

@@ -120,7 +120,19 @@ const (
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
+	ErrMaximumExpires
 	// Add new error codes here.
+
+	// Server-Side-Encryption (with Customer provided key) related API errors.
+
+	ErrInsecureSSECustomerRequest
+	ErrSSEEncryptedObject
+	ErrInvalidEncryptionParameters
+	ErrInvalidSSECustomerAlgorithm
+	ErrInvalidSSECustomerKey
+	ErrMissingSSECustomerKey
+	ErrMissingSSECustomerKeyMD5
+	ErrSSECustomerKeyMD5Mismatch
 
 	// Bucket notification related errors.
 	ErrEventNotification
@@ -150,6 +162,7 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
+	ErrInvalidRequest
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -159,6 +172,7 @@ const (
 	ErrAdminConfigNoQuorum
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
+	ErrObjectTampered
 )
 
 // error code to APIError structure, these fields carry respective
@@ -574,6 +588,51 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Range specified is not valid for source object",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrMetadataTooLarge: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInsecureSSECustomerRequest: {
+		Code:           "InvalidRequest",
+		Description:    errInsecureSSERequest.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSSEEncryptedObject: {
+		Code:           "InvalidRequest",
+		Description:    errEncryptedObject.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidEncryptionParameters: {
+		Code:           "InvalidRequest",
+		Description:    "The encryption parameters are not applicable to this object.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidSSECustomerAlgorithm: {
+		Code:           "InvalidArgument",
+		Description:    errInvalidSSEAlgorithm.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidSSECustomerKey: {
+		Code:           "InvalidArgument",
+		Description:    errInvalidSSEKey.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSSECustomerKey: {
+		Code:           "InvalidArgument",
+		Description:    errMissingSSEKey.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSSECustomerKeyMD5: {
+		Code:           "InvalidArgument",
+		Description:    errMissingSSEKeyMD5.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSSECustomerKeyMD5Mismatch: {
+		Code:           "InvalidArgument",
+		Description:    errSSEKeyMD5Mismatch.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	/// S3 extensions.
 	ErrContentSHA256Mismatch: {
@@ -653,11 +712,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "A timeout occurred while trying to lock a resource",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
-	ErrMetadataTooLarge: {
-		Code:           "InvalidArgument",
-		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrUnsupportedMetadata: {
 		Code:           "InvalidArgument",
 		Description:    "Your metadata headers are not supported.",
@@ -668,6 +722,25 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "All parts except the last part should be of the same size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrObjectTampered: {
+		Code:           "XMinioObjectTampered",
+		Description:    errObjectTampered.Error(),
+		HTTPStatusCode: http.StatusPartialContent,
+	},
+	ErrMaximumExpires: {
+		Code:           "AuthorizationQueryParametersError",
+		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	// Generic Invalid-Request error. Should be used for response errors only for unlikely
+	// corner case errors for which introducing new APIErrorCode is not worth it. errorIf()
+	// should be used to log the error at the source of the error for debugging purposes.
+	ErrInvalidRequest: {
+		Code:           "InvalidRequest",
+		Description:    "Invalid Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	// Add your error structure here.
 }
 
@@ -697,6 +770,27 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	if apiErr != ErrNone {
 		// If there was a match in the above switch case.
 		return apiErr
+	}
+
+	switch err { // SSE errors
+	case errInsecureSSERequest:
+		return ErrInsecureSSECustomerRequest
+	case errInvalidSSEAlgorithm:
+		return ErrInvalidSSECustomerAlgorithm
+	case errInvalidSSEKey:
+		return ErrInvalidSSECustomerKey
+	case errMissingSSEKey:
+		return ErrMissingSSECustomerKey
+	case errMissingSSEKeyMD5:
+		return ErrMissingSSECustomerKeyMD5
+	case errSSEKeyMD5Mismatch:
+		return ErrSSECustomerKeyMD5Mismatch
+	case errObjectTampered:
+		return ErrObjectTampered
+	case errEncryptedObject:
+		return ErrSSEEncryptedObject
+	case errSSEKeyMismatch:
+		return ErrAccessDenied // no access without correct key
 	}
 
 	switch err.(type) {

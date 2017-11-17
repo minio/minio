@@ -22,7 +22,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -213,14 +215,6 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 		return err
 	}
 
-	// https://github.com/containous/traefik/issues/560
-	// https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
-	//
-	// Proxies might buffer the connection to avoid this we
-	// need the proper MIME type before writing to client.
-	// This MIME header tells the proxies to avoid buffering
-	w.Header().Set("Content-Type", "text/event-stream")
-
 	// Add additional CRLF characters for client to
 	// differentiate the individual events properly.
 	_, err = w.Write(append(notificationBytes, crlf...))
@@ -232,25 +226,61 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 // CRLF character used for chunked transfer in accordance with HTTP standards.
 var crlf = []byte("\r\n")
 
-// sendBucketNotification - writes notification back to client on the response writer
-// for each notification input, otherwise writes whitespace characters periodically
-// to keep the connection active. Each notification messages are terminated by CRLF
-// character. Upon any error received on response writer the for loop exits.
-func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []NotificationEvent) {
-	var dummyEvents = map[string][]NotificationEvent{"Records": nil}
-	// Continuously write to client either timely empty structures
-	// every 5 seconds, or return back the notifications.
+// listenChan A `listenChan` provides a data channel to send event
+// notifications on and `doneCh` to signal that events are no longer
+// being received. It also sends empty events (whitespace) to keep the
+// underlying connection alive.
+type listenChan struct {
+	doneCh chan struct{}
+	dataCh chan []NotificationEvent
+}
+
+// newListenChan returns a listenChan with properly initialized
+// unbuffered channels.
+func newListenChan() *listenChan {
+	return &listenChan{
+		doneCh: make(chan struct{}),
+		dataCh: make(chan []NotificationEvent),
+	}
+}
+
+// sendNotificationEvent sends notification events on the data channel
+// unless doneCh is not closed
+func (l *listenChan) sendNotificationEvent(events []NotificationEvent) {
+	select {
+	// Returns immediately if receiver has quit.
+	case <-l.doneCh:
+	// Blocks until receiver is available.
+	case l.dataCh <- events:
+	}
+}
+
+// waitForListener writes event notification OR whitespaces on
+// ResponseWriter until client closes connection
+func (l *listenChan) waitForListener(w http.ResponseWriter) {
+
+	// Logs errors other than EPIPE and ECONNRESET.
+	// EPIPE and ECONNRESET indicate that the client stopped
+	// listening to notification events.
+	logClientError := func(err error, msg string) {
+		if oe, ok := err.(*net.OpError); ok && (oe.Err == syscall.EPIPE || oe.Err ==
+			syscall.ECONNRESET) {
+			errorIf(err, msg)
+		}
+	}
+
+	emptyEvent := map[string][]NotificationEvent{"Records": nil}
+	defer close(l.doneCh)
 	for {
 		select {
-		case events := <-arnListenerCh:
+		case events := <-l.dataCh:
 			if err := writeNotification(w, map[string][]NotificationEvent{"Records": events}); err != nil {
-				errorIf(err, "Unable to write notification to client.")
+				logClientError(err, "Unable to write notification")
 				return
 			}
-		case <-time.After(globalSNSConnAlive): // Wait for global conn active seconds.
-			if err := writeNotification(w, dummyEvents); err != nil {
-				// FIXME - do not log for all errors.
-				errorIf(err, "Unable to write notification to client.")
+		case <-time.After(globalSNSConnAlive):
+			if err := writeNotification(w, emptyEvent); err != nil {
+				logClientError(err, "Unable to write empty notification")
 				return
 			}
 		}
@@ -346,12 +376,11 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		},
 	}
 
-	// Setup a listening channel that will receive notifications
-	// from the RPC handler.
-	nEventCh := make(chan []NotificationEvent)
-	defer close(nEventCh)
+	// Setup a listen channel to receive notifications like
+	// s3:ObjectCreated, s3:ObjectDeleted etc.
+	nListenCh := newListenChan()
 	// Add channel for listener events
-	if err = globalEventNotifier.AddListenerChan(accountARN, nEventCh); err != nil {
+	if err = globalEventNotifier.AddListenerChan(accountARN, nListenCh); err != nil {
 		errorIf(err, "Error adding a listener!")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -361,8 +390,8 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer globalEventNotifier.RemoveListenerChan(accountARN)
 
 	// Update topic config to bucket config and persist - as soon
-	// as this call compelets, events may start appearing in
-	// nEventCh
+	// as this call completes, events may start appearing in
+	// nListenCh
 	lc := listenerConfig{
 		TopicConfig:  *topicCfg,
 		TargetServer: targetServer,
@@ -378,8 +407,16 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Add all common headers.
 	setCommonHeaders(w)
 
-	// Start sending bucket notifications.
-	sendBucketNotification(w, nEventCh)
+	// https://github.com/containous/traefik/issues/560
+	// https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+	//
+	// Proxies might buffer the connection to avoid this we
+	// need the proper MIME type before writing to client.
+	// This MIME header tells the proxies to avoid buffering
+	w.Header().Set("Content-Type", "text/event-stream")
+
+	// Start writing bucket notifications to ResponseWriter.
+	nListenCh.waitForListener(w)
 }
 
 // AddBucketListenerConfig - Updates on disk state of listeners, and

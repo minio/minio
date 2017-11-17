@@ -499,7 +499,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// ListMultipartUploads doesn't list the parts.
 		{
 			MaxUploads: 100,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -515,7 +515,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			KeyMarker:  "minio-object-1.txt",
 		},
 		// listMultipartResults - 3.
-		// `KeyMarker` is set, no uploadMetadata expected.
+		// `KeyMarker` is set, no MultipartInfo expected.
 		// ListMultipartUploads doesn't list the parts.
 		// `Maxupload` value is asserted.
 		{
@@ -523,7 +523,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			KeyMarker:  "orange",
 		},
 		// listMultipartResults - 4.
-		// `KeyMarker` is set, no uploadMetadata expected.
+		// `KeyMarker` is set, no MultipartInfo expected.
 		// Maxupload value is asserted.
 		{
 			MaxUploads: 1,
@@ -531,12 +531,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		},
 		// listMultipartResults - 5.
 		// `KeyMarker` is set. It contains part of the objectname as `KeyPrefix`.
-		// Expecting the result to contain one uploadMetadata entry and Istruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and Istruncated to be false.
 		{
 			MaxUploads:  10,
 			KeyMarker:   "min",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -546,12 +546,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 6.
 		// `KeyMarker` is set. It contains part of the objectname as `KeyPrefix`.
 		// `MaxUploads` is set equal to the number of meta data entries in the result, the result contains only one entry.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  1,
 			KeyMarker:   "min",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -561,7 +561,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 7.
 		// `KeyMarker` is set. It contains part of the objectname as `KeyPrefix`.
 		// Testing for the case with `MaxUploads` set to 0.
-		// Expecting the result to contain no uploadMetadata entry since `MaxUploads` is set to 0.
+		// Expecting the result to contain no MultipartInfo entry since `MaxUploads` is set to 0.
 		// Expecting `IsTruncated` to be true.
 		{
 			MaxUploads:  0,
@@ -571,7 +571,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 8.
 		// `KeyMarker` is set. It contains part of the objectname as KeyPrefix.
 		// Testing for the case with `MaxUploads` set to 0.
-		// Expecting the result to contain no uploadMetadata entry since `MaxUploads` is set to 0.
+		// Expecting the result to contain no MultipartInfo entry since `MaxUploads` is set to 0.
 		// Expecting `isTruncated` to be true.
 		{
 			MaxUploads:  0,
@@ -581,12 +581,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 9.
 		// `KeyMarker` is set. It contains part of the objectname as KeyPrefix.
 		// `KeyMarker` is set equal to the object name in the result.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
 			KeyMarker:   "minio-object",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -596,12 +596,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 10.
 		// Prefix is set. It is set equal to the object name.
 		// MaxUploads is set more than number of meta data entries in the result.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
 			Prefix:      "minio-object-1.txt",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -611,12 +611,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 11.
 		// Setting `Prefix` to contain the object name as its prefix.
 		// MaxUploads is set more than number of meta data entries in the result.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
 			Prefix:      "min",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -626,12 +626,12 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 12.
 		// Setting `Prefix` to contain the object name as its prefix.
 		// MaxUploads is set equal to number of meta data entries in the result.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  1,
 			Prefix:      "min",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -659,13 +659,13 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// listMultipartResults - 15.
 		// Setting `Delimiter`.
 		// MaxUploads is set more than number of meta data entries in the result.
-		// Expecting the result to contain one uploadMetadata entry and IsTruncated to be false.
+		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
 			Delimiter:   "/",
 			Prefix:      "",
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[0],
@@ -677,7 +677,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Will be used to list on bucketNames[1].
 		{
 			MaxUploads: 100,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
@@ -703,7 +703,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			KeyMarker:      "minio-object-1.txt",
 			UploadIDMarker: uploadIDs[1],
 			IsTruncated:    false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[2],
@@ -725,7 +725,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			KeyMarker:      "minio-object-1.txt",
 			UploadIDMarker: uploadIDs[2],
 			IsTruncated:    false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[3],
@@ -734,7 +734,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		},
 		// listMultipartResults - 19.
 		// Testing for listing of 3 uploadID's for a given object, setting maxKeys to be 2.
-		// There are 3 uploadMetadata in the result (uploadIDs[1-3]), it should be truncated to 2.
+		// There are 3 MultipartInfo in the result (uploadIDs[1-3]), it should be truncated to 2.
 		// Since there is only single object for bucketNames[1], the NextKeyMarker is set to its name.
 		// The last entry in the result, uploadIDs[2], that is should be set as NextUploadIDMarker.
 		// Will be used to list on bucketNames[1].
@@ -743,7 +743,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			IsTruncated:        true,
 			NextKeyMarker:      objectNames[0],
 			NextUploadIDMarker: uploadIDs[2],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
@@ -756,7 +756,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		},
 		// listMultipartResults - 20.
 		// Testing for listing of 3 uploadID's for a given object, setting maxKeys to be 1.
-		// There are 3 uploadMetadata in the result (uploadIDs[1-3]), it should be truncated to 1.
+		// There are 3 MultipartInfo in the result (uploadIDs[1-3]), it should be truncated to 1.
 		// The last entry in the result, uploadIDs[1], that is should be set as NextUploadIDMarker.
 		// Will be used to list on bucketNames[1].
 		{
@@ -764,7 +764,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			IsTruncated:        true,
 			NextKeyMarker:      objectNames[0],
 			NextUploadIDMarker: uploadIDs[1],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
@@ -773,13 +773,13 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		},
 		// listMultipartResults - 21.
 		// Testing for listing of 3 uploadID's for a given object, setting maxKeys to be 3.
-		// There are 3 uploadMetadata in the result (uploadIDs[1-3]), hence no truncation is expected.
-		// Since all the uploadMetadata is listed, expecting no values for NextUploadIDMarker and NextKeyMarker.
+		// There are 3 MultipartInfo in the result (uploadIDs[1-3]), hence no truncation is expected.
+		// Since all the MultipartInfo is listed, expecting no values for NextUploadIDMarker and NextKeyMarker.
 		// Will be used to list on bucketNames[1].
 		{
 			MaxUploads:  3,
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
@@ -801,7 +801,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  10,
 			IsTruncated: false,
 			Prefix:      "min",
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[1],
@@ -844,7 +844,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			IsTruncated:    false,
 			Prefix:         "min",
 			UploadIDMarker: uploadIDs[1],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[2],
@@ -863,7 +863,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  100,
 			IsTruncated: false,
 
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[4],
@@ -896,7 +896,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  100,
 			IsTruncated: false,
 			Prefix:      "min",
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[4],
@@ -913,7 +913,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  100,
 			IsTruncated: false,
 			Prefix:      "ney",
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[2],
 					UploadID: uploadIDs[6],
@@ -930,7 +930,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  100,
 			IsTruncated: false,
 			Prefix:      "parrot",
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[4],
 					UploadID: uploadIDs[8],
@@ -948,7 +948,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  100,
 			IsTruncated: false,
 			Prefix:      "neymar.jpeg",
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[3],
 					UploadID: uploadIDs[7],
@@ -965,7 +965,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			IsTruncated:        true,
 			NextUploadIDMarker: uploadIDs[6],
 			NextKeyMarker:      objectNames[2],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[4],
@@ -987,7 +987,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{
 			MaxUploads:  6,
 			IsTruncated: false,
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[0],
 					UploadID: uploadIDs[4],
@@ -1020,7 +1020,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:     10,
 			IsTruncated:    false,
 			UploadIDMarker: uploadIDs[6],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[3],
 					UploadID: uploadIDs[7],
@@ -1041,7 +1041,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			MaxUploads:  10,
 			IsTruncated: false,
 			KeyMarker:   objectNames[3],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[4],
 					UploadID: uploadIDs[8],
@@ -1054,7 +1054,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		},
 		// listMultipartResults - 35.
 		// Checking listing with `Prefix` and `KeyMarker`.
-		// No upload uploadMetadata in the result expected since KeyMarker is set to last Key in the result.
+		// No upload MultipartInfo in the result expected since KeyMarker is set to last Key in the result.
 		{
 			MaxUploads:  10,
 			IsTruncated: false,
@@ -1068,7 +1068,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			IsTruncated:    false,
 			Prefix:         "minio",
 			UploadIDMarker: uploadIDs[4],
-			Uploads: []uploadMetadata{
+			Uploads: []MultipartInfo{
 				{
 					Object:   objectNames[1],
 					UploadID: uploadIDs[5],
@@ -1160,11 +1160,11 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{bucketNames[1], "", "minio-object-1.txt", uploadIDs[1], "", 100, listMultipartResults[16], nil, true},
 		{bucketNames[1], "", "minio-object-1.txt", uploadIDs[2], "", 100, listMultipartResults[17], nil, true},
 		// Test cases with multiple uploadID listing for a given object (Test number 31-32).
-		// MaxKeys set to values lesser than the number of entries in the uploadMetadata.
+		// MaxKeys set to values lesser than the number of entries in the MultipartInfo.
 		// IsTruncated is expected to be true.
 		{bucketNames[1], "", "", "", "", 2, listMultipartResults[18], nil, true},
 		{bucketNames[1], "", "", "", "", 1, listMultipartResults[19], nil, true},
-		// MaxKeys set to the value which is equal to no of entries in the uploadMetadata (Test number 33).
+		// MaxKeys set to the value which is equal to no of entries in the MultipartInfo (Test number 33).
 		// In case of bucketNames[1], there are 3 entries.
 		// Since all available entries are listed, IsTruncated is expected to be false
 		// and NextMarkers are expected to empty.
@@ -1836,19 +1836,19 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	}
 	// Parts to be sent as input for CompleteMultipartUpload.
 	inputParts := []struct {
-		parts []completePart
+		parts []CompletePart
 	}{
 		// inputParts - 0.
 		// Case for replicating ETag mismatch.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "abcd", PartNumber: 1},
 			},
 		},
 		// inputParts - 1.
 		// should error out with part too small.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 1},
 				{ETag: "1f7690ebdd9b4caf8fab49ca1757bf27", PartNumber: 2},
 			},
@@ -1856,7 +1856,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// inputParts - 2.
 		// Case with invalid Part number.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 10},
 			},
 		},
@@ -1864,7 +1864,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Case with valid part.
 		// Part size greater than 5MB.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: validPartMD5, PartNumber: 5},
 			},
 		},
@@ -1872,7 +1872,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Used to verify that the other remaining parts are deleted after
 		// a successful call to CompleteMultipartUpload.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: validPartMD5, PartNumber: 6},
 			},
 		},
@@ -1887,7 +1887,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		bucket   string
 		object   string
 		uploadID string
-		parts    []completePart
+		parts    []CompletePart
 		// Expected output of CompleteMultipartUpload.
 		expectedS3MD5 string
 		expectedErr   error
@@ -1895,28 +1895,28 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", []completePart{}, "", BucketNameInvalid{Bucket: ".test"}, false},
-		{"Test", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "Test"}, false},
-		{"---", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "---"}, false},
-		{"ad", "", "", []completePart{}, "", BucketNameInvalid{Bucket: "ad"}, false},
+		{".test", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
 		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", []completePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		{"volatile-bucket-1", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Test case for Asserting for invalid objectName (Test number 8).
-		{bucketNames[0], "", "", []completePart{}, "", ObjectNameInvalid{Bucket: bucketNames[0]}, false},
+		{bucketNames[0], "", "", []CompletePart{}, "", ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
-		{bucketNames[0], objectNames[0], "abc", []completePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
+		{bucketNames[0], objectNames[0], "abc", []CompletePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
 		// Test case with invalid Part Etag (Test number 10-11).
-		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abc"}}, "", fmt.Errorf("encoding/hex: odd length hex string"), false},
-		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abcz"}}, "", fmt.Errorf("encoding/hex: invalid byte: U+007A 'z'"), false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abc"}}, "", fmt.Errorf("encoding/hex: odd length hex string"), false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcz"}}, "", fmt.Errorf("encoding/hex: invalid byte: U+007A 'z'"), false},
 		// Part number 0 doesn't exist, expecting InvalidPart error (Test number 12).
-		{bucketNames[0], objectNames[0], uploadIDs[0], []completePart{{ETag: "abcd", PartNumber: 0}}, "", InvalidPart{}, false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcd", PartNumber: 0}}, "", InvalidPart{}, false},
 		// // Upload and PartNumber exists, But a deliberate ETag mismatch is introduced (Test number 13).
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[0].parts, "", InvalidPart{}, false},
 		// Test case with non existent object name (Test number 14).
-		{bucketNames[0], "my-object", uploadIDs[0], []completePart{{ETag: "abcd", PartNumber: 1}}, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
+		{bucketNames[0], "my-object", uploadIDs[0], []CompletePart{{ETag: "abcd", PartNumber: 1}}, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
 		// Testing for Part being too small (Test number 15).
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[1].parts, "", PartTooSmall{PartNumber: 1}, false},
 		// TestCase with invalid Part Number (Test number 16).
@@ -1924,7 +1924,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[2].parts, "", InvalidPart{}, false},
 		// Test case with unsorted parts (Test number 17).
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[3].parts, s3MD5, nil, true},
-		// The other parts will be flushed after a successful completePart (Test number 18).
+		// The other parts will be flushed after a successful CompletePart (Test number 18).
 		// the case above successfully completes CompleteMultipartUpload, the remaining Parts will be flushed.
 		// Expecting to fail with Invalid UploadID.
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[4].parts, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},

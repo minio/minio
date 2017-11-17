@@ -110,8 +110,8 @@ func (fs fsObjects) addUploadID(bucket, object, uploadID string, initiated time.
 }
 
 // listMultipartUploadIDs - list all the upload ids from a marker up to 'count'.
-func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int) ([]uploadMetadata, bool, error) {
-	var uploads []uploadMetadata
+func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int) ([]MultipartInfo, bool, error) {
+	var uploads []MultipartInfo
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
@@ -149,7 +149,7 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 	}
 
 	for index < len(uploadIDs.Uploads) {
-		uploads = append(uploads, uploadMetadata{
+		uploads = append(uploads, MultipartInfo{
 			Object:    objectName,
 			UploadID:  uploadIDs.Uploads[index].UploadID,
 			Initiated: uploadIDs.Uploads[index].Initiated,
@@ -191,7 +191,7 @@ func (fs fsObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 		multipartMarkerPath = pathJoin(bucket, keyMarker)
 	}
 
-	var uploads []uploadMetadata
+	var uploads []MultipartInfo
 	var err error
 	var eof bool
 
@@ -244,7 +244,7 @@ func (fs fsObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			if hasSuffix(walkResult.entry, slashSeparator) {
-				uploads = append(uploads, uploadMetadata{
+				uploads = append(uploads, MultipartInfo{
 					Object: entry,
 				})
 				maxUploads--
@@ -257,7 +257,7 @@ func (fs fsObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 				continue
 			}
 
-			var tmpUploads []uploadMetadata
+			var tmpUploads []MultipartInfo
 			var end bool
 			uploadIDMarker = ""
 
@@ -713,7 +713,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (oi ObjectInfo, e error) {
+func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
 	if err := checkCompleteMultipartArgs(bucket, object, fs); err != nil {
 		return oi, err
 	}

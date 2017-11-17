@@ -390,6 +390,12 @@
 			"revisionTime": "2017-08-28T17:39:33Z"
 		},
 		{
+			"checksumSHA1": "/VYXTlcksV92qL4Avr5S3NJ/Fxs=",
+			"path": "github.com/minio/sio",
+			"revision": "d8be2518a912f0db0dd17dc55f46da4360ee60d8",
+			"revisionTime": "2017-09-06T19:57:40Z"
+		},
+		{
 			"checksumSHA1": "zvQr4zOz1/g/Fui6co0sctxrJ28=",
 			"path": "github.com/nats-io/go-nats",
 			"revision": "6b6bf392d34d01f57cc563ae123f00c13778bd57",
@@ -489,6 +495,24 @@
 			"revisionTime": "2016-12-15T19:56:52Z"
 		},
 		{
+			"checksumSHA1": "CvMkf3KUUGUVHibg6G/zI7XtVbM=",
+			"path": "golang.org/x/crypto/chacha20poly1305",
+			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
+			"revisionTime": "2017-08-25T20:24:07Z"
+		},
+		{
+			"checksumSHA1": "8f1lWFSOLu7O6Jqk/e+ydH1yoms=",
+			"path": "golang.org/x/crypto/chacha20poly1305/internal/chacha20",
+			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
+			"revisionTime": "2017-08-25T20:24:07Z"
+		},
+		{
+			"checksumSHA1": "kVKE0OX1Xdw5mG7XKT86DLLKE2I=",
+			"path": "golang.org/x/crypto/poly1305",
+			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
+			"revisionTime": "2017-08-25T20:24:07Z"
+		},
+		{
 			"path": "golang.org/x/net/context",
 			"revision": "a728288923b47049b2ce791836767ffbe964a5bd",
 			"revisionTime": "2016-07-07T15:24:52-07:00"
@@ -566,10 +590,10 @@
 			"revisionTime": "2017-04-12T07:26:39Z"
 		},
 		{
-			"checksumSHA1": "ZVZBntvdoK/qUq/6uF8YMWmuMC4=",
+			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "ea9bcade75cb975a0b9738936568ab388b845617",
-			"revisionTime": "2017-03-08T18:50:27Z"
+			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
+			"revisionTime": "2017-11-09T13:50:42Z"
 		},
 		{
 			"checksumSHA1": "faFDXp++cLjLBlvsr+izZ+go1WU=",

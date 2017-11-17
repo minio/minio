@@ -157,6 +157,11 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrExpiredPresignRequest
 	}
 
+	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
+	if err != nil {
+		return ErrInvalidRequest
+	}
+
 	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
 	if gotSignature != expectedSignature {
 		return ErrSignatureDoesNotMatch
@@ -235,6 +240,11 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 	if err != nil {
 		errorIf(err, "Unable to unescape (%s)", encodedQuery)
 		return ErrInvalidQueryParams
+	}
+
+	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
+	if err != nil {
+		return ErrInvalidRequest
 	}
 
 	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)

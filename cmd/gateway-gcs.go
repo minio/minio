@@ -39,6 +39,7 @@ import (
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 var (
@@ -192,11 +193,15 @@ func gcsToObjectError(err error, params ...string) error {
 
 	bucket := ""
 	object := ""
+	uploadID := ""
 	if len(params) >= 1 {
 		bucket = params[0]
 	}
 	if len(params) == 2 {
 		object = params[1]
+	}
+	if len(params) == 3 {
+		uploadID = params[2]
 	}
 
 	// in some cases just a plain error is being returned
@@ -208,9 +213,15 @@ func gcsToObjectError(err error, params ...string) error {
 		e.e = err
 		return e
 	case "storage: object doesn't exist":
-		err = ObjectNotFound{
-			Bucket: bucket,
-			Object: object,
+		if uploadID != "" {
+			err = InvalidUploadID{
+				UploadID: uploadID,
+			}
+		} else {
+			err = ObjectNotFound{
+				Bucket: bucket,
+				Object: object,
+			}
 		}
 		e.e = err
 		return e
@@ -371,7 +382,9 @@ func newGCSGatewayLayer(projectID string) (GatewayLayer, error) {
 	}
 
 	// Initialize a GCS client.
-	client, err := storage.NewClient(ctx)
+	// Send user-agent in this format for Google to obtain usage insights while participating in the
+	// Google Cloud Technology Partners (https://cloud.google.com/partners/)
+	client, err := storage.NewClient(ctx, option.WithUserAgent(fmt.Sprintf("Minio/%s (GPN:Minio;)", Version)))
 	if err != nil {
 		return nil, err
 	}
@@ -923,7 +936,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 // an object layer compatible error upon any error.
 func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID string) error {
 	_, err := l.client.Bucket(bucket).Object(gcsMultipartMetaName(uploadID)).Attrs(l.ctx)
-	return gcsToObjectError(traceError(err), bucket, key)
+	return gcsToObjectError(traceError(err), bucket, key, uploadID)
 }
 
 // PutObjectPart puts a part of object in bucket
@@ -948,7 +961,6 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	}
 	// Make sure to close the object writer upon success.
 	w.Close()
-
 	return PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,
@@ -1003,13 +1015,13 @@ func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID st
 // to the number of components you can compose per second. This rate counts both the
 // components being appended to a composite object as well as the components being
 // copied when the composite object of which they are a part is copied.
-func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID string, uploadedParts []completePart) (ObjectInfo, error) {
+func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID string, uploadedParts []CompletePart) (ObjectInfo, error) {
 	meta := gcsMultipartMetaName(uploadID)
 	object := l.client.Bucket(bucket).Object(meta)
 
 	partZeroAttrs, err := object.Attrs(l.ctx)
 	if err != nil {
-		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key, uploadID)
 	}
 
 	r, err := object.NewReader(l.ctx)
@@ -1036,9 +1048,26 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	}
 
 	var parts []*storage.ObjectHandle
-	for _, uploadedPart := range uploadedParts {
+	partSizes := make([]int64, len(uploadedParts))
+	for i, uploadedPart := range uploadedParts {
 		parts = append(parts, l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID,
 			uploadedPart.PartNumber, uploadedPart.ETag)))
+		partAttr, pErr := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, uploadedPart.PartNumber, uploadedPart.ETag)).Attrs(l.ctx)
+		if pErr != nil {
+			return ObjectInfo{}, gcsToObjectError(traceError(pErr), bucket, key, uploadID)
+		}
+		partSizes[i] = partAttr.Size
+	}
+
+	// Error out if parts except last part sizing < 5MiB.
+	for i, size := range partSizes[:len(partSizes)-1] {
+		if size < globalMinPartSize {
+			return ObjectInfo{}, traceError(PartTooSmall{
+				PartNumber: uploadedParts[i].PartNumber,
+				PartSize:   size,
+				PartETag:   uploadedParts[i].ETag,
+			})
+		}
 	}
 
 	// Returns name of the composed object.

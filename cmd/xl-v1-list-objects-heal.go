@@ -222,7 +222,7 @@ func (xl xlObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
 
 // Fetches list of multipart uploadIDs given bucket, keyMarker, uploadIDMarker.
 func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
-	maxUploads int, disks []StorageAPI) (uploads []uploadMetadata, end bool,
+	maxUploads int, disks []StorageAPI) (uploads []MultipartInfo, end bool,
 	err error) {
 
 	// Hold a read lock on keyMarker path.
@@ -261,7 +261,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 
 	recursive := delimiter != slashSeparator
 
-	var uploads []uploadMetadata
+	var uploads []MultipartInfo
 	var err error
 	// List all upload ids for the given keyMarker, starting from
 	// uploadIDMarker.
@@ -332,7 +332,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 				retainSlash(bucket))
 			// Skip entries that are not object directory.
 			if hasSuffix(walkResult.entry, slashSeparator) {
-				uploads = append(uploads, uploadMetadata{
+				uploads = append(uploads, MultipartInfo{
 					Object: entry,
 				})
 				uploadsLeft--
@@ -344,7 +344,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 
 			// For an object entry we get all its pending
 			// uploadIDs.
-			var newUploads []uploadMetadata
+			var newUploads []MultipartInfo
 			var end bool
 			uploadIDMarker = ""
 			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,

@@ -1,4 +1,4 @@
-// +build netbsd solaris
+// +build netbsd
 
 /*
  * Minio Cloud Storage, (C) 2017 Minio, Inc.

@@ -1,4 +1,4 @@
-// +build darwin freebsd dragonfly openbsd
+// +build darwin freebsd dragonfly openbsd solaris
 
 /*
  * Minio Cloud Storage, (C) 2017 Minio, Inc.
@@ -19,9 +19,9 @@
 package disk
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(fstype [16]int8) string {
-	b := make([]byte, len(fstype[:]))
-	for i, v := range fstype[:] {
+func getFSType(fstype []int8) string {
+	b := make([]byte, len(fstype))
+	for i, v := range fstype {
 		b[i] = byte(v)
 	}
 	return string(b)

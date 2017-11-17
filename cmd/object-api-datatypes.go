@@ -181,7 +181,7 @@ type ListMultipartsInfo struct {
 	IsTruncated bool
 
 	// List of all pending uploads.
-	Uploads []uploadMetadata
+	Uploads []MultipartInfo
 
 	// When a prefix is provided in the request, The result contains only keys
 	// starting with the specified prefix.
@@ -261,8 +261,8 @@ type PartInfo struct {
 	Size int64
 }
 
-// uploadMetadata - represents metadata in progress multipart upload.
-type uploadMetadata struct {
+// MultipartInfo - represents metadata in progress multipart upload.
+type MultipartInfo struct {
 	// Object name for which the multipart upload was initiated.
 	Object string
 
@@ -277,8 +277,9 @@ type uploadMetadata struct {
 	HealUploadInfo *HealObjectInfo `xml:"HealUploadInfo,omitempty"`
 }
 
-// completePart - completed part container.
-type completePart struct {
+// CompletePart - represents the part that was completed, this is sent by the client
+// during CompleteMultipartUpload request.
+type CompletePart struct {
 	// Part number identifying the part. This is a positive integer between 1 and
 	// 10,000
 	PartNumber int
@@ -287,14 +288,15 @@ type completePart struct {
 	ETag string
 }
 
-// completedParts - is a collection satisfying sort.Interface.
-type completedParts []completePart
+// CompletedParts - is a collection satisfying sort.Interface.
+type CompletedParts []CompletePart
 
-func (a completedParts) Len() int           { return len(a) }
-func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
+func (a CompletedParts) Len() int           { return len(a) }
+func (a CompletedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a CompletedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
-// completeMultipartUpload - represents input fields for completing multipart upload.
-type completeMultipartUpload struct {
-	Parts []completePart `xml:"Part"`
+// CompleteMultipartUpload - represents list of parts which are completed, this is sent by the
+// client during CompleteMultipartUpload request.
+type CompleteMultipartUpload struct {
+	Parts []CompletePart `xml:"Part"`
 }

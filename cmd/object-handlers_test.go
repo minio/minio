@@ -1078,7 +1078,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 
 	a := 0
 	b := globalMinPartSize - 1
-	var parts []completePart
+	var parts []CompletePart
 	for partNumber := 1; partNumber <= 2; partNumber++ {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
@@ -1109,7 +1109,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 			t.Fatalf("Test failed to decode XML response: <ERROR> %v", err)
 		}
 
-		parts = append(parts, completePart{
+		parts = append(parts, CompletePart{
 			PartNumber: partNumber,
 			ETag:       canonicalizeETag(resp.ETag),
 		})
@@ -2162,19 +2162,19 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 	// Parts to be sent as input for CompleteMultipartUpload.
 	inputParts := []struct {
-		parts []completePart
+		parts []CompletePart
 	}{
 		// inputParts - 0.
 		// Case for replicating ETag mismatch.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "abcd", PartNumber: 1},
 			},
 		},
 		// inputParts - 1.
 		// should error out with part too small.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 1},
 				{ETag: "1f7690ebdd9b4caf8fab49ca1757bf27", PartNumber: 2},
 			},
@@ -2182,7 +2182,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// inputParts - 2.
 		// Case with invalid Part number.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 10},
 			},
 		},
@@ -2190,7 +2190,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// Case with valid parts,but parts are unsorted.
 		// Part size greater than 5 MiB.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: validPartMD5, PartNumber: 6},
 				{ETag: validPartMD5, PartNumber: 5},
 			},
@@ -2199,7 +2199,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// Case with valid part.
 		// Part size greater than 5 MiB.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: validPartMD5, PartNumber: 5},
 				{ETag: validPartMD5, PartNumber: 6},
 			},
@@ -2209,7 +2209,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// Used for the case of testing for anonymous API request.
 		// Part size greater than 5 MiB.
 		{
-			[]completePart{
+			[]CompletePart{
 				{ETag: validPartMD5, PartNumber: 1},
 				{ETag: validPartMD5, PartNumber: 2},
 			},
@@ -2230,7 +2230,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		bucket    string
 		object    string
 		uploadID  string
-		parts     []completePart
+		parts     []CompletePart
 		accessKey string
 		secretKey string
 		// Expected output of CompleteMultipartUpload.
@@ -2253,13 +2253,13 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 2.
-		// No parts specified in completePart{}.
+		// No parts specified in CompletePart{}.
 		// Should return ErrMalformedXML in the response body.
 		{
 			bucket:    bucketName,
 			object:    objectName,
 			uploadID:  uploadIDs[0],
-			parts:     []completePart{},
+			parts:     []CompletePart{},
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
@@ -2361,14 +2361,14 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		var req *http.Request
 		var completeBytes, actualContent []byte
 		// Complete multipart upload parts.
-		completeUploads := &completeMultipartUpload{
+		completeUploads := &CompleteMultipartUpload{
 			Parts: testCase.parts,
 		}
 		completeBytes, err = xml.Marshal(completeUploads)
 		if err != nil {
 			t.Fatalf("Error XML encoding of parts: <ERROR> %s.", err)
 		}
-		// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+		// Indicating that all parts are uploaded and initiating CompleteMultipartUpload.
 		req, err = newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", bucketName, objectName, testCase.uploadID),
 			int64(len(completeBytes)), bytes.NewReader(completeBytes), testCase.accessKey, testCase.secretKey)
 		if err != nil {
@@ -2400,7 +2400,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// Testing for anonymous API request.
 	var completeBytes []byte
 	// Complete multipart upload parts.
-	completeUploads := &completeMultipartUpload{
+	completeUploads := &CompleteMultipartUpload{
 		Parts: inputParts[5].parts,
 	}
 	completeBytes, err = xml.Marshal(completeUploads)
@@ -2426,7 +2426,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// There is no need to use an existing bucket or valid input for creating the request,
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
-	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	// Indicating that all parts are uploaded and initiating CompleteMultipartUpload.
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 

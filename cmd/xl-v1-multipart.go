@@ -297,7 +297,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	if keyMarker != "" {
 		multipartMarkerPath = pathJoin(bucket, keyMarker)
 	}
-	var uploads []uploadMetadata
+	var uploads []MultipartInfo
 	var err error
 	var eof bool
 	// List all upload ids for the keyMarker starting from
@@ -356,7 +356,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For an entry looking like a directory, store and
 			// continue the loop not need to fetch uploads.
 			if hasSuffix(walkResult.entry, slashSeparator) {
-				uploads = append(uploads, uploadMetadata{
+				uploads = append(uploads, MultipartInfo{
 					Object: entry,
 				})
 				maxUploads--
@@ -366,7 +366,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				}
 				continue
 			}
-			var newUploads []uploadMetadata
+			var newUploads []MultipartInfo
 			var end bool
 			uploadIDMarker = ""
 
@@ -832,7 +832,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (oi ObjectInfo, e error) {
+func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
 	if err := checkCompleteMultipartArgs(bucket, object, xl); err != nil {
 		return oi, err
 	}

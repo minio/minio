@@ -190,3 +190,26 @@ func TestExtractMetadataHeaders(t *testing.T) {
 		}
 	}
 }
+
+// Test getResource()
+func TestGetResource(t *testing.T) {
+	testCases := []struct {
+		p                string
+		host             string
+		domain           string
+		expectedResource string
+	}{
+		{"/a/b/c", "test.mydomain.com", "mydomain.com", "/test/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", "notmydomain.com", "/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", "", "/a/b/c"},
+	}
+	for i, test := range testCases {
+		gotResource, err := getResource(test.p, test.host, test.domain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if gotResource != test.expectedResource {
+			t.Fatalf("test %d: expected %s got %s", i+1, test.expectedResource, gotResource)
+		}
+	}
+}

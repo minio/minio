@@ -452,13 +452,17 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
-	if hasSuffix(object, slashSeparator) {
-		// Directory call needs to arrive with object ending with "/".
-		fi, err := fsStatDir(pathJoin(fs.fsPath, bucket, object))
-		if err != nil {
-			return oi, toObjectErr(err, bucket, object)
+	fi, err := fsStatDir(pathJoin(fs.fsPath, bucket, object))
+	if err != nil && errorCause(err) != errFileAccessDenied {
+		return oi, toObjectErr(err, bucket, object)
+	}
+	if fi != nil {
+		// If file found and request was with object ending with "/", consider it
+		// as directory and return object info
+		if hasSuffix(object, slashSeparator) {
+			return fsMeta.ToObjectInfo(bucket, object, fi), nil
 		}
-		return fsMeta.ToObjectInfo(bucket, object, fi), nil
+		return oi, toObjectErr(errFileNotFound, bucket, object)
 	}
 
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
@@ -485,7 +489,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error
 	}
 
 	// Stat the file to get file size.
-	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
+	fi, err = fsStatFile(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}

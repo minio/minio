@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,6 +129,26 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		u.Path = path.Clean(u.Path)
 		if isEmptyPath(u.Path) {
 			return ep, fmt.Errorf("empty or root path is not supported in URL endpoint")
+		}
+
+		// On windows having a preceding "/" will cause problems, if the
+		// command line already has C:/<export-folder/ in it. Final resulting
+		// path on windows might become C:/C:/ this will cause problems
+		// of starting minio server properly in distributed mode on windows.
+		// As a special case make sure to trim the separator.
+
+		// NOTE: It is also perfectly fine for windows users to have a path
+		// without C:/ since at that point we treat it as relative path
+		// and obtain the full filesystem path as well. Providing C:/
+		// style is necessary to provide paths other than C:/,
+		// such as F:/, D:/ etc.
+		//
+		// Another additional benefit here is that this style also
+		// supports providing \\host\share support as well.
+		if runtime.GOOS == globalWindowsOSName {
+			if filepath.VolumeName(u.Path[1:]) != "" {
+				u.Path = u.Path[1:]
+			}
 		}
 
 		isLocal, err = isLocalHost(host)

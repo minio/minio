@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -438,10 +439,22 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	bucket := mux.Vars(r)["bucket"]
+
 	// Require Content-Length to be set in the request
 	size := r.ContentLength
 	if size < 0 {
 		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+	resource, err := getResource(r.URL.Path, r.Host, globalDomainName)
+	if err != nil {
+		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		return
+	}
+	// Make sure that the URL  does not contain object name.
+	if bucket != filepath.Clean(resource[1:]) {
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
@@ -482,7 +495,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Close multipart file
 	defer fileBody.Close()
 
-	bucket := mux.Vars(r)["bucket"]
 	formValues.Set("Bucket", bucket)
 
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {

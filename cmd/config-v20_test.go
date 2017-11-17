@@ -117,8 +117,8 @@ func TestServerConfig(t *testing.T) {
 	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v19 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v19)
+	if serverConfig.GetVersion() != v20 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v20)
 	}
 
 	// Attempt to save.
@@ -148,6 +148,9 @@ func TestServerConfigWithEnvs(t *testing.T) {
 
 	os.Setenv("MINIO_REGION", "us-west-1")
 	defer os.Unsetenv("MINIO_REGION")
+
+	os.Setenv("MINIO_DOMAIN", "domain.com")
+	defer os.Unsetenv("MINIO_DOMAIN")
 
 	defer resetGlobalIsEnvs()
 
@@ -189,6 +192,9 @@ func TestServerConfigWithEnvs(t *testing.T) {
 		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
 
+	if serverConfig.Domain != "domain.com" {
+		t.Errorf("Expecting Domain to be `domain.com` found " + serverConfig.Domain)
+	}
 }
 
 func TestCheckDupJSONKeys(t *testing.T) {
@@ -231,7 +237,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v19
+	v := v20
 
 	testCases := []struct {
 		configData string
