@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"time"
 
 	errors2 "github.com/minio/minio/pkg/errors"
@@ -31,6 +32,7 @@ import (
 const (
 	formatBackendFS   = "fs"
 	formatFSVersionV1 = "1"
+	formatFSVersionV2 = "2"
 )
 
 // formatFSV1 - structure holds format version '1'.
@@ -41,6 +43,12 @@ type formatFSV1 struct {
 	} `json:"fs"`
 }
 
+// formatFSV2 - structure is same as formatFSV1. But the multipart backend
+// structure is flat instead of hierarchy now.
+// In .minio.sys/multipart we have:
+// sha256(bucket/object)/uploadID/[fs.json, 1.etag, 2.etag ....]
+type formatFSV2 = formatFSV1
+
 // Used to detect the version of "fs" format.
 type formatFSVersionDetect struct {
 	FS struct {
@@ -48,12 +56,21 @@ type formatFSVersionDetect struct {
 	} `json:"fs"`
 }
 
-// Returns the latest "fs" format.
+// Returns the latest "fs" format V1
 func newFormatFSV1() (format *formatFSV1) {
 	f := &formatFSV1{}
 	f.Version = formatMetaVersionV1
 	f.Format = formatBackendFS
 	f.FS.Version = formatFSVersionV1
+	return f
+}
+
+// Returns the latest "fs" format V2
+func newFormatFSV2() (format *formatFSV2) {
+	f := &formatFSV2{}
+	f.Version = formatMetaVersionV1
+	f.Format = formatBackendFS
+	f.FS.Version = formatFSVersionV2
 	return f
 }
 
@@ -98,20 +115,57 @@ func formatFSGetVersion(r io.ReadSeeker) (string, error) {
 	return format.FS.Version, nil
 }
 
-// Migrate the "fs" backend.
-// Migration should happen when formatFSV1.FS.Version changes. This version
-// can change when there is a change to the struct formatFSV1.FS or if there
-// is any change in the backend file system tree structure.
-func formatFSMigrate(wlk *lock.LockedFile) error {
-	// Add any migration code here in case we bump format.FS.Version
-
-	// Make sure that the version is what we expect after the migration.
+// Migrate from V1 to V2. V2 implements new backend format for multipart
+// uploads. Delete the previous multipart directory.
+func formatFSMigrateV1ToV2(wlk *lock.LockedFile, fsPath string) error {
 	version, err := formatFSGetVersion(wlk)
 	if err != nil {
 		return err
 	}
+
 	if version != formatFSVersionV1 {
-		return fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV1, version)
+		return fmt.Errorf(`format.json version expected %s, found %s`, formatFSVersionV1, version)
+	}
+
+	if err = fsRemoveAll(path.Join(fsPath, minioMetaMultipartBucket)); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(path.Join(fsPath, minioMetaMultipartBucket), 0755); err != nil {
+		return err
+	}
+
+	return formatFSSave(wlk.File, newFormatFSV2())
+}
+
+// Migrate the "fs" backend.
+// Migration should happen when formatFSV1.FS.Version changes. This version
+// can change when there is a change to the struct formatFSV1.FS or if there
+// is any change in the backend file system tree structure.
+func formatFSMigrate(wlk *lock.LockedFile, fsPath string) error {
+	// Add any migration code here in case we bump format.FS.Version
+	version, err := formatFSGetVersion(wlk)
+	if err != nil {
+		return err
+	}
+
+	switch version {
+	case formatFSVersionV1:
+		if err = formatFSMigrateV1ToV2(wlk, fsPath); err != nil {
+			return err
+		}
+		fallthrough
+	case formatFSVersionV2:
+		// We are at the latest version.
+	}
+
+	// Make sure that the version is what we expect after the migration.
+	version, err = formatFSGetVersion(wlk)
+	if err != nil {
+		return err
+	}
+	if version != formatFSVersionV2 {
+		return fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version)
 	}
 	return nil
 }
@@ -196,7 +250,7 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if version != formatFSVersionV1 {
+		if version != formatFSVersionV2 {
 			// Format needs migration
 			rlk.Close()
 			// Hold write lock during migration so that we do not disturb any
@@ -211,7 +265,7 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			if err != nil {
 				return nil, err
 			}
-			err = formatFSMigrate(wlk)
+			err = formatFSMigrate(wlk, fsPath)
 			wlk.Close()
 			if err != nil {
 				// Migration failed, bail out so that the user can observe what happened.

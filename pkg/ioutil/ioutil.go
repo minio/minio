@@ -20,7 +20,12 @@ package ioutil
 
 import (
 	"io"
+
+	humanize "github.com/dustin/go-humanize"
 )
+
+// defaultAppendBufferSize - Default buffer size for the AppendFile
+const defaultAppendBufferSize = humanize.MiByte
 
 // WriteOnCloser implements io.WriteCloser and always
 // exectues at least one write operation if it is closed.

@@ -23,6 +23,7 @@ import (
 	"runtime"
 
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/lock"
 )
 
 // Removes only the file at given path does not remove
@@ -266,7 +267,7 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		return 0, errors.Trace(err)
 	}
 
-	writer, err := os.OpenFile((filePath), os.O_CREATE|os.O_WRONLY, 0666)
+	writer, err := lock.Open(filePath, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return 0, osErrToFSFileErr(err)
 	}
@@ -291,6 +292,7 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 			return 0, errors.Trace(err)
 		}
 	}
+
 	return bytesWritten, nil
 }
 

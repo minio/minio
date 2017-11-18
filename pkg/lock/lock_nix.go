@@ -90,3 +90,8 @@ func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, er
 func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
 	return lockedOpenFile(path, flag, perm, 0)
 }
+
+// Open - Call os.OpenFile
+func Open(path string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(path, flag, perm)
+}

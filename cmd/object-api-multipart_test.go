@@ -1374,11 +1374,12 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		},
 		// partinfos - 2.
 		{
-			Bucket:      bucketNames[0],
-			Object:      objectNames[0],
-			MaxParts:    2,
-			IsTruncated: false,
-			UploadID:    uploadIDs[0],
+			Bucket:           bucketNames[0],
+			Object:           objectNames[0],
+			MaxParts:         2,
+			IsTruncated:      false,
+			UploadID:         uploadIDs[0],
+			PartNumberMarker: 3,
 			Parts: []PartInfo{
 				{
 					PartNumber: 4,
@@ -1611,11 +1612,12 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		},
 		// partinfos - 2.
 		{
-			Bucket:      bucketNames[0],
-			Object:      objectNames[0],
-			MaxParts:    2,
-			IsTruncated: false,
-			UploadID:    uploadIDs[0],
+			Bucket:           bucketNames[0],
+			Object:           objectNames[0],
+			MaxParts:         2,
+			IsTruncated:      false,
+			UploadID:         uploadIDs[0],
+			PartNumberMarker: 3,
 			Parts: []PartInfo{
 				{
 					PartNumber: 4,
