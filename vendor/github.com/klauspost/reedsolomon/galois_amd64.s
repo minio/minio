@@ -87,31 +87,31 @@ TEXT ·galMulAVX2Xor(SB), 7, $0
 	MOVQ  high+24(FP), DX   // DX: &high
 	MOVQ  $15, BX           // BX: low mask
 	MOVQ  BX, X5
-	MOVOU (SI), X6          // X6 low
+	MOVOU (SI), X6          // X6: low
 	MOVOU (DX), X7          // X7: high
 	MOVQ  in_len+56(FP), R9 // R9: len(in)
 
-	LONG $0x384de3c4; WORD $0x01f6 // VINSERTI128 YMM6, YMM6, XMM6, 1 ; low
-	LONG $0x3845e3c4; WORD $0x01ff // VINSERTI128 YMM7, YMM7, XMM7, 1 ; high
-	LONG $0x787d62c4; BYTE $0xc5   // VPBROADCASTB YMM8, XMM5         ; X8: lomask (unpacked)
+	VINSERTI128  $1, X6, Y6, Y6 // low
+	VINSERTI128  $1, X7, Y7, Y7 // high
+	VPBROADCASTB X5, Y8         // Y8: lomask (unpacked)
 
-	SHRQ  $5, R9         // len(in) /32
+	SHRQ  $5, R9         // len(in) / 32
 	MOVQ  out+72(FP), DX // DX: &out
-	MOVQ  in+48(FP), SI  // R11: &in
+	MOVQ  in+48(FP), SI  // SI: &in
 	TESTQ R9, R9
 	JZ    done_xor_avx2
 
 loopback_xor_avx2:
-	LONG $0x066ffec5             // VMOVDQU YMM0, [rsi]
-	LONG $0x226ffec5             // VMOVDQU YMM4, [rdx]
-	LONG $0xd073f5c5; BYTE $0x04 // VPSRLQ  YMM1, YMM0, 4   ; X1: high input
-	LONG $0xdb7dc1c4; BYTE $0xc0 // VPAND   YMM0, YMM0, YMM8      ; X0: low input
-	LONG $0xdb75c1c4; BYTE $0xc8 // VPAND   YMM1, YMM1, YMM8      ; X1: high input
-	LONG $0x004de2c4; BYTE $0xd0 // VPSHUFB  YMM2, YMM6, YMM0   ; X2: mul low part
-	LONG $0x0045e2c4; BYTE $0xd9 // VPSHUFB  YMM3, YMM7, YMM1   ; X2: mul high part
-	LONG $0xdbefedc5             // VPXOR   YMM3, YMM2, YMM3    ; X3: Result
-	LONG $0xe4efe5c5             // VPXOR   YMM4, YMM3, YMM4    ; X4: Result
-	LONG $0x227ffec5             // VMOVDQU [rdx], YMM4
+	VMOVDQU (SI), Y0
+	VMOVDQU (DX), Y4
+	VPSRLQ  $4, Y0, Y1 // Y1: high input
+	VPAND   Y8, Y0, Y0 // Y0: low input
+	VPAND   Y8, Y1, Y1 // Y1: high input
+	VPSHUFB Y0, Y6, Y2 // Y2: mul low part
+	VPSHUFB Y1, Y7, Y3 // Y3: mul high part
+	VPXOR   Y3, Y2, Y3 // Y3: Result
+	VPXOR   Y4, Y3, Y4 // Y4: Result
+	VMOVDQU Y4, (DX)
 
 	ADDQ $32, SI           // in+=32
 	ADDQ $32, DX           // out+=32
@@ -119,8 +119,7 @@ loopback_xor_avx2:
 	JNZ  loopback_xor_avx2
 
 done_xor_avx2:
-	// VZEROUPPER
-	BYTE $0xc5; BYTE $0xf8; BYTE $0x77
+	VZEROUPPER
 	RET
 
 // func galMulAVX2(low, high, in, out []byte)
@@ -129,29 +128,29 @@ TEXT ·galMulAVX2(SB), 7, $0
 	MOVQ  high+24(FP), DX   // DX: &high
 	MOVQ  $15, BX           // BX: low mask
 	MOVQ  BX, X5
-	MOVOU (SI), X6          // X6 low
+	MOVOU (SI), X6          // X6: low
 	MOVOU (DX), X7          // X7: high
 	MOVQ  in_len+56(FP), R9 // R9: len(in)
 
-	LONG $0x384de3c4; WORD $0x01f6 // VINSERTI128 YMM6, YMM6, XMM6, 1 ; low
-	LONG $0x3845e3c4; WORD $0x01ff // VINSERTI128 YMM7, YMM7, XMM7, 1 ; high
-	LONG $0x787d62c4; BYTE $0xc5   // VPBROADCASTB YMM8, XMM5         ; X8: lomask (unpacked)
+	VINSERTI128  $1, X6, Y6, Y6 // low
+	VINSERTI128  $1, X7, Y7, Y7 // high
+	VPBROADCASTB X5, Y8         // Y8: lomask (unpacked)
 
-	SHRQ  $5, R9         // len(in) /32
+	SHRQ  $5, R9         // len(in) / 32
 	MOVQ  out+72(FP), DX // DX: &out
-	MOVQ  in+48(FP), SI  // R11: &in
+	MOVQ  in+48(FP), SI  // SI: &in
 	TESTQ R9, R9
 	JZ    done_avx2
 
 loopback_avx2:
-	LONG $0x066ffec5             // VMOVDQU YMM0, [rsi]
-	LONG $0xd073f5c5; BYTE $0x04 // VPSRLQ  YMM1, YMM0, 4   ; X1: high input
-	LONG $0xdb7dc1c4; BYTE $0xc0 // VPAND   YMM0, YMM0, YMM8      ; X0: low input
-	LONG $0xdb75c1c4; BYTE $0xc8 // VPAND   YMM1, YMM1, YMM8      ; X1: high input
-	LONG $0x004de2c4; BYTE $0xd0 // VPSHUFB  YMM2, YMM6, YMM0   ; X2: mul low part
-	LONG $0x0045e2c4; BYTE $0xd9 // VPSHUFB  YMM3, YMM7, YMM1   ; X2: mul high part
-	LONG $0xe3efedc5             // VPXOR   YMM4, YMM2, YMM3    ; X4: Result
-	LONG $0x227ffec5             // VMOVDQU [rdx], YMM4
+	VMOVDQU (SI), Y0
+	VPSRLQ  $4, Y0, Y1 // Y1: high input
+	VPAND   Y8, Y0, Y0 // Y0: low input
+	VPAND   Y8, Y1, Y1 // Y1: high input
+	VPSHUFB Y0, Y6, Y2 // Y2: mul low part
+	VPSHUFB Y1, Y7, Y3 // Y3: mul high part
+	VPXOR   Y3, Y2, Y4 // Y4: Result
+	VMOVDQU Y4, (DX)
 
 	ADDQ $32, SI       // in+=32
 	ADDQ $32, DX       // out+=32
@@ -159,8 +158,7 @@ loopback_avx2:
 	JNZ  loopback_avx2
 
 done_avx2:
-
-	BYTE $0xc5; BYTE $0xf8; BYTE $0x77 // VZEROUPPER
+	VZEROUPPER
 	RET
 
 // func sSE2XorSlice(in, out []byte)

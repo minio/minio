@@ -14,10 +14,11 @@ type options struct {
 	minSplitSize               int
 	useAVX2, useSSSE3, useSSE2 bool
 	usePAR1Matrix              bool
+	useCauchy                  bool
 }
 
 var defaultOptions = options{
-	maxGoroutines: 50,
+	maxGoroutines: 384,
 	minSplitSize:  512,
 }
 
@@ -81,5 +82,17 @@ func withSSE2(enabled bool) Option {
 func WithPAR1Matrix() Option {
 	return func(o *options) {
 		o.usePAR1Matrix = true
+		o.useCauchy = false
+	}
+}
+
+// WithCauchyMatrix will make the encoder build a Cauchy style matrix.
+// The output of this is not compatible with the standard output.
+// A Cauchy matrix is faster to generate. This does not affect data throughput,
+// but will result in slightly faster start-up time.
+func WithCauchyMatrix() Option {
+	return func(o *options) {
+		o.useCauchy = true
+		o.usePAR1Matrix = false
 	}
 }
