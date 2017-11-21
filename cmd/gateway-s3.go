@@ -417,7 +417,7 @@ func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5HexString(), data.SHA256HexString(), toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
@@ -436,6 +436,21 @@ func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket str
 		return objInfo, s3ToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(dstBucket, dstObject)
+}
+
+// CopyObjectPart creates a part in a multipart upload by copying
+// existing object or a part of it.
+func (l *s3Objects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
+	partID int, startOffset, length int64, metadata map[string]string) (p PartInfo, err error) {
+
+	completePart, err := l.Client.CopyObjectPart(srcBucket, srcObject, destBucket, destObject,
+		uploadID, partID, startOffset, length, metadata)
+	if err != nil {
+		return p, s3ToObjectError(errors.Trace(err), srcBucket, srcObject)
+	}
+	p.PartNumber = completePart.PartNumber
+	p.ETag = completePart.ETag
+	return p, nil
 }
 
 // DeleteObject deletes a blob in bucket
@@ -537,7 +552,7 @@ func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 
 // PutObjectPart puts a part of object in bucket
 func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5(), data.SHA256())
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5HexString(), data.SHA256HexString())
 	if err != nil {
 		return pi, s3ToObjectError(errors.Trace(err), bucket, object)
 	}

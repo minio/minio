@@ -73,7 +73,7 @@ func (a gatewayUnsupported) DeleteBucketPolicies(bucket string) error {
 
 // CopyObjectPart - Not implemented.
 func (a gatewayUnsupported) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string,
-	partID int, startOffset int64, length int64) (info PartInfo, err error) {
+	partID int, startOffset int64, length int64, metadata map[string]string) (info PartInfo, err error) {
 	return info, errors.Trace(NotImplemented{})
 }
 

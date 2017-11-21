@@ -45,7 +45,7 @@ type ObjectLayer interface {
 	// Multipart operations.
 	ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
 	NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error)
-	CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error)
+	CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string) (info PartInfo, err error)
 	PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
 	ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
 	AbortMultipartUpload(bucket, object, uploadID string) error
