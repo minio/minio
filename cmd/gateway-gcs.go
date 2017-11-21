@@ -805,7 +805,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
-		w.Close()
+		w.CloseWithError(err)
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
 
