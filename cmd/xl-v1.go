@@ -24,6 +24,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/objcache"
 )
 
@@ -197,7 +198,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
 			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
-			if isErr(err, baseErrs...) {
+			if errors.IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue
 			}

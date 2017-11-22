@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -122,7 +123,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		if testCase.expectedErrType == nil && err != nil {
 			t.Errorf("Test %d, unexpected err is received: %v, expected:%v\n", i+1, err, testCase.expectedErrType)
 		}
-		if testCase.expectedErrType != nil && !isSameType(errorCause(err), testCase.expectedErrType) {
+		if testCase.expectedErrType != nil && !isSameType(errors.Cause(err), testCase.expectedErrType) {
 			t.Errorf("Test %d, unexpected err is received: %v, expected:%v\n", i+1, err, testCase.expectedErrType)
 		}
 	}
@@ -151,7 +152,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	}
 
 	err = obj.AbortMultipartUpload(bucket, object, "abc")
-	err = errorCause(err)
+	err = errors.Cause(err)
 	switch err.(type) {
 	case InvalidUploadID:
 	default:

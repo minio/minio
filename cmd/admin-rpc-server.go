@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,11 +25,12 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/errors"
 )
 
 const adminPath = "/admin"
 
-var errUnsupportedBackend = errors.New("not supported for non erasure-code backend")
+var errUnsupportedBackend = fmt.Errorf("not supported for non erasure-code backend")
 
 // adminCmd - exports RPC methods for service status, stop and
 // restart commands.
@@ -166,7 +166,7 @@ func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
 	}
 
 	if serverConfig == nil {
-		return errors.New("config not present")
+		return fmt.Errorf("config not present")
 	}
 
 	jsonBytes, err := json.Marshal(serverConfig)
@@ -238,7 +238,7 @@ func registerAdminRPCRouter(mux *router.Router) error {
 	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
-		return traceError(err)
+		return errors.Trace(err)
 	}
 	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)

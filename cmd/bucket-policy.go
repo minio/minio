@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -88,7 +89,7 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]policy.Bucke
 	buckets, err := objAPI.ListBuckets()
 	if err != nil {
 		errorIf(err, "Unable to list buckets.")
-		return nil, errorCause(err)
+		return nil, errors.Cause(err)
 	}
 
 	policies = make(map[string]policy.BucketAccessPolicy)
@@ -99,7 +100,7 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]policy.Bucke
 		if pErr != nil {
 			// net.Dial fails for rpc client or any
 			// other unexpected errors during net.Dial.
-			if !isErrIgnored(pErr, errDiskNotFound) {
+			if !errors.IsErrIgnored(pErr, errDiskNotFound) {
 				if !isErrBucketPolicyNotFound(pErr) {
 					pErrs = append(pErrs, pErr)
 				}
@@ -162,7 +163,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
-		return nil, errorCause(err)
+		return nil, errors.Cause(err)
 	}
 
 	return &buffer, nil
@@ -199,7 +200,7 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	err := objAPI.DeleteObject(minioMetaBucket, policyPath)
 	if err != nil {
 		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
-		err = errorCause(err)
+		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -226,12 +227,12 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
-		return errorCause(err)
+		return errors.Cause(err)
 	}
 
 	if _, err = objAPI.PutObject(minioMetaBucket, policyPath, hashReader, nil); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
-		return errorCause(err)
+		return errors.Cause(err)
 	}
 	return nil
 }

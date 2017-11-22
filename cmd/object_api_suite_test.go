@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Return pointer to testOneByteReadEOF{}
@@ -754,7 +755,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	for i, testCase := range testCases {
 		_, expectedErr := obj.GetObjectInfo(bucketName, testCase.dir)
 		if expectedErr != nil {
-			expectedErr = errorCause(expectedErr)
+			expectedErr = errors.Cause(expectedErr)
 			if expectedErr.Error() != testCase.err.Error() {
 				t.Errorf("Test %d, %s: Expected error %s, got %s", i+1, instanceType, testCase.err, expectedErr)
 			}

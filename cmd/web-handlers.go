@@ -19,7 +19,6 @@ package cmd
 import (
 	"archive/zip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -37,6 +36,7 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -433,7 +433,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		// Since the error message may be very long to display
 		// on the browser, we tell the user to check the
 		// server logs.
-		return toJSONError(errors.New("unexpected error(s) occurred - please check minio server logs"))
+		return toJSONError(fmt.Errorf("unexpected error(s) occurred - please check minio server logs"))
 	}
 
 	// As we have updated access/secret key, generate new auth token.
@@ -748,7 +748,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		_, ok := errorCause(err).(PolicyNotFound)
+		_, ok := errors.Cause(err).(PolicyNotFound)
 		if !ok {
 			return toJSONError(err, args.BucketName)
 		}
@@ -790,7 +790,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		_, ok := errorCause(err).(PolicyNotFound)
+		_, ok := errors.Cause(err).(PolicyNotFound)
 		if !ok {
 			return toJSONError(err, args.BucketName)
 		}
@@ -834,7 +834,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		if _, ok := errorCause(err).(PolicyNotFound); !ok {
+		if _, ok := errors.Cause(err).(PolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
 		}
 		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -878,7 +878,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if apiErr.Code == "XMinioPolicyNesting" {
 			err = PolicyNesting{}
 		} else {
-			err = errors.New(apiErr.Description)
+			err = fmt.Errorf(apiErr.Description)
 		}
 		return toJSONError(err, args.BucketName)
 	}
@@ -1004,7 +1004,7 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(err error) APIError {
-	err = errorCause(err)
+	err = errors.Cause(err)
 	if err == errAuthentication {
 		return APIError{
 			Code:           "AccessDenied",

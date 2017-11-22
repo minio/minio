@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -162,7 +163,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	for i, testCase := range testCases {
 		objInfo, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256), testCase.inputMeta)
-		actualErr = errorCause(actualErr)
+		actualErr = errors.Cause(actualErr)
 		if actualErr != nil && testCase.expectedError == nil {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -236,7 +237,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	sha256sum := ""
 	for i, testCase := range testCases {
 		objInfo, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta)
-		actualErr = errorCause(actualErr)
+		actualErr = errors.Cause(actualErr)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -286,7 +287,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	}
 
 	_, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta)
-	actualErr = errorCause(actualErr)
+	actualErr = errors.Cause(actualErr)
 	if actualErr != nil && testCase.shouldPass {
 		t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", len(testCases)+1, instanceType, actualErr.Error())
 	}

@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -378,7 +379,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, traceError(errNoSuchNotifications)
+			return nil, errors.Trace(errNoSuchNotifications)
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
 		// Returns error for other errors.
@@ -387,7 +388,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 
 	// if `notifications.xml` is empty we should return NoSuchNotifications.
 	if buffer.Len() == 0 {
-		return nil, traceError(errNoSuchNotifications)
+		return nil, errors.Trace(errNoSuchNotifications)
 	}
 
 	// Unmarshal notification bytes.
@@ -395,7 +396,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	notificationCfg := &notificationConfig{}
 	// Unmarshal notification bytes only if we read data.
 	if err = xml.Unmarshal(notificationConfigBytes, notificationCfg); err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 
 	// Return success.
@@ -429,7 +430,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket listeners are found on the bucket
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, traceError(errNoSuchNotifications)
+			return nil, errors.Trace(errNoSuchNotifications)
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
 		// Returns error for other errors.
@@ -438,14 +439,14 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// if `listener.json` is empty we should return NoSuchNotifications.
 	if buffer.Len() == 0 {
-		return nil, traceError(errNoSuchNotifications)
+		return nil, errors.Trace(errNoSuchNotifications)
 	}
 
 	var lCfg []listenerConfig
 	lConfigBytes := buffer.Bytes()
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
 		errorIf(err, "Unable to unmarshal listener config from JSON.")
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 
 	// Return success.
@@ -552,13 +553,13 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 func loadNotificationAndListenerConfig(bucketName string, objAPI ObjectLayer) (nCfg *notificationConfig, lCfg []listenerConfig, err error) {
 	// Loads notification config if any.
 	nCfg, err = loadNotificationConfig(bucketName, objAPI)
-	if err != nil && !isErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !errors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return nil, nil, err
 	}
 
 	// Loads listener config if any.
 	lCfg, err = loadListenerConfig(bucketName, objAPI)
-	if err != nil && !isErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !errors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return nil, nil, err
 	}
 	return nCfg, lCfg, nil

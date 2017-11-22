@@ -99,3 +99,12 @@ func (h hashMismatchError) Error() string {
 		"Bitrot verification mismatch - expected %v, received %v",
 		h.expected, h.computed)
 }
+
+// Collection of basic errors.
+var baseErrs = []error{
+	errDiskNotFound,
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+}
+
+var baseIgnoredErrs = baseErrs

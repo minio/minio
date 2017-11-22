@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -152,7 +152,7 @@ func (s SiaMethodNotSupported) Error() string {
 func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", "http://"+addr+call, nil)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 	req.Header.Set("User-Agent", "Sia-Agent")
 	if apiPassword != "" {
@@ -160,7 +160,7 @@ func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
@@ -225,7 +225,7 @@ func list(addr string, apiPassword string, obj *renterFiles) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
-		return errors.New("Expecting a response, but API returned status code 204 No Content")
+		return fmt.Errorf("Expecting a response, but API returned %s", resp.Status)
 	}
 
 	return json.NewDecoder(resp.Body).Decode(obj)
@@ -369,7 +369,7 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 
 func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
 	if !isValidObjectName(object) {
-		return traceError(ObjectNameInvalid{bucket, object})
+		return errors.Trace(ObjectNameInvalid{bucket, object})
 	}
 
 	dstFile := pathJoin(s.TempDir, mustGetUUID())
@@ -398,7 +398,7 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > size || startOffset+length > size {
-		return traceError(InvalidRange{startOffset, length, size})
+		return errors.Trace(InvalidRange{startOffset, length, size})
 	}
 
 	// Allocate a staging buffer.
@@ -430,14 +430,14 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 		}
 	}
 
-	return objInfo, traceError(ObjectNotFound{bucket, object})
+	return objInfo, errors.Trace(ObjectNotFound{bucket, object})
 }
 
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// Check the object's name first
 	if !isValidObjectName(object) {
-		return objInfo, traceError(ObjectNameInvalid{bucket, object})
+		return objInfo, errors.Trace(ObjectNameInvalid{bucket, object})
 	}
 
 	bufSize := int64(readSizeV1)

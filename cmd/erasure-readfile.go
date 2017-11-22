@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"io"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // ReadFile reads as much data as requested from the file under the given volume and path and writes the data to the provided writer.
@@ -25,13 +27,13 @@ import (
 // up to the given length. If parts of the file are corrupted ReadFile tries to reconstruct the data.
 func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, length int64, totalLength int64, checksums [][]byte, algorithm BitrotAlgorithm, blocksize int64) (f ErasureFileInfo, err error) {
 	if offset < 0 || length < 0 {
-		return f, traceError(errUnexpected)
+		return f, errors.Trace(errUnexpected)
 	}
 	if offset+length > totalLength {
-		return f, traceError(errUnexpected)
+		return f, errors.Trace(errUnexpected)
 	}
 	if !algorithm.Available() {
-		return f, traceError(errBitrotHashAlgoInvalid)
+		return f, errors.Trace(errBitrotHashAlgoInvalid)
 	}
 
 	f.Checksums = make([][]byte, len(s.disks))
@@ -66,7 +68,7 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, 
 		}
 		err = s.readConcurrent(volume, path, blockOffset, blocks, verifiers, errChans)
 		if err != nil {
-			return f, traceError(errXLReadQuorum)
+			return f, errors.Trace(errXLReadQuorum)
 		}
 
 		writeLength := blocksize - startOffset
@@ -150,7 +152,7 @@ func erasureReadBlocksConcurrent(disks []StorageAPI, volume, path string, offset
 // It sends the returned error through the error channel.
 func erasureReadFromFile(disk StorageAPI, volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier, errChan chan<- error) {
 	if disk == OfflineDisk {
-		errChan <- traceError(errDiskNotFound)
+		errChan <- errors.Trace(errDiskNotFound)
 		return
 	}
 	_, err := disk.ReadFile(volume, path, offset, buffer, verifier)

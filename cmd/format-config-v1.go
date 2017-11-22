@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"sync"
 
+	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -123,10 +124,10 @@ func (f *formatConfigV1) CheckFS() error {
 // if reading format.json fails with io.EOF.
 func (f *formatConfigV1) LoadFormat(lk *lock.LockedFile) error {
 	_, err := f.ReadFrom(lk)
-	if errorCause(err) == io.EOF {
+	if errors2.Cause(err) == io.EOF {
 		// No data on disk `format.json` still empty
 		// treat it as unformatted disk.
-		return traceError(errUnformattedDisk)
+		return errors2.Trace(errUnformattedDisk)
 	}
 	return err
 }
@@ -136,14 +137,14 @@ func (f *formatConfigV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	var fbytes []byte
 	fbytes, err = json.Marshal(f)
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	if err = lk.Truncate(0); err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	_, err = lk.Write(fbytes)
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	return int64(len(fbytes)), nil
 }
@@ -152,18 +153,18 @@ func (f *formatConfigV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var fbytes []byte
 	fi, err := lk.Stat()
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	fbytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	if len(fbytes) == 0 {
-		return 0, traceError(io.EOF)
+		return 0, errors2.Trace(io.EOF)
 	}
 	// Decode `format.json`.
 	if err = json.Unmarshal(fbytes, f); err != nil {
-		return 0, traceError(err)
+		return 0, errors2.Trace(err)
 	}
 	return int64(len(fbytes)), nil
 }

@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/tidwall/gjson"
@@ -166,15 +167,15 @@ func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	var metadataBytes []byte
 	metadataBytes, err = json.Marshal(m)
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 
 	if err = lk.Truncate(0); err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 
 	if _, err = lk.Write(metadataBytes); err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 
 	// Success.
@@ -222,16 +223,16 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
 	fi, err := lk.Stat()
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 
 	fsMetaBuf, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 
 	if len(fsMetaBuf) == 0 {
-		return 0, traceError(io.EOF)
+		return 0, errors.Trace(io.EOF)
 	}
 
 	// obtain version.
@@ -243,7 +244,7 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
 	if !isFSMetaValid(m.Version, m.Format) {
-		return 0, traceError(errCorruptedFormat)
+		return 0, errors.Trace(errCorruptedFormat)
 	}
 
 	// obtain metadata.
@@ -278,9 +279,9 @@ func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 		if os.IsNotExist(err) {
 			// If format.json not found then
 			// its an unformatted disk.
-			return nil, traceError(errUnformattedDisk)
+			return nil, errors.Trace(errUnformattedDisk)
 		}
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 
 	var format = &formatConfigV1{}
@@ -296,7 +297,7 @@ func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 	}
 
 	//  Always return read lock here and should be closed by the caller.
-	return rlk, traceError(err)
+	return rlk, errors.Trace(err)
 }
 
 // Creates a new format.json if unformatted.
@@ -307,7 +308,7 @@ func createFormatFS(fsPath string) error {
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return traceError(err)
+		return errors.Trace(err)
 	}
 	// Close the locked file upon return.
 	defer lk.Close()
@@ -316,7 +317,7 @@ func createFormatFS(fsPath string) error {
 	// writes the new format.json
 	var format = &formatConfigV1{}
 	err = format.LoadFormat(lk)
-	if errorCause(err) == errUnformattedDisk {
+	if errors.Cause(err) == errUnformattedDisk {
 		_, err = newFSFormat().WriteTo(lk)
 		return err
 	}
@@ -338,10 +339,10 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			// is blocked if attempted in-turn avoiding corruption on
 			// the backend disk.
 			return rlk, nil
-		case errorCause(err) == errUnformattedDisk:
+		case errors.Cause(err) == errUnformattedDisk:
 			if err = createFormatFS(fsPath); err != nil {
 				// Existing write locks detected.
-				if errorCause(err) == lock.ErrAlreadyLocked {
+				if errors.Cause(err) == lock.ErrAlreadyLocked {
 					// Lock already present, sleep and attempt again.
 					time.Sleep(100 * time.Millisecond)
 					continue

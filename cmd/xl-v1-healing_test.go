@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests healing of format XL.
@@ -289,7 +291,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	// Validate if bucket was deleted properly.
 	_, err = obj.GetBucketInfo(bucketName)
 	if err != nil {
-		err = errorCause(err)
+		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNotFound:
 		default:
@@ -531,7 +533,7 @@ func TestHealObjectXL(t *testing.T) {
 
 	// Try healing now, expect to receive errDiskNotFound.
 	_, _, err = obj.HealObject(bucket, object)
-	if errorCause(err) != errDiskNotFound {
+	if errors.Cause(err) != errDiskNotFound {
 		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
 	}
 }

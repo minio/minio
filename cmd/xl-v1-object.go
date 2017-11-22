@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
@@ -116,7 +117,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 	hashReader, err := hash.NewReader(pipeReader, length, "", "")
 	if err != nil {
-		return oi, toObjectErr(traceError(err), dstBucket, dstObject)
+		return oi, toObjectErr(errors.Trace(err), dstBucket, dstObject)
 	}
 
 	objInfo, err := xl.PutObject(dstBucket, dstObject, hashReader, metadata)
@@ -143,12 +144,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		return traceError(errUnexpected)
+		return errors.Trace(errUnexpected)
 	}
 
 	// Writer cannot be nil.
 	if writer == nil {
-		return traceError(errUnexpected)
+		return errors.Trace(errUnexpected)
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -179,13 +180,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return errors.Trace(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Get start part index and offset.
 	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return errors.Trace(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Calculate endOffset according to length
@@ -197,7 +198,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Get last part index to read given length.
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(endOffset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return errors.Trace(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Save the writer.
@@ -214,7 +215,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 			// Copy the data out.
 			if _, err = io.Copy(writer, reader); err != nil {
-				return traceError(err)
+				return errors.Trace(err)
 			}
 
 			// Success.
@@ -224,7 +225,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
-			return traceError(err)
+			return errors.Trace(err)
 		} // Cache has not been found, fill the cache.
 
 		// Cache is only set if whole object is being read.
@@ -241,7 +242,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			// Ignore error if cache is full, proceed to write the object.
 			if err != nil && err != objcache.ErrCacheFull {
 				// For any other error return here.
-				return toObjectErr(traceError(err), bucket, object)
+				return toObjectErr(errors.Trace(err), bucket, object)
 			}
 		}
 	}
@@ -390,7 +391,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 			defer wg.Done()
 			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
-				errs[index] = traceError(err)
+				errs[index] = errors.Trace(err)
 			}
 		}(index, disk)
 	}
@@ -401,7 +402,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, quorum)
-	if errorCause(err) == errXLWriteQuorum {
+	if errors.Cause(err) == errXLWriteQuorum {
 		// Undo all the partial rename operations.
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
 	}
@@ -439,7 +440,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
 		if xl.parentDirIsObject(bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+			return ObjectInfo{}, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
 		}
 		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
 	}
@@ -451,14 +452,14 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < 0 {
-		return ObjectInfo{}, toObjectErr(traceError(errInvalidArgument))
+		return ObjectInfo{}, toObjectErr(errors.Trace(errInvalidArgument))
 	}
 
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		return ObjectInfo{}, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
 	}
 
 	// No metadata is set, allocate a new one.
@@ -488,7 +489,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		} else {
 			// Return errors other than ErrCacheFull
 			if err != objcache.ErrCacheFull {
-				return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+				return ObjectInfo{}, toObjectErr(errors.Trace(err), bucket, object)
 			}
 		}
 	}
@@ -561,7 +562,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
 		if file.Size < curPartSize {
-			return ObjectInfo{}, traceError(IncompleteBody{})
+			return ObjectInfo{}, errors.Trace(IncompleteBody{})
 		}
 
 		// Update the total written size
@@ -663,14 +664,14 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
-			dErrs[index] = traceError(errDiskNotFound)
+			dErrs[index] = errors.Trace(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			err := cleanupDir(disk, bucket, object)
-			if err != nil && errorCause(err) != errVolumeNotFound {
+			if err != nil && errors.Cause(err) != errVolumeNotFound {
 				dErrs[index] = err
 			}
 		}(index, disk)
@@ -692,7 +693,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
-		return traceError(ObjectNotFound{bucket, object})
+		return errors.Trace(ObjectNotFound{bucket, object})
 	} // else proceed to delete the object.
 
 	// Delete the object on all disks.
