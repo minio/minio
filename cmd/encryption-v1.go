@@ -253,7 +253,9 @@ func DecryptRequest(client io.Writer, r *http.Request, metadata map[string]strin
 		Key: keyEncryptionKey,
 	})
 	if n != 32 || err != nil {
-		return nil, errObjectTampered
+		// Either the provided key does not match or the object was tampered.
+		// To provide strict AWS S3 compatibility we return: access denied.
+		return nil, errSSEKeyMismatch
 	}
 
 	writer, err := sio.DecryptWriter(client, sio.Config{Key: objectEncryptionKey.Bytes()})

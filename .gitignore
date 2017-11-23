@@ -9,7 +9,7 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-build
+build/
 vendor/**/*.js
 vendor/**/*.json
 release
@@ -23,3 +23,4 @@ parts/
 prime/
 snap/.snapcraft/
 stage/
+.sia_temp/

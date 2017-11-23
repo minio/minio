@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -738,7 +739,76 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 		return result, err
 	}
 
-	// It's decided not to support List Object Parts, hence returning empty result.
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	result.MaxParts = maxParts
+
+	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	resp, err := objBlob.GetBlockList(storage.BlockListTypeUncommitted, nil)
+	if err != nil {
+		return result, azureToObjectError(traceError(err), bucket, object)
+	}
+	// Build a sorted list of parts and return the requested entries.
+	partsMap := make(map[int]PartInfo)
+	for _, block := range resp.UncommittedBlocks {
+		var partNumber int
+		var parsedUploadID string
+		var md5Hex string
+		if partNumber, _, parsedUploadID, md5Hex, err = azureParseBlockID(block.Name); err != nil {
+			return result, azureToObjectError(traceError(errUnexpected), bucket, object)
+		}
+		if parsedUploadID != uploadID {
+			continue
+		}
+		part, ok := partsMap[partNumber]
+		if !ok {
+			partsMap[partNumber] = PartInfo{
+				PartNumber: partNumber,
+				Size:       block.Size,
+				ETag:       md5Hex,
+			}
+			continue
+		}
+		if part.ETag != md5Hex {
+			// If two parts of same partNumber were uploaded with different contents
+			// return error as we won't be able to decide which the latest part is.
+			return result, azureToObjectError(traceError(errUnexpected), bucket, object)
+		}
+		part.Size += block.Size
+		partsMap[partNumber] = part
+	}
+	var parts []PartInfo
+	for _, part := range partsMap {
+		parts = append(parts, part)
+	}
+	sort.SliceStable(parts, func(i int, j int) bool {
+		return parts[i].PartNumber < parts[j].PartNumber
+	})
+	partsCount := 0
+	i := 0
+	if partNumberMarker != 0 {
+		// If the marker was set, skip the entries till the marker.
+		for _, part := range parts {
+			i++
+			if part.PartNumber == partNumberMarker {
+				break
+			}
+		}
+	}
+	for partsCount < maxParts && i < len(parts) {
+		result.Parts = append(result.Parts, parts[i])
+		i++
+		partsCount++
+	}
+
+	if i < len(parts) {
+		result.IsTruncated = true
+		if partsCount != 0 {
+			result.NextPartNumberMarker = result.Parts[partsCount-1].PartNumber
+		}
+	}
+	result.PartNumberMarker = partNumberMarker
 	return result, nil
 }
 

@@ -35,8 +35,6 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
-	"golang.org/x/oauth2/google"
-	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -297,47 +295,6 @@ func isValidGCSProjectIDFormat(projectID string) bool {
 	return gcsProjectIDRegex.MatchString(projectID)
 }
 
-// checkGCSProjectID - checks if the project ID does really exist using resource manager API.
-func checkGCSProjectID(ctx context.Context, projectID string) error {
-	// Check if a project id associated to the current account does really exist
-	resourceManagerClient, err := google.DefaultClient(ctx, cloudresourcemanager.CloudPlatformReadOnlyScope)
-	if err != nil {
-		return err
-	}
-
-	baseSvc, err := cloudresourcemanager.New(resourceManagerClient)
-	if err != nil {
-		return err
-	}
-
-	projectSvc := cloudresourcemanager.NewProjectsService(baseSvc)
-
-	curPageToken := ""
-
-	// Iterate over projects list result pages and immediately return nil when
-	// the project ID is found.
-	for {
-		resp, err := projectSvc.List().PageToken(curPageToken).Context(ctx).Do()
-		if err != nil {
-			return fmt.Errorf("Error getting projects list: %s", err.Error())
-		}
-
-		for _, p := range resp.Projects {
-			if p.ProjectId == projectID {
-				return nil
-			}
-		}
-
-		if resp.NextPageToken != "" {
-			curPageToken = resp.NextPageToken
-		} else {
-			break
-		}
-	}
-
-	return errGCSProjectIDNotFound
-}
-
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
 	gatewayUnsupported
@@ -374,11 +331,6 @@ func newGCSGatewayLayer(projectID string) (GatewayLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	err = checkGCSProjectID(ctx, projectID)
-	if err != nil {
-		return nil, err
 	}
 
 	// Initialize a GCS client.
@@ -853,7 +805,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
-		w.Close()
+		w.CloseWithError(err)
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
 
