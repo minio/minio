@@ -682,10 +682,17 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 		return "", traceError(err)
 	}
 
-	blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
-	err = blob.CreateBlockBlobFromReader(bytes.NewBuffer(jsonData), nil)
+	metaBlob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
+	err = metaBlob.CreateBlockBlobFromReader(bytes.NewBuffer(jsonData), nil)
 	if err != nil {
 		return "", azureToObjectError(traceError(err), bucket, metadataObject)
+	}
+
+	// Create empty BlockBlob so that attempts to get info and block list don't 404.
+	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	err = blob.CreateBlockBlob(nil)
+	if err != nil {
+		return "", azureToObjectError(traceError(err), bucket, object)
 	}
 
 	return uploadID, nil
