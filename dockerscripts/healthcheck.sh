@@ -19,7 +19,7 @@ set -x
 
 _init () {
     scheme="http://"
-    address="127.0.0.1:9000"
+    address="$(netstat -nplt 2>/dev/null | awk ' /(.*\/minio)/ { gsub(":::","127.0.0.1:",$4); print $4}')"
     resource="/minio/index.html"
     start=$(stat -c "%Y" /proc/1)
 }
