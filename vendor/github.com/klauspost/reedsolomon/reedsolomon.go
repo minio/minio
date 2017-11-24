@@ -183,6 +183,26 @@ func buildMatrixPAR1(dataShards, totalShards int) (matrix, error) {
 	return result, nil
 }
 
+func buildMatrixCauchy(dataShards, totalShards int) (matrix, error) {
+	result, err := newMatrix(totalShards, dataShards)
+	if err != nil {
+		return nil, err
+	}
+
+	for r, row := range result {
+		// The top portion of the matrix is the identity
+		// matrix, and the bottom is a transposed Cauchy matrix.
+		if r < dataShards {
+			result[r][r] = 1
+		} else {
+			for c := range row {
+				result[r][c] = invTable[(byte(r ^ c))]
+			}
+		}
+	}
+	return result, nil
+}
+
 // New creates a new encoder and initializes it to
 // the number of data shards and parity shards that
 // you want to use. You can reuse this encoder.
@@ -208,9 +228,12 @@ func New(dataShards, parityShards int, opts ...Option) (Encoder, error) {
 	}
 
 	var err error
-	if r.o.usePAR1Matrix {
+	switch {
+	case r.o.useCauchy:
+		r.m, err = buildMatrixCauchy(dataShards, r.Shards)
+	case r.o.usePAR1Matrix:
 		r.m, err = buildMatrixPAR1(dataShards, r.Shards)
-	} else {
+	default:
 		r.m, err = buildMatrix(dataShards, r.Shards)
 	}
 	if err != nil {
