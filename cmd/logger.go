@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/mc/pkg/console"
+	"github.com/minio/minio/pkg/errors"
 )
 
 var log = NewLogger()
@@ -42,7 +42,7 @@ func (l *loggers) Validate() (err error) {
 	if l != nil {
 		fileLogger := l.GetFile()
 		if fileLogger.Enable && fileLogger.Filename == "" {
-			err = errors.New("Missing filename for enabled file logger")
+			err = fmt.Errorf("Missing filename for enabled file logger")
 		}
 	}
 
@@ -186,7 +186,7 @@ func getSource() string {
 
 func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
 	isErrIgnored := func(err error) (ok bool) {
-		err = errorCause(err)
+		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNotFound, BucketNotEmpty, BucketExists:
 			ok = true
@@ -207,8 +207,8 @@ func logIf(level logrus.Level, source string, err error, msg string, data ...int
 		"cause":  err.Error(),
 	}
 
-	if terr, ok := err.(*Error); ok {
-		fields["stack"] = strings.Join(terr.Trace(), " ")
+	if terr, ok := err.(*errors.Error); ok {
+		fields["stack"] = strings.Join(terr.Stack(), " ")
 	}
 
 	switch level {

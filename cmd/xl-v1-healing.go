@@ -21,6 +21,8 @@ import (
 	"path"
 	"sort"
 	"sync"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // healFormatXL - heals missing `format.json` on freshly or corrupted
@@ -105,7 +107,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			dErrs[index] = traceError(errDiskNotFound)
+			dErrs[index] = errors.Trace(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -114,11 +116,11 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 			defer wg.Done()
 			if _, err := disk.StatVol(bucket); err != nil {
 				if err != errVolumeNotFound {
-					dErrs[index] = traceError(err)
+					dErrs[index] = errors.Trace(err)
 					return
 				}
 				if err = disk.MakeVol(bucket); err != nil {
-					dErrs[index] = traceError(err)
+					dErrs[index] = errors.Trace(err)
 				}
 			}
 		}(index, disk)
@@ -128,7 +130,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 	wg.Wait()
 
 	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errorCause(reducedErr) == errXLWriteQuorum {
+	if errors.Cause(reducedErr) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
@@ -198,7 +200,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo, buck
 			continue
 		}
 		// Ignore any disks not found.
-		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
+		if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break
@@ -416,7 +418,7 @@ func healObject(storageDisks []StorageAPI, bucket, object string, quorum int) (i
 		// may have object parts still present in the object
 		// directory. This needs to be deleted for object to
 		// healed successfully.
-		if errs[index] != nil && !isErr(errs[index], errFileNotFound) {
+		if errs[index] != nil && !errors.IsErr(errs[index], errFileNotFound) {
 			continue
 		}
 
@@ -522,7 +524,7 @@ func healObject(storageDisks []StorageAPI, bucket, object string, quorum int) (i
 		aErr = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket,
 			retainSlash(object))
 		if aErr != nil {
-			return 0, 0, toObjectErr(traceError(aErr), bucket, object)
+			return 0, 0, toObjectErr(errors.Trace(aErr), bucket, object)
 		}
 	}
 	return numOfflineDisks, numHealedDisks, nil

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio-go"
+	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -114,8 +115,8 @@ func TestS3ToObjectError(t *testing.T) {
 
 	for i, tc := range testCases {
 		actualErr := s3ToObjectError(tc.inputErr, tc.bucket, tc.object)
-		if e, ok := actualErr.(*Error); ok && e.e != tc.expectedErr {
-			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e.e)
+		if e, ok := actualErr.(*errors2.Error); ok && e.Cause != tc.expectedErr {
+			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e.Cause)
 		}
 	}
 }

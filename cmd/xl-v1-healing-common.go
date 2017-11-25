@@ -19,6 +19,8 @@ package cmd
 import (
 	"path/filepath"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -130,7 +132,7 @@ func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata 
 			continue
 		}
 		// disk either has an older xl.json or doesn't have one.
-		switch errorCause(errs[index]) {
+		switch errors.Cause(errs[index]) {
 		case nil, errFileNotFound:
 			outDatedDisks[index] = disks[index]
 		}
@@ -210,7 +212,7 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 		// xl.json is not found, which implies the erasure
 		// coded blocks are unavailable in the corresponding disk.
 		// First half of the disks are data and the rest are parity.
-		switch realErr := errorCause(err); realErr {
+		switch realErr := errors.Cause(err); realErr {
 		case errDiskNotFound:
 			disksMissing = true
 			fallthrough
@@ -280,7 +282,7 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 					availableDisks[i] = OfflineDisk
 					break
 				}
-				return nil, nil, traceError(hErr)
+				return nil, nil, errors.Trace(hErr)
 			}
 		}
 

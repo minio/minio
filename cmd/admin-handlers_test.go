@@ -33,6 +33,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/errors"
 )
 
 var configJSON = []byte(`{
@@ -1033,7 +1034,7 @@ func buildAdminRequest(queryVal url.Values, opHdr, method string,
 	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
 	req, err := newTestRequest(method, "/?"+queryVal.Encode(), contentLength, bodySeeker)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 
 	req.Header.Set(minioAdminOpHeader, opHdr)
@@ -1041,7 +1042,7 @@ func buildAdminRequest(queryVal url.Values, opHdr, method string,
 	cred := serverConfig.GetCredential()
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 
 	return req, nil

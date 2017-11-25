@@ -19,6 +19,8 @@ package cmd
 import (
 	"hash"
 	"io"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
@@ -26,14 +28,14 @@ import (
 // be used to protect the erasure encoded file.
 func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, algorithm BitrotAlgorithm, writeQuorum int) (f ErasureFileInfo, err error) {
 	if !algorithm.Available() {
-		return f, traceError(errBitrotHashAlgoInvalid)
+		return f, errors.Trace(errBitrotHashAlgoInvalid)
 	}
 	f.Checksums = make([][]byte, len(s.disks))
 	hashers := make([]hash.Hash, len(s.disks))
 	for i := range hashers {
 		hashers[i] = algorithm.New()
 	}
-	errChans, errors := make([]chan error, len(s.disks)), make([]error, len(s.disks))
+	errChans, errs := make([]chan error, len(s.disks)), make([]error, len(s.disks))
 	for i := range errChans {
 		errChans[i] = make(chan error, 1) // create buffered channel to let finished go-routines die early
 	}
@@ -53,19 +55,19 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 				return f, err
 			}
 		} else {
-			return f, traceError(err)
+			return f, errors.Trace(err)
 		}
 
 		for i := range errChans { // span workers
 			go erasureAppendFile(s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
 		}
 		for i := range errChans { // what until all workers are finished
-			errors[i] = <-errChans[i]
+			errs[i] = <-errChans[i]
 		}
-		if err = reduceWriteQuorumErrs(errors, objectOpIgnoredErrs, writeQuorum); err != nil {
+		if err = reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, writeQuorum); err != nil {
 			return f, err
 		}
-		s.disks = evalDisks(s.disks, errors)
+		s.disks = evalDisks(s.disks, errs)
 		f.Size += int64(n)
 	}
 
@@ -83,7 +85,7 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 // the hash of the written data. It sends the write error (or nil) over the error channel.
 func erasureAppendFile(disk StorageAPI, volume, path string, hash hash.Hash, buf []byte, errChan chan<- error) {
 	if disk == OfflineDisk {
-		errChan <- traceError(errDiskNotFound)
+		errChan <- errors.Trace(errDiskNotFound)
 		return
 	}
 	err := disk.AppendFile(volume, path, buf)

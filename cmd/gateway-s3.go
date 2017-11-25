@@ -24,6 +24,7 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -105,15 +106,15 @@ func s3ToObjectError(err error, params ...string) error {
 		return nil
 	}
 
-	e, ok := err.(*Error)
+	e, ok := err.(*errors.Error)
 	if !ok {
-		// Code should be fixed if this function is called without doing traceError()
+		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
 		errorIf(err, "Expected type *Error")
 		return err
 	}
 
-	err = e.e
+	err = e.Cause
 
 	bucket := ""
 	object := ""
@@ -163,7 +164,7 @@ func s3ToObjectError(err error, params ...string) error {
 		err = PartTooSmall{}
 	}
 
-	e.e = err
+	e.Cause = err
 	return e
 }
 
@@ -230,7 +231,7 @@ func (l *s3Objects) StorageInfo() (si StorageInfo) {
 func (l *s3Objects) MakeBucketWithLocation(bucket, location string) error {
 	err := l.Client.MakeBucket(bucket, location)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket)
+		return s3ToObjectError(errors.Trace(err), bucket)
 	}
 	return err
 }
@@ -245,12 +246,12 @@ func (l *s3Objects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	// access to these buckets.
 	// Ref - http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 	if s3utils.CheckValidBucketName(bucket) != nil {
-		return bi, traceError(BucketNameInvalid{Bucket: bucket})
+		return bi, errors.Trace(BucketNameInvalid{Bucket: bucket})
 	}
 
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
-		return bi, s3ToObjectError(traceError(err), bucket)
+		return bi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	for _, bi := range buckets {
@@ -264,14 +265,14 @@ func (l *s3Objects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 		}, nil
 	}
 
-	return bi, traceError(BucketNotFound{Bucket: bucket})
+	return bi, errors.Trace(BucketNotFound{Bucket: bucket})
 }
 
 // ListBuckets lists all S3 buckets
 func (l *s3Objects) ListBuckets() ([]BucketInfo, error) {
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
-		return nil, s3ToObjectError(traceError(err))
+		return nil, s3ToObjectError(errors.Trace(err))
 	}
 
 	b := make([]BucketInfo, len(buckets))
@@ -289,7 +290,7 @@ func (l *s3Objects) ListBuckets() ([]BucketInfo, error) {
 func (l *s3Objects) DeleteBucket(bucket string) error {
 	err := l.Client.RemoveBucket(bucket)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket)
+		return s3ToObjectError(errors.Trace(err), bucket)
 	}
 	return nil
 }
@@ -298,7 +299,7 @@ func (l *s3Objects) DeleteBucket(bucket string) error {
 func (l *s3Objects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	result, err := l.Client.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return loi, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
@@ -308,7 +309,7 @@ func (l *s3Objects) ListObjects(bucket string, prefix string, marker string, del
 func (l *s3Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
 	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
-		return loi, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	return fromMinioClientListBucketV2Result(bucket, result), nil
@@ -366,23 +367,23 @@ func fromMinioClientListBucketResult(bucket string, result minio.ListBucketResul
 // length indicates the total length of the object.
 func (l *s3Objects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
 	if length < 0 && length != -1 {
-		return s3ToObjectError(traceError(errInvalidArgument), bucket, key)
+		return s3ToObjectError(errors.Trace(errInvalidArgument), bucket, key)
 	}
 
 	opts := minio.GetObjectOptions{}
 	if startOffset >= 0 && length >= 0 {
 		if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
-			return s3ToObjectError(traceError(err), bucket, key)
+			return s3ToObjectError(errors.Trace(err), bucket, key)
 		}
 	}
 	object, _, err := l.Client.GetObject(bucket, key, opts)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return s3ToObjectError(errors.Trace(err), bucket, key)
 	}
 	defer object.Close()
 
 	if _, err := io.Copy(writer, object); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return s3ToObjectError(errors.Trace(err), bucket, key)
 	}
 	return nil
 }
@@ -408,7 +409,7 @@ func fromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
 	oi, err := l.Client.StatObject(bucket, object, minio.StatObjectOptions{})
 	if err != nil {
-		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		return ObjectInfo{}, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
@@ -418,7 +419,7 @@ func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
 	if err != nil {
-		return objInfo, s3ToObjectError(traceError(err), bucket, object)
+		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
@@ -432,7 +433,7 @@ func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket str
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
 	metadata["x-amz-metadata-directive"] = "REPLACE"
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, metadata); err != nil {
-		return objInfo, s3ToObjectError(traceError(err), srcBucket, srcObject)
+		return objInfo, s3ToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(dstBucket, dstObject)
 }
@@ -441,7 +442,7 @@ func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket str
 func (l *s3Objects) DeleteObject(bucket string, object string) error {
 	err := l.Client.RemoveObject(bucket, object)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket, object)
+		return s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return nil
@@ -519,7 +520,7 @@ func (l *s3Objects) NewMultipartUpload(bucket string, object string, metadata ma
 	opts := minio.PutObjectOptions{UserMetadata: metadata}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
-		return uploadID, s3ToObjectError(traceError(err), bucket, object)
+		return uploadID, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 	return uploadID, nil
 }
@@ -538,7 +539,7 @@ func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
 	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5(), data.SHA256())
 	if err != nil {
-		return pi, s3ToObjectError(traceError(err), bucket, object)
+		return pi, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return fromMinioClientObjectPart(info), nil
@@ -582,7 +583,7 @@ func (l *s3Objects) ListObjectParts(bucket string, object string, uploadID strin
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *s3Objects) AbortMultipartUpload(bucket string, object string, uploadID string) error {
 	err := l.Client.AbortMultipartUpload(bucket, object, uploadID)
-	return s3ToObjectError(traceError(err), bucket, object)
+	return s3ToObjectError(errors.Trace(err), bucket, object)
 }
 
 // toMinioClientCompletePart converts CompletePart to minio CompletePart
@@ -606,7 +607,7 @@ func toMinioClientCompleteParts(parts []CompletePart) []minio.CompletePart {
 func (l *s3Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, e error) {
 	err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, toMinioClientCompleteParts(uploadedParts))
 	if err != nil {
-		return oi, s3ToObjectError(traceError(err), bucket, object)
+		return oi, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return l.GetObjectInfo(bucket, object)
@@ -615,7 +616,7 @@ func (l *s3Objects) CompleteMultipartUpload(bucket string, object string, upload
 // SetBucketPolicies sets policy on bucket
 func (l *s3Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	if err := l.Client.PutBucketPolicy(bucket, policyInfo); err != nil {
-		return s3ToObjectError(traceError(err), bucket, "")
+		return s3ToObjectError(errors.Trace(err), bucket, "")
 	}
 
 	return nil
@@ -625,7 +626,7 @@ func (l *s3Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAcc
 func (l *s3Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, s3ToObjectError(traceError(err), bucket, "")
+		return policy.BucketAccessPolicy{}, s3ToObjectError(errors.Trace(err), bucket, "")
 	}
 	return policyInfo, nil
 }
@@ -633,7 +634,7 @@ func (l *s3Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy,
 // DeleteBucketPolicies deletes all policies on bucket
 func (l *s3Objects) DeleteBucketPolicies(bucket string) error {
 	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
-		return s3ToObjectError(traceError(err), bucket, "")
+		return s3ToObjectError(errors.Trace(err), bucket, "")
 	}
 	return nil
 }

@@ -19,6 +19,8 @@ package cmd
 import (
 	"fmt"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 type statusType string
@@ -116,23 +118,23 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockSource, opsID stri
 	// Check whether the lock info entry for <volume, path> pair already exists.
 	_, ok := n.debugLockMap[param]
 	if !ok {
-		return traceError(LockInfoVolPathMissing{param.volume, param.path})
+		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
 	}
 
 	// Check whether lock info entry for the given `opsID` exists.
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
-		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 
 	// Check whether lockSource is same.
 	if lockInfo.lockSource != lockSource {
-		return traceError(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		return errors.Trace(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
 	}
 
 	// Status of the lock should be set to "Blocked".
 	if lockInfo.status != blockedStatus {
-		return traceError(LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		return errors.Trace(LockInfoStateNotBlocked{param.volume, param.path, opsID})
 	}
 	// Change lock status to running and update the time.
 	n.debugLockMap[param].lockInfo[opsID] = newDebugLockInfo(lockSource, runningStatus, readLock)
@@ -181,23 +183,23 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string,
 func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string, readLock bool) error {
 	_, ok := n.debugLockMap[param]
 	if !ok {
-		return traceError(LockInfoVolPathMissing{param.volume, param.path})
+		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
 	}
 
 	// Check whether lock info entry for the given `opsID` exists.
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
-		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 
 	// Check whether lockSource is same.
 	if lockInfo.lockSource != lockSource {
-		return traceError(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		return errors.Trace(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
 	}
 
 	// Status of the lock should be set to "Blocked".
 	if lockInfo.status != blockedStatus {
-		return traceError(LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		return errors.Trace(LockInfoStateNotBlocked{param.volume, param.path, opsID})
 	}
 	// Clear the status by removing the entry for the given `opsID`.
 	delete(n.debugLockMap[param].lockInfo, opsID)
@@ -214,7 +216,7 @@ func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string,
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	// delete the lock info for the given operation.
 	if _, found := n.debugLockMap[param]; !found {
-		return traceError(LockInfoVolPathMissing{param.volume, param.path})
+		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
 	}
 
 	// The following stats update is relevant only in case of a
@@ -238,14 +240,14 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error
 	// delete the lock info for the given operation.
 	infoMap, found := n.debugLockMap[param]
 	if !found {
-		return traceError(LockInfoVolPathMissing{param.volume, param.path})
+		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
 	}
 	// The operation finished holding the lock on the resource, remove
 	// the entry for the given operation with the operation ID.
 	opsIDLock, foundInfo := infoMap.lockInfo[opsID]
 	if !foundInfo {
 		// Unlock request with invalid operation ID not accepted.
-		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 	// Update global and (volume, path) lock status.
 	granted := opsIDLock.status == runningStatus

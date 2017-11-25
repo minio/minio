@@ -17,11 +17,11 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/minio/mc/pkg/console"
+	"github.com/minio/minio/pkg/errors"
 )
 
 /*
@@ -140,7 +140,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	// Count errors by error value.
 	errMap := make(map[error]int)
 	for _, err := range sErrs {
-		errMap[errorCause(err)]++
+		errMap[errors.Cause(err)]++
 	}
 
 	// Validates and converts specific config errors into WaitForConfig.
@@ -296,7 +296,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				console.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
 			}
 		case <-globalServiceDoneCh:
-			return errors.New("Initializing data volumes gracefully stopped")
+			return fmt.Errorf("Initializing data volumes gracefully stopped")
 		}
 	}
 }

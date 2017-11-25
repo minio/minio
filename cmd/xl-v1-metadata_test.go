@@ -26,6 +26,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	errors2 "github.com/minio/minio/pkg/errors"
 )
 
 // Tests for reading XL object info.
@@ -93,7 +94,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	}
 
 	_, _, err = obj.(*xlObjects).readXLMetaStat(bucketName, objectName)
-	if errorCause(err) != errVolumeNotFound {
+	if errors2.Cause(err) != errVolumeNotFound {
 		t.Fatal(err)
 	}
 }
@@ -178,7 +179,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	}
 
 	_, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
-	if errorCause(err) != errFileNotFound {
+	if errors2.Cause(err) != errFileNotFound {
 		t.Fatal(err)
 	}
 }
@@ -297,7 +298,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Test them.
 	for _, testCase := range testCases {
 		index, offset, err := xlMeta.ObjectToPartOffset(testCase.offset)
-		err = errorCause(err)
+		err = errors2.Cause(err)
 		if err != testCase.expectedErr {
 			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
 		}
@@ -355,7 +356,7 @@ func TestPickValidXLMeta(t *testing.T) {
 	for i, test := range testCases {
 		xlMeta, err := pickValidXLMeta(test.metaArr, test.modTime)
 		if test.expectedErr != nil {
-			if errorCause(err).Error() != test.expectedErr.Error() {
+			if errors2.Cause(err).Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",
 					i+1, test.expectedErr, err)
 			}
