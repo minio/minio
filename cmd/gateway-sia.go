@@ -553,7 +553,7 @@ func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, siaPath 
 
 		// Sleep between each check so that we're not hammering the Sia
 		// daemon with requests.
-		time.Sleep(time.Second)
+		time.Sleep(15 * time.Second)
 	}
 	fsRemoveFile(tempFile)
 }
