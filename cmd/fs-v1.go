@@ -699,9 +699,13 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 		}
 	}
 
-	// Delete the object.
-	if err := fsDeleteFile(pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
-		return toObjectErr(err, bucket, object)
+	// Delete the object, leave the directory behind unless explicitly deleted.
+	if err := fsRemoveFile(pathJoin(fs.fsPath, bucket, object)); err != nil {
+		switch errorCause(err) {
+		case errVolumeNotEmpty:
+		default:
+			return toObjectErr(err, bucket, object)
+		}
 	}
 
 	if bucket != minioMetaBucket {

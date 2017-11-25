@@ -38,7 +38,7 @@ func fsRemoveFile(filePath string) (err error) {
 		return errors.Trace(err)
 	}
 
-	if err = os.Remove((filePath)); err != nil {
+	if err = os.Remove(filePath); err != nil {
 		return osErrToFSFileErr(err)
 	}
 
@@ -201,6 +201,9 @@ func osErrToFSFileErr(err error) error {
 	}
 	if isSysErrPathNotFound(err) {
 		return errors.Trace(errFileNotFound)
+	}
+	if isSysErrNotEmpty(err) {
+		return traceError(errVolumeNotEmpty)
 	}
 	return err
 }
