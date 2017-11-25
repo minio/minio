@@ -469,7 +469,7 @@ func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, 
 		fsRemoveFile(srcFile)
 		return objInfo, err
 	}
-	go s.deleteTempFileWhenUploadCompletes(srcFile, siaPath)
+	defer s.deleteTempFileWhenUploadCompletes(srcFile, siaPath)
 
 	objInfo = ObjectInfo{
 		Name:    object,
