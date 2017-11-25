@@ -539,18 +539,18 @@ func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, er
 // until it reaches 100% upload progress, then deletes the local temp copy from
 // the filesystem.
 func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, siaPath string) {
-	done := false
-	for !done {
-		so, err := s.findSiaObject(siaPath)
+	var soi siaObjectInfo
+	// Wait until 100% upload instead of 1x redundancy because if we delete
+	// after 1x redundancy, the user has to pay the cost of other hosts
+	// redistributing the file.
+	for soi.UploadProgress < 100.0 {
+		var err error
+		soi, err = s.findSiaObject(siaPath)
 		if err != nil {
-			return
+			errorIf(err, "Unable to find file uploaded to Sia path %s", siaPath)
+			break
 		}
-		// Wait until 100% upload instead of 1x redundancy because if
-		// we delete after 1x redundancy, the user has to pay the cost
-		// of other hosts redistributing the file.
-		if so.UploadProgress >= 100.0 {
-			done = true
-		}
+
 		// Sleep between each check so that we're not hammering the Sia
 		// daemon with requests.
 		time.Sleep(time.Second)
