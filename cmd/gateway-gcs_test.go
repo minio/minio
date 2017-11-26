@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ import (
 	"reflect"
 	"testing"
 
-	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/errors"
+	"google.golang.org/api/googleapi"
 )
 
 func TestToGCSPageToken(t *testing.T) {
@@ -201,10 +203,192 @@ func TestGCSParseProjectID(t *testing.T) {
 	f.WriteString(contents)
 	projectID, err := gcsParseProjectID(f.Name())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	if projectID != "miniotesting" {
 		t.Errorf(`Expected projectID value to be "miniotesting"`)
+	}
+
+	if _, err = gcsParseProjectID("non-existent"); err == nil {
+		t.Errorf(`Expected to fail but succeeded reading "non-existent"`)
+	}
+
+	f.WriteString(`,}`)
+
+	if _, err := gcsParseProjectID(f.Name()); err == nil {
+		t.Errorf(`Expected to fail reading corrupted credentials file`)
+	}
+}
+
+func TestGCSPublicURL(t *testing.T) {
+	gcsURL := toGCSPublicURL("bucket", "testing")
+	if gcsURL != "https://storage.googleapis.com/bucket/testing" {
+		t.Errorf(`Expected "https://storage.googleapis.com/bucket/testing", got %s"`, gcsURL)
+	}
+}
+
+func TestGCSToObjectError(t *testing.T) {
+	testCases := []struct {
+		params      []string
+		gcsErr      error
+		expectedErr error
+	}{
+		{
+			[]string{}, nil, nil,
+		},
+		{
+			[]string{}, fmt.Errorf("Not *Error"), fmt.Errorf("Not *Error"),
+		},
+		{
+			[]string{"bucket"},
+			errors.Trace(fmt.Errorf("storage: bucket doesn't exist")),
+			BucketNotFound{
+				Bucket: "bucket",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(fmt.Errorf("storage: object doesn't exist")),
+			ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket", "object", "uploadID"},
+			errors.Trace(fmt.Errorf("storage: object doesn't exist")),
+			InvalidUploadID{
+				UploadID: "uploadID",
+			},
+		},
+		{
+			[]string{},
+			errors.Trace(fmt.Errorf("Unknown error")),
+			fmt.Errorf("Unknown error"),
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Message: "No list of errors",
+			}),
+			&googleapi.Error{
+				Message: "No list of errors",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason:  "conflict",
+					Message: "You already own this bucket. Please select another name.",
+				}},
+			}),
+			BucketAlreadyOwnedByYou{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason:  "conflict",
+					Message: "Sorry, that name is not available. Please try a different one.",
+				}},
+			}),
+			BucketAlreadyExists{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "conflict",
+				}},
+			}),
+			BucketNotEmpty{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "notFound",
+				}},
+			}),
+			BucketNotFound{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "notFound",
+				}},
+			}),
+			ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "invalid",
+				}},
+			}),
+			BucketNameInvalid{
+				Bucket: "bucket",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "forbidden",
+				}},
+			}),
+			PrefixAccessDenied{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "keyInvalid",
+				}},
+			}),
+			PrefixAccessDenied{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "required",
+				}},
+			}),
+			PrefixAccessDenied{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket", "object"},
+			errors.Trace(&googleapi.Error{
+				Errors: []googleapi.ErrorItem{{
+					Reason: "unknown",
+				}},
+			}),
+			fmt.Errorf("Unsupported error reason: unknown"),
+		},
+	}
+
+	for i, testCase := range testCases {
+		actualErr := gcsToObjectError(testCase.gcsErr, testCase.params...)
+		if actualErr != nil {
+			if actualErr.Error() != testCase.expectedErr.Error() {
+				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, actualErr)
+			}
+		}
 	}
 }

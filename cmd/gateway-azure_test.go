@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -31,6 +32,10 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers := map[string]string{
 		"accept-encoding":          "gzip",
 		"content-encoding":         "gzip",
+		"cache-control":            "age: 3600",
+		"content-disposition":      "dummy",
+		"content-length":           "10",
+		"content-type":             "application/javascript",
 		"X-Amz-Meta-Hdr":           "value",
 		"X-Amz-Meta-X_test_key":    "value",
 		"X-Amz-Meta-X__test__key":  "value",
@@ -101,8 +106,21 @@ func TestAzurePropertiesToS3Meta(t *testing.T) {
 		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+		"Cache-Control":            "max-age: 3600",
+		"Content-Disposition":      "dummy",
+		"Content-Encoding":         "gzip",
+		"Content-Length":           "10",
+		"Content-MD5":              "base64-md5",
+		"Content-Type":             "application/javascript",
 	}
-	actualMeta := azurePropertiesToS3Meta(metadata, storage.BlobProperties{})
+	actualMeta := azurePropertiesToS3Meta(metadata, storage.BlobProperties{
+		CacheControl:       "max-age: 3600",
+		ContentDisposition: "dummy",
+		ContentEncoding:    "gzip",
+		ContentLength:      10,
+		ContentMD5:         "base64-md5",
+		ContentType:        "application/javascript",
+	})
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
 		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
@@ -119,10 +137,15 @@ func TestAzureToObjectError(t *testing.T) {
 			nil, nil, "", "",
 		},
 		{
-			errors.Trace(errUnexpected), errUnexpected, "", "",
+			errors.Trace(fmt.Errorf("Non azure error")),
+			fmt.Errorf("Non azure error"), "", "",
 		},
 		{
-			errors.Trace(errUnexpected), errors.Trace(errUnexpected), "", "",
+			storage.AzureStorageServiceError{
+				Code: "ContainerAlreadyExists",
+			}, storage.AzureStorageServiceError{
+				Code: "ContainerAlreadyExists",
+			}, "bucket", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
@@ -133,6 +156,16 @@ func TestAzureToObjectError(t *testing.T) {
 			errors.Trace(storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
 			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+		},
+		{
+			errors.Trace(storage.AzureStorageServiceError{
+				Code: "RequestBodyTooLarge",
+			}), PartTooBig{}, "", "",
+		},
+		{
+			errors.Trace(storage.AzureStorageServiceError{
+				Code: "InvalidMetadata",
+			}), UnsupportedMetadata{}, "", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
@@ -154,8 +187,7 @@ func TestAzureToObjectError(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		err := azureToObjectError(testCase.actualErr, testCase.bucket, testCase.object)
-		if err != nil {
+		if err := azureToObjectError(testCase.actualErr, testCase.bucket, testCase.object); err != nil {
 			if err.Error() != testCase.expectedErr.Error() {
 				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
 			}
@@ -191,32 +223,41 @@ func TestAzureParseBlockID(t *testing.T) {
 		subPartNumber int
 		uploadID      string
 		md5           string
+		success       bool
 	}{
-		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ==", 1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e"},
-		{"MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw==", 2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273"},
+		// Invalid base64.
+		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ=", 0, 0, "", "", false},
+		// Invalid number of tokens.
+		{"MDAwMDEuQUEuZjMyOGMzNWNhZDkzODEzNwo=", 0, 0, "", "", false},
+		// Invalid encoded part ID.
+		{"MDAwMGEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQo=", 0, 0, "", "", false},
+		// Invalid sub part ID.
+		{"MDAwMDEuQUEuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQo=", 0, 0, "", "", false},
+		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ==", 1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e", true},
+		{"MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw==", 2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273", true},
 	}
-	for _, test := range testCases {
+	for i, test := range testCases {
 		partID, subPartNumber, uploadID, md5, err := azureParseBlockID(test.blockID)
-		if err != nil {
-			t.Fatal(err)
+		if err != nil && test.success {
+			t.Errorf("Test %d: Expected success but failed %s", i+1, err)
 		}
-		if partID != test.partID {
-			t.Fatalf("%d not equal to %d", partID, test.partID)
+		if err == nil && !test.success {
+			t.Errorf("Test %d: Expected to fail but succeeeded insteadl", i+1)
 		}
-		if subPartNumber != test.subPartNumber {
-			t.Fatalf("%d not equal to %d", subPartNumber, test.subPartNumber)
+		if err == nil {
+			if partID != test.partID {
+				t.Errorf("Test %d: %d not equal to %d", i+1, partID, test.partID)
+			}
+			if subPartNumber != test.subPartNumber {
+				t.Errorf("Test %d: %d not equal to %d", i+1, subPartNumber, test.subPartNumber)
+			}
+			if uploadID != test.uploadID {
+				t.Errorf("Test %d: %s not equal to %s", i+1, uploadID, test.uploadID)
+			}
+			if md5 != test.md5 {
+				t.Errorf("Test %d: %s not equal to %s", i+1, md5, test.md5)
+			}
 		}
-		if uploadID != test.uploadID {
-			t.Fatalf("%s not equal to %s", uploadID, test.uploadID)
-		}
-		if md5 != test.md5 {
-			t.Fatalf("%s not equal to %s", md5, test.md5)
-		}
-	}
-
-	_, _, _, _, err := azureParseBlockID("junk")
-	if err == nil {
-		t.Fatal("Expected azureParseBlockID() to return error")
 	}
 }
 
