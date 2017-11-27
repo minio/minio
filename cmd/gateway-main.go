@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/errors"
 	miniohttp "github.com/minio/minio/pkg/http"
 )
 
@@ -115,7 +115,7 @@ func validateGatewayArguments(serverAddr, endpointAddr string) error {
 			return err
 		}
 		if sameTarget {
-			return errors.New("endpoint points to the local gateway")
+			return fmt.Errorf("endpoint points to the local gateway")
 		}
 	}
 	return nil
@@ -144,7 +144,7 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	// Validate if we have access, secret set through environment.
 	gatewayName := gw.Name()
 	if !globalIsEnvCreds {
-		errorIf(errors.New("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
+		errorIf(fmt.Errorf("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
@@ -158,7 +158,7 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	enableLoggers()
 
 	// Init the error tracing module.
-	initError()
+	errors.Init(GOPATH, "github.com/minio/minio")
 
 	// Check and load SSL certificates.
 	var err error

@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Test InitEventNotifier with faulty disks
@@ -71,7 +73,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 	// Test initEventNotifier() with faulty disks
 	for i := 1; i <= 3; i++ {
-		if err := initEventNotifier(xl); errorCause(err) != errFaultyDisk {
+		if err := initEventNotifier(xl); errors.Cause(err) != errFaultyDisk {
 			t.Fatal("Unexpected error:", err)
 		}
 	}

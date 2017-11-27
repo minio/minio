@@ -25,6 +25,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/dsync"
+	"github.com/minio/minio/pkg/errors"
 )
 
 const (
@@ -100,7 +101,7 @@ func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error
 	for _, lockServer := range lockServers {
 		lockRPCServer := newRPCServer()
 		if err := lockRPCServer.RegisterName(lockServiceName, lockServer); err != nil {
-			return traceError(err)
+			return errors.Trace(err)
 		}
 		lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
 		lockRouter.Path(path.Join(lockServicePath, lockServer.ll.serviceEndpoint)).Handler(lockRPCServer)

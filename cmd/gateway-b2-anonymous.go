@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // mkRange converts offset, size into Range header equivalent.
@@ -44,7 +45,7 @@ func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int6
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
-		return b2ToObjectError(traceError(err), bucket, object)
+		return b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 	rng := mkRange(startOffset, length)
 	if rng != "" {
@@ -52,14 +53,14 @@ func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int6
 	}
 	resp, err := l.anonClient.Do(req)
 	if err != nil {
-		return b2ToObjectError(traceError(err), bucket, object)
+		return b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return b2ToObjectError(traceError(errors.New(resp.Status)), bucket, object)
+		return b2ToObjectError(errors.Trace(fmt.Errorf(resp.Status)), bucket, object)
 	}
 	_, err = io.Copy(writer, resp.Body)
-	return b2ToObjectError(traceError(err), bucket, object)
+	return b2ToObjectError(errors.Trace(err), bucket, object)
 }
 
 // Converts http Header into ObjectInfo. This function looks for all the
@@ -73,13 +74,13 @@ func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int6
 func headerToObjectInfo(bucket, object string, header http.Header) (objInfo ObjectInfo, err error) {
 	clen, err := strconv.ParseInt(header.Get("Content-Length"), 10, 64)
 	if err != nil {
-		return objInfo, b2ToObjectError(traceError(err), bucket, object)
+		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	// Converting upload timestamp in milliseconds to a time.Time value for ObjectInfo.ModTime.
 	timeStamp, err := strconv.ParseInt(header.Get("X-Bz-Upload-Timestamp"), 10, 64)
 	if err != nil {
-		return objInfo, b2ToObjectError(traceError(err), bucket, object)
+		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	// Populate user metadata by looking for all the X-Bz-Info-<name>
@@ -91,12 +92,12 @@ func headerToObjectInfo(bucket, object string, header http.Header) (objInfo Obje
 			var name string
 			name, err = url.QueryUnescape(strings.TrimPrefix(key, "X-Bz-Info-"))
 			if err != nil {
-				return objInfo, b2ToObjectError(traceError(err), bucket, object)
+				return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 			}
 			var val string
 			val, err = url.QueryUnescape(header.Get(key))
 			if err != nil {
-				return objInfo, b2ToObjectError(traceError(err), bucket, object)
+				return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 			}
 			userMetadata[name] = val
 		}
@@ -119,15 +120,15 @@ func (l *b2Objects) AnonGetObjectInfo(bucket string, object string) (objInfo Obj
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("HEAD", uri, nil)
 	if err != nil {
-		return objInfo, b2ToObjectError(traceError(err), bucket, object)
+		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 	resp, err := l.anonClient.Do(req)
 	if err != nil {
-		return objInfo, b2ToObjectError(traceError(err), bucket, object)
+		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, b2ToObjectError(traceError(errors.New(resp.Status)), bucket, object)
+		return objInfo, b2ToObjectError(errors.Trace(fmt.Errorf(resp.Status)), bucket, object)
 	}
 	return headerToObjectInfo(bucket, object, resp.Header)
 }

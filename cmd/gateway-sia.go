@@ -225,7 +225,7 @@ func list(addr string, apiPassword string, obj *renterFiles) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
-		return errors.New("Expecting a response, but API returned %s", resp.Status)
+		return fmt.Errorf("Expecting a response, but API returned %s", resp.Status)
 	}
 
 	return json.NewDecoder(resp.Body).Decode(obj)

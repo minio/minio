@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
+	"github.com/minio/minio/pkg/errors"
 	miniohttp "github.com/minio/minio/pkg/http"
 )
 
@@ -150,7 +151,7 @@ func serverMain(ctx *cli.Context) {
 	enableLoggers()
 
 	// Init the error tracing module.
-	initError()
+	errors.Init(GOPATH, "github.com/minio/minio")
 
 	// Check and load SSL certificates.
 	var err error

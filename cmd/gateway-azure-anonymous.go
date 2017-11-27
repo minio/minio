@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/container.go
@@ -116,22 +117,22 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
 	url, err := url.Parse(blobURL)
 	if err != nil {
-		return bucketInfo, azureToObjectError(traceError(err))
+		return bucketInfo, azureToObjectError(errors.Trace(err))
 	}
 	url.RawQuery = "restype=container"
 	resp, err := azureAnonRequest(httpHEAD, url.String(), nil)
 	if err != nil {
-		return bucketInfo, azureToObjectError(traceError(err), bucket)
+		return bucketInfo, azureToObjectError(errors.Trace(err), bucket)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
+		return bucketInfo, azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
 	if err != nil {
-		return bucketInfo, traceError(err)
+		return bucketInfo, errors.Trace(err)
 	}
 
 	bucketInfo = BucketInfo{
@@ -155,16 +156,16 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
 	resp, err := azureAnonRequest(httpGET, blobURL, h)
 	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
+		return azureToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	_, err = io.Copy(writer, resp.Body)
-	return traceError(err)
+	return errors.Trace(err)
 }
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
@@ -173,12 +174,12 @@ func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectI
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
 	resp, err := azureAnonRequest(httpHEAD, blobURL, nil)
 	if err != nil {
-		return objInfo, azureToObjectError(traceError(err), bucket, object)
+		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return objInfo, azureToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	var contentLength int64
@@ -186,13 +187,13 @@ func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectI
 	if contentLengthStr != "" {
 		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
 		if err != nil {
-			return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
+			return objInfo, azureToObjectError(errors.Trace(errUnexpected), bucket, object)
 		}
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
 	if err != nil {
-		return objInfo, traceError(err)
+		return objInfo, errors.Trace(err)
 	}
 
 	objInfo.ModTime = t
@@ -225,13 +226,13 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
 	url, err := url.Parse(blobURL)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	url.RawQuery = q.Encode()
 
 	resp, err := azureAnonRequest(httpGET, url.String(), nil)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	defer resp.Body.Close()
 
@@ -239,11 +240,11 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	err = xml.Unmarshal(data, &listResp)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 
 	result.IsTruncated = listResp.NextMarker != ""
@@ -279,13 +280,13 @@ func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, deli
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
 	url, err := url.Parse(blobURL)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	url.RawQuery = q.Encode()
 
 	resp, err := http.Get(url.String())
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	defer resp.Body.Close()
 
@@ -293,11 +294,11 @@ func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, deli
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 	err = xml.Unmarshal(data, &listResp)
 	if err != nil {
-		return result, azureToObjectError(traceError(err))
+		return result, azureToObjectError(errors.Trace(err))
 	}
 
 	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set

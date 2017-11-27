@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 func toGCSPublicURL(bucket, object string) string {
@@ -32,7 +34,7 @@ func toGCSPublicURL(bucket, object string) string {
 func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
 	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)
 	if err != nil {
-		return gcsToObjectError(traceError(err), bucket, object)
+		return gcsToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	if length > 0 && startOffset > 0 {
@@ -43,28 +45,28 @@ func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return gcsToObjectError(traceError(err), bucket, object)
+		return gcsToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	_, err = io.Copy(writer, resp.Body)
-	return gcsToObjectError(traceError(err), bucket, object)
+	return gcsToObjectError(errors.Trace(err), bucket, object)
 }
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
 	resp, err := http.Head(toGCSPublicURL(bucket, object))
 	if err != nil {
-		return objInfo, gcsToObjectError(traceError(err), bucket, object)
+		return objInfo, gcsToObjectError(errors.Trace(err), bucket, object)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return objInfo, gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	var contentLength int64
@@ -72,13 +74,13 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 	if contentLengthStr != "" {
 		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
 		if err != nil {
-			return objInfo, gcsToObjectError(traceError(errUnexpected), bucket, object)
+			return objInfo, gcsToObjectError(errors.Trace(errUnexpected), bucket, object)
 		}
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
 	if err != nil {
-		return objInfo, traceError(err)
+		return objInfo, errors.Trace(err)
 	}
 
 	objInfo.ModTime = t
@@ -99,7 +101,7 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
+		return ListObjectsInfo{}, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
@@ -110,7 +112,7 @@ func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimi
 	// Request V1 List Object to the backend
 	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsV2Info{}, s3ToObjectError(traceError(err), bucket)
+		return ListObjectsV2Info{}, s3ToObjectError(errors.Trace(err), bucket)
 	}
 	// translate V1 Result to V2Info
 	return fromMinioClientListBucketResultToV2Info(bucket, result), nil
@@ -120,18 +122,18 @@ func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimi
 func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
 	resp, err := http.Head(toGCSPublicURL(bucket, ""))
 	if err != nil {
-		return bucketInfo, gcsToObjectError(traceError(err))
+		return bucketInfo, gcsToObjectError(errors.Trace(err))
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
+		return bucketInfo, gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
 	if err != nil {
-		return bucketInfo, traceError(err)
+		return bucketInfo, errors.Trace(err)
 	}
 
 	// Last-Modified date being returned by GCS

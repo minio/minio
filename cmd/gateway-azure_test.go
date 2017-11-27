@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Test canonical metadata.
@@ -60,7 +61,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"invalid--meta": "value",
 	}
 	_, _, err = s3MetaToAzureProperties(headers)
-	if err = errorCause(err); err != nil {
+	if err = errors.Cause(err); err != nil {
 		if _, ok := err.(UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
@@ -118,23 +119,23 @@ func TestAzureToObjectError(t *testing.T) {
 			nil, nil, "", "",
 		},
 		{
-			traceError(errUnexpected), errUnexpected, "", "",
+			errors.Trace(errUnexpected), errUnexpected, "", "",
 		},
 		{
-			traceError(errUnexpected), traceError(errUnexpected), "", "",
+			errors.Trace(errUnexpected), errors.Trace(errUnexpected), "", "",
 		},
 		{
-			traceError(storage.AzureStorageServiceError{
+			errors.Trace(storage.AzureStorageServiceError{
 				Code: "ContainerAlreadyExists",
 			}), BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			traceError(storage.AzureStorageServiceError{
+			errors.Trace(storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
 			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
-			traceError(storage.AzureStorageServiceError{
+			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
 			}), ObjectNotFound{
 				Bucket: "bucket",
@@ -142,12 +143,12 @@ func TestAzureToObjectError(t *testing.T) {
 			}, "bucket", "object",
 		},
 		{
-			traceError(storage.AzureStorageServiceError{
+			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
 			}), BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			traceError(storage.AzureStorageServiceError{
+			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusBadRequest,
 			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},

@@ -16,6 +16,8 @@
 
 package cmd
 
+import "github.com/minio/minio/pkg/errors"
+
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
@@ -30,10 +32,10 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
-				if isErrIgnored(err, treeWalkIgnoredErrs...) {
+				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
-				return nil, false, traceError(err)
+				return nil, false, errors.Trace(err)
 			}
 
 			entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
@@ -89,7 +91,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if errorCause(err) == errFileNotFound {
+				if errors.Cause(err) == errFileNotFound {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)

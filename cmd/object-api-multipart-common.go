@@ -24,6 +24,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -80,14 +81,14 @@ func (u *uploadsV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	var uplBytes []byte
 	uplBytes, err = json.Marshal(u)
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	if err = lk.Truncate(0); err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	_, err = lk.Write(uplBytes)
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	return int64(len(uplBytes)), nil
 }
@@ -96,18 +97,18 @@ func (u *uploadsV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var uploadIDBytes []byte
 	fi, err := lk.Stat()
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	uploadIDBytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	if len(uploadIDBytes) == 0 {
-		return 0, traceError(io.EOF)
+		return 0, errors.Trace(io.EOF)
 	}
 	// Decode `uploads.json`.
 	if err = json.Unmarshal(uploadIDBytes, u); err != nil {
-		return 0, traceError(err)
+		return 0, errors.Trace(err)
 	}
 	return int64(len(uploadIDBytes)), nil
 }
@@ -118,12 +119,12 @@ func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV
 	// Reads entire `uploads.json`.
 	buf, err := disk.ReadAll(minioMetaMultipartBucket, uploadJSONPath)
 	if err != nil {
-		return uploadsV1{}, traceError(err)
+		return uploadsV1{}, errors.Trace(err)
 	}
 
 	// Decode `uploads.json`.
 	if err = json.Unmarshal(buf, &uploadIDs); err != nil {
-		return uploadsV1{}, traceError(err)
+		return uploadsV1{}, errors.Trace(err)
 	}
 
 	// Success.
@@ -142,20 +143,20 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 	// Serialize to prepare to write to disk.
 	uplBytes, wErr := json.Marshal(&u)
 	if wErr != nil {
-		return traceError(wErr)
+		return errors.Trace(wErr)
 	}
 
 	// Write `uploads.json` to disk. First to tmp location and then rename.
 	if wErr = disk.AppendFile(minioMetaTmpBucket, tmpPath, uplBytes); wErr != nil {
-		return traceError(wErr)
+		return errors.Trace(wErr)
 	}
 	wErr = disk.RenameFile(minioMetaTmpBucket, tmpPath, minioMetaMultipartBucket, uploadsPath)
 	if wErr != nil {
 		if dErr := disk.DeleteFile(minioMetaTmpBucket, tmpPath); dErr != nil {
 			// we return the most recent error.
-			return traceError(dErr)
+			return errors.Trace(dErr)
 		}
-		return traceError(wErr)
+		return errors.Trace(wErr)
 	}
 	return nil
 }

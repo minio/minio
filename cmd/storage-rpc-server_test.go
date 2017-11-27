@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/errors"
 )
 
 type testStorageRPCServer struct {
@@ -68,7 +69,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 }
 
 func errorIfInvalidToken(t *testing.T, err error) {
-	realErr := errorCause(err)
+	realErr := errors.Cause(err)
 	if realErr != errInvalidToken {
 		t.Errorf("Expected to fail with %s but failed with %s", errInvalidToken, realErr)
 	}

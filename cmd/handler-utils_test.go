@@ -25,6 +25,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests validate bucket LocationConstraint.
@@ -114,7 +116,7 @@ func TestValidateFormFieldSize(t *testing.T) {
 	for i, testCase := range testCases {
 		err := validateFormFieldSize(testCase.header)
 		if err != nil {
-			if errorCause(err).Error() != testCase.err.Error() {
+			if errors.Cause(err).Error() != testCase.err.Error() {
 				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.err, err)
 			}
 		}

@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"path"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
@@ -61,7 +63,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 			return true
 		}
 		// Ignore for file not found,  disk not found or faulty disk.
-		if isErrIgnored(err, xlTreeWalkIgnoredErrs...) {
+		if errors.IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 			continue
 		}
 		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)
