@@ -23,12 +23,24 @@ import (
 )
 
 const (
+	// NOTE: Values indicated here are based on manual testing and
+	// for best case scenarios under wide array of setups. If you
+	// encounter changes in future feel free to change these values.
+
+	// Attempt to retry only this many number of times before
+	// giving up on the remote disk entirely during initialization.
+	globalStorageInitRetryThreshold = 2
+
 	// Attempt to retry only this many number of times before
 	// giving up on the remote disk entirely after initialization.
 	globalStorageRetryThreshold = 1
 
 	// Interval to check health status of a node whether it has
-	// come back up online
+	// come back up online during initialization.
+	globalStorageInitHealthCheckInterval = 15 * time.Minute
+
+	// Interval to check health status of a node whether it has
+	// come back up online.
 	globalStorageHealthCheckInterval = 5 * time.Minute
 )
 
@@ -52,6 +64,7 @@ func retryToStorageErr(err error) error {
 type retryStorage struct {
 	remoteStorage    StorageAPI
 	maxRetryAttempts int
+	retryInterval    time.Duration
 	retryUnit        time.Duration
 	retryCap         time.Duration
 	offline          bool      // Mark whether node is offline
@@ -78,7 +91,7 @@ func (f *retryStorage) Close() (err error) {
 // restore the connection
 func (f *retryStorage) IsOffline() bool {
 	// Check if offline and whether enough time has lapsed since most recent check
-	if f.offline && UTCNow().Sub(f.offlineTimestamp) >= globalStorageHealthCheckInterval {
+	if f.offline && UTCNow().Sub(f.offlineTimestamp) >= f.retryInterval {
 		f.offlineTimestamp = UTCNow() // reset timestamp
 
 		if e := f.reInit(nil); e == nil {
@@ -260,15 +273,13 @@ func (f *retryStorage) reInitUponDiskNotFound(err error) bool {
 	return false
 }
 
-// Connect and attempt to load the format from a disconnected node,
-// attempts three times before giving up.
+// Connect and attempt to load the format from a disconnected node.
+// Additionally upon failure, we retry maxRetryAttempts times before
+// giving up. Essentially as a whole it would mean we are infact
+// performing 1 + maxRetryAttempts times reInit.
 func (f *retryStorage) reInit(e error) (err error) {
-
-	// Only after initialization and minimum of one interval
-	// has passed (to prevent marking a node as offline right
-	// after initialization), check whether node has gone offline
-	if f.maxRetryAttempts == globalStorageRetryThreshold &&
-		UTCNow().Sub(f.offlineTimestamp) >= globalStorageHealthCheckInterval {
+	// Check whether node has gone offline.
+	if UTCNow().Sub(f.offlineTimestamp) >= f.retryInterval {
 		if e == errDiskNotFoundFromNetError { // Make node offline due to network error
 			f.offline = true // Marking node offline
 			f.offlineTimestamp = UTCNow()
@@ -299,8 +310,7 @@ func (f *retryStorage) reInit(e error) (err error) {
 
 		// Attempt to load format to see if the disk is really
 		// a formatted disk and part of the cluster.
-		_, err = loadFormat(f.remoteStorage)
-		if err != nil {
+		if _, err = loadFormat(f.remoteStorage); err != nil {
 			// No need to return error until the retry count
 			// threshold has reached.
 			if i < f.maxRetryAttempts {
