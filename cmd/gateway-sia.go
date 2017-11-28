@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,6 +34,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/sha256-simd"
 )
 
 const (
@@ -294,14 +297,30 @@ func (s *siaObjects) StorageInfo() (si StorageInfo) {
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
-	return nil
+	srcFile := pathJoin(s.TempDir, mustGetUUID())
+	defer fsRemoveFile(srcFile)
+
+	if _, err := fsCreateFile(srcFile, bytes.NewReader([]byte("")), nil, 0); err != nil {
+		return err
+	}
+
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+	return post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password)
 }
 
 // GetBucketInfo gets bucket metadata.
 func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, err error) {
-	// Until Sia support buckets/directories, must return here that all buckets exist.
-	bi.Name = bucket
-	return bi, nil
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+
+	dstFile := pathJoin(s.TempDir, mustGetUUID())
+	defer fsRemoveFile(dstFile)
+
+	if err := get(s.Address, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(dstFile), s.password); err != nil {
+		return bi, err
+	}
+	return BucketInfo{Name: bucket}, nil
 }
 
 // ListBuckets will detect and return existing buckets on Sia.
@@ -327,7 +346,7 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	for _, bktName := range m.ToSlice() {
 		buckets = append(buckets, BucketInfo{
 			Name:    bktName,
-			Created: timeSentinel,
+			Created: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
 		})
 	}
 
@@ -336,7 +355,10 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 
 // DeleteBucket deletes a bucket on Sia.
 func (s *siaObjects) DeleteBucket(bucket string) error {
-	return nil
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+
+	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
 }
 
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
@@ -350,11 +372,16 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 
 	root := s.RootDir + "/"
 
+	sha256sum := sha256.Sum256([]byte(bucket))
 	// FIXME(harsha) - No paginated output supported for Sia backend right now, only prefix
 	// based filtering. Once list renter files API supports paginated output we can support
 	// paginated results here as well - until then Listing is an expensive operation.
 	for _, sObj := range siaObjs {
 		name := strings.TrimPrefix(sObj.SiaPath, pathJoin(root, bucket, "/"))
+		// Skip the file created specially when bucket was created.
+		if name == hex.EncodeToString(sha256sum[:]) {
+			continue
+		}
 		if strings.HasPrefix(name, prefix) {
 			loi.Objects = append(loi.Objects, ObjectInfo{
 				Bucket: bucket,
