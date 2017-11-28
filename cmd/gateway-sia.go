@@ -409,28 +409,39 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 	return err
 }
 
-// GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
-	var siaObj = pathJoin(s.RootDir, bucket, object)
-	sObjs, serr := s.listRenterFiles(bucket)
-	if serr != nil {
-		return objInfo, serr
+// findSiaObject retrieves the siaObjectInfo for the Sia object with the given
+// Sia path name.
+func (s *siaObjects) findSiaObject(siaPath string) (siaObjectInfo, error) {
+	sObjs, err := s.listRenterFiles("")
+	if err != nil {
+		return siaObjectInfo{}, err
 	}
 
 	for _, sObj := range sObjs {
-		if sObj.SiaPath == siaObj {
-			// Metadata about sia objects is just quite minimal
-			// there is nothing else sia provides other than size.
-			return ObjectInfo{
-				Bucket: bucket,
-				Name:   object,
-				Size:   int64(sObj.Filesize),
-				IsDir:  false,
-			}, nil
+		if sObj.SiaPath == siaPath {
+			return sObj, nil
 		}
 	}
 
-	return objInfo, errors.Trace(ObjectNotFound{bucket, object})
+	return siaObjectInfo{}, errors.Trace(ObjectNotFound{"", siaPath})
+}
+
+// GetObjectInfo reads object info and replies back ObjectInfo
+func (s *siaObjects) GetObjectInfo(bucket string, object string) (ObjectInfo, error) {
+	siaPath := pathJoin(s.RootDir, bucket, object)
+	so, err := s.findSiaObject(siaPath)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	// Metadata about sia objects is just quite minimal. Sia only provides
+	// file size.
+	return ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+		Size:   int64(so.Filesize),
+		IsDir:  false,
+	}, nil
 }
 
 // PutObject creates a new object with the incoming data,
@@ -448,16 +459,17 @@ func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, 
 	buf := make([]byte, int(bufSize))
 
 	srcFile := pathJoin(s.TempDir, mustGetUUID())
-	defer fsRemoveFile(srcFile)
 
 	if _, err = fsCreateFile(srcFile, data, buf, data.Size()); err != nil {
 		return objInfo, err
 	}
 
-	var siaObj = pathJoin(s.RootDir, bucket, object)
-	if err = post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password); err != nil {
+	var siaPath = pathJoin(s.RootDir, bucket, object)
+	if err = post(s.Address, "/renter/upload/"+siaPath, "source="+srcFile, s.password); err != nil {
+		fsRemoveFile(srcFile)
 		return objInfo, err
 	}
+	defer s.deleteTempFileWhenUploadCompletes(srcFile, siaPath)
 
 	objInfo = ObjectInfo{
 		Name:    object,
@@ -498,7 +510,7 @@ type renterFiles struct {
 	Files []siaObjectInfo `json:"files"`
 }
 
-// ListObjects will return a list of existing objects in the bucket provided
+// listRenterFiles will return a list of existing objects in the bucket provided
 func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, err error) {
 	// Get list of all renter files
 	var rf renterFiles
@@ -521,4 +533,27 @@ func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, er
 	}
 
 	return siaObjs, nil
+}
+
+// deleteTempFileWhenUploadCompletes checks the status of a Sia file upload
+// until it reaches 100% upload progress, then deletes the local temp copy from
+// the filesystem.
+func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, siaPath string) {
+	var soi siaObjectInfo
+	// Wait until 100% upload instead of 1x redundancy because if we delete
+	// after 1x redundancy, the user has to pay the cost of other hosts
+	// redistributing the file.
+	for soi.UploadProgress < 100.0 {
+		var err error
+		soi, err = s.findSiaObject(siaPath)
+		if err != nil {
+			errorIf(err, "Unable to find file uploaded to Sia path %s", siaPath)
+			break
+		}
+
+		// Sleep between each check so that we're not hammering the Sia
+		// daemon with requests.
+		time.Sleep(15 * time.Second)
+	}
+	fsRemoveFile(tempFile)
 }
