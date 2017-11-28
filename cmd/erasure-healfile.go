@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"hash"
 	"strings"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 // HealFile tries to reconstruct an erasure-coded file spread over all
@@ -48,7 +50,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 	f ErasureFileInfo, err error) {
 
 	if !alg.Available() {
-		return f, traceError(errBitrotHashAlgoInvalid)
+		return f, errors.Trace(errBitrotHashAlgoInvalid)
 	}
 
 	// Initialization
@@ -144,7 +146,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 		// If all disks had write errors we quit.
 		if !writeSucceeded {
 			// build error from all write errors
-			return f, traceError(joinWriteErrors(writeErrors))
+			return f, errors.Trace(joinWriteErrors(writeErrors))
 		}
 	}
 

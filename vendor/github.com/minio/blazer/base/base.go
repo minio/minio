@@ -46,47 +46,47 @@ const (
 	DefaultUserAgent = "blazer/0.1.1"
 )
 
-type b2err struct {
-	msg        string
-	method     string
+type Error struct {
+	Message    string
+	Method     string
+	StatusCode int
+	Code       string
 	retry      int
-	statusCode int
-	code       string
 }
 
-func (e b2err) Error() string {
-	if e.method == "" {
-		return fmt.Sprintf("b2 error: %s", e.msg)
+func (e Error) Error() string {
+	if e.Method == "" {
+		return fmt.Sprintf("b2 error: %s", e.Message)
 	}
-	return fmt.Sprintf("%s: %d: %s: %s", e.method, e.statusCode, e.code, e.msg)
+	return fmt.Sprintf("%s: %d: %s: %s", e.Method, e.StatusCode, e.Code, e.Message)
 }
 
 // Action checks an error and returns a recommended course of action.
 func Action(err error) ErrAction {
-	e, ok := err.(b2err)
+	e, ok := err.(Error)
 	if !ok {
 		return Punt
 	}
 	if e.retry > 0 {
 		return Retry
 	}
-	if e.statusCode >= http.StatusInternalServerError && e.statusCode < 600 {
-		if e.method == "b2_upload_file" || e.method == "b2_upload_part" {
+	if e.StatusCode >= http.StatusInternalServerError && e.StatusCode < 600 {
+		if e.Method == "b2_upload_file" || e.Method == "b2_upload_part" {
 			return AttemptNewUpload
 		}
 	}
-	switch e.statusCode {
+	switch e.StatusCode {
 	case http.StatusUnauthorized:
-		if e.method == "b2_authorize_account" {
+		if e.Method == "b2_authorize_account" {
 			return Punt
 		}
-		if e.method == "b2_upload_file" || e.method == "b2_upload_part" {
+		if e.Method == "b2_upload_file" || e.Method == "b2_upload_part" {
 			return AttemptNewUpload
 		}
 		return ReAuthenticate
 	case http.StatusBadRequest:
 		// See restic/restic#1207
-		if e.method == "b2_upload_file" && strings.HasPrefix(e.msg, "more than one upload using auth token") {
+		if e.Method == "b2_upload_file" && strings.HasPrefix(e.Message, "more than one upload using auth token") {
 			return AttemptNewUpload
 		}
 		return Punt
@@ -104,11 +104,11 @@ type ErrAction int
 
 // Code returns the error code and message.
 func Code(err error) (int, string, string) {
-	e, ok := err.(b2err)
+	e, ok := err.(Error)
 	if !ok {
 		return 0, "", ""
 	}
-	return e.statusCode, e.code, e.msg
+	return e.StatusCode, e.Code, e.Message
 }
 
 const (
@@ -149,12 +149,12 @@ func mkErr(resp *http.Response) error {
 		}
 		retryAfter = int(r)
 	}
-	return b2err{
-		msg:        msg.Msg,
+	return Error{
+		Message:    msg.Msg,
+		StatusCode: resp.StatusCode,
+		Code:       msg.Code,
+		Method:     resp.Request.Header.Get("X-Blazer-Method"),
 		retry:      retryAfter,
-		statusCode: resp.StatusCode,
-		code:       msg.Code,
-		method:     resp.Request.Header.Get("X-Blazer-Method"),
 	}
 }
 
@@ -163,7 +163,7 @@ func mkErr(resp *http.Response) error {
 // indicates Retry, the user should implement their own exponential backoff,
 // beginning with one second.
 func Backoff(err error) time.Duration {
-	e, ok := err.(b2err)
+	e, ok := err.(Error)
 	if !ok {
 		return 0
 	}
@@ -379,9 +379,9 @@ func (o *b2Options) makeRequest(ctx context.Context, method, verb, uri string, b
 	if reply.err != nil {
 		// Connection errors are retryable.
 		blog.V(2).Infof(">> %s uri: %v err: %v", method, req.URL, reply.err)
-		return b2err{
-			msg:   reply.err.Error(),
-			retry: 1,
+		return Error{
+			Message: reply.err.Error(),
+			retry:   1,
 		}
 	}
 	resp := reply.resp

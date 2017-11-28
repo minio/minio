@@ -24,10 +24,15 @@ go get -u github.com/klauspost/reedsolomon
 
 # Changes
 
+## October 1, 2017
+
+* [Cauchy Matrix](https://godoc.org/github.com/klauspost/reedsolomon#WithCauchyMatrix) is now an option. Thanks to [templexxx](https://github.com/templexxx) for the basis of this.
+* Default maximum number of [goroutines](https://godoc.org/github.com/klauspost/reedsolomon#WithMaxGoroutines) has been increased for better multi-core scaling.
+* After several requests the Reconstruct and ReconstructData now slices of zero length but sufficient capacity to be used instead of allocating new memory.
+
 ## August 26, 2017
 
-*  The[`Encoder()`](https://godoc.org/github.com/klauspost/reedsolomon#Encoder) now contains an `Update` function contributed by [chenzhongtao](https://github.com/chenzhongtao).
-
+*  The [`Encoder()`](https://godoc.org/github.com/klauspost/reedsolomon#Encoder) now contains an `Update` function contributed by [chenzhongtao](https://github.com/chenzhongtao).
 * [Frank Wessels](https://github.com/fwessels) kindly contributed ARM 64 bit assembly, which gives a huge performance boost on this platform.
 
 ## July 20, 2017
@@ -155,7 +160,7 @@ It might seem like a limitation that all data should be in memory, but an import
       splitA[i] = data[i][:25000]
       splitB[i] = data[i][25000:]
       
-      // Concencate it to itself
+      // Concatenate it to itself
 	  merged[i] = append(make([]byte, 0, len(data[i])*2), data[i]...)
 	  merged[i] = append(merged[i], data[i]...)
     }

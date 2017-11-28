@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
@@ -56,7 +58,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
-		err = errorCause(err)
+		err = errors.Cause(err)
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
@@ -93,7 +95,7 @@ func TestFSCleanupMultipartUpload(t *testing.T) {
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
-		err = errorCause(err)
+		err = errors.Cause(err)
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
@@ -122,7 +124,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	_, err = obj.NewMultipartUpload(bucketName, objectName, nil)
 	if err != nil {
-		if _, ok := errorCause(err).(BucketNotFound); !ok {
+		if _, ok := errors.Cause(err).(BucketNotFound); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
 	}
@@ -146,7 +148,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Test with disk removed.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}); err != nil {
-		if !isSameType(errorCause(err), BucketNotFound{}) {
+		if !isSameType(errors.Cause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}
@@ -184,7 +186,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum))
-	if !isSameType(errorCause(err), BucketNotFound{}) {
+	if !isSameType(errors.Cause(err), BucketNotFound{}) {
 		t.Fatal("Unexpected error ", err)
 	}
 }
@@ -220,7 +222,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); err != nil {
-		if !isSameType(errorCause(err), BucketNotFound{}) {
+		if !isSameType(errors.Cause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}
@@ -323,7 +325,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.ListMultipartUploads(bucketName, objectName, "", "", "", 1000); err != nil {
-		if !isSameType(errorCause(err), BucketNotFound{}) {
+		if !isSameType(errors.Cause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}

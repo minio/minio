@@ -20,6 +20,7 @@ import (
 	"io"
 
 	minio "github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -27,7 +28,7 @@ import (
 func (l *s3Objects) AnonPutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, e error) {
 	oi, err := l.anonClient.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
 	if err != nil {
-		return objInfo, s3ToObjectError(traceError(err), bucket, object)
+		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
@@ -37,17 +38,17 @@ func (l *s3Objects) AnonPutObject(bucket string, object string, data *hash.Reade
 func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
 	opts := minio.GetObjectOptions{}
 	if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return s3ToObjectError(errors.Trace(err), bucket, key)
 	}
 	object, _, err := l.anonClient.GetObject(bucket, key, opts)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return s3ToObjectError(errors.Trace(err), bucket, key)
 	}
 
 	defer object.Close()
 
 	if _, err := io.CopyN(writer, object, length); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return s3ToObjectError(errors.Trace(err), bucket, key)
 	}
 
 	return nil
@@ -57,7 +58,7 @@ func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, 
 func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, e error) {
 	oi, err := l.anonClient.StatObject(bucket, object, minio.StatObjectOptions{})
 	if err != nil {
-		return objInfo, s3ToObjectError(traceError(err), bucket, object)
+		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
@@ -67,7 +68,7 @@ func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo Obj
 func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return loi, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
@@ -77,7 +78,7 @@ func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string,
 func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
 	result, err := l.anonClient.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
-		return loi, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	return fromMinioClientListBucketV2Result(bucket, result), nil
@@ -86,14 +87,14 @@ func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken, delimit
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *s3Objects) AnonGetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	if exists, err := l.anonClient.BucketExists(bucket); err != nil {
-		return bi, s3ToObjectError(traceError(err), bucket)
+		return bi, s3ToObjectError(errors.Trace(err), bucket)
 	} else if !exists {
-		return bi, traceError(BucketNotFound{Bucket: bucket})
+		return bi, errors.Trace(BucketNotFound{Bucket: bucket})
 	}
 
 	buckets, err := l.anonClient.ListBuckets()
 	if err != nil {
-		return bi, s3ToObjectError(traceError(err), bucket)
+		return bi, s3ToObjectError(errors.Trace(err), bucket)
 	}
 
 	for _, bi := range buckets {
@@ -107,5 +108,5 @@ func (l *s3Objects) AnonGetBucketInfo(bucket string) (bi BucketInfo, e error) {
 		}, nil
 	}
 
-	return bi, traceError(BucketNotFound{Bucket: bucket})
+	return bi, errors.Trace(BucketNotFound{Bucket: bucket})
 }

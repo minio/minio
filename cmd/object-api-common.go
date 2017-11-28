@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/errors"
 )
 
 const (
@@ -107,7 +108,7 @@ func houseKeeping(storageDisks []StorageAPI) error {
 			// Cleanup all temp entries upon start.
 			err := cleanupDir(disk, minioMetaTmpBucket, "")
 			if err != nil {
-				if !isErrIgnored(errorCause(err), errDiskNotFound, errVolumeNotFound, errFileNotFound) {
+				if !errors.IsErrIgnored(errors.Cause(err), errDiskNotFound, errVolumeNotFound, errFileNotFound) {
 					errs[index] = err
 				}
 			}
@@ -164,21 +165,21 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 			// Attempt to create `.minio.sys`.
 			err := disk.MakeVol(minioMetaBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
+				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 					return
 				}
 			}
 			err = disk.MakeVol(minioMetaTmpBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
+				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 					return
 				}
 			}
 			err = disk.MakeVol(minioMetaMultipartBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
+				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 					return
 				}
@@ -208,7 +209,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	delFunc = func(entryPath string) error {
 		if !hasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
-			return traceError(storage.DeleteFile(volume, entryPath))
+			return errors.Trace(storage.DeleteFile(volume, entryPath))
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
@@ -217,7 +218,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		if err == errFileNotFound {
 			return nil
 		} else if err != nil { // For any other errors fail.
-			return traceError(err)
+			return errors.Trace(err)
 		} // else on success..
 
 		// Recurse and delete all other entries.

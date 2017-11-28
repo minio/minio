@@ -32,6 +32,7 @@ import (
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -40,7 +41,7 @@ import (
 func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
 	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
-		err = errorCause(err)
+		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
 			// Return error for invalid bucket name.
@@ -328,7 +329,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			deletedObjects = append(deletedObjects, object)
 			continue
 		}
-		if _, ok := errorCause(err).(ObjectNotFound); ok {
+		if _, ok := errors.Cause(err).(ObjectNotFound); ok {
 			// If the object is not found it should be
 			// accounted as deleted as per S3 spec.
 			deletedObjects = append(deletedObjects, object)

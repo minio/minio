@@ -1,19 +1,23 @@
 # Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Changes in a bucket, such as object uploads and removal, can be monitored using bucket event notification
-mechanism and can be published to the following targets:
+Events occurring on objects in a bucket can be monitored using bucket event notifications. Event types supported by Minio server are
 
-| Notification Targets|
-|:---|
-| [`AMQP`](#AMQP) |
-| [`MQTT`](#MQTT) |
-| [`Elasticsearch`](#Elasticsearch) |
-| [`Redis`](#Redis) |
-| [`NATS`](#NATS) |
-| [`PostgreSQL`](#PostgreSQL) |
-| [`MySQL`](#MySQL) |
-| [`Apache Kafka`](#apache-kafka) |
-| [`Webhooks`](#webhooks) |
+| Supported Event Types | | |
+|:---------------------------|--------------------------------------------|-------------------------|
+| `s3:ObjectCreated:Put`     | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`|
+| `s3:ObjectCreated:Post`    | `s3:ObjectRemoved:Delete`                  |
+| `s3:ObjectCreated:Copy`    | `s3:ObjectAccessed:Get`                    |
+
+Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.minio.io/docs/minio-client-complete-guide#events). Minio SDK's
+[`BucketNotification` APIs](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification) can also be used.
+
+Bucket events can be published to the following targets:
+
+| Supported Notification Targets | | |
+|:---------------------------|--------------------------------------------|-------------------------|
+| [`AMQP`](#AMQP) | [`Redis`](#Redis) | [`MySQL`](#MySQL) |
+| [`MQTT`](#MQTT) | [`NATS`](#NATS) | [`Apache Kafka`](#apache-kafka) |
+| [`Elasticsearch`](#Elasticsearch) | [`PostgreSQL`](#PostgreSQL) | [`Webhooks`](#webhooks) |
 
 ## Prerequisites
 

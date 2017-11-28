@@ -17,8 +17,9 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,7 +32,9 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/sha256-simd"
 )
 
 const (
@@ -152,7 +155,7 @@ func (s SiaMethodNotSupported) Error() string {
 func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", "http://"+addr+call, nil)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 	req.Header.Set("User-Agent", "Sia-Agent")
 	if apiPassword != "" {
@@ -160,7 +163,7 @@ func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors.Trace(err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
@@ -225,7 +228,7 @@ func list(addr string, apiPassword string, obj *renterFiles) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
-		return errors.New("Expecting a response, but API returned status code 204 No Content")
+		return fmt.Errorf("Expecting a response, but API returned %s", resp.Status)
 	}
 
 	return json.NewDecoder(resp.Body).Decode(obj)
@@ -294,14 +297,30 @@ func (s *siaObjects) StorageInfo() (si StorageInfo) {
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
-	return nil
+	srcFile := pathJoin(s.TempDir, mustGetUUID())
+	defer fsRemoveFile(srcFile)
+
+	if _, err := fsCreateFile(srcFile, bytes.NewReader([]byte("")), nil, 0); err != nil {
+		return err
+	}
+
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+	return post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password)
 }
 
 // GetBucketInfo gets bucket metadata.
 func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, err error) {
-	// Until Sia support buckets/directories, must return here that all buckets exist.
-	bi.Name = bucket
-	return bi, nil
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+
+	dstFile := pathJoin(s.TempDir, mustGetUUID())
+	defer fsRemoveFile(dstFile)
+
+	if err := get(s.Address, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(dstFile), s.password); err != nil {
+		return bi, err
+	}
+	return BucketInfo{Name: bucket}, nil
 }
 
 // ListBuckets will detect and return existing buckets on Sia.
@@ -327,7 +346,7 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	for _, bktName := range m.ToSlice() {
 		buckets = append(buckets, BucketInfo{
 			Name:    bktName,
-			Created: timeSentinel,
+			Created: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
 		})
 	}
 
@@ -336,7 +355,10 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 
 // DeleteBucket deletes a bucket on Sia.
 func (s *siaObjects) DeleteBucket(bucket string) error {
-	return nil
+	sha256sum := sha256.Sum256([]byte(bucket))
+	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+
+	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
 }
 
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
@@ -350,11 +372,16 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 
 	root := s.RootDir + "/"
 
+	sha256sum := sha256.Sum256([]byte(bucket))
 	// FIXME(harsha) - No paginated output supported for Sia backend right now, only prefix
 	// based filtering. Once list renter files API supports paginated output we can support
 	// paginated results here as well - until then Listing is an expensive operation.
 	for _, sObj := range siaObjs {
 		name := strings.TrimPrefix(sObj.SiaPath, pathJoin(root, bucket, "/"))
+		// Skip the file created specially when bucket was created.
+		if name == hex.EncodeToString(sha256sum[:]) {
+			continue
+		}
 		if strings.HasPrefix(name, prefix) {
 			loi.Objects = append(loi.Objects, ObjectInfo{
 				Bucket: bucket,
@@ -369,7 +396,7 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 
 func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
 	if !isValidObjectName(object) {
-		return traceError(ObjectNameInvalid{bucket, object})
+		return errors.Trace(ObjectNameInvalid{bucket, object})
 	}
 
 	dstFile := pathJoin(s.TempDir, mustGetUUID())
@@ -398,7 +425,7 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > size || startOffset+length > size {
-		return traceError(InvalidRange{startOffset, length, size})
+		return errors.Trace(InvalidRange{startOffset, length, size})
 	}
 
 	// Allocate a staging buffer.
@@ -409,35 +436,46 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 	return err
 }
 
-// GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
-	var siaObj = pathJoin(s.RootDir, bucket, object)
-	sObjs, serr := s.listRenterFiles(bucket)
-	if serr != nil {
-		return objInfo, serr
+// findSiaObject retrieves the siaObjectInfo for the Sia object with the given
+// Sia path name.
+func (s *siaObjects) findSiaObject(siaPath string) (siaObjectInfo, error) {
+	sObjs, err := s.listRenterFiles("")
+	if err != nil {
+		return siaObjectInfo{}, err
 	}
 
 	for _, sObj := range sObjs {
-		if sObj.SiaPath == siaObj {
-			// Metadata about sia objects is just quite minimal
-			// there is nothing else sia provides other than size.
-			return ObjectInfo{
-				Bucket: bucket,
-				Name:   object,
-				Size:   int64(sObj.Filesize),
-				IsDir:  false,
-			}, nil
+		if sObj.SiaPath == siaPath {
+			return sObj, nil
 		}
 	}
 
-	return objInfo, traceError(ObjectNotFound{bucket, object})
+	return siaObjectInfo{}, errors.Trace(ObjectNotFound{"", siaPath})
+}
+
+// GetObjectInfo reads object info and replies back ObjectInfo
+func (s *siaObjects) GetObjectInfo(bucket string, object string) (ObjectInfo, error) {
+	siaPath := pathJoin(s.RootDir, bucket, object)
+	so, err := s.findSiaObject(siaPath)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	// Metadata about sia objects is just quite minimal. Sia only provides
+	// file size.
+	return ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+		Size:   int64(so.Filesize),
+		IsDir:  false,
+	}, nil
 }
 
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// Check the object's name first
 	if !isValidObjectName(object) {
-		return objInfo, traceError(ObjectNameInvalid{bucket, object})
+		return objInfo, errors.Trace(ObjectNameInvalid{bucket, object})
 	}
 
 	bufSize := int64(readSizeV1)
@@ -448,16 +486,17 @@ func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, 
 	buf := make([]byte, int(bufSize))
 
 	srcFile := pathJoin(s.TempDir, mustGetUUID())
-	defer fsRemoveFile(srcFile)
 
 	if _, err = fsCreateFile(srcFile, data, buf, data.Size()); err != nil {
 		return objInfo, err
 	}
 
-	var siaObj = pathJoin(s.RootDir, bucket, object)
-	if err = post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password); err != nil {
+	var siaPath = pathJoin(s.RootDir, bucket, object)
+	if err = post(s.Address, "/renter/upload/"+siaPath, "source="+srcFile, s.password); err != nil {
+		fsRemoveFile(srcFile)
 		return objInfo, err
 	}
+	defer s.deleteTempFileWhenUploadCompletes(srcFile, siaPath)
 
 	objInfo = ObjectInfo{
 		Name:    object,
@@ -498,7 +537,7 @@ type renterFiles struct {
 	Files []siaObjectInfo `json:"files"`
 }
 
-// ListObjects will return a list of existing objects in the bucket provided
+// listRenterFiles will return a list of existing objects in the bucket provided
 func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, err error) {
 	// Get list of all renter files
 	var rf renterFiles
@@ -521,4 +560,27 @@ func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, er
 	}
 
 	return siaObjs, nil
+}
+
+// deleteTempFileWhenUploadCompletes checks the status of a Sia file upload
+// until it reaches 100% upload progress, then deletes the local temp copy from
+// the filesystem.
+func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, siaPath string) {
+	var soi siaObjectInfo
+	// Wait until 100% upload instead of 1x redundancy because if we delete
+	// after 1x redundancy, the user has to pay the cost of other hosts
+	// redistributing the file.
+	for soi.UploadProgress < 100.0 {
+		var err error
+		soi, err = s.findSiaObject(siaPath)
+		if err != nil {
+			errorIf(err, "Unable to find file uploaded to Sia path %s", siaPath)
+			break
+		}
+
+		// Sleep between each check so that we're not hammering the Sia
+		// daemon with requests.
+		time.Sleep(15 * time.Second)
+	}
+	fsRemoveFile(tempFile)
 }

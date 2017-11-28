@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/minio/minio/pkg/errors"
 )
 
 func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
@@ -112,7 +114,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if errorCause(err) == errFileNotFound {
+				if errors.Cause(err) == errFileNotFound {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)
@@ -238,7 +240,7 @@ func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
 		uploads, end, err = listMultipartUploadIDs(bucket, keyMarker,
 			uploadIDMarker, maxUploads, disk)
 		if err == nil ||
-			!isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			!errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			break
 		}
 	}

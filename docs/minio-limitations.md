@@ -23,7 +23,7 @@
 |Maximum number of objects per bucket| no-limit|
 |Maximum object size|	5 TiB|
 |Minimum object size| 0 B|
-|Maximum object size per PUT operation| 5 GiB|
+|Maximum object size per PUT operation| 5 TiB|
 |Maximum number of parts per upload| 	10,000|
 |Part size|5 MiB to 5 GiB. Last part can be 0 B to 5 GiB|
 |Maximum number of parts returned per list parts request| 1000|

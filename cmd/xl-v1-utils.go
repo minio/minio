@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/tidwall/gjson"
 )
 
@@ -35,9 +36,9 @@ import (
 // maximal values would occur quorum or more number of times.
 func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) {
 	errorCounts := make(map[error]int)
-	errs = errorsCause(errs)
+	errs = errors2.Causes(errs)
 	for _, err := range errs {
-		if isErrIgnored(err, ignoredErrs...) {
+		if errors2.IsErrIgnored(err, ignoredErrs...) {
 			continue
 		}
 		errorCounts[err]++
@@ -72,10 +73,10 @@ func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr e
 	}
 	if maxErr != nil && maxCount >= quorum {
 		// Errors in quorum.
-		return traceError(maxErr, errs...)
+		return errors2.Trace(maxErr, errs...)
 	}
 	// No quorum satisfied.
-	maxErr = traceError(quorumErr, errs...)
+	maxErr = errors2.Trace(quorumErr, errs...)
 	return
 }
 
@@ -174,11 +175,11 @@ func parseXLErasureInfo(xlMetaBuf []byte) (ErasureInfo, error) {
 	for i, v := range checkSumsResult {
 		algorithm := BitrotAlgorithmFromString(v.Get("algorithm").String())
 		if !algorithm.Available() {
-			return erasure, traceError(errBitrotHashAlgoInvalid)
+			return erasure, errors2.Trace(errBitrotHashAlgoInvalid)
 		}
 		hash, err := hex.DecodeString(v.Get("hash").String())
 		if err != nil {
-			return erasure, traceError(err)
+			return erasure, errors2.Trace(err)
 		}
 		checkSums[i] = ChecksumInfo{Name: v.Get("name").String(), Algorithm: algorithm, Hash: hash}
 	}
@@ -245,7 +246,7 @@ func readXLMetaParts(disk StorageAPI, bucket string, object string) ([]objectPar
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return nil, traceError(err)
+		return nil, errors2.Trace(err)
 	}
 	// obtain xlMetaV1{}.Partsusing `github.com/tidwall/gjson`.
 	xlMetaParts := parseXLParts(xlMetaBuf)
@@ -258,7 +259,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return si, nil, traceError(err)
+		return si, nil, errors2.Trace(err)
 	}
 
 	// obtain version.
@@ -270,7 +271,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// Validate if the xl.json we read is sane, return corrupted format.
 	if !isXLMetaValid(xlVersion, xlFormat) {
 		// For version mismatchs and unrecognized format, return corrupted format.
-		return si, nil, traceError(errCorruptedFormat)
+		return si, nil, errors2.Trace(errCorruptedFormat)
 	}
 
 	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
@@ -279,7 +280,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// obtain xlMetaV1{}.Stat using `github.com/tidwall/gjson`.
 	xlStat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
-		return si, nil, traceError(err)
+		return si, nil, errors2.Trace(err)
 	}
 
 	// Return structured `xl.json`.
@@ -291,12 +292,12 @@ func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1,
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return xlMetaV1{}, traceError(err)
+		return xlMetaV1{}, errors2.Trace(err)
 	}
 	// obtain xlMetaV1{} using `github.com/tidwall/gjson`.
 	xlMeta, err = xlMetaV1UnmarshalJSON(xlMetaBuf)
 	if err != nil {
-		return xlMetaV1{}, traceError(err)
+		return xlMetaV1{}, errors2.Trace(err)
 	}
 	// Return structured `xl.json`.
 	return xlMeta, nil
@@ -392,13 +393,13 @@ var (
 // returns error if totalSize is -1, partSize is 0, partIndex is 0.
 func calculatePartSizeFromIdx(totalSize int64, partSize int64, partIndex int) (currPartSize int64, err error) {
 	if totalSize < 0 {
-		return 0, traceError(errInvalidArgument)
+		return 0, errors2.Trace(errInvalidArgument)
 	}
 	if partSize == 0 {
-		return 0, traceError(errPartSizeZero)
+		return 0, errors2.Trace(errPartSizeZero)
 	}
 	if partIndex < 1 {
-		return 0, traceError(errPartSizeIndex)
+		return 0, errors2.Trace(errPartSizeIndex)
 	}
 	if totalSize > 0 {
 		// Compute the total count of parts
