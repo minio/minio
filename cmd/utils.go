@@ -93,11 +93,11 @@ func checkValidMD5(md5 string) ([]byte, error) {
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
 const (
-	// Maximum object size per PUT request is 16GiB.
+	// Maximum object size per PUT request is 5TB.
 	// This is a divergence from S3 limit on purpose to support
 	// use cases where users are going to upload large files
 	// using 'curl' and presigned URL.
-	globalMaxObjectSize = 16 * humanize.GiByte
+	globalMaxObjectSize = 5 * humanize.TiByte
 
 	// Minimum Part size for multipart upload is 5MiB
 	globalMinPartSize = 5 * humanize.MiByte
