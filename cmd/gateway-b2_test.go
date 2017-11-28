@@ -17,8 +17,12 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
+
+	b2 "github.com/minio/blazer/base"
+	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests headerToObjectInfo
@@ -99,6 +103,93 @@ func TestMkRange(t *testing.T) {
 		gotRng := mkRange(testCase.offset, testCase.size)
 		if gotRng != testCase.expectedRng {
 			t.Errorf("Test %d: expected %s, got %s", i+1, testCase.expectedRng, gotRng)
+		}
+	}
+}
+
+// Test b2 object error.
+func TestB2ObjectError(t *testing.T) {
+	testCases := []struct {
+		params      []string
+		b2Err       error
+		expectedErr error
+	}{
+		{
+			[]string{}, nil, nil,
+		},
+		{
+			[]string{}, fmt.Errorf("Not *Error"), fmt.Errorf("Not *Error"),
+		},
+		{
+			[]string{}, errors.Trace(fmt.Errorf("Non B2 Error")), fmt.Errorf("Non B2 Error"),
+		},
+		{
+			[]string{"bucket"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "duplicate_bucket_name",
+			}), BucketAlreadyOwnedByYou{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "bad_request",
+			}), BucketNotFound{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "bad_request",
+			}), ObjectNameInvalid{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "bad_bucket_id",
+			}), BucketNotFound{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "file_not_present",
+			}), ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket", "object"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "not_found",
+			}), ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			},
+		},
+		{
+			[]string{"bucket"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Code:       "cannot_delete_non_empty_bucket",
+			}), BucketNotEmpty{Bucket: "bucket"},
+		},
+		{
+			[]string{"bucket", "object", "uploadID"}, errors.Trace(b2.Error{
+				StatusCode: 1,
+				Message:    "No active upload for",
+			}), InvalidUploadID{
+				UploadID: "uploadID",
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		actualErr := b2ToObjectError(testCase.b2Err, testCase.params...)
+		if actualErr != nil {
+			if actualErr.Error() != testCase.expectedErr.Error() {
+				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, actualErr)
+			}
 		}
 	}
 }

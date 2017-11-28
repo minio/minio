@@ -296,10 +296,10 @@
 			"revisionTime": "2016-11-23T14:36:37Z"
 		},
 		{
-			"checksumSHA1": "1EiU/fWJI6ldCTGorUvijilegRM=",
+			"checksumSHA1": "uTShVxdYNwW+3WI6SfJwOc/LQgo=",
 			"path": "github.com/minio/blazer/base",
-			"revision": "8e81ddf2d8deed54c6ac3f7d264d78659e72fbb8",
-			"revisionTime": "2017-10-06T21:06:28Z"
+			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
+			"revisionTime": "2017-11-26T20:28:54Z"
 		},
 		{
 			"checksumSHA1": "ucCxupZ1gyxvFsBg5igP13dySLI=",
