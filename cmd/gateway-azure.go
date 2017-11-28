@@ -746,6 +746,11 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 
 	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	resp, err := objBlob.GetBlockList(storage.BlockListTypeUncommitted, nil)
+	azureErr, ok := err.(storage.AzureStorageServiceError)
+	if ok && azureErr.StatusCode == http.StatusNotFound {
+		// If no parts are uploaded yet then we return empty list.
+		return result, nil
+	}
 	if err != nil {
 		return result, azureToObjectError(errors.Trace(err), bucket, object)
 	}
