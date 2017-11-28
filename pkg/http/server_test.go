@@ -97,3 +97,80 @@ func TestNewServer(t *testing.T) {
 		}
 	}
 }
+
+var tlsCipherSuitesTests = []struct {
+	ciphers    []uint16
+	shouldFail bool
+}{
+	{ciphers: nil, shouldFail: false},
+	{ciphers: defaultCipherSuites, shouldFail: false},
+	{ciphers: unsupportedCipherSuites, shouldFail: true},
+}
+
+// Tests the server accepts only TLS connections when at least
+// one of the supported (secure) cipher suites is supported by the client.
+func TestTLSCiphers(t *testing.T) {
+	certificate, err := getTLSCert()
+	if err != nil {
+		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
+	}
+	port := getNextPort()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write(nil)
+	})
+	server := NewServer([]string{"127.0.0.1:" + port}, handler, &certificate)
+	go func() { server.Start() }()
+	defer server.Shutdown()
+
+	for !server.IsStarted() { // block until server is available
+	}
+	for i, testCase := range tlsCipherSuitesTests {
+		client := http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+					CipherSuites:       testCase.ciphers,
+				},
+			},
+		}
+		_, err := client.Get("https://127.0.0.1:" + port)
+		if err != nil && !testCase.shouldFail {
+			t.Errorf("Test %d: Failed to execute GET request: %s", i, err)
+		}
+		if err == nil && testCase.shouldFail {
+			t.Errorf("Test %d: Successfully connected to server but expected connection failure", i)
+		}
+	}
+}
+
+// Tests whether a client can successfully establish a TLS connection to
+// a server with the Go standard library default cipher suites.
+func TestStandardTLSCiphers(t *testing.T) {
+	certificate, err := getTLSCert()
+	if err != nil {
+		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
+	}
+	port := getNextPort()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Hello, world")
+	})
+	server := NewServer([]string{"127.0.0.1:" + port}, handler, &certificate)
+	server.TLSConfig.CipherSuites = nil // use Go standard ciphers
+	go func() { server.Start() }()
+	defer server.Shutdown()
+
+	for !server.IsStarted() { // block until server is available
+	}
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	_, err = client.Get("https://127.0.0.1:" + port + "/")
+	if err != nil {
+		t.Fatalf("Failed to execute GET request: %s", err)
+	}
+}

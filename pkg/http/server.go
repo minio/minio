@@ -25,6 +25,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 const (
@@ -64,16 +65,19 @@ type Server struct {
 // Start - start HTTP server
 func (srv *Server) Start() (err error) {
 	// Take a copy of server fields.
-	tlsConfig := srv.TLSConfig
+	var tlsConfig *tls.Config
+	if srv.TLSConfig != nil {
+		tlsConfig = srv.TLSConfig.Clone()
+	}
 	readTimeout := srv.ReadTimeout
 	writeTimeout := srv.WriteTimeout
-	handler := srv.Handler
+	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
-	addrs := srv.Addrs
+	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
 	tcpKeepAliveTimeout := srv.TCPKeepAliveTimeout
 	updateBytesReadFunc := srv.UpdateBytesReadFunc
 	updateBytesWrittenFunc := srv.UpdateBytesWrittenFunc
-	errorLogFunc := srv.ErrorLogFunc
+	errorLogFunc := srv.ErrorLogFunc // if srv.ErrorLogFunc holds non-synced state -> possible data race
 
 	// Create new HTTP listener.
 	var listener *httpListener
@@ -149,12 +153,59 @@ func (srv *Server) Shutdown() error {
 	}
 }
 
+// IsStarted returns true if the server has started and can handle connections.
+func (srv *Server) IsStarted() bool {
+	return srv.listener != nil && srv.listener.acceptCh != nil
+}
+
+// Secure Go implementations of modern TLS ciphers
+// The following ciphers are excluded because:
+//  - RC4 ciphers:              RC4 is broken
+//  - 3DES ciphers:             Because of the 64 bit blocksize of DES (Sweet32)
+//  - CBC-SHA256 ciphers:       No countermeasures against Lucky13 timing attack
+//  - CBC-SHA ciphers:          Legacy ciphers (SHA-1) and non-constant time
+//                              implementation of CBC.
+//                              (CBC-SHA ciphers can be enabled again if required)
+//  - RSA key exchange ciphers: Disabled because of dangerous PKCS1-v1.5 RSA
+//                              padding scheme. See Bleichenbacher attacks.
+var defaultCipherSuites = []uint16{
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+}
+
+var unsupportedCipherSuites = []uint16{
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,        // Broken cipher
+	tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,     // Sweet32
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,   // No countermeasures against timing attacks
+	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,          // Broken cipher
+
+	// all RSA-PKCS1-v1.5 ciphers are disabled - danger of Bleichenbacher attack variants
+	tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,   // Sweet32
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
+	tls.TLS_RSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+	tls.TLS_RSA_WITH_RC4_128_SHA,        // Broken cipher
+
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
+}
+
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate) *Server {
 	var tlsConfig *tls.Config
 	if certificate != nil {
 		tlsConfig = &tls.Config{
 			PreferServerCipherSuites: true,
+			CipherSuites:             defaultCipherSuites,
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 		}
