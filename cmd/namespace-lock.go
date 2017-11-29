@@ -53,7 +53,7 @@ type RWLockerSync interface {
 // Initialize distributed locking only in case of distributed setup.
 // Returns lock clients and the node index for the current server.
 func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int) {
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 	clnts = make([]dsync.NetLocker, len(endpoints))
 	myNode = -1
 	for index, endpoint := range endpoints {

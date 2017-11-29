@@ -38,7 +38,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	serverCred := serverConfig.GetCredential()
+	serverCred := globalServerConfig.GetCredential()
 	token, err := authenticateNode(serverCred.AccessKey, serverCred.SecretKey)
 	if err != nil {
 		t.Fatalf("unable for JWT to generate token, %s", err)

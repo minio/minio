@@ -227,7 +227,7 @@ func dialMySQL(msql mySQLNotify) (mc mySQLConn, e error) {
 }
 
 func newMySQLNotify(accountID string) (*logrus.Logger, error) {
-	mysqlNotify := serverConfig.Notify.GetMySQLByID(accountID)
+	mysqlNotify := globalServerConfig.Notify.GetMySQLByID(accountID)
 
 	// Dial mysql
 	myC, err := dialMySQL(mysqlNotify)

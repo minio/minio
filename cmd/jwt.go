@@ -53,7 +53,7 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 		return "", err
 	}
 
-	serverCred := serverConfig.GetCredential()
+	serverCred := globalServerConfig.GetCredential()
 
 	if serverCred.AccessKey != passedCredential.AccessKey {
 		return "", errInvalidAccessKeyID
@@ -90,7 +90,7 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 		return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
 	}
 
-	return []byte(serverConfig.GetCredential().SecretKey), nil
+	return []byte(globalServerConfig.GetCredential().SecretKey), nil
 }
 
 func isAuthTokenValid(tokenString string) bool {
@@ -107,7 +107,7 @@ func isAuthTokenValid(tokenString string) bool {
 		errorIf(err, "Invalid claims in JWT token string")
 		return false
 	}
-	return jwtToken.Valid && claims.Subject == serverConfig.GetCredential().AccessKey
+	return jwtToken.Valid && claims.Subject == globalServerConfig.GetCredential().AccessKey
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
@@ -129,7 +129,7 @@ func webRequestAuthenticate(req *http.Request) error {
 	if err = claims.Valid(); err != nil {
 		return err
 	}
-	if claims.Subject != serverConfig.GetCredential().AccessKey {
+	if claims.Subject != globalServerConfig.GetCredential().AccessKey {
 		return errInvalidAccessKeyID
 	}
 	if !jwtToken.Valid {

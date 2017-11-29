@@ -307,7 +307,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	if cmd == restartCmd {
 		go testServiceSignalReceiver(cmd, t)
 	}
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 	var body []byte
 
 	req, err := getServiceCmdRequest(cmd, credentials, body)
@@ -362,7 +362,7 @@ func TestServiceSetCreds(t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 	var body []byte
 
 	testCases := []struct {
@@ -411,7 +411,7 @@ func TestServiceSetCreds(t *testing.T) {
 
 		// If we got 200 OK, check if new credentials are really set
 		if rec.Code == http.StatusOK {
-			cred := serverConfig.GetCredential()
+			cred := globalServerConfig.GetCredential()
 			if cred.AccessKey != testCase.Username {
 				t.Errorf("Test %d: Wrong access key, expected = %s, found = %s", i+1, testCase.Username, cred.AccessKey)
 			}
@@ -488,7 +488,7 @@ func TestListLocksHandler(t *testing.T) {
 		}
 		req.Header.Set(minioAdminOpHeader, "list")
 
-		cred := serverConfig.GetCredential()
+		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to sign list locks request - %v", i+1, err)
@@ -556,7 +556,7 @@ func TestClearLocksHandler(t *testing.T) {
 		}
 		req.Header.Set(minioAdminOpHeader, "clear")
 
-		cred := serverConfig.GetCredential()
+		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to sign clear locks request - %v", i+1, err)
@@ -841,7 +841,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 		}
 		req.Header.Set(minioAdminOpHeader, "list-objects")
 
-		cred := serverConfig.GetCredential()
+		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to sign list objects needing heal request - %v", i+1, err)
@@ -912,7 +912,7 @@ func TestHealBucketHandler(t *testing.T) {
 
 		req.Header.Set(minioAdminOpHeader, "bucket")
 
-		cred := serverConfig.GetCredential()
+		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to sign heal bucket request - %v",
@@ -1015,7 +1015,7 @@ func TestHealObjectHandler(t *testing.T) {
 
 		req.Header.Set(minioAdminOpHeader, "object")
 
-		cred := serverConfig.GetCredential()
+		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to sign heal object request - %v", i+1, err)
@@ -1039,7 +1039,7 @@ func buildAdminRequest(queryVal url.Values, opHdr, method string,
 
 	req.Header.Set(minioAdminOpHeader, opHdr)
 
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 	if err != nil {
 		return nil, errors.Trace(err)

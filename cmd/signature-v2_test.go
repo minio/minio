@@ -49,8 +49,8 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	now := UTCNow()
 
 	var (
-		accessKey = serverConfig.GetCredential().AccessKey
-		secretKey = serverConfig.GetCredential().SecretKey
+		accessKey = globalServerConfig.GetCredential().AccessKey
+		secretKey = globalServerConfig.GetCredential().SecretKey
 	)
 	testCases := []struct {
 		queryParams map[string]string
@@ -163,7 +163,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	accessID := serverConfig.GetCredential().AccessKey
+	accessID := globalServerConfig.GetCredential().AccessKey
 	testCases := []struct {
 		authString    string
 		expectedError APIErrorCode
@@ -233,7 +233,7 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		t.Fatal("Unable to initialize test config.")
 	}
 	defer os.RemoveAll(root)
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	policy := "policy"
 	testCases := []struct {
 		accessKey string

@@ -374,7 +374,7 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 		}
 	}
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err

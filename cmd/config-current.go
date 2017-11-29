@@ -36,18 +36,18 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const configCurrentVersion = "20"
+const serverConfigVersion = "20"
 
-type serverConfigCurrent = serverConfigV20
+type serverConfig = serverConfigV20
 
 var (
-	// serverConfig server config.
-	serverConfig   *serverConfigCurrent
-	serverConfigMu sync.RWMutex
+	// globalServerConfig server config.
+	globalServerConfig   *serverConfig
+	globalServerConfigMu sync.RWMutex
 )
 
 // GetVersion get current config version.
-func (s *serverConfigCurrent) GetVersion() string {
+func (s *serverConfig) GetVersion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -55,7 +55,7 @@ func (s *serverConfigCurrent) GetVersion() string {
 }
 
 // SetRegion set a new region.
-func (s *serverConfigCurrent) SetRegion(region string) {
+func (s *serverConfig) SetRegion(region string) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -64,7 +64,7 @@ func (s *serverConfigCurrent) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s *serverConfigCurrent) GetRegion() string {
+func (s *serverConfig) GetRegion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -72,7 +72,7 @@ func (s *serverConfigCurrent) GetRegion() string {
 }
 
 // SetCredentials set new credentials. SetCredential returns the previous credential.
-func (s *serverConfigCurrent) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
+func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -87,7 +87,7 @@ func (s *serverConfigCurrent) SetCredential(creds auth.Credentials) (prevCred au
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigCurrent) GetCredential() auth.Credentials {
+func (s *serverConfig) GetCredential() auth.Credentials {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -95,7 +95,7 @@ func (s *serverConfigCurrent) GetCredential() auth.Credentials {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigCurrent) SetBrowser(b bool) {
+func (s *serverConfig) SetBrowser(b bool) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -104,7 +104,7 @@ func (s *serverConfigCurrent) SetBrowser(b bool) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigCurrent) GetBrowser() bool {
+func (s *serverConfig) GetBrowser() bool {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -112,7 +112,7 @@ func (s *serverConfigCurrent) GetBrowser() bool {
 }
 
 // Save config.
-func (s *serverConfigCurrent) Save() error {
+func (s *serverConfig) Save() error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -120,9 +120,9 @@ func (s *serverConfigCurrent) Save() error {
 	return quick.Save(getConfigFile(), s)
 }
 
-func newServerConfig() *serverConfigCurrent {
-	srvCfg := &serverConfigCurrent{
-		Version:    configCurrentVersion,
+func newServerConfig() *serverConfig {
+	srvCfg := &serverConfig{
+		Version:    serverConfigVersion,
 		Credential: auth.MustGetNewCredentials(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
@@ -182,12 +182,12 @@ func newConfig() error {
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
 	// unlock the mutex.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
-	serverConfigMu.Unlock()
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return serverConfig.Save()
+	return globalServerConfig.Save()
 }
 
 // doCheckDupJSONKeys recursively detects duplicate json keys
@@ -242,8 +242,8 @@ func checkDupJSONKeys(json string) error {
 }
 
 // getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfigCurrent, error) {
-	srvCfg := &serverConfigCurrent{
+func getValidConfig() (*serverConfig, error) {
+	srvCfg := &serverConfig{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -253,8 +253,8 @@ func getValidConfig() (*serverConfigCurrent, error) {
 		return nil, err
 	}
 
-	if srvCfg.Version != configCurrentVersion {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", configCurrentVersion, srvCfg.Version)
+	if srvCfg.Version != serverConfigVersion {
+		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys
@@ -313,21 +313,21 @@ func loadConfig() error {
 	}
 
 	// hold the mutex lock before a new config is assigned.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
 	if !globalIsEnvCreds {
-		globalActiveCred = serverConfig.GetCredential()
+		globalActiveCred = globalServerConfig.GetCredential()
 	}
 	if !globalIsEnvBrowser {
-		globalIsBrowserEnabled = serverConfig.GetBrowser()
+		globalIsBrowserEnabled = globalServerConfig.GetBrowser()
 	}
 	if !globalIsEnvRegion {
-		globalServerRegion = serverConfig.GetRegion()
+		globalServerRegion = globalServerConfig.GetRegion()
 	}
 	if !globalIsEnvDomainName {
-		globalDomainName = serverConfig.Domain
+		globalDomainName = globalServerConfig.Domain
 	}
-	serverConfigMu.Unlock()
+	globalServerConfigMu.Unlock()
 
 	return nil
 }

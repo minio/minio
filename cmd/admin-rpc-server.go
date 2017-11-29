@@ -148,7 +148,7 @@ func (s *adminCmd) ServerInfoData(args *AuthRPCArgs, reply *ServerInfoDataReply)
 			Uptime:   UTCNow().Sub(globalBootTime),
 			Version:  Version,
 			CommitID: CommitID,
-			Region:   serverConfig.GetRegion(),
+			Region:   globalServerConfig.GetRegion(),
 			SQSARN:   arns,
 		},
 		StorageInfo: storageInfo,
@@ -165,11 +165,11 @@ func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
 		return err
 	}
 
-	if serverConfig == nil {
+	if globalServerConfig == nil {
 		return fmt.Errorf("config not present")
 	}
 
-	jsonBytes, err := json.Marshal(serverConfig)
+	jsonBytes, err := json.Marshal(globalServerConfig)
 	if err != nil {
 		return err
 	}

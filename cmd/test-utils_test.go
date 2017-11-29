@@ -287,7 +287,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	// Test Server needs to start before formatting of disks.
 	// Get credential.
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	testServer.Obj = objLayer
 	testServer.Disks = mustGetNewEndpointList(disks...)
@@ -377,7 +377,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	// Create an instance of TestServer.
 	testRPCServer := TestServer{}
 	// Get credential.
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	endpoints := mustGetNewEndpointList(disks...)
 	testRPCServer.Root = root
@@ -407,7 +407,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testRPCServer := TestServer{}
 	// Get credential.
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	endpoints := mustGetNewEndpointList(disks...)
 	testRPCServer.Root = root
@@ -459,10 +459,10 @@ func resetGlobalObjectAPI() {
 // set it to `nil`.
 func resetGlobalConfig() {
 	// hold the mutex lock before a new config is assigned.
-	serverConfigMu.Lock()
+	globalServerConfigMu.Lock()
 	// Save the loaded config globally.
-	serverConfig = nil
-	serverConfigMu.Unlock()
+	globalServerConfig = nil
+	globalServerConfigMu.Unlock()
 }
 
 // reset global NSLock.
@@ -529,10 +529,10 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	}
 
 	// Set a default region.
-	serverConfig.SetRegion(bucketLocation)
+	globalServerConfig.SetRegion(bucketLocation)
 
 	// Save config.
-	if err = serverConfig.Save(); err != nil {
+	if err = globalServerConfig.Save(); err != nil {
 		return "", err
 	}
 
@@ -766,7 +766,7 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
 	secretKey, signature string, currTime time.Time) (*http.Request, error) {
 
-	regionStr := serverConfig.GetRegion()
+	regionStr := globalServerConfig.GetRegion()
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -874,7 +874,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
 
-	region := serverConfig.GetRegion()
+	region := globalServerConfig.GetRegion()
 	date := UTCNow()
 	scope := getScope(date, region)
 	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
@@ -1002,7 +1002,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
-	region := serverConfig.GetRegion()
+	region := globalServerConfig.GetRegion()
 
 	// Get canonical headers.
 	var buf bytes.Buffer
@@ -1943,7 +1943,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
 
@@ -2191,7 +2191,7 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 	testRPCServer := TestServer{}
 
 	// Fetch credentials for the test server.
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	testRPCServer.Root = root
 	testRPCServer.AccessKey = credentials.AccessKey
@@ -2212,7 +2212,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	testRPCServer := TestServer{}
 
 	// Fetch credentials for the test server.
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	testRPCServer.Root = root
 	testRPCServer.AccessKey = credentials.AccessKey

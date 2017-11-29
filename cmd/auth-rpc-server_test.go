@@ -28,7 +28,7 @@ func TestLogin(t *testing.T) {
 		t.Fatalf("Failed to create test config - %v", err)
 	}
 	defer os.RemoveAll(rootPath)
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)

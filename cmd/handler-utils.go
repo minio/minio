@@ -43,7 +43,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	} // else for both err as nil or io.EOF
 	location = locationConstraint.Location
 	if location == "" {
-		location = serverConfig.GetRegion()
+		location = globalServerConfig.GetRegion()
 	}
 	return location, ErrNone
 }
@@ -51,7 +51,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 // Validates input location is same as configured region
 // of Minio server.
 func isValidLocation(location string) bool {
-	return serverConfig.GetRegion() == "" || serverConfig.GetRegion() == location
+	return globalServerConfig.GetRegion() == "" || globalServerConfig.GetRegion() == location
 }
 
 // Supported headers that needs to be extracted.
