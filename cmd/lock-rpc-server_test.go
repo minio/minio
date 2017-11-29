@@ -57,7 +57,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 			lockMap:         make(map[string][]lockRequesterInfo),
 		},
 	}
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)

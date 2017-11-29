@@ -27,36 +27,27 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// Steps to move from version N to version N+1
+// 1. Add new struct serverConfigVN+1 in config-versions.go
+// 2. Set configCurrentVersion to "N+1"
+// 3. Set serverConfigCurrent to serverConfigVN+1
+// 4. Add new migration function (ex. func migrateVNToVN+1()) in config-migrate.go
+// 5. Call migrateVNToVN+1() from migrateConfig() in config-migrate.go
+// 6. Make changes in config-current_test.go for any test change
+
 // Config version
-const v20 = "20"
+const serverConfigVersion = "20"
+
+type serverConfig = serverConfigV20
 
 var (
-	// serverConfig server config.
-	serverConfig   *serverConfigV20
-	serverConfigMu sync.RWMutex
+	// globalServerConfig server config.
+	globalServerConfig   *serverConfig
+	globalServerConfigMu sync.RWMutex
 )
 
-// serverConfigV20 server configuration version '20' which is like
-// version '19' except it adds support for VirtualHostDomain
-type serverConfigV20 struct {
-	sync.RWMutex
-	Version string `json:"version"`
-
-	// S3 API configuration.
-	Credential auth.Credentials `json:"credential"`
-	Region     string           `json:"region"`
-	Browser    BrowserFlag      `json:"browser"`
-	Domain     string           `json:"domain"`
-
-	// Additional error logging configuration.
-	Logger *loggers `json:"logger"`
-
-	// Notification queue configuration.
-	Notify *notifier `json:"notify"`
-}
-
 // GetVersion get current config version.
-func (s *serverConfigV20) GetVersion() string {
+func (s *serverConfig) GetVersion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -64,7 +55,7 @@ func (s *serverConfigV20) GetVersion() string {
 }
 
 // SetRegion set a new region.
-func (s *serverConfigV20) SetRegion(region string) {
+func (s *serverConfig) SetRegion(region string) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -73,7 +64,7 @@ func (s *serverConfigV20) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s *serverConfigV20) GetRegion() string {
+func (s *serverConfig) GetRegion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -81,7 +72,7 @@ func (s *serverConfigV20) GetRegion() string {
 }
 
 // SetCredentials set new credentials. SetCredential returns the previous credential.
-func (s *serverConfigV20) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
+func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -96,7 +87,7 @@ func (s *serverConfigV20) SetCredential(creds auth.Credentials) (prevCred auth.C
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV20) GetCredential() auth.Credentials {
+func (s *serverConfig) GetCredential() auth.Credentials {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -104,7 +95,7 @@ func (s *serverConfigV20) GetCredential() auth.Credentials {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV20) SetBrowser(b bool) {
+func (s *serverConfig) SetBrowser(b bool) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -113,7 +104,7 @@ func (s *serverConfigV20) SetBrowser(b bool) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV20) GetBrowser() bool {
+func (s *serverConfig) GetBrowser() bool {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -121,7 +112,7 @@ func (s *serverConfigV20) GetBrowser() bool {
 }
 
 // Save config.
-func (s *serverConfigV20) Save() error {
+func (s *serverConfig) Save() error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -129,9 +120,9 @@ func (s *serverConfigV20) Save() error {
 	return quick.Save(getConfigFile(), s)
 }
 
-func newServerConfigV20() *serverConfigV20 {
-	srvCfg := &serverConfigV20{
-		Version:    v20,
+func newServerConfig() *serverConfig {
+	srvCfg := &serverConfig{
+		Version:    serverConfigVersion,
 		Credential: auth.MustGetNewCredentials(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
@@ -169,7 +160,7 @@ func newServerConfigV20() *serverConfigV20 {
 // found, otherwise use default parameters
 func newConfig() error {
 	// Initialize server config.
-	srvCfg := newServerConfigV20()
+	srvCfg := newServerConfig()
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
@@ -191,12 +182,12 @@ func newConfig() error {
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
 	// unlock the mutex.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
-	serverConfigMu.Unlock()
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return serverConfig.Save()
+	return globalServerConfig.Save()
 }
 
 // doCheckDupJSONKeys recursively detects duplicate json keys
@@ -251,8 +242,8 @@ func checkDupJSONKeys(json string) error {
 }
 
 // getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfigV20, error) {
-	srvCfg := &serverConfigV20{
+func getValidConfig() (*serverConfig, error) {
+	srvCfg := &serverConfig{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -262,8 +253,8 @@ func getValidConfig() (*serverConfigV20, error) {
 		return nil, err
 	}
 
-	if srvCfg.Version != v20 {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v20, srvCfg.Version)
+	if srvCfg.Version != serverConfigVersion {
+		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys
@@ -322,21 +313,21 @@ func loadConfig() error {
 	}
 
 	// hold the mutex lock before a new config is assigned.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
 	if !globalIsEnvCreds {
-		globalActiveCred = serverConfig.GetCredential()
+		globalActiveCred = globalServerConfig.GetCredential()
 	}
 	if !globalIsEnvBrowser {
-		globalIsBrowserEnabled = serverConfig.GetBrowser()
+		globalIsBrowserEnabled = globalServerConfig.GetBrowser()
 	}
 	if !globalIsEnvRegion {
-		globalServerRegion = serverConfig.GetRegion()
+		globalServerRegion = globalServerConfig.GetRegion()
 	}
 	if !globalIsEnvDomainName {
-		globalDomainName = serverConfig.Domain
+		globalDomainName = globalServerConfig.Domain
 	}
-	serverConfigMu.Unlock()
+	globalServerConfigMu.Unlock()
 
 	return nil
 }

@@ -101,10 +101,10 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 // Prints common server startup message. Prints credential, region and browser access.
 func printServerCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 
 	// Get saved region.
-	region := serverConfig.GetRegion()
+	region := globalServerConfig.GetRegion()
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
@@ -143,7 +143,7 @@ func printEventNotifiers() {
 // and custom platform specific message.
 func printCLIAccessMsg(endPoint string, alias string) {
 	// Get saved credentials.
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)

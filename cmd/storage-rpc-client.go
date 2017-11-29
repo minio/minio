@@ -97,7 +97,7 @@ func toStorageErr(err error) error {
 func newStorageRPC(endpoint Endpoint) StorageAPI {
 	// Dial minio rpc storage http path.
 	rpcPath := path.Join(minioReservedBucketPath, storageRPCPath, endpoint.Path)
-	serverCred := serverConfig.GetCredential()
+	serverCred := globalServerConfig.GetCredential()
 
 	return &networkStorage{
 		rpcClient: newAuthRPCClient(authConfig{

@@ -38,14 +38,14 @@ func checkUpdate(mode string) {
 }
 
 func enableLoggers() {
-	fileLogTarget := serverConfig.Logger.GetFile()
+	fileLogTarget := globalServerConfig.Logger.GetFile()
 	if fileLogTarget.Enable {
 		err := InitFileLogger(&fileLogTarget)
 		fatalIf(err, "Unable to initialize file logger")
 		log.AddTarget(fileLogTarget)
 	}
 
-	consoleLogTarget := serverConfig.Logger.GetConsole()
+	consoleLogTarget := globalServerConfig.Logger.GetConsole()
 	if consoleLogTarget.Enable {
 		InitConsoleLogger(&consoleLogTarget)
 	}
@@ -57,7 +57,7 @@ func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
 		fatalIf(migrateConfig(), "Config migration failed.")
-		fatalIf(loadConfig(), "Unable to load config version: '%s'.", v20)
+		fatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
 	} else {
 		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
 		log.Println("Created minio configuration file successfully at " + getConfigDir())

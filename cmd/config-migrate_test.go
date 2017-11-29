@@ -169,17 +169,17 @@ func TestServerConfigMigrateV2toV19(t *testing.T) {
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := v20
-	if serverConfig.Version != expectedVersion {
-		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
+	expectedVersion := serverConfigVersion
+	if globalServerConfig.Version != expectedVersion {
+		t.Fatalf("Expect version "+expectedVersion+", found: %v", globalServerConfig.Version)
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	if serverConfig.Credential.AccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKey)
+	if globalServerConfig.Credential.AccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
 	}
-	if serverConfig.Credential.SecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretKey)
+	if globalServerConfig.Credential.SecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
 	}
 }
 

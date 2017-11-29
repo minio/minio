@@ -1500,7 +1500,7 @@ func migrateV19ToV20() error {
 	}
 
 	// Copy over fields from V19 into V20 config struct
-	srvConfig := &serverConfigV20{
+	srvConfig := &serverConfig{
 		Logger: &loggers{},
 		Notify: &notifier{},
 	}

@@ -195,7 +195,7 @@ func newS3GatewayLayer(host string) (GatewayLayer, error) {
 		endpoint = "s3.amazonaws.com"
 	}
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 
 	// Initialize minio client object.
 	client, err := minio.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)

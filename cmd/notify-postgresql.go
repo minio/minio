@@ -242,7 +242,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pc pgConn, e error) {
 }
 
 func newPostgreSQLNotify(accountID string) (*logrus.Logger, error) {
-	pgNotify := serverConfig.Notify.GetPostgreSQLByID(accountID)
+	pgNotify := globalServerConfig.Notify.GetPostgreSQLByID(accountID)
 
 	// Dial postgres
 	pgC, err := dialPostgreSQL(pgNotify)

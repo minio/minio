@@ -112,7 +112,7 @@ type b2Objects struct {
 // newB2GatewayLayer returns b2 gateway layer.
 func newB2GatewayLayer() (GatewayLayer, error) {
 	ctx := context.Background()
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 
 	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(newCustomHTTPTransport()))
 	if err != nil {

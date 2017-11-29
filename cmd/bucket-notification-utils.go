@@ -120,7 +120,7 @@ func checkARN(arn, arnType string) APIErrorCode {
 	// Server region is allowed to be empty by default,
 	// in such a scenario ARN region is not validating
 	// allowing all regions.
-	if sregion := serverConfig.GetRegion(); sregion != "" {
+	if sregion := globalServerConfig.GetRegion(); sregion != "" {
 		region := strs[3]
 		if region != sregion {
 			return ErrRegionNotification
@@ -146,34 +146,34 @@ func isValidQueueID(queueARN string) bool {
 	// Is Queue identifier valid?.
 
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
-		amqpN := serverConfig.Notify.GetAMQPByID(sqsARN.AccountID)
+		amqpN := globalServerConfig.Notify.GetAMQPByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
 	} else if isMQTTQueue(sqsARN) {
-		mqttN := serverConfig.Notify.GetMQTTByID(sqsARN.AccountID)
+		mqttN := globalServerConfig.Notify.GetMQTTByID(sqsARN.AccountID)
 		return mqttN.Enable && mqttN.Broker != ""
 	} else if isNATSQueue(sqsARN) {
-		natsN := serverConfig.Notify.GetNATSByID(sqsARN.AccountID)
+		natsN := globalServerConfig.Notify.GetNATSByID(sqsARN.AccountID)
 		return natsN.Enable && natsN.Address != ""
 	} else if isElasticQueue(sqsARN) { // Elastic queue.
-		elasticN := serverConfig.Notify.GetElasticSearchByID(sqsARN.AccountID)
+		elasticN := globalServerConfig.Notify.GetElasticSearchByID(sqsARN.AccountID)
 		return elasticN.Enable && elasticN.URL != ""
 	} else if isRedisQueue(sqsARN) { // Redis queue.
-		redisN := serverConfig.Notify.GetRedisByID(sqsARN.AccountID)
+		redisN := globalServerConfig.Notify.GetRedisByID(sqsARN.AccountID)
 		return redisN.Enable && redisN.Addr != ""
 	} else if isPostgreSQLQueue(sqsARN) {
-		pgN := serverConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
+		pgN := globalServerConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
 	} else if isMySQLQueue(sqsARN) {
-		msqlN := serverConfig.Notify.GetMySQLByID(sqsARN.AccountID)
+		msqlN := globalServerConfig.Notify.GetMySQLByID(sqsARN.AccountID)
 		// Mysql can work with only default conn. info.
 		return msqlN.Enable
 	} else if isKafkaQueue(sqsARN) {
-		kafkaN := serverConfig.Notify.GetKafkaByID(sqsARN.AccountID)
+		kafkaN := globalServerConfig.Notify.GetKafkaByID(sqsARN.AccountID)
 		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
 			kafkaN.Topic != "")
 	} else if isWebhookQueue(sqsARN) {
-		webhookN := serverConfig.Notify.GetWebhookByID(sqsARN.AccountID)
+		webhookN := globalServerConfig.Notify.GetWebhookByID(sqsARN.AccountID)
 		return webhookN.Enable && webhookN.Endpoint != ""
 	}
 	return false
@@ -281,7 +281,7 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	// Server region is allowed to be empty by default,
 	// in such a scenario ARN region is not validating
 	// allowing all regions.
-	if sregion := serverConfig.GetRegion(); sregion != "" {
+	if sregion := globalServerConfig.GetRegion(); sregion != "" {
 		region := strs[3]
 		if region != sregion {
 			return

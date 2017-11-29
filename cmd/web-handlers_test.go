@@ -143,7 +143,7 @@ func TestWebHandlerLogin(t *testing.T) {
 func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	// test cases with sample input and expected output.
 	testCases := []struct {
@@ -183,7 +183,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	// get random bucket name.
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -220,7 +220,7 @@ func TestWebHandlerServerInfo(t *testing.T) {
 func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -261,7 +261,7 @@ func TestWebHandlerMakeBucket(t *testing.T) {
 func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -314,7 +314,7 @@ func TestWebHandlerListBuckets(t *testing.T) {
 func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -362,7 +362,7 @@ func TestWebHandlerListObjects(t *testing.T) {
 func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
 
@@ -457,7 +457,7 @@ func TestWebHandlerRemoveObject(t *testing.T) {
 func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -548,7 +548,7 @@ func TestWebHandlerGenerateAuth(t *testing.T) {
 func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -585,7 +585,7 @@ func TestWebHandlerSetAuth(t *testing.T) {
 func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -637,7 +637,7 @@ func TestWebHandlerGetAuth(t *testing.T) {
 func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -680,7 +680,7 @@ func getTokenString(accessKey, secretKey string) (string, error) {
 
 func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -737,7 +737,7 @@ func TestWebHandlerUpload(t *testing.T) {
 func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	content := []byte("temporary file's content")
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -830,7 +830,7 @@ func TestWebHandlerDownload(t *testing.T) {
 func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -939,7 +939,7 @@ func TestWebHandlerDownloadZip(t *testing.T) {
 
 func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1023,7 +1023,7 @@ func TestWebHandlerPresignedGetHandler(t *testing.T) {
 func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1128,7 +1128,7 @@ func TestWebHandlerGetBucketPolicyHandler(t *testing.T) {
 func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1206,7 +1206,7 @@ func TestWebHandlerListAllBucketPoliciesHandler(t *testing.T) {
 func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1303,7 +1303,7 @@ func TestWebHandlerSetBucketPolicyHandler(t *testing.T) {
 func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1465,7 +1465,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)
@@ -1575,7 +1575,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 
-	credentials := serverConfig.GetCredential()
+	credentials := globalServerConfig.GetCredential()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)

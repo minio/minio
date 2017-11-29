@@ -68,7 +68,7 @@ func isAMQPQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeAMQP {
 		return false
 	}
-	amqpL := serverConfig.Notify.GetAMQPByID(sqsArn.AccountID)
+	amqpL := globalServerConfig.Notify.GetAMQPByID(sqsArn.AccountID)
 	if !amqpL.Enable {
 		return false
 	}
@@ -87,7 +87,7 @@ func isMQTTQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeMQTT {
 		return false
 	}
-	mqttL := serverConfig.Notify.GetMQTTByID(sqsArn.AccountID)
+	mqttL := globalServerConfig.Notify.GetMQTTByID(sqsArn.AccountID)
 	if !mqttL.Enable {
 		return false
 	}
@@ -106,7 +106,7 @@ func isNATSQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeNATS {
 		return false
 	}
-	natsL := serverConfig.Notify.GetNATSByID(sqsArn.AccountID)
+	natsL := globalServerConfig.Notify.GetNATSByID(sqsArn.AccountID)
 	if !natsL.Enable {
 		return false
 	}
@@ -125,7 +125,7 @@ func isWebhookQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeWebhook {
 		return false
 	}
-	rNotify := serverConfig.Notify.GetWebhookByID(sqsArn.AccountID)
+	rNotify := globalServerConfig.Notify.GetWebhookByID(sqsArn.AccountID)
 	return rNotify.Enable
 }
 
@@ -134,7 +134,7 @@ func isRedisQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeRedis {
 		return false
 	}
-	rNotify := serverConfig.Notify.GetRedisByID(sqsArn.AccountID)
+	rNotify := globalServerConfig.Notify.GetRedisByID(sqsArn.AccountID)
 	if !rNotify.Enable {
 		return false
 	}
@@ -153,7 +153,7 @@ func isElasticQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeElastic {
 		return false
 	}
-	esNotify := serverConfig.Notify.GetElasticSearchByID(sqsArn.AccountID)
+	esNotify := globalServerConfig.Notify.GetElasticSearchByID(sqsArn.AccountID)
 	if !esNotify.Enable {
 		return false
 	}
@@ -171,7 +171,7 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypePostgreSQL {
 		return false
 	}
-	pgNotify := serverConfig.Notify.GetPostgreSQLByID(sqsArn.AccountID)
+	pgNotify := globalServerConfig.Notify.GetPostgreSQLByID(sqsArn.AccountID)
 	if !pgNotify.Enable {
 		return false
 	}
@@ -189,7 +189,7 @@ func isMySQLQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeMySQL {
 		return false
 	}
-	msqlNotify := serverConfig.Notify.GetMySQLByID(sqsArn.AccountID)
+	msqlNotify := globalServerConfig.Notify.GetMySQLByID(sqsArn.AccountID)
 	if !msqlNotify.Enable {
 		return false
 	}
@@ -207,7 +207,7 @@ func isKafkaQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeKafka {
 		return false
 	}
-	kafkaNotifyCfg := serverConfig.Notify.GetKafkaByID(sqsArn.AccountID)
+	kafkaNotifyCfg := globalServerConfig.Notify.GetKafkaByID(sqsArn.AccountID)
 	if !kafkaNotifyCfg.Enable {
 		return false
 	}

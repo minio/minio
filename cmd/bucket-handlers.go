@@ -120,7 +120,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", serverConfig.GetRegion())
+		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", globalServerConfig.GetRegion())
 	}
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -136,7 +136,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
-	region := serverConfig.GetRegion()
+	region := globalServerConfig.GetRegion()
 	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,
@@ -165,7 +165,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucketMultipartUploads", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucketMultipartUploads", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -212,7 +212,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send listBuckets() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+		s3Error = checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
 	}
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -246,7 +246,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	var authError APIErrorCode
-	if authError = checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); authError != ErrNone {
+	if authError = checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion()); authError != ErrNone {
 		// In the event access is denied, a 200 response should still be returned
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 		if authError != ErrAccessDenied {
@@ -385,7 +385,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// PutBucket does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -649,7 +649,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
@@ -679,7 +679,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	// DeleteBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}

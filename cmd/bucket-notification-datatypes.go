@@ -209,5 +209,5 @@ type arnSQS struct {
 
 // Stringer for constructing AWS ARN compatible string.
 func (m arnSQS) String() string {
-	return minioSqs + serverConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
+	return minioSqs + globalServerConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
 }

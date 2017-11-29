@@ -34,95 +34,95 @@ func TestServerConfig(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
 
-	if serverConfig.GetRegion() != globalMinioDefaultRegion {
-		t.Errorf("Expecting region `us-east-1` found %s", serverConfig.GetRegion())
+	if globalServerConfig.GetRegion() != globalMinioDefaultRegion {
+		t.Errorf("Expecting region `us-east-1` found %s", globalServerConfig.GetRegion())
 	}
 
 	// Set new region and verify.
-	serverConfig.SetRegion("us-west-1")
-	if serverConfig.GetRegion() != "us-west-1" {
-		t.Errorf("Expecting region `us-west-1` found %s", serverConfig.GetRegion())
+	globalServerConfig.SetRegion("us-west-1")
+	if globalServerConfig.GetRegion() != "us-west-1" {
+		t.Errorf("Expecting region `us-west-1` found %s", globalServerConfig.GetRegion())
 	}
 
 	// Set new amqp notification id.
-	serverConfig.Notify.SetAMQPByID("2", amqpNotify{})
-	savedNotifyCfg1 := serverConfig.Notify.GetAMQPByID("2")
+	globalServerConfig.Notify.SetAMQPByID("2", amqpNotify{})
+	savedNotifyCfg1 := globalServerConfig.Notify.GetAMQPByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg1, amqpNotify{}) {
 		t.Errorf("Expecting AMQP config %#v found %#v", amqpNotify{}, savedNotifyCfg1)
 	}
 
 	// Set new elastic search notification id.
-	serverConfig.Notify.SetElasticSearchByID("2", elasticSearchNotify{})
-	savedNotifyCfg2 := serverConfig.Notify.GetElasticSearchByID("2")
+	globalServerConfig.Notify.SetElasticSearchByID("2", elasticSearchNotify{})
+	savedNotifyCfg2 := globalServerConfig.Notify.GetElasticSearchByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg2, elasticSearchNotify{}) {
 		t.Errorf("Expecting Elasticsearch config %#v found %#v", elasticSearchNotify{}, savedNotifyCfg2)
 	}
 
 	// Set new redis notification id.
-	serverConfig.Notify.SetRedisByID("2", redisNotify{})
-	savedNotifyCfg3 := serverConfig.Notify.GetRedisByID("2")
+	globalServerConfig.Notify.SetRedisByID("2", redisNotify{})
+	savedNotifyCfg3 := globalServerConfig.Notify.GetRedisByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg3, redisNotify{}) {
 		t.Errorf("Expecting Redis config %#v found %#v", redisNotify{}, savedNotifyCfg3)
 	}
 
 	// Set new kafka notification id.
-	serverConfig.Notify.SetKafkaByID("2", kafkaNotify{})
-	savedNotifyCfg4 := serverConfig.Notify.GetKafkaByID("2")
+	globalServerConfig.Notify.SetKafkaByID("2", kafkaNotify{})
+	savedNotifyCfg4 := globalServerConfig.Notify.GetKafkaByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg4, kafkaNotify{}) {
 		t.Errorf("Expecting Kafka config %#v found %#v", kafkaNotify{}, savedNotifyCfg4)
 	}
 
 	// Set new Webhook notification id.
-	serverConfig.Notify.SetWebhookByID("2", webhookNotify{})
-	savedNotifyCfg5 := serverConfig.Notify.GetWebhookByID("2")
+	globalServerConfig.Notify.SetWebhookByID("2", webhookNotify{})
+	savedNotifyCfg5 := globalServerConfig.Notify.GetWebhookByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg5, webhookNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg5)
 	}
 
 	// Set new console logger.
 	// Set new MySQL notification id.
-	serverConfig.Notify.SetMySQLByID("2", mySQLNotify{})
-	savedNotifyCfg6 := serverConfig.Notify.GetMySQLByID("2")
+	globalServerConfig.Notify.SetMySQLByID("2", mySQLNotify{})
+	savedNotifyCfg6 := globalServerConfig.Notify.GetMySQLByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg6, mySQLNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
 	}
 
 	// Set new console logger.
 	// Set new MQTT notification id.
-	serverConfig.Notify.SetMQTTByID("2", mqttNotify{})
-	savedNotifyCfg7 := serverConfig.Notify.GetMQTTByID("2")
+	globalServerConfig.Notify.SetMQTTByID("2", mqttNotify{})
+	savedNotifyCfg7 := globalServerConfig.Notify.GetMQTTByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg7, mqttNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mqttNotify{}, savedNotifyCfg7)
 	}
 
 	consoleLogger := NewConsoleLogger()
-	serverConfig.Logger.SetConsole(consoleLogger)
-	consoleCfg := serverConfig.Logger.GetConsole()
+	globalServerConfig.Logger.SetConsole(consoleLogger)
+	consoleCfg := globalServerConfig.Logger.GetConsole()
 	if !reflect.DeepEqual(consoleCfg, consoleLogger) {
 		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger, consoleCfg)
 	}
 	// Set new console logger.
 	consoleLogger.Enable = false
-	serverConfig.Logger.SetConsole(consoleLogger)
+	globalServerConfig.Logger.SetConsole(consoleLogger)
 
 	// Set new file logger.
 	fileLogger := NewFileLogger("test-log-file")
-	serverConfig.Logger.SetFile(fileLogger)
-	fileCfg := serverConfig.Logger.GetFile()
+	globalServerConfig.Logger.SetFile(fileLogger)
+	fileCfg := globalServerConfig.Logger.GetFile()
 	if !reflect.DeepEqual(fileCfg, fileLogger) {
 		t.Errorf("Expecting file logger config %#v found %#v", fileLogger, fileCfg)
 	}
 	// Set new file logger.
 	fileLogger.Enable = false
-	serverConfig.Logger.SetFile(fileLogger)
+	globalServerConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v20 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v20)
+	if globalServerConfig.GetVersion() != serverConfigVersion {
+		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), serverConfigVersion)
 	}
 
 	// Attempt to save.
-	if err := serverConfig.Save(); err != nil {
+	if err := globalServerConfig.Save(); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 
@@ -172,17 +172,17 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	// Check if serverConfig has
-	if serverConfig.GetBrowser() {
-		t.Errorf("Expecting browser is set to false found %v", serverConfig.GetBrowser())
+	if globalServerConfig.GetBrowser() {
+		t.Errorf("Expecting browser is set to false found %v", globalServerConfig.GetBrowser())
 	}
 
 	// Check if serverConfig has
-	if serverConfig.GetRegion() != "us-west-1" {
-		t.Errorf("Expecting region to be \"us-west-1\" found %v", serverConfig.GetRegion())
+	if globalServerConfig.GetRegion() != "us-west-1" {
+		t.Errorf("Expecting region to be \"us-west-1\" found %v", globalServerConfig.GetRegion())
 	}
 
 	// Check if serverConfig has
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 
 	if cred.AccessKey != "minio" {
 		t.Errorf("Expecting access key to be `minio` found %s", cred.AccessKey)
@@ -192,8 +192,8 @@ func TestServerConfigWithEnvs(t *testing.T) {
 		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
 
-	if serverConfig.Domain != "domain.com" {
-		t.Errorf("Expecting Domain to be `domain.com` found " + serverConfig.Domain)
+	if globalServerConfig.Domain != "domain.com" {
+		t.Errorf("Expecting Domain to be `domain.com` found " + globalServerConfig.Domain)
 	}
 }
 
@@ -237,7 +237,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v20
+	v := serverConfigVersion
 
 	testCases := []struct {
 		configData string

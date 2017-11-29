@@ -139,7 +139,7 @@ func (lc localAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 			Version:  Version,
 			CommitID: CommitID,
 			SQSARN:   arns,
-			Region:   serverConfig.GetRegion(),
+			Region:   globalServerConfig.GetRegion(),
 		},
 	}, nil
 }
@@ -158,11 +158,11 @@ func (rc remoteAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 
 // GetConfig - returns config.json of the local server.
 func (lc localAdminClient) GetConfig() ([]byte, error) {
-	if serverConfig == nil {
+	if globalServerConfig == nil {
 		return nil, fmt.Errorf("config not present")
 	}
 
-	return json.Marshal(serverConfig)
+	return json.Marshal(globalServerConfig)
 }
 
 // GetConfig - returns config.json of the remote server.
@@ -246,7 +246,7 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 	})
 
 	hostSet := set.CreateStringSet(globalMinioAddr)
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, adminPath)
 	for _, host := range GetRemotePeers(endpoints) {
 		if hostSet.Contains(host) {

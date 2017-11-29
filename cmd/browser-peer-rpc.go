@@ -51,12 +51,12 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 	}
 
 	// Update credentials in memory
-	prevCred := serverConfig.SetCredential(args.Creds)
+	prevCred := globalServerConfig.SetCredential(args.Creds)
 
 	// Save credentials to config file
-	if err := serverConfig.Save(); err != nil {
+	if err := globalServerConfig.Save(); err != nil {
 		// Save the current creds when failed to update.
-		serverConfig.SetCredential(prevCred)
+		globalServerConfig.SetCredential(prevCred)
 
 		errorIf(err, "Unable to update the config with new credentials sent from browser RPC.")
 		return err
@@ -77,7 +77,7 @@ func updateCredsOnPeers(creds auth.Credentials) map[string]error {
 	errs := make([]error, len(peers))
 	var wg sync.WaitGroup
 
-	serverCred := serverConfig.GetCredential()
+	serverCred := globalServerConfig.GetCredential()
 	// Launch go routines to send request to each peer in parallel.
 	for ix := range peers {
 		wg.Add(1)
