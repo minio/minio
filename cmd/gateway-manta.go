@@ -26,7 +26,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/hashicorp/terraform/backend"
 	triton "github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/authentication"
 	"github.com/joyent/triton-go/storage"
