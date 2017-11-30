@@ -1246,41 +1246,6 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			if actualResult.KeyMarker != expectedResult.KeyMarker {
 				t.Errorf("Test %d: %s: Expected keyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.KeyMarker, actualResult.KeyMarker)
 			}
-
-			// ListMultipartUploads returns empty respsonse always in FS mode
-			if instanceType != FSTestStr {
-				// Asserting IsTruncated.
-				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-					t.Errorf("Test %d: %s: Expected Istruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-					continue
-				}
-				// Asserting NextUploadIDMarker.
-				if actualResult.NextUploadIDMarker != expectedResult.NextUploadIDMarker {
-					t.Errorf("Test %d: %s: Expected NextUploadIDMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextUploadIDMarker, actualResult.NextUploadIDMarker)
-					continue
-				}
-				// Asserting NextKeyMarker.
-				if actualResult.NextKeyMarker != expectedResult.NextKeyMarker {
-					t.Errorf("Test %d: %s: Expected NextKeyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextKeyMarker, actualResult.NextKeyMarker)
-					continue
-				}
-				// Asserting the number of upload Metadata info.
-				if len(expectedResult.Uploads) != len(actualResult.Uploads) {
-					t.Errorf("Test %d: %s: Expected the result to contain info of %d Multipart Uploads, but found %d instead", i+1, instanceType, len(expectedResult.Uploads), len(actualResult.Uploads))
-					continue
-				}
-				// Iterating over the uploads Metadata and asserting the fields.
-				for j, actualMetaData := range actualResult.Uploads {
-					//  Asserting the object name in the upload Metadata.
-					if actualMetaData.Object != expectedResult.Uploads[j].Object {
-						t.Errorf("Test %d: %s: Metadata %d: Expected Metadata Object to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Uploads[j].Object, actualMetaData.Object)
-					}
-					//  Asserting the uploadID in the upload Metadata.
-					if actualMetaData.UploadID != expectedResult.Uploads[j].UploadID {
-						t.Errorf("Test %d: %s: Metadata %d: Expected Metadata UploadID to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Uploads[j].UploadID, actualMetaData.UploadID)
-					}
-				}
-			}
 		}
 	}
 }
