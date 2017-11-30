@@ -1,10 +1,7 @@
-
-
 ## Minio SDKs
 Minio SDKs are available in different languages and contain the library, examples and documentation. Object APIs exposed by the SDKs help users build cloud-native applications for multi-cloud environments.
 
 Click on the links below to know more about the SDKs and APIs.
-
 
 | SDK | Quick start guide | API reference |
 |:--- |:--- |:--- |
