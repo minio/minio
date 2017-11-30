@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -395,10 +394,6 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 }
 
 func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
-	if !isValidObjectName(object) {
-		return errors.Trace(ObjectNameInvalid{bucket, object})
-	}
-
 	dstFile := pathJoin(s.TempDir, mustGetUUID())
 	defer fsRemoveFile(dstFile)
 
@@ -473,11 +468,6 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	// Check the object's name first
-	if !isValidObjectName(object) {
-		return objInfo, errors.Trace(ObjectNameInvalid{bucket, object})
-	}
-
 	bufSize := int64(readSizeV1)
 	size := data.Size()
 	if size > 0 && bufSize > size {
@@ -525,12 +515,6 @@ type siaObjectInfo struct {
 	Renewing       bool    `json:"renewing"`
 	Redundancy     float64 `json:"redundancy"`
 	UploadProgress float64 `json:"uploadprogress"`
-}
-
-// isValidObjectName returns whether or not the objectName provided is suitable for Sia
-func isValidObjectName(objectName string) bool {
-	reg, _ := regexp.Compile("[^a-zA-Z0-9., _/\\\\+-]+")
-	return objectName == reg.ReplaceAllString(objectName, "")
 }
 
 type renterFiles struct {
