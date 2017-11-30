@@ -29,11 +29,7 @@ import (
 // Documentation links, these are part of message printing code.
 const (
 	mcQuickStartGuide     = "https://docs.minio.io/docs/minio-client-quickstart-guide"
-	goQuickStartGuide     = "https://docs.minio.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide     = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide   = "https://docs.minio.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide     = "https://docs.minio.io/docs/python-client-quickstart-guide"
-	dotnetQuickStartGuide = "https://docs.minio.io/docs/dotnet-client-quickstart-guide"
+	quickStartGuide       = "https://docs.minio.io/docs/minio-sdks-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.
@@ -159,11 +155,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
 	log.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
-	log.Println(colorBlue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
-	log.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
-	log.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
-	log.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
-	log.Println(colorBlue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
+        log.Println(colorBlue(" Go, Java, Python, JavaScript & .NET : ") + quickStartGuide)
 }
 
 // Get formatted disk/storage info message.
