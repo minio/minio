@@ -50,6 +50,14 @@ sysctl -w vm.dirty_background_ratio=1
 sysctl -w vm.dirty_ratio=5
 ```
 
+- *`Transparent Hugepage Support`*: This is a Linux kernel feature intended to improve performance by making more efficient use of processor’s memory-mapping hardware. But this may cause [problems](https://blogs.oracle.com/linux/performance-issues-with-transparent-huge-pages-thp) for non-optimized applications. As most Linux distributions set it to `enabled=always` by default, we recommend changing this to `enabled=madvise`. This will allow applications optimized for transparent hugepages to obtain the performance benefits, while preventing the associated problems otherwise.
+
+```sh
+echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+```
+
+Also, set `transparent_hugepage=madvise` on your kernel command line (e.g. in /etc/default/grub) to persistently set this value.
+
 ## Tuning Scheduler
 
 Proper scheduler configuration makes sure Minio process gets adequate CPU time. Here are the recommended scheduler settings
