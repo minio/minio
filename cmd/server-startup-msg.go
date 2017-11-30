@@ -155,7 +155,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
 	log.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
-        log.Println(colorBlue(" Go, Java, Python, JavaScript & .NET : ") + quickStartGuide)
+       log.Println(colorBlue(" Go, Java, Python, JavaScript & .NET : ") + quickStartGuide)
 }
 
 // Get formatted disk/storage info message.
