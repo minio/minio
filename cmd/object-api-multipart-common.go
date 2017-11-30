@@ -167,6 +167,10 @@ func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count
 	// Read `uploads.json`.
 	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)
 	if err != nil {
+		switch errors.Cause(err) {
+		case errFileNotFound, errFileAccessDenied:
+			return nil, true, nil
+		}
 		return nil, false, err
 	}
 	index := 0
