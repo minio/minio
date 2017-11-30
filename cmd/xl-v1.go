@@ -159,8 +159,15 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return xl, nil
 	}
 
-	// Do a quick heal on the buckets themselves for any discrepancies.
-	return xl, quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum)
+	// Perform a quick heal on the buckets and bucket metadata for any discrepancies.
+	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
+		return nil, err
+	}
+
+	// Start background process to cleanup old multipart objects in `.minio.sys`.
+	go cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, xl, xl.listMultipartUploadsCleanup, globalServiceDoneCh)
+
+	return xl, nil
 }
 
 // Shutdown function for object storage interface.

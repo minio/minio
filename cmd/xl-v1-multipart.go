@@ -272,6 +272,174 @@ func commitXLMetadata(disks []StorageAPI, srcBucket, srcPrefix, dstBucket, dstPr
 	return evalDisks(disks, mErrs), err
 }
 
+// listMultipartUploadsCleanup - lists all multipart uploads. Called by xl.cleanupStaleMultipartUpload()
+func (xl xlObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	result := ListMultipartsInfo{
+		IsTruncated: true,
+		MaxUploads:  maxUploads,
+		KeyMarker:   keyMarker,
+		Prefix:      prefix,
+		Delimiter:   delimiter,
+	}
+
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	// Not using path.Join() as it strips off the trailing '/'.
+	multipartPrefixPath := pathJoin(bucket, prefix)
+	if prefix == "" {
+		// Should have a trailing "/" if prefix is ""
+		// For ex. multipartPrefixPath should be "multipart/bucket/" if prefix is ""
+		multipartPrefixPath += slashSeparator
+	}
+	multipartMarkerPath := ""
+	if keyMarker != "" {
+		multipartMarkerPath = pathJoin(bucket, keyMarker)
+	}
+	var uploads []MultipartInfo
+	var err error
+	var eof bool
+	// List all upload ids for the keyMarker starting from
+	// uploadIDMarker first.
+	if uploadIDMarker != "" {
+		// hold lock on keyMarker path
+		keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+			pathJoin(bucket, keyMarker))
+		if err = keyMarkerLock.GetRLock(globalListingTimeout); err != nil {
+			return lmi, err
+		}
+		for _, disk := range xl.getLoadBalancedDisks() {
+			if disk == nil {
+				continue
+			}
+			uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
+			if err == nil {
+				break
+			}
+			if errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
+				continue
+			}
+			break
+		}
+		keyMarkerLock.RUnlock()
+		if err != nil {
+			return lmi, err
+		}
+		maxUploads = maxUploads - len(uploads)
+	}
+	var walkerCh chan treeWalkResult
+	var walkerDoneCh chan struct{}
+	heal := false // true only for xl.ListObjectsHeal
+	// Validate if we need to list further depending on maxUploads.
+	if maxUploads > 0 {
+		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaMultipartBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
+		if walkerCh == nil {
+			walkerDoneCh = make(chan struct{})
+			isLeaf := xl.isMultipartUpload
+			listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, xl.getLoadBalancedDisks()...)
+			walkerCh = startTreeWalk(minioMetaMultipartBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, walkerDoneCh)
+		}
+		// Collect uploads until we have reached maxUploads count to 0.
+		for maxUploads > 0 {
+			walkResult, ok := <-walkerCh
+			if !ok {
+				// Closed channel.
+				eof = true
+				break
+			}
+			// For any walk error return right away.
+			if walkResult.err != nil {
+				return lmi, walkResult.err
+			}
+			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
+			// For an entry looking like a directory, store and
+			// continue the loop not need to fetch uploads.
+			if hasSuffix(walkResult.entry, slashSeparator) {
+				uploads = append(uploads, MultipartInfo{
+					Object: entry,
+				})
+				maxUploads--
+				if maxUploads == 0 {
+					eof = true
+					break
+				}
+				continue
+			}
+			var newUploads []MultipartInfo
+			var end bool
+			uploadIDMarker = ""
+
+			// For the new object entry we get all its
+			// pending uploadIDs.
+			entryLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+				pathJoin(bucket, entry))
+			if err = entryLock.GetRLock(globalListingTimeout); err != nil {
+				return lmi, err
+			}
+			var disk StorageAPI
+			for _, disk = range xl.getLoadBalancedDisks() {
+				if disk == nil {
+					continue
+				}
+				newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
+				if err == nil {
+					break
+				}
+				if errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
+					continue
+				}
+				break
+			}
+			entryLock.RUnlock()
+			if err != nil {
+				if errors.IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
+					continue
+				}
+				return lmi, err
+			}
+			uploads = append(uploads, newUploads...)
+			maxUploads -= len(newUploads)
+			if end && walkResult.end {
+				eof = true
+				break
+			}
+		}
+	}
+	// For all received uploads fill in the multiparts result.
+	for _, upload := range uploads {
+		var objectName string
+		var uploadID string
+		if hasSuffix(upload.Object, slashSeparator) {
+			// All directory entries are common prefixes.
+			uploadID = "" // For common prefixes, upload ids are empty.
+			objectName = upload.Object
+			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
+		} else {
+			uploadID = upload.UploadID
+			objectName = upload.Object
+			result.Uploads = append(result.Uploads, upload)
+		}
+		result.NextKeyMarker = objectName
+		result.NextUploadIDMarker = uploadID
+	}
+
+	if !eof {
+		// Save the go-routine state in the pool so that it can continue from where it left off on
+		// the next request.
+		xl.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix, heal}, walkerCh, walkerDoneCh)
+	}
+
+	result.IsTruncated = !eof
+	// Result is not truncated, reset the markers.
+	if !result.IsTruncated {
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
+	}
+	return result, nil
+}
+
 // ListMultipartUploads - lists all the pending multipart
 // uploads for a particular object in a bucket.
 //

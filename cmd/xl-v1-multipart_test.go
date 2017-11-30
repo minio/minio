@@ -20,7 +20,104 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/errors"
 )
+
+// Tests cleanup multipart uploads for erasure coded backend.
+func TestXLCleanupMultipartUploadsInRoutine(t *testing.T) {
+	// Initialize configuration
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	defer os.RemoveAll(root)
+
+	// Create an instance of xl backend
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Defer cleanup of backend directories
+	defer removeRoots(fsDirs)
+
+	xl := obj.(*xlObjects)
+
+	// Close the go-routine, we are going to
+	// manually start it and test in this test case.
+	globalServiceDoneCh <- struct{}{}
+
+	bucketName := "bucket"
+	objectName := "object"
+
+	obj.MakeBucketWithLocation(bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+
+	go cleanupStaleMultipartUploads(20*time.Millisecond, 0, obj, xl.listMultipartUploadsCleanup, globalServiceDoneCh)
+
+	// Wait for 40ms such that - we have given enough time for
+	// cleanup routine to kick in.
+	time.Sleep(40 * time.Millisecond)
+
+	// Close the routine we do not need it anymore.
+	globalServiceDoneCh <- struct{}{}
+
+	// Check if upload id was already purged.
+	if err = obj.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
+		err = errors.Cause(err)
+		if _, ok := err.(InvalidUploadID); !ok {
+			t.Fatal("Unexpected err: ", err)
+		}
+	}
+}
+
+// Tests cleanup of stale upload ids.
+func TestXLCleanupMultipartUpload(t *testing.T) {
+	// Initialize configuration
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	defer os.RemoveAll(root)
+
+	// Create an instance of xl backend
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Defer cleanup of backend directories
+	defer removeRoots(fsDirs)
+
+	xl := obj.(*xlObjects)
+
+	// Close the go-routine, we are going to
+	// manually start it and test in this test case.
+	globalServiceDoneCh <- struct{}{}
+
+	bucketName := "bucket"
+	objectName := "object"
+
+	obj.MakeBucketWithLocation(bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+
+	if err = cleanupStaleMultipartUpload(bucketName, 0, obj, xl.listMultipartUploadsCleanup); err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+
+	// Check if upload id was already purged.
+	if err = obj.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
+		err = errors.Cause(err)
+		if _, ok := err.(InvalidUploadID); !ok {
+			t.Fatal("Unexpected err: ", err)
+		}
+	}
+}
 
 func TestUpdateUploadJSON(t *testing.T) {
 	// Initialize configuration
