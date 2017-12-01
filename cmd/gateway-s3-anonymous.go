@@ -26,6 +26,10 @@ import (
 
 // AnonPutObject creates a new object anonymously with the incoming data,
 func (l *s3Objects) AnonPutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, e error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return objInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
 	oi, err := l.anonClient.PutObject(bucket, object, data, data.Size(), data.MD5(), data.SHA256(), toMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
@@ -36,6 +40,10 @@ func (l *s3Objects) AnonPutObject(bucket string, object string, data *hash.Reade
 
 // AnonGetObject - Get object anonymously
 func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return traceError(BucketNotFound{Bucket: bucket})
+	}
 	opts := minio.GetObjectOptions{}
 	if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
 		return s3ToObjectError(errors.Trace(err), bucket, key)
@@ -56,6 +64,10 @@ func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, 
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, e error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return objInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
 	oi, err := l.anonClient.StatObject(bucket, object, minio.StatObjectOptions{})
 	if err != nil {
 		return objInfo, s3ToObjectError(errors.Trace(err), bucket, object)
@@ -66,6 +78,10 @@ func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo Obj
 
 // AnonListObjects - List objects anonymously
 func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return loi, traceError(BucketNotFound{Bucket: bucket})
+	}
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return loi, s3ToObjectError(errors.Trace(err), bucket)
@@ -76,6 +92,10 @@ func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string,
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
 func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return loi, traceError(BucketNotFound{Bucket: bucket})
+	}
 	result, err := l.anonClient.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
 		return loi, s3ToObjectError(errors.Trace(err), bucket)
@@ -86,6 +106,10 @@ func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken, delimit
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *s3Objects) AnonGetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return bi, traceError(BucketNotFound{Bucket: bucket})
+	}
 	if exists, err := l.anonClient.BucketExists(bucket); err != nil {
 		return bi, s3ToObjectError(errors.Trace(err), bucket)
 	} else if !exists {

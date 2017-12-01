@@ -114,6 +114,11 @@ func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, 
 
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
 func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return bucketInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference("").GetURL()
 	url, err := url.Parse(blobURL)
 	if err != nil {
@@ -146,6 +151,11 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	h := make(http.Header)
 	if length > 0 && startOffset > 0 {
 		h.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
@@ -171,6 +181,11 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
 func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return objInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	blobURL := a.client.GetContainerReference(bucket).GetBlobReference(object).GetURL()
 	resp, err := azureAnonRequest(httpHEAD, blobURL, nil)
 	if err != nil {
@@ -212,6 +227,11 @@ func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectI
 
 // AnonListObjects - Use Azure equivalent ListBlobs.
 func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return result, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     marker,
@@ -266,6 +286,10 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
 func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return result, traceError(BucketNotFound{Bucket: bucket})
+	}
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     continuationToken,

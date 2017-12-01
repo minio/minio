@@ -42,6 +42,10 @@ func mkRange(offset, size int64) string {
 // AnonGetObject - performs a plain http GET request on a public resource,
 // fails if the resource is not public.
 func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return traceError(BucketNotFound{Bucket: bucket})
+	}
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
@@ -117,6 +121,10 @@ func headerToObjectInfo(bucket, object string, header http.Header) (objInfo Obje
 // AnonGetObjectInfo - performs a plain http HEAD request on a public resource,
 // fails if the resource is not public.
 func (l *b2Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+	// if browser is not enabled and bucket requested is reserved bucket, return 404
+	if !globalIsBrowserEnabled && isMinioReservedBucket(bucket) {
+		return objInfo, traceError(BucketNotFound{Bucket: bucket})
+	}
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("HEAD", uri, nil)
 	if err != nil {
