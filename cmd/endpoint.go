@@ -65,18 +65,9 @@ func (endpoint Endpoint) Type() EndpointType {
 	return URLEndpointType
 }
 
-// SetHTTPS - sets secure http for URLEndpointType.
-func (endpoint Endpoint) SetHTTPS() {
-	if endpoint.Host != "" {
-		endpoint.Scheme = "https"
-	}
-}
-
-// SetHTTP - sets insecure http for URLEndpointType.
-func (endpoint Endpoint) SetHTTP() {
-	if endpoint.Host != "" {
-		endpoint.Scheme = "http"
-	}
+// IsHTTPS - returns true if secure for URLEndpointType.
+func (endpoint Endpoint) IsHTTPS() bool {
+	return endpoint.Scheme == "https"
 }
 
 // NewEndpoint - returns new endpoint based on given arguments.
@@ -190,18 +181,9 @@ func (endpoints EndpointList) Less(i, j int) bool {
 	return endpoints[i].String() < endpoints[j].String()
 }
 
-// SetHTTPS - sets secure http for URLEndpointType.
-func (endpoints EndpointList) SetHTTPS() {
-	for i := range endpoints {
-		endpoints[i].SetHTTPS()
-	}
-}
-
-// SetHTTP - sets insecure http for URLEndpointType.
-func (endpoints EndpointList) SetHTTP() {
-	for i := range endpoints {
-		endpoints[i].SetHTTP()
-	}
+// IsHTTPS - returns true if secure for URLEndpointType.
+func (endpoints EndpointList) IsHTTPS() bool {
+	return endpoints[0].IsHTTPS()
 }
 
 // NewEndpointList - returns new endpoint list based on input args.
