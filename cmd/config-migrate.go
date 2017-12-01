@@ -143,7 +143,7 @@ func migrateConfig() error {
 		}
 		fallthrough
 	case "18":
-		// Migrate version '17' to '18'.
+		// Migrate version '18' to '19'.
 		if err = migrateV18ToV19(); err != nil {
 			return err
 		}
@@ -154,6 +154,11 @@ func migrateConfig() error {
 		}
 		fallthrough
 	case "20":
+		if err = migrateV20ToV21(); err != nil {
+			return err
+		}
+		fallthrough
+	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -1500,7 +1505,7 @@ func migrateV19ToV20() error {
 	}
 
 	// Copy over fields from V19 into V20 config struct
-	srvConfig := &serverConfig{
+	srvConfig := &serverConfigV20{
 		Logger: &loggers{},
 		Notify: &notifier{},
 	}
@@ -1590,5 +1595,112 @@ func migrateV19ToV20() error {
 	}
 
 	log.Printf(configMigrateMSGTemplate, configFile, cv19.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV20ToV21() error {
+	configFile := getConfigFile()
+
+	cv20 := &serverConfigV20{}
+	_, err := quick.Load(configFile, cv20)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘20’. %v", err)
+	}
+	if cv20.Version != "20" {
+		return nil
+	}
+
+	// Copy over fields from V20 into V21 config struct
+	srvConfig := &serverConfigV21{
+		Notify: &notifier{},
+	}
+	srvConfig.Version = serverConfigVersion
+	srvConfig.Credential = cv20.Credential
+	srvConfig.Region = cv20.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	// check and set notifiers config
+	if len(cv20.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		// New deliveryMode parameter is added for AMQP,
+		// default value is already 0, so nothing to
+		// explicitly migrate here.
+		srvConfig.Notify.AMQP = cv20.Notify.AMQP
+	}
+	if len(cv20.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv20.Notify.ElasticSearch
+	}
+	if len(cv20.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv20.Notify.Redis
+	}
+	if len(cv20.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv20.Notify.PostgreSQL
+	}
+	if len(cv20.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv20.Notify.Kafka
+	}
+	if len(cv20.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv20.Notify.NATS
+	}
+	if len(cv20.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv20.Notify.Webhook
+	}
+	if len(cv20.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
+		srvConfig.Notify.MySQL["1"] = mySQLNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv20.Notify.MySQL
+	}
+	if len(cv20.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]mqttNotify)
+		srvConfig.Notify.MQTT["1"] = mqttNotify{}
+	} else {
+		srvConfig.Notify.MQTT = cv20.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv20.Browser
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv20.Domain
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv20.Version, srvConfig.Version, err)
+	}
+
+	log.Printf(configMigrateMSGTemplate, configFile, cv20.Version, srvConfig.Version)
 	return nil
 }
