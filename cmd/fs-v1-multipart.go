@@ -30,13 +30,6 @@ import (
 	"github.com/minio/minio/pkg/lock"
 )
 
-const (
-	// Expiry duration after which the multipart uploads are deemed stale.
-	fsMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
-	// Cleanup interval when the stale multipart cleanup is initiated.
-	fsMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
-)
-
 // Returns if the prefix is a multipart upload.
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)
@@ -1041,62 +1034,4 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	}
 
 	return nil
-}
-
-// Removes multipart uploads if any older than `expiry` duration in a given bucket.
-func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Duration) (err error) {
-	var lmi ListMultipartsInfo
-	var st os.FileInfo
-	for {
-		// List multipart uploads in a bucket 1000 at a time
-		prefix := ""
-		lmi, err = fs.listMultipartUploadsCleanup(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
-		if err != nil {
-			errorIf(err, "Unable to list uploads")
-			return err
-		}
-
-		// Remove uploads (and its parts) older than expiry duration.
-		for _, upload := range lmi.Uploads {
-			uploadIDPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, upload.Object, upload.UploadID)
-			if st, err = fsStatDir(uploadIDPath); err != nil {
-				errorIf(err, "Failed to lookup uploads directory path %s", uploadIDPath)
-				continue
-			}
-			if time.Since(st.ModTime()) > expiry {
-				fs.AbortMultipartUpload(bucket, upload.Object, upload.UploadID)
-			}
-		}
-
-		// No more incomplete uploads remain, break and return.
-		if !lmi.IsTruncated {
-			break
-		}
-	}
-
-	return nil
-}
-
-// Removes multipart uploads if any older than `expiry` duration
-// on all buckets for every `cleanupInterval`, this function is
-// blocking and should be run in a go-routine.
-func (fs fsObjects) cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
-	ticker := time.NewTicker(cleanupInterval)
-	for {
-		select {
-		case <-doneCh:
-			// Stop the timer.
-			ticker.Stop()
-			return
-		case <-ticker.C:
-			bucketInfos, err := fs.ListBuckets()
-			if err != nil {
-				errorIf(err, "Unable to list buckets")
-				continue
-			}
-			for _, bucketInfo := range bucketInfos {
-				fs.cleanupStaleMultipartUpload(bucketInfo.Name, expiry)
-			}
-		}
-	}
 }

@@ -156,8 +156,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
-	// Start background process to cleanup old files in `.minio.sys`.
-	go fs.cleanupStaleMultipartUploads(fsMultipartCleanupInterval, fsMultipartExpiry, globalServiceDoneCh)
+	// Start background process to cleanup old multipart objects in `.minio.sys`.
+	go cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, fs, fs.listMultipartUploadsCleanup, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
