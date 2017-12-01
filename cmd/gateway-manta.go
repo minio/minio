@@ -131,7 +131,7 @@ func newMantaGateway(host string) (GatewayLayer, error) {
 		}
 	}
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	keyMaterial := os.Getenv("MANTA_KEY_MATERIAL")
 
 	if keyMaterial == "" {
