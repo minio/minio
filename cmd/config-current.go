@@ -36,9 +36,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "20"
+const serverConfigVersion = "21"
 
-type serverConfig = serverConfigV20
+type serverConfig = serverConfigV21
 
 var (
 	// globalServerConfig server config.
@@ -71,7 +71,7 @@ func (s *serverConfig) GetRegion() string {
 	return s.Region
 }
 
-// SetCredentials set new credentials. SetCredential returns the previous credential.
+// SetCredential sets new credential and returns the previous credential.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	s.Lock()
 	defer s.Unlock()
@@ -126,12 +126,8 @@ func newServerConfig() *serverConfig {
 		Credential: auth.MustGetNewCredentials(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
-		Logger:     &loggers{},
 		Notify:     &notifier{},
 	}
-
-	// Enable console logger by default on a fresh run.
-	srvCfg.Logger.Console = NewConsoleLogger()
 
 	// Make sure to initialize notification configs.
 	srvCfg.Notify.AMQP = make(map[string]amqpNotify)
@@ -272,11 +268,6 @@ func getValidConfig() (*serverConfig, error) {
 	// Error out if global is env credential is not set and config has invalid credential
 	if !globalIsEnvCreds && !srvCfg.Credential.IsValid() {
 		return nil, errors.New("invalid credential in config file " + configFile)
-	}
-
-	// Validate logger field
-	if err = srvCfg.Logger.Validate(); err != nil {
-		return nil, err
 	}
 
 	// Validate notify field
