@@ -598,12 +598,6 @@ func (l *b2Objects) NewMultipartUpload(bucket string, object string, metadata ma
 	return lf.ID, nil
 }
 
-// CopyObjectPart copy part of object to other bucket and object.
-func (l *b2Objects) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string,
-	uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	return PartInfo{}, errors.Trace(NotImplemented{})
-}
-
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
 func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *h2.Reader) (pi PartInfo, err error) {
 	bkt, err := l.Bucket(bucket)

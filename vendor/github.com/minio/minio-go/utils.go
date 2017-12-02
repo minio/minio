@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,8 @@ package minio
 import (
 	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -38,18 +41,18 @@ func xmlDecoder(body io.Reader, v interface{}) error {
 	return d.Decode(v)
 }
 
-// sum256 calculate sha256 sum for an input byte array.
-func sum256(data []byte) []byte {
+// sum256 calculate sha256sum for an input byte array, returns hex encoded.
+func sum256Hex(data []byte) string {
 	hash := sha256.New()
 	hash.Write(data)
-	return hash.Sum(nil)
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
-// sumMD5 calculate sumMD5 sum for an input byte array.
-func sumMD5(data []byte) []byte {
+// sumMD5Base64 calculate md5sum for an input byte array, returns base64 encoded.
+func sumMD5Base64(data []byte) string {
 	hash := md5.New()
 	hash.Write(data)
-	return hash.Sum(nil)
+	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
 }
 
 // getEndpointURL - construct a new endpoint.
@@ -109,10 +112,13 @@ func closeResponse(resp *http.Response) {
 	}
 }
 
-var emptySHA256 = sum256(nil)
+var (
+	// Hex encoded string of nil sha256sum bytes.
+	emptySHA256Hex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-// Sentinel URL is the default url value which is invalid.
-var sentinelURL = url.URL{}
+	// Sentinel URL is the default url value which is invalid.
+	sentinelURL = url.URL{}
+)
 
 // Verify if input endpoint URL is valid.
 func isValidEndpointURL(endpointURL url.URL) error {
@@ -230,8 +236,9 @@ var cseHeaders = []string{
 
 // isStandardHeader returns true if header is a supported header and not a custom header
 func isStandardHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
 	for _, header := range supportedHeaders {
-		if strings.Compare(strings.ToLower(headerKey), header) == 0 {
+		if strings.ToLower(header) == key {
 			return true
 		}
 	}
@@ -249,4 +256,32 @@ func isCSEHeader(headerKey string) bool {
 		}
 	}
 	return false
+}
+
+// sseHeaders is list of server side encryption headers
+var sseHeaders = []string{
+	"x-amz-server-side-encryption",
+	"x-amz-server-side-encryption-aws-kms-key-id",
+	"x-amz-server-side-encryption-context",
+	"x-amz-server-side-encryption-customer-algorithm",
+	"x-amz-server-side-encryption-customer-key",
+	"x-amz-server-side-encryption-customer-key-MD5",
+}
+
+// isSSEHeader returns true if header is a server side encryption header.
+func isSSEHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
+	for _, h := range sseHeaders {
+		if strings.ToLower(h) == key {
+			return true
+		}
+	}
+	return false
+}
+
+// isAmzHeader returns true if header is a x-amz-meta-* or x-amz-acl header.
+func isAmzHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
+
+	return strings.HasPrefix(key, "x-amz-meta-") || key == "x-amz-acl"
 }

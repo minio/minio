@@ -436,7 +436,9 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 // CopyObjectPart - similar to PutObjectPart but reads data from an existing
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64) (pi PartInfo, e error) {
+func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
+	startOffset int64, length int64, metadata map[string]string) (pi PartInfo, e error) {
+
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
 		return pi, err
 	}

@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +21,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"strconv"
 )
 
 /* **** SAMPLE ERROR RESPONSE ****
@@ -48,6 +48,9 @@ type ErrorResponse struct {
 	// Region where the bucket is located. This header is returned
 	// only in HEAD bucket and ListObjects response.
 	Region string
+
+	// Underlying HTTP status code for the returned error
+	StatusCode int `xml:"-" json:"-"`
 
 	// Headers of the returned S3 XML error
 	Headers http.Header `xml:"-" json:"-"`
@@ -100,7 +103,10 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 		msg := "Response is empty. " + reportIssue
 		return ErrInvalidArgument(msg)
 	}
-	var errResp ErrorResponse
+
+	errResp := ErrorResponse{
+		StatusCode: resp.StatusCode,
+	}
 
 	err := xmlDecoder(resp.Body, &errResp)
 	// Xml decoding failed with no body, fall back to HTTP headers.
@@ -109,12 +115,14 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 		case http.StatusNotFound:
 			if objectName == "" {
 				errResp = ErrorResponse{
+					StatusCode: resp.StatusCode,
 					Code:       "NoSuchBucket",
 					Message:    "The specified bucket does not exist.",
 					BucketName: bucketName,
 				}
 			} else {
 				errResp = ErrorResponse{
+					StatusCode: resp.StatusCode,
 					Code:       "NoSuchKey",
 					Message:    "The specified key does not exist.",
 					BucketName: bucketName,
@@ -123,6 +131,7 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 			}
 		case http.StatusForbidden:
 			errResp = ErrorResponse{
+				StatusCode: resp.StatusCode,
 				Code:       "AccessDenied",
 				Message:    "Access Denied.",
 				BucketName: bucketName,
@@ -130,12 +139,14 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 			}
 		case http.StatusConflict:
 			errResp = ErrorResponse{
+				StatusCode: resp.StatusCode,
 				Code:       "Conflict",
 				Message:    "Bucket not empty.",
 				BucketName: bucketName,
 			}
 		case http.StatusPreconditionFailed:
 			errResp = ErrorResponse{
+				StatusCode: resp.StatusCode,
 				Code:       "PreconditionFailed",
 				Message:    s3ErrorResponseMap["PreconditionFailed"],
 				BucketName: bucketName,
@@ -143,6 +154,7 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 			}
 		default:
 			errResp = ErrorResponse{
+				StatusCode: resp.StatusCode,
 				Code:       resp.Status,
 				Message:    resp.Status,
 				BucketName: bucketName,
@@ -150,7 +162,7 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 		}
 	}
 
-	// Save hodID, requestID and region information
+	// Save hostID, requestID and region information
 	// from headers if not available through error XML.
 	if errResp.RequestID == "" {
 		errResp.RequestID = resp.Header.Get("x-amz-request-id")
@@ -162,7 +174,7 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 		errResp.Region = resp.Header.Get("x-amz-bucket-region")
 	}
 	if errResp.Code == "InvalidRegion" && errResp.Region != "" {
-		errResp.Message = fmt.Sprintf("Region does not match, expecting region '%s'.", errResp.Region)
+		errResp.Message = fmt.Sprintf("Region does not match, expecting region ‘%s’.", errResp.Region)
 	}
 
 	// Save headers returned in the API XML error
@@ -173,10 +185,10 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 
 // ErrTransferAccelerationBucket - bucket name is invalid to be used with transfer acceleration.
 func ErrTransferAccelerationBucket(bucketName string) error {
-	msg := fmt.Sprintf("The name of the bucket used for Transfer Acceleration must be DNS-compliant and must not contain periods (\".\").")
 	return ErrorResponse{
+		StatusCode: http.StatusBadRequest,
 		Code:       "InvalidArgument",
-		Message:    msg,
+		Message:    "The name of the bucket used for Transfer Acceleration must be DNS-compliant and must not contain periods ‘.’.",
 		BucketName: bucketName,
 	}
 }
@@ -185,6 +197,7 @@ func ErrTransferAccelerationBucket(bucketName string) error {
 func ErrEntityTooLarge(totalSize, maxObjectSize int64, bucketName, objectName string) error {
 	msg := fmt.Sprintf("Your proposed upload size ‘%d’ exceeds the maximum allowed object size ‘%d’ for single PUT operation.", totalSize, maxObjectSize)
 	return ErrorResponse{
+		StatusCode: http.StatusBadRequest,
 		Code:       "EntityTooLarge",
 		Message:    msg,
 		BucketName: bucketName,
@@ -194,9 +207,10 @@ func ErrEntityTooLarge(totalSize, maxObjectSize int64, bucketName, objectName st
 
 // ErrEntityTooSmall - Input size is smaller than supported minimum.
 func ErrEntityTooSmall(totalSize int64, bucketName, objectName string) error {
-	msg := fmt.Sprintf("Your proposed upload size ‘%d’ is below the minimum allowed object size '0B' for single PUT operation.", totalSize)
+	msg := fmt.Sprintf("Your proposed upload size ‘%d’ is below the minimum allowed object size ‘0B’ for single PUT operation.", totalSize)
 	return ErrorResponse{
-		Code:       "EntityTooLarge",
+		StatusCode: http.StatusBadRequest,
+		Code:       "EntityTooSmall",
 		Message:    msg,
 		BucketName: bucketName,
 		Key:        objectName,
@@ -205,9 +219,9 @@ func ErrEntityTooSmall(totalSize int64, bucketName, objectName string) error {
 
 // ErrUnexpectedEOF - Unexpected end of file reached.
 func ErrUnexpectedEOF(totalRead, totalSize int64, bucketName, objectName string) error {
-	msg := fmt.Sprintf("Data read ‘%s’ is not equal to the size ‘%s’ of the input Reader.",
-		strconv.FormatInt(totalRead, 10), strconv.FormatInt(totalSize, 10))
+	msg := fmt.Sprintf("Data read ‘%d’ is not equal to the size ‘%d’ of the input Reader.", totalRead, totalSize)
 	return ErrorResponse{
+		StatusCode: http.StatusBadRequest,
 		Code:       "UnexpectedEOF",
 		Message:    msg,
 		BucketName: bucketName,
@@ -218,18 +232,20 @@ func ErrUnexpectedEOF(totalRead, totalSize int64, bucketName, objectName string)
 // ErrInvalidBucketName - Invalid bucket name response.
 func ErrInvalidBucketName(message string) error {
 	return ErrorResponse{
-		Code:      "InvalidBucketName",
-		Message:   message,
-		RequestID: "minio",
+		StatusCode: http.StatusBadRequest,
+		Code:       "InvalidBucketName",
+		Message:    message,
+		RequestID:  "minio",
 	}
 }
 
 // ErrInvalidObjectName - Invalid object name response.
 func ErrInvalidObjectName(message string) error {
 	return ErrorResponse{
-		Code:      "NoSuchKey",
-		Message:   message,
-		RequestID: "minio",
+		StatusCode: http.StatusNotFound,
+		Code:       "NoSuchKey",
+		Message:    message,
+		RequestID:  "minio",
 	}
 }
 
@@ -240,9 +256,10 @@ var ErrInvalidObjectPrefix = ErrInvalidObjectName
 // ErrInvalidArgument - Invalid argument response.
 func ErrInvalidArgument(message string) error {
 	return ErrorResponse{
-		Code:      "InvalidArgument",
-		Message:   message,
-		RequestID: "minio",
+		StatusCode: http.StatusBadRequest,
+		Code:       "InvalidArgument",
+		Message:    message,
+		RequestID:  "minio",
 	}
 }
 
@@ -250,9 +267,10 @@ func ErrInvalidArgument(message string) error {
 // The specified bucket does not have a bucket policy.
 func ErrNoSuchBucketPolicy(message string) error {
 	return ErrorResponse{
-		Code:      "NoSuchBucketPolicy",
-		Message:   message,
-		RequestID: "minio",
+		StatusCode: http.StatusNotFound,
+		Code:       "NoSuchBucketPolicy",
+		Message:    message,
+		RequestID:  "minio",
 	}
 }
 
@@ -260,8 +278,9 @@ func ErrNoSuchBucketPolicy(message string) error {
 // The specified API call is not supported
 func ErrAPINotSupported(message string) error {
 	return ErrorResponse{
-		Code:      "APINotSupported",
-		Message:   message,
-		RequestID: "minio",
+		StatusCode: http.StatusNotImplemented,
+		Code:       "APINotSupported",
+		Message:    message,
+		RequestID:  "minio",
 	}
 }

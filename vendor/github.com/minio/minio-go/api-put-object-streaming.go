@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2017 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,19 +34,14 @@ import (
 //
 // Following code handles these types of readers.
 //
-//  - *os.File
 //  - *minio.Object
 //  - Any reader which has a method 'ReadAt()'
 //
 func (c Client) putObjectMultipartStream(ctx context.Context, bucketName, objectName string,
 	reader io.Reader, size int64, opts PutObjectOptions) (n int64, err error) {
 
-	// Verify if reader is *minio.Object, *os.File or io.ReaderAt.
-	// NOTE: Verification of object is kept for a specific purpose
-	// while it is going to be duck typed similar to io.ReaderAt.
-	// It is to indicate that *minio.Object implements io.ReaderAt.
-	// and such a functionality is used in the subsequent code path.
-	if isFile(reader) || !isObject(reader) && isReadAt(reader) {
+	if !isObject(reader) && isReadAt(reader) {
+		// Verify if the reader implements ReadAt and it is not a *minio.Object then we will use parallel uploader.
 		n, err = c.putObjectMultipartStreamFromReadAt(ctx, bucketName, objectName, reader.(io.ReaderAt), size, opts)
 	} else {
 		n, err = c.putObjectMultipartStreamNoChecksum(ctx, bucketName, objectName, reader, size, opts)
@@ -171,7 +167,7 @@ func (c Client) putObjectMultipartStreamFromReadAt(ctx context.Context, bucketNa
 				var objPart ObjectPart
 				objPart, err = c.uploadPart(ctx, bucketName, objectName, uploadID,
 					sectionReader, uploadReq.PartNum,
-					nil, nil, partSize, opts.UserMetadata)
+					"", "", partSize, opts.UserMetadata)
 				if err != nil {
 					uploadedPartsCh <- uploadedPartRes{
 						Size:  0,
@@ -284,7 +280,7 @@ func (c Client) putObjectMultipartStreamNoChecksum(ctx context.Context, bucketNa
 		var objPart ObjectPart
 		objPart, err = c.uploadPart(ctx, bucketName, objectName, uploadID,
 			io.LimitReader(hookReader, partSize),
-			partNumber, nil, nil, partSize, opts.UserMetadata)
+			partNumber, "", "", partSize, opts.UserMetadata)
 		if err != nil {
 			return totalUploadedSize, err
 		}
@@ -348,7 +344,12 @@ func (c Client) putObjectNoChecksum(ctx context.Context, bucketName, objectName 
 	}
 	if size > 0 {
 		if isReadAt(reader) && !isObject(reader) {
-			reader = io.NewSectionReader(reader.(io.ReaderAt), 0, size)
+			seeker, _ := reader.(io.Seeker)
+			offset, err := seeker.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return 0, ErrInvalidArgument(err.Error())
+			}
+			reader = io.NewSectionReader(reader.(io.ReaderAt), offset, size)
 		}
 	}
 
@@ -358,7 +359,7 @@ func (c Client) putObjectNoChecksum(ctx context.Context, bucketName, objectName 
 
 	// This function does not calculate sha256 and md5sum for payload.
 	// Execute put object.
-	st, err := c.putObjectDo(ctx, bucketName, objectName, readSeeker, nil, nil, size, opts)
+	st, err := c.putObjectDo(ctx, bucketName, objectName, readSeeker, "", "", size, opts)
 	if err != nil {
 		return 0, err
 	}
@@ -370,7 +371,7 @@ func (c Client) putObjectNoChecksum(ctx context.Context, bucketName, objectName 
 
 // putObjectDo - executes the put object http operation.
 // NOTE: You must have WRITE permissions on a bucket to add an object to it.
-func (c Client) putObjectDo(ctx context.Context, bucketName, objectName string, reader io.Reader, md5Sum []byte, sha256Sum []byte, size int64, opts PutObjectOptions) (ObjectInfo, error) {
+func (c Client) putObjectDo(ctx context.Context, bucketName, objectName string, reader io.Reader, md5Base64, sha256Hex string, size int64, opts PutObjectOptions) (ObjectInfo, error) {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ObjectInfo{}, err
@@ -383,13 +384,13 @@ func (c Client) putObjectDo(ctx context.Context, bucketName, objectName string, 
 
 	// Populate request metadata.
 	reqMetadata := requestMetadata{
-		bucketName:         bucketName,
-		objectName:         objectName,
-		customHeader:       customHeader,
-		contentBody:        reader,
-		contentLength:      size,
-		contentMD5Bytes:    md5Sum,
-		contentSHA256Bytes: sha256Sum,
+		bucketName:       bucketName,
+		objectName:       objectName,
+		customHeader:     customHeader,
+		contentBody:      reader,
+		contentLength:    size,
+		contentMD5Base64: md5Base64,
+		contentSHA256Hex: sha256Hex,
 	}
 
 	// Execute PUT an objectName.

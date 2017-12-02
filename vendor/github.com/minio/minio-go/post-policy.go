@@ -1,3 +1,20 @@
+/*
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package minio
 
 import (
@@ -164,6 +181,28 @@ func (p *PostPolicy) SetSuccessStatusAction(status string) error {
 		return err
 	}
 	p.formData["success_action_status"] = status
+	return nil
+}
+
+// SetUserMetadata - Set user metadata as a key/value couple.
+// Can be retrieved through a HEAD request or an event.
+func (p *PostPolicy) SetUserMetadata(key string, value string) error {
+	if strings.TrimSpace(key) == "" || key == "" {
+		return ErrInvalidArgument("Key is empty")
+	}
+	if strings.TrimSpace(value) == "" || value == "" {
+		return ErrInvalidArgument("Value is empty")
+	}
+	headerName := fmt.Sprintf("x-amz-meta-%s", key)
+	policyCond := policyCondition{
+		matchType: "eq",
+		condition: fmt.Sprintf("$%s", headerName),
+		value:     value,
+	}
+	if err := p.addNewPolicy(policyCond); err != nil {
+		return err
+	}
+	p.formData[headerName] = value
 	return nil
 }
 

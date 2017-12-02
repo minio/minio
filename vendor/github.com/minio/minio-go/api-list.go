@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +40,7 @@ import (
 //
 func (c Client) ListBuckets() ([]BucketInfo, error) {
 	// Execute GET on service.
-	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{contentSHA256Bytes: emptySHA256})
+	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{contentSHA256Hex: emptySHA256Hex})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -217,9 +218,9 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 
 	// Execute GET on bucket to list objects.
 	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentSHA256Bytes: emptySHA256,
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentSHA256Hex: emptySHA256Hex,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -395,9 +396,9 @@ func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimit
 
 	// Execute GET on bucket to list objects.
 	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentSHA256Bytes: emptySHA256,
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentSHA256Hex: emptySHA256Hex,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -574,9 +575,9 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 
 	// Execute GET on bucketName to list multipart uploads.
 	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentSHA256Bytes: emptySHA256,
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentSHA256Hex: emptySHA256Hex,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -692,10 +693,10 @@ func (c Client) listObjectPartsQuery(bucketName, objectName, uploadID string, pa
 
 	// Execute GET on objectName to get list of parts.
 	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{
-		bucketName:         bucketName,
-		objectName:         objectName,
-		queryValues:        urlValues,
-		contentSHA256Bytes: emptySHA256,
+		bucketName:       bucketName,
+		objectName:       objectName,
+		queryValues:      urlValues,
+		contentSHA256Hex: emptySHA256Hex,
 	})
 	defer closeResponse(resp)
 	if err != nil {

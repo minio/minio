@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +26,6 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
-// Verify if reader is *os.File
-func isFile(reader io.Reader) (ok bool) {
-	_, ok = reader.(*os.File)
-	return
-}
-
 // Verify if reader is *minio.Object
 func isObject(reader io.Reader) (ok bool) {
 	_, ok = reader.(*Object)
@@ -40,6 +35,26 @@ func isObject(reader io.Reader) (ok bool) {
 // Verify if reader is a generic ReaderAt
 func isReadAt(reader io.Reader) (ok bool) {
 	_, ok = reader.(io.ReaderAt)
+	if ok {
+		var v *os.File
+		v, ok = reader.(*os.File)
+		if ok {
+			// Stdin, Stdout and Stderr all have *os.File type
+			// which happen to also be io.ReaderAt compatible
+			// we need to add special conditions for them to
+			// be ignored by this function.
+			for _, f := range []string{
+				"/dev/stdin",
+				"/dev/stdout",
+				"/dev/stderr",
+			} {
+				if f == v.Name() {
+					ok = false
+					break
+				}
+			}
+		}
+	}
 	return
 }
 
