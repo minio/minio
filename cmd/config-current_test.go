@@ -79,7 +79,6 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg5)
 	}
 
-	// Set new console logger.
 	// Set new MySQL notification id.
 	globalServerConfig.Notify.SetMySQLByID("2", mySQLNotify{})
 	savedNotifyCfg6 := globalServerConfig.Notify.GetMySQLByID("2")
@@ -87,34 +86,12 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
 	}
 
-	// Set new console logger.
 	// Set new MQTT notification id.
 	globalServerConfig.Notify.SetMQTTByID("2", mqttNotify{})
 	savedNotifyCfg7 := globalServerConfig.Notify.GetMQTTByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg7, mqttNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mqttNotify{}, savedNotifyCfg7)
 	}
-
-	consoleLogger := NewConsoleLogger()
-	globalServerConfig.Logger.SetConsole(consoleLogger)
-	consoleCfg := globalServerConfig.Logger.GetConsole()
-	if !reflect.DeepEqual(consoleCfg, consoleLogger) {
-		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger, consoleCfg)
-	}
-	// Set new console logger.
-	consoleLogger.Enable = false
-	globalServerConfig.Logger.SetConsole(consoleLogger)
-
-	// Set new file logger.
-	fileLogger := NewFileLogger("test-log-file")
-	globalServerConfig.Logger.SetFile(fileLogger)
-	fileCfg := globalServerConfig.Logger.GetFile()
-	if !reflect.DeepEqual(fileCfg, fileLogger) {
-		t.Errorf("Expecting file logger config %#v found %#v", fileLogger, fileCfg)
-	}
-	// Set new file logger.
-	fileLogger.Enable = false
-	globalServerConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
 	if globalServerConfig.GetVersion() != serverConfigVersion {
@@ -273,9 +250,6 @@ func TestValidateConfig(t *testing.T) {
 		// Test 10 - duplicated json keys
 		{`{"version": "` + v + `", "browser": "on", "browser": "on", "region":"us-east-1", "credential" : {"accessKey":"minio", "secretKey":"minio123"}}`, false},
 
-		// Test 11 - empty filename field in File
-		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "file": { "enable": true, "filename": "" } }}`, false},
-
 		// Test 12 - Test AMQP
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "amqp": { "1": { "enable": true, "url": "", "exchange": "", "routingKey": "", "exchangeType": "", "mandatory": false, "immediate": false, "durable": false, "internal": false, "noWait": false, "autoDeleted": false }}}}`, false},
 
@@ -337,7 +311,7 @@ func TestValidateConfig(t *testing.T) {
 			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, verr)
 		}
 		if !testCase.shouldPass && verr == nil {
-			t.Errorf("Test %d, should fail but it succeed.", i+1)
+			t.Errorf("Test %d, should fail but it succeeded.", i+1)
 		}
 	}
 

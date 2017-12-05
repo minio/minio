@@ -37,22 +37,6 @@ func checkUpdate(mode string) {
 	}
 }
 
-func enableLoggers() {
-	fileLogTarget := globalServerConfig.Logger.GetFile()
-	if fileLogTarget.Enable {
-		err := InitFileLogger(&fileLogTarget)
-		fatalIf(err, "Unable to initialize file logger")
-		log.AddTarget(fileLogTarget)
-	}
-
-	consoleLogTarget := globalServerConfig.Logger.GetConsole()
-	if consoleLogTarget.Enable {
-		InitConsoleLogger(&consoleLogTarget)
-	}
-
-	log.SetConsoleTarget(consoleLogTarget)
-}
-
 func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
