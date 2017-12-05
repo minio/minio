@@ -147,8 +147,8 @@ func serverMain(ctx *cli.Context) {
 	// Initialize server config.
 	initConfig()
 
-	// Enable loggers as per configuration file.
-	enableLoggers()
+	// Enable console logger.
+	enableConsoleLogger()
 
 	// Init the error tracing module.
 	errors.Init(GOPATH, "github.com/minio/minio")

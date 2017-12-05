@@ -509,3 +509,18 @@ type serverConfigV20 struct {
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
+
+// serverConfigV21 is just like version '20' without logger field
+type serverConfigV21 struct {
+	sync.RWMutex
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
+	Domain     string           `json:"domain"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
