@@ -29,7 +29,7 @@ import (
 // Documentation links, these are part of message printing code.
 const (
 	mcQuickStartGuide     = "https://docs.minio.io/docs/minio-client-quickstart-guide"
-	quickStartGuide       = "https://docs.minio.io/docs/minio-sdks-quickstart-guide"
+	quickStartGuide       = "https://docs.minio.io/docs/sdk-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.
