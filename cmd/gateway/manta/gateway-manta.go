@@ -29,7 +29,10 @@ import (
 	triton "github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/authentication"
 	"github.com/joyent/triton-go/storage"
+
 	"github.com/minio/cli"
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -54,11 +57,13 @@ FLAGS:
   {{end}}{{end}}
 ENDPOINT:
   Manta server endpoint. Default ENDPOINT is https://us-east.manta.joyent.com
+
 ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: The Manta account name.
      MINIO_SECRET_KEY: A KeyID associated with the Manta account.
      MANTA_KEY_MATERIAL: The path to the SSH Key associated with the Manta account if the MINIO_SECRET_KEY is not in SSH Agent.
+
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
@@ -81,57 +86,48 @@ EXAMPLES:
 
 `
 
-	MustRegisterGatewayCommand(cli.Command{
+	minio.RegisterGatewayCommand(cli.Command{
 		Name:               mantaBackend,
 		Usage:              "Manta Object Storage.",
 		Action:             mantaGatewayMain,
 		CustomHelpTemplate: mantaGatewayTemplate,
-		Flags:              append(serverFlags, globalFlags...),
 		HideHelpCommand:    true,
 	})
 }
 
 func mantaGatewayMain(ctx *cli.Context) {
+	// Validate gateway arguments.
 	host := ctx.Args().First()
-	startGateway(ctx, &MantaGateway{host})
+	// Validate gateway arguments.
+	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+
+	minio.StartGateway(ctx, &Manta{host})
 }
 
-// MantaGateway implements Gateway.
-type MantaGateway struct {
+// Manta implements Gateway.
+type Manta struct {
 	host string
 }
 
 // Name implements Gateway interface.
-func (g *MantaGateway) Name() string {
+func (g *Manta) Name() string {
 	return mantaBackend
 }
 
 // NewGatewayLayer returns manta gateway layer, implements GatewayLayer interface to
 // talk to manta remote backend.
-func (g *MantaGateway) NewGatewayLayer() (GatewayLayer, error) {
-	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-	return newMantaGateway(g.host)
-}
-
-// tritonObjects - Implements Object layer for Triton Manta storage
-type tritonObjects struct {
-	gatewayUnsupported
-	client *storage.StorageClient
-}
-
-func newMantaGateway(host string) (GatewayLayer, error) {
+func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
 	var err error
 	var signer authentication.Signer
 	var endpoint = defaultMantaURL
 
-	if host != "" {
-		endpoint, _, err = parseGatewayEndpoint(host)
+	if g.host != "" {
+		endpoint, _, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	creds := globalServerConfig.GetCredential()
 	keyMaterial := os.Getenv("MANTA_KEY_MATERIAL")
 
 	if keyMaterial == "" {
@@ -170,22 +166,33 @@ func newMantaGateway(host string) (GatewayLayer, error) {
 		}
 	}
 
-	config := &triton.ClientConfig{
+	triton, err := storage.NewClient(&triton.ClientConfig{
 		MantaURL:    endpoint,
 		AccountName: creds.AccessKey,
 		Signers:     []authentication.Signer{signer},
-	}
-	triton, err := storage.NewClient(config)
+	})
 	if err != nil {
 		return nil, err
 	}
-	triton.Client.HTTPClient = &http.Client{Transport: newCustomHTTPTransport()}
 
-	gateway := &tritonObjects{
-		client: triton,
+	triton.Client.HTTPClient = &http.Client{
+		Transport: minio.NewCustomHTTPTransport(),
 	}
 
-	return gateway, nil
+	return &tritonObjects{
+		client: triton,
+	}, nil
+}
+
+// Production - Manta is not production ready.
+func (g *Manta) Production() bool {
+	return false
+}
+
+// tritonObjects - Implements Object layer for Triton Manta storage
+type tritonObjects struct {
+	minio.GatewayUnsupported
+	client *storage.StorageClient
 }
 
 // Shutdown - save any gateway metadata to disk
@@ -195,7 +202,7 @@ func (t *tritonObjects) Shutdown() error {
 }
 
 // StorageInfo - Not relevant to Triton backend.
-func (t *tritonObjects) StorageInfo() (si StorageInfo) {
+func (t *tritonObjects) StorageInfo() (si minio.StorageInfo) {
 	return si
 }
 
@@ -220,8 +227,8 @@ func (t *tritonObjects) MakeBucketWithLocation(bucket, location string) error {
 // GetBucketInfo - Get directory metadata..
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
-	var info BucketInfo
+func (t *tritonObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e error) {
+	var info minio.BucketInfo
 	ctx := context.Background()
 	resp, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
 		ObjectPath: path.Join(mantaDefaultRootStore, bucket),
@@ -230,7 +237,7 @@ func (t *tritonObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 		return info, err
 	}
 
-	return BucketInfo{
+	return minio.BucketInfo{
 		Name:    bucket,
 		Created: resp.LastModified,
 	}, nil
@@ -240,7 +247,7 @@ func (t *tritonObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 // ListDirectories.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListBuckets() (buckets []BucketInfo, err error) {
+func (t *tritonObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 	ctx := context.Background()
 	dirs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
 		DirectoryName: path.Join(mantaDefaultRootStore),
@@ -251,7 +258,7 @@ func (t *tritonObjects) ListBuckets() (buckets []BucketInfo, err error) {
 
 	for _, dir := range dirs.Entries {
 		if dir.Type == "directory" {
-			buckets = append(buckets, BucketInfo{
+			buckets = append(buckets, minio.BucketInfo{
 				Name:    dir.Name,
 				Created: dir.ModifiedTime,
 			})
@@ -280,7 +287,7 @@ func (t *tritonObjects) DeleteBucket(bucket string) error {
 // and marker, uses Manta equivalent ListDirectory.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	ctx := context.Background()
 	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
 		DirectoryName: path.Join(mantaDefaultRootStore, bucket, prefix),
@@ -302,7 +309,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 		if obj.Type == "directory" {
 			result.Prefixes = append(result.Prefixes, obj.Name)
 		} else {
-			result.Objects = append(result.Objects, ObjectInfo{
+			result.Objects = append(result.Objects, minio.ObjectInfo{
 				Name:    obj.Name,
 				Size:    int64(obj.Size),
 				ModTime: obj.ModifiedTime,
@@ -326,7 +333,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 // and continuationToken, uses Manta equivalent ListDirectory.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
 	ctx := context.Background()
 	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
 		DirectoryName: path.Join(mantaDefaultRootStore, bucket, prefix),
@@ -348,7 +355,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 		if obj.Type == "directory" {
 			result.Prefixes = append(result.Prefixes, obj.Name)
 		} else {
-			result.Objects = append(result.Objects, ObjectInfo{
+			result.Objects = append(result.Objects, minio.ObjectInfo{
 				Name:    obj.Name,
 				Size:    int64(obj.Size),
 				ModTime: obj.ModifiedTime,
@@ -376,7 +383,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		return errors.Trace(errUnexpected)
+		return errors.Trace(fmt.Errorf("Unexpected error"))
 	}
 
 	ctx := context.Background()
@@ -401,11 +408,11 @@ func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, leng
 	return err
 }
 
-// GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
+// GetObjectInfo - reads blob metadata properties and replies back minio.ObjectInfo,
 // uses Triton equivalent GetBlobProperties.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	// Manta doesn't have an equivalent HEAD object API, use Get API itself.
 
 	ctx := context.Background()
@@ -417,7 +424,7 @@ func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo
 	}
 	obj.ObjectReader.Close()
 
-	return ObjectInfo{
+	return minio.ObjectInfo{
 		Bucket:      bucket,
 		ContentType: obj.ContentType,
 		Size:        int64(obj.ContentLength),
@@ -439,7 +446,7 @@ func (d dummySeeker) Seek(offset int64, whence int) (int64, error) {
 // CreateBlockBlobFromReader.
 //
 // https://apidocs.joyent.com/manta/api.html#PutObject
-func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	ctx := context.Background()
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
 		ContentLength: uint64(data.Size()),
@@ -462,7 +469,7 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 // Uses Manta Snaplinks API.
 //
 // https://apidocs.joyent.com/manta/api.html#PutSnapLink
-func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	ctx := context.Background()
 
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{

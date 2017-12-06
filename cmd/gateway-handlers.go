@@ -246,13 +246,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Make sure we hex encode md5sum here.
-	metadata["etag"] = hex.EncodeToString(md5Bytes)
-
-	// Make sure we save `Content-Md5` right here, backend callers might use
-	// this to send it back to the backend implementations.
-	metadata["content-md5"] = r.Header.Get("Content-Md5")
-
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	if objectLock.GetLock(globalOperationTimeout) != nil {
