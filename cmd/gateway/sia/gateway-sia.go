@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package sia
 
 import (
 	"bytes"
@@ -22,15 +22,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/sha256-simd"
@@ -41,7 +47,7 @@ const (
 )
 
 type siaObjects struct {
-	gatewayUnsupported
+	minio.GatewayUnsupported
 	Address  string // Address and port of Sia Daemon.
 	TempDir  string // Temporary storage location for file transfers.
 	RootDir  string // Root directory to store files on Sia.
@@ -72,12 +78,11 @@ EXAMPLES:
 
 `
 
-	MustRegisterGatewayCommand(cli.Command{
+	minio.RegisterGatewayCommand(cli.Command{
 		Name:               siaBackend,
 		Usage:              "Sia Decentralized Cloud.",
 		Action:             siaGatewayMain,
 		CustomHelpTemplate: siaGatewayTemplate,
-		Flags:              append(serverFlags, globalFlags...),
 		HideHelpCommand:    true,
 	})
 }
@@ -87,26 +92,67 @@ func siaGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
 	// Validate gateway arguments.
-	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
-	startGateway(ctx, &SiaGateway{host})
+	minio.StartGateway(ctx, &Sia{host})
 }
 
-// SiaGateway implements Gateway.
-type SiaGateway struct {
+// Sia implements Gateway.
+type Sia struct {
 	host string // Sia daemon host address
 }
 
 // Name implements Gateway interface.
-func (g *SiaGateway) Name() string {
+func (g *Sia) Name() string {
 	return siaBackend
 }
 
-// NewGatewayLayer returns b2 gateway layer, implements GatewayLayer interface to
-// talk to B2 remote backend.
-func (g *SiaGateway) NewGatewayLayer() (GatewayLayer, error) {
-	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-	return newSiaGatewayLayer(g.host)
+// NewGatewayLayer returns Sia gateway layer, implements GatewayLayer interface to
+// talk to Sia backend.
+func (g *Sia) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+	sia := &siaObjects{
+		Address: g.host,
+		// RootDir uses access key directly, provides partitioning for
+		// concurrent users talking to same sia daemon.
+		RootDir:  creds.AccessKey,
+		TempDir:  os.Getenv("SIA_TEMP_DIR"),
+		password: os.Getenv("SIA_API_PASSWORD"),
+	}
+
+	// If Address not provided on command line or ENV, default to:
+	if sia.Address == "" {
+		sia.Address = "127.0.0.1:9980"
+	}
+
+	// If local Sia temp directory not specified, default to:
+	if sia.TempDir == "" {
+		sia.TempDir = ".sia_temp"
+	}
+
+	var err error
+	sia.TempDir, err = filepath.Abs(sia.TempDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the temp directory with proper permissions.
+	// Ignore error when dir already exists.
+	if err = os.MkdirAll(sia.TempDir, 0700); err != nil {
+		return nil, err
+	}
+
+	colorBlue := color.New(color.FgBlue).SprintfFunc()
+	colorBold := color.New(color.Bold).SprintFunc()
+
+	log.Println(colorBlue("\nSia Gateway Configuration:"))
+	log.Println(colorBlue("  Sia Daemon API Address:") + colorBold(fmt.Sprintf(" %s\n", sia.Address)))
+	log.Println(colorBlue("  Sia Temp Directory:") + colorBold(fmt.Sprintf(" %s\n", sia.TempDir)))
+	return sia, nil
+}
+
+// Production - sia gateway is not ready for production use.
+func (g *Sia) Production() bool {
+	return false
 }
 
 // non2xx returns true for non-success HTTP status codes.
@@ -139,12 +185,12 @@ func decodeError(resp *http.Response) error {
 	return apiErr
 }
 
-// SiaMethodNotSupported - returned if call returned error.
-type SiaMethodNotSupported struct {
+// MethodNotSupported - returned if call returned error.
+type MethodNotSupported struct {
 	method string
 }
 
-func (s SiaMethodNotSupported) Error() string {
+func (s MethodNotSupported) Error() string {
 	return fmt.Sprintf("API call not recognized: %s", s.method)
 }
 
@@ -166,7 +212,7 @@ func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
-		return nil, SiaMethodNotSupported{call}
+		return nil, MethodNotSupported{call}
 	}
 	if non2xx(resp.StatusCode) {
 		err := decodeError(resp)
@@ -191,12 +237,12 @@ func apiPost(addr, call, vals, apiPassword string) (*http.Response, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
-		return nil, SiaMethodNotSupported{call}
+		return nil, MethodNotSupported{call}
 	}
 
 	if non2xx(resp.StatusCode) {
@@ -244,45 +290,6 @@ func get(addr, call, apiPassword string) error {
 	return nil
 }
 
-// newSiaGatewayLayer returns Sia gatewaylayer
-func newSiaGatewayLayer(host string) (GatewayLayer, error) {
-	sia := &siaObjects{
-		Address: host,
-		// RootDir uses access key directly, provides partitioning for
-		// concurrent users talking to same sia daemon.
-		RootDir:  os.Getenv("MINIO_ACCESS_KEY"),
-		TempDir:  os.Getenv("SIA_TEMP_DIR"),
-		password: os.Getenv("SIA_API_PASSWORD"),
-	}
-
-	// If Address not provided on command line or ENV, default to:
-	if sia.Address == "" {
-		sia.Address = "127.0.0.1:9980"
-	}
-
-	// If local Sia temp directory not specified, default to:
-	if sia.TempDir == "" {
-		sia.TempDir = ".sia_temp"
-	}
-
-	var err error
-	sia.TempDir, err = filepath.Abs(sia.TempDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the temp directory with proper permissions.
-	// Ignore error when dir already exists.
-	if err = os.MkdirAll(sia.TempDir, 0700); err != nil {
-		return nil, err
-	}
-
-	log.Println(colorBlue("\nSia Gateway Configuration:"))
-	log.Println(colorBlue("  Sia Daemon API Address:") + colorBold(fmt.Sprintf(" %s\n", sia.Address)))
-	log.Println(colorBlue("  Sia Temp Directory:") + colorBold(fmt.Sprintf(" %s\n", sia.TempDir)))
-	return sia, nil
-}
-
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (s *siaObjects) Shutdown() error {
@@ -290,40 +297,44 @@ func (s *siaObjects) Shutdown() error {
 }
 
 // StorageInfo is not relevant to Sia backend.
-func (s *siaObjects) StorageInfo() (si StorageInfo) {
+func (s *siaObjects) StorageInfo() (si minio.StorageInfo) {
 	return si
 }
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
-	srcFile := pathJoin(s.TempDir, mustGetUUID())
-	defer fsRemoveFile(srcFile)
+	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
+	defer os.Remove(srcFile)
 
-	if _, err := fsCreateFile(srcFile, bytes.NewReader([]byte("")), nil, 0); err != nil {
+	writer, err := os.Create(srcFile)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(writer, bytes.NewReader([]byte(""))); err != nil {
 		return err
 	}
 
 	sha256sum := sha256.Sum256([]byte(bucket))
-	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+	var siaObj = path.Join(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
 	return post(s.Address, "/renter/upload/"+siaObj, "source="+srcFile, s.password)
 }
 
 // GetBucketInfo gets bucket metadata.
-func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, err error) {
+func (s *siaObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, err error) {
 	sha256sum := sha256.Sum256([]byte(bucket))
-	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+	var siaObj = path.Join(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
 
-	dstFile := pathJoin(s.TempDir, mustGetUUID())
-	defer fsRemoveFile(dstFile)
+	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
+	defer os.Remove(dstFile)
 
 	if err := get(s.Address, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(dstFile), s.password); err != nil {
 		return bi, err
 	}
-	return BucketInfo{Name: bucket}, nil
+	return minio.BucketInfo{Name: bucket}, nil
 }
 
 // ListBuckets will detect and return existing buckets on Sia.
-func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
+func (s *siaObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 	sObjs, serr := s.listRenterFiles("")
 	if serr != nil {
 		return buckets, serr
@@ -343,7 +354,7 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	}
 
 	for _, bktName := range m.ToSlice() {
-		buckets = append(buckets, BucketInfo{
+		buckets = append(buckets, minio.BucketInfo{
 			Name:    bktName,
 			Created: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
 		})
@@ -355,12 +366,12 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, err error) {
 // DeleteBucket deletes a bucket on Sia.
 func (s *siaObjects) DeleteBucket(bucket string) error {
 	sha256sum := sha256.Sum256([]byte(bucket))
-	var siaObj = pathJoin(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
+	var siaObj = path.Join(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
 
 	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
 }
 
-func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	siaObjs, siaErr := s.listRenterFiles(bucket)
 	if siaErr != nil {
 		return loi, siaErr
@@ -376,13 +387,13 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	// based filtering. Once list renter files API supports paginated output we can support
 	// paginated results here as well - until then Listing is an expensive operation.
 	for _, sObj := range siaObjs {
-		name := strings.TrimPrefix(sObj.SiaPath, pathJoin(root, bucket, "/"))
+		name := strings.TrimPrefix(sObj.SiaPath, path.Join(root, bucket)+"/")
 		// Skip the file created specially when bucket was created.
 		if name == hex.EncodeToString(sha256sum[:]) {
 			continue
 		}
 		if strings.HasPrefix(name, prefix) {
-			loi.Objects = append(loi.Objects, ObjectInfo{
+			loi.Objects = append(loi.Objects, minio.ObjectInfo{
 				Bucket: bucket,
 				Name:   name,
 				Size:   int64(sObj.Filesize),
@@ -394,33 +405,45 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 }
 
 func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
-	dstFile := pathJoin(s.TempDir, mustGetUUID())
-	defer fsRemoveFile(dstFile)
+	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
+	defer os.Remove(dstFile)
 
-	var siaObj = pathJoin(s.RootDir, bucket, object)
+	var siaObj = path.Join(s.RootDir, bucket, object)
 	if err := get(s.Address, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(dstFile), s.password); err != nil {
 		return err
 	}
 
-	reader, size, err := fsOpenFile(dstFile, startOffset)
+	reader, err := os.Open(dstFile)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return err
 	}
 	defer reader.Close()
+	st, err := reader.Stat()
+	if err != nil {
+		return err
+	}
+	size := st.Size()
+	if _, err = reader.Seek(startOffset, os.SEEK_SET); err != nil {
+		return err
+	}
 
 	// For negative length we read everything.
 	if length < 0 {
 		length = size - startOffset
 	}
 
-	bufSize := int64(readSizeV1)
+	bufSize := int64(1 * humanize.MiByte)
 	if bufSize > length {
 		bufSize = length
 	}
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > size || startOffset+length > size {
-		return errors.Trace(InvalidRange{startOffset, length, size})
+		return errors.Trace(minio.InvalidRange{
+			OffsetBegin:  startOffset,
+			OffsetEnd:    length,
+			ResourceSize: size,
+		})
 	}
 
 	// Allocate a staging buffer.
@@ -433,7 +456,9 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 
 // findSiaObject retrieves the siaObjectInfo for the Sia object with the given
 // Sia path name.
-func (s *siaObjects) findSiaObject(siaPath string) (siaObjectInfo, error) {
+func (s *siaObjects) findSiaObject(bucket, object string) (siaObjectInfo, error) {
+	siaPath := path.Join(s.RootDir, bucket, object)
+
 	sObjs, err := s.listRenterFiles("")
 	if err != nil {
 		return siaObjectInfo{}, err
@@ -445,64 +470,62 @@ func (s *siaObjects) findSiaObject(siaPath string) (siaObjectInfo, error) {
 		}
 	}
 
-	return siaObjectInfo{}, errors.Trace(ObjectNotFound{"", siaPath})
+	return siaObjectInfo{}, errors.Trace(minio.ObjectNotFound{
+		Bucket: bucket,
+		Object: object,
+	})
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(bucket string, object string) (ObjectInfo, error) {
-	siaPath := pathJoin(s.RootDir, bucket, object)
-	so, err := s.findSiaObject(siaPath)
+func (s *siaObjects) GetObjectInfo(bucket string, object string) (minio.ObjectInfo, error) {
+	so, err := s.findSiaObject(bucket, object)
 	if err != nil {
-		return ObjectInfo{}, err
+		return minio.ObjectInfo{}, err
 	}
 
-	// Metadata about sia objects is just quite minimal. Sia only provides
-	// file size.
-	return ObjectInfo{
-		Bucket: bucket,
-		Name:   object,
-		Size:   int64(so.Filesize),
-		IsDir:  false,
+	// Metadata about sia objects is just quite minimal. Sia only provides file size.
+	return minio.ObjectInfo{
+		Bucket:  bucket,
+		Name:    object,
+		ModTime: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		Size:    int64(so.Filesize),
+		IsDir:   false,
 	}, nil
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	bufSize := int64(readSizeV1)
-	size := data.Size()
-	if size > 0 && bufSize > size {
-		bufSize = size
-	}
-	buf := make([]byte, int(bufSize))
-
-	srcFile := pathJoin(s.TempDir, mustGetUUID())
-
-	if _, err = fsCreateFile(srcFile, data, buf, data.Size()); err != nil {
+func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
+	writer, err := os.Create(srcFile)
+	if err != nil {
 		return objInfo, err
 	}
 
-	var siaPath = pathJoin(s.RootDir, bucket, object)
-	if err = post(s.Address, "/renter/upload/"+siaPath, "source="+srcFile, s.password); err != nil {
-		fsRemoveFile(srcFile)
+	wsize, err := io.CopyN(writer, data, data.Size())
+	if err != nil {
+		os.Remove(srcFile)
 		return objInfo, err
 	}
-	defer s.deleteTempFileWhenUploadCompletes(srcFile, siaPath)
 
-	objInfo = ObjectInfo{
+	if err = post(s.Address, "/renter/upload/"+path.Join(s.RootDir, bucket, object), "source="+srcFile, s.password); err != nil {
+		os.Remove(srcFile)
+		return objInfo, err
+	}
+	defer s.deleteTempFileWhenUploadCompletes(srcFile, bucket, object)
+
+	return minio.ObjectInfo{
 		Name:    object,
 		Bucket:  bucket,
 		ModTime: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
-		Size:    size,
-		ETag:    genETag(),
-	}
-
-	return objInfo, nil
+		Size:    wsize,
+		ETag:    minio.GenETag(),
+	}, nil
 }
 
 // DeleteObject deletes a blob in bucket
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
 	// Tell Sia daemon to delete the object
-	var siaObj = pathJoin(s.RootDir, bucket, object)
+	var siaObj = path.Join(s.RootDir, bucket, object)
 	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
 }
 
@@ -549,22 +572,23 @@ func (s *siaObjects) listRenterFiles(bucket string) (siaObjs []siaObjectInfo, er
 // deleteTempFileWhenUploadCompletes checks the status of a Sia file upload
 // until it reaches 100% upload progress, then deletes the local temp copy from
 // the filesystem.
-func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, siaPath string) {
+func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, bucket, object string) {
 	var soi siaObjectInfo
 	// Wait until 100% upload instead of 1x redundancy because if we delete
 	// after 1x redundancy, the user has to pay the cost of other hosts
 	// redistributing the file.
 	for soi.UploadProgress < 100.0 {
 		var err error
-		soi, err = s.findSiaObject(siaPath)
+		soi, err = s.findSiaObject(bucket, object)
 		if err != nil {
-			errorIf(err, "Unable to find file uploaded to Sia path %s", siaPath)
+			minio.ErrorIf(err, "Unable to find file uploaded to Sia path %s/%s", bucket, object)
 			break
 		}
 
-		// Sleep between each check so that we're not hammering the Sia
-		// daemon with requests.
+		// Sleep between each check so that we're not hammering
+		// the Sia daemon with requests.
 		time.Sleep(15 * time.Second)
 	}
-	fsRemoveFile(tempFile)
+
+	os.Remove(tempFile)
 }

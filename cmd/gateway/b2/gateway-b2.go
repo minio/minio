@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package b2
 
 import (
 	"context"
@@ -34,6 +34,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	h2 "github.com/minio/minio/pkg/hash"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 // Supported bucket types by B2 backend.
@@ -68,53 +70,33 @@ EXAMPLES:
       $ {{.HelpName}}
 
 `
-
-	MustRegisterGatewayCommand(cli.Command{
+	minio.RegisterGatewayCommand(cli.Command{
 		Name:               b2Backend,
 		Usage:              "Backblaze B2.",
 		Action:             b2GatewayMain,
 		CustomHelpTemplate: b2GatewayTemplate,
-		Flags:              append(serverFlags, globalFlags...),
 		HideHelpCommand:    true,
 	})
 }
 
 // Handler for 'minio gateway b2' command line.
 func b2GatewayMain(ctx *cli.Context) {
-	startGateway(ctx, &B2Gateway{})
+	minio.StartGateway(ctx, &B2{})
 }
 
-// B2Gateway implements Gateway.
-type B2Gateway struct{}
+// B2 implements Minio Gateway
+type B2 struct{}
 
 // Name implements Gateway interface.
-func (g *B2Gateway) Name() string {
+func (g *B2) Name() string {
 	return b2Backend
 }
 
 // NewGatewayLayer returns b2 gateway layer, implements GatewayLayer interface to
 // talk to B2 remote backend.
-func (g *B2Gateway) NewGatewayLayer() (GatewayLayer, error) {
-	log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-	return newB2GatewayLayer()
-}
-
-// b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
-type b2Objects struct {
-	gatewayUnsupported
-	mu         sync.Mutex
-	creds      auth.Credentials
-	b2Client   *b2.B2
-	anonClient *http.Client
-	ctx        context.Context
-}
-
-// newB2GatewayLayer returns b2 gateway layer.
-func newB2GatewayLayer() (GatewayLayer, error) {
+func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
 	ctx := context.Background()
-	creds := globalServerConfig.GetCredential()
-
-	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(newCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +105,26 @@ func newB2GatewayLayer() (GatewayLayer, error) {
 		creds:    creds,
 		b2Client: client,
 		anonClient: &http.Client{
-			Transport: newCustomHTTPTransport(),
+			Transport: minio.NewCustomHTTPTransport(),
 		},
 		ctx: ctx,
 	}, nil
+}
+
+// Production - Ready for production use?
+func (g *B2) Production() bool {
+	// Not ready for production use just yet.
+	return false
+}
+
+// b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
+type b2Objects struct {
+	minio.GatewayUnsupported
+	mu         sync.Mutex
+	creds      auth.Credentials
+	b2Client   *b2.B2
+	anonClient *http.Client
+	ctx        context.Context
 }
 
 // Convert B2 errors to minio object layer errors.
@@ -139,7 +137,7 @@ func b2ToObjectError(err error, params ...string) error {
 	if !ok {
 		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
-		errorIf(err, "Expected type *Error")
+		minio.ErrorIf(err, "Expected type *Error")
 		return err
 	}
 
@@ -170,24 +168,30 @@ func b2ToObjectError(err error, params ...string) error {
 
 	switch code {
 	case "duplicate_bucket_name":
-		err = BucketAlreadyOwnedByYou{Bucket: bucket}
+		err = minio.BucketAlreadyOwnedByYou{Bucket: bucket}
 	case "bad_request":
 		if object != "" {
-			err = ObjectNameInvalid{bucket, object}
+			err = minio.ObjectNameInvalid{
+				Bucket: bucket,
+				Object: object,
+			}
 		} else if bucket != "" {
-			err = BucketNotFound{Bucket: bucket}
+			err = minio.BucketNotFound{Bucket: bucket}
 		}
 	case "bad_bucket_id":
-		err = BucketNotFound{Bucket: bucket}
+		err = minio.BucketNotFound{Bucket: bucket}
 	case "file_not_present", "not_found":
-		err = ObjectNotFound{bucket, object}
+		err = minio.ObjectNotFound{
+			Bucket: bucket,
+			Object: object,
+		}
 	case "cannot_delete_non_empty_bucket":
-		err = BucketNotEmpty{bucket, ""}
+		err = minio.BucketNotEmpty{Bucket: bucket}
 	}
 
 	// Special interpretation like this is required for Multipart sessions.
 	if strings.Contains(msg, "No active upload for") && uploadID != "" {
-		err = InvalidUploadID{uploadID}
+		err = minio.InvalidUploadID{UploadID: uploadID}
 	}
 
 	e.Cause = err
@@ -202,7 +206,7 @@ func (l *b2Objects) Shutdown() error {
 }
 
 // StorageInfo is not relevant to B2 backend.
-func (l *b2Objects) StorageInfo() (si StorageInfo) {
+func (l *b2Objects) StorageInfo() (si minio.StorageInfo) {
 	return si
 }
 
@@ -216,7 +220,7 @@ func (l *b2Objects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 func (l *b2Objects) reAuthorizeAccount() error {
-	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(newCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
 	if err != nil {
 		return err
 	}
@@ -260,29 +264,29 @@ func (l *b2Objects) Bucket(bucket string) (*b2.Bucket, error) {
 			return bkt, nil
 		}
 	}
-	return nil, errors.Trace(BucketNotFound{Bucket: bucket})
+	return nil, errors.Trace(minio.BucketNotFound{Bucket: bucket})
 }
 
 // GetBucketInfo gets bucket metadata..
-func (l *b2Objects) GetBucketInfo(bucket string) (bi BucketInfo, err error) {
+func (l *b2Objects) GetBucketInfo(bucket string) (bi minio.BucketInfo, err error) {
 	if _, err = l.Bucket(bucket); err != nil {
 		return bi, err
 	}
-	return BucketInfo{
+	return minio.BucketInfo{
 		Name:    bucket,
 		Created: time.Unix(0, 0),
 	}, nil
 }
 
 // ListBuckets lists all B2 buckets
-func (l *b2Objects) ListBuckets() ([]BucketInfo, error) {
+func (l *b2Objects) ListBuckets() ([]minio.BucketInfo, error) {
 	bktList, err := l.listBuckets(nil)
 	if err != nil {
 		return nil, err
 	}
-	var bktInfo []BucketInfo
+	var bktInfo []minio.BucketInfo
 	for _, bkt := range bktList {
-		bktInfo = append(bktInfo, BucketInfo{
+		bktInfo = append(bktInfo, minio.BucketInfo{
 			Name:    bkt.Name,
 			Created: time.Unix(0, 0),
 		})
@@ -301,12 +305,11 @@ func (l *b2Objects) DeleteBucket(bucket string) error {
 }
 
 // ListObjects lists all objects in B2 bucket filtered by prefix, returns upto at max 1000 entries at a time.
-func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return loi, err
 	}
-	loi = ListObjectsInfo{}
 	files, next, lerr := bkt.ListFileNames(l.ctx, maxKeys, marker, prefix, delimiter)
 	if lerr != nil {
 		return loi, b2ToObjectError(errors.Trace(lerr), bucket)
@@ -318,12 +321,12 @@ func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, del
 		case "folder":
 			loi.Prefixes = append(loi.Prefixes, file.Name)
 		case "upload":
-			loi.Objects = append(loi.Objects, ObjectInfo{
+			loi.Objects = append(loi.Objects, minio.ObjectInfo{
 				Bucket:      bucket,
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        toS3ETag(file.Info.ID),
+				ETag:        minio.ToS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -334,13 +337,12 @@ func (l *b2Objects) ListObjects(bucket string, prefix string, marker string, del
 
 // ListObjectsV2 lists all objects in B2 bucket filtered by prefix, returns upto max 1000 entries at a time.
 func (l *b2Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int,
-	fetchOwner bool, startAfter string) (loi ListObjectsV2Info, err error) {
+	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
 	// fetchOwner, startAfter are not supported and unused.
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return loi, err
 	}
-	loi = ListObjectsV2Info{}
 	files, next, lerr := bkt.ListFileNames(l.ctx, maxKeys, continuationToken, prefix, delimiter)
 	if lerr != nil {
 		return loi, b2ToObjectError(errors.Trace(lerr), bucket)
@@ -353,12 +355,12 @@ func (l *b2Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter s
 		case "folder":
 			loi.Prefixes = append(loi.Prefixes, file.Name)
 		case "upload":
-			loi.Objects = append(loi.Objects, ObjectInfo{
+			loi.Objects = append(loi.Objects, minio.ObjectInfo{
 				Bucket:      bucket,
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        toS3ETag(file.Info.ID),
+				ETag:        minio.ToS3ETag(file.Info.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -388,7 +390,7 @@ func (l *b2Objects) GetObject(bucket string, object string, startOffset int64, l
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return objInfo, err
@@ -402,16 +404,15 @@ func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 	if err != nil {
 		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
-	objInfo = ObjectInfo{
+	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        toS3ETag(fi.ID),
+		ETag:        minio.ToS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
 		UserDefined: fi.Info,
-	}
-	return objInfo, nil
+	}, nil
 }
 
 // In B2 - You must always include the X-Bz-Content-Sha1 header with
@@ -421,10 +422,8 @@ func (l *b2Objects) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 // (3) the string do_not_verify.
 // For more reference - https://www.backblaze.com/b2/docs/uploading.html
 //
-const (
-	sha1NoVerify = "do_not_verify"
-	sha1AtEOF    = "hex_digits_at_end"
-)
+// In our case we are going to use (2) option
+const sha1AtEOF = "hex_digits_at_end"
 
 // With the second option mentioned above, you append the 40-character hex sha1
 // to the end of the request body, immediately after the contents of the file
@@ -437,20 +436,20 @@ const (
 // Additionally this reader also verifies Hash encapsulated inside hash.Reader
 // at io.EOF if the verification failed we return an error and do not send
 // the content to server.
-func newB2Reader(r *h2.Reader, size int64) *B2Reader {
-	return &B2Reader{
+func newB2Reader(r *h2.Reader, size int64) *Reader {
+	return &Reader{
 		r:        r,
 		size:     size,
 		sha1Hash: sha1.New(),
 	}
 }
 
-// B2Reader - is a Reader wraps the hash.Reader which will emit out the sha1
+// Reader - is a Reader wraps the hash.Reader which will emit out the sha1
 // hex digits at io.EOF. It also means that your overall content size is
 // now original size + 40 bytes. Additionally this reader also verifies
 // Hash encapsulated inside hash.Reader at io.EOF if the verification
 // failed we return an error and do not send the content to server.
-type B2Reader struct {
+type Reader struct {
 	r        *h2.Reader
 	size     int64
 	sha1Hash hash.Hash
@@ -460,8 +459,8 @@ type B2Reader struct {
 }
 
 // Size - Returns the total size of Reader.
-func (nb *B2Reader) Size() int64 { return nb.size + 40 }
-func (nb *B2Reader) Read(p []byte) (int, error) {
+func (nb *Reader) Size() int64 { return nb.size + 40 }
+func (nb *Reader) Read(p []byte) (int, error) {
 	if nb.isEOF {
 		return nb.buf.Read(p)
 	}
@@ -480,8 +479,7 @@ func (nb *B2Reader) Read(p []byte) (int, error) {
 }
 
 // PutObject uploads the single upload to B2 backend by using *b2_upload_file* API, uploads upto 5GiB.
-func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, metadata map[string]string) (ObjectInfo, error) {
-	var objInfo ObjectInfo
+func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return objInfo, err
@@ -508,10 +506,10 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
 	}
 
-	return ObjectInfo{
+	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        toS3ETag(fi.ID),
+		ETag:        minio.ToS3ETag(fi.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -521,8 +519,8 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 
 // CopyObject copies a blob from source container to destination container.
 func (l *b2Objects) CopyObject(srcBucket string, srcObject string, dstBucket string,
-	dstObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	return objInfo, errors.Trace(NotImplemented{})
+	dstObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+	return objInfo, errors.Trace(minio.NotImplemented{})
 }
 
 // DeleteObject deletes a blob in bucket
@@ -543,7 +541,7 @@ func (l *b2Objects) DeleteObject(bucket string, object string) error {
 
 // ListMultipartUploads lists all multipart uploads.
 func (l *b2Objects) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string,
-	delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
+	delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	// keyMarker, prefix, delimiter are all ignored, Backblaze B2 doesn't support any
 	// of these parameters only equivalent parameter is uploadIDMarker.
 	bkt, err := l.Bucket(bucket)
@@ -559,7 +557,7 @@ func (l *b2Objects) ListMultipartUploads(bucket string, prefix string, keyMarker
 	if err != nil {
 		return lmi, b2ToObjectError(errors.Trace(err), bucket)
 	}
-	lmi = ListMultipartsInfo{
+	lmi = minio.ListMultipartsInfo{
 		MaxUploads: maxUploads,
 	}
 	if nextMarker != "" {
@@ -567,7 +565,7 @@ func (l *b2Objects) ListMultipartUploads(bucket string, prefix string, keyMarker
 		lmi.NextUploadIDMarker = nextMarker
 	}
 	for _, largeFile := range largeFiles {
-		lmi.Uploads = append(lmi.Uploads, MultipartInfo{
+		lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
 			Object:    largeFile.Name,
 			UploadID:  largeFile.ID,
 			Initiated: largeFile.Timestamp,
@@ -599,7 +597,7 @@ func (l *b2Objects) NewMultipartUpload(bucket string, object string, metadata ma
 }
 
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *h2.Reader) (pi PartInfo, err error) {
+func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *h2.Reader) (pi minio.PartInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return pi, err
@@ -616,21 +614,21 @@ func (l *b2Objects) PutObjectPart(bucket string, object string, uploadID string,
 		return pi, b2ToObjectError(errors.Trace(err), bucket, object, uploadID)
 	}
 
-	return PartInfo{
+	return minio.PartInfo{
 		PartNumber:   partID,
-		LastModified: UTCNow(),
-		ETag:         toS3ETag(sha1),
+		LastModified: minio.UTCNow(),
+		ETag:         minio.ToS3ETag(sha1),
 		Size:         data.Size(),
 	}, nil
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, err error) {
+func (l *b2Objects) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi minio.ListPartsInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return lpi, err
 	}
-	lpi = ListPartsInfo{
+	lpi = minio.ListPartsInfo{
 		Bucket:           bucket,
 		Object:           object,
 		UploadID:         uploadID,
@@ -648,9 +646,9 @@ func (l *b2Objects) ListObjectParts(bucket string, object string, uploadID strin
 		lpi.NextPartNumberMarker = next
 	}
 	for _, part := range partsList {
-		lpi.Parts = append(lpi.Parts, PartInfo{
+		lpi.Parts = append(lpi.Parts, minio.PartInfo{
 			PartNumber: part.Number,
-			ETag:       toS3ETag(part.SHA1),
+			ETag:       minio.ToS3ETag(part.SHA1),
 			Size:       part.Size,
 		})
 	}
@@ -668,7 +666,7 @@ func (l *b2Objects) AbortMultipartUpload(bucket string, object string, uploadID 
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object, uses B2's LargeFile upload API.
-func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, err error) {
+func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return oi, err
@@ -678,7 +676,7 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 		// B2 requires contigous part numbers starting with 1, they do not support
 		// hand picking part numbers, we return an S3 compatible error instead.
 		if i+1 != uploadedPart.PartNumber {
-			return oi, b2ToObjectError(errors.Trace(InvalidPart{}), bucket, object, uploadID)
+			return oi, b2ToObjectError(errors.Trace(minio.InvalidPart{}), bucket, object, uploadID)
 		}
 
 		// Trim "-1" suffix in ETag as PutObjectPart() treats B2 returned SHA1 as ETag.
@@ -697,23 +695,23 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 // bucketType.AllPrivate - bucketTypePrivate means that you need an authorization token to download them.
 // Default is AllPrivate for all buckets.
 func (l *b2Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	var policies []BucketAccessPolicy
+	var policies []minio.BucketAccessPolicy
 
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
-		policies = append(policies, BucketAccessPolicy{
+		policies = append(policies, minio.BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,
 		})
 	}
 	prefix := bucket + "/*" // For all objects inside the bucket.
 	if len(policies) != 1 {
-		return errors.Trace(NotImplemented{})
+		return errors.Trace(minio.NotImplemented{})
 	}
 	if policies[0].Prefix != prefix {
-		return errors.Trace(NotImplemented{})
+		return errors.Trace(minio.NotImplemented{})
 	}
 	if policies[0].Policy != policy.BucketPolicyReadOnly {
-		return errors.Trace(NotImplemented{})
+		return errors.Trace(minio.NotImplemented{})
 	}
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
@@ -739,7 +737,7 @@ func (l *b2Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy,
 	// bkt.Type can also be snapshot, but it is only allowed through B2 browser console,
 	// just return back as policy not found for all cases.
 	// CreateBucket always sets the value to allPrivate by default.
-	return policy.BucketAccessPolicy{}, errors.Trace(PolicyNotFound{Bucket: bucket})
+	return policy.BucketAccessPolicy{}, errors.Trace(minio.PolicyNotFound{Bucket: bucket})
 }
 
 // DeleteBucketPolicies - resets the bucketType of bucket on B2 to 'allPrivate'.

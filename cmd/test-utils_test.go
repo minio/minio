@@ -2394,13 +2394,4 @@ func TestToErrIsNil(t *testing.T) {
 	if toAPIErrorCode(nil) != ErrNone {
 		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(nil))
 	}
-	if s3ToObjectError(nil) != nil {
-		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", s3ToObjectError(nil))
-	}
-	if azureToObjectError(nil) != nil {
-		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", azureToObjectError(nil))
-	}
-	if gcsToObjectError(nil) != nil {
-		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", gcsToObjectError(nil))
-	}
 }

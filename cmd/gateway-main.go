@@ -40,36 +40,15 @@ var (
 	}
 )
 
-// Gateway represents a gateway backend.
-type Gateway interface {
-	// Name returns the unique name of the gateway.
-	Name() string
-	// NewGatewayLayer returns a new gateway layer.
-	NewGatewayLayer() (GatewayLayer, error)
-}
-
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
-	// We should not have multiple subcommands with same name.
-	for _, c := range gatewayCmd.Subcommands {
-		if c.Name == cmd.Name {
-			return fmt.Errorf("duplicate gateway: %s", cmd.Name)
-		}
-	}
-
+	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, serverFlags...)...), globalFlags...)
 	gatewayCmd.Subcommands = append(gatewayCmd.Subcommands, cmd)
 	return nil
 }
 
-// MustRegisterGatewayCommand is like RegisterGatewayCommand but panics instead of returning error.
-func MustRegisterGatewayCommand(cmd cli.Command) {
-	if err := RegisterGatewayCommand(cmd); err != nil {
-		panic(err)
-	}
-}
-
-// Return endpoint.
-func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+// ParseGatewayEndpoint - Return endpoint.
+func ParseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
 	schemeSpecified := len(strings.Split(arg, "://")) > 1
 	if !schemeSpecified {
 		// Default connection will be "secure".
@@ -91,8 +70,8 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 	}
 }
 
-// Validate gateway arguments.
-func validateGatewayArguments(serverAddr, endpointAddr string) error {
+// ValidateGatewayArguments - Validate gateway arguments.
+func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 	if err := CheckLocalServerAddr(serverAddr); err != nil {
 		return err
 	}
@@ -121,8 +100,18 @@ func validateGatewayArguments(serverAddr, endpointAddr string) error {
 	return nil
 }
 
-// Handler for 'minio gateway <name>'.
-func startGateway(ctx *cli.Context, gw Gateway) {
+// StartGateway - handler for 'minio gateway <name>'.
+func StartGateway(ctx *cli.Context, gw Gateway) {
+	if gw == nil {
+		fatalIf(errUnexpected, "Gateway implementation not initialized, exiting.")
+	}
+
+	// Validate if we have access, secret set through environment.
+	gatewayName := gw.Name()
+	if ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
+	}
+
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 	if quietFlag {
@@ -142,7 +131,6 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 	handleCommonEnvVars()
 
 	// Validate if we have access, secret set through environment.
-	gatewayName := gw.Name()
 	if !globalIsEnvCreds {
 		errorIf(fmt.Errorf("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
@@ -167,11 +155,7 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
-	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
-	}
-
-	newObject, err := gw.NewGatewayLayer()
+	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	router := mux.NewRouter().SkipClean(true)
@@ -229,6 +213,11 @@ func startGateway(ctx *cli.Context, gw Gateway) {
 		mode := globalMinioModeGatewayPrefix + gatewayName
 		// Check update mode.
 		checkUpdate(mode)
+
+		// Print a warning message if gateway is not ready for production before the startup banner.
+		if !gw.Production() {
+			log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+		}
 
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
