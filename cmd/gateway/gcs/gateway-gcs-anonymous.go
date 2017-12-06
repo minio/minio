@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package gcs
 
 import (
 	"fmt"
@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/errors"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 func toGCSPublicURL(bucket, object string) string {
@@ -50,7 +52,7 @@ func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return gcsToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	_, err = io.Copy(writer, resp.Body)
@@ -58,7 +60,7 @@ func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int
 }
 
 // AnonGetObjectInfo - Get object info anonymously
-func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo minio.ObjectInfo, err error) {
 	resp, err := http.Head(toGCSPublicURL(bucket, object))
 	if err != nil {
 		return objInfo, gcsToObjectError(errors.Trace(err), bucket, object)
@@ -66,7 +68,7 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return objInfo, gcsToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	var contentLength int64
@@ -74,7 +76,7 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 	if contentLengthStr != "" {
 		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
 		if err != nil {
-			return objInfo, gcsToObjectError(errors.Trace(errUnexpected), bucket, object)
+			return objInfo, gcsToObjectError(errors.Trace(fmt.Errorf("Unexpected error")), bucket, object)
 		}
 	}
 
@@ -98,28 +100,28 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 }
 
 // AnonListObjects - List objects anonymously
-func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsInfo{}, s3ToObjectError(errors.Trace(err), bucket)
+		return minio.ListObjectsInfo{}, minio.ErrorRespToObjectError(errors.Trace(err), bucket)
 	}
 
-	return fromMinioClientListBucketResult(bucket, result), nil
+	return minio.FromMinioClientListBucketResult(bucket, result), nil
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
+func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (minio.ListObjectsV2Info, error) {
 	// Request V1 List Object to the backend
 	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsV2Info{}, s3ToObjectError(errors.Trace(err), bucket)
+		return minio.ListObjectsV2Info{}, minio.ErrorRespToObjectError(errors.Trace(err), bucket)
 	}
 	// translate V1 Result to V2Info
-	return fromMinioClientListBucketResultToV2Info(bucket, result), nil
+	return minio.FromMinioClientListBucketResultToV2Info(bucket, result), nil
 }
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
-func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo minio.BucketInfo, err error) {
 	resp, err := http.Head(toGCSPublicURL(bucket, ""))
 	if err != nil {
 		return bucketInfo, gcsToObjectError(errors.Trace(err))
@@ -128,7 +130,7 @@ func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, gcsToObjectError(errors.Trace(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
+		return bucketInfo, gcsToObjectError(errors.Trace(minio.AnonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
@@ -137,7 +139,7 @@ func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, er
 	}
 
 	// Last-Modified date being returned by GCS
-	return BucketInfo{
+	return minio.BucketInfo{
 		Name:    bucket,
 		Created: t,
 	}, nil

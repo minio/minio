@@ -22,10 +22,26 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 )
 
-// GatewayLayer - Interface to implement gateway mode.
+// GatewayMinioSysTmp prefix is used in Azure/GCS gateway for save metadata sent by Initialize Multipart Upload API.
+const GatewayMinioSysTmp = "minio.sys.tmp/"
+
+// Gateway represents a gateway backend.
+type Gateway interface {
+	// Name returns the unique name of the gateway.
+	Name() string
+
+	// NewGatewayLayer returns a new gateway layer.
+	NewGatewayLayer(creds auth.Credentials) (GatewayLayer, error)
+
+	// Returns true if gateway is ready for production.
+	Production() bool
+}
+
+// GatewayLayer - interface to implement gateway mode.
 type GatewayLayer interface {
 	ObjectLayer
 

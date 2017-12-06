@@ -158,6 +158,11 @@ func serverMain(ctx *cli.Context) {
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL certificate file")
 
+	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
+	if globalIsDistXL && globalEndpoints.IsHTTPS() && !globalIsSSL {
+		fatalIf(errInvalidArgument, "No certificates found for HTTPS endpoints (%s)", globalEndpoints)
+	}
+
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
 		mode := globalMinioModeFS
@@ -182,7 +187,6 @@ func serverMain(ctx *cli.Context) {
 	initNSLock(globalIsDistXL)
 
 	// Configure server.
-	// Declare handler to avoid lint errors.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")

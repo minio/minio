@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package b2
 
 import (
 	"fmt"
@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/errors"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 // mkRange converts offset, size into Range header equivalent.
@@ -34,9 +36,9 @@ func mkRange(offset, size int64) string {
 		return ""
 	}
 	if size == 0 {
-		return fmt.Sprintf("%s%d-", byteRangePrefix, offset)
+		return fmt.Sprintf("bytes=%d-", offset)
 	}
-	return fmt.Sprintf("%s%d-%d", byteRangePrefix, offset, offset+size-1)
+	return fmt.Sprintf("bytes=%d-%d", offset, offset+size-1)
 }
 
 // AnonGetObject - performs a plain http GET request on a public resource,
@@ -71,7 +73,7 @@ func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int6
 // X-Bz-Info-<header>:<value> is converted to <header>:<value>
 // Content-Type is converted to ContentType.
 // X-Bz-Content-Sha1 is converted to ETag.
-func headerToObjectInfo(bucket, object string, header http.Header) (objInfo ObjectInfo, err error) {
+func headerToObjectInfo(bucket, object string, header http.Header) (objInfo minio.ObjectInfo, err error) {
 	clen, err := strconv.ParseInt(header.Get("Content-Length"), 10, 64)
 	if err != nil {
 		return objInfo, b2ToObjectError(errors.Trace(err), bucket, object)
@@ -103,7 +105,7 @@ func headerToObjectInfo(bucket, object string, header http.Header) (objInfo Obje
 		}
 	}
 
-	return ObjectInfo{
+	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
 		ContentType: header.Get("Content-Type"),
@@ -116,7 +118,7 @@ func headerToObjectInfo(bucket, object string, header http.Header) (objInfo Obje
 
 // AnonGetObjectInfo - performs a plain http HEAD request on a public resource,
 // fails if the resource is not public.
-func (l *b2Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+func (l *b2Objects) AnonGetObjectInfo(bucket string, object string) (objInfo minio.ObjectInfo, err error) {
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("HEAD", uri, nil)
 	if err != nil {

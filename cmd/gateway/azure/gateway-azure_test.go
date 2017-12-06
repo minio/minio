@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package azure
 
 import (
 	"fmt"
@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -67,7 +68,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	}
 	_, _, err = s3MetaToAzureProperties(headers)
 	if err = errors.Cause(err); err != nil {
-		if _, ok := err.(UnsupportedMetadata); !ok {
+		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
 	}
@@ -150,27 +151,27 @@ func TestAzureToObjectError(t *testing.T) {
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				Code: "ContainerAlreadyExists",
-			}), BucketExists{Bucket: "bucket"}, "bucket", "",
+			}), minio.BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
-			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				Code: "RequestBodyTooLarge",
-			}), PartTooBig{}, "", "",
+			}), minio.PartTooBig{}, "", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				Code: "InvalidMetadata",
-			}), UnsupportedMetadata{}, "", "",
+			}), minio.UnsupportedMetadata{}, "", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), ObjectNotFound{
+			}), minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			}, "bucket", "object",
@@ -178,12 +179,12 @@ func TestAzureToObjectError(t *testing.T) {
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), BucketNotFound{Bucket: "bucket"}, "bucket", "",
+			}), minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
 			errors.Trace(storage.AzureStorageServiceError{
 				StatusCode: http.StatusBadRequest,
-			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 	}
 	for i, testCase := range testCases {
@@ -321,32 +322,27 @@ func TestAnonErrToObjectErr(t *testing.T) {
 		{"ObjectNotFound",
 			http.StatusNotFound,
 			[]string{"testBucket", "testObject"},
-			ObjectNotFound{Bucket: "testBucket", Object: "testObject"},
+			minio.ObjectNotFound{Bucket: "testBucket", Object: "testObject"},
 		},
 		{"BucketNotFound",
 			http.StatusNotFound,
 			[]string{"testBucket", ""},
-			BucketNotFound{Bucket: "testBucket"},
+			minio.BucketNotFound{Bucket: "testBucket"},
 		},
 		{"ObjectNameInvalid",
 			http.StatusBadRequest,
 			[]string{"testBucket", "testObject"},
-			ObjectNameInvalid{Bucket: "testBucket", Object: "testObject"},
+			minio.ObjectNameInvalid{Bucket: "testBucket", Object: "testObject"},
 		},
 		{"BucketNameInvalid",
 			http.StatusBadRequest,
 			[]string{"testBucket", ""},
-			BucketNameInvalid{Bucket: "testBucket"},
-		},
-		{"UnexpectedError",
-			http.StatusBadGateway,
-			[]string{"testBucket", "testObject"},
-			errUnexpected,
+			minio.BucketNameInvalid{Bucket: "testBucket"},
 		},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			if err := anonErrToObjectErr(test.statusCode, test.params...); !reflect.DeepEqual(err, test.wantErr) {
+			if err := minio.AnonErrToObjectErr(test.statusCode, test.params...); !reflect.DeepEqual(err, test.wantErr) {
 				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
 			}
 		})

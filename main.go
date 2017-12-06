@@ -30,6 +30,9 @@ import (
 	version "github.com/hashicorp/go-version"
 	"github.com/minio/mc/pkg/console"
 	minio "github.com/minio/minio/cmd"
+
+	// Import gateway
+	_ "github.com/minio/minio/cmd/gateway"
 )
 
 const (

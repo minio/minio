@@ -1,6 +1,6 @@
 /*
  * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * (C) 2015, 2016, 2017 Minio, Inc.
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,8 +76,8 @@ func (c Client) MakeBucket(bucketName string, location string) (err error) {
 		if err != nil {
 			return err
 		}
-		reqMetadata.contentMD5Bytes = sumMD5(createBucketConfigBytes)
-		reqMetadata.contentSHA256Bytes = sum256(createBucketConfigBytes)
+		reqMetadata.contentMD5Base64 = sumMD5Base64(createBucketConfigBytes)
+		reqMetadata.contentSHA256Hex = sum256Hex(createBucketConfigBytes)
 		reqMetadata.contentBody = bytes.NewReader(createBucketConfigBytes)
 		reqMetadata.contentLength = int64(len(createBucketConfigBytes))
 	}
@@ -162,12 +162,12 @@ func (c Client) putBucketPolicy(bucketName string, policyInfo policy.BucketAcces
 
 	policyBuffer := bytes.NewReader(policyBytes)
 	reqMetadata := requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentBody:        policyBuffer,
-		contentLength:      int64(len(policyBytes)),
-		contentMD5Bytes:    sumMD5(policyBytes),
-		contentSHA256Bytes: sum256(policyBytes),
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentBody:      policyBuffer,
+		contentLength:    int64(len(policyBytes)),
+		contentMD5Base64: sumMD5Base64(policyBytes),
+		contentSHA256Hex: sum256Hex(policyBytes),
 	}
 
 	// Execute PUT to upload a new bucket policy.
@@ -197,9 +197,9 @@ func (c Client) removeBucketPolicy(bucketName string) error {
 
 	// Execute DELETE on objectName.
 	resp, err := c.executeMethod(context.Background(), "DELETE", requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentSHA256Bytes: emptySHA256,
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentSHA256Hex: emptySHA256Hex,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -227,12 +227,12 @@ func (c Client) SetBucketNotification(bucketName string, bucketNotification Buck
 
 	notifBuffer := bytes.NewReader(notifBytes)
 	reqMetadata := requestMetadata{
-		bucketName:         bucketName,
-		queryValues:        urlValues,
-		contentBody:        notifBuffer,
-		contentLength:      int64(len(notifBytes)),
-		contentMD5Bytes:    sumMD5(notifBytes),
-		contentSHA256Bytes: sum256(notifBytes),
+		bucketName:       bucketName,
+		queryValues:      urlValues,
+		contentBody:      notifBuffer,
+		contentLength:    int64(len(notifBytes)),
+		contentMD5Base64: sumMD5Base64(notifBytes),
+		contentSHA256Hex: sum256Hex(notifBytes),
 	}
 
 	// Execute PUT to upload a new bucket notification.

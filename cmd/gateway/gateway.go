@@ -1,6 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * Copyright 2015-2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +14,15 @@
  * limitations under the License.
  */
 
-package minio
+package gateway
 
 import (
-	"context"
+	// Import all gateways.
+	_ "github.com/minio/minio/cmd/gateway/azure"
+	_ "github.com/minio/minio/cmd/gateway/b2"
+	_ "github.com/minio/minio/cmd/gateway/gcs"
+	_ "github.com/minio/minio/cmd/gateway/manta"
+	_ "github.com/minio/minio/cmd/gateway/s3"
+	_ "github.com/minio/minio/cmd/gateway/sia"
+	// Add your gateway here.
 )
-
-// FPutObject - Create an object in a bucket, with contents from file at filePath
-func (c Client) FPutObject(bucketName, objectName, filePath string, opts PutObjectOptions) (n int64, err error) {
-	return c.FPutObjectWithContext(context.Background(), bucketName, objectName, filePath, opts)
-}

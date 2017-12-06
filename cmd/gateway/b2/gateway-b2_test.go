@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package b2
 
 import (
 	"fmt"
@@ -23,6 +23,8 @@ import (
 
 	b2 "github.com/minio/blazer/base"
 	"github.com/minio/minio/pkg/errors"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 // Tests headerToObjectInfo
@@ -30,7 +32,7 @@ func TestHeaderToObjectInfo(t *testing.T) {
 	testCases := []struct {
 		bucket, object string
 		header         http.Header
-		objInfo        ObjectInfo
+		objInfo        minio.ObjectInfo
 	}{
 		{
 			bucket: "bucket",
@@ -42,7 +44,7 @@ func TestHeaderToObjectInfo(t *testing.T) {
 				"X-Bz-Info-X-Amz-Meta-1": []string{"test1"},
 				"X-Bz-File-Id":           []string{"xxxxx"},
 			},
-			objInfo: ObjectInfo{
+			objInfo: minio.ObjectInfo{
 				Bucket:      "bucket",
 				Name:        "object",
 				ContentType: "application/javascript",
@@ -127,19 +129,23 @@ func TestB2ObjectError(t *testing.T) {
 			[]string{"bucket"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "duplicate_bucket_name",
-			}), BucketAlreadyOwnedByYou{Bucket: "bucket"},
+			}), minio.BucketAlreadyOwnedByYou{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "bad_request",
-			}), BucketNotFound{Bucket: "bucket"},
+			}), minio.BucketNotFound{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket", "object"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "bad_request",
-			}), ObjectNameInvalid{
+			}), minio.ObjectNameInvalid{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -148,13 +154,13 @@ func TestB2ObjectError(t *testing.T) {
 			[]string{"bucket"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "bad_bucket_id",
-			}), BucketNotFound{Bucket: "bucket"},
+			}), minio.BucketNotFound{Bucket: "bucket"},
 		},
 		{
 			[]string{"bucket", "object"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "file_not_present",
-			}), ObjectNotFound{
+			}), minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -163,7 +169,7 @@ func TestB2ObjectError(t *testing.T) {
 			[]string{"bucket", "object"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "not_found",
-			}), ObjectNotFound{
+			}), minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
@@ -172,13 +178,15 @@ func TestB2ObjectError(t *testing.T) {
 			[]string{"bucket"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Code:       "cannot_delete_non_empty_bucket",
-			}), BucketNotEmpty{Bucket: "bucket"},
+			}), minio.BucketNotEmpty{
+				Bucket: "bucket",
+			},
 		},
 		{
 			[]string{"bucket", "object", "uploadID"}, errors.Trace(b2.Error{
 				StatusCode: 1,
 				Message:    "No active upload for",
-			}), InvalidUploadID{
+			}), minio.InvalidUploadID{
 				UploadID: "uploadID",
 			},
 		},
