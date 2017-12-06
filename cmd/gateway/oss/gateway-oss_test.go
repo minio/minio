@@ -1,17 +1,20 @@
-package cmd
+package oss
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"reflect"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/errors"
 )
 
 func ossErrResponse(code string) error {
-	return traceError(oss.ServiceError{
+	return errors.Trace(oss.ServiceError{
 		Code: code,
 	})
 }
@@ -24,44 +27,44 @@ func TestOSSToObjectError(t *testing.T) {
 	}{
 		{
 			inputErr:    ossErrResponse("BucketAlreadyExists"),
-			expectedErr: BucketAlreadyOwnedByYou{},
+			expectedErr: minio.BucketAlreadyOwnedByYou{},
 		},
 		{
 			inputErr:    ossErrResponse("BucketNotEmpty"),
-			expectedErr: BucketNotEmpty{},
+			expectedErr: minio.BucketNotEmpty{},
 		},
 		{
 			inputErr:    ossErrResponse("InvalidBucketName"),
-			expectedErr: BucketNameInvalid{},
+			expectedErr: minio.BucketNameInvalid{},
 		},
 		{
 			inputErr:    ossErrResponse("NoSuchBucket"),
-			expectedErr: BucketNotFound{},
+			expectedErr: minio.BucketNotFound{},
 		},
 		// with empty object, NoSuchKey is interpreted as BucketNotFound
 		{
 			inputErr:    ossErrResponse("NoSuchKey"),
-			expectedErr: BucketNotFound{},
+			expectedErr: minio.BucketNotFound{},
 		},
 		{
 			inputErr:    ossErrResponse("NoSuchUpload"),
-			expectedErr: InvalidUploadID{},
+			expectedErr: minio.InvalidUploadID{},
 		},
 		{
 			inputErr:    ossErrResponse("InvalidObjectName"),
-			expectedErr: ObjectNameInvalid{},
+			expectedErr: minio.ObjectNameInvalid{},
 		},
 		{
 			inputErr:    ossErrResponse("AccessDenied"),
-			expectedErr: PrefixAccessDenied{},
+			expectedErr: minio.PrefixAccessDenied{},
 		},
 		{
 			inputErr:    ossErrResponse("NoSuchUpload"),
-			expectedErr: InvalidUploadID{},
+			expectedErr: minio.InvalidUploadID{},
 		},
 		{
 			inputErr:    ossErrResponse("EntityTooSmall"),
-			expectedErr: PartTooSmall{},
+			expectedErr: minio.PartTooSmall{},
 		},
 		{
 			inputErr:    nil,
@@ -70,7 +73,7 @@ func TestOSSToObjectError(t *testing.T) {
 		// Special test case for NoSuchKey with object name
 		{
 			inputErr:    ossErrResponse("NoSuchKey"),
-			expectedErr: ObjectNotFound{Bucket: "bucket", Object: "object"},
+			expectedErr: minio.ObjectNotFound{Bucket: "bucket", Object: "object"},
 			bucket:      "bucket",
 			object:      "object",
 		},
@@ -78,15 +81,15 @@ func TestOSSToObjectError(t *testing.T) {
 		// Special test case for error value that is not of
 		// type (*Error)
 		{
-			inputErr:    errors.New("not a *Error"),
-			expectedErr: errors.New("not a *Error"),
+			inputErr:    fmt.Errorf("not a *Error"),
+			expectedErr: fmt.Errorf("not a *Error"),
 		},
 	}
 
 	for i, tc := range testCases {
 		actualErr := ossToObjectError(tc.inputErr, tc.bucket, tc.object)
-		if e, ok := actualErr.(*Error); ok && e.e != tc.expectedErr {
-			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, e.e)
+		if e, ok := actualErr.(*errors.Error); ok && e.Cause != tc.expectedErr {
+			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, e.Cause)
 		}
 	}
 }
@@ -99,8 +102,8 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"invalid--meta": "value",
 	}
 	_, err = s3MetaToOSSOptions(headers)
-	if err = errorCause(err); err != nil {
-		if _, ok := err.(UnsupportedMetadata); !ok {
+	if err = errors.Cause(err); err != nil {
+		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
 	}
