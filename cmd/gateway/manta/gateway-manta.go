@@ -166,7 +166,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 		}
 	}
 
-	triton, err := storage.NewClient(&triton.ClientConfig{
+	tc, err := storage.NewClient(&triton.ClientConfig{
 		MantaURL:    endpoint,
 		AccountName: creds.AccessKey,
 		Signers:     []authentication.Signer{signer},
@@ -175,12 +175,12 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 		return nil, err
 	}
 
-	triton.Client.HTTPClient = &http.Client{
+	tc.Client.HTTPClient = &http.Client{
 		Transport: minio.NewCustomHTTPTransport(),
 	}
 
 	return &tritonObjects{
-		client: triton,
+		client: tc,
 	}, nil
 }
 
