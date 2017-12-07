@@ -602,12 +602,6 @@
 			"revisionTime": "2017-04-25T18:31:26Z"
 		},
 		{
-			"checksumSHA1": "M1wpFKbvAwtmAafEAYAvJ5mUlf0=",
-			"path": "google.golang.org/api/cloudresourcemanager/v1",
-			"revision": "4a52eba41712e0b12c17258ac017e177abeaf535",
-			"revisionTime": "2017-06-21T19:15:06Z"
-		},
-		{
 			"checksumSHA1": "C7k1pbU/WU4CBoBwA4EBUnV/iek=",
 			"path": "google.golang.org/api/gensupport",
 			"revision": "fbbaff1827317122a8a0e1b24de25df8417ce87b",
