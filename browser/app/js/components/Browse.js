@@ -210,9 +210,19 @@ export default class Browse extends React.Component {
     dispatch(actions.hideAbout())
   }
 
+  toggleBucketDropdown(e) {
+    const {dispatch, showBucketDropdown} = this.props
+    if (showBucketDropdown) {
+      dispatch(actions.hideBucketDropdown())
+    } else {
+      dispatch(actions.showBucketDropdown())
+    }
+  }
+
   showBucketPolicy(e) {
     e.preventDefault()
     const {dispatch} = this.props
+    this.toggleBucketDropdown(e)
     dispatch(actions.showBucketPolicy())
   }
 
@@ -222,14 +232,28 @@ export default class Browse extends React.Component {
     dispatch(actions.hideBucketPolicy())
   }
 
+  deleteBucket(e, bucket) {
+    e.preventDefault()
+    const {dispatch} = this.props
+    this.toggleBucketDropdown(e)
+    dispatch(actions.deleteBucket(bucket))
+    browserHistory.push(`${minioBrowserPrefix}/`)
+  }
+
   uploadFile(e) {
     e.preventDefault()
-    const {dispatch, buckets} = this.props
-
+    const {dispatch, buckets, currentBucket} = this.props
     if (buckets.length === 0) {
       dispatch(actions.showAlert({
         type: 'danger',
         message: "Bucket needs to be created before trying to upload files."
+      }))
+      return
+    }
+    if (currentBucket === '') {
+      dispatch(actions.showAlert({
+        type: 'danger',
+        message: "Please choose a bucket before trying to upload files."
       }))
       return
     }
@@ -577,7 +601,9 @@ export default class Browse extends React.Component {
         <SideBar searchBuckets={ this.searchBuckets.bind(this) }
           selectBucket={ this.selectBucket.bind(this) }
           clickOutside={ this.hideSidebar.bind(this) }
-          showPolicy={ this.showBucketPolicy.bind(this) } />
+          showPolicy={ this.showBucketPolicy.bind(this) }
+          deleteBucket={ this.deleteBucket.bind(this) }
+          toggleBucketDropdown={ this.toggleBucketDropdown.bind(this) } />
         <div className="fe-body">
           <div className={ 'list-actions' + (classNames({
                              ' list-actions-toggled': checkedObjects.length > 0

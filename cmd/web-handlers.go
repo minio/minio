@@ -145,6 +145,36 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	return nil
 }
 
+// RemoveBucketArgs - remove bucket args.
+type RemoveBucketArgs struct {
+	BucketName string `json:"bucketName"`
+}
+
+// DeleteBucket - removes a bucket, must be empty.
+func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs, reply *WebGenericRep) error {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return toJSONError(errServerNotInitialized)
+	}
+	if !isHTTPRequestValid(r) {
+		return toJSONError(errAuthentication)
+	}
+
+	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return toJSONError(errOperationTimedOut)
+	}
+	defer bucketLock.Unlock()
+
+	err := objectAPI.DeleteBucket(args.BucketName)
+	if err != nil {
+		return toJSONError(err, args.BucketName)
+	}
+
+	reply.UIVersion = browser.UIVersion
+	return nil
+}
+
 // ListBucketsRep - list buckets response
 type ListBucketsRep struct {
 	Buckets   []WebBucketInfo `json:"buckets"`

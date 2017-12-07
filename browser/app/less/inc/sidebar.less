@@ -111,7 +111,7 @@
 		}
 
 		&:hover {
-			.fesli-trigger {
+			.bucket-dropdown .dropdown-toggle {
 				.opacity(0.6);
 
 				&:hover {
@@ -132,17 +132,40 @@
 	}
 }
 
-.fesli-trigger {
-	.opacity(0);
-	.transition(all);
-	.transition-duration(200ms);
+/* Dropdown */
+.bucket-dropdown {
 	position: absolute;
-	top: 0;
-	right: 0;
+	top: 0px;
+	right: 0px;
 	width: 35px;
 	height: 100%;
 	cursor: pointer;
-	background: url(../../img/more-h-light.svg) no-repeat top 20px left;
+	color: @white;
+
+	.dropdown-toggle {
+		.opacity(0);
+		.transition(all);
+		.transition-duration(200ms);
+		font-size: 20px;
+		background-color: transparent;
+	}
+
+	.dropdown-menu-right {
+		padding: 15px 0;
+		margin-top: -1px;
+		& li {
+			a:before {
+				content: none;
+				-webkit-box-shadow: @dropdown-shadow;
+				box-shadow: @dropdown-shadow;	
+			}
+			&:not(.active):hover {
+				& > a {
+					color: @dropdown-link-hover-color;
+				}
+			}
+		}
+	}
 }
 
 /* Scrollbar */
