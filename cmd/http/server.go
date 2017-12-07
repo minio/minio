@@ -18,6 +18,7 @@ package http
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net/http"
 	"sync"
@@ -26,10 +27,21 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
+
+	"github.com/minio/minio/pkg/ocsp"
+	ocspgo "golang.org/x/crypto/ocsp"
 )
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
+
+	// ocspSuccessUpdateInterval is the time interval between
+	// two successful OCSP updates
+	ocspSuccessUpdateInterval = time.Hour
+
+	// ocspFailUpdateInterval is the time interval between
+	// two failed OCSP updates
+	ocspFailUpdateInterval = time.Second * 30
 
 	// DefaultShutdownTimeout - default shutdown timeout used for graceful http server shutdown.
 	DefaultShutdownTimeout = 5 * time.Second
@@ -47,10 +59,22 @@ const (
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
 )
 
+var (
+	// ErrCertRevoked indicates that the current TLS certificate is revoked by the certificate authority
+	ErrCertRevoked = errors.New("certificate revoked")
+)
+
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs                  []string      // addresses on which the server listens for new connection.
+
+	currCert         *tls.Certificate // current cert
+	certMu           *sync.Mutex      // protects currCert
+	ocspUpdateDoneCh chan struct{}    // stops ocsp staple update
+
+	Addrs   []string // addresses on which the server listens for new connection.
+	ErrorCh chan error
+
 	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
 	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
 	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
@@ -61,8 +85,96 @@ type Server struct {
 	requestCount           int32         // counter holds no. of request in process.
 }
 
+// certificate securely updates server with a new certificate
+func (srv *Server) certificate() (*tls.Certificate, error) {
+	srv.certMu.Lock()
+	defer srv.certMu.Unlock()
+	return srv.currCert, nil
+}
+
+// updateCertOCSP updates the OCSP field of the current certificate
+func (srv *Server) updateCertOCSP() (bool, bool, error) {
+
+	srv.certMu.Lock()
+	publicCert := srv.currCert.Certificate[0]
+	srv.certMu.Unlock()
+
+	// Extract the raw bytes of the leaf public certificate
+	parsedCert, err := x509.ParseCertificate(publicCert)
+	if err != nil {
+		return false, false, err
+	}
+
+	// Fetch OCSP response
+	ocspBytes, ocspResp, ocspErr := ocsp.GetOCSPForCert([]*x509.Certificate{parsedCert})
+	if ocspErr != nil {
+		// Return OCSP unsupported
+		if ocspErr == ocsp.ErrNoOCSPServer {
+			return false, true, nil
+		}
+		return false, false, ocspErr
+	}
+
+	srv.certMu.Lock()
+	srv.currCert = &tls.Certificate{
+		Certificate: srv.currCert.Certificate,
+		PrivateKey:  srv.currCert.PrivateKey,
+		OCSPStaple:  ocspBytes,
+	}
+	srv.certMu.Unlock()
+
+	if ocspResp.Status == ocspgo.Revoked {
+		return false, false, ErrCertRevoked
+	}
+
+	return true, false, nil
+}
+
+// startOCSPBackgroundUpdate - regularly updates tls certificate with
+// new ocsp staple response.
+func (srv *Server) startOCSPBackgroundUpdate() {
+	go func() {
+		// Infinite loop to update OCSP value
+		for {
+			var err error
+			ocspUpdated := false
+			ocspUnsupported := true
+			sleepTime := ocspFailUpdateInterval
+
+			// Update OCSP field in current TLS certificate
+			ocspUpdated, ocspUnsupported, err = srv.updateCertOCSP()
+			if err != nil {
+				if srv.ErrorCh != nil {
+					srv.ErrorCh <- err
+				}
+			}
+
+			if ocspUnsupported {
+				// OCSP is unsupported, no need to continue
+				// the background update
+				break
+			}
+
+			if ocspUpdated {
+				sleepTime = ocspSuccessUpdateInterval
+			}
+
+			select {
+			// Wait until we get order to finish
+			case <-srv.ocspUpdateDoneCh:
+				return
+			case <-time.After(sleepTime):
+			}
+		}
+	}()
+}
+
 // Start - start HTTP server
-func (srv *Server) Start() (err error) {
+func (srv *Server) Start() {
+	go srv.synchronousStart()
+}
+
+func (srv *Server) synchronousStart() {
 	// Take a copy of server fields.
 	var tlsConfig *tls.Config
 	if srv.TLSConfig != nil {
@@ -78,8 +190,7 @@ func (srv *Server) Start() (err error) {
 	updateBytesWrittenFunc := srv.UpdateBytesWrittenFunc
 
 	// Create new HTTP listener.
-	var listener *httpListener
-	listener, err = newHTTPListener(
+	listener, err := newHTTPListener(
 		addrs,
 		tlsConfig,
 		tcpKeepAliveTimeout,
@@ -89,7 +200,10 @@ func (srv *Server) Start() (err error) {
 		updateBytesWrittenFunc,
 	)
 	if err != nil {
-		return err
+		if srv.ErrorCh != nil {
+			srv.ErrorCh <- err
+		}
+		return
 	}
 
 	// Wrap given handler to do additional
@@ -113,8 +227,16 @@ func (srv *Server) Start() (err error) {
 	srv.listener = listener
 	srv.listenerMutex.Unlock()
 
+	// Start OCSP regular update only when TLS is configured
+	if srv.TLSConfig != nil {
+		srv.startOCSPBackgroundUpdate()
+	}
+
 	// Start servicing with listener.
-	return srv.Server.Serve(listener)
+	err = srv.Server.Serve(listener)
+	if srv.ErrorCh != nil {
+		srv.ErrorCh <- err
+	}
 }
 
 // Shutdown - shuts down HTTP server.
@@ -129,6 +251,10 @@ func (srv *Server) Shutdown() error {
 	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
 		// shutdown in progress
 		return errors.New("http server already in shutdown")
+	}
+
+	if srv.ocspUpdateDoneCh != nil {
+		close(srv.ocspUpdateDoneCh)
 	}
 
 	// Close underneath HTTP listener.
@@ -173,29 +299,35 @@ var defaultCipherSuites = []uint16{
 }
 
 // NewServer - creates new HTTP server using given arguments.
-func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate) *Server {
-	var tlsConfig *tls.Config
-	if certificate != nil {
-		tlsConfig = &tls.Config{
-			PreferServerCipherSuites: true,
-			CipherSuites:             defaultCipherSuites,
-			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"http/1.1", "h2"},
-		}
-		tlsConfig.Certificates = append(tlsConfig.Certificates, *certificate)
-	}
-
+func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate, errorCh chan error) *Server {
 	httpServer := &Server{
 		Addrs:               addrs,
+		ErrorCh:             errorCh,
 		ShutdownTimeout:     DefaultShutdownTimeout,
 		TCPKeepAliveTimeout: DefaultTCPKeepAliveTimeout,
 		listenerMutex:       &sync.Mutex{},
 	}
+
 	httpServer.Handler = handler
-	httpServer.TLSConfig = tlsConfig
 	httpServer.ReadTimeout = DefaultReadTimeout
 	httpServer.WriteTimeout = DefaultWriteTimeout
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
+
+	if certificate != nil {
+		httpServer.TLSConfig = &tls.Config{
+			PreferServerCipherSuites: true,
+			CipherSuites:             defaultCipherSuites,
+			MinVersion:               tls.VersionTLS12,
+			NextProtos:               []string{"http/1.1", "h2"},
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return httpServer.certificate()
+			},
+		}
+
+		httpServer.currCert = certificate
+		httpServer.certMu = &sync.Mutex{}
+		httpServer.ocspUpdateDoneCh = make(chan struct{})
+	}
 
 	return httpServer
 }

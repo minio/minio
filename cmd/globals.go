@@ -125,7 +125,8 @@ var (
 	globalRootCAs *x509.CertPool
 
 	// IsSSL indicates if the server is configured with SSL.
-	globalIsSSL bool
+	globalIsSSL         bool
+	globalIsCertRevoked bool
 
 	globalTLSCertificate *tls.Certificate
 

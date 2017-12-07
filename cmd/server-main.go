@@ -257,14 +257,12 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate, globalHTTPServerErrorCh)
 	globalHTTPServer.ReadTimeout = globalConnReadTimeout
 	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
-	go func() {
-		globalHTTPServerErrorCh <- globalHTTPServer.Start()
-	}()
+	globalHTTPServer.Start()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
@@ -287,7 +285,7 @@ func serverMain(ctx *cli.Context) {
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
 
-	handleSignals()
+	handleEvents()
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

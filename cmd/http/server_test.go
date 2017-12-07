@@ -49,7 +49,13 @@ func TestNewServer(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		server := NewServer(testCase.addrs, testCase.handler, testCase.certificate)
+		nullCh := make(chan error)
+		go func() {
+			for {
+				<-nullCh
+			}
+		}()
+		server := NewServer(testCase.addrs, testCase.handler, testCase.certificate, nullCh)
 		if server == nil {
 			t.Fatalf("Case %v: server: expected: <non-nil>, got: <nil>", (i + 1))
 		}
@@ -141,12 +147,19 @@ func TestServerTLSCiphers(t *testing.T) {
 	for i, testCase := range testCases {
 		func() {
 			addr := "127.0.0.1:" + getNextPort()
+			errCh := make(chan error)
+			go func() {
+				for {
+					<-errCh
+				}
+			}()
 
 			server := NewServer([]string{addr},
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintf(w, "Hello, world")
 				}),
-				&certificate)
+				&certificate,
+				errCh)
 			if testCase.resetServerCiphers {
 				// Use Go default ciphers.
 				server.TLSConfig.CipherSuites = nil
