@@ -83,16 +83,6 @@ export MINIO_DOMAIN=mydomain.com
 minio server /data
 ```
 
-#### Logger
-|Field|Type|Description|
-|:---|:---|:---|
-|``logger ``| |Server logs errors and fatal messages via logger. You may enable one or more loggers at the same time.|
-|``logger.console``| |Send log messages to console.|
-|``logger.console.enable``| _bool_ | Enable or disable console logger. Default is set to _true_.|
-|``logger.file``| |Send log message to a file.|
-|``logger.file.enable``| _bool_ | Enable or disable file logger. Default is set to _false_.|
-|``logger.file.filename``| _string_ | Path and name of the log file. Example: _/var/log/minio.log_ |
-
 #### Notify
 |Field|Type|Description|
 |:---|:---|:---|
