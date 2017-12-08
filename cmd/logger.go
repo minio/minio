@@ -17,11 +17,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/minio/mc/pkg/console"
@@ -29,6 +32,15 @@ import (
 )
 
 var log = NewLogger()
+
+type logEntry struct {
+	Level   string   `json:"type"`
+	Source  string   `json:"source"`
+	Cause   string   `json:"cause"`
+	Message string   `json:"message"`
+	Time    string   `json:"time"`
+	Stack   []string `json:"stack"`
+}
 
 // LogTarget - interface for log target.
 type LogTarget interface {
@@ -48,6 +60,7 @@ type Logger struct {
 	consoleTarget ConsoleLogger
 	targets       []LogTarget
 	quiet         bool
+	json          bool
 }
 
 // AddTarget - add logger to this hook.
@@ -89,6 +102,12 @@ func (log *Logger) Levels() []logrus.Level {
 
 // EnableQuiet - sets quiet option.
 func (log *Logger) EnableQuiet() {
+	log.quiet = true
+}
+
+// EnableJSON - outputs logs in json format.
+func (log *Logger) EnableJSON() {
+	log.json = true
 	log.quiet = true
 }
 
@@ -137,6 +156,26 @@ func getSource() string {
 	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
 }
 
+func printJSON(level logrus.Level, source, cause, msg string, stack []string, data ...interface{}) {
+	logJSON, err := json.Marshal(&logEntry{
+		Level:   strings.Title(level.String()),
+		Source:  source,
+		Stack:   stack,
+		Cause:   cause,
+		Time:    UTCNow().Format(time.RFC3339Nano),
+		Message: fmt.Sprintf(msg, data...),
+	})
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(logJSON))
+
+	if level == logrus.FatalLevel {
+		os.Exit(1)
+	}
+}
+
 func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
 	isErrIgnored := func(err error) (ok bool) {
 		err = errors.Cause(err)
@@ -155,13 +194,23 @@ func logIf(level logrus.Level, source string, err error, msg string, data ...int
 		return
 	}
 
+	var stack []string
+	if terr, ok := err.(*errors.Error); ok {
+		stack = terr.Stack()
+	}
+
+	if log.json {
+		printJSON(level, source, err.Error(), msg, stack, data...)
+		return
+	}
+
 	fields := logrus.Fields{
 		"source": source,
 		"cause":  err.Error(),
 	}
 
-	if terr, ok := err.(*errors.Error); ok {
-		fields["stack"] = strings.Join(terr.Stack(), " ")
+	if len(stack) > 0 {
+		fields["stack"] = strings.Join(stack, " ")
 	}
 
 	switch level {
