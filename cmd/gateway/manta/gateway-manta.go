@@ -41,10 +41,12 @@ import (
 // and require access credentials to read them. Within the stor namespace, you can create any
 // number of directories and objects.
 const (
-	mantaDefaultRootStore = "/stor"
-	mantaBackend          = "manta"
-	defaultMantaURL       = "https://us-east.manta.joyent.com"
+	mantaBackend     = "manta"
+	defaultMantaRoot = "/stor"
+	defaultMantaURL  = "https://us-east.manta.joyent.com"
 )
+
+var mantaRoot = defaultMantaRoot
 
 func init() {
 	const mantaGatewayTemplate = `NAME:
@@ -128,6 +130,10 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 		}
 	}
 
+	if overrideRoot, ok := os.LookupEnv("MANTA_ROOT"); ok {
+		mantaRoot = overrideRoot
+	}
+
 	keyMaterial := os.Getenv("MANTA_KEY_MATERIAL")
 
 	if keyMaterial == "" {
@@ -136,7 +142,6 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 			return nil, errors.Trace(err)
 		}
 	} else {
-
 		var keyBytes []byte
 		if _, err = os.Stat(keyMaterial); err == nil {
 			keyBytes, err = ioutil.ReadFile(keyMaterial)
@@ -216,7 +221,7 @@ func (t *tritonObjects) StorageInfo() (si minio.StorageInfo) {
 func (t *tritonObjects) MakeBucketWithLocation(bucket, location string) error {
 	ctx := context.Background()
 	err := t.client.Dir().Put(ctx, &storage.PutDirectoryInput{
-		DirectoryName: path.Join(mantaDefaultRootStore, bucket),
+		DirectoryName: path.Join(mantaRoot, bucket),
 	})
 	if err != nil {
 		return err
@@ -231,7 +236,7 @@ func (t *tritonObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e err
 	var info minio.BucketInfo
 	ctx := context.Background()
 	resp, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
-		ObjectPath: path.Join(mantaDefaultRootStore, bucket),
+		ObjectPath: path.Join(mantaRoot, bucket),
 	})
 	if err != nil {
 		return info, err
@@ -250,7 +255,7 @@ func (t *tritonObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e err
 func (t *tritonObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 	ctx := context.Background()
 	dirs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
-		DirectoryName: path.Join(mantaDefaultRootStore),
+		DirectoryName: path.Join(mantaRoot),
 	})
 	if err != nil {
 		return nil, err
@@ -275,7 +280,7 @@ func (t *tritonObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 func (t *tritonObjects) DeleteBucket(bucket string) error {
 	ctx := context.Background()
 	return t.client.Dir().Delete(ctx, &storage.DeleteDirectoryInput{
-		DirectoryName: path.Join(mantaDefaultRootStore, bucket),
+		DirectoryName: path.Join(mantaRoot, bucket),
 	})
 }
 
@@ -290,7 +295,7 @@ func (t *tritonObjects) DeleteBucket(bucket string) error {
 func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	ctx := context.Background()
 	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
-		DirectoryName: path.Join(mantaDefaultRootStore, bucket, prefix),
+		DirectoryName: path.Join(mantaRoot, bucket, prefix),
 		Limit:         uint64(maxKeys),
 		Marker:        marker,
 	})
@@ -336,7 +341,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
 	ctx := context.Background()
 	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
-		DirectoryName: path.Join(mantaDefaultRootStore, bucket, prefix),
+		DirectoryName: path.Join(mantaRoot, bucket, prefix),
 		Limit:         uint64(maxKeys),
 		Marker:        continuationToken,
 	})
@@ -388,7 +393,7 @@ func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, leng
 
 	ctx := context.Background()
 	output, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
-		ObjectPath: path.Join(mantaDefaultRootStore, bucket, object),
+		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
 	if err != nil {
 		return err
@@ -417,7 +422,7 @@ func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo minio.Obje
 
 	ctx := context.Background()
 	obj, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
-		ObjectPath: path.Join(mantaDefaultRootStore, bucket, object),
+		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
 	if err != nil {
 		return objInfo, err
@@ -450,7 +455,7 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 	ctx := context.Background()
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
 		ContentLength: uint64(data.Size()),
-		ObjectPath:    path.Join(mantaDefaultRootStore, bucket, object),
+		ObjectPath:    path.Join(mantaRoot, bucket, object),
 		ContentType:   metadata["content-type"],
 		ContentMD5:    metadata["content-md5"],
 		ObjectReader:  dummySeeker{data},
@@ -473,8 +478,8 @@ func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject 
 	ctx := context.Background()
 
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{
-		SourcePath: path.Join(mantaDefaultRootStore, srcBucket, srcObject),
-		LinkPath:   path.Join(mantaDefaultRootStore, destBucket, destObject),
+		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
+		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
 	}); err != nil {
 		return objInfo, errors.Trace(err)
 	}
@@ -489,7 +494,7 @@ func (t *tritonObjects) DeleteObject(bucket, object string) error {
 	ctx := context.Background()
 
 	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
-		ObjectPath: path.Join(mantaDefaultRootStore, bucket, object),
+		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
 		return errors.Trace(err)
 	}
