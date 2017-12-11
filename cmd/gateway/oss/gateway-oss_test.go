@@ -19,9 +19,8 @@ package oss
 import (
 	"fmt"
 	"net/http"
-	"testing"
-
 	"reflect"
+	"testing"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
@@ -115,9 +114,9 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 	var headers map[string]string
 
 	headers = map[string]string{
-		"invalid--meta": "value",
+		"x-amz-meta-invalid_meta": "value",
 	}
-	_, err = s3MetaToOSSOptions(headers)
+	_, err = appendS3MetaToOSSOptions(nil, headers)
 	if err = errors.Cause(err); err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
@@ -128,18 +127,17 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"accept-encoding":          "gzip", // not this
 		"content-encoding":         "gzip",
 		"X-Amz-Meta-Hdr":           "value",
-		"X-Amz-Meta-X_test_key":    "value",
-		"X-Amz-Meta-X__test__key":  "value",
-		"X-Amz-Meta-X-Test__key":   "value",
+		"X-Amz-Meta-X-test-key":    "value",
+		"X-Amz-Meta-X--test--key":  "value",
 		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	opts, err := s3MetaToOSSOptions(headers)
+	opts, err := appendS3MetaToOSSOptions(nil, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
-	if len(opts) != len(headers)-1 {
+	if len(opts) != len(headers) {
 		t.Fatalf("Test failed, S3 metdata is not fully transformed. expeted: %d, actual: %d", len(headers)-1, len(opts))
 	}
 }

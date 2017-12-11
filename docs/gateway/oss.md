@@ -44,6 +44,7 @@ mc ls myb2
 Gateway inherits the following OSS limitations:
 
 - Bucket names with "." in the bucket name are not supported.
+- Custom metadata with "_" in the key is not supported.
 
 Other limitations:
 

@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/dustin/go-humanize"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
@@ -36,7 +37,10 @@ import (
 )
 
 const (
-	ossBackend = "oss"
+	ossS3MinPartSize = 5 * humanize.MiByte
+	ossMaxParts      = 1000
+	ossMaxKeys       = 1000
+	ossBackend       = "oss"
 )
 
 func init() {
@@ -137,23 +141,28 @@ func (g *OSS) Production() bool {
 	return false
 }
 
-// s3MetaToOSSOptions converts metadata meant for S3 PUT/COPY
+// appendS3MetaToOSSOptions converts metadata meant for S3 PUT/COPY
 // object into oss.Option.
 //
 // S3 user-metadata is translated to OSS metadata by removing the
 // `X-Amz-Meta-` prefix and converted into `X-Oss-Meta-`.
 //
 // Header names are canonicalized as in http.Header.
-func s3MetaToOSSOptions(s3Metadata map[string]string) ([]oss.Option, error) {
-	opts := make([]oss.Option, 0, len(s3Metadata))
+func appendS3MetaToOSSOptions(opts []oss.Option, s3Metadata map[string]string) ([]oss.Option, error) {
+	if opts == nil {
+		opts = make([]oss.Option, 0, len(s3Metadata))
+	}
 	for k, v := range s3Metadata {
 		k = http.CanonicalHeaderKey(k)
 
 		switch {
-		case strings.Contains(k, "--"):
-			return nil, errors.Trace(minio.UnsupportedMetadata{})
 		case strings.HasPrefix(k, "X-Amz-Meta-"):
-			opts = append(opts, oss.Meta(k[len("X-Amz-Meta-"):], v))
+			metaKey := k[len("X-Amz-Meta-"):]
+			// NOTE(timonwong): OSS won't allow headers with underscore(_).
+			if strings.Contains(metaKey, "_") {
+				return nil, errors.Trace(minio.UnsupportedMetadata{})
+			}
+			opts = append(opts, oss.Meta(metaKey, v))
 		case k == "X-Amz-Acl":
 			// Valid values: public-read, private, and public-read-write
 			opts = append(opts, oss.ObjectACL(oss.ACLType(v)))
@@ -172,6 +181,7 @@ func s3MetaToOSSOptions(s3Metadata map[string]string) ([]oss.Option, error) {
 				opts = append(opts, oss.CopySourceIfModifiedSince(v))
 			}
 		case k == "Accept-Encoding":
+			opts = append(opts, oss.AcceptEncoding(v))
 		case k == "Cache-Control":
 			opts = append(opts, oss.CacheControl(v))
 		case k == "Content-Disposition":
@@ -197,7 +207,7 @@ func s3MetaToOSSOptions(s3Metadata map[string]string) ([]oss.Option, error) {
 }
 
 // ossMetaToS3Meta converts OSS metadata to S3 metadata.
-// It is the reverse of s3MetaToOSSOptions.
+// It is the reverse of appendS3MetaToOSSOptions.
 func ossHeaderToS3Meta(header http.Header) map[string]string {
 	// Decoding technique for each key is used here is as follows
 	// Each '_' is converted to '-'
@@ -259,11 +269,16 @@ func ossToObjectError(err error, params ...string) error {
 	err = e.Cause
 	bucket := ""
 	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
+	uploadID := ""
+	switch len(params) {
+	case 3:
+		uploadID = params[2]
+		fallthrough
+	case 2:
 		object = params[1]
+		fallthrough
+	case 1:
+		bucket = params[0]
 	}
 
 	ossErr, ok := err.(oss.ServiceError)
@@ -275,9 +290,9 @@ func ossToObjectError(err error, params ...string) error {
 
 	switch ossErr.Code {
 	case "BucketAlreadyExists":
-		err = minio.BucketAlreadyOwnedByYou{}
+		err = minio.BucketAlreadyOwnedByYou{Bucket: bucket}
 	case "BucketNotEmpty":
-		err = minio.BucketNotEmpty{}
+		err = minio.BucketNotEmpty{Bucket: bucket}
 	case "InvalidBucketName":
 		err = minio.BucketNameInvalid{Bucket: bucket}
 	case "NoSuchBucket":
@@ -289,16 +304,17 @@ func ossToObjectError(err error, params ...string) error {
 			err = minio.BucketNotFound{Bucket: bucket}
 		}
 	case "InvalidObjectName":
-		err = minio.ObjectNameInvalid{}
+		err = minio.ObjectNameInvalid{Bucket: bucket, Object: object}
 	case "AccessDenied":
-		err = minio.PrefixAccessDenied{
-			Bucket: bucket,
-			Object: object,
-		}
+		err = minio.PrefixAccessDenied{Bucket: bucket, Object: object}
 	case "NoSuchUpload":
-		err = minio.InvalidUploadID{}
+		err = minio.InvalidUploadID{UploadID: uploadID}
 	case "EntityTooSmall":
 		err = minio.PartTooSmall{}
+	case "SignatureDoesNotMatch":
+		err = minio.SignatureDoesNotMatch{}
+	case "InvalidPart":
+		err = minio.InvalidPart{}
 	}
 
 	e.Cause = err
@@ -323,19 +339,31 @@ func (l *ossObjects) StorageInfo() (si minio.StorageInfo) {
 	return
 }
 
+// ossIsValidBucketName verifies whether a bucket name is valid.
+func ossIsValidBucketName(bucket string) bool {
+	// dot is not allowed in bucket name
+	if strings.Contains(bucket, ".") {
+		return false
+	}
+	if !minio.IsValidBucketName(bucket) {
+		return false
+	}
+	return true
+}
+
 // MakeBucketWithLocation creates a new container on OSS backend.
 func (l *ossObjects) MakeBucketWithLocation(bucket, location string) error {
+	if !ossIsValidBucketName(bucket) {
+		return errors.Trace(minio.BucketNameInvalid{Bucket: bucket})
+	}
+
 	err := l.Client.CreateBucket(bucket)
 	return ossToObjectError(errors.Trace(err), bucket)
 }
 
 // ossGeBucketInfo gets bucket metadata.
 func ossGeBucketInfo(client *oss.Client, bucket string) (bi minio.BucketInfo, err error) {
-	// Verify if bucket (container-name) is valid. here.
-	// IsValidBucketName has same restrictions as container names mentioned
-	// in azure documentation, so we will simply use the same function here.
-	// https://www.alibabacloud.com/help/doc-detail/31827.htm#h2-bucket
-	if !minio.IsValidBucketName(bucket) {
+	if !ossIsValidBucketName(bucket) {
 		return bi, errors.Trace(minio.BucketNameInvalid{Bucket: bucket})
 	}
 
@@ -399,7 +427,7 @@ func fromOSSClientObjectProperties(bucket string, o oss.ObjectProperties) minio.
 		Name:    o.Key,
 		ModTime: o.LastModified,
 		Size:    o.Size,
-		ETag:    minio.CanonicalizeETag(o.ETag),
+		ETag:    minio.ToS3ETag(o.ETag),
 	}
 }
 
@@ -426,6 +454,11 @@ func ossListObjects(client *oss.Client, bucket, prefix, marker, delimiter string
 	buck, err := client.Bucket(bucket)
 	if err != nil {
 		return loi, ossToObjectError(errors.Trace(err), bucket)
+	}
+
+	// maxKeys should default to 1000 or less.
+	if maxKeys == 0 || maxKeys > ossMaxKeys {
+		maxKeys = ossMaxKeys
 	}
 
 	lor, err := buck.ListObjects(oss.Prefix(prefix), oss.Marker(marker), oss.Delimiter(delimiter), oss.MaxKeys(maxKeys))
@@ -510,6 +543,19 @@ func (l *ossObjects) GetObject(bucket, key string, startOffset, length int64, wr
 	return ossGetObject(l.Client, bucket, key, startOffset, length, writer)
 }
 
+func translatePlainError(err error) error {
+	errString := err.Error()
+
+	switch errString {
+	case "oss: service returned without a response body (404 Not Found)":
+		return oss.ServiceError{Code: "NoSuchKey"}
+	case "oss: service returned without a response body (400 Bad Request)":
+		return oss.ServiceError{Code: "AccessDenied"}
+	}
+
+	return err
+}
+
 // ossGetObjectInfo reads object info and replies back ObjectInfo.
 func ossGetObjectInfo(client *oss.Client, bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := client.Bucket(bucket)
@@ -519,7 +565,7 @@ func ossGetObjectInfo(client *oss.Client, bucket, object string) (objInfo minio.
 
 	header, err := bkt.GetObjectDetailedMeta(object)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), bucket, object)
+		return objInfo, ossToObjectError(errors.Trace(translatePlainError(err)), bucket, object)
 	}
 
 	// Build S3 metadata from OSS metadata
@@ -527,12 +573,13 @@ func ossGetObjectInfo(client *oss.Client, bucket, object string) (objInfo minio.
 
 	modTime, _ := http.ParseTime(header.Get("Last-Modified"))
 	size, _ := strconv.ParseInt(header.Get("Content-Length"), 10, 64)
+
 	return minio.ObjectInfo{
 		Bucket:          bucket,
 		Name:            object,
 		ModTime:         modTime,
 		Size:            size,
-		ETag:            minio.CanonicalizeETag(header.Get("ETag")),
+		ETag:            minio.ToS3ETag(header.Get("ETag")),
 		UserDefined:     userDefined,
 		ContentType:     header.Get("Content-Type"),
 		ContentEncoding: header.Get("Content-Encoding"),
@@ -552,7 +599,7 @@ func ossPutObject(client *oss.Client, bucket, object string, data *hash.Reader, 
 	}
 
 	// Build OSS metadata
-	opts, err := s3MetaToOSSOptions(metadata)
+	opts, err := appendS3MetaToOSSOptions(nil, metadata)
 	if err != nil {
 		return objInfo, ossToObjectError(err, bucket, object)
 	}
@@ -577,11 +624,20 @@ func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 
+	opts := make([]oss.Option, 0, len(metadata)+1)
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
 	// metadata input is already a trickled down value from interpreting x-oss-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
-	if _, err = bkt.CopyObjectTo(dstBucket, dstObject, srcObject, oss.MetadataDirective(oss.MetaReplace)); err != nil {
+	opts = append(opts, oss.MetadataDirective(oss.MetaReplace))
+
+	// Build OSS metadata
+	opts, err = appendS3MetaToOSSOptions(opts, metadata)
+	if err != nil {
+		return objInfo, ossToObjectError(err, srcBucket, srcObject)
+	}
+
+	if _, err = bkt.CopyObjectTo(dstBucket, dstObject, srcObject, opts...); err != nil {
 		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(dstBucket, dstObject)
@@ -653,7 +709,7 @@ func (l *ossObjects) NewMultipartUpload(bucket, object string, metadata map[stri
 	}
 
 	// Build OSS metadata
-	opts, err := s3MetaToOSSOptions(metadata)
+	opts, err := appendS3MetaToOSSOptions(nil, metadata)
 	if err != nil {
 		return uploadID, ossToObjectError(err, bucket, object)
 	}
@@ -686,7 +742,7 @@ func (l *ossObjects) PutObjectPart(bucket, object, uploadID string, partID int, 
 
 	return minio.PartInfo{
 		Size: size,
-		ETag: minio.CanonicalizeETag(up.ETag),
+		ETag: minio.ToS3ETag(up.ETag),
 		// NOTE(timonwong): LastModified is not supported
 		PartNumber: up.PartNumber,
 	}, nil
@@ -707,7 +763,7 @@ func fromOSSClientListPartsInfo(lupr oss.ListUploadedPartsResult, partNumberMark
 		parts[i] = minio.PartInfo{
 			PartNumber:   up.PartNumber,
 			LastModified: up.LastModified,
-			ETag:         minio.CanonicalizeETag(up.ETag),
+			ETag:         minio.ToS3ETag(up.ETag),
 			Size:         int64(up.Size),
 		}
 	}
@@ -725,12 +781,11 @@ func fromOSSClientListPartsInfo(lupr oss.ListUploadedPartsResult, partNumberMark
 	}
 }
 
-// ListObjectParts returns all object parts for specified object in specified bucket
-func (l *ossObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi minio.ListPartsInfo, err error) {
+func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, partNumberMarker, maxParts int) (lupr oss.ListUploadedPartsResult, err error) {
 	params := ossBuildListObjectPartsParams(uploadID, partNumberMarker, maxParts)
-	resp, err := l.Client.Conn.Do("GET", bucket, object, params, nil, nil, 0, nil)
+	resp, err := client.Conn.Do("GET", bucket, object, params, nil, nil, 0, nil)
 	if err != nil {
-		return lpi, ossToObjectError(errors.Trace(err), bucket, object)
+		return lupr, err
 	}
 
 	defer func() {
@@ -739,10 +794,48 @@ func (l *ossObjects) ListObjectParts(bucket, object, uploadID string, partNumber
 		resp.Body.Close()
 	}()
 
-	var lupr oss.ListUploadedPartsResult
 	err = xml.NewDecoder(resp.Body).Decode(&lupr)
 	if err != nil {
-		return lpi, ossToObjectError(errors.Trace(err), bucket, object)
+		return lupr, err
+	}
+	return lupr, nil
+}
+
+// CopyObjectPart creates a part in a multipart upload by copying
+// existing object or a part of it.
+func (l *ossObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
+	partID int, startOffset, length int64, metadata map[string]string) (p minio.PartInfo, err error) {
+
+	bkt, err := l.Client.Bucket(destBucket)
+	if err != nil {
+		return p, ossToObjectError(errors.Trace(err), destBucket)
+	}
+
+	// Build OSS metadata
+	opts, err := appendS3MetaToOSSOptions(nil, metadata)
+	if err != nil {
+		return p, ossToObjectError(err, srcBucket, srcObject)
+	}
+
+	completePart, err := bkt.UploadPartCopy(oss.InitiateMultipartUploadResult{
+		Key:      destObject,
+		UploadID: uploadID,
+	}, srcBucket, srcObject, startOffset, length, partID, opts...)
+
+	if err != nil {
+		return p, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
+	}
+
+	p.PartNumber = completePart.PartNumber
+	p.ETag = minio.ToS3ETag(completePart.ETag)
+	return p, nil
+}
+
+// ListObjectParts returns all object parts for specified object in specified bucket
+func (l *ossObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi minio.ListPartsInfo, err error) {
+	lupr, err := ossListObjectParts(l.Client, bucket, object, uploadID, partNumberMarker, maxParts)
+	if err != nil {
+		return lpi, ossToObjectError(errors.Trace(err), bucket, object, uploadID)
 	}
 
 	return fromOSSClientListPartsInfo(lupr, partNumberMarker), nil
@@ -768,9 +861,42 @@ func (l *ossObjects) AbortMultipartUpload(bucket, object, uploadID string) error
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object.
 func (l *ossObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, err error) {
-	bkt, err := l.Client.Bucket(bucket)
+	client := l.Client
+	bkt, err := client.Bucket(bucket)
 	if err != nil {
 		return oi, ossToObjectError(errors.Trace(err), bucket, object)
+	}
+
+	// Error out if uploadedParts except last part sizing < 5MiB.
+	// NOTE(timonwong): Actually, OSS wont't throw EntityTooSmall error, doing this check just for mint :(
+	var partNumberMarker int
+	lupr := oss.ListUploadedPartsResult{IsTruncated: true}
+	for lupr.IsTruncated {
+		lupr, err = ossListObjectParts(client, bucket, object, uploadID, partNumberMarker, ossMaxParts)
+		if err != nil {
+			return oi, ossToObjectError(errors.Trace(err), bucket, object, uploadID)
+		}
+
+		uploadedParts := lupr.UploadedParts
+		if !lupr.IsTruncated {
+			if len(uploadedParts) < 1 {
+				uploadedParts = nil
+			} else {
+				uploadedParts = uploadedParts[:len(uploadedParts)-1]
+			}
+		}
+
+		for _, part := range uploadedParts {
+			if part.Size < ossS3MinPartSize {
+				return oi, errors.Trace(minio.PartTooSmall{
+					PartNumber: part.PartNumber,
+					PartSize:   int64(part.Size),
+					PartETag:   minio.ToS3ETag(part.ETag),
+				})
+			}
+		}
+
+		partNumberMarker, _ = strconv.Atoi(lupr.NextPartNumberMarker)
 	}
 
 	imur := oss.InitiateMultipartUploadResult{
@@ -782,9 +908,10 @@ func (l *ossObjects) CompleteMultipartUpload(bucket, object, uploadID string, up
 	for i, up := range uploadedParts {
 		parts[i] = oss.UploadPart{
 			PartNumber: up.PartNumber,
-			ETag:       up.ETag,
+			ETag:       strings.TrimSuffix(up.ETag, "-1"), // Trim "-1" suffix in ETag as PutObjectPart().
 		}
 	}
+
 	_, err = bkt.CompleteMultipartUpload(imur, parts)
 	if err != nil {
 		return oi, ossToObjectError(errors.Trace(err), bucket, object)
@@ -828,7 +955,7 @@ func (l *ossObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 		}
 	}
 
-	return errors.Trace(minio.NotImplemented{})
+	return nil
 }
 
 // GetBucketPolicies will get policy on bucket.
@@ -841,7 +968,8 @@ func (l *ossObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	switch result.ACL {
 	case string(oss.ACLPrivate):
-		// This is a no-op
+		// By default, all buckets starts with a "private" policy.
+		return policy.BucketAccessPolicy{}, ossToObjectError(errors.Trace(minio.PolicyNotFound{}), bucket)
 	case string(oss.ACLPublicRead):
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	case string(oss.ACLPublicReadWrite):
