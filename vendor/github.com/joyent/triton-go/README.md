@@ -3,6 +3,8 @@
 `triton-go` is an idiomatic library exposing a client SDK for Go applications
 using Joyent's Triton Compute and Storage (Manta) APIs.
 
+[![Build Status](https://travis-ci.org/joyent/triton-go.svg?branch=master)](https://travis-ci.org/joyent/triton-go) [![Go Report Card](https://goreportcard.com/badge/github.com/joyent/triton-go)](https://goreportcard.com/report/github.com/joyent/triton-go)
+
 ## Usage
 
 Triton uses [HTTP Signature][4] to sign the Date header in each HTTP request
@@ -144,23 +146,50 @@ import (
 func main() {
     keyID := os.Getenv("SDC_KEY_ID")
     accountName := os.Getenv("SDC_ACCOUNT")
-    keyPath := os.Getenv("SDC_KEY_FILE")
+    keyMaterial := os.Getenv("SDC_KEY_MATERIAL")
 
-    privateKey, err := ioutil.ReadFile(keyPath)
-    if err != nil {
-        log.Fatalf("Couldn't find key file matching %s\n%s", keyID, err)
-    }
+    var signer authentication.Signer
+    var err error
 
-    sshKeySigner, err := authentication.NewPrivateKeySigner(keyID, privateKey, accountName)
-    if err != nil {
-        log.Fatal(err)
+    if keyMaterial == "" {
+        signer, err = authentication.NewSSHAgentSigner(keyID, accountName)
+        if err != nil {
+            log.Fatalf("Error Creating SSH Agent Signer: {{err}}", err)
+        }
+    } else {
+        var keyBytes []byte
+        if _, err = os.Stat(keyMaterial); err == nil {
+            keyBytes, err = ioutil.ReadFile(keyMaterial)
+            if err != nil {
+                log.Fatalf("Error reading key material from %s: %s",
+                    keyMaterial, err)
+            }
+            block, _ := pem.Decode(keyBytes)
+            if block == nil {
+                log.Fatalf(
+                    "Failed to read key material '%s': no key found", keyMaterial)
+            }
+
+            if block.Headers["Proc-Type"] == "4,ENCRYPTED" {
+                log.Fatalf(
+                    "Failed to read key '%s': password protected keys are\n"+
+                        "not currently supported. Please decrypt the key prior to use.", keyMaterial)
+            }
+
+        } else {
+            keyBytes = []byte(keyMaterial)
+        }
+
+        signer, err = authentication.NewPrivateKeySigner(keyID, []byte(keyMaterial), accountName)
+        if err != nil {
+            log.Fatalf("Error Creating SSH Private Key Signer: {{err}}", err)
+        }
     }
 
     config := &triton.ClientConfig{
         TritonURL:   os.Getenv("SDC_URL"),
-        MantaURL:    os.Getenv("MANTA_URL"),
         AccountName: accountName,
-        Signers:     []authentication.Signer{sshKeySigner},
+        Signers:     []authentication.Signer{signer},
     }
 
     c, err := compute.NewClient(config)

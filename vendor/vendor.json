@@ -262,28 +262,28 @@
 			"revisionTime": "2016-01-19T13:13:26-08:00"
 		},
 		{
-			"checksumSHA1": "0rEZ1HKhlPYgpoXzeG7mzbqwoBM=",
+			"checksumSHA1": "7ktZIWxNhEAtX+ci5WzD/9nz/bY=",
 			"path": "github.com/joyent/triton-go",
-			"revision": "8b86a52d43931ef053ce7b639c5f711f4bbebe19",
-			"revisionTime": "2017-09-28T17:06:36Z"
+			"revision": "b519eaf447296ec203c97149777be5f26fc205cc",
+			"revisionTime": "2017-12-11T19:26:39Z"
 		},
 		{
-			"checksumSHA1": "JKf97EAAAZFQ6Wf8qN9X7TWqNBY=",
+			"checksumSHA1": "Cth7NCLH/HaeKh9ZMRpQtudTEQQ=",
 			"path": "github.com/joyent/triton-go/authentication",
-			"revision": "8b86a52d43931ef053ce7b639c5f711f4bbebe19",
-			"revisionTime": "2017-09-28T17:06:36Z"
+			"revision": "b519eaf447296ec203c97149777be5f26fc205cc",
+			"revisionTime": "2017-12-11T19:26:39Z"
 		},
 		{
-			"checksumSHA1": "dlO1or0cyVMAmZzyLcBuoy+M0xU=",
+			"checksumSHA1": "0N7sdMRK20VULUO0y1Wk4y7vjPs=",
 			"path": "github.com/joyent/triton-go/client",
-			"revision": "8b86a52d43931ef053ce7b639c5f711f4bbebe19",
-			"revisionTime": "2017-09-28T17:06:36Z"
+			"revision": "b519eaf447296ec203c97149777be5f26fc205cc",
+			"revisionTime": "2017-12-11T19:26:39Z"
 		},
 		{
-			"checksumSHA1": "9VONvM4aQL088cLPgg+Z0K0dshc=",
+			"checksumSHA1": "ujmaUDLWuepasqy8snP4UaMKGl4=",
 			"path": "github.com/joyent/triton-go/storage",
-			"revision": "8b86a52d43931ef053ce7b639c5f711f4bbebe19",
-			"revisionTime": "2017-09-28T17:06:36Z"
+			"revision": "b519eaf447296ec203c97149777be5f26fc205cc",
+			"revisionTime": "2017-12-11T19:26:39Z"
 		},
 		{
 			"path": "github.com/klauspost/cpuid",
@@ -537,12 +537,6 @@
 			"revisionTime": "2017-08-25T20:24:07Z"
 		},
 		{
-			"checksumSHA1": "kVKE0OX1Xdw5mG7XKT86DLLKE2I=",
-			"path": "golang.org/x/crypto/poly1305",
-			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
-			"revisionTime": "2017-08-25T20:24:07Z"
-		},
-		{
 			"checksumSHA1": "IQkUIOnvlf0tYloFx9mLaXSvXWQ=",
 			"path": "golang.org/x/crypto/curve25519",
 			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
@@ -559,6 +553,12 @@
 			"path": "golang.org/x/crypto/ed25519/internal/edwards25519",
 			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
 			"revisionTime": "2017-09-15T19:08:28Z"
+		},
+		{
+			"checksumSHA1": "kVKE0OX1Xdw5mG7XKT86DLLKE2I=",
+			"path": "golang.org/x/crypto/poly1305",
+			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
+			"revisionTime": "2017-08-25T20:24:07Z"
 		},
 		{
 			"checksumSHA1": "yPCMw2UX8Jad4GNWSwo8QgZS6TY=",

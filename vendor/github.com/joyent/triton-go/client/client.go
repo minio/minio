@@ -19,7 +19,14 @@ import (
 
 const nilContext = "nil context"
 
-var MissingKeyIdError = errors.New("Default SSH agent authentication requires SDC_KEY_ID")
+var (
+	ErrDefaultAuth = errors.New("default SSH agent authentication requires SDC_KEY_ID and SSH_AUTH_SOCK")
+	ErrAccountName = errors.New("missing account name for Triton/Manta")
+	ErrMissingURL  = errors.New("missing Triton and/or Manta URL")
+
+	BadTritonURL = "invalid format of triton URL"
+	BadMantaURL  = "invalid format of manta URL"
+)
 
 // Client represents a connection to the Triton Compute or Object Storage APIs.
 type Client struct {
@@ -28,7 +35,6 @@ type Client struct {
 	TritonURL   url.URL
 	MantaURL    url.URL
 	AccountName string
-	Endpoint    string
 }
 
 // New is used to construct a Client in order to make API
@@ -37,59 +43,69 @@ type Client struct {
 // At least one signer must be provided - example signers include
 // authentication.PrivateKeySigner and authentication.SSHAgentSigner.
 func New(tritonURL string, mantaURL string, accountName string, signers ...authentication.Signer) (*Client, error) {
+	if accountName == "" {
+		return nil, ErrAccountName
+	}
+
+	if tritonURL == "" && mantaURL == "" {
+		return nil, ErrMissingURL
+	}
+
 	cloudURL, err := url.Parse(tritonURL)
 	if err != nil {
-		return nil, errwrap.Wrapf("invalid endpoint URL: {{err}}", err)
+		return nil, errwrap.Wrapf(BadTritonURL+": {{err}}", err)
 	}
 
 	storageURL, err := url.Parse(mantaURL)
 	if err != nil {
-		return nil, errwrap.Wrapf("invalid manta URL: {{err}}", err)
+		return nil, errwrap.Wrapf(BadMantaURL+": {{err}}", err)
 	}
 
-	if accountName == "" {
-		return nil, errors.New("account name can not be empty")
-	}
-
-	httpClient := &http.Client{
-		Transport:     httpTransport(false),
-		CheckRedirect: doNotFollowRedirects,
-	}
-
-	newClient := &Client{
-		HTTPClient:  httpClient,
-		Authorizers: signers,
-		TritonURL:   *cloudURL,
-		MantaURL:    *storageURL,
-		AccountName: accountName,
-		// TODO(justinwr): Deprecated?
-		// Endpoint:    tritonURL,
-	}
-
-	var authorizers []authentication.Signer
+	authorizers := make([]authentication.Signer, 0)
 	for _, key := range signers {
 		if key != nil {
 			authorizers = append(authorizers, key)
 		}
 	}
 
+	newClient := &Client{
+		HTTPClient: &http.Client{
+			Transport:     httpTransport(false),
+			CheckRedirect: doNotFollowRedirects,
+		},
+		Authorizers: authorizers,
+		TritonURL:   *cloudURL,
+		MantaURL:    *storageURL,
+		AccountName: accountName,
+	}
+
 	// Default to constructing an SSHAgentSigner if there are no other signers
-	// passed into NewClient and there's an SDC_KEY_ID value available in the
-	// user environ.
-	if len(authorizers) == 0 {
-		keyID := os.Getenv("SDC_KEY_ID")
-		if len(keyID) != 0 {
-			keySigner, err := authentication.NewSSHAgentSigner(keyID, accountName)
-			if err != nil {
-				return nil, errwrap.Wrapf("Problem initializing NewSSHAgentSigner: {{err}}", err)
-			}
-			newClient.Authorizers = append(authorizers, keySigner)
-		} else {
-			return nil, MissingKeyIdError
+	// passed into NewClient and there's an SDC_KEY_ID and SSH_AUTH_SOCK
+	// available in the user's environ(7).
+	if len(newClient.Authorizers) == 0 {
+		if err := newClient.DefaultAuth(); err != nil {
+			return nil, err
 		}
 	}
 
 	return newClient, nil
+}
+
+// initDefaultAuth provides a default key signer for a client. This should only
+// be used internally if the client has no other key signer for authenticating
+// with Triton. We first look for both `SDC_KEY_ID` and `SSH_AUTH_SOCK` in the
+// user's environ(7). If so we default to the SSH agent key signer.
+func (c *Client) DefaultAuth() error {
+	if keyID, keyOk := os.LookupEnv("SDC_KEY_ID"); keyOk {
+		defaultSigner, err := authentication.NewSSHAgentSigner(keyID, c.AccountName)
+		if err != nil {
+			return errwrap.Wrapf("problem initializing NewSSHAgentSigner: {{err}}", err)
+		}
+		c.Authorizers = append(c.Authorizers, defaultSigner)
+	} else {
+		return ErrDefaultAuth
+	}
+	return nil
 }
 
 // InsecureSkipTLSVerify turns off TLS verification for the client connection. This
@@ -112,8 +128,8 @@ func httpTransport(insecureSkipTLSVerify bool) *http.Transport {
 			KeepAlive: 30 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 10 * time.Second,
-		DisableKeepAlives:   true,
-		MaxIdleConnsPerHost: -1,
+		MaxIdleConns:        10,
+		IdleConnTimeout:     15 * time.Second,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: insecureSkipTLSVerify,
 		},
