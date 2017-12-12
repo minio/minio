@@ -29,8 +29,7 @@
 
 ## Prerequisites
 
-To run this example, you need Kubernetes version >=1.4 cluster installed and running, and that you have installed the [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) command line tool in your path. Please see the
-[getting started guides](https://kubernetes.io/docs/getting-started-guides/) for installation instructions for your platform.
+To run this example, you need Kubernetes version >=1.4 cluster installed and running, and that you have installed the [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) command line tool in your path. Please see the [getting started guides](https://kubernetes.io/docs/getting-started-guides/) for installation instructions for your platform.
 
 ## Minio Standalone Server Deployment
 
@@ -66,15 +65,12 @@ This is the PVC description.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  # This name uniquely identifies the PVC. Will be used in deployment below.
+  # This name uniquely identifies the PVC. This is used in deployment.
   name: minio-pv-claim
-  annotations:
-    volume.alpha.kubernetes.io/storage-class: anything
-  labels:
-    app: minio-storage-claim
 spec:
   # Read more about access modes here: http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
   accessModes:
+    # The volume is mounted as read-write by a single node
     - ReadWriteOnce
   resources:
     # This is the request for storage. Should be available in the cluster.
@@ -100,26 +96,34 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   # This name uniquely identifies the Deployment
-  name: minio-deployment
+  name: minio
 spec:
   strategy:
+    # Specifies the strategy used to replace old Pods by new ones
+    # Refer: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
     type: Recreate
   template:
     metadata:
       labels:
-        # Label is used as selector in the service.
+        # This label is used as a selector in Service definition
         app: minio
     spec:
-      # Refer to the PVC created earlier
+      # Volumes used by this deployment
       volumes:
       - name: data
+        # This volume is based on PVC
         persistentVolumeClaim:
           # Name of the PVC created earlier
           claimName: minio-pv-claim
       containers:
       - name: minio
-        # Pulls the default Minio image from Docker Hub
-        image: minio/minio:RELEASE.2017-05-05T01-14-51Z
+        # Volume mounts for this container
+        volumeMounts:
+        # Volume 'data' is mounted to path '/data'
+        - name: data 
+          mountPath: "/data"
+        # Pulls the lastest Minio image from Docker Hub
+        image: minio/minio:RELEASE.2017-11-22T19-55-46Z
         args:
         - server
         - /data
@@ -132,10 +136,6 @@ spec:
         ports:
         - containerPort: 9000
           hostPort: 9000
-        # Mount the volume into the pod
-        volumeMounts:
-        - name: data # must match the volume name, above
-          mountPath: "/data"
 ```
 
 Create the Deployment
@@ -155,6 +155,7 @@ In this example, we expose the Minio Deployment by creating a LoadBalancer servi
 apiVersion: v1
 kind: Service
 metadata:
+  # This name uniquely identifies the service
   name: minio-service
 spec:
   type: LoadBalancer
@@ -163,6 +164,7 @@ spec:
       targetPort: 9000
       protocol: TCP
   selector:
+    # Looks for labels `app:minio` in the namespace and applies the spec
     app: minio
 ```
 Create the Minio service
@@ -199,7 +201,7 @@ deployment "minio-deployment" image updated
 You can cleanup the cluster using
 
 ```sh
-kubectl delete deployment minio-deployment \
+kubectl delete deployment minio \
 &&  kubectl delete pvc minio-pv-claim \
 && kubectl delete svc minio-service
 ```
@@ -263,16 +265,18 @@ This is the Statefulset description.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
+  # This name uniquely identifies the StatefulSet
   name: minio
 spec:
   serviceName: minio
   replicas: 4
+  selector:
+    matchLabels:
+      app: minio # has to match .spec.template.metadata.labels
   template:
     metadata:
-      annotations:
-        pod.alpha.kubernetes.io/initialized: "true"
       labels:
-        app: minio
+        app: minio # has to match .spec.selector.matchLabels
     spec:
       containers:
       - name: minio
@@ -281,7 +285,7 @@ spec:
           value: "minio"
         - name: MINIO_SECRET_KEY
           value: "minio123"
-        image: minio/minio:RELEASE.2017-05-05T01-14-51Z
+        image: minio/minio:RELEASE.2017-11-22T19-55-46Z
         args:
         - server
         - http://minio-0.minio.default.svc.cluster.local/data
@@ -301,8 +305,6 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: data
-      annotations:
-        volume.alpha.kubernetes.io/storage-class: anything
     spec:
       accessModes:
         - ReadWriteOnce
