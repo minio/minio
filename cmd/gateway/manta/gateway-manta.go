@@ -293,14 +293,54 @@ func (t *tritonObjects) DeleteBucket(bucket string) error {
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
 func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
-	ctx := context.Background()
-	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
-		DirectoryName: path.Join(mantaRoot, bucket, prefix),
+	var (
+		dirName string
+		objs    *storage.ListDirectoryOutput
+		input   *storage.ListDirectoryInput
+
+		ctx     = context.Background()
+		bname   = path.Base(prefix)
+		pathDir = path.Dir(prefix)
+	)
+
+	// Make sure to only request a Dir.List for the parent "directory" for a
+	// given prefix first. We don't know if our prefix is referencing a
+	// directory or file name and can't send file names into Dir.List because
+	// that'll cause Manta to return file content in the response body. Dir.List
+	// expects to parse out directory entries in JSON. So, try the first
+	// directory name of the prefix path provided.
+	if pathDir == "." {
+		dirName = path.Join(mantaRoot, bucket)
+	} else {
+		dirName = path.Join(mantaRoot, bucket, pathDir)
+	}
+
+	input = &storage.ListDirectoryInput{
+		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
 		Marker:        marker,
-	})
+	}
+	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
 		return result, errors.Trace(err)
+	}
+
+	// Only perform this evaluation if our pathDir was not a root directory
+	// itself, meaning we received a file name at the tail of our prefix.
+	if pathDir != "." {
+		for _, obj := range objs.Entries {
+			// If the base name of our prefix was found to be of type
+			// "directory" than we need to pull the directory entries for that
+			// instead.
+			if obj.Name == bname && obj.Type == "directory" {
+				input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
+				objs, err = t.client.Dir().List(ctx, input)
+				if err != nil {
+					return result, errors.Trace(err)
+				}
+				break
+			}
+		}
 	}
 
 	isTruncated := true // Always send a second request.
