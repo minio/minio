@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -132,10 +133,13 @@ func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
 }
 
-func contains(stringList []string, element string) bool {
-	for _, e := range stringList {
-		if e == element {
-			return true
+func contains(slice interface{}, elem interface{}) bool {
+	v := reflect.ValueOf(slice)
+	if v.Kind() == reflect.Slice {
+		for i := 0; i < v.Len(); i++ {
+			if v.Index(i).Interface() == elem {
+				return true
+			}
 		}
 	}
 	return false

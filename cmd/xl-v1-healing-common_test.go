@@ -130,7 +130,7 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	obj, disks, err := prepareXL()
+	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -339,7 +339,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	obj, disks, err := prepareXL()
+	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}

@@ -38,7 +38,7 @@ func TestListObjectsHeal(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	// Create an instance of xl backend
-	xl, fsDirs, err := prepareXL()
+	xl, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestListUploadsHeal(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	// Create an instance of XL backend.
-	xl, fsDirs, err := prepareXL()
+	xl, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}

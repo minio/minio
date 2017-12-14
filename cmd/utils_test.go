@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -309,6 +310,41 @@ func TestToS3ETag(t *testing.T) {
 		etag := ToS3ETag(testCase.etag)
 		if etag != testCase.expectedETag {
 			t.Fatalf("test %v: expected: %v, got: %v", i+1, testCase.expectedETag, etag)
+		}
+	}
+}
+
+// Test contains
+func TestContains(t *testing.T) {
+
+	testErr := errors.New("test err")
+
+	testCases := []struct {
+		slice interface{}
+		elem  interface{}
+		found bool
+	}{
+		{nil, nil, false},
+		{"1", "1", false},
+		{nil, "1", false},
+		{[]string{"1"}, nil, false},
+		{[]string{}, "1", false},
+		{[]string{"1"}, "1", true},
+		{[]string{"2"}, "1", false},
+		{[]string{"1", "2"}, "1", true},
+		{[]string{"2", "1"}, "1", true},
+		{[]string{"2", "1", "3"}, "1", true},
+		{[]int{1, 2, 3}, "1", false},
+		{[]int{1, 2, 3}, 2, true},
+		{[]int{1, 2, 3, 4, 5, 6}, 7, false},
+		{[]error{errors.New("new err")}, testErr, false},
+		{[]error{errors.New("new err"), testErr}, testErr, true},
+	}
+
+	for i, testCase := range testCases {
+		found := contains(testCase.slice, testCase.elem)
+		if found != testCase.found {
+			t.Fatalf("Test %v: expected: %v, got: %v", i+1, testCase.found, found)
 		}
 	}
 }

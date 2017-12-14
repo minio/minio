@@ -169,8 +169,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	return obj, fsDirs[0], nil
 }
 
-func prepareXL() (ObjectLayer, []string, error) {
-	nDisks := 16
+func prepareXL(nDisks int) (ObjectLayer, []string, error) {
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
 		return nil, nil, err
@@ -181,6 +180,10 @@ func prepareXL() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	return obj, fsDirs, nil
+}
+
+func prepareXL16() (ObjectLayer, []string, error) {
+	return prepareXL(16)
 }
 
 // Initialize FS objects.
@@ -1748,7 +1751,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
 	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
-		return prepareXL()
+		return prepareXL16()
 	default:
 		// return FS backend by default.
 		obj, disk, err := prepareFS()
@@ -1955,7 +1958,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
 
-	objLayer, xlDisks, err := prepareXL()
+	objLayer, xlDisks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2001,7 +2004,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
-	objLayer, fsDirs, err := prepareXL()
+	objLayer, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2026,7 +2029,7 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 
-	objLayer, fsDirs, err := prepareXL()
+	objLayer, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2044,7 +2047,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 	}
 	defer os.RemoveAll(configPath)
 
-	objLayer, fsDirs, err := prepareXL()
+	objLayer, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2255,7 +2258,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	testRPCServer.SecretKey = credentials.SecretKey
 
 	// init disks
-	objLayer, fsDirs, err := prepareXL()
+	objLayer, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("%s", err)
 	}

@@ -27,7 +27,7 @@ import (
 
 // TestStorageInfo - tests storage info.
 func TestStorageInfo(t *testing.T) {
-	objLayer, fsDirs, err := prepareXL()
+	objLayer, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer.")
 	}

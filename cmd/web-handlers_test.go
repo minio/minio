@@ -1363,7 +1363,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 // TestWebCheckAuthorization - Test Authorization for all web handlers
 func TestWebCheckAuthorization(t *testing.T) {
 	// Prepare XL backend
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -1542,7 +1542,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	defer os.RemoveAll(root)
 
 	// Prepare XL backend
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

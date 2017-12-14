@@ -34,7 +34,7 @@ func TestXLCleanupMultipartUploadsInRoutine(t *testing.T) {
 	defer os.RemoveAll(root)
 
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestXLCleanupMultipartUpload(t *testing.T) {
 	defer os.RemoveAll(root)
 
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 	defer os.RemoveAll(root)
 
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
