@@ -42,7 +42,7 @@ type ListDirectoryOutput struct {
 
 // List lists the contents of a directory on the Triton Object Store service.
 func (s *DirectoryClient) List(ctx context.Context, input *ListDirectoryInput) (*ListDirectoryOutput, error) {
-	fullPath := path.Clean(path.Join("/", s.client.AccountName, input.DirectoryName))
+	absPath := absFileInput(s.client.AccountName, input.DirectoryName)
 	query := &url.Values{}
 	if input.Limit != 0 {
 		query.Set("limit", strconv.FormatUint(input.Limit, 10))
@@ -53,7 +53,7 @@ func (s *DirectoryClient) List(ctx context.Context, input *ListDirectoryInput) (
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   fullPath,
+		Path:   string(absPath),
 		Query:  query,
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
@@ -98,13 +98,14 @@ type PutDirectoryInput struct {
 // create-or-update operation. Your private namespace starts at /:login, and you
 // can create any nested set of directories or objects within it.
 func (s *DirectoryClient) Put(ctx context.Context, input *PutDirectoryInput) error {
-	fullPath := path.Clean(path.Join("/", s.client.AccountName, input.DirectoryName))
+	absPath := absFileInput(s.client.AccountName, input.DirectoryName)
+
 	headers := &http.Header{}
 	headers.Set("Content-Type", "application/json; type=directory")
 
 	reqInput := client.RequestInput{
 		Method:  http.MethodPut,
-		Path:    fullPath,
+		Path:    string(absPath),
 		Headers: headers,
 	}
 	respBody, _, err := s.client.ExecuteRequestStorage(ctx, reqInput)
@@ -121,23 +122,77 @@ func (s *DirectoryClient) Put(ctx context.Context, input *PutDirectoryInput) err
 // DeleteDirectoryInput represents parameters to a Delete operation.
 type DeleteDirectoryInput struct {
 	DirectoryName string
+	ForceDelete   bool //Will recursively delete all child directories and objects
 }
 
 // Delete deletes a directory on the Triton Object Storage. The directory must
 // be empty.
 func (s *DirectoryClient) Delete(ctx context.Context, input *DeleteDirectoryInput) error {
-	fullPath := path.Clean(path.Join("/", s.client.AccountName, input.DirectoryName))
+	absPath := absFileInput(s.client.AccountName, input.DirectoryName)
 
+	if input.ForceDelete {
+		err := deleteAll(*s, ctx, absPath)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := deleteDirectory(*s, ctx, absPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteAll(c DirectoryClient, ctx context.Context, directoryPath _AbsCleanPath) error {
+	objs, err := c.List(ctx, &ListDirectoryInput{
+		DirectoryName: string(directoryPath),
+	})
+	if err != nil {
+		return err
+	}
+	for _, obj := range objs.Entries {
+		newPath := absFileInput(c.client.AccountName, path.Join(string(directoryPath), obj.Name))
+		if obj.Type == "directory" {
+			err := deleteDirectory(c, ctx, newPath)
+			if err != nil {
+				return deleteAll(c, ctx, newPath)
+			}
+		} else {
+			return deleteObject(c, ctx, newPath)
+		}
+	}
+
+	return nil
+}
+
+func deleteDirectory(c DirectoryClient, ctx context.Context, directoryPath _AbsCleanPath) error {
 	reqInput := client.RequestInput{
 		Method: http.MethodDelete,
-		Path:   fullPath,
+		Path:   string(directoryPath),
 	}
-	respBody, _, err := s.client.ExecuteRequestStorage(ctx, reqInput)
+	respBody, _, err := c.client.ExecuteRequestStorage(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing Delete request: {{err}}", err)
+		return errwrap.Wrapf("Error executing DeleteDirectory request: {{err}}", err)
+	}
+
+	return nil
+}
+
+func deleteObject(c DirectoryClient, ctx context.Context, path _AbsCleanPath) error {
+	objClient := &ObjectsClient{
+		client: c.client,
+	}
+
+	err := objClient.Delete(ctx, &DeleteObjectInput{
+		ObjectPath: string(path),
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

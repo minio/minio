@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -174,7 +175,7 @@ func (c *Client) ExecuteRequestURIParams(ctx context.Context, inputs RequestInpu
 	body := inputs.Body
 	query := inputs.Query
 
-	var requestBody io.ReadSeeker
+	var requestBody io.Reader
 	if body != nil {
 		marshaled, err := json.MarshalIndent(body, "", "    ")
 		if err != nil {
@@ -233,7 +234,7 @@ func (c *Client) ExecuteRequestRaw(ctx context.Context, inputs RequestInput) (*h
 	path := inputs.Path
 	body := inputs.Body
 
-	var requestBody io.ReadSeeker
+	var requestBody io.Reader
 	if body != nil {
 		marshaled, err := json.MarshalIndent(body, "", "    ")
 		if err != nil {
@@ -286,7 +287,7 @@ func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput)
 	endpoint := c.MantaURL
 	endpoint.Path = path
 
-	var requestBody io.ReadSeeker
+	var requestBody io.Reader
 	if body != nil {
 		marshaled, err := json.MarshalIndent(body, "", "    ")
 		if err != nil {
@@ -339,10 +340,17 @@ func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput)
 		StatusCode: resp.StatusCode,
 	}
 
-	errorDecoder := json.NewDecoder(resp.Body)
-	if err := errorDecoder.Decode(mantaError); err != nil {
-		return nil, nil, errwrap.Wrapf("Error decoding error response: {{err}}", err)
+	if req.Method != http.MethodHead {
+		errorDecoder := json.NewDecoder(resp.Body)
+		if err := errorDecoder.Decode(mantaError); err != nil {
+			return nil, nil, errwrap.Wrapf("Error decoding error response: {{err}}", err)
+		}
 	}
+
+	if mantaError.Message == "" {
+		mantaError.Message = fmt.Sprintf("HTTP response returned status code %d", resp.StatusCode)
+	}
+
 	return nil, nil, mantaError
 }
 
@@ -351,7 +359,7 @@ type RequestNoEncodeInput struct {
 	Path    string
 	Query   *url.Values
 	Headers *http.Header
-	Body    io.ReadSeeker
+	Body    io.Reader
 }
 
 func (c *Client) ExecuteRequestNoEncode(ctx context.Context, inputs RequestNoEncodeInput) (io.ReadCloser, http.Header, error) {

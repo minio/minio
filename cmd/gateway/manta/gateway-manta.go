@@ -25,9 +25,12 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 
+	"github.com/hashicorp/errwrap"
 	triton "github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/authentication"
+	tclient "github.com/joyent/triton-go/client"
 	"github.com/joyent/triton-go/storage"
 
 	"github.com/minio/cli"
@@ -298,9 +301,8 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 		objs    *storage.ListDirectoryOutput
 		input   *storage.ListDirectoryInput
 
-		ctx     = context.Background()
-		bname   = path.Base(prefix)
-		pathDir = path.Dir(prefix)
+		ctx      = context.Background()
+		pathBase = path.Base(prefix)
 	)
 
 	// Make sure to only request a Dir.List for the parent "directory" for a
@@ -309,7 +311,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 	// that'll cause Manta to return file content in the response body. Dir.List
 	// expects to parse out directory entries in JSON. So, try the first
 	// directory name of the prefix path provided.
-	if pathDir == "." {
+	if pathDir := path.Dir(prefix); pathDir == "." {
 		dirName = path.Join(mantaRoot, bucket)
 	} else {
 		dirName = path.Join(mantaRoot, bucket, pathDir)
@@ -325,21 +327,16 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 		return result, errors.Trace(err)
 	}
 
-	// Only perform this evaluation if our pathDir was not a root directory
-	// itself, meaning we received a file name at the tail of our prefix.
-	if pathDir != "." {
-		for _, obj := range objs.Entries {
-			// If the base name of our prefix was found to be of type
-			// "directory" than we need to pull the directory entries for that
-			// instead.
-			if obj.Name == bname && obj.Type == "directory" {
-				input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
-				objs, err = t.client.Dir().List(ctx, input)
-				if err != nil {
-					return result, errors.Trace(err)
-				}
-				break
+	for _, obj := range objs.Entries {
+		// If the base name of our prefix was found to be of type "directory"
+		// than we need to pull the directory entries for that instead.
+		if obj.Name == pathBase && obj.Type == "directory" {
+			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
+			objs, err = t.client.Dir().List(ctx, input)
+			if err != nil {
+				return result, errors.Trace(err)
 			}
+			break
 		}
 	}
 
@@ -352,7 +349,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 
 	for _, obj := range objs.Entries {
 		if obj.Type == "directory" {
-			result.Prefixes = append(result.Prefixes, obj.Name)
+			result.Prefixes = append(result.Prefixes, obj.Name+delimiter)
 		} else {
 			result.Objects = append(result.Objects, minio.ObjectInfo{
 				Name:    obj.Name,
@@ -379,14 +376,40 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
 func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
-	ctx := context.Background()
-	objs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
-		DirectoryName: path.Join(mantaRoot, bucket, prefix),
+	var (
+		dirName string
+		objs    *storage.ListDirectoryOutput
+		input   *storage.ListDirectoryInput
+
+		ctx      = context.Background()
+		pathBase = path.Base(prefix)
+	)
+
+	if pathDir := path.Dir(prefix); pathDir == "." {
+		dirName = path.Join(mantaRoot, bucket)
+	} else {
+		dirName = path.Join(mantaRoot, bucket, pathDir)
+	}
+
+	input = &storage.ListDirectoryInput{
+		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
 		Marker:        continuationToken,
-	})
+	}
+	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
 		return result, errors.Trace(err)
+	}
+
+	for _, obj := range objs.Entries {
+		if obj.Name == pathBase && obj.Type == "directory" {
+			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
+			objs, err = t.client.Dir().List(ctx, input)
+			if err != nil {
+				return result, errors.Trace(err)
+			}
+			break
+		}
 	}
 
 	isTruncated := true // Always send a second request.
@@ -398,7 +421,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 
 	for _, obj := range objs.Entries {
 		if obj.Type == "directory" {
-			result.Prefixes = append(result.Prefixes, obj.Name)
+			result.Prefixes = append(result.Prefixes, obj.Name+delimiter)
 		} else {
 			result.Objects = append(result.Objects, minio.ObjectInfo{
 				Name:    obj.Name,
@@ -413,9 +436,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 	if isTruncated {
 		result.NextContinuationToken = result.Objects[len(result.Objects)-1].Name
 	}
-
 	return result, nil
-
 }
 
 // GetObject - Reads an object from Manta. Supports additional parameters like
@@ -458,24 +479,33 @@ func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, leng
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
 func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo minio.ObjectInfo, err error) {
-	// Manta doesn't have an equivalent HEAD object API, use Get API itself.
-
 	ctx := context.Background()
-	obj, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
+	info, err := t.client.Objects().GetInfo(ctx, &storage.GetInfoInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
 	if err != nil {
+		errType := &tclient.MantaError{}
+		if errwrap.ContainsType(err, errType) {
+			mantaErr := errwrap.GetType(err, errType).(*tclient.MantaError)
+			if mantaErr.StatusCode == http.StatusNotFound {
+				return objInfo, minio.ObjectNotFound{
+					Bucket: bucket,
+					Object: object,
+				}
+			}
+		}
+
 		return objInfo, err
 	}
-	obj.ObjectReader.Close()
 
 	return minio.ObjectInfo{
 		Bucket:      bucket,
-		ContentType: obj.ContentType,
-		Size:        int64(obj.ContentLength),
-		ETag:        obj.ETag,
-		ModTime:     obj.LastModified,
-		UserDefined: obj.Metadata,
+		ContentType: info.ContentType,
+		Size:        int64(info.ContentLength),
+		ETag:        info.ETag,
+		ModTime:     info.LastModified,
+		UserDefined: info.Metadata,
+		IsDir:       strings.HasSuffix(info.ContentType, "type=directory"),
 	}, nil
 }
 
@@ -497,8 +527,10 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 		ContentLength: uint64(data.Size()),
 		ObjectPath:    path.Join(mantaRoot, bucket, object),
 		ContentType:   metadata["content-type"],
-		ContentMD5:    metadata["content-md5"],
-		ObjectReader:  dummySeeker{data},
+		// TODO: Change to `string(data.md5sum)` if/when that becomes an exported field
+		ContentMD5:   metadata["content-md5"],
+		ObjectReader: dummySeeker{data},
+		ForceInsert:  true,
 	}); err != nil {
 		return objInfo, errors.Trace(err)
 	}
@@ -516,7 +548,6 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 // https://apidocs.joyent.com/manta/api.html#PutSnapLink
 func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	ctx := context.Background()
-
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
 		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
@@ -532,7 +563,6 @@ func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject 
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
 func (t *tritonObjects) DeleteObject(bucket, object string) error {
 	ctx := context.Background()
-
 	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
