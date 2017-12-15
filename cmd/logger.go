@@ -17,78 +17,68 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"path"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/errors"
 )
 
 var log = NewLogger()
+var trimStrings []string
 
-// LogTarget - interface for log target.
-type LogTarget interface {
-	Fire(entry *logrus.Entry) error
-	String() string
+// Level type
+type Level int8
+
+// Enumerated level types
+const (
+	Error Level = iota + 1
+	Fatal
+)
+
+func (level Level) String() string {
+	var lvlStr string
+	switch level {
+	case Error:
+		lvlStr = "ERROR"
+	case Fatal:
+		lvlStr = "FATAL"
+	}
+	return lvlStr
 }
 
-// BaseLogTarget - base log target.
-type BaseLogTarget struct {
-	Enable    bool `json:"enable"`
-	formatter logrus.Formatter
+type logEntry struct {
+	Level   string   `json:"level"`
+	Message string   `json:"message"`
+	Time    string   `json:"time"`
+	Cause   string   `json:"cause"`
+	Trace   []string `json:"trace"`
 }
 
-// Logger - higher level logger.
+// Logger - for console messages
 type Logger struct {
-	logger        *logrus.Logger
-	consoleTarget ConsoleLogger
-	targets       []LogTarget
-	quiet         bool
+	quiet bool
+	json  bool
 }
 
-// AddTarget - add logger to this hook.
-func (log *Logger) AddTarget(logTarget LogTarget) {
-	log.targets = append(log.targets, logTarget)
+// NewLogger - to create a new Logger object
+func NewLogger() *Logger {
+	return &Logger{}
 }
 
-// SetConsoleTarget - sets console target to this hook.
-func (log *Logger) SetConsoleTarget(consoleTarget ConsoleLogger) {
-	log.consoleTarget = consoleTarget
-}
-
-// Fire - log entry handler to save logs.
-func (log *Logger) Fire(entry *logrus.Entry) (err error) {
-	if err = log.consoleTarget.Fire(entry); err != nil {
-		log.Printf("Unable to log to console target. %s\n", err)
-	}
-
-	for _, logTarget := range log.targets {
-		if err = logTarget.Fire(entry); err != nil {
-			log.Printf("Unable to log to target %s. %s\n", logTarget, err)
-		}
-	}
-
-	return err
-}
-
-// Levels - returns list of log levels support.
-func (log *Logger) Levels() []logrus.Level {
-	return []logrus.Level{
-		logrus.PanicLevel,
-		logrus.FatalLevel,
-		logrus.ErrorLevel,
-		logrus.WarnLevel,
-		logrus.InfoLevel,
-		logrus.DebugLevel,
-	}
-}
-
-// EnableQuiet - sets quiet option.
+// EnableQuiet - turns quiet option on.
 func (log *Logger) EnableQuiet() {
+	log.quiet = true
+}
+
+// EnableJSON - outputs logs in json format.
+func (log *Logger) EnableJSON() {
+	log.json = true
 	log.quiet = true
 }
 
@@ -106,38 +96,66 @@ func (log *Logger) Printf(format string, args ...interface{}) {
 	}
 }
 
-// NewLogger - returns a new initialized logger.
-func NewLogger() *Logger {
-	logger := logrus.New()
-	logger.Out = ioutil.Discard
-	logger.Level = logrus.DebugLevel
-
-	l := &Logger{
-		logger:        logger,
-		consoleTarget: NewConsoleLogger(),
-	}
-
-	// Adds a console logger.
-	logger.Hooks.Add(l)
-
-	return l
-}
-
-func getSource() string {
-	var funcName string
-	pc, filename, lineNum, ok := runtime.Caller(2)
-	if ok {
-		filename = path.Base(filename)
-		funcName = strings.TrimPrefix(runtime.FuncForPC(pc).Name(), "github.com/minio/minio/cmd.")
+func init() {
+	var goPathList []string
+	// Add all possible GOPATH paths into trimStrings
+	// Split GOPATH depending on the OS type
+	if runtime.GOOS == "windows" {
+		goPathList = strings.Split(GOPATH, ";")
 	} else {
-		filename = "<unknown>"
-		lineNum = 0
+		// All other types of OSs
+		goPathList = strings.Split(GOPATH, ":")
 	}
 
-	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
+	// Add trim string "{GOROOT}/src/" into trimStrings
+	trimStrings = []string{filepath.Join(runtime.GOROOT(), "src") + string(filepath.Separator)}
+
+	// Add all possible path from GOPATH=path1:path2...:pathN
+	// as "{path#}/src/" into trimStrings
+	for _, goPathString := range goPathList {
+		trimStrings = append(trimStrings, filepath.Join(goPathString, "src")+string(filepath.Separator))
+	}
+	// Add "github.com/minio/minio" as the last to cover
+	// paths like "{GOROOT}/src/github.com/minio/minio"
+	// and "{GOPATH}/src/github.com/minio/minio"
+	trimStrings = append(trimStrings, filepath.Join("github.com", "minio", "minio")+string(filepath.Separator))
 }
 
-func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
+func trimTrace(f string) string {
+	for _, trimString := range trimStrings {
+		f = strings.TrimPrefix(filepath.ToSlash(f), filepath.ToSlash(trimString))
+	}
+	return filepath.FromSlash(f)
+}
+
+// getTrace method - creates and returns stack trace
+func getTrace(traceLevel int) []string {
+	var trace []string
+	pc, file, lineNumber, ok := runtime.Caller(traceLevel)
+
+	for ok {
+		// Clean up the common prefixes
+		file = trimTrace(file)
+		// Get the function name
+		_, funcName := filepath.Split(runtime.FuncForPC(pc).Name())
+		// Skip duplicate traces that start with file name, "<autogenerated>"
+		// and also skip traces with function name that starts with "runtime."
+		if !strings.HasPrefix(file, "<autogenerated>") &&
+			!strings.HasPrefix(funcName, "runtime.") {
+			// Form and append a line of stack trace into a
+			// collection, 'trace', to build full stack trace
+			trace = append(trace, fmt.Sprintf("%v:%v:%v()", file, lineNumber, funcName))
+		}
+		traceLevel++
+		// Read stack trace information from PC
+		pc, file, lineNumber, ok = runtime.Caller(traceLevel)
+	}
+	return trace
+}
+
+func logIf(level Level, err error, msg string,
+	data ...interface{}) {
+
 	isErrIgnored := func(err error) (ok bool) {
 		err = errors.Cause(err)
 		switch err.(type) {
@@ -154,36 +172,51 @@ func logIf(level logrus.Level, source string, err error, msg string, data ...int
 	if err == nil || isErrIgnored(err) {
 		return
 	}
+	cause := strings.Title(err.Error())
+	// Get full stack trace
+	trace := getTrace(3)
+	// Get time
+	timeOfError := UTCNow().Format(time.RFC3339Nano)
+	// Output the formatted log message at console
+	var output string
+	message := fmt.Sprintf(msg, data...)
+	if log.json {
+		logJSON, err := json.Marshal(&logEntry{
+			Level:   level.String(),
+			Message: message,
+			Time:    timeOfError,
+			Cause:   cause,
+			Trace:   trace,
+		})
+		if err != nil {
+			panic("json marshal of logEntry failed: " + err.Error())
+		}
+		output = string(logJSON)
+	} else {
+		// Add a sequence number and formatting for each stack trace
+		// No formatting is required for the first entry
+		trace[0] = "1: " + trace[0]
+		for i, element := range trace[1:] {
+			trace[i+1] = fmt.Sprintf("%8v: %s", i+2, element)
+		}
+		errMsg := fmt.Sprintf("[%s] [%s] %s (%s)",
+			timeOfError, level.String(), message, cause)
 
-	fields := logrus.Fields{
-		"source": source,
-		"cause":  err.Error(),
+		output = fmt.Sprintf("\nTrace: %s\n%s",
+			strings.Join(trace, "\n"),
+			colorRed(colorBold(errMsg)))
 	}
+	fmt.Println(output)
 
-	if terr, ok := err.(*errors.Error); ok {
-		fields["stack"] = strings.Join(terr.Stack(), " ")
-	}
-
-	switch level {
-	case logrus.PanicLevel:
-		log.logger.WithFields(fields).Panicf(msg, data...)
-	case logrus.FatalLevel:
-		log.logger.WithFields(fields).Fatalf(msg, data...)
-	case logrus.ErrorLevel:
-		log.logger.WithFields(fields).Errorf(msg, data...)
-	case logrus.WarnLevel:
-		log.logger.WithFields(fields).Warnf(msg, data...)
-	case logrus.InfoLevel:
-		log.logger.WithFields(fields).Infof(msg, data...)
-	default:
-		log.logger.WithFields(fields).Debugf(msg, data...)
+	if level == Fatal {
+		os.Exit(1)
 	}
 }
 
 func errorIf(err error, msg string, data ...interface{}) {
-	logIf(logrus.ErrorLevel, getSource(), err, msg, data...)
+	logIf(Error, err, msg, data...)
 }
 
 func fatalIf(err error, msg string, data ...interface{}) {
-	logIf(logrus.FatalLevel, getSource(), err, msg, data...)
+	logIf(Fatal, err, msg, data...)
 }

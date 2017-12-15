@@ -71,9 +71,6 @@ func init() {
 
 	// Set system resources to maximum.
 	setMaxResources()
-
-	// Quiet logging.
-	log.logger.Hooks = nil
 }
 
 // concurreny level for certain parallel tests.

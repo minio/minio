@@ -21,6 +21,22 @@ import (
 	"time"
 )
 
+// WARNING:
+//
+// Expected source line number is hard coded, 32, in the
+// following test. Adding new code before this test or changing its
+// position will cause the line number to change and the test to FAIL
+// Tests getSource().
+func TestGetSource(t *testing.T) {
+	currentSource := func() string { return getSource() }
+	gotSource := currentSource()
+	// Hard coded line number, 32, in the "expectedSource" value
+	expectedSource := "[namespace-lock_test.go:32:TestGetSource()]"
+	if gotSource != expectedSource {
+		t.Errorf("expected : %s, got : %s", expectedSource, gotSource)
+	}
+}
+
 // Tests functionality provided by namespace lock.
 func TestNamespaceLockTest(t *testing.T) {
 	// List of test cases.
