@@ -71,6 +71,9 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
       $ export MINIO_ACCESS_KEY=azureaccountname

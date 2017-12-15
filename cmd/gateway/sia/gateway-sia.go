@@ -69,6 +69,12 @@ ENVIRONMENT VARIABLES: (Default values in parenthesis)
      MINIO_ACCESS_KEY: Custom access key (Do not reuse same access keys on all instances)
      MINIO_SECRET_KEY: Custom secret key (Do not reuse same secret keys on all instances)
 
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
   SIA_TEMP_DIR:        The name of the local Sia temporary storage directory. (.sia_temp)
   SIA_API_PASSWORD:    API password for Sia daemon. (default is empty)
 
