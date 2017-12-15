@@ -61,6 +61,7 @@ func handleSignals() {
 
 			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
+			stopHTTPTrace()
 			log.Printf("Exiting on signal %v\n", osSignal)
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
@@ -71,12 +72,14 @@ func handleSignals() {
 				log.Println("Restarting on service signal")
 				err := globalHTTPServer.Shutdown()
 				errorIf(err, "Unable to shutdown http server")
+				stopHTTPTrace()
 				rerr := restartProcess()
 				errorIf(rerr, "Unable to restart the server")
 
 				exit(err == nil && rerr == nil)
 			case serviceStop:
 				log.Println("Stopping on service signal")
+				stopHTTPTrace()
 				exit(stopProcess())
 			}
 		}

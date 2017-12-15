@@ -123,8 +123,8 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	// Enable HTTP request/response headers and body logging.
-	globalHTTPTrace bool
+	// File to log HTTP request/response headers and body.
+	globalHTTPTraceFile *os.File
 
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
