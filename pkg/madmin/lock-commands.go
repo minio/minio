@@ -82,24 +82,19 @@ func getLockInfos(body io.Reader) ([]VolumeLockInfo, error) {
 
 // ListLocks - Calls List Locks Management API to fetch locks matching
 // bucket, prefix and held before the duration supplied.
-func (adm *AdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+func (adm *AdminClient) ListLocks(bucket, prefix string,
+	duration time.Duration) ([]VolumeLockInfo, error) {
+
 	queryVal := make(url.Values)
-	queryVal.Set("lock", "")
 	queryVal.Set("bucket", bucket)
 	queryVal.Set("prefix", prefix)
-	queryVal.Set("duration", duration.String())
+	queryVal.Set("older-than", duration.String())
 
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "list")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute GET on /?lock to list locks.
-	resp, err := adm.executeMethod("GET", reqData)
-
+	// Execute GET on /minio/admin/v1/locks to list locks.
+	resp, err := adm.executeMethod("GET", requestData{
+		queryValues: queryVal,
+		relPath:     "/v1/locks",
+	})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -114,24 +109,19 @@ func (adm *AdminClient) ListLocks(bucket, prefix string, duration time.Duration)
 
 // ClearLocks - Calls Clear Locks Management API to clear locks held
 // on bucket, matching prefix older than duration supplied.
-func (adm *AdminClient) ClearLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+func (adm *AdminClient) ClearLocks(bucket, prefix string,
+	duration time.Duration) ([]VolumeLockInfo, error) {
+
 	queryVal := make(url.Values)
-	queryVal.Set("lock", "")
 	queryVal.Set("bucket", bucket)
 	queryVal.Set("prefix", prefix)
 	queryVal.Set("duration", duration.String())
 
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "clear")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
 	// Execute POST on /?lock to clear locks.
-	resp, err := adm.executeMethod("POST", reqData)
-
+	resp, err := adm.executeMethod("DELETE", requestData{
+		queryValues: queryVal,
+		relPath:     "/v1/locks",
+	})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err

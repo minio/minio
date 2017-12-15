@@ -19,7 +19,4 @@ package madmin
 const (
 	// Unsigned payload.
 	unsignedPayload = "UNSIGNED-PAYLOAD"
-
-	// Admin operation header.
-	minioAdminOpHeader = "X-Minio-Operation"
 )

@@ -38,18 +38,24 @@ type adminCmd struct {
 	AuthRPCServer
 }
 
+// SignalServiceArgs - provides the signal argument to SignalService RPC
+type SignalServiceArgs struct {
+	AuthRPCArgs
+	Sig serviceSignal
+}
+
 // ListLocksQuery - wraps ListLocks API's query values to send over RPC.
 type ListLocksQuery struct {
 	AuthRPCArgs
-	bucket   string
-	prefix   string
-	duration time.Duration
+	Bucket   string
+	Prefix   string
+	Duration time.Duration
 }
 
 // ListLocksReply - wraps ListLocks response over RPC.
 type ListLocksReply struct {
 	AuthRPCReply
-	volLocks []VolumeLockInfo
+	VolLocks []VolumeLockInfo
 }
 
 // ServerInfoDataReply - wraps the server info response over RPC.
@@ -64,13 +70,13 @@ type ConfigReply struct {
 	Config []byte // json-marshalled bytes of serverConfigV13
 }
 
-// Restart - Restart this instance of minio server.
-func (s *adminCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
+// SignalService - Send a restart or stop signal to the service
+func (s *adminCmd) SignalService(args *SignalServiceArgs, reply *AuthRPCReply) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
 
-	globalServiceSignalCh <- serviceRestart
+	globalServiceSignalCh <- args.Sig
 	return nil
 }
 
@@ -79,8 +85,8 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	if err := query.IsAuthenticated(); err != nil {
 		return err
 	}
-	volLocks := listLocksInfo(query.bucket, query.prefix, query.duration)
-	*reply = ListLocksReply{volLocks: volLocks}
+	volLocks := listLocksInfo(query.Bucket, query.Prefix, query.Duration)
+	*reply = ListLocksReply{VolLocks: volLocks}
 	return nil
 }
 

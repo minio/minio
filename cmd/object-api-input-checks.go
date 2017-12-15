@@ -153,9 +153,6 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer) error {
 
 // Checks whether bucket exists and returns appropriate error if not.
 func checkBucketExist(bucket string, obj ObjectLayer) error {
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
 	_, err := obj.GetBucketInfo(bucket)
 	if err != nil {
 		return errors.Cause(err)

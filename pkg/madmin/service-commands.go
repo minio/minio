@@ -18,69 +18,79 @@
 package madmin
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"time"
 )
 
-// ServiceStatusMetadata - contains the response of service status API
-type ServiceStatusMetadata struct {
-	Uptime time.Duration `json:"uptime"`
+// ServerVersion - server version
+type ServerVersion struct {
+	Version  string `json:"version"`
+	CommitID string `json:"commitID"`
 }
 
-// ServiceStatus - Connect to a minio server and call Service Status Management API
-// to fetch server's storage information represented by ServiceStatusMetadata structure
-func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
+// ServiceStatus - contains the response of service status API
+type ServiceStatus struct {
+	ServerVersion ServerVersion `json:"serverVersion"`
+	Uptime        time.Duration `json:"uptime"`
+}
 
-	// Prepare web service request
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "status")
-
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("GET", reqData)
+// ServiceStatus - Connect to a minio server and call Service Status
+// Management API to fetch server's storage information represented by
+// ServiceStatusMetadata structure
+func (adm *AdminClient) ServiceStatus() (ss ServiceStatus, err error) {
+	// Request API to GET service status
+	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/service"})
 	defer closeResponse(resp)
 	if err != nil {
-		return ServiceStatusMetadata{}, err
+		return ss, err
 	}
 
 	// Check response http status code
 	if resp.StatusCode != http.StatusOK {
-		return ServiceStatusMetadata{}, httpRespToErrorResponse(resp)
+		return ss, httpRespToErrorResponse(resp)
 	}
-
-	// Unmarshal the server's json response
-	var serviceStatus ServiceStatusMetadata
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return ServiceStatusMetadata{}, err
+		return ss, err
 	}
 
-	err = json.Unmarshal(respBytes, &serviceStatus)
-	if err != nil {
-		return ServiceStatusMetadata{}, err
-	}
-
-	return serviceStatus, nil
+	err = json.Unmarshal(respBytes, &ss)
+	return ss, err
 }
 
-// ServiceRestart - Call Service Restart API to restart a specified Minio server
-func (adm *AdminClient) ServiceRestart() error {
-	//
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "restart")
+// ServiceActionValue - type to restrict service-action values
+type ServiceActionValue string
 
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
+const (
+	// ServiceActionValueRestart represents restart action
+	ServiceActionValueRestart ServiceActionValue = "restart"
+	// ServiceActionValueStop represents stop action
+	ServiceActionValueStop = "stop"
+)
 
+// ServiceAction - represents POST body for service action APIs
+type ServiceAction struct {
+	Action ServiceActionValue `json:"action"`
+}
+
+// ServiceSendAction - Call Service Restart/Stop API to restart/stop a
+// Minio server
+func (adm *AdminClient) ServiceSendAction(action ServiceActionValue) error {
+	body, err := json.Marshal(ServiceAction{action})
+	if err != nil {
+		return err
+	}
+
+	// Request API to Restart server
+	resp, err := adm.executeMethod("POST", requestData{
+		relPath:            "/v1/service",
+		contentBody:        bytes.NewReader(body),
+		contentSHA256Bytes: sum256(body),
+	})
 	defer closeResponse(resp)
 	if err != nil {
 		return err

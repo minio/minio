@@ -166,13 +166,12 @@ type ListBucketsResponse struct {
 
 // Upload container for in progress multipart upload
 type Upload struct {
-	Key            string
-	UploadID       string `xml:"UploadId"`
-	Initiator      Initiator
-	Owner          Owner
-	StorageClass   string
-	Initiated      string
-	HealUploadInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
+	Key          string
+	UploadID     string `xml:"UploadId"`
+	Initiator    Initiator
+	Owner        Owner
+	StorageClass string
+	Initiated    string
 }
 
 // CommonPrefix container for prefix response in ListObjectsResponse
@@ -182,9 +181,8 @@ type CommonPrefix struct {
 
 // Bucket container for bucket metadata
 type Bucket struct {
-	Name           string
-	CreationDate   string          // time string of format "2006-01-02T15:04:05.000Z"
-	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
+	Name         string
+	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
 }
 
 // Object container for object metadata
@@ -198,8 +196,7 @@ type Object struct {
 	Owner Owner
 
 	// The class of storage used to store the object.
-	StorageClass   string
-	HealObjectInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
+	StorageClass string
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -308,7 +305,6 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
 		listbucket.CreationDate = bucket.Created.UTC().Format(timeFormatAMZLong)
-		listbucket.HealBucketInfo = bucket.HealBucketInfo
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -339,8 +335,6 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		content.Size = object.Size
 		content.StorageClass = globalMinioDefaultStorageClass
 		content.Owner = owner
-		// object.HealObjectInfo is non-empty only when resp is constructed in ListObjectsHeal.
-		content.HealObjectInfo = object.HealObjectInfo
 		contents = append(contents, content)
 	}
 	// TODO - support EncodingType in xml decoding
@@ -498,7 +492,6 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object
 		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZLong)
-		newUpload.HealUploadInfo = upload.HealUploadInfo
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse
@@ -577,4 +570,14 @@ func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *u
 func writeErrorResponseHeadersOnly(w http.ResponseWriter, errorCode APIErrorCode) {
 	apiError := getAPIError(errorCode)
 	writeResponse(w, apiError.HTTPStatusCode, nil, mimeNone)
+}
+
+// writeErrorResponseJSON - writes error response in JSON format;
+// useful for admin APIs.
+func writeErrorResponseJSON(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL) {
+	apiError := getAPIError(errorCode)
+	// Generate error response.
+	errorResponse := getAPIErrorResponse(apiError, reqURL.Path)
+	encodedErrorResponse := encodeResponseJSON(errorResponse)
+	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }

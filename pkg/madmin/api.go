@@ -71,6 +71,8 @@ type AdminClient struct {
 const (
 	libraryName    = "madmin-go"
 	libraryVersion = "0.0.1"
+
+	libraryAdminURLPrefix = "/minio/admin"
 )
 
 // User Agent should always following the below style.
@@ -175,6 +177,9 @@ func (c *AdminClient) TraceOff() {
 type requestData struct {
 	customHeaders http.Header
 	queryValues   url.Values
+
+	// Url path relative to admin API base endpoint
+	relPath string
 
 	contentBody        io.Reader
 	contentLength      int64
@@ -388,7 +393,7 @@ func (c AdminClient) newRequest(method string, reqData requestData) (req *http.R
 	location := "us-east-1"
 
 	// Construct a new target URL.
-	targetURL, err := c.makeTargetURL(reqData.queryValues)
+	targetURL, err := c.makeTargetURL(reqData)
 	if err != nil {
 		return nil, err
 	}
@@ -440,16 +445,16 @@ func (c AdminClient) newRequest(method string, reqData requestData) (req *http.R
 }
 
 // makeTargetURL make a new target url.
-func (c AdminClient) makeTargetURL(queryValues url.Values) (*url.URL, error) {
+func (c AdminClient) makeTargetURL(r requestData) (*url.URL, error) {
 
 	host := c.endpointURL.Host
 	scheme := c.endpointURL.Scheme
 
-	urlStr := scheme + "://" + host + "/"
+	urlStr := scheme + "://" + host + libraryAdminURLPrefix + r.relPath
 
 	// If there are any query values, add them to the end.
-	if len(queryValues) > 0 {
-		urlStr = urlStr + "?" + s3utils.QueryEncode(queryValues)
+	if len(r.queryValues) > 0 {
+		urlStr = urlStr + "?" + s3utils.QueryEncode(r.queryValues)
 	}
 	u, err := url.Parse(urlStr)
 	if err != nil {

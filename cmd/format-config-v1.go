@@ -281,14 +281,14 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	// Initialize format configs.
 	var formatConfigs = make([]*formatConfigV1, len(bootstrapDisks))
 
-	// Make a volume entry on all underlying storage disks.
+	// Load format from each disk in parallel
 	for index, disk := range bootstrapDisks {
 		if disk == nil {
 			sErrs[index] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)
-		// Make a volume inside a go-routine.
+		// Launch go-routine per disk.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			formatConfig, lErr := loadFormat(disk)
@@ -300,15 +300,9 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 		}(index, disk)
 	}
 
-	// Wait for all make vol to finish.
+	// Wait for all go-routines to finish.
 	wg.Wait()
 
-	for _, err := range sErrs {
-		if err != nil {
-			// Return all formats and errors.
-			return formatConfigs, sErrs
-		}
-	}
 	// Return all formats and nil
 	return formatConfigs, sErrs
 }
@@ -403,7 +397,6 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 	// Collect currently available disk uuids.
 	for index, formatConfig := range formatConfigs {
 		if formatConfig == nil {
-			disks[index] = ""
 			continue
 		}
 		disks[index] = formatConfig.XL.Disk
@@ -512,8 +505,10 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 			if err != nil {
 				return nil, err
 			}
-			if len(vols) > 1 {
-				// 'format.json' not found, but we found user data.
+			if len(vols) > 1 || (len(vols) == 1 &&
+				vols[0].Name != minioMetaBucket) {
+				// 'format.json' not found, but we
+				// found user data.
 				return nil, errCorruptedFormat
 			}
 			// No other data found, its a fresh disk.
@@ -532,18 +527,17 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	return format, nil
 }
 
-// collectNSaveNewFormatConfigs - creates new format configs based on
-// the reference config and saves it on all disks, this is to be
-// called from healFormatXL* functions.
+// collectNSaveNewFormatConfigs - generates new format configs based on
+// the given ref. config and saves on each disk
 func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
-	orderedDisks []StorageAPI) error {
+	orderedDisks []StorageAPI, dryRun bool) error {
 
 	// Collect new format configs that need to be written.
 	var newFormatConfigs = make([]*formatConfigV1, len(orderedDisks))
 	for index := range orderedDisks {
 		// New configs are generated since we are going
 		// to re-populate across all disks.
-		config := &formatConfigV1{
+		newFormatConfigs[index] = &formatConfigV1{
 			Version: referenceConfig.Version,
 			Format:  referenceConfig.Format,
 			XL: &xlFormat{
@@ -552,7 +546,6 @@ func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
 				JBOD:    referenceConfig.XL.JBOD,
 			},
 		}
-		newFormatConfigs[index] = config
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
@@ -561,16 +554,19 @@ func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
 	}
 
 	// Save new `format.json` across all disks, in JBOD order.
-	return saveFormatXL(orderedDisks, newFormatConfigs)
+	if !dryRun {
+		return saveFormatXL(orderedDisks, newFormatConfigs)
+	}
+	return nil
 }
 
 // Heals any missing format.json on the drives. Returns error only for
 // unexpected errors as regular errors can be ignored since there
 // might be enough quorum to be operational.  Heals only fresh disks.
 func healFormatXLFreshDisks(storageDisks []StorageAPI,
-	formatConfigs []*formatConfigV1) error {
+	formatConfigs []*formatConfigV1, dryRun bool) error {
 
-	// Reorder the disks based on the JBOD order.
+	// Reorder disks based on JBOD order, and get reference config.
 	referenceConfig, orderedDisks, err := reorderDisks(storageDisks,
 		formatConfigs, true)
 	if err != nil {
@@ -582,21 +578,23 @@ func healFormatXLFreshDisks(storageDisks []StorageAPI,
 	// and allowed fresh disks to be arranged anywhere.
 	// Following block facilitates to put fresh disks.
 	for index, format := range formatConfigs {
+		if format != nil {
+			continue
+		}
 		// Format is missing so we go through ordered disks.
-		if format == nil {
-			// At this point when disk is missing the fresh disk
-			// in the stack get it back from storageDisks.
-			for oIndex, disk := range orderedDisks {
-				if disk == nil {
-					orderedDisks[oIndex] = storageDisks[index]
-					break
-				}
+		// At this point when disk is missing the fresh disk
+		// in the stack get it back from storageDisks.
+		for oIndex, disk := range orderedDisks {
+			if disk == nil {
+				orderedDisks[oIndex] = storageDisks[index]
+				break
 			}
 		}
 	}
 
 	// apply new format config and save to all disks
-	return collectNSaveNewFormatConfigs(referenceConfig, orderedDisks)
+	return collectNSaveNewFormatConfigs(referenceConfig, orderedDisks,
+		dryRun)
 }
 
 // collectUnAssignedDisks - collect disks unassigned to orderedDisks
@@ -681,9 +679,9 @@ func reorderDisksByInspection(orderedDisks, storageDisks []StorageAPI,
 
 // Heals corrupted format json in all disks
 func healFormatXLCorruptedDisks(storageDisks []StorageAPI,
-	formatConfigs []*formatConfigV1) error {
+	formatConfigs []*formatConfigV1, dryRun bool) error {
 
-	// Reorder the disks based on the JBOD order.
+	// Reorder disks based on JBOD order, and update ref. config.
 	referenceConfig, orderedDisks, err := reorderDisks(storageDisks,
 		formatConfigs, true)
 	if err != nil {
@@ -711,8 +709,9 @@ func healFormatXLCorruptedDisks(storageDisks []StorageAPI,
 		}
 	}
 
-	// apply new format config and save to all disks
-	return collectNSaveNewFormatConfigs(referenceConfig, orderedDisks)
+	// generate and write new configs to all disks
+	return collectNSaveNewFormatConfigs(referenceConfig, orderedDisks,
+		dryRun)
 }
 
 // loadFormatXL - loads XL `format.json` and returns back properly

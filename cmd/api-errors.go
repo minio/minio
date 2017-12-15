@@ -40,8 +40,8 @@ type APIErrorResponse struct {
 	Key        string
 	BucketName string
 	Resource   string
-	RequestID  string `xml:"RequestId"`
-	HostID     string `xml:"HostId"`
+	RequestID  string `xml:"RequestId" json:"RequestId"`
+	HostID     string `xml:"HostId" json:"HostId"`
 }
 
 // APIErrorCode type of error status.
@@ -168,12 +168,20 @@ const (
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
 
+	ErrMalformedJSON
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
 	ErrAdminCredentialsMismatch
+	ErrAdminNonTLSCredsUpdate
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrHealMarkerInvalid
+	ErrHealNoSuchProcess
+	ErrHealAlreadyStopped
+	ErrHealStaleStatusMarker
+	ErrHealInvalidFutureStatusMarker
+	ErrHealMissingBucket
 )
 
 // error code to APIError structure, these fields carry respective
@@ -683,6 +691,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Server not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrMalformedJSON: {
+		Code:           "XMinioMalformedJSON",
+		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
 		Description:    "The access key is invalid.",
@@ -702,6 +715,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminCredentialsMismatch",
 		Description:    "Credentials in config mismatch with server environment variables",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrAdminNonTLSCredsUpdate: {
+		Code:           "XMinioAdminNonTLSCredentialsUpdate",
+		Description:    "Credentials/Configuration cannot be updated/retrieved over a non-TLS connection",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
@@ -739,6 +757,36 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Invalid Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealMarkerInvalid: {
+		Code:           "XMinioHealMarkerInvalid",
+		Description:    "Heal status request requires a valid `marker` query parameter",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealNoSuchProcess: {
+		Code:           "XMinioHealNoSuchProcess",
+		Description:    "No such heal process is running on the server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealAlreadyStopped: {
+		Code:           "XMinioHealAlreadyStopped",
+		Description:    "The heal sequence has already been stopped",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealStaleStatusMarker: {
+		Code:           "XMinioHealStaleStatusMarker",
+		Description:    "Provided `marker` is too stale. A newer result index has already been consumed.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealInvalidFutureStatusMarker: {
+		Code:           "XMinioHealInvalidFutureStatusMarker",
+		Description:    "Provided `marker` is invalid as a heal result with given index has not yet been produced.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealMissingBucket: {
+		Code:           "XMinioHealMissingBucket",
+		Description:    "A heal start request with a non-empty object-prefix parameter requires a bucket to be specified.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

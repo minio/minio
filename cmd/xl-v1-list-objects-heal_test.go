@@ -19,8 +19,6 @@ package cmd
 import (
 	"bytes"
 	"os"
-	"path"
-	"path/filepath"
 	"strconv"
 	"testing"
 )
@@ -56,14 +54,16 @@ func TestListObjectsHeal(t *testing.T) {
 
 	// Put 5 objects under sane dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i), mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i),
+			mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
 	}
-	// Put 500 objects under unsane/subdir dir
+	// Put 5 objects under unsane/subdir dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i), mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i),
+			mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
@@ -103,7 +103,7 @@ func TestListObjectsHeal(t *testing.T) {
 		// Inexistent object
 		{bucketName, "inexistentObj", "", "", 1000, nil, 0},
 		// Test ListObjectsHeal when all objects are sane
-		{bucketName, "", "", "", 1000, nil, 0},
+		{bucketName, "", "", "", 1000, nil, 10},
 	}
 	for i, testCase := range testCases {
 		testFunc(testCase, i+1)
@@ -121,12 +121,12 @@ func TestListObjectsHeal(t *testing.T) {
 
 	testCases = []testData{
 		// Test ListObjectsHeal when all objects under unsane/ need to be healed
-		{bucketName, "", "", "", 1000, nil, 5},
+		{bucketName, "", "", "", 1000, nil, 10},
 		// List objects heal under unsane/, should return all elements
 		{bucketName, "unsane/", "", "", 1000, nil, 5},
-		// List healing objects under sane/, should return 0
-		{bucketName, "sane/", "", "", 1000, nil, 0},
-		// Max Keys == 200
+		// List healing objects under sane/
+		{bucketName, "sane/", "", "", 1000, nil, 5},
+		// Max Keys == 2
 		{bucketName, "unsane/", "", "", 2, nil, 2},
 		// Max key > 1000
 		{bucketName, "unsane/", "", "", 5000, nil, 5},
@@ -141,79 +141,4 @@ func TestListObjectsHeal(t *testing.T) {
 		testFunc(testCase, i+1)
 	}
 
-}
-
-// Test for ListUploadsHeal API for XL.
-func TestListUploadsHeal(t *testing.T) {
-	initNSLock(false)
-
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// Remove config directory after the test ends.
-	defer os.RemoveAll(rootPath)
-
-	// Create an instance of XL backend.
-	xl, fsDirs, err := prepareXL()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Cleanup backend directories on function return.
-	defer removeRoots(fsDirs)
-
-	bucketName := "bucket"
-	prefix := "prefix"
-	objName := path.Join(prefix, "obj")
-
-	// Create test bucket.
-	err = xl.MakeBucketWithLocation(bucketName, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a new multipart upload.
-	uploadID, err := xl.NewMultipartUpload(bucketName, objName, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Upload a part.
-	data := bytes.Repeat([]byte("a"), 1024)
-	_, err = xl.PutObjectPart(bucketName, objName, uploadID, 1,
-		mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Check if list uploads heal returns any uploads to be healed
-	// incorrectly.
-	listUploadsInfo, err := xl.ListUploadsHeal(bucketName, prefix, "", "", "", 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// All uploads intact nothing to heal.
-	if len(listUploadsInfo.Uploads) != 0 {
-		t.Errorf("Expected no uploads but received %d", len(listUploadsInfo.Uploads))
-	}
-
-	// Delete the part from the first disk to make the upload (and
-	// its part) to appear in upload heal listing.
-	firstDisk := xl.(*xlObjects).storageDisks[0]
-	err = firstDisk.DeleteFile(minioMetaMultipartBucket,
-		filepath.Join(bucketName, objName, uploadID, xlMetaJSONFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	listUploadsInfo, err = xl.ListUploadsHeal(bucketName, prefix, "", "", "", 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// One upload with missing xl.json on first disk.
-	if len(listUploadsInfo.Uploads) != 1 {
-		t.Errorf("Expected 1 upload but received %d", len(listUploadsInfo.Uploads))
-	}
 }
