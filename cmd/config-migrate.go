@@ -1616,7 +1616,7 @@ func migrateV20ToV21() error {
 	srvConfig := &serverConfigV21{
 		Notify: &notifier{},
 	}
-	srvConfig.Version = serverConfigVersion
+	srvConfig.Version = "21"
 	srvConfig.Credential = cv20.Credential
 	srvConfig.Region = cv20.Region
 	if srvConfig.Region == "" {
