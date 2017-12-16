@@ -29,28 +29,14 @@ import (
 
 // Check for updates and print a notification message
 func checkUpdate(mode string) {
-	// Its OK to ignore any errors during getUpdateInfo() here.
-	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
-		if updateMsg := computeUpdateMessage(downloadURL, older); updateMsg != "" {
+	// Its OK to ignore any errors during doUpdate() here.
+	if updateMsg, _, currentReleaseTime, latestReleaseTime, err := getUpdateInfo(2*time.Second, mode); err == nil {
+		if globalInplaceUpdateDisabled {
 			log.Println(updateMsg)
+		} else {
+			log.Println(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
-}
-
-func enableLoggers() {
-	fileLogTarget := globalServerConfig.Logger.GetFile()
-	if fileLogTarget.Enable {
-		err := InitFileLogger(&fileLogTarget)
-		fatalIf(err, "Unable to initialize file logger")
-		log.AddTarget(fileLogTarget)
-	}
-
-	consoleLogTarget := globalServerConfig.Logger.GetConsole()
-	if consoleLogTarget.Enable {
-		InitConsoleLogger(&consoleLogTarget)
-	}
-
-	log.SetConsoleTarget(consoleLogTarget)
 }
 
 func initConfig() {
@@ -122,4 +108,9 @@ func handleCommonEnvVars() {
 	if globalDomainName != "" {
 		globalIsEnvDomainName = true
 	}
+
+	// In place update is true by default if the MINIO_UPDATE is not set
+	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
+	// in-place update is off.
+	globalInplaceUpdateDisabled = strings.EqualFold(os.Getenv("MINIO_UPDATE"), "off")
 }

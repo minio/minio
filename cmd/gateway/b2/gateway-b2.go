@@ -23,6 +23,7 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
+
 	"net/http"
 	"strings"
 	"sync"
@@ -62,6 +63,9 @@ ENVIRONMENT VARIABLES:
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
 EXAMPLES:
   1. Start minio gateway server for B2 backend.

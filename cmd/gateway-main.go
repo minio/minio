@@ -142,9 +142,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize gateway config.
 	initConfig()
 
-	// Enable loggers as per configuration file.
-	enableLoggers()
-
 	// Init the error tracing module.
 	errors.Init(GOPATH, "github.com/minio/minio")
 

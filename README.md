@@ -26,8 +26,8 @@ Install minio packages using [Homebrew](http://brew.sh/)
 brew install minio/stable/minio
 minio server /data
 ```
-#### Note
-If you previously installed minio using `brew install minio` then it is recommended that you reinstall minio from `minio/stable/minio` official repo instead.
+
+> NOTE: If you previously installed minio using `brew install minio` then it is recommended that you reinstall minio from `minio/stable/minio` official repo instead.
 ```sh
 brew uninstall minio
 brew install minio/stable/minio
@@ -53,18 +53,15 @@ chmod +x minio
 ```
 
 ### Snap
-You can install the latest `minio` [snap](https://snapcraft.io), and help testing the most recent changes of the master branch in [all the supported Linux distros](https://snapcraft.io/docs/core/install) with:
-
+Install minio using [Snap](https://snapcraft.io)
 ```sh
 sudo snap install minio --edge
 ```
 
-Every time a new version of `minio` is pushed to the store, you will get it updated automatically.
-
-You will need to allow the minio snap to observe mounts in the system:
-
+Start minio using `snap run` command
 ```sh
 sudo snap connect minio:mount-observe
+sudo snap run minio server /data
 ```
 
 ## Microsoft Windows
@@ -88,7 +85,6 @@ service minio start
 ```
 
 ## Install from Source
-
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
 ```sh

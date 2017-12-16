@@ -1,16 +1,18 @@
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
+  # This name uniquely identifies the StatefulSet
   name: minio
 spec:
   serviceName: minio
   replicas: 4
+  selector:
+    matchLabels:
+      app: minio # has to match .spec.template.metadata.labels
   template:
     metadata:
-      annotations:
-        pod.alpha.kubernetes.io/initialized: "true"
       labels:
-        app: minio
+        app: minio # has to match .spec.selector.matchLabels
     spec:
       containers:
       - name: minio
@@ -39,8 +41,6 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: data
-      annotations:
-        volume.alpha.kubernetes.io/storage-class: anything
     spec:
       accessModes:
         - ReadWriteOnce

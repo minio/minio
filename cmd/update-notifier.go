@@ -28,9 +28,9 @@ import (
 	"github.com/fatih/color"
 )
 
-// computeUpdateMessage - calculates the update message, only if a
+// prepareUpdateMessage - prepares the update message, only if a
 // newer version is available.
-func computeUpdateMessage(downloadURL string, older time.Duration) string {
+func prepareUpdateMessage(downloadURL string, older time.Duration) string {
 	if downloadURL == "" || older <= 0 {
 		return ""
 	}

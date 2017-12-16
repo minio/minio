@@ -62,6 +62,9 @@ ENVIRONMENT VARIABLES:
   REGION:
      MINIO_REGION: To set custom region. By default it is "us-east-1".
 
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared
@@ -146,9 +149,6 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize server config.
 	initConfig()
-
-	// Enable loggers as per configuration file.
-	enableLoggers()
 
 	// Init the error tracing module.
 	errors.Init(GOPATH, "github.com/minio/minio")

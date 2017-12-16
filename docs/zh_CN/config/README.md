@@ -69,16 +69,6 @@ export MINIO_BROWSER=off
 minio server /data
 ```
 
-#### 日志记录
-|参数|类型|描述|
-|:---|:---|:---|
-|``logger ``| |服务通过logger记录error或者fatal(致命)错误，你可以同时开启多个logger。|
-|``logger.console``| |将日志信息发送到控制台|
-|``logger.console.enable``| _bool_ | 是否开启控制台日志输出，默认是开启|
-|``logger.file``| |发送日志信息到文件|
-|``logger.file.enable``| _bool_ | 是否开启文件日志记录，默认是关闭。|
-|``logger.file.filename``| _string_ |文件日志的输出路径， 比如: _/var/log/minio.log_ |
-
 #### 通知
 |参数|类型|描述|
 |:---|:---|:---|

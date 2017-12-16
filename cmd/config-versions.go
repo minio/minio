@@ -418,6 +418,12 @@ type serverConfigV15 struct {
 	Notify *notifier `json:"notify"`
 }
 
+type loggers struct {
+	sync.RWMutex
+	Console ConsoleLogger `json:"console"`
+	File    FileLogger    `json:"file"`
+}
+
 // serverConfigV16 server configuration version '16' which is like
 // version '15' except it makes a change to logging configuration.
 type serverConfigV16 struct {
@@ -505,6 +511,21 @@ type serverConfigV20 struct {
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+// serverConfigV21 is just like version '20' without logger field
+type serverConfigV21 struct {
+	sync.RWMutex
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
+	Domain     string           `json:"domain"`
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`

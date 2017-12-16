@@ -55,6 +55,9 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
       $ export MINIO_ACCESS_KEY=accesskey
