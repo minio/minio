@@ -318,13 +318,14 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 }
 
 // Wrap disks into retryable disks.
-func initRetryableStorageDisks(disks []StorageAPI, retryUnit, retryCap time.Duration) (outDisks []StorageAPI) {
+func initRetryableStorageDisks(disks []StorageAPI, retryUnit, retryCap, retryInterval time.Duration, retryThreshold int) (outDisks []StorageAPI) {
 	// Initialize the disk into a retryable-disks wrapper.
 	outDisks = make([]StorageAPI, len(disks))
 	for i, disk := range disks {
 		outDisks[i] = &retryStorage{
 			remoteStorage:    disk,
-			maxRetryAttempts: globalStorageRetryThreshold,
+			retryInterval:    retryInterval,
+			maxRetryAttempts: retryThreshold,
 			retryUnit:        retryUnit,
 			retryCap:         retryCap,
 			offlineTimestamp: UTCNow(), // Set timestamp to prevent immediate marking as offline
@@ -346,19 +347,20 @@ func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks [
 	// retry window (30 seconds, with once-per-second retries) so
 	// that we wait enough amount of time before the disks come
 	// online.
-	retryDisks := initRetryableStorageDisks(storageDisks, time.Second, time.Second*30)
+	retryDisks := initRetryableStorageDisks(storageDisks, time.Second, time.Second*30,
+		globalStorageInitHealthCheckInterval, globalStorageInitRetryThreshold)
 
 	// Start retry loop retrying until disks are formatted
 	// properly, until we have reached a conditional quorum of
 	// formatted disks.
-	err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks)
-	if err != nil {
+	if err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks); err != nil {
 		return nil, err
 	}
 
 	// Initialize the disk into a formatted disks wrapper. This
 	// uses a shorter retry window (5ms with once-per-ms retries)
-	formattedDisks = initRetryableStorageDisks(storageDisks, time.Millisecond, time.Millisecond*5)
+	formattedDisks = initRetryableStorageDisks(storageDisks, time.Millisecond, time.Millisecond*5,
+		globalStorageHealthCheckInterval, globalStorageRetryThreshold)
 
 	// Success.
 	return formattedDisks, nil
