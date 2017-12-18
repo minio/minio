@@ -29,8 +29,8 @@ import (
 
 // Steps to move from version N to version N+1
 // 1. Add new struct serverConfigVN+1 in config-versions.go
-// 2. Set configCurrentVersion to "N+1"
-// 3. Set serverConfigCurrent to serverConfigVN+1
+// 2. Set serverConfigVersion to "N+1"
+// 3. Set serverConfig to serverConfigVN+1
 // 4. Add new migration function (ex. func migrateVNToVN+1()) in config-migrate.go
 // 5. Call migrateVNToVN+1() from migrateConfig() in config-migrate.go
 // 6. Make changes in config-current_test.go for any test change
