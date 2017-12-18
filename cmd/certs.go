@@ -22,8 +22,14 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 )
+
+// TLSPrivateKeyPassword is the environment variable which contains the password used
+// to decrypt the TLS private key. It must be set if the TLS private key is
+// password protected.
+const TLSPrivateKeyPassword = "MINIO_CERT_PASSWD"
 
 func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err error) {
 	// Read certificate file.
@@ -90,6 +96,36 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
+// load an X509 key pair (private key , certificate) from the provided
+// paths. The private key may be encrypted and is decrypted using the
+// ENV_VAR: MINIO_CERT_PASSWD.
+func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
+	certPEMBlock, err := ioutil.ReadFile(certFile)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("TLS: failed to read cert file: %v", err)
+	}
+	keyPEMBlock, err := ioutil.ReadFile(keyFile)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("TLS: failed to read private key: %v", err)
+	}
+	key, rest := pem.Decode(keyPEMBlock)
+	if len(rest) > 0 {
+		return tls.Certificate{}, fmt.Errorf("TLS: private key contains additional data")
+	}
+	if x509.IsEncryptedPEMBlock(key) {
+		password, ok := os.LookupEnv(TLSPrivateKeyPassword)
+		if !ok {
+			return tls.Certificate{}, fmt.Errorf("TLS: private key is encrypted but no password is present - set env var: %s", TLSPrivateKeyPassword)
+		}
+		decryptedKey, decErr := x509.DecryptPEMBlock(key, []byte(password))
+		if decErr != nil {
+			return tls.Certificate{}, fmt.Errorf("TLS: failed to decrypt private key: %v", decErr)
+		}
+		keyPEMBlock = pem.EncodeToMemory(&pem.Block{Type: key.Type, Bytes: decryptedKey})
+	}
+	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+}
+
 func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, nil, false, nil
@@ -100,7 +136,7 @@ func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsC
 	}
 
 	var cert tls.Certificate
-	if cert, err = tls.LoadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
+	if cert, err = loadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
 		return nil, nil, nil, false, err
 	}
 
