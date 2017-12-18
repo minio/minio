@@ -75,8 +75,6 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		{"----", "obj", BucketNameInvalid{Bucket: "----"}},
 		{"bucket", "", ObjectNameInvalid{Bucket: "bucket", Object: ""}},
 		{"bucket", "doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "doesnotexist"}},
-		{"bucket", "obj/", ObjectNotFound{Bucket: "bucket", Object: "obj/"}},
-		{"bucket", "/obj", ObjectNotFound{Bucket: "bucket", Object: "/obj"}},
 		{"bucket", "obj", nil},
 	}
 
