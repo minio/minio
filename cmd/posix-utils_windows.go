@@ -25,7 +25,7 @@ import (
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
-	if len(volname) < 3 || len(volname) > 63 {
+	if len(volname) < 3 {
 		return false
 	}
 	// Volname shouldn't have reserved characters on windows in it.

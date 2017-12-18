@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"path"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -220,6 +221,11 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		} else if err != nil { // For any other errors fail.
 			return errors.Trace(err)
 		} // else on success..
+
+		// Entry path is empty, just delete it.
+		if len(entries) == 0 {
+			return errors.Trace(storage.DeleteFile(volume, path.Clean(entryPath)))
+		}
 
 		// Recurse and delete all other entries.
 		for _, entry := range entries {

@@ -76,9 +76,7 @@ func verifyError(c *check, response *http.Response, code, description string, st
 func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.SetUpSuite(c)
 	suite.TestBucketSQSNotificationWebHook(c)
-	if suite.serverType == "XL" {
-		suite.TestObjectDir(c)
-	}
+	suite.TestObjectDir(c)
 	suite.TestBucketSQSNotificationAMQP(c)
 	suite.TestBucketPolicy(c)
 	suite.TestDeleteBucket(c)
@@ -260,7 +258,7 @@ func (s *TestSuiteCommon) TestObjectDir(c *check) {
 	response, err = client.Do(request)
 
 	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusNotFound)
+	c.Assert(response.StatusCode, http.StatusOK)
 
 	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, bucketName, "my-object-directory/"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
@@ -271,7 +269,7 @@ func (s *TestSuiteCommon) TestObjectDir(c *check) {
 	response, err = client.Do(request)
 
 	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusNotFound)
+	c.Assert(response.StatusCode, http.StatusOK)
 
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "my-object-directory/"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
@@ -638,7 +636,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *check) {
 	// assert the status of http response.
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	// object name was "prefix/myobject", an attempt to delelte "prefix"
+	// object name was "prefix/myobject", an attempt to delete "prefix"
 	// Should not delete "prefix/myobject"
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
