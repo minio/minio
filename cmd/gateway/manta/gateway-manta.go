@@ -324,6 +324,9 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
+		if tclient.IsResourceNotFoundError(err) {
+			return result, minio.BucketNotFound{Bucket: bucket}
+		}
 		return result, errors.Trace(err)
 	}
 
@@ -398,6 +401,9 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
+		if tclient.IsResourceNotFoundError(err) {
+			return result, minio.BucketNotFound{Bucket: bucket}
+		}
 		return result, errors.Trace(err)
 	}
 
