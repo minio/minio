@@ -86,6 +86,12 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
+			"checksumSHA1": "tX0Bq1gzqskL98nnB1X2rDqxH18=",
+			"path": "github.com/aliyun/aliyun-oss-go-sdk/oss",
+			"revision": "6fe16293d6b7af4f5c2450714c5b4825c8ad040c",
+			"revisionTime": "2017-09-25T03:23:15Z"
+		},
+		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"
