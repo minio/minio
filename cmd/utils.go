@@ -263,3 +263,11 @@ func NewCustomHTTPTransport() http.RoundTripper {
 		DisableCompression:    true,
 	}
 }
+
+// Load the json (typically from disk file).
+func jsonLoadFromSeeker(r io.ReadSeeker, data interface{}) error {
+	if _, err := r.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return json.NewDecoder(r).Decode(data)
+}
