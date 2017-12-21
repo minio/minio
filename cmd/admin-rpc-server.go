@@ -104,8 +104,12 @@ func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
 		return err
 	}
 
+	// Wrap into retrying disks
+	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
+		time.Millisecond, time.Millisecond*5, globalStorageHealthCheckInterval, globalStorageRetryThreshold)
+
 	// Initialize new object layer with newly formatted disks.
-	newObjectAPI, err := newXLObjects(bootstrapDisks)
+	newObjectAPI, err := newXLObjects(retryingDisks)
 	if err != nil {
 		return err
 	}
