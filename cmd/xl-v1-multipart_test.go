@@ -142,19 +142,20 @@ func TestUpdateUploadJSON(t *testing.T) {
 	}
 
 	testCases := []struct {
-		uploadID  string
-		initiated time.Time
-		isRemove  bool
-		errVal    error
+		uploadID    string
+		initiated   time.Time
+		writeQuorum int
+		isRemove    bool
+		errVal      error
 	}{
-		{"111abc", UTCNow(), false, nil},
-		{"222abc", UTCNow(), false, nil},
-		{"111abc", time.Time{}, true, nil},
+		{"111abc", UTCNow(), 9, false, nil},
+		{"222abc", UTCNow(), 10, false, nil},
+		{"111abc", time.Time{}, 11, true, nil},
 	}
 
 	xl := obj.(*xlObjects)
 	for i, test := range testCases {
-		testErrVal := xl.updateUploadJSON(bucket, object, test.uploadID, test.initiated, test.isRemove)
+		testErrVal := xl.updateUploadJSON(bucket, object, test.uploadID, test.initiated, test.writeQuorum, test.isRemove)
 		if testErrVal != test.errVal {
 			t.Errorf("Test %d: Expected error value %v, but got %v",
 				i+1, test.errVal, testErrVal)
@@ -166,7 +167,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*retryStorage), nil, errFaultyDisk)
 	}
 
-	testErrVal := xl.updateUploadJSON(bucket, object, "222abc", UTCNow(), false)
+	testErrVal := xl.updateUploadJSON(bucket, object, "222abc", UTCNow(), 10, false)
 	if testErrVal == nil || testErrVal.Error() != errXLWriteQuorum.Error() {
 		t.Errorf("Expected write quorum error, but got: %v", testErrVal)
 	}

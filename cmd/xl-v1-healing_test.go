@@ -333,8 +333,12 @@ func TestQuickHeal(t *testing.T) {
 		}
 	}
 
+	// figure out read and write quorum
+	readQuorum := len(xl.storageDisks) / 2
+	writeQuorum := len(xl.storageDisks)/2 + 1
+
 	// Heal the missing buckets.
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = quickHeal(*xl, writeQuorum, readQuorum); err != nil {
 		t.Fatal(err)
 	}
 
@@ -351,7 +355,7 @@ func TestQuickHeal(t *testing.T) {
 		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errUnformattedDisk)
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != errUnformattedDisk {
+	if err = quickHeal(*xl, writeQuorum, readQuorum); err != errUnformattedDisk {
 		t.Fatal(err)
 	}
 
@@ -368,7 +372,7 @@ func TestQuickHeal(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	xl.storageDisks[0] = nil
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = quickHeal(*xl, writeQuorum, readQuorum); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -390,7 +394,7 @@ func TestQuickHeal(t *testing.T) {
 		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = quickHeal(*xl, writeQuorum, readQuorum); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 }
@@ -533,7 +537,8 @@ func TestHealObjectXL(t *testing.T) {
 
 	// Try healing now, expect to receive errDiskNotFound.
 	_, _, err = obj.HealObject(bucket, object)
-	if errors.Cause(err) != errDiskNotFound {
+	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
+	if errors.Cause(err) != errXLReadQuorum {
 		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
 	}
 }

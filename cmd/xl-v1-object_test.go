@@ -154,8 +154,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl.storageDisks[8] = nil
 	err = obj.DeleteObject(bucket, object)
 	err = errors.Cause(err)
-	if err != toObjectErr(errXLWriteQuorum, bucket, object) {
-		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
+	if err != toObjectErr(errXLReadQuorum, bucket, object) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLReadQuorum, bucket, object), err)
 	}
 	// Cleanup backend directories
 	removeRoots(fsDirs)

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
@@ -36,9 +37,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "21"
+const serverConfigVersion = "22"
 
-type serverConfig = serverConfigV21
+type serverConfig = serverConfigV22
 
 var (
 	// globalServerConfig server config.
@@ -101,6 +102,52 @@ func (s *serverConfig) SetBrowser(b bool) {
 
 	// Set the new value.
 	s.Browser = BrowserFlag(b)
+}
+
+func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
+	s.Lock()
+	defer s.Unlock()
+
+	// Set the values
+	s.StorageClass.Standard = standardClass.Scheme + strconv.Itoa(standardClass.Parity)
+	s.StorageClass.RRS = rrsClass.Scheme + strconv.Itoa(rrsClass.Parity)
+}
+
+func (s *serverConfig) GetStorageClass() (standardStorageClass, rrsStorageClass storageClass) {
+	s.RLock()
+	defer s.RUnlock()
+
+	var err error
+	var ssc storageClass
+	var rrsc storageClass
+
+	if s.StorageClass.Standard != "" {
+		// Parse the values read from config file into storageClass struct
+		ssc, err = parseStorageClass(s.StorageClass.Standard)
+		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.Standard)
+	}
+
+	if s.StorageClass.RRS != "" {
+		// Parse the values read from config file into storageClass struct
+		rrsc, err = parseStorageClass(s.StorageClass.RRS)
+		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.RRS)
+	}
+
+	// Validation is done after parsing both the storage classes. This is needed because we need one
+	// storage class value to deduce the correct value of the other storage class.
+	if rrsc.Scheme != "" {
+		err := validateRRSParity(rrsc.Parity, ssc.Parity)
+		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.RRS)
+		globalIsStorageClass = true
+	}
+
+	if ssc.Scheme != "" {
+		err := validateSSParity(ssc.Parity, rrsc.Parity)
+		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.Standard)
+		globalIsStorageClass = true
+	}
+
+	return
 }
 
 // GetCredentials get current credentials.
@@ -173,6 +220,10 @@ func newConfig() error {
 
 	if globalIsEnvDomainName {
 		srvCfg.Domain = globalDomainName
+	}
+
+	if globalIsStorageClass {
+		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -303,6 +354,10 @@ func loadConfig() error {
 		srvCfg.Domain = globalDomainName
 	}
 
+	if globalIsStorageClass {
+		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
+	}
+
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg
@@ -317,6 +372,9 @@ func loadConfig() error {
 	}
 	if !globalIsEnvDomainName {
 		globalDomainName = globalServerConfig.Domain
+	}
+	if !globalIsStorageClass {
+		globalStandardStorageClass, globalRRStorageClass = globalServerConfig.GetStorageClass()
 	}
 	globalServerConfigMu.Unlock()
 

@@ -113,4 +113,34 @@ func handleCommonEnvVars() {
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(os.Getenv("MINIO_UPDATE"), "off")
+
+	// Validate and store the storage class env variables only for XL/Dist XL setups
+	if globalIsXL {
+		var err error
+
+		// Check for environment variables and parse into storageClass struct
+		if ssc := os.Getenv(standardStorageClass); ssc != "" {
+			globalStandardStorageClass, err = parseStorageClass(ssc)
+			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClass)
+		}
+
+		if rrsc := os.Getenv(reducedRedundancyStorageClass); rrsc != "" {
+			globalRRStorageClass, err = parseStorageClass(rrsc)
+			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClass)
+		}
+
+		// Validation is done after parsing both the storage classes. This is needed because we need one
+		// storage class value to deduce the correct value of the other storage class.
+		if globalRRStorageClass.Scheme != "" {
+			err := validateRRSParity(globalRRStorageClass.Parity, globalStandardStorageClass.Parity)
+			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClass)
+			globalIsStorageClass = true
+		}
+
+		if globalStandardStorageClass.Scheme != "" {
+			err := validateSSParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
+			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClass)
+			globalIsStorageClass = true
+		}
+	}
 }
