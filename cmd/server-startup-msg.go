@@ -47,6 +47,16 @@ func printStartupMessage(apiEndPoints []string) {
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
 
+	// Object layer is initialized then print StorageInfo.
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		printStorageInfo(objAPI.StorageInfo())
+		// Storage class info only printed for Erasure backend
+		if objAPI.StorageInfo().Backend.Type == Erasure {
+			printStorageClassInfoMsg(objAPI.StorageInfo())
+		}
+	}
+
 	// Prints credential, region and browser access.
 	printServerCommonMsg(strippedAPIEndpoints)
 
@@ -56,12 +66,6 @@ func printStartupMessage(apiEndPoints []string) {
 
 	// Prints documentation message.
 	printObjectAPIMsg()
-
-	// Object layer is initialized then print StorageInfo.
-	objAPI := newObjectLayerFn()
-	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo())
-	}
 
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
@@ -173,18 +177,42 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 		humanize.IBytes(uint64(storageInfo.Total)))
 	if storageInfo.Backend.Type == Erasure {
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
-		if maxDiskFailures := storageInfo.Backend.ReadQuorum - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-			diskInfo += fmt.Sprintf("We can withstand [%d] drive failure(s).", maxDiskFailures)
-		}
 		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
+	}
+	return msg
+}
+
+func printStorageClassInfoMsg(storageInfo StorageInfo) {
+	standardClassMsg := getStandardStorageClassInfoMsg(storageInfo)
+	rrsClassMsg := getRRSStorageClassInfoMsg(storageInfo)
+	storageClassMsg := fmt.Sprintf(getFormatStr(len(standardClassMsg), 3), standardClassMsg) + fmt.Sprintf(getFormatStr(len(rrsClassMsg), 3), rrsClassMsg)
+	// Print storage class section only if data is present
+	if storageClassMsg != "" {
+		log.Println(colorBlue("Storage Class:"))
+		log.Println(storageClassMsg)
+	}
+}
+
+func getStandardStorageClassInfoMsg(storageInfo StorageInfo) string {
+	var msg string
+	if maxDiskFailures := storageInfo.Backend.standardSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
+		msg += fmt.Sprintf("Objects with Standard class can withstand [%d] drive failure(s).\n", maxDiskFailures)
+	}
+	return msg
+}
+
+func getRRSStorageClassInfoMsg(storageInfo StorageInfo) string {
+	var msg string
+	if maxDiskFailures := storageInfo.Backend.rrSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
+		msg += fmt.Sprintf("Objects with Reduced Redundancy class can withstand [%d] drive failure(s).\n", maxDiskFailures)
 	}
 	return msg
 }
 
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
-	log.Println()
 	log.Println(getStorageInfoMsg(storageInfo))
+	log.Println()
 }
 
 // Prints certificate expiry date warning

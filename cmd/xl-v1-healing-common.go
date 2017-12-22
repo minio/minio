@@ -121,6 +121,29 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
+// Returns one of the latest updated xlMeta files and count of total valid xlMeta(s) updated latest
+func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(partsMetadata, errs)
+
+	// Count all lastest updated xlMeta values
+	var count int
+	var latestXLMeta xlMetaV1
+
+	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
+	modTime, _ := commonTime(modTimes)
+
+	// Interate through all the modTimes and count the xlMeta(s) with latest time.
+	for index, t := range modTimes {
+		if t == modTime && partsMetadata[index].IsValid() {
+			latestXLMeta = partsMetadata[index]
+			count++
+		}
+	}
+	// Return one of the latest xlMetaData, and the count of lastest updated xlMeta files
+	return latestXLMeta, count
+}
+
 // outDatedDisks - return disks which don't have the latest object (i.e xl.json).
 // disks that are offline are not 'marked' outdated.
 func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata []xlMetaV1,
@@ -184,7 +207,11 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 	// Less than quorum erasure coded blocks of the object have the same create time.
 	// This object can't be healed with the information we have.
 	modTime, count := commonTime(listObjectModtimes(partsMetadata, errs))
-	if count < xl.readQuorum {
+
+	// get read quorum for this object
+	readQuorum, _, err := objectQuorumFromMeta(xl, partsMetadata, errs)
+
+	if count < readQuorum || err != nil {
 		return HealObjectInfo{
 			Status:             quorumUnavailable,
 			MissingDataCount:   0,
@@ -217,7 +244,7 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 			disksMissing = true
 			fallthrough
 		case errFileNotFound:
-			if xlMeta.Erasure.Distribution[i]-1 < xl.dataBlocks {
+			if xlMeta.Erasure.Distribution[i]-1 < xlMeta.Erasure.DataBlocks {
 				missingDataCount++
 			} else {
 				missingParityCount++

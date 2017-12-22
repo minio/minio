@@ -60,6 +60,7 @@ var supportedHeaders = []string{
 	"cache-control",
 	"content-encoding",
 	"content-disposition",
+	amzStorageClass,
 	// Add more supported headers here.
 }
 
@@ -116,7 +117,8 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 		return nil, errors.Trace(errInvalidArgument)
 	}
 	metadata := make(map[string]string)
-	// Save standard supported headers.
+
+	// Save all supported headers.
 	for _, supportedHeader := range supportedHeaders {
 		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
 		// HTTP headers are case insensitive, look for both canonical
@@ -127,6 +129,7 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 			metadata[supportedHeader] = header.Get(supportedHeader)
 		}
 	}
+
 	// Go through all other headers for any additional headers that needs to be saved.
 	for key := range header {
 		if key != http.CanonicalHeaderKey(key) {

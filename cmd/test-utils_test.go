@@ -489,6 +489,12 @@ func resetGlobalIsEnvs() {
 	globalIsEnvCreds = false
 	globalIsEnvBrowser = false
 	globalIsEnvRegion = false
+	globalIsStorageClass = false
+}
+
+func resetGlobalStorageEnvs() {
+	globalStandardStorageClass = storageClass{}
+	globalRRStorageClass = storageClass{}
 }
 
 // Resets all the globals used modified in tests.
@@ -510,6 +516,8 @@ func resetTestGlobals() {
 	resetGlobalIsXL()
 	// Reset global isEnvCreds flag.
 	resetGlobalIsEnvs()
+	// Reset global storage class flags
+	resetGlobalStorageEnvs()
 }
 
 // Configure the server for the test run.
@@ -1968,6 +1976,9 @@ type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string
 // Regular object test type.
 type objTestType func(obj ObjectLayer, instanceType string, t TestErrHandler)
 
+// Special test type for test with directories
+type objTestTypeWithDirs func(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler)
+
 // Special object test type for disk not found situations.
 type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []string, t *testing.T)
 
@@ -1996,6 +2007,31 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	}
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, t)
+	defer removeRoots(append(fsDirs, fsDir))
+}
+
+// ExecObjectLayerTestWithDirs - executes object layer tests.
+// Creates single node and XL ObjectLayer instance and runs test for both the layers.
+func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal("Unexpected error", err)
+	}
+	defer os.RemoveAll(rootPath)
+
+	objLayer, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
+	}
+
+	objLayer, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
+	}
+	// Executing the object layer tests for XL.
+	objTest(objLayer, XLTestStr, fsDirs, t)
 	defer removeRoots(append(fsDirs, fsDir))
 }
 

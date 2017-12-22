@@ -64,7 +64,8 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum)
+	writeQuorum := len(xl.storageDisks)/2 + 1
+	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(err) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(xl.storageDisks, bucket)
@@ -142,7 +143,8 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	return BucketInfo{}, reduceReadQuorumErrs(bucketErrs, nil, xl.readQuorum)
+	readQuorum := len(xl.storageDisks) / 2
+	return BucketInfo{}, reduceReadQuorumErrs(bucketErrs, nil, readQuorum)
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
@@ -251,7 +253,8 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Wait for all the delete vols to finish.
 	wg.Wait()
 
-	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum)
+	writeQuorum := len(xl.storageDisks)/2 + 1
+	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(err) == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
 	}

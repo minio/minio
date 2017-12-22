@@ -43,10 +43,10 @@ type StorageInfo struct {
 		Type BackendType
 
 		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks  int // Online disks during server startup.
-		OfflineDisks int // Offline disks during server startup.
-		ReadQuorum   int // Minimum disks required for successful read operations.
-		WriteQuorum  int // Minimum disks required for successful write operations.
+		OnlineDisks      int // Online disks during server startup.
+		OfflineDisks     int // Offline disks during server startup.
+		standardSCParity int // Parity disks for currently configured Standard storage class.
+		rrSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
 	}
 }
 

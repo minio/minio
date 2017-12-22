@@ -50,10 +50,6 @@ const (
 type xlObjects struct {
 	mutex        *sync.Mutex
 	storageDisks []StorageAPI // Collection of initialized backend disks.
-	dataBlocks   int          // dataBlocks count caculated for erasure.
-	parityBlocks int          // parityBlocks count calculated for erasure.
-	readQuorum   int          // readQuorum minimum required disks to read data.
-	writeQuorum  int          // writeQuorum minimum required disks to write data.
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
@@ -92,6 +88,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, errInvalidArgument
 	}
 
+	// figure out readQuorum for erasure format.json
 	readQuorum := len(storageDisks) / 2
 	writeQuorum := len(storageDisks)/2 + 1
 
@@ -101,9 +98,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 	}
 
-	// Calculate data and parity blocks.
-	dataBlocks, parityBlocks := len(newStorageDisks)/2, len(newStorageDisks)/2
-
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
@@ -111,8 +105,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	xl := &xlObjects{
 		mutex:        &sync.Mutex{},
 		storageDisks: newStorageDisks,
-		dataBlocks:   dataBlocks,
-		parityBlocks: parityBlocks,
 		listPool:     listPool,
 	}
 
@@ -144,11 +136,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
-	// Figure out read and write quorum based on number of storage disks.
-	// READ and WRITE quorum is always set to (N/2) number of disks.
-	xl.readQuorum = readQuorum
-	xl.writeQuorum = writeQuorum
-
 	// If the number of offline servers is equal to the readQuorum
 	// (i.e. the number of online servers also equals the
 	// readQuorum), we cannot perform quick-heal (no
@@ -160,7 +147,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	}
 
 	// Perform a quick heal on the buckets and bucket metadata for any discrepancies.
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err = quickHeal(*xl, writeQuorum, readQuorum); err != nil {
 		return nil, err
 	}
 
@@ -258,13 +245,18 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	storageInfo.Backend.Type = Erasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
+
+	_, scParity := getDrivesCount(standardStorageClass, disks)
+	storageInfo.Backend.standardSCParity = scParity
+
+	_, rrSCparity := getDrivesCount(reducedRedundancyStorageClass, disks)
+	storageInfo.Backend.rrSCParity = rrSCparity
+
 	return storageInfo
 }
 
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
 	storageInfo := getStorageInfo(xl.storageDisks)
-	storageInfo.Backend.ReadQuorum = xl.readQuorum
-	storageInfo.Backend.WriteQuorum = xl.writeQuorum
 	return storageInfo
 }
