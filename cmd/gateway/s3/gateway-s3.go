@@ -289,7 +289,7 @@ func (l *s3Objects) GetObjectInfo(bucket string, object string) (objInfo minio.O
 
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5HexString(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata))
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata))
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(errors.Trace(err), bucket, object)
 	}
@@ -343,7 +343,7 @@ func (l *s3Objects) NewMultipartUpload(bucket string, object string, metadata ma
 
 // PutObjectPart puts a part of object in bucket
 func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi minio.PartInfo, e error) {
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5HexString(), data.SHA256HexString())
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5Base64String(), data.SHA256HexString())
 	if err != nil {
 		return pi, minio.ErrorRespToObjectError(errors.Trace(err), bucket, object)
 	}

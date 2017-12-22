@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"hash"
@@ -115,6 +116,11 @@ func (r *Reader) SHA256() []byte {
 // MD5HexString returns hex md5 value.
 func (r *Reader) MD5HexString() string {
 	return hex.EncodeToString(r.md5sum)
+}
+
+// MD5Base64String returns base64 encoded MD5sum value.
+func (r *Reader) MD5Base64String() string {
+	return base64.StdEncoding.EncodeToString(r.md5sum)
 }
 
 // SHA256HexString returns hex sha256 value.

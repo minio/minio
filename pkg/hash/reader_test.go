@@ -40,6 +40,9 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if r.SHA256HexString() != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
 		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
 	}
+	if r.MD5Base64String() != "4vxxTEcn7pOV8yTNLn8zHw==" {
+		t.Errorf("Expected md5base64 \"4vxxTEcn7pOV8yTNLn8zHw==\", got \"%s\"", r.MD5Base64String())
+	}
 	if r.Size() != 4 {
 		t.Errorf("Expected size 4, got %d", r.Size())
 	}
