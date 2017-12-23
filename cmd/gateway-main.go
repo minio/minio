@@ -136,6 +136,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
+
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
