@@ -801,6 +801,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	copySourceHeader.Set("X-Amz-Copy-Source", "somewhere")
 	invalidMD5Header := http.Header{}
 	invalidMD5Header.Set("Content-Md5", "42")
+	inalidStorageClassHeader := http.Header{}
+	inalidStorageClassHeader.Set(amzStorageClass, "INVALID")
 
 	addCustomHeaders := func(req *http.Request, customHeaders http.Header) {
 		for k, values := range customHeaders {
@@ -894,6 +896,18 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:          credentials.SecretKey,
 			fault:              MissingContentLength,
 			expectedRespStatus: http.StatusLengthRequired,
+		},
+		// Test case - 7.
+		// Test Case with invalid header key X-Amz-Storage-Class
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            inalidStorageClassHeader,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 	// Iterating over the cases, fetching the object validating the response.

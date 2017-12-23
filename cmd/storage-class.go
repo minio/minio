@@ -26,10 +26,16 @@ import (
 const (
 	// metadata entry for storage class
 	amzStorageClass = "x-amz-storage-class"
+	// Canonical metadata entry for storage class
+	amzStorageClassCanonical = "X-Amz-Storage-Class"
 	// Reduced redundancy storage class
-	reducedRedundancyStorageClass = "MINIO_STORAGE_CLASS_RRS"
+	reducedRedundancyStorageClass = "REDUCED_REDUNDANCY"
 	// Standard storage class
-	standardStorageClass = "MINIO_STORAGE_CLASS_STANDARD"
+	standardStorageClass = "STANDARD"
+	// Reduced redundancy storage class environment variable
+	reducedRedundancyStorageClassEnv = "MINIO_STORAGE_CLASS_RRS"
+	// Standard storage class environment variable
+	standardStorageClassEnv = "MINIO_STORAGE_CLASS_STANDARD"
 	// Supported storage class scheme is EC
 	supportedStorageClassScheme = "EC"
 	// Minimum parity disks
@@ -46,6 +52,12 @@ type storageClass struct {
 type storageClassConfig struct {
 	Standard string `json:"standard"`
 	RRS      string `json:"rrs"`
+}
+
+// Validate if storage class in metadata
+// Only Standard and RRS Storage classes are supported
+func isValidStorageClassMeta(sc string) bool {
+	return sc == reducedRedundancyStorageClass || sc == standardStorageClass
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
@@ -142,8 +154,7 @@ func validateSSParity(ssParity, rrsParity int) (err error) {
 // -- Default for Reduced Redundancy Storage class is, parity = 2 and data = N-Parity
 // -- Default for Standard Storage class is, parity = N/2, data = N/2
 // If storage class is not present in metadata, default value is data = N/2, parity = N/2
-func getDrivesCount(sc string, disks []StorageAPI) (data, parity int) {
-	totalDisks := len(disks)
+func getRedundancyCount(sc string, totalDisks int) (data, parity int) {
 	parity = totalDisks / 2
 	switch sc {
 	case reducedRedundancyStorageClass:

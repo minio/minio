@@ -152,11 +152,11 @@ func testValidateSSParity(obj ObjectLayer, instanceType string, dirs []string, t
 	}
 }
 
-func TestGetDrivesCount(t *testing.T) {
-	ExecObjectLayerTestWithDirs(t, testGetDrivesCount)
+func TestRedundancyCount(t *testing.T) {
+	ExecObjectLayerTestWithDirs(t, testGetRedundancyCount)
 }
 
-func testGetDrivesCount(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
+func testGetRedundancyCount(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
 	// Reset global storage class flags
 	resetGlobalStorageEnvs()
 	xl := obj.(*xlObjects)
@@ -183,7 +183,7 @@ func testGetDrivesCount(obj ObjectLayer, instanceType string, dirs []string, t T
 		if tt.name == 5 {
 			globalStandardStorageClass.Parity = 6
 		}
-		data, parity := getDrivesCount(tt.sc, tt.disks)
+		data, parity := getRedundancyCount(tt.sc, len(tt.disks))
 		if data != tt.expectedData {
 			t.Errorf("Test %d, Expected data disks %d, got %d", tt.name, tt.expectedData, data)
 			return
@@ -350,6 +350,28 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		if tt.expectedWriteQuorum != actualWriteQuorum {
 			t.Errorf("Test %d, Expected Write Quorum %d, got %d", tt.name, tt.expectedWriteQuorum, actualWriteQuorum)
 			return
+		}
+	}
+}
+
+// Test isValidStorageClassMeta method with valid and invalid inputs
+func TestIsValidStorageClassMeta(t *testing.T) {
+	tests := []struct {
+		name int
+		sc   string
+		want bool
+	}{
+		{1, "STANDARD", true},
+		{2, "REDUCED_REDUNDANCY", true},
+		{3, "", false},
+		{4, "INVALID", false},
+		{5, "123", false},
+		{6, "MINIO_STORAGE_CLASS_RRS", false},
+		{7, "MINIO_STORAGE_CLASS_STANDARD", false},
+	}
+	for _, tt := range tests {
+		if got := isValidStorageClassMeta(tt.sc); got != tt.want {
+			t.Errorf("Test %d, Expected Storage Class to be %t, got %t", tt.name, tt.want, got)
 		}
 	}
 }

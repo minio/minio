@@ -186,6 +186,14 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	// Validate storage class metadata if present
+	if _, ok := r.Header[amzStorageClassCanonical]; ok {
+		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
+			writeErrorResponse(w, ErrInvalidStorageClass, r.URL)
+			return
+		}
+	}
+
 	// TODO: we should validate the object name here
 
 	// Get Content-Md5 sent by client and verify if valid
