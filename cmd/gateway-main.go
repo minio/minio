@@ -150,6 +150,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL certificate file")
 
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
+
 	initNSLock(false) // Enable local namespace lock.
 
 	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
