@@ -119,27 +119,27 @@ func handleCommonEnvVars() {
 		var err error
 
 		// Check for environment variables and parse into storageClass struct
-		if ssc := os.Getenv(standardStorageClass); ssc != "" {
+		if ssc := os.Getenv(standardStorageClassEnv); ssc != "" {
 			globalStandardStorageClass, err = parseStorageClass(ssc)
-			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClass)
+			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
 		}
 
-		if rrsc := os.Getenv(reducedRedundancyStorageClass); rrsc != "" {
+		if rrsc := os.Getenv(reducedRedundancyStorageClassEnv); rrsc != "" {
 			globalRRStorageClass, err = parseStorageClass(rrsc)
-			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClass)
+			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
 		}
 
 		// Validation is done after parsing both the storage classes. This is needed because we need one
 		// storage class value to deduce the correct value of the other storage class.
 		if globalRRStorageClass.Scheme != "" {
 			err := validateRRSParity(globalRRStorageClass.Parity, globalStandardStorageClass.Parity)
-			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClass)
+			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
 			globalIsStorageClass = true
 		}
 
 		if globalStandardStorageClass.Scheme != "" {
 			err := validateSSParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClass)
+			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
 			globalIsStorageClass = true
 		}
 	}

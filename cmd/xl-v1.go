@@ -246,10 +246,10 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
 
-	_, scParity := getDrivesCount(standardStorageClass, disks)
+	_, scParity := getRedundancyCount(standardStorageClass, len(disks))
 	storageInfo.Backend.standardSCParity = scParity
 
-	_, rrSCparity := getDrivesCount(reducedRedundancyStorageClass, disks)
+	_, rrSCparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
 	storageInfo.Backend.rrSCParity = rrSCparity
 
 	return storageInfo

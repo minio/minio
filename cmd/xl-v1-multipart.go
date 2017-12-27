@@ -501,7 +501,7 @@ func (xl xlObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMark
 // operation(s) on the object.
 func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (string, error) {
 
-	dataBlocks, parityBlocks := getDrivesCount(meta[amzStorageClass], xl.storageDisks)
+	dataBlocks, parityBlocks := getRedundancyCount(meta[amzStorageClass], len(xl.storageDisks))
 
 	xlMeta := newXLMetaV1(object, dataBlocks, parityBlocks)
 

@@ -508,7 +508,7 @@ func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, m
 		}
 	}
 	// Get parity and data drive count based on storage class metadata
-	dataDrives, parityDrives := getDrivesCount(metadata[amzStorageClass], xl.storageDisks)
+	dataDrives, parityDrives := getRedundancyCount(metadata[amzStorageClass], len(xl.storageDisks))
 
 	// we now know the number of blocks this object needs for data and parity.
 	// writeQuorum is dataBlocks + 1

@@ -164,6 +164,10 @@ const (
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
 	ErrInvalidRequest
+
+	// Minio storage class error codes
+	ErrInvalidStorageClass
+
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -192,6 +196,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidMetadataDirective: {
 		Code:           "InvalidArgument",
 		Description:    "Unknown metadata directive.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidStorageClass: {
+		Code:           "InvalidStorageClass",
+		Description:    "Invalid storage class.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidRequestBody: {
