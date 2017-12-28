@@ -1,5 +1,23 @@
 ## Unreleased
 
+## 0.5.2 (December 28)
+
+- Standardise the API SSH Signers input casing and naming
+
+## 0.5.1 (December 28)
+
+- Include leading '/' when working with SSH Agent signers
+
+## 0.5.0 (December 28)
+
+- Add support for RBAC in triton-go [#82]
+This is a breaking change. No longer do we pass individual parameters to the SSH Signer funcs, but we now pass an input Struct. This will guard from from additional parameter changes in the future. 
+We also now add support for using `SDC_*` and `TRITON_*` env vars when working with the Default agent signer
+
+## 0.4.2 (December 22)
+
+- Fixing a panic when the user loses network connectivity when making a GET request to instance [#81]
+
 ## 0.4.1 (December 15)
 
 - Clean up the handling of directory sanitization. Use abs paths everywhere [#79]
