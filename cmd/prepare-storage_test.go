@@ -16,7 +16,10 @@
 
 package cmd
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func (action InitActions) String() string {
 	switch action {
@@ -38,6 +41,42 @@ func (action InitActions) String() string {
 		return "Abort"
 	default:
 		return "Unknown"
+	}
+}
+
+func TestReduceInitXLErrs(t *testing.T) {
+	_, fsDirs, err := prepareXL(4)
+	if err != nil {
+		t.Fatalf("Unable to initialize 'XL' object layer.")
+	}
+
+	// Remove all dirs.
+	for _, dir := range fsDirs {
+		defer os.RemoveAll(dir)
+	}
+
+	storageDisks, err := initStorageDisks(mustGetNewEndpointList(fsDirs...))
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	testCases := []struct {
+		sErrs       []error
+		expectedErr string
+	}{
+		{[]error{nil, nil, nil, nil}, ""},
+		{[]error{errUnformattedDisk, nil, nil, nil}, "\n[01/04] " + storageDisks[0].String() + " : unformatted disk found"},
+		{[]error{errUnformattedDisk, errUnformattedDisk, nil, nil}, "\n[01/04] " + storageDisks[0].String() + " : unformatted disk found" + "\n[02/04] " + storageDisks[1].String() + " : unformatted disk found"},
+		{[]error{errUnformattedDisk, errUnformattedDisk, errServerVersionMismatch, nil}, storageDisks[2].String() + ": Server versions do not match"},
+	}
+	for i, test := range testCases {
+		actual := reduceInitXLErrs(storageDisks, test.sErrs)
+		if test.expectedErr == "" && actual != nil {
+			t.Errorf("Test %d expected no error but received `%s`", i+1, actual.Error())
+		}
+		if test.expectedErr != "" && actual.Error() != test.expectedErr {
+			t.Errorf("Test %d expected `%s` but received `%s`", i+1, test.expectedErr, actual.Error())
+		}
 	}
 }
 
