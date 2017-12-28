@@ -310,7 +310,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 	nlripLongLived := getLongLivedLocks(l.ll.lockMap, interval)
 	l.ll.mutex.Unlock()
 
-	serverCred := serverConfig.GetCredential()
+	serverCred := globalServerConfig.GetCredential()
 	// Validate if long lived locks are indeed clean.
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.

@@ -28,6 +28,13 @@ import (
 	"github.com/minio/minio/pkg/lock"
 )
 
+const (
+	// Expiry duration after which the multipart uploads are deemed stale.
+	multipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	// Cleanup interval when the stale multipart cleanup is initiated.
+	multipartCleanupInterval = time.Hour * 24 // 24 hrs.
+)
+
 // A uploadInfo represents the s3 compatible spec.
 type uploadInfo struct {
 	UploadID  string    `json:"uploadId"`  // UploadID for the active multipart upload.
@@ -167,6 +174,10 @@ func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count
 	// Read `uploads.json`.
 	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)
 	if err != nil {
+		switch errors.Cause(err) {
+		case errFileNotFound, errFileAccessDenied:
+			return nil, true, nil
+		}
 		return nil, false, err
 	}
 	index := 0
@@ -193,4 +204,59 @@ func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count
 	}
 	end := (index == len(uploadsJSON.Uploads))
 	return uploads, end, nil
+}
+
+// List multipart uploads func defines the function signature of list multipart recursive function.
+type listMultipartUploadsFunc func(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error)
+
+// Removes multipart uploads if any older than `expiry` duration
+// on all buckets for every `cleanupInterval`, this function is
+// blocking and should be run in a go-routine.
+func cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, obj ObjectLayer, listFn listMultipartUploadsFunc, doneCh chan struct{}) {
+	ticker := time.NewTicker(cleanupInterval)
+	for {
+		select {
+		case <-doneCh:
+			// Stop the timer.
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			bucketInfos, err := obj.ListBuckets()
+			if err != nil {
+				errorIf(err, "Unable to list buckets")
+				continue
+			}
+			for _, bucketInfo := range bucketInfos {
+				cleanupStaleMultipartUpload(bucketInfo.Name, expiry, obj, listFn)
+			}
+		}
+	}
+}
+
+// Removes multipart uploads if any older than `expiry` duration in a given bucket.
+func cleanupStaleMultipartUpload(bucket string, expiry time.Duration, obj ObjectLayer, listFn listMultipartUploadsFunc) (err error) {
+	var lmi ListMultipartsInfo
+	for {
+		// List multipart uploads in a bucket 1000 at a time
+		prefix := ""
+		lmi, err = listFn(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
+		if err != nil {
+			errorIf(err, "Unable to list uploads")
+			return err
+		}
+
+		// Remove uploads (and its parts) older than expiry duration.
+		for _, upload := range lmi.Uploads {
+			if time.Since(upload.Initiated) > expiry {
+				obj.AbortMultipartUpload(bucket, upload.Object, upload.UploadID)
+			}
+		}
+
+		// No more incomplete uploads remain, break and return.
+		if !lmi.IsTruncated {
+			break
+		}
+	}
+
+	return nil
 }

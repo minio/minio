@@ -137,7 +137,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 	defer bucketLock.Unlock()
 
-	if err := objectAPI.MakeBucketWithLocation(args.BucketName, serverConfig.GetRegion()); err != nil {
+	if err := objectAPI.MakeBucketWithLocation(args.BucketName, globalServerConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 
@@ -409,12 +409,12 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	prevCred := serverConfig.SetCredential(creds)
+	prevCred := globalServerConfig.SetCredential(creds)
 
 	// Persist updated credentials.
-	if err = serverConfig.Save(); err != nil {
+	if err = globalServerConfig.Save(); err != nil {
 		// Save the current creds when failed to update.
-		serverConfig.SetCredential(prevCred)
+		globalServerConfig.SetCredential(prevCred)
 
 		errsMap[globalMinioAddr] = err
 	}
@@ -467,7 +467,7 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	reply.AccessKey = creds.AccessKey
 	reply.SecretKey = creds.SecretKey
 	reply.UIVersion = browser.UIVersion
@@ -486,7 +486,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 		return toJSONError(errAuthentication)
 	}
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 
 	token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
 	if err != nil {
@@ -925,8 +925,8 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 
 // Returns presigned url for GET method.
 func presignedGet(host, bucket, object string, expiry int64) string {
-	cred := serverConfig.GetCredential()
-	region := serverConfig.GetRegion()
+	cred := globalServerConfig.GetCredential()
+	region := globalServerConfig.GetRegion()
 
 	accessKey := cred.AccessKey
 	secretKey := cred.SecretKey

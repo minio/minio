@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +19,13 @@ package minio
 
 import (
 	"errors"
+	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio-go/pkg/s3utils"
 )
-
-// supportedGetReqParams - supported request parameters for GET presigned request.
-var supportedGetReqParams = map[string]struct{}{
-	"response-expires":             {},
-	"response-content-type":        {},
-	"response-cache-control":       {},
-	"response-content-language":    {},
-	"response-content-encoding":    {},
-	"response-content-disposition": {},
-}
 
 // presignURL - Returns a presigned URL for an input 'method'.
 // Expires maximum is 7days - ie. 604800 and minimum is 1.
@@ -42,42 +34,27 @@ func (c Client) presignURL(method string, bucketName string, objectName string, 
 	if method == "" {
 		return nil, ErrInvalidArgument("method cannot be empty.")
 	}
-	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
+	if err = s3utils.CheckValidBucketName(bucketName); err != nil {
 		return nil, err
 	}
-	if err := s3utils.CheckValidObjectName(objectName); err != nil {
-		return nil, err
-	}
-	if err := isValidExpiry(expires); err != nil {
+	if err = isValidExpiry(expires); err != nil {
 		return nil, err
 	}
 
 	// Convert expires into seconds.
 	expireSeconds := int64(expires / time.Second)
 	reqMetadata := requestMetadata{
-		presignURL: true,
-		bucketName: bucketName,
-		objectName: objectName,
-		expires:    expireSeconds,
-	}
-
-	// For "GET" we are handling additional request parameters to
-	// override its response headers.
-	if method == "GET" {
-		// Verify if input map has unsupported params, if yes exit.
-		for k := range reqParams {
-			if _, ok := supportedGetReqParams[k]; !ok {
-				return nil, ErrInvalidArgument(k + " unsupported request parameter for presigned GET.")
-			}
-		}
-		// Save the request parameters to be used in presigning for GET request.
-		reqMetadata.queryValues = reqParams
+		presignURL:  true,
+		bucketName:  bucketName,
+		objectName:  objectName,
+		expires:     expireSeconds,
+		queryValues: reqParams,
 	}
 
 	// Instantiate a new request.
 	// Since expires is set newRequest will presign the request.
-	req, err := c.newRequest(method, reqMetadata)
-	if err != nil {
+	var req *http.Request
+	if req, err = c.newRequest(method, reqMetadata); err != nil {
 		return nil, err
 	}
 	return req.URL, nil
@@ -88,6 +65,9 @@ func (c Client) presignURL(method string, bucketName string, objectName string, 
 // upto 7days or a minimum of 1sec. Additionally you can override
 // a set of response headers using the query parameters.
 func (c Client) PresignedGetObject(bucketName string, objectName string, expires time.Duration, reqParams url.Values) (u *url.URL, err error) {
+	if err = s3utils.CheckValidObjectName(objectName); err != nil {
+		return nil, err
+	}
 	return c.presignURL("GET", bucketName, objectName, expires, reqParams)
 }
 
@@ -96,6 +76,9 @@ func (c Client) PresignedGetObject(bucketName string, objectName string, expires
 // upto 7days or a minimum of 1sec. Additionally you can override
 // a set of response headers using the query parameters.
 func (c Client) PresignedHeadObject(bucketName string, objectName string, expires time.Duration, reqParams url.Values) (u *url.URL, err error) {
+	if err = s3utils.CheckValidObjectName(objectName); err != nil {
+		return nil, err
+	}
 	return c.presignURL("HEAD", bucketName, objectName, expires, reqParams)
 }
 
@@ -103,6 +86,9 @@ func (c Client) PresignedHeadObject(bucketName string, objectName string, expire
 // without credentials. URL can have a maximum expiry of upto 7days
 // or a minimum of 1sec.
 func (c Client) PresignedPutObject(bucketName string, objectName string, expires time.Duration) (u *url.URL, err error) {
+	if err = s3utils.CheckValidObjectName(objectName); err != nil {
+		return nil, err
+	}
 	return c.presignURL("PUT", bucketName, objectName, expires, nil)
 }
 

@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2017 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +60,17 @@ func (c Core) CopyObject(sourceBucket, sourceObject, destBucket, destObject stri
 	return c.copyObjectDo(context.Background(), sourceBucket, sourceObject, destBucket, destObject, metadata)
 }
 
+// CopyObjectPart - creates a part in a multipart upload by copying (a
+// part of) an existing object.
+func (c Core) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string,
+	partID int, startOffset, length int64, metadata map[string]string) (p CompletePart, err error) {
+
+	return c.copyObjectPartDo(context.Background(), srcBucket, srcObject, destBucket, destObject, uploadID,
+		partID, startOffset, length, metadata)
+}
+
 // PutObject - Upload object. Uploads using single PUT call.
-func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Sum, sha256Sum []byte, metadata map[string]string) (ObjectInfo, error) {
+func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Base64, sha256Hex string, metadata map[string]string) (ObjectInfo, error) {
 	opts := PutObjectOptions{}
 	m := make(map[string]string)
 	for k, v := range metadata {
@@ -77,7 +87,7 @@ func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Su
 		}
 	}
 	opts.UserMetadata = m
-	return c.putObjectDo(context.Background(), bucket, object, data, md5Sum, sha256Sum, size, opts)
+	return c.putObjectDo(context.Background(), bucket, object, data, md5Base64, sha256Hex, size, opts)
 }
 
 // NewMultipartUpload - Initiates new multipart upload and returns the new uploadID.
@@ -92,14 +102,14 @@ func (c Core) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, de
 }
 
 // PutObjectPart - Upload an object part.
-func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, data io.Reader, size int64, md5Sum, sha256Sum []byte) (ObjectPart, error) {
-	return c.PutObjectPartWithMetadata(bucket, object, uploadID, partID, data, size, md5Sum, sha256Sum, nil)
+func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, data io.Reader, size int64, md5Base64, sha256Hex string) (ObjectPart, error) {
+	return c.PutObjectPartWithMetadata(bucket, object, uploadID, partID, data, size, md5Base64, sha256Hex, nil)
 }
 
 // PutObjectPartWithMetadata - upload an object part with additional request metadata.
 func (c Core) PutObjectPartWithMetadata(bucket, object, uploadID string, partID int, data io.Reader,
-	size int64, md5Sum, sha256Sum []byte, metadata map[string]string) (ObjectPart, error) {
-	return c.uploadPart(context.Background(), bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size, metadata)
+	size int64, md5Base64, sha256Hex string, metadata map[string]string) (ObjectPart, error) {
+	return c.uploadPart(context.Background(), bucket, object, uploadID, data, partID, md5Base64, sha256Hex, size, metadata)
 }
 
 // ListObjectParts - List uploaded parts of an incomplete upload.x
@@ -140,5 +150,5 @@ func (c Core) GetObject(bucketName, objectName string, opts GetObjectOptions) (i
 // StatObject is a lower level API implemented to support special
 // conditions matching etag, modtime on a request.
 func (c Core) StatObject(bucketName, objectName string, opts StatObjectOptions) (ObjectInfo, error) {
-	return c.statObject(bucketName, objectName, opts)
+	return c.statObject(context.Background(), bucketName, objectName, opts)
 }

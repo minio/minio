@@ -130,7 +130,7 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	obj, disks, err := prepareXL()
+	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -339,7 +339,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	obj, disks, err := prepareXL()
+	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -364,7 +364,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	partsMetadata, errs := readAllXLMetadata(xlDisks, bucket, object)
-	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
+	readQuorum := len(xl.storageDisks) / 2
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}
 

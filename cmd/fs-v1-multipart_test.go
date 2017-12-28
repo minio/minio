@@ -26,6 +26,7 @@ import (
 	"github.com/minio/minio/pkg/errors"
 )
 
+// Tests cleanup multipart uploads for filesystem backend.
 func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
@@ -47,7 +48,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go fs.cleanupStaleMultipartUploads(20*time.Millisecond, 0, globalServiceDoneCh)
+	go cleanupStaleMultipartUploads(20*time.Millisecond, 0, obj, fs.listMultipartUploadsCleanup, globalServiceDoneCh)
 
 	// Wait for 40ms such that - we have given enough time for
 	// cleanup routine to kick in.
@@ -89,7 +90,7 @@ func TestFSCleanupMultipartUpload(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	if err = fs.cleanupStaleMultipartUpload(bucketName, 0); err != nil {
+	if err = cleanupStaleMultipartUpload(bucketName, 0, obj, fs.listMultipartUploadsCleanup); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 

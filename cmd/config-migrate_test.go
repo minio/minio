@@ -125,11 +125,16 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV18ToV19(); err != nil {
 		t.Fatal("migrate v18 to v19 should succeed when no config file is found")
 	}
-
+	if err := migrateV19ToV20(); err != nil {
+		t.Fatal("migrate v19 to v20 should succeed when no config file is found")
+	}
+	if err := migrateV20ToV21(); err != nil {
+		t.Fatal("migrate v20 to v21 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v19 is successfully done
-func TestServerConfigMigrateV2toV19(t *testing.T) {
+// Test if a config migration from v2 to v21 is successfully done
+func TestServerConfigMigrateV2toV21(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -169,17 +174,17 @@ func TestServerConfigMigrateV2toV19(t *testing.T) {
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := v20
-	if serverConfig.Version != expectedVersion {
-		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
+	expectedVersion := serverConfigVersion
+	if globalServerConfig.Version != expectedVersion {
+		t.Fatalf("Expect version "+expectedVersion+", found: %v", globalServerConfig.Version)
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	if serverConfig.Credential.AccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKey)
+	if globalServerConfig.Credential.AccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
 	}
-	if serverConfig.Credential.SecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretKey)
+	if globalServerConfig.Credential.SecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
 	}
 }
 
@@ -251,6 +256,12 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV18ToV19(); err == nil {
 		t.Fatal("migrateConfigV18ToV19() should fail with a corrupted json")
+	}
+	if err := migrateV19ToV20(); err == nil {
+		t.Fatal("migrateConfigV19ToV20() should fail with a corrupted json")
+	}
+	if err := migrateV20ToV21(); err == nil {
+		t.Fatal("migrateConfigV20ToV21() should fail with a corrupted json")
 	}
 }
 

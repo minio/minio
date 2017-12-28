@@ -72,7 +72,7 @@ func dialMQTT(mqttL mqttNotify) (mc mqttConn, e error) {
 }
 
 func newMQTTNotify(accountID string) (*logrus.Logger, error) {
-	mqttL := serverConfig.Notify.GetMQTTByID(accountID)
+	mqttL := globalServerConfig.Notify.GetMQTTByID(accountID)
 
 	//connect to MQTT Server
 	mqttC, err := dialMQTT(mqttL)

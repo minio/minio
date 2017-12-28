@@ -1,19 +1,15 @@
 {
-    "version": "16",
+    "version": "22",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
     },
     "region": "us-east-1",
     "browser": "on",
-    "logger": {
-        "console": {
-            "enable": true
-        },
-        "file": {
-            "enable": false,
-            "filename": ""
-        }
+    "domain": "",
+    "storageclass": {
+        "standard": "",
+        "rrs": ""
     },
     "notify": {
         "amqp": {
@@ -105,6 +101,17 @@
                 "user": "root",
                 "password": "password",
                 "database": "miniodb"
+            }
+        },
+        "mqtt": {
+            "1": {
+                "enable": false,
+                "broker": "tcp://localhost:1883",
+                "topic": "minio",
+                "qos": 1,
+                "clientId": "minio",
+                "username": "",
+                "password": ""
             }
         }
     }

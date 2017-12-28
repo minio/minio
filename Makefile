@@ -58,15 +58,13 @@ spelling:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@go test $(GOFLAGS) .
-	@go test $(GOFLAGS) github.com/minio/minio/cmd...
-	@go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@go test $(GOFLAGS) ./...
 	@echo "Verifying build"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 coverage: build
 	@echo "Running all coverage for minio"
-	@./buildscripts/go-coverage.sh
+	@(env bash $(PWD)/buildscripts/go-coverage.sh)
 
 # Builds minio locally.
 build:

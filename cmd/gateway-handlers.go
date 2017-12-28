@@ -61,7 +61,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
@@ -186,6 +186,14 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	// Validate storage class metadata if present
+	if _, ok := r.Header[amzStorageClassCanonical]; ok {
+		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
+			writeErrorResponse(w, ErrInvalidStorageClass, r.URL)
+			return
+		}
+	}
+
 	// TODO: we should validate the object name here
 
 	// Get Content-Md5 sent by client and verify if valid
@@ -286,7 +294,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
@@ -357,7 +365,7 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
@@ -429,7 +437,7 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -492,7 +500,7 @@ func (api gatewayAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -526,7 +534,7 @@ func (api gatewayAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -596,7 +604,7 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// PutBucket does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -643,7 +651,7 @@ func (api gatewayAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http
 	}
 
 	// DeleteBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -690,7 +698,7 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
@@ -764,7 +772,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
@@ -843,7 +851,7 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 			return
 		}
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
@@ -898,7 +906,7 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		s3Error := isReqAuthenticated(r, globalMinioDefaultRegion)
 		if s3Error == ErrInvalidRegion {
 			// Clients like boto3 send getBucketLocation() call signed with region that is configured.
-			s3Error = isReqAuthenticated(r, serverConfig.GetRegion())
+			s3Error = isReqAuthenticated(r, globalServerConfig.GetRegion())
 		}
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -927,7 +935,7 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
-	region := serverConfig.GetRegion()
+	region := globalServerConfig.GetRegion()
 	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,

@@ -52,8 +52,6 @@ func TestHealMsg(t *testing.T) {
 		{endpoints, storageDisks, errs},
 		// Test - 2 for one of the disks is nil.
 		{endpoints, nilDisks, errs},
-		// Test - 3 for one of the errs is authentication.
-		{endpoints, nilDisks, authErrs},
 	}
 
 	for i, testCase := range testCases {
@@ -64,10 +62,6 @@ func TestHealMsg(t *testing.T) {
 		msg = getStorageInitMsg("init", testCase.endPoints, testCase.storageDisks)
 		if msg == "" {
 			t.Fatalf("Test: %d Unable to get regular message.", i+1)
-		}
-		msg = getConfigErrMsg(testCase.storageDisks, testCase.serrs)
-		if msg == "" {
-			t.Fatalf("Test: %d Unable to get config error message.", i+1)
 		}
 	}
 }

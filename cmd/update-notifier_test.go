@@ -26,7 +26,7 @@ import (
 )
 
 // Tests update notifier string builder.
-func TestComputeUpdateMessage(t *testing.T) {
+func TestPrepareUpdateMessage(t *testing.T) {
 	testCases := []struct {
 		older time.Duration
 		dlURL string
@@ -71,7 +71,7 @@ func TestComputeUpdateMessage(t *testing.T) {
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 
 	for i, testCase := range testCases {
-		output := computeUpdateMessage(testCase.dlURL, testCase.older)
+		output := prepareUpdateMessage(testCase.dlURL, testCase.older)
 		line1 := fmt.Sprintf("%s %s", plainMsg, yellow(testCase.expectedSubStr))
 		line2 := fmt.Sprintf("Update: %s", cyan(testCase.dlURL))
 		// Uncomment below to see message appearance:

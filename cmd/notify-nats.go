@@ -138,7 +138,7 @@ func closeNATS(conn natsIOConn) {
 }
 
 func newNATSNotify(accountID string) (*logrus.Logger, error) {
-	natsL := serverConfig.Notify.GetNATSByID(accountID)
+	natsL := globalServerConfig.Notify.GetNATSByID(accountID)
 
 	// Connect to nats server.
 	natsC, err := dialNATS(natsL, false)

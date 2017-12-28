@@ -18,15 +18,18 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -130,10 +133,13 @@ func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
 }
 
-func contains(stringList []string, element string) bool {
-	for _, e := range stringList {
-		if e == element {
-			return true
+func contains(slice interface{}, elem interface{}) bool {
+	v := reflect.ValueOf(slice)
+	if v.Kind() == reflect.Slice {
+		for i := 0; i < v.Len(); i++ {
+			if v.Index(i).Interface() == elem {
+				return true
+			}
 		}
 	}
 	return false
@@ -212,13 +218,13 @@ func UTCNow() time.Time {
 	return time.Now().UTC()
 }
 
-// genETag - generate UUID based ETag
-func genETag() string {
-	return toS3ETag(getMD5Hash([]byte(mustGetUUID())))
+// GenETag - generate UUID based ETag
+func GenETag() string {
+	return ToS3ETag(getMD5Hash([]byte(mustGetUUID())))
 }
 
-// toS3ETag - return checksum to ETag
-func toS3ETag(etag string) string {
+// ToS3ETag - return checksum to ETag
+func ToS3ETag(etag string) string {
 	etag = canonicalizeETag(etag)
 
 	if !strings.HasSuffix(etag, "-1") {
@@ -228,4 +234,24 @@ func toS3ETag(etag string) string {
 	}
 
 	return etag
+}
+
+// NewCustomHTTPTransport returns a new http configuration
+// used while communicating with the cloud backends.
+// This sets the value for MaxIdleConns from 2 (go default) to
+// 100.
+func NewCustomHTTPTransport() http.RoundTripper {
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
+		DisableCompression:    true,
+	}
 }

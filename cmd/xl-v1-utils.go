@@ -118,7 +118,7 @@ func hashOrder(key string, cardinality int) []int {
 	nums := make([]int, cardinality)
 	keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
 
-	start := int(keyCrc%uint32(cardinality)) | 1
+	start := int(keyCrc % uint32(cardinality))
 	for i := 1; i <= cardinality; i++ {
 		nums[i-1] = 1 + ((start + i) % cardinality)
 	}

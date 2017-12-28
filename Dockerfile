@@ -5,6 +5,7 @@ MAINTAINER Minio Inc <dev@minio.io>
 ENV GOPATH /go
 ENV PATH $PATH:$GOPATH/bin
 ENV CGO_ENABLED 0
+ENV MINIO_UPDATE off
 
 WORKDIR /go/src/github.com/minio/
 

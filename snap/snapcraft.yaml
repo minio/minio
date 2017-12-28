@@ -28,4 +28,4 @@ parts:
     go-importpath: github.com/minio/minio
     after: [go]
   go:
-    source-tag: go1.8.3
+    source-tag: go1.9.2

@@ -396,7 +396,8 @@ func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []object
 	}
 	// If all errors were ignored, reduce to maximal occurrence
 	// based on the read quorum.
-	return nil, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
+	readQuorum := len(xl.storageDisks) / 2
+	return nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
 }
 
 // readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
@@ -423,7 +424,8 @@ func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMe
 	}
 	// If all errors were ignored, reduce to maximal occurrence
 	// based on the read quorum.
-	return statInfo{}, nil, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
+	readQuorum := len(xl.storageDisks) / 2
+	return statInfo{}, nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
 }
 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
@@ -513,7 +515,7 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
-func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum, readQuorum int) ([]StorageAPI, error) {
+func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum int) ([]StorageAPI, error) {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 

@@ -48,7 +48,7 @@ func makeS3Peers(endpoints EndpointList) (s3PeerList s3Peers) {
 	})
 
 	hostSet := set.CreateStringSet(localAddr)
-	cred := serverConfig.GetCredential()
+	cred := globalServerConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, s3Path)
 	for _, host := range GetRemotePeers(endpoints) {
 		if hostSet.Contains(host) {

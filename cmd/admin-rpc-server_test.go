@@ -33,7 +33,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestReInitDisks(t *testing.T) {
 	globalIsXL = true
 	adminServer := adminCmd{}
 
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestGetConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
@@ -212,7 +212,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
-	creds := serverConfig.GetCredential()
+	creds := globalServerConfig.GetCredential()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)

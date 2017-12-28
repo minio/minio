@@ -59,13 +59,13 @@ func TestNewWebHookNotify(t *testing.T) {
 		t.Fatal("Unexpected should fail")
 	}
 
-	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:80"})
+	globalServerConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:80"})
 	_, err = newWebhookNotify("10")
 	if err != nil {
 		t.Fatal("Unexpected should not fail with lookupEndpoint", err)
 	}
 
-	serverConfig.Notify.SetWebhookByID("15", webhookNotify{Enable: true, Endpoint: "http://%"})
+	globalServerConfig.Notify.SetWebhookByID("15", webhookNotify{Enable: true, Endpoint: "http://%"})
 	_, err = newWebhookNotify("15")
 	if err == nil {
 		t.Fatal("Unexpected should fail with invalid URL escape")
@@ -74,7 +74,7 @@ func TestNewWebHookNotify(t *testing.T) {
 	server := httptest.NewServer(postHandler{})
 	defer server.Close()
 
-	serverConfig.Notify.SetWebhookByID("20", webhookNotify{Enable: true, Endpoint: server.URL})
+	globalServerConfig.Notify.SetWebhookByID("20", webhookNotify{Enable: true, Endpoint: server.URL})
 	webhook, err := newWebhookNotify("20")
 	if err != nil {
 		t.Fatal("Unexpected shouldn't fail", err)
