@@ -113,13 +113,13 @@ func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 	s.StorageClass.RRS = rrsClass.Scheme + strconv.Itoa(rrsClass.Parity)
 }
 
-func (s *serverConfig) GetStorageClass() (standardStorageClass, rrsStorageClass storageClass) {
+// GetStorageClass reads storage class fields from current config, parses and validates it.
+// It returns the standard and reduced redundancy storage class struct
+func (s *serverConfig) GetStorageClass() (ssc, rrsc storageClass) {
 	s.RLock()
 	defer s.RUnlock()
 
 	var err error
-	var ssc storageClass
-	var rrsc storageClass
 
 	if s.StorageClass.Standard != "" {
 		// Parse the values read from config file into storageClass struct
@@ -136,13 +136,13 @@ func (s *serverConfig) GetStorageClass() (standardStorageClass, rrsStorageClass 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.
 	if rrsc.Scheme != "" {
-		err := validateRRSParity(rrsc.Parity, ssc.Parity)
+		err = validateRRSParity(rrsc.Parity, ssc.Parity)
 		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.RRS)
 		globalIsStorageClass = true
 	}
 
 	if ssc.Scheme != "" {
-		err := validateSSParity(ssc.Parity, rrsc.Parity)
+		err = validateSSParity(ssc.Parity, rrsc.Parity)
 		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.Standard)
 		globalIsStorageClass = true
 	}
