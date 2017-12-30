@@ -427,7 +427,7 @@ func TestParseSignV4(t *testing.T) {
 			validateCredentialfields(t, i+1, testCase.expectedAuthField.Credential, parsedAuthField.Credential)
 
 			// validating the extraction/parsing of signature field.
-			if testCase.expectedAuthField.Signature != parsedAuthField.Signature {
+			if !compareSignatureV4(testCase.expectedAuthField.Signature, parsedAuthField.Signature) {
 				t.Errorf("Test %d: Parsed Signature field mismatch: Expected \"%s\", got \"%s\"", i+1, testCase.expectedAuthField.Signature, parsedAuthField.Signature)
 			}
 
@@ -795,7 +795,7 @@ func TestParsePreSignV4(t *testing.T) {
 				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedPreSignValues.SignedHeaders, parsedPreSign.SignedHeaders)
 			}
 			// validating signature field.
-			if testCase.expectedPreSignValues.Signature != parsedPreSign.Signature {
+			if !compareSignatureV4(testCase.expectedPreSignValues.Signature, parsedPreSign.Signature) {
 				t.Errorf("Test %d: Signature field mismatch: Expected \"%s\", got \"%s\"", i+1, testCase.expectedPreSignValues.Signature, parsedPreSign.Signature)
 			}
 			// validating expiry duration.
