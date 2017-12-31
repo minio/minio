@@ -83,7 +83,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := xl.isObject
-		listDir := listDirHealFactory(isLeaf, xl.storageDisks...)
+		listDir := listDirHealFactory(isLeaf, xl.storageDisks()...)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 

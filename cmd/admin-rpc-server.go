@@ -93,40 +93,40 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 // ReInitDisk - reinitialize storage disks and object layer to use the
 // new format.
 func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
+	// if err := args.IsAuthenticated(); err != nil {
+	// 	return err
+	// }
 
-	if !globalIsXL {
-		return errUnsupportedBackend
-	}
+	// if !globalIsXL {
+	// 	return errUnsupportedBackend
+	// }
 
-	// Get the current object layer instance.
-	objLayer := newObjectLayerFn()
+	// // Get the current object layer instance.
+	// objLayer := newObjectLayerFn()
 
-	// Initialize new disks to include the newly formatted disks.
-	bootstrapDisks, err := initStorageDisks(globalEndpoints)
-	if err != nil {
-		return err
-	}
+	// // Initialize new disks to include the newly formatted disks.
+	// bootstrapDisks, err := initStorageDisks(globalEndpoints)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// Wrap into retrying disks
-	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
-		time.Millisecond, time.Millisecond*5, globalStorageHealthCheckInterval, globalStorageRetryThreshold)
+	// // Wrap into retrying disks
+	// retryingDisks := initRetryableStorageDisks(bootstrapDisks,
+	// 	time.Millisecond, time.Millisecond*5, globalStorageHealthCheckInterval, globalStorageRetryThreshold)
 
-	// Initialize new object layer with newly formatted disks.
-	newObjectAPI, err := newXLObjects(retryingDisks)
-	if err != nil {
-		return err
-	}
+	// // Initialize new object layer with newly formatted disks.
+	// newObjectAPI, err := newXLObjects(retryingDisks)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// Replace object layer with newly formatted storage.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObjectAPI
-	globalObjLayerMutex.Unlock()
+	// // Replace object layer with newly formatted storage.
+	// globalObjLayerMutex.Lock()
+	// globalObjectAPI = newObjectAPI
+	// globalObjLayerMutex.Unlock()
 
-	// Shutdown storage belonging to old object layer instance.
-	objLayer.Shutdown()
+	// // Shutdown storage belonging to old object layer instance.
+	// objLayer.Shutdown()
 
 	return nil
 }

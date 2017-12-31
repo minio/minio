@@ -110,9 +110,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var err error
 
 	if hasArgsWithEllipses(ctx.Args()...) {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSets, globalXLPerSetDiskCount, err = CreateEndpointsFromEllipses(serverAddr, ctx.Args()...)
+		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLPerSetDiskCount, err = CreateEndpointsFromEllipses(serverAddr, ctx.Args()...)
 	} else {
 		globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
+		globalXLSetCount = 1
+		globalXLPerSetDiskCount = len(globalEndpoints)
 	}
 
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
@@ -268,52 +270,14 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 		return newFSObjectLayer(endpoints[0].Path)
 	}
 
-	// Wait for formatting disks for XL backend.
-	var formattedDisksSets [][]StorageAPI
-
-	// First disk argument check if it is local.
-	for _, endpoints := range GetEndpointSets(endpoints, globalXLSets) {
-		var storageDisks []StorageAPI
-		// Initialize storage disks.
-		storageDisks, err = initStorageDisks(endpoints)
-		if err != nil {
-			return nil, err
-		}
-
-		var formattedDisks []StorageAPI
-		formattedDisks, err = waitForFormatXLDisks(endpoints[0].IsLocal, endpoints, storageDisks)
-		if err != nil {
-			return nil, err
-		}
-
-		// Cleanup objects that weren't successfully written into the namespace.
-		if err = houseKeeping(formattedDisks); err != nil {
-			return nil, err
-		}
-
-		formattedDisksSets = append(formattedDisksSets, formattedDisks)
+	format, err := waitForFormatXLDisks(endpoints[0].IsLocal, endpoints, globalXLSetCount)
+	if err != nil {
+		return nil, err
 	}
 
-	// Once all disks are formatted in XL, proceed to initialize object layer.
-	var objAPI ObjectLayer
-	if len(formattedDisksSets) == 1 {
-		// Initialize XL object layer.
-		objAPI, err = newXLObjects(formattedDisksSets[0])
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		var layers []*xlObjects
-		for _, storageDisks := range formattedDisksSets {
-			var obj ObjectLayer
-			if obj, err = newXLObjects(storageDisks); err != nil {
-				return nil, err
-			}
-			layers = append(layers, obj.(*xlObjects))
-		}
-		objAPI = newXLSets(layers)
-	}
+	objAPI := newXLSets(endpoints, format)
 
+	globalXLSets = objAPI
 	// Initialize and load bucket policies.
 	if err = initBucketPolicies(objAPI); err != nil {
 		return nil, err

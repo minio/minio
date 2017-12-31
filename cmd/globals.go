@@ -74,8 +74,10 @@ const (
 )
 
 var (
+	globalXLSets *xlSets
+
 	// Indicates the total number of erasure coded sets configured.
-	globalXLSets int
+	globalXLSetCount int
 
 	// Indicates per set disk count.
 	globalXLPerSetDiskCount int

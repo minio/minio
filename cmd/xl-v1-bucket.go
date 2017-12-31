@@ -49,10 +49,10 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	var wg = &sync.WaitGroup{}
 
 	// Initialize list of errors.
-	var dErrs = make([]error, len(xl.storageDisks))
+	var dErrs = make([]error, len(xl.storageDisks()))
 
 	// Make a volume entry on all underlying storage disks.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range xl.storageDisks() {
 		if disk == nil {
 			dErrs[index] = errors.Trace(errDiskNotFound)
 			continue
@@ -71,11 +71,11 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	writeQuorum := len(xl.storageDisks)/2 + 1
+	writeQuorum := len(xl.storageDisks())/2 + 1
 	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(err) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(xl.storageDisks, bucket)
+		undoMakeBucket(xl.storageDisks(), bucket)
 	}
 	return toObjectErr(err, bucket)
 }
@@ -84,7 +84,7 @@ func (xl xlObjects) undoDeleteBucket(bucket string) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range xl.storageDisks() {
 		if disk == nil {
 			continue
 		}
@@ -150,7 +150,7 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := len(xl.storageDisks) / 2
+	readQuorum := len(xl.storageDisks()) / 2
 	return BucketInfo{}, reduceReadQuorumErrs(bucketErrs, nil, readQuorum)
 }
 
@@ -240,10 +240,10 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}
-	var dErrs = make([]error, len(xl.storageDisks))
+	var dErrs = make([]error, len(xl.storageDisks()))
 
 	// Remove a volume entry on all underlying storage disks.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range xl.storageDisks() {
 		if disk == nil {
 			dErrs[index] = errors.Trace(errDiskNotFound)
 			continue
@@ -273,7 +273,8 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 	// Wait for all the delete vols to finish.
 	wg.Wait()
-	writeQuorum := len(xl.storageDisks)/2 + 1
+
+	writeQuorum := len(xl.storageDisks())/2 + 1
 	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(err) == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)

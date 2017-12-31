@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -43,8 +42,7 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	mutex        *sync.Mutex
-	storageDisks []StorageAPI // Collection of initialized backend disks.
+	mutex *sync.Mutex
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
@@ -54,68 +52,34 @@ type xlObjects struct {
 
 	// Variable represents bucket policies in memory.
 	bucketPolicies *bucketPolicies
+
+	storageDisks func() []StorageAPI
 }
 
 // list of all errors that can be ignored in tree walk operation in XL
 var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
 // newXLObjects - initialize new xl object layer.
-func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
-	if storageDisks == nil {
-		return nil, errInvalidArgument
-	}
-
-	// figure out readQuorum for erasure format.json
-	readQuorum := len(storageDisks) / 2
-	writeQuorum := len(storageDisks)/2 + 1
-
-	// Load saved XL format.json and validate.
-	newStorageDisks, err := loadFormatXL(storageDisks, readQuorum)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
-	}
-
+func newXLObjects(xls *xlSets, getDisks func() []StorageAPI) *xlObjects {
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
 	// Initialize xl objects.
 	xl := &xlObjects{
 		mutex:        &sync.Mutex{},
-		storageDisks: newStorageDisks,
 		listPool:     listPool,
 		nsMutex:      newNSLock(globalIsDistXL),
+		xls:          xls,
+		storageDisks: getDisks,
 	}
 
-	// Initialize meta volume, if volume already exists ignores it.
-	if err = initMetaVolume(xl.storageDisks); err != nil {
-		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
-	}
-
-	// If the number of offline servers is equal to the readQuorum
-	// (i.e. the number of online servers also equals the
-	// readQuorum), we cannot perform quick-heal (no
-	// write-quorum). However reads may still be possible, so we
-	// skip quick-heal in this case, and continue.
-	offlineCount := len(newStorageDisks) - diskCount(newStorageDisks)
-	if offlineCount == readQuorum {
-		return xl, nil
-	}
-
-	// Perform a quick heal on the buckets and bucket metadata for any discrepancies.
-	if err = quickHeal(*xl, writeQuorum, readQuorum); err != nil {
-		return nil, err
-	}
-
-	// Start background process to cleanup old multipart objects in `.minio.sys`.
-	go cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, xl, xl.listMultipartUploadsCleanup, globalServiceDoneCh)
-
-	return xl, nil
+	return xl
 }
 
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
-	for _, disk := range xl.storageDisks {
+	for _, disk := range xl.storageDisks() {
 		// This closes storage rpc client connections if any.
 		// Otherwise this is a no-op.
 		if disk == nil {
@@ -273,6 +237,6 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
-	storageInfo := getStorageInfo(xl.storageDisks)
+	storageInfo := getStorageInfo(xl.storageDisks())
 	return storageInfo
 }

@@ -17,9 +17,12 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
@@ -32,16 +35,126 @@ import (
 type xlSets struct {
 	sets []*xlObjects
 
+	format *formatXLV2
+
+	xlDisksMu sync.Mutex
+	xlDisks   [][]StorageAPI
+	endPoints []Endpoint
+
 	// Pack level listObjects pool management.
 	listPool *treeWalkPool
 }
 
-// Initialize new set of erasure coded sets.
-func newXLSets(sets []*xlObjects) ObjectLayer {
-	return &xlSets{
-		sets:     sets,
-		listPool: newTreeWalkPool(globalLookupTimeout),
+func (s *xlSets) RemoveStaleDisks() {
+	if s == nil {
+		return
 	}
+	s.xlDisksMu.Lock()
+	defer s.xlDisksMu.Unlock()
+
+	for i := 0; i < len(s.xlDisks); i++ {
+		for j := 0; j < len(s.xlDisks[i]); j++ {
+			if s.xlDisks[i][j] == nil {
+				continue
+			}
+			if !isNetworkStorageConnected(s.xlDisks[i][j]) {
+				s.xlDisks[i][j] = nil
+			}
+		}
+	}
+}
+
+func (s *xlSets) isConnected(endpoint Endpoint) bool {
+	s.xlDisksMu.Lock()
+	defer s.xlDisksMu.Unlock()
+
+	endPointPath := endpoint.String()
+	if endpoint.IsLocal {
+		endPointPath = endpoint.Path
+	}
+	for i := 0; i < len(s.xlDisks); i++ {
+		for j := 0; j < len(s.xlDisks[i]); j++ {
+			if s.xlDisks[i][j] == nil {
+				continue
+			}
+			if s.xlDisks[i][j].String() == endPointPath {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *xlSets) findIndex(diskID string) (int, int, error) {
+	for i := 0; i < len(s.format.XL.Sets); i++ {
+		for j := 0; j < len(s.format.XL.Sets[i]); j++ {
+			if s.format.XL.Sets[i][j] == diskID {
+				return i, j, nil
+			}
+		}
+	}
+	return 0, 0, fmt.Errorf("diskID: %s not found", diskID)
+}
+
+func (s *xlSets) Connect() {
+	for {
+		s.RemoveStaleDisks()
+		for _, endpoint := range s.endPoints {
+			if s.isConnected(endpoint) {
+				continue
+			}
+			disk, err := newStorageAPI(endpoint)
+			if err != nil {
+				PrintEndpointError(endpoint, err)
+				continue
+			}
+			format, err := loadFormat(disk)
+			if err != nil {
+				PrintEndpointError(endpoint, err)
+				continue
+			}
+			if err = formatXLV2Check(s.format, format); err != nil {
+				PrintEndpointError(endpoint, err)
+				continue
+			}
+			i, j, err := s.findIndex(format.XL.This)
+			if err != nil {
+				PrintEndpointError(endpoint, err)
+				continue
+			}
+			s.xlDisksMu.Lock()
+			s.xlDisks[i][j] = disk
+			s.xlDisksMu.Unlock()
+		}
+		time.Sleep(time.Second * 10)
+	}
+}
+
+func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
+	return func() []StorageAPI {
+		s.xlDisksMu.Lock()
+		defer s.xlDisksMu.Unlock()
+		retval := make([]StorageAPI, globalXLPerSetDiskCount)
+		copy(retval, s.xlDisks[setIndex])
+		return retval
+	}
+}
+
+// Initialize new set of erasure coded sets.
+func newXLSets(endPoints []Endpoint, format *formatXLV2) *xlSets {
+	retval := &xlSets{
+		sets:      make([]*xlObjects, globalXLSetCount),
+		xlDisks:   make([][]StorageAPI, globalXLSetCount),
+		endPoints: endPoints,
+		format:    format,
+		listPool:  newTreeWalkPool(globalLookupTimeout),
+	}
+	for i := 0; i < len(format.XL.Sets); i++ {
+		retval.xlDisks[i] = make([]StorageAPI, globalXLPerSetDiskCount)
+		retval.sets[i] = newXLObjects(retval, retval.GetDisks(i))
+	}
+	go retval.Connect()
+	return retval
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
