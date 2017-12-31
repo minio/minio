@@ -347,7 +347,7 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
-	objInfo.UserDefined = cleanMetaETag(xlMetaMap)
+	objInfo.UserDefined = cleanMetadata(xlMetaMap)
 
 	// Success.
 	return objInfo, nil

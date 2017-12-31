@@ -187,14 +187,26 @@ func getCompleteMultipartMD5(parts []CompletePart) (string, error) {
 	return s3MD5, nil
 }
 
-// Clean meta etag keys 'md5Sum', 'etag'.
-func cleanMetaETag(metadata map[string]string) map[string]string {
-	return cleanMetadata(metadata, "md5Sum", "etag")
+// Clean unwanted fields from metadata
+func cleanMetadata(metadata map[string]string) map[string]string {
+	// Remove STANDARD StorageClass
+	metadata = removeStandardStorageClass(metadata)
+	// Clean meta etag keys 'md5Sum', 'etag'.
+	return cleanMetadataKeys(metadata, "md5Sum", "etag")
 }
 
-// Clean metadata takes keys to be filtered
-// and returns a new map with the keys filtered.
-func cleanMetadata(metadata map[string]string, keyNames ...string) map[string]string {
+// Filter X-Amz-Storage-Class field only if it is set to STANDARD.
+// This is done since AWS S3 doesn't return STANDARD Storage class as response header.
+func removeStandardStorageClass(metadata map[string]string) map[string]string {
+	if metadata[amzStorageClass] == standardStorageClass {
+		delete(metadata, amzStorageClass)
+	}
+	return metadata
+}
+
+// cleanMetadataKeys takes keyNames to be filtered
+// and returns a new map with all the entries with keyNames removed.
+func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
 	var newMeta = make(map[string]string)
 	for k, v := range metadata {
 		if contains(keyNames, k) {
