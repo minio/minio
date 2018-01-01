@@ -87,6 +87,9 @@ export default class Web {
   MakeBucket(args) {
     return this.makeCall('MakeBucket', args)
   }
+  DeleteBucket(args) {
+    return this.makeCall('DeleteBucket', args)
+  }
   ListObjects(args) {
     return this.makeCall('ListObjects', args)
   }

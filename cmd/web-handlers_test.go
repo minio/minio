@@ -305,6 +305,107 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	}
 }
 
+// Wrapper for calling DeleteBucket handler
+func TestWebHandlerDeleteBucket(t *testing.T) {
+	ExecObjectLayerTest(t, testDeleteBucketWebHandler)
+}
+
+// testDeleteBucketWebHandler - Test DeleteBucket web handler
+func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	apiRouter := initTestWebRPCEndPoint(obj)
+
+	credentials := globalServerConfig.GetCredential()
+	token, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
+	if err != nil {
+		t.Fatalf("could not get RPC token, %s", err.Error())
+	}
+
+	bucketName := getRandomBucketName()
+	err = obj.MakeBucketWithLocation(bucketName, "")
+	if err != nil {
+		t.Fatalf("failed to create bucket: %s (%s)", err.Error(), instanceType)
+	}
+
+	testCases := []struct {
+		bucketName string
+		// Whether or not to put an object into the bucket.
+		initWithObject bool
+		token          string
+		// Expected error (error must only contain this string to pass test)
+		// Empty string = no error
+		expect string
+	}{
+		{"", false, token, "Bucket Name  is invalid"},
+		{".", false, "auth", "Authentication failed"},
+		{".", false, token, "Bucket Name . is invalid"},
+		{"ab", false, token, "Bucket Name ab is invalid"},
+		{"minio", false, "false token", "Authentication failed"},
+		{"minio", false, token, "specified bucket minio does not exist"},
+		{bucketName, false, token, ""},
+		{bucketName, true, token, "Bucket not empty"},
+		{bucketName, false, "", "Authentication failed"},
+	}
+
+	for _, test := range testCases {
+		if test.initWithObject {
+			data := bytes.NewBufferString("hello")
+			_, err = obj.PutObject(test.bucketName, "object", mustGetHashReader(t, data, int64(data.Len()), "", ""), nil)
+			// _, err = obj.PutObject(test.bucketName, "object", int64(data.Len()), data, nil, "")
+			if err != nil {
+				t.Fatalf("could not put object to %s, %s", test.bucketName, err.Error())
+			}
+		}
+
+		rec := httptest.NewRecorder()
+
+		makeBucketRequest := MakeBucketArgs{BucketName: test.bucketName}
+		makeBucketReply := &WebGenericRep{}
+
+		req, err := newTestWebRPCRequest("Web.DeleteBucket", test.token, makeBucketRequest)
+		if err != nil {
+			t.Errorf("failed to create HTTP request: <ERROR> %v", err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected the response status to be `%d`, but instead found `%d`", http.StatusOK, rec.Code)
+		}
+		err = getTestWebRPCResponse(rec, &makeBucketReply)
+
+		if test.expect != "" {
+			if err == nil {
+				// If we expected an error, but didn't get one.
+				t.Errorf("expected `..%s..` but got nil error", test.expect)
+			} else if !strings.Contains(err.Error(), test.expect) {
+				// If we got an error that wasn't what we expected.
+				t.Errorf("expected `..%s..` but got `%s`", test.expect, err.Error())
+			}
+		} else if test.expect == "" && err != nil {
+			t.Errorf("expected test success, but got `%s`", err.Error())
+		}
+
+		// If we created the bucket with an object, now delete the object to cleanup.
+		if test.initWithObject {
+			err = obj.DeleteObject(test.bucketName, "object")
+			if err != nil {
+				t.Fatalf("could not delete object, %s", err.Error())
+			}
+		}
+
+		// If it did not succeed in deleting the bucket, don't try and recreate it.
+		// Or, it'll fail if there was an object.
+		if err != nil || test.initWithObject {
+			continue
+		}
+
+		err = obj.MakeBucketWithLocation(bucketName, "")
+		if err != nil {
+			// failed to create new bucket, abort.
+			t.Fatalf("failed to create new bucket (%s): %s", instanceType, err.Error())
+		}
+	}
+}
+
 // Wrapper for calling ListBuckets Web Handler
 func TestWebHandlerListBuckets(t *testing.T) {
 	ExecObjectLayerTest(t, testListBucketsWebHandler)
