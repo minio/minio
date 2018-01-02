@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,8 @@ import (
 	"github.com/minio/minio/pkg/errors"
 )
 
-var configJSON = []byte(`{
+var (
+	configJSON = []byte(`{
 	"version": "13",
 	"credential": {
 		"accessKey": "minio",
@@ -131,6 +133,7 @@ var configJSON = []byte(`{
 		}
 	}
 }`)
+)
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
 // admin-handler unit tests.
@@ -1257,7 +1260,7 @@ func TestSetConfigHandler(t *testing.T) {
 	req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(configJSON)),
 		bytes.NewReader(configJSON))
 	if err != nil {
-		t.Fatalf("Failed to construct get-config object request - %v", err)
+		t.Fatalf("Failed to construct set-config object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1274,6 +1277,44 @@ func TestSetConfigHandler(t *testing.T) {
 
 	if !result.Status {
 		t.Error("Expected set-config to succeed, but failed")
+	}
+
+	// Check that a very large config file returns an error.
+	{
+		// Make a large enough config string
+		invalidCfg := []byte(strings.Repeat("A", maxConfigJSONSize+1))
+		req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(invalidCfg)),
+			bytes.NewReader(invalidCfg))
+		if err != nil {
+			t.Fatalf("Failed to construct set-config object request - %v", err)
+		}
+
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		respBody := string(rec.Body.Bytes())
+		if rec.Code != http.StatusBadRequest ||
+			!strings.Contains(respBody, "Configuration data provided exceeds the allowed maximum of") {
+			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
+		}
+	}
+
+	// Check that a config with duplicate keys in an object return
+	// error.
+	{
+		invalidCfg := append(configJSON[:len(configJSON)-1], []byte(`, "version": "15"}`)...)
+		req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(invalidCfg)),
+			bytes.NewReader(invalidCfg))
+		if err != nil {
+			t.Fatalf("Failed to construct set-config object request - %v", err)
+		}
+
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		respBody := string(rec.Body.Bytes())
+		if rec.Code != http.StatusBadRequest ||
+			!strings.Contains(respBody, "JSON configuration provided has objects with duplicate keys") {
+			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
+		}
 	}
 }
 

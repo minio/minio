@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -35,6 +36,8 @@ import (
 const (
 	minioAdminOpHeader   = "X-Minio-Operation"
 	minioConfigTmpFormat = "config-%s.json"
+
+	maxConfigJSONSize = 256 * 1024 // 256KiB
 )
 
 // Type-safe query params.
@@ -978,22 +981,39 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	}
 
 	// Read configuration bytes from request body.
-	configBytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
+	configBuf := make([]byte, maxConfigJSONSize+1)
+	n, err := io.ReadFull(r.Body, configBuf)
+	if err == nil {
+		// More than maxConfigSize bytes were available
+		writeErrorResponse(w, ErrAdminConfigTooLarge, r.URL)
+		return
+	}
+	if err != io.ErrUnexpectedEOF {
 		errorIf(err, "Failed to read config from request body.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	configBytes := configBuf[:n]
+
+	// Validate JSON provided in the request body: check the
+	// client has not sent JSON objects with duplicate keys.
+	if err = checkDupJSONKeys(string(configBytes)); err != nil {
+		errorIf(err, "config contains duplicate JSON entries.")
+		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
+		return
+	}
+
 	var config serverConfig
 	err = json.Unmarshal(configBytes, &config)
-
 	if err != nil {
-		errorIf(err, "Failed to unmarshal config from request body.")
+		errorIf(err, "Failed to unmarshal JSON configuration", err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	// If credentials for the server are provided via environment,
+	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		creds := globalServerConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||
