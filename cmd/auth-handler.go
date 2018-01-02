@@ -23,11 +23,6 @@ import (
 	"strings"
 )
 
-// Verify if the request http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD"
-func isRequestUnsignedPayload(r *http.Request) bool {
-	return r.Header.Get("x-amz-content-sha256") == unsignedPayload
-}
-
 // Verify if request has JWT.
 func isRequestJWT(r *http.Request) bool {
 	return strings.HasPrefix(r.Header.Get("Authorization"), jwtAlgorithm)

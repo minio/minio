@@ -32,38 +32,53 @@ import (
 // client did not calculate sha256 of the payload.
 const unsignedPayload = "UNSIGNED-PAYLOAD"
 
-// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
-// client did not calculate sha256 of the payload. Hence we skip calculating sha256.
-// We also skip calculating sha256 for presigned requests without "x-amz-content-sha256"
-// query header.
+// skipContentSha256Cksum returns true if caller needs to skip
+// payload checksum, false if not.
 func skipContentSha256Cksum(r *http.Request) bool {
-	queryContentSha256 := r.URL.Query().Get("X-Amz-Content-Sha256")
-	isRequestPresignedUnsignedPayload := func(r *http.Request) bool {
-		if isRequestPresignedSignatureV4(r) {
-			return queryContentSha256 == "" || queryContentSha256 == unsignedPayload
-		}
-		return false
+	var (
+		v  []string
+		ok bool
+	)
+
+	if isRequestPresignedSignatureV4(r) {
+		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+	} else {
+		v, ok = r.Header["X-Amz-Content-Sha256"]
 	}
-	return isRequestUnsignedPayload(r) || isRequestPresignedUnsignedPayload(r)
+
+	// If x-amz-content-sha256 is set and the value is not
+	// 'UNSIGNED-PAYLOAD' we should validate the content sha256.
+	return !(ok && v[0] != unsignedPayload)
 }
 
 // Returns SHA256 for calculating canonical-request.
 func getContentSha256Cksum(r *http.Request) string {
+	var (
+		defaultSha256Cksum string
+		v                  []string
+		ok                 bool
+	)
+
 	// For a presigned request we look at the query param for sha256.
 	if isRequestPresignedSignatureV4(r) {
-		presignedCkSum := r.URL.Query().Get("X-Amz-Content-Sha256")
-		if presignedCkSum == "" {
-			// If not set presigned is defaulted to UNSIGNED-PAYLOAD.
-			return unsignedPayload
-		}
-		return presignedCkSum
+		// X-Amz-Content-Sha256, if not set in presigned requests, checksum
+		// will default to 'UNSIGNED-PAYLOAD'.
+		defaultSha256Cksum = unsignedPayload
+		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+	} else {
+		// X-Amz-Content-Sha256, if not set in signed requests, checksum
+		// will default to sha256([]byte("")).
+		defaultSha256Cksum = emptySHA256
+		v, ok = r.Header["X-Amz-Content-Sha256"]
 	}
-	contentCkSum := r.Header.Get("X-Amz-Content-Sha256")
-	if contentCkSum == "" {
-		// If not set content checksum is defaulted to sha256([]byte("")).
-		contentCkSum = emptySHA256
+
+	// We found 'X-Amz-Content-Sha256' return the captured value.
+	if ok {
+		return v[0]
 	}
-	return contentCkSum
+
+	// We couldn't find 'X-Amz-Content-Sha256'.
+	return defaultSha256Cksum
 }
 
 // isValidRegion - verify if incoming region value is valid with configured Region.

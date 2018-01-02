@@ -585,6 +585,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
+
 	case authTypePresigned, authTypeSigned:
 		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
