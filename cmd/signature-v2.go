@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -71,7 +72,7 @@ func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	}
 	policy := formValues.Get("Policy")
 	signature := formValues.Get("Signature")
-	if signature != calculateSignatureV2(policy, cred.SecretKey) {
+	if !compareSignatureV2(signature, calculateSignatureV2(policy, cred.SecretKey)) {
 		return ErrSignatureDoesNotMatch
 	}
 	return ErrNone
@@ -124,6 +125,9 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// Extract the necessary values from presigned query, construct a list of new filtered queries.
 	for _, query := range unescapedQueries {
 		keyval := strings.SplitN(query, "=", 2)
+		if len(keyval) != 2 {
+			return ErrInvalidQueryParams
+		}
 		switch keyval[0] {
 		case "AWSAccessKeyId":
 			accessKey = keyval[1]
@@ -163,7 +167,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	}
 
 	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
-	if gotSignature != expectedSignature {
+	if !compareSignatureV2(gotSignature, expectedSignature) {
 		return ErrSignatureDoesNotMatch
 	}
 
@@ -247,11 +251,15 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return ErrInvalidRequest
 	}
 
-	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)
-	if v2Auth != expectedAuth {
+	prefix := fmt.Sprintf("%s %s:", signV2Algorithm, globalServerConfig.GetCredential().AccessKey)
+	if !strings.HasPrefix(v2Auth, prefix) {
 		return ErrSignatureDoesNotMatch
 	}
-
+	v2Auth = v2Auth[len(prefix):]
+	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)
+	if !compareSignatureV2(v2Auth, expectedAuth) {
+		return ErrSignatureDoesNotMatch
+	}
 	return ErrNone
 }
 
@@ -268,12 +276,30 @@ func preSignatureV2(method string, encodedResource string, encodedQuery string, 
 	return calculateSignatureV2(stringToSign, cred.SecretKey)
 }
 
-// Return signature-v2 authrization header.
+// Return the signature v2 of a given request.
 func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	cred := globalServerConfig.GetCredential()
 	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, "")
 	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
-	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKey, signature)
+	return signature
+}
+
+// compareSignatureV2 returns true if and only if both signatures
+// are equal. The signatures are expected to be base64 encoded strings
+// according to the AWS S3 signature V2 spec.
+func compareSignatureV2(sig1, sig2 string) bool {
+	// Decode signature string to binary byte-sequence representation is required
+	// as Base64 encoding of a value is not unique:
+	// For example "aGVsbG8=" and "aGVsbG8=\r" will result in the same byte slice.
+	signature1, err := base64.StdEncoding.DecodeString(sig1)
+	if err != nil {
+		return false
+	}
+	signature2, err := base64.StdEncoding.DecodeString(sig2)
+	if err != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare(signature1, signature2) == 1
 }
 
 // Return canonical headers.
