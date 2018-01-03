@@ -19,8 +19,35 @@ TEXT ·galMulSSSE3Xor(SB), 7, $0
 	MOVQ   out+72(FP), DX    // DX: &out
 	PSHUFB X5, X8            // X8: lomask (unpacked)
 	SHRQ   $4, R9            // len(in) / 16
+	MOVQ   SI, AX
+	MOVQ   DX, BX
+	ANDQ   $15, AX
+	ANDQ   $15, BX
 	CMPQ   R9, $0
 	JEQ    done_xor
+	ORQ    AX, BX
+	CMPQ   BX, $0
+	JNZ    loopback_xor
+
+loopback_xor_aligned:
+	MOVOA  (SI), X0             // in[x]
+	MOVOA  (DX), X4             // out[x]
+	MOVOA  X0, X1               // in[x]
+	MOVOA  X6, X2               // low copy
+	MOVOA  X7, X3               // high copy
+	PSRLQ  $4, X1               // X1: high input
+	PAND   X8, X0               // X0: low input
+	PAND   X8, X1               // X0: high input
+	PSHUFB X0, X2               // X2: mul low part
+	PSHUFB X1, X3               // X3: mul high part
+	PXOR   X2, X3               // X3: Result
+	PXOR   X4, X3               // X3: Result xor existing out
+	MOVOA  X3, (DX)             // Store
+	ADDQ   $16, SI              // in+=16
+	ADDQ   $16, DX              // out+=16
+	SUBQ   $1, R9
+	JNZ    loopback_xor_aligned
+	JMP    done_xor
 
 loopback_xor:
 	MOVOU  (SI), X0     // in[x]
@@ -57,15 +84,40 @@ TEXT ·galMulSSSE3(SB), 7, $0
 	MOVQ   in_len+56(FP), R9 // R9: len(in)
 	MOVQ   out+72(FP), DX    // DX: &out
 	PSHUFB X5, X8            // X8: lomask (unpacked)
+	MOVQ   SI, AX
+	MOVQ   DX, BX
 	SHRQ   $4, R9            // len(in) / 16
+	ANDQ   $15, AX
+	ANDQ   $15, BX
 	CMPQ   R9, $0
 	JEQ    done
+	ORQ    AX, BX
+	CMPQ   BX, $0
+	JNZ    loopback
+
+loopback_aligned:
+	MOVOA  (SI), X0         // in[x]
+	MOVOA  X0, X1           // in[x]
+	MOVOA  X6, X2           // low copy
+	MOVOA  X7, X3           // high copy
+	PSRLQ  $4, X1           // X1: high input
+	PAND   X8, X0           // X0: low input
+	PAND   X8, X1           // X0: high input
+	PSHUFB X0, X2           // X2: mul low part
+	PSHUFB X1, X3           // X3: mul high part
+	PXOR   X2, X3           // X3: Result
+	MOVOA  X3, (DX)         // Store
+	ADDQ   $16, SI          // in+=16
+	ADDQ   $16, DX          // out+=16
+	SUBQ   $1, R9
+	JNZ    loopback_aligned
+	JMP    done
 
 loopback:
 	MOVOU  (SI), X0 // in[x]
 	MOVOU  X0, X1   // in[x]
-	MOVOU  X6, X2   // low copy
-	MOVOU  X7, X3   // high copy
+	MOVOA  X6, X2   // low copy
+	MOVOA  X7, X3   // high copy
 	PSRLQ  $4, X1   // X1: high input
 	PAND   X8, X0   // X0: low input
 	PAND   X8, X1   // X0: high input

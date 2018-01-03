@@ -447,7 +447,7 @@ func healObject(storageDisks []StorageAPI, bucket, object string, quorum int) (i
 	// part to .minio/tmp/uuid/ which needs to be renamed later to
 	// the final location.
 	storage, err := NewErasureStorage(latestDisks,
-		latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks)
+		latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
 	if err != nil {
 		return 0, 0, toObjectErr(err, bucket, object)
 	}

@@ -86,7 +86,7 @@ func TestErasureReadFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.onDisks-test.dataBlocks)
+		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -174,7 +174,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 	defer setup.Remove()
 
-	storage, err := NewErasureStorage(setup.disks, dataBlocks, parityBlocks)
+	storage, err := NewErasureStorage(setup.disks, dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Fatalf("failed to create ErasureStorage: %v", err)
 	}
@@ -231,7 +231,7 @@ func benchmarkErasureRead(data, parity, dataDown, parityDown int, size int64, b 
 		b.Fatalf("failed to create test setup: %v", err)
 	}
 	defer setup.Remove()
-	storage, err := NewErasureStorage(setup.disks, data, parity)
+	storage, err := NewErasureStorage(setup.disks, data, parity, blockSizeV1)
 	if err != nil {
 		b.Fatalf("failed to create ErasureStorage: %v", err)
 	}

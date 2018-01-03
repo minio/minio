@@ -74,7 +74,7 @@ func TestErasureHealFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
 		}
-		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.disks-test.dataBlocks)
+		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)

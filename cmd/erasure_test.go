@@ -52,7 +52,7 @@ func TestErasureDecode(t *testing.T) {
 		copy(buffer, data)
 
 		disks := make([]StorageAPI, test.dataBlocks+test.parityBlocks)
-		storage, err := NewErasureStorage(disks, test.dataBlocks, test.parityBlocks)
+		storage, err := NewErasureStorage(disks, test.dataBlocks, test.parityBlocks, blockSizeV1)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create erasure storage: %v", i, err)
 		}
