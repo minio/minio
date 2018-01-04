@@ -23,11 +23,11 @@ import (
 	"fmt"
 	"hash"
 	"path"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/minio/highwayhash"
 	"github.com/minio/minio/pkg/errors"
 	sha256 "github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
@@ -36,20 +36,26 @@ import (
 const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 
 // DefaultBitrotAlgorithm is the default algorithm used for bitrot protection.
-var DefaultBitrotAlgorithm = BLAKE2b512
+var DefaultBitrotAlgorithm = HighwayHash256
 
 func init() {
+	hh256Key, err := hex.DecodeString(magicHighwayHash256Key)
+	if err != nil || len(hh256Key) != highwayhash.Size {
+		panic("Failed to decode fixed magic HighwayHash256 key: Please report this bug at https://github.com/minio/minio/issues")
+	}
+
 	newBLAKE2b := func() hash.Hash {
 		b2, _ := blake2b.New512(nil) // New512 never returns an error if the key is nil
 		return b2
 	}
+	newHighwayHash256 := func() hash.Hash {
+		hh, _ := highwayhash.New(hh256Key) // New will never return error since key is 256 bit
+		return hh
+	}
+
 	crypto.RegisterHash(crypto.Hash(SHA256), sha256.New)
 	crypto.RegisterHash(crypto.Hash(BLAKE2b512), newBLAKE2b)
-	crypto.RegisterHash(crypto.Hash(HighwayHash256), nil) // TODO(aead): currently not supported, waiting for google to finish algorithm spec.
-
-	if runtime.GOARCH == "arm64" { // use SHA256 hardware implementation of arm64
-		DefaultBitrotAlgorithm = SHA256
-	}
+	crypto.RegisterHash(crypto.Hash(HighwayHash256), newHighwayHash256)
 }
 
 // BitrotAlgorithm specifies a algorithm used for bitrot protection.
@@ -60,10 +66,11 @@ const (
 	SHA256 = BitrotAlgorithm(crypto.SHA256)
 
 	// HighwayHash256 represents the HighwayHash-256 hash function
-	HighwayHash256 = BitrotAlgorithm(crypto.SHA3_256) // we must define that HighwayHash-256 is SHA3-256 because there is no HighwayHash constant in golang/crypto yet.
+	HighwayHash256         = BitrotAlgorithm(crypto.SHA3_256)                                   // we must define that HighwayHash-256 is SHA3-256 because there is no HighwayHash constant in golang/crypto yet.
+	magicHighwayHash256Key = "4be734fa8e238acd263e83e6bb968552040f935da39f441497e09d1322de36a0" // magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
 
 	// BLAKE2b512 represents the BLAKE2b-256 hash function
-	BLAKE2b512 = BitrotAlgorithm(crypto.SHA3_512) // we must define that BLAKE2b-512 is SHA3-512 because there is no BLAKE2b-512 constant in golang/crypto yet - FIXME: Go1.9 has BLAKE2 constants
+	BLAKE2b512 = BitrotAlgorithm(crypto.BLAKE2b_512)
 )
 
 var bitrotAlgorithms = map[BitrotAlgorithm]string{
