@@ -172,7 +172,7 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 15, 1, 5, 3},
-		}, "Objects with Standard class can withstand [4] drive failure(s).\n"},
+		}, "Objects with " + standardStorageClass + " class can withstand [4] drive failure(s).\n"},
 		{"2", StorageInfo{
 			Total: 30 * humanize.GiByte,
 			Free:  3 * humanize.GiByte,
@@ -183,7 +183,7 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 10, 0, 5, 3},
-		}, "Objects with Standard class can withstand [5] drive failure(s).\n"},
+		}, "Objects with " + standardStorageClass + " class can withstand [5] drive failure(s).\n"},
 		{"3", StorageInfo{
 			Total: 15 * humanize.GiByte,
 			Free:  2 * humanize.GiByte,
@@ -194,7 +194,7 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 12, 3, 6, 2},
-		}, "Objects with Standard class can withstand [3] drive failure(s).\n"},
+		}, "Objects with " + standardStorageClass + " class can withstand [3] drive failure(s).\n"},
 	}
 	for _, tt := range tests {
 		if got := getStandardStorageClassInfoMsg(tt.args); got != tt.want {
@@ -219,7 +219,7 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 15, 1, 5, 3},
-		}, "Objects with Reduced Redundancy class can withstand [2] drive failure(s).\n"},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
 		{"2", StorageInfo{
 			Total: 30 * humanize.GiByte,
 			Free:  3 * humanize.GiByte,
@@ -230,7 +230,7 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 16, 0, 5, 3},
-		}, "Objects with Reduced Redundancy class can withstand [3] drive failure(s).\n"},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [3] drive failure(s).\n"},
 		{"3", StorageInfo{
 			Total: 15 * humanize.GiByte,
 			Free:  2 * humanize.GiByte,
@@ -241,7 +241,7 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				standardSCParity int
 				rrSCParity       int
 			}{Erasure, 12, 3, 6, 5},
-		}, "Objects with Reduced Redundancy class can withstand [2] drive failure(s).\n"},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
 	}
 	for _, tt := range tests {
 		if got := getRRSStorageClassInfoMsg(tt.args); got != tt.want {

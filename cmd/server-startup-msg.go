@@ -198,7 +198,7 @@ func printStorageClassInfoMsg(storageInfo StorageInfo) {
 func getStandardStorageClassInfoMsg(storageInfo StorageInfo) string {
 	var msg string
 	if maxDiskFailures := storageInfo.Backend.standardSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-		msg += fmt.Sprintf("Objects with Standard class can withstand [%d] drive failure(s).\n", maxDiskFailures)
+		msg += fmt.Sprintf("Objects with "+standardStorageClass+" class can withstand [%d] drive failure(s).\n", maxDiskFailures)
 	}
 	return msg
 }
@@ -206,7 +206,7 @@ func getStandardStorageClassInfoMsg(storageInfo StorageInfo) string {
 func getRRSStorageClassInfoMsg(storageInfo StorageInfo) string {
 	var msg string
 	if maxDiskFailures := storageInfo.Backend.rrSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-		msg += fmt.Sprintf("Objects with Reduced Redundancy class can withstand [%d] drive failure(s).\n", maxDiskFailures)
+		msg += fmt.Sprintf("Objects with "+reducedRedundancyStorageClass+" class can withstand [%d] drive failure(s).\n", maxDiskFailures)
 	}
 	return msg
 }

@@ -65,3 +65,6 @@ const (
 	amzHeaderKey     = "X-Amz-Meta-X-Amz-Key"
 	amzHeaderMatDesc = "X-Amz-Meta-X-Amz-Matdesc"
 )
+
+// Storage class header constant.
+const amzStorageClass = "X-Amz-Storage-Class"

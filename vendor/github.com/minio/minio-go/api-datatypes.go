@@ -44,7 +44,7 @@ type ObjectInfo struct {
 
 	// Collection of additional metadata on the object.
 	// eg: x-amz-meta-*, content-encoding etc.
-	Metadata http.Header `json:"metadata"`
+	Metadata http.Header `json:"metadata" xml:"-"`
 
 	// Owner name.
 	Owner struct {

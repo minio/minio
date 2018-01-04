@@ -381,7 +381,6 @@ func (c Client) putObjectDo(ctx context.Context, bucketName, objectName string, 
 	}
 	// Set headers.
 	customHeader := opts.Header()
-
 	// Populate request metadata.
 	reqMetadata := requestMetadata{
 		bucketName:       bucketName,
