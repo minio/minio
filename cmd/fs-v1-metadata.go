@@ -122,7 +122,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
-	objInfo.UserDefined = cleanMetaETag(m.Meta)
+	objInfo.UserDefined = cleanMetadata(m.Meta)
 
 	// Success..
 	return objInfo

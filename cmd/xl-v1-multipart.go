@@ -691,7 +691,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		}
 	}
 
-	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}

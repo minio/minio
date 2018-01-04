@@ -44,8 +44,9 @@ type ErasureStorage struct {
 
 // NewErasureStorage creates a new ErasureStorage. The storage erasure codes and protects all data written to
 // the disks.
-func NewErasureStorage(disks []StorageAPI, dataBlocks, parityBlocks int) (s ErasureStorage, err error) {
-	erasure, err := reedsolomon.New(dataBlocks, parityBlocks)
+func NewErasureStorage(disks []StorageAPI, dataBlocks, parityBlocks int, blockSize int64) (s ErasureStorage, err error) {
+	shardsize := (int(blockSize) + dataBlocks - 1) / dataBlocks
+	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
 	if err != nil {
 		return s, errors.Tracef("failed to create erasure coding: %v", err)
 	}
