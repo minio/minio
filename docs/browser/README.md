@@ -15,6 +15,8 @@ Currently these tokens expire after 10hrs, this is not configurable yet.
 minio server /data
 ```
 
+This will mount the filesystem that Minio uses in the `/data` directory of the host machine. For example, if you run Minio locally and create a bucket called `foo`, then you can access any files you "uploaded" to the `foo` bucket by navigating to the `/data/foo` directory on your local disk.
+
 ### JSON RPC APIs.
 
 JSON RPC namespace is `Web`.
