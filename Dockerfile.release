@@ -5,6 +5,8 @@ MAINTAINER Minio Inc <dev@minio.io>
 COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
 
 ENV MINIO_UPDATE off
+ENV MINIO_ACCESS_KEY_FILE=access_key \
+    MINIO_SECRET_KEY_FILE=secret_key
 
 RUN \
      apk add --no-cache ca-certificates && \
