@@ -50,10 +50,10 @@ healthcheck_main () {
                 ${scheme}${address}${resource})
         fi
 
-        # If http_repsonse is 200 - server is up. When MINIO_BROWSER is
-        # set to off, curl responds with 404. We assume that the server
-        # is up
-        [ "$http_response" = "200" ] || [ "$http_response" = "404" ]
+        # If http_repsonse is 200 - server is up. When MINIO_BROWSER
+        # is set to off, curl responds with 404 or 403. We assume that
+        # the server is up
+        [ "$http_response" = "200" ] || [ "$http_response" = "404" ] || [ "$http_response" = "403" ]
     fi
 }
 
