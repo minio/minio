@@ -280,18 +280,21 @@ func (s *posix) MakeVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	// Make a volume entry, with mode 0777 mkdir honors system umask.
-	err = os.Mkdir((volumeDir), 0777)
-	if err != nil {
-		if os.IsExist(err) {
-			return errVolumeExists
-		} else if os.IsPermission(err) {
+
+	if _, err := os.Stat(volumeDir); err != nil {
+		// Volume does not exist we proceed to create.
+		if os.IsNotExist(err) {
+			// Make a volume entry, with mode 0777 mkdir honors system umask.
+			err = os.MkdirAll(volumeDir, 0777)
+		}
+		if os.IsPermission(err) {
 			return errDiskAccessDenied
 		}
 		return err
 	}
-	// Success
-	return nil
+
+	// Stat succeeds we return errVolumeExists.
+	return errVolumeExists
 }
 
 // ListVols - list volumes.
@@ -381,7 +384,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	// Stat a volume entry.
 	var st os.FileInfo
-	st, err = os.Stat((volumeDir))
+	st, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
