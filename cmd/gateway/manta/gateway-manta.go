@@ -32,7 +32,6 @@ import (
 	"github.com/joyent/triton-go/authentication"
 	tclient "github.com/joyent/triton-go/client"
 	"github.com/joyent/triton-go/storage"
-
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
@@ -68,6 +67,7 @@ ENVIRONMENT VARIABLES:
      MINIO_ACCESS_KEY: The Manta account name.
      MINIO_SECRET_KEY: A KeyID associated with the Manta account.
      MANTA_KEY_MATERIAL: The path to the SSH Key associated with the Manta account if the MINIO_SECRET_KEY is not in SSH Agent.
+	 MANTA_SUBUSER: The username of a user who has limited access to your account.
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
@@ -140,7 +140,14 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 	keyMaterial := os.Getenv("MANTA_KEY_MATERIAL")
 
 	if keyMaterial == "" {
-		signer, err = authentication.NewSSHAgentSigner(creds.SecretKey, creds.AccessKey)
+		input := authentication.SSHAgentSignerInput{
+			KeyID:       creds.SecretKey,
+			AccountName: creds.AccessKey,
+		}
+		if userName, ok := os.LookupEnv("MANTA_SUBUSER"); ok {
+			input.Username = userName
+		}
+		signer, err = authentication.NewSSHAgentSigner(input)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -168,7 +175,16 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 			keyBytes = []byte(keyMaterial)
 		}
 
-		signer, err = authentication.NewPrivateKeySigner(creds.SecretKey, keyBytes, creds.AccessKey)
+		input := authentication.PrivateKeySignerInput{
+			KeyID:              creds.SecretKey,
+			PrivateKeyMaterial: keyBytes,
+			AccountName:        creds.AccessKey,
+		}
+		if userName, ok := os.LookupEnv("MANTA_SUBUSER"); ok {
+			input.Username = userName
+		}
+
+		signer, err = authentication.NewPrivateKeySigner(input)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

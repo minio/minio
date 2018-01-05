@@ -260,7 +260,6 @@ func (s *ObjectsClient) Put(ctx context.Context, input *PutObjectInput) error {
 	absPath := absFileInput(s.client.AccountName, input.ObjectPath)
 
 	if input.ForceInsert {
-		// IsDir() uses a path relative to the account
 		absDirName := _AbsCleanPath(path.Dir(string(absPath)))
 		exists, err := checkDirectoryTreeExists(*s, ctx, absDirName)
 		if err != nil {

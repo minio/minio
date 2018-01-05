@@ -14,5 +14,6 @@ type ClientConfig struct {
 	TritonURL   string
 	MantaURL    string
 	AccountName string
+	Username    string
 	Signers     []authentication.Signer
 }
