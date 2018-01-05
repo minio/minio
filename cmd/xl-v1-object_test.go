@@ -35,7 +35,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	var disks []string
 	var err error
 
-	objLayer, disks, err = prepareXL()
+	objLayer, disks, err = prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create an instance of xl backend
-	xl, fsDirs, err := prepareXL()
+	xl, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +154,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl.storageDisks[8] = nil
 	err = obj.DeleteObject(bucket, object)
 	err = errors.Cause(err)
-	if err != toObjectErr(errXLWriteQuorum, bucket, object) {
-		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
+	if err != toObjectErr(errXLReadQuorum, bucket, object) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLReadQuorum, bucket, object), err)
 	}
 	// Cleanup backend directories
 	removeRoots(fsDirs)
@@ -163,7 +164,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 
 func TestGetObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +216,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 
 func TestPutObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +273,7 @@ func TestHealing(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	obj, fsDirs, err := prepareXL()
+	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)
 	}

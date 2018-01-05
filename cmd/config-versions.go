@@ -530,3 +530,22 @@ type serverConfigV21 struct {
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
+
+// serverConfigV22 is just like version '21' with added support
+// for StorageClass
+type serverConfigV22 struct {
+	sync.RWMutex
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
+	Domain     string           `json:"domain"`
+
+	// Storage class configuration
+	StorageClass storageClassConfig `json:"storageclass"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}

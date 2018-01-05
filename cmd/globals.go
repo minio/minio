@@ -149,7 +149,6 @@ var (
 
 	globalIsEnvDomainName bool
 	globalDomainName      string // Root domain for virtual host style requests
-	// Add new variable global values here.
 
 	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
@@ -158,6 +157,16 @@ var (
 
 	// Keep connection active for clients actively using ListenBucketNotification.
 	globalSNSConnAlive = 5 * time.Second // Send a whitespace every 5 seconds.
+
+	// Storage classes
+	// Set to indicate if storage class is set up
+	globalIsStorageClass bool
+	// Set to store reduced redundancy storage class
+	globalRRStorageClass storageClass
+	// Set to store standard storage class
+	globalStandardStorageClass storageClass
+
+	// Add new variable global values here.
 )
 
 // global colors.

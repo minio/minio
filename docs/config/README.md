@@ -1,4 +1,4 @@
-# Minio Server `config.json` (v18) Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio Server `config.json` (v22) Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 Minio server stores all its configuration data in `${HOME}/.minio/config.json` file by default. Following sections provide detailed explanation of each fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
@@ -83,18 +83,28 @@ export MINIO_DOMAIN=mydomain.com
 minio server /data
 ```
 
+### Storage Class
+|Field|Type|Description|
+|:---|:---|:---|
+|``storageclass``| | Set storage class for configurable data and parity, as per object basis.|
+|``storageclass.standard`` | _string_ | Value for standard storage class. It should be in the format `EC:Parity`, for example to set 4 disk parity for standard storage class objects, set this field to `EC:4`.|
+|``storageclass.rrs`` | _string_ |  Value for reduced redundancy storage class. It should be in the format `EC:Parity`, for example to set 3 disk parity for reduced redundancy storage class objects, set this field to `EC:3`.|
+
+By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in Minio server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
+
 #### Notify
 |Field|Type|Description|
 |:---|:---|:---|
 |``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
 |``notify.amqp``| |[Configure to publish Minio events via AMQP target.](http://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
-|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](http://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
+|``notify.nats``| |[Configure to publish Minio events via NATS target.](http://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
 |``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
 |``notify.redis``| |[Configure to publish Minio events via Redis target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
-|``notify.nats``| |[Configure to publish Minio events via NATS target.](http://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
 |``notify.postgresql``| |[Configure to publish Minio events via PostgreSQL target.](http://docs.minio.io/docs/minio-bucket-notification-guide#PostgreSQL)|
 |``notify.kafka``| |[Configure to publish Minio events via Apache Kafka target.](http://docs.minio.io/docs/minio-bucket-notification-guide#apache-kafka)|
 |``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](http://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
+|``notify.mysql``| |[Configure to publish Minio events via MySql target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MySQL)|
+|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](http://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
 
 ## Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)

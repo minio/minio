@@ -122,10 +122,10 @@ const (
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
+	ErrSlowDown
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
-
 	ErrInsecureSSECustomerRequest
 	ErrSSEEncryptedObject
 	ErrInvalidEncryptionParameters
@@ -164,6 +164,10 @@ const (
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
 	ErrInvalidRequest
+
+	// Minio storage class error codes
+	ErrInvalidStorageClass
+
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -192,6 +196,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidMetadataDirective: {
 		Code:           "InvalidArgument",
 		Description:    "Unknown metadata directive.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidStorageClass: {
+		Code:           "InvalidStorageClass",
+		Description:    "Invalid storage class.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidRequestBody: {
@@ -505,6 +514,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "AccessDenied",
 		Description:    "Request is not valid yet",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrSlowDown: {
+		Code:           "SlowDown",
+		Description:    "Please reduce your request",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {

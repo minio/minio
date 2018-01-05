@@ -29,7 +29,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/sha256-simd"
+	sha256 "github.com/minio/sha256-simd"
 )
 
 // Streaming AWS Signature Version '4' constants.
@@ -142,7 +142,7 @@ func calculateSeedSignature(r *http.Request) (signature string, region string, d
 	newSignature := getSignature(signingKey, stringToSign)
 
 	// Verify if signature match.
-	if newSignature != signV4Values.Signature {
+	if !compareSignatureV4(newSignature, signV4Values.Signature) {
 		return "", "", time.Time{}, ErrSignatureDoesNotMatch
 	}
 
@@ -308,7 +308,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
 			// Calculate the chunk signature.
 			newSignature := getChunkSignature(cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
-			if cr.chunkSignature != newSignature {
+			if !compareSignatureV4(cr.chunkSignature, newSignature) {
 				// Chunk signature doesn't match we return signature does not match.
 				cr.err = errSignatureMismatch
 				return 0, cr.err

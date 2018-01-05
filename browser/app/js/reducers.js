@@ -25,6 +25,7 @@ export default (state = {
     storageInfo: {},
     serverInfo: {},
     currentBucket: '',
+    showBucketDropdown: false,
     currentPath: '',
     showMakeBucketModal: false,
     uploads: {},
@@ -70,6 +71,14 @@ export default (state = {
     case actions.ADD_BUCKET:
       newState.buckets = [action.bucket, ...newState.buckets]
       newState.visibleBuckets = [action.bucket, ...newState.visibleBuckets]
+      break
+    case actions.REMOVE_BUCKET:
+      newState.buckets = newState.buckets.filter(bucket => bucket != action.bucket)
+      newState.visibleBuckets = newState.visibleBuckets.filter(bucket => bucket != action.bucket)
+      newState.currentBucket = ""
+      break
+    case actions.SHOW_BUCKET_DROPDOWN:
+      newState.showBucketDropdown = action.showBucketDropdown
       break
     case actions.SET_VISIBLE_BUCKETS:
       newState.visibleBuckets = action.visibleBuckets

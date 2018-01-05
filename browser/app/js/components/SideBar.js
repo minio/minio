@@ -21,8 +21,9 @@ import Scrollbars from 'react-custom-scrollbars/lib/Scrollbars'
 import connect from 'react-redux/lib/components/connect'
 
 import logo from '../../img/logo.svg'
+import Dropdown from 'react-bootstrap/lib/Dropdown'
 
-let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy}) => {
+let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy, deleteBucket, toggleBucketDropdown, showBucketDropdown}) => {
 
   const list = visibleBuckets.map((bucket, i) => {
     return <li className={ classNames({
@@ -33,7 +34,19 @@ let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchB
                                     }) }>
                { bucket }
              </a>
-             <i className="fesli-trigger" onClick={ showPolicy }></i>
+             <Dropdown open={bucket === currentBucket && showBucketDropdown} onToggle={toggleBucketDropdown} className="bucket-dropdown" id="bucket-dropdown">
+               <Dropdown.Toggle noCaret>
+                 <i className="zmdi zmdi-more-vert" />
+               </Dropdown.Toggle>
+               <Dropdown.Menu className="dropdown-menu-right">
+                 <li>
+                   <a onClick={ showPolicy }>Edit policy</a>
+                 </li>
+                 <li>
+                   <a onClick={ (e) => deleteBucket(e, bucket) }>Delete</a>
+                 </li>
+               </Dropdown.Menu>
+             </Dropdown>
            </li>
   })
 
@@ -80,6 +93,7 @@ export default connect(state => {
     visibleBuckets: state.visibleBuckets,
     loadBucket: state.loadBucket,
     currentBucket: state.currentBucket,
+    showBucketDropdown: state.showBucketDropdown,
     sidebarStatus: state.sidebarStatus
   }
 })(SideBar)

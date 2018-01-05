@@ -18,13 +18,16 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/sys"
 	"github.com/rs/cors"
+	"golang.org/x/time/rate"
 )
 
 // HandlerFunc - useful to chain different middleware http.Handler
@@ -553,4 +556,46 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+// setRateLimitHandler middleware limits the throughput to h using a
+// rate.Limiter token bucket configured with maxOpenFileLimit and
+// burst set to 1. The request will idle for up to 1*time.Second.
+// If the limiter detects the deadline will be exceeded, the request is
+// cancelled immediately.
+func setRateLimitHandler(h http.Handler) http.Handler {
+	_, maxLimit, err := sys.GetMaxOpenFileLimit()
+	if err != nil {
+		panic(err)
+	}
+	// Burst value is set to 1 to allow only maxOpenFileLimit
+	// requests to happen at once.
+	l := rate.NewLimiter(rate.Limit(maxLimit), 1)
+	return rateLimit{l, h}
+}
+
+type rateLimit struct {
+	*rate.Limiter
+	handler http.Handler
+}
+
+func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// create a new context from the request with the wait timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+	defer cancel() // always cancel the context!
+
+	// Wait errors out if the request cannot be processed within
+	// the deadline. time/rate tries to reserve a slot if possible
+	// with in the given duration if it's not possible then Wait(ctx)
+	// returns an error and we cancel the request with ErrSlowDown
+	// error message to the client. This context wait also ensures
+	// requests doomed to fail are terminated early, preventing a
+	// potential pileup on the server.
+	if err := l.Wait(ctx); err != nil {
+		// Send an S3 compatible error, SlowDown.
+		writeErrorResponse(w, ErrSlowDown, r.URL)
+		return
+	}
+
+	l.handler.ServeHTTP(w, r)
 }

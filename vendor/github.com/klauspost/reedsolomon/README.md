@@ -24,6 +24,10 @@ go get -u github.com/klauspost/reedsolomon
 
 # Changes
 
+## November 18, 2017
+
+Added [WithAutoGoroutines](https://godoc.org/github.com/klauspost/reedsolomon#WithAutoGoroutines) which will attempt to calculate the optimal number of goroutines to use based on your expected shard size and detected CPU.
+
 ## October 1, 2017
 
 * [Cauchy Matrix](https://godoc.org/github.com/klauspost/reedsolomon#WithCauchyMatrix) is now an option. Thanks to [templexxx](https://github.com/templexxx) for the basis of this.

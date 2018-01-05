@@ -234,6 +234,11 @@ var cseHeaders = []string{
 	"X-Amz-Matdesc",
 }
 
+// isStorageClassHeader returns true if the header is a supported storage class header
+func isStorageClassHeader(headerKey string) bool {
+	return strings.ToLower(amzStorageClass) == strings.ToLower(headerKey)
+}
+
 // isStandardHeader returns true if header is a supported header and not a custom header
 func isStandardHeader(headerKey string) bool {
 	key := strings.ToLower(headerKey)

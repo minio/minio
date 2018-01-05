@@ -193,7 +193,7 @@ func (atb *adminXLTestBed) TearDown() {
 // initTestObjLayer - Helper function to initialize an XL-based object
 // layer and set globalObjectAPI.
 func initTestXLObjLayer() (ObjectLayer, []string, error) {
-	objLayer, xlDirs, xlErr := prepareXL()
+	objLayer, xlDirs, xlErr := prepareXL16()
 	if xlErr != nil {
 		return nil, nil, xlErr
 	}

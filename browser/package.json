@@ -60,6 +60,7 @@
     "humanize": "0.0.9",
     "json-loader": "^0.5.4",
     "local-storage-fallback": "^1.3.0",
+    "material-design-iconic-font": "^2.2.0",
     "mime-db": "^1.25.0",
     "mime-types": "^2.1.13",
     "moment": "^2.15.1",

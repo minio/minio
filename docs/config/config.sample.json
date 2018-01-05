@@ -1,5 +1,5 @@
 {
-    "version": "21",
+    "version": "22",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
@@ -7,6 +7,10 @@
     "region": "us-east-1",
     "browser": "on",
     "domain": "",
+    "storageclass": {
+        "standard": "",
+        "rrs": ""
+    },
     "notify": {
         "amqp": {
             "1": {

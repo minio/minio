@@ -40,6 +40,7 @@ type PutObjectOptions struct {
 	CacheControl       string
 	EncryptMaterials   encrypt.Materials
 	NumThreads         uint
+	StorageClass       string
 }
 
 // getNumThreads - gets the number of threads to be used in the multipart
@@ -77,8 +78,11 @@ func (opts PutObjectOptions) Header() (header http.Header) {
 		header[amzHeaderKey] = []string{opts.EncryptMaterials.GetKey()}
 		header[amzHeaderMatDesc] = []string{opts.EncryptMaterials.GetDesc()}
 	}
+	if opts.StorageClass != "" {
+		header[amzStorageClass] = []string{opts.StorageClass}
+	}
 	for k, v := range opts.UserMetadata {
-		if !isAmzHeader(k) && !isStandardHeader(k) && !isSSEHeader(k) {
+		if !isAmzHeader(k) && !isStandardHeader(k) && !isSSEHeader(k) && !isStorageClassHeader(k) {
 			header["X-Amz-Meta-"+k] = []string{v}
 		} else {
 			header[k] = []string{v}
@@ -91,8 +95,8 @@ func (opts PutObjectOptions) Header() (header http.Header) {
 // encryption headers and raises an error if so.
 func (opts PutObjectOptions) validate() (err error) {
 	for k := range opts.UserMetadata {
-		if isStandardHeader(k) || isCSEHeader(k) {
-			return ErrInvalidArgument(k + " unsupported request parameter for user defined metadata")
+		if isStandardHeader(k) || isCSEHeader(k) || isStorageClassHeader(k) {
+			return ErrInvalidArgument(k + " unsupported request parameter for user defined metadata from minio-go")
 		}
 	}
 	return nil

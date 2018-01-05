@@ -98,21 +98,46 @@ const (
 	Abort
 )
 
+// configErrs contains the list of configuration errors.
+var configErrs = []error{
+	errInvalidAccessKeyID,
+	errAuthentication,
+	errServerVersionMismatch,
+	errServerTimeMismatch,
+}
+
 // Quick error to actions converts looking for specific errors
 // which need to be returned quickly and server should wait instead.
 func quickErrToActions(errMap map[error]int) InitActions {
 	var action InitActions
-	switch {
-	case errMap[errInvalidAccessKeyID] > 0:
-		fallthrough
-	case errMap[errAuthentication] > 0:
-		fallthrough
-	case errMap[errServerVersionMismatch] > 0:
-		fallthrough
-	case errMap[errServerTimeMismatch] > 0:
-		action = WaitForConfig
+	for _, configErr := range configErrs {
+		if errMap[configErr] > 0 {
+			action = WaitForConfig
+			break
+		}
 	}
 	return action
+}
+
+// reduceInitXLErrs reduces errors found in distributed XL initialization
+func reduceInitXLErrs(storageDisks []StorageAPI, sErrs []error) error {
+	var foundErrs int
+	for i := range sErrs {
+		if sErrs[i] != nil {
+			foundErrs++
+		}
+	}
+	if foundErrs == 0 {
+		return nil
+	}
+	// Early quit if there is a config error
+	for i := range sErrs {
+		if contains(configErrs, sErrs[i]) {
+			return fmt.Errorf("%s: %s", storageDisks[i], sErrs[i])
+		}
+	}
+	// Combine all disk errors otherwise for user inspection
+	return fmt.Errorf("%s", combineDiskErrs(storageDisks, sErrs))
 }
 
 // Preparatory initialization stage for XL validates known errors.
@@ -262,7 +287,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 			// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
 			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
 			case Abort:
-				return fmt.Errorf("%s", combineDiskErrs(storageDisks, sErrs))
+				return reduceInitXLErrs(storageDisks, sErrs)
 			case FormatDisks:
 				console.Eraseline()
 				printFormatMsg(endpoints, storageDisks, printOnceFn())
@@ -289,7 +314,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				)
 			case WaitForConfig:
 				// Print configuration errors.
-				printConfigErrMsg(storageDisks, sErrs, printOnceFn())
+				return reduceInitXLErrs(storageDisks, sErrs)
 			case WaitForAll:
 				console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
 			case WaitForFormatting:
@@ -318,13 +343,14 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 }
 
 // Wrap disks into retryable disks.
-func initRetryableStorageDisks(disks []StorageAPI, retryUnit, retryCap time.Duration) (outDisks []StorageAPI) {
+func initRetryableStorageDisks(disks []StorageAPI, retryUnit, retryCap, retryInterval time.Duration, retryThreshold int) (outDisks []StorageAPI) {
 	// Initialize the disk into a retryable-disks wrapper.
 	outDisks = make([]StorageAPI, len(disks))
 	for i, disk := range disks {
 		outDisks[i] = &retryStorage{
 			remoteStorage:    disk,
-			maxRetryAttempts: globalStorageRetryThreshold,
+			retryInterval:    retryInterval,
+			maxRetryAttempts: retryThreshold,
 			retryUnit:        retryUnit,
 			retryCap:         retryCap,
 			offlineTimestamp: UTCNow(), // Set timestamp to prevent immediate marking as offline
@@ -346,19 +372,20 @@ func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks [
 	// retry window (30 seconds, with once-per-second retries) so
 	// that we wait enough amount of time before the disks come
 	// online.
-	retryDisks := initRetryableStorageDisks(storageDisks, time.Second, time.Second*30)
+	retryDisks := initRetryableStorageDisks(storageDisks, time.Second, time.Second*30,
+		globalStorageInitHealthCheckInterval, globalStorageInitRetryThreshold)
 
 	// Start retry loop retrying until disks are formatted
 	// properly, until we have reached a conditional quorum of
 	// formatted disks.
-	err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks)
-	if err != nil {
+	if err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks); err != nil {
 		return nil, err
 	}
 
 	// Initialize the disk into a formatted disks wrapper. This
 	// uses a shorter retry window (5ms with once-per-ms retries)
-	formattedDisks = initRetryableStorageDisks(storageDisks, time.Millisecond, time.Millisecond*5)
+	formattedDisks = initRetryableStorageDisks(storageDisks, time.Millisecond, time.Millisecond*5,
+		globalStorageHealthCheckInterval, globalStorageRetryThreshold)
 
 	// Success.
 	return formattedDisks, nil

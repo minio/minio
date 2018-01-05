@@ -35,11 +35,11 @@ func TestStorageInfoMsg(t *testing.T) {
 		Total: 10 * humanize.GiByte,
 		Free:  2 * humanize.GiByte,
 		Backend: struct {
-			Type         BackendType
-			OnlineDisks  int
-			OfflineDisks int
-			ReadQuorum   int
-			WriteQuorum  int
+			Type             BackendType
+			OnlineDisks      int
+			OfflineDisks     int
+			standardSCParity int
+			rrSCParity       int
 		}{Erasure, 7, 1, 4, 5},
 	}
 
@@ -154,4 +154,98 @@ func TestPrintStartupMessage(t *testing.T) {
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printStartupMessage(apiEndpoints)
+}
+
+func TestGetStandardStorageClassInfoMsg(t *testing.T) {
+	tests := []struct {
+		name string
+		args StorageInfo
+		want string
+	}{
+		{"1", StorageInfo{
+			Total: 20 * humanize.GiByte,
+			Free:  2 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 15, 1, 5, 3},
+		}, "Objects with " + standardStorageClass + " class can withstand [4] drive failure(s).\n"},
+		{"2", StorageInfo{
+			Total: 30 * humanize.GiByte,
+			Free:  3 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 10, 0, 5, 3},
+		}, "Objects with " + standardStorageClass + " class can withstand [5] drive failure(s).\n"},
+		{"3", StorageInfo{
+			Total: 15 * humanize.GiByte,
+			Free:  2 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 12, 3, 6, 2},
+		}, "Objects with " + standardStorageClass + " class can withstand [3] drive failure(s).\n"},
+	}
+	for _, tt := range tests {
+		if got := getStandardStorageClassInfoMsg(tt.args); got != tt.want {
+			t.Errorf("Test %s failed, expected %v, got %v", tt.name, tt.want, got)
+		}
+	}
+}
+
+func TestGetRRSStorageClassInfoMsg(t *testing.T) {
+	tests := []struct {
+		name string
+		args StorageInfo
+		want string
+	}{
+		{"1", StorageInfo{
+			Total: 20 * humanize.GiByte,
+			Free:  2 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 15, 1, 5, 3},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
+		{"2", StorageInfo{
+			Total: 30 * humanize.GiByte,
+			Free:  3 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 16, 0, 5, 3},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [3] drive failure(s).\n"},
+		{"3", StorageInfo{
+			Total: 15 * humanize.GiByte,
+			Free:  2 * humanize.GiByte,
+			Backend: struct {
+				Type             BackendType
+				OnlineDisks      int
+				OfflineDisks     int
+				standardSCParity int
+				rrSCParity       int
+			}{Erasure, 12, 3, 6, 5},
+		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
+	}
+	for _, tt := range tests {
+		if got := getRRSStorageClassInfoMsg(tt.args); got != tt.want {
+			t.Errorf("Test %s failed, expected %v, got %v", tt.name, tt.want, got)
+		}
+	}
 }
