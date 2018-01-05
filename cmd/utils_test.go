@@ -19,8 +19,10 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -46,6 +48,19 @@ func TestCloneHeader(t *testing.T) {
 		clonedHeader := cloneHeader(header)
 		if !reflect.DeepEqual(header, clonedHeader) {
 			t.Errorf("Test %d failed", i+1)
+		}
+	}
+}
+
+// Tests closing http tracing file.
+func TestStopHTTPTrace(t *testing.T) {
+	var err error
+	globalHTTPTraceFile, err = ioutil.TempFile("", "")
+	if err != nil {
+		defer os.Remove(globalHTTPTraceFile.Name())
+		stopHTTPTrace()
+		if globalHTTPTraceFile != nil {
+			t.Errorf("globalHTTPTraceFile is not nil, it is expected to be nil")
 		}
 	}
 }

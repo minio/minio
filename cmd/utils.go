@@ -37,6 +37,14 @@ import (
 	"github.com/pkg/profile"
 )
 
+// Close Http tracing file.
+func stopHTTPTrace() {
+	if globalHTTPTraceFile != nil {
+		errorIf(globalHTTPTraceFile.Close(), "Unable to close httpTraceFile %s", globalHTTPTraceFile.Name())
+		globalHTTPTraceFile = nil
+	}
+}
+
 // make a copy of http.Header
 func cloneHeader(h http.Header) http.Header {
 	h2 := make(http.Header, len(h))
