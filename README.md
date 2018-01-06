@@ -99,6 +99,11 @@ Minio Server comes with an embedded web based object browser. Point your web bro
 ## Test using Minio Client `mc`
 `mc` provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services. Follow the Minio Client [Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide) for further instructions.
 
+## Pre-existing data
+When deployed on a single drive, Minio server lets clients access any pre-existing data in the data directory. For example, if Minio is started with the command  `minio server /mnt/data`, any pre-existing data in the `/mnt/data` directory would be accessible to the clients.
+
+The above statement is also valid for all gateway backends.
+
 ## Explore Further
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
