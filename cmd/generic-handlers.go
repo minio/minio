@@ -229,7 +229,7 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
+	if r.Method == http.MethodGet && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
 		if hasPrefix(r.URL.Path, minioReservedBucketPath+"/") {
 			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
@@ -341,24 +341,14 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-// List of http methods.
-const (
-	httpGET     = "GET"
-	httpPUT     = "PUT"
-	httpHEAD    = "HEAD"
-	httpPOST    = "POST"
-	httpDELETE  = "DELETE"
-	httpOPTIONS = "OPTIONS"
-)
-
 // List of default allowable HTTP methods.
 var defaultAllowableHTTPMethods = []string{
-	httpGET,
-	httpPUT,
-	httpHEAD,
-	httpPOST,
-	httpDELETE,
-	httpOPTIONS,
+	http.MethodGet,
+	http.MethodPut,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodDelete,
+	http.MethodOptions,
 }
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
