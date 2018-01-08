@@ -20,168 +20,30 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"reflect"
 	"sync"
-
-	errors2 "github.com/minio/minio/pkg/errors"
-	"github.com/minio/minio/pkg/lock"
 )
 
-// fsFormat - structure holding 'fs' format.
-type fsFormat struct {
-	Version string `json:"version"`
-}
-
-// FS format version strings.
 const (
-	// Represents the current backend disk structure
-	// version under `.minio.sys` and actual data namespace.
-
-	// formatConfigV1.fsFormat.Version
-	fsFormatBackendV1 = "1"
-)
-
-// xlFormat - structure holding 'xl' format.
-type xlFormat struct {
-	Version string `json:"version"` // Version of 'xl' format.
-	Disk    string `json:"disk"`    // Disk field carries assigned disk uuid.
-	// JBOD field carries the input disk order generated the first
-	// time when fresh disks were supplied.
-	JBOD []string `json:"jbod"`
-}
-
-// XL format version strings.
-const (
-	// Represents the current backend disk structure
-	// version under `.minio.sys` and actual data namespace.
-
-	// formatConfigV1.xlFormat.Version
-	xlFormatBackendV1 = "1"
-)
-
-// formatConfigV1 - structure holds format config version '1'.
-type formatConfigV1 struct {
-	Version string `json:"version"` // Version of the format config.
-	// Format indicates the backend format type, supports two values 'xl' and 'fs'.
-	Format string    `json:"format"`
-	FS     *fsFormat `json:"fs,omitempty"` // FS field holds fs format.
-	XL     *xlFormat `json:"xl,omitempty"` // XL field holds xl format.
-}
-
-// Format json file.
-const (
-	// Format config file carries backend format specific details.
-	formatConfigFile = "format.json"
-
-	// Format config tmp file carries backend format.
-	formatConfigFileTmp = "format.json.tmp"
-)
-
-// `format.json` version value.
-const (
-	// formatConfigV1.Version represents the version string
-	// of the current structure and its fields in `format.json`.
-	formatFileV1 = "1"
-
-	// Future `format.json` structure changes should have
-	// its own version and should be subsequently listed here.
-)
-
-// Constitutes `format.json` backend name.
-const (
-	// Represents FS backend.
-	formatBackendFS = "fs"
-
 	// Represents XL backend.
 	formatBackendXL = "xl"
+
+	// formatXLV1.XL.Version
+	formatXLVersionV1 = "1"
 )
 
-// CheckFS if the format is FS and is valid with right values
-// returns appropriate errors otherwise.
-func (f *formatConfigV1) CheckFS() error {
-	// Validate if format config version is v1.
-	if f.Version != formatFileV1 {
-		return fmt.Errorf("Unknown format file version '%s'", f.Version)
-	}
-
-	// Validate if we have the expected format.
-	if f.Format != formatBackendFS {
-		return fmt.Errorf("FS backend format required. Found '%s'", f.Format)
-	}
-
-	// Check if format is currently supported.
-	if f.FS.Version != fsFormatBackendV1 {
-		return fmt.Errorf("Unknown backend FS format version '%s'", f.FS.Version)
-	}
-
-	// Success.
-	return nil
-}
-
-// LoadFormat - loads format config v1, returns `errUnformattedDisk`
-// if reading format.json fails with io.EOF.
-func (f *formatConfigV1) LoadFormat(lk *lock.LockedFile) error {
-	_, err := f.ReadFrom(lk)
-	if errors2.Cause(err) == io.EOF {
-		// No data on disk `format.json` still empty
-		// treat it as unformatted disk.
-		return errors2.Trace(errUnformattedDisk)
-	}
-	return err
-}
-
-func (f *formatConfigV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
-	// Serialize to prepare to write to disk.
-	var fbytes []byte
-	fbytes, err = json.Marshal(f)
-	if err != nil {
-		return 0, errors2.Trace(err)
-	}
-	if err = lk.Truncate(0); err != nil {
-		return 0, errors2.Trace(err)
-	}
-	_, err = lk.Write(fbytes)
-	if err != nil {
-		return 0, errors2.Trace(err)
-	}
-	return int64(len(fbytes)), nil
-}
-
-func (f *formatConfigV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
-	var fbytes []byte
-	fi, err := lk.Stat()
-	if err != nil {
-		return 0, errors2.Trace(err)
-	}
-	fbytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
-	if err != nil {
-		return 0, errors2.Trace(err)
-	}
-	if len(fbytes) == 0 {
-		return 0, errors2.Trace(io.EOF)
-	}
-	// Decode `format.json`.
-	if err = json.Unmarshal(fbytes, f); err != nil {
-		return 0, errors2.Trace(err)
-	}
-	return int64(len(fbytes)), nil
-}
-
-func newFSFormat() (format *formatConfigV1) {
-	return newFSFormatV1()
-}
-
-// newFSFormatV1 - initializes new formatConfigV1 with FS format info.
-func newFSFormatV1() (format *formatConfigV1) {
-	return &formatConfigV1{
-		Version: formatFileV1,
-		Format:  formatBackendFS,
-		FS: &fsFormat{
-			Version: fsFormatBackendV1,
-		},
-	}
+// Represents the current backend disk structure
+// version under `.minio.sys` and actual data namespace.
+// formatXLV1 - structure holds format config version '1'.
+type formatXLV1 struct {
+	formatMetaV1
+	XL struct {
+		Version string `json:"version"` // Version of 'xl' format.
+		Disk    string `json:"disk"`    // Disk field carries assigned disk uuid.
+		// JBOD field carries the input disk order generated the first
+		// time when fresh disks were supplied.
+		JBOD []string `json:"jbod"`
+	} `json:"xl"` // XL field holds xl format.
 }
 
 /*
@@ -271,7 +133,7 @@ func formatErrsSummary(errs []error) (formatCount, unformattedDiskCount,
 }
 
 // loadAllFormats - load all format config from all input disks in parallel.
-func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
+func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatXLV1, []error) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -279,7 +141,7 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	var sErrs = make([]error, len(bootstrapDisks))
 
 	// Initialize format configs.
-	var formatConfigs = make([]*formatConfigV1, len(bootstrapDisks))
+	var formats = make([]*formatXLV1, len(bootstrapDisks))
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range bootstrapDisks {
@@ -291,12 +153,12 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			formatConfig, lErr := loadFormat(disk)
+			format, lErr := loadFormat(disk)
 			if lErr != nil {
 				sErrs[index] = lErr
 				return
 			}
-			formatConfigs[index] = formatConfig
+			formats[index] = format
 		}(index, disk)
 	}
 
@@ -306,11 +168,11 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	for _, err := range sErrs {
 		if err != nil {
 			// Return all formats and errors.
-			return formatConfigs, sErrs
+			return formats, sErrs
 		}
 	}
 	// Return all formats and nil
-	return formatConfigs, sErrs
+	return formats, sErrs
 }
 
 // genericFormatCheckXL - validates and returns error.
@@ -318,7 +180,7 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 // if (any disk is corrupt) return error // phase2
 // if (jbod inconsistent) return error // phase2
 // if (disks not recognized) // Always error.
-func genericFormatCheckXL(formatConfigs []*formatConfigV1, sErrs []error) (err error) {
+func genericFormatCheckXL(formats []*formatXLV1, sErrs []error) (err error) {
 	// Calculate the errors.
 	var (
 		errCorruptFormatCount = 0
@@ -342,20 +204,20 @@ func genericFormatCheckXL(formatConfigs []*formatConfigV1, sErrs []error) (err e
 	}
 
 	// Calculate read quorum.
-	readQuorum := len(formatConfigs) / 2
+	readQuorum := len(formats) / 2
 
 	// Validate the err count under read quorum.
-	if errCount > len(formatConfigs)-readQuorum {
+	if errCount > len(formats)-readQuorum {
 		return errXLReadQuorum
 	}
 
 	// Check if number of corrupted format under read quorum
-	if errCorruptFormatCount > len(formatConfigs)-readQuorum {
+	if errCorruptFormatCount > len(formats)-readQuorum {
 		return errCorruptedFormat
 	}
 
 	// Validates if format and JBOD are consistent across all disks.
-	if err = checkFormatXL(formatConfigs); err != nil {
+	if err = checkFormatXL(formats); err != nil {
 		return err
 	}
 
@@ -366,15 +228,15 @@ func genericFormatCheckXL(formatConfigs []*formatConfigV1, sErrs []error) (err e
 // isSavedUUIDInOrder - validates if disk uuid is present and valid in all
 // available format config JBOD. This function also validates if the disk UUID
 // is always available on all JBOD under the same order.
-func isSavedUUIDInOrder(uuid string, formatConfigs []*formatConfigV1) bool {
+func isSavedUUIDInOrder(uuid string, formats []*formatXLV1) bool {
 	var orderIndexes []int
 	// Validate each for format.json for relevant uuid.
-	for _, formatConfig := range formatConfigs {
-		if formatConfig == nil {
+	for _, format := range formats {
+		if format == nil {
 			continue
 		}
 		// Validate if UUID is present in JBOD.
-		uuidIndex := findDiskIndex(uuid, formatConfig.XL.JBOD)
+		uuidIndex := findDiskIndex(uuid, format.XL.JBOD)
 		if uuidIndex == -1 {
 			// UUID not found.
 			errorIf(errDiskNotFound, "Disk %s not found in JBOD list", uuid)
@@ -398,15 +260,15 @@ func isSavedUUIDInOrder(uuid string, formatConfigs []*formatConfigV1) bool {
 }
 
 // checkDisksConsistency - checks if all disks are consistent with all JBOD entries on all disks.
-func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
-	var disks = make([]string, len(formatConfigs))
+func checkDisksConsistency(formats []*formatXLV1) error {
+	var disks = make([]string, len(formats))
 	// Collect currently available disk uuids.
-	for index, formatConfig := range formatConfigs {
-		if formatConfig == nil {
+	for index, format := range formats {
+		if format == nil {
 			disks[index] = ""
 			continue
 		}
-		disks[index] = formatConfig.XL.Disk
+		disks[index] = format.XL.Disk
 	}
 	// Validate collected uuids and verify JBOD.
 	for _, uuid := range disks {
@@ -414,7 +276,7 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 			continue
 		}
 		// Is uuid present on all JBOD ?.
-		if !isSavedUUIDInOrder(uuid, formatConfigs) {
+		if !isSavedUUIDInOrder(uuid, formats) {
 			return fmt.Errorf("%s disk not found in JBOD", uuid)
 		}
 	}
@@ -422,17 +284,17 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 }
 
 // checkJBODConsistency - validate xl jbod order if they are consistent.
-func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
+func checkJBODConsistency(formats []*formatXLV1) error {
 	var sentinelJBOD []string
 	// Extract first valid JBOD.
-	for _, format := range formatConfigs {
+	for _, format := range formats {
 		if format == nil {
 			continue
 		}
 		sentinelJBOD = format.XL.JBOD
 		break
 	}
-	for _, format := range formatConfigs {
+	for _, format := range formats {
 		if format == nil {
 			continue
 		}
@@ -458,14 +320,14 @@ func findDiskIndex(disk string, jbod []string) int {
 // format-config. If assignUUIDs is true, it assigns UUIDs to disks
 // with missing format configurations in the reference configuration.
 func reorderDisks(bootstrapDisks []StorageAPI,
-	formatConfigs []*formatConfigV1, assignUUIDs bool) (*formatConfigV1,
+	formats []*formatXLV1, assignUUIDs bool) (*formatXLV1,
 	[]StorageAPI, error) {
 
 	// Pick first non-nil format-cfg as reference
-	var refCfg *formatConfigV1
-	for _, formatConfig := range formatConfigs {
-		if formatConfig != nil {
-			refCfg = formatConfig
+	var refCfg *formatXLV1
+	for _, format := range formats {
+		if format != nil {
+			refCfg = format
 			break
 		}
 	}
@@ -476,7 +338,7 @@ func reorderDisks(bootstrapDisks []StorageAPI,
 
 	// construct reordered disk slice
 	var newDisks = make([]StorageAPI, len(bootstrapDisks))
-	for fIndex, format := range formatConfigs {
+	for fIndex, format := range formats {
 		if format == nil {
 			continue
 		}
@@ -501,7 +363,7 @@ func reorderDisks(bootstrapDisks []StorageAPI,
 }
 
 // loadFormat - loads format.json from disk.
-func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
+func loadFormat(disk StorageAPI) (format *formatXLV1, err error) {
 	buf, err := disk.ReadAll(minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
@@ -523,7 +385,7 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	}
 
 	// Try to decode format json into formatConfigV1 struct.
-	format = &formatConfigV1{}
+	format = &formatXLV1{}
 	if err = json.Unmarshal(buf, format); err != nil {
 		return nil, err
 	}
@@ -535,23 +397,20 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 // collectNSaveNewFormatConfigs - creates new format configs based on
 // the reference config and saves it on all disks, this is to be
 // called from healFormatXL* functions.
-func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
+func collectNSaveNewFormatConfigs(referenceConfig *formatXLV1,
 	orderedDisks []StorageAPI) error {
 
 	// Collect new format configs that need to be written.
-	var newFormatConfigs = make([]*formatConfigV1, len(orderedDisks))
+	var newFormatConfigs = make([]*formatXLV1, len(orderedDisks))
 	for index := range orderedDisks {
 		// New configs are generated since we are going
 		// to re-populate across all disks.
-		config := &formatConfigV1{
-			Version: referenceConfig.Version,
-			Format:  referenceConfig.Format,
-			XL: &xlFormat{
-				Version: referenceConfig.XL.Version,
-				Disk:    referenceConfig.XL.JBOD[index],
-				JBOD:    referenceConfig.XL.JBOD,
-			},
-		}
+		config := &formatXLV1{}
+		config.Version = referenceConfig.Version
+		config.Format = referenceConfig.Format
+		config.XL.Version = referenceConfig.XL.Version
+		config.XL.Disk = referenceConfig.XL.JBOD[index]
+		config.XL.JBOD = referenceConfig.XL.JBOD
 		newFormatConfigs[index] = config
 	}
 
@@ -568,11 +427,11 @@ func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
 // unexpected errors as regular errors can be ignored since there
 // might be enough quorum to be operational.  Heals only fresh disks.
 func healFormatXLFreshDisks(storageDisks []StorageAPI,
-	formatConfigs []*formatConfigV1) error {
+	formats []*formatXLV1) error {
 
 	// Reorder the disks based on the JBOD order.
 	referenceConfig, orderedDisks, err := reorderDisks(storageDisks,
-		formatConfigs, true)
+		formats, true)
 	if err != nil {
 		return err
 	}
@@ -581,7 +440,7 @@ func healFormatXLFreshDisks(storageDisks []StorageAPI,
 	// We need to make sure we have kept the previous order
 	// and allowed fresh disks to be arranged anywhere.
 	// Following block facilitates to put fresh disks.
-	for index, format := range formatConfigs {
+	for index, format := range formats {
 		// Format is missing so we go through ordered disks.
 		if format == nil {
 			// At this point when disk is missing the fresh disk
@@ -624,9 +483,9 @@ func collectUnAssignedDisks(storageDisks, orderedDisks []StorageAPI) (
 // Inspect the content of all disks to guess the right order according
 // to the format files. The right order is represented in orderedDisks
 func reorderDisksByInspection(orderedDisks, storageDisks []StorageAPI,
-	formatConfigs []*formatConfigV1) ([]StorageAPI, error) {
+	formats []*formatXLV1) ([]StorageAPI, error) {
 
-	for index, format := range formatConfigs {
+	for index, format := range formats {
 		if format != nil {
 			continue
 		}
@@ -681,11 +540,11 @@ func reorderDisksByInspection(orderedDisks, storageDisks []StorageAPI,
 
 // Heals corrupted format json in all disks
 func healFormatXLCorruptedDisks(storageDisks []StorageAPI,
-	formatConfigs []*formatConfigV1) error {
+	formats []*formatXLV1) error {
 
 	// Reorder the disks based on the JBOD order.
 	referenceConfig, orderedDisks, err := reorderDisks(storageDisks,
-		formatConfigs, true)
+		formats, true)
 	if err != nil {
 		return err
 	}
@@ -693,7 +552,7 @@ func healFormatXLCorruptedDisks(storageDisks []StorageAPI,
 	// For disks with corrupted formats, inspect the disks
 	// contents to guess the disks order
 	orderedDisks, err = reorderDisksByInspection(orderedDisks, storageDisks,
-		formatConfigs)
+		formats)
 	if err != nil {
 		return err
 	}
@@ -721,7 +580,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 	var unformattedDisksFoundCnt = 0
 	var diskNotFoundCount = 0
 	var corruptedDisksFoundCnt = 0
-	formatConfigs := make([]*formatConfigV1, len(bootstrapDisks))
+	formats := make([]*formatXLV1, len(bootstrapDisks))
 
 	// Try to load `format.json` bootstrap disks.
 	for index, disk := range bootstrapDisks {
@@ -729,7 +588,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 			diskNotFoundCount++
 			continue
 		}
-		var formatXL *formatConfigV1
+		var formatXL *formatXLV1
 		formatXL, err = loadFormat(disk)
 		if err != nil {
 			if err == errUnformattedDisk {
@@ -745,7 +604,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 			return nil, err
 		}
 		// Save valid formats.
-		formatConfigs[index] = formatXL
+		formats[index] = formatXL
 	}
 
 	// If all disks indicate that 'format.json' is not available return 'errUnformattedDisk'.
@@ -760,59 +619,59 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 	}
 
 	// Validate the format configs read are correct.
-	if err = checkFormatXL(formatConfigs); err != nil {
+	if err = checkFormatXL(formats); err != nil {
 		return nil, err
 	}
 	// Erasure code requires disks to be presented in the same
 	// order each time.
-	_, orderedDisks, err := reorderDisks(bootstrapDisks, formatConfigs,
+	_, orderedDisks, err := reorderDisks(bootstrapDisks, formats,
 		false)
 	return orderedDisks, err
 }
 
-func checkFormatXLValue(formatXL *formatConfigV1) error {
+func checkFormatXLValue(formatXL *formatXLV1) error {
 	// Validate format version and format type.
-	if formatXL.Version != formatFileV1 {
+	if formatXL.Version != formatMetaVersionV1 {
 		return fmt.Errorf("Unsupported version of backend format [%s] found", formatXL.Version)
 	}
 	if formatXL.Format != formatBackendXL {
 		return fmt.Errorf("Unsupported backend format [%s] found", formatXL.Format)
 	}
-	if formatXL.XL.Version != "1" {
+	if formatXL.XL.Version != formatXLVersionV1 {
 		return fmt.Errorf("Unsupported XL backend format found [%s]", formatXL.XL.Version)
 	}
 	return nil
 }
 
-func checkFormatXLValues(formatConfigs []*formatConfigV1) (int, error) {
-	for i, formatXL := range formatConfigs {
+func checkFormatXLValues(formats []*formatXLV1) (int, error) {
+	for i, formatXL := range formats {
 		if formatXL == nil {
 			continue
 		}
 		if err := checkFormatXLValue(formatXL); err != nil {
 			return i, err
 		}
-		if len(formatConfigs) != len(formatXL.XL.JBOD) {
+		if len(formats) != len(formatXL.XL.JBOD) {
 			return i, fmt.Errorf("Number of disks %d did not match the backend format %d",
-				len(formatConfigs), len(formatXL.XL.JBOD))
+				len(formats), len(formatXL.XL.JBOD))
 		}
 	}
 	return -1, nil
 }
 
 // checkFormatXL - verifies if format.json format is intact.
-func checkFormatXL(formatConfigs []*formatConfigV1) error {
-	if _, err := checkFormatXLValues(formatConfigs); err != nil {
+func checkFormatXL(formats []*formatXLV1) error {
+	if _, err := checkFormatXLValues(formats); err != nil {
 		return err
 	}
-	if err := checkJBODConsistency(formatConfigs); err != nil {
+	if err := checkJBODConsistency(formats); err != nil {
 		return err
 	}
-	return checkDisksConsistency(formatConfigs)
+	return checkDisksConsistency(formats)
 }
 
 // saveFormatXL - populates `format.json` on disks in its order.
-func saveFormatXL(storageDisks []StorageAPI, formats []*formatConfigV1) error {
+func saveFormatXL(storageDisks []StorageAPI, formats []*formatXLV1) error {
 	var errs = make([]error, len(storageDisks))
 	var wg = &sync.WaitGroup{}
 	// Write `format.json` to all disks.
@@ -821,7 +680,7 @@ func saveFormatXL(storageDisks []StorageAPI, formats []*formatConfigV1) error {
 			continue
 		}
 		wg.Add(1)
-		go func(index int, disk StorageAPI, format *formatConfigV1) {
+		go func(index int, disk StorageAPI, format *formatXLV1) {
 			defer wg.Done()
 
 			// Marshal and write to disk.
@@ -862,45 +721,37 @@ func saveFormatXL(storageDisks []StorageAPI, formats []*formatConfigV1) error {
 	return nil
 }
 
-// initFormatXL - save XL format configuration on all disks.
-func initFormatXL(storageDisks []StorageAPI) (err error) {
-	// Initialize jbods.
-	var jbod = make([]string, len(storageDisks))
+// Return a slice of format, to be used to format uninitialized disks.
+func newFormatXLV1(diskCount int) []*formatXLV1 {
+	var jbod = make([]string, diskCount)
 
-	// Initialize formats.
-	var formats = make([]*formatConfigV1, len(storageDisks))
+	var formats = make([]*formatXLV1, diskCount)
 
-	// Initialize `format.json`.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		// Allocate format config.
-		formats[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    mustGetUUID(),
-			},
-		}
-		jbod[index] = formats[index].XL.Disk
+	for i := 0; i < diskCount; i++ {
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = mustGetUUID()
+		formats[i] = format
+		jbod[i] = formats[i].XL.Disk
 	}
 
 	// Update the jbod entries.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		// Save jbod.
-		formats[index].XL.JBOD = jbod
+	for i := 0; i < diskCount; i++ {
+		formats[i].XL.JBOD = jbod
 	}
 
+	return formats
+}
+
+// initFormatXL - save XL format configuration on all disks.
+func initFormatXL(storageDisks []StorageAPI) (err error) {
 	// Initialize meta volume, if volume already exists ignores it.
 	if err := initMetaVolume(storageDisks); err != nil {
 		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save formats `format.json` across all disks.
-	return saveFormatXL(storageDisks, formats)
+	return saveFormatXL(storageDisks, newFormatXLV1(len(storageDisks)))
 }

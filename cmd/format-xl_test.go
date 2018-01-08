@@ -18,54 +18,46 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
-	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/lock"
 )
 
 // generates a valid format.json for XL backend.
-func genFormatXLValid() []*formatConfigV1 {
+func genFormatXLValid() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	return formatConfigs
 }
 
 // generates a invalid format.json version for XL backend.
-func genFormatXLInvalidVersion() []*formatConfigV1 {
+func genFormatXLInvalidVersion() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	// Corrupt version numbers.
 	formatConfigs[0].Version = "2"
@@ -74,46 +66,42 @@ func genFormatXLInvalidVersion() []*formatConfigV1 {
 }
 
 // generates a invalid format.json version for XL backend.
-func genFormatXLInvalidFormat() []*formatConfigV1 {
+func genFormatXLInvalidFormat() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
-	// Corrupt version numbers.
+	// Corrupt format.
 	formatConfigs[0].Format = "lx"
 	formatConfigs[3].Format = "lx"
 	return formatConfigs
 }
 
 // generates a invalid format.json version for XL backend.
-func genFormatXLInvalidXLVersion() []*formatConfigV1 {
+func genFormatXLInvalidXLVersion() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	// Corrupt version numbers.
 	formatConfigs[0].XL.Version = "10"
@@ -121,51 +109,47 @@ func genFormatXLInvalidXLVersion() []*formatConfigV1 {
 	return formatConfigs
 }
 
-func genFormatFS() *formatConfigV1 {
-	return &formatConfigV1{
-		Version: formatFileV1,
-		Format:  formatBackendFS,
-	}
+func genFormatFS() *formatXLV1 {
+	format := &formatXLV1{}
+	format.Version = formatMetaVersionV1
+	format.Format = formatBackendFS
+	return format
 }
 
 // generates a invalid format.json version for XL backend.
-func genFormatXLInvalidJBODCount() []*formatConfigV1 {
+func genFormatXLInvalidJBODCount() []*formatXLV1 {
 	jbod := make([]string, 7)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	return formatConfigs
 }
 
 // generates a invalid format.json JBOD for XL backend.
-func genFormatXLInvalidJBOD() []*formatConfigV1 {
+func genFormatXLInvalidJBOD() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
@@ -177,22 +161,20 @@ func genFormatXLInvalidJBOD() []*formatConfigV1 {
 }
 
 // generates a invalid format.json Disk UUID for XL backend.
-func genFormatXLInvalidDisks() []*formatConfigV1 {
+func genFormatXLInvalidDisks() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	// Make disk 5 and disk 8 have inconsistent disk uuid's.
 	formatConfigs[4].XL.Disk = mustGetUUID()
@@ -201,22 +183,20 @@ func genFormatXLInvalidDisks() []*formatConfigV1 {
 }
 
 // generates a invalid format.json Disk UUID in wrong order for XL backend.
-func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
+func genFormatXLInvalidDisksOrder() []*formatXLV1 {
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	// Re order jbod for failure case.
 	var jbod1 = make([]string, 8)
@@ -459,7 +439,7 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 //  - invalid JBOD
 //  - invalid Disk uuid
 func TestFormatXL(t *testing.T) {
-	formatInputCases := [][]*formatConfigV1{
+	formatInputCases := [][]*formatXLV1{
 		genFormatXLValid(),
 		genFormatXLInvalidVersion(),
 		genFormatXLInvalidFormat(),
@@ -470,7 +450,7 @@ func TestFormatXL(t *testing.T) {
 		genFormatXLInvalidDisksOrder(),
 	}
 	testCases := []struct {
-		formatConfigs []*formatConfigV1
+		formatConfigs []*formatXLV1
 		shouldPass    bool
 	}{
 		{
@@ -525,22 +505,20 @@ func TestSavedUUIDOrder(t *testing.T) {
 		shouldPass bool
 	}, 8)
 	jbod := make([]string, 8)
-	formatConfigs := make([]*formatConfigV1, 8)
+	formatConfigs := make([]*formatXLV1, 8)
 	for index := range jbod {
 		jbod[index] = mustGetUUID()
 		uuidTestCases[index].uuid = jbod[index]
 		uuidTestCases[index].shouldPass = true
 	}
 	for index := range jbod {
-		formatConfigs[index] = &formatConfigV1{
-			Version: formatFileV1,
-			Format:  formatBackendXL,
-			XL: &xlFormat{
-				Version: xlFormatBackendV1,
-				Disk:    jbod[index],
-				JBOD:    jbod,
-			},
-		}
+		format := &formatXLV1{}
+		format.Version = formatMetaVersionV1
+		format.Format = formatBackendXL
+		format.XL.Version = formatXLVersionV1
+		format.XL.Disk = jbod[index]
+		format.XL.JBOD = jbod
+		formatConfigs[index] = format
 	}
 	// Re order jbod for failure case.
 	var jbod1 = make([]string, 8)
@@ -653,169 +631,15 @@ func TestGenericFormatCheckXL(t *testing.T) {
 		t.Fatalf("Should fail here")
 	}
 	errs = []error{nil}
-	if err := genericFormatCheckXL([]*formatConfigV1{genFormatFS()}, errs); err == nil {
+	format := &formatXLV1{}
+	format.Version = formatMetaVersionV1
+	format.Format = formatBackendFS
+	if err := genericFormatCheckXL([]*formatXLV1{format}, errs); err == nil {
 		t.Fatalf("Should fail here")
 	}
 	errs = []error{errFaultyDisk}
-	if err := genericFormatCheckXL([]*formatConfigV1{genFormatFS()}, errs); err == nil {
+	if err := genericFormatCheckXL([]*formatXLV1{format}, errs); err == nil {
 		t.Fatalf("Should fail here")
-	}
-}
-
-// TestFSCheckFormatFSErr - test loadFormatFS loading older format.
-func TestFSCheckFormatFSErr(t *testing.T) {
-	// Prepare for testing
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer os.RemoveAll(disk)
-
-	// Assign a new UUID.
-	uuid := mustGetUUID()
-
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolumeFS(disk, uuid); err != nil {
-		t.Fatal(err)
-	}
-
-	testCases := []struct {
-		format         *formatConfigV1
-		formatWriteErr error
-		formatCheckErr error
-		shouldPass     bool
-	}{
-		{
-			format: &formatConfigV1{
-				Version: formatFileV1,
-				Format:  formatBackendFS,
-				FS: &fsFormat{
-					Version: fsFormatBackendV1,
-				},
-			},
-			formatCheckErr: nil,
-			shouldPass:     true,
-		},
-		{
-			format: &formatConfigV1{
-				Version: formatFileV1,
-				Format:  formatBackendFS,
-				FS: &fsFormat{
-					Version: "10",
-				},
-			},
-			formatCheckErr: errors.New("Unknown backend FS format version '10'"),
-			shouldPass:     false,
-		},
-		{
-			format: &formatConfigV1{
-				Version: formatFileV1,
-				Format:  "garbage",
-				FS: &fsFormat{
-					Version: fsFormatBackendV1,
-				},
-			},
-			formatCheckErr: errors.New("FS backend format required. Found 'garbage'"),
-		},
-		{
-			format: &formatConfigV1{
-				Version: "-1",
-				Format:  formatBackendFS,
-				FS: &fsFormat{
-					Version: fsFormatBackendV1,
-				},
-			},
-			formatCheckErr: errors.New("Unknown format file version '-1'"),
-		},
-	}
-
-	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
-	for i, testCase := range testCases {
-		lk, err := lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = testCase.format.WriteTo(lk)
-		lk.Close()
-		if err != nil {
-			t.Fatalf("Test %d: Expected nil, got %s", i+1, err)
-		}
-
-		lk, err = lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		formatCfg := &formatConfigV1{}
-		_, err = formatCfg.ReadFrom(lk)
-		lk.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = formatCfg.CheckFS()
-		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: Should not fail with unexpected %s, expected nil", i+1, err)
-		}
-		if err == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: Should fail with expected %s, got nil", i+1, testCase.formatCheckErr)
-		}
-		if err != nil && !testCase.shouldPass {
-			if errors2.Cause(err).Error() != testCase.formatCheckErr.Error() {
-				t.Errorf("Test %d: Should fail with expected %s, got %s", i+1, testCase.formatCheckErr, err)
-			}
-		}
-	}
-}
-
-// TestFSCheckFormatFS - test loadFormatFS with healty and faulty disks
-func TestFSCheckFormatFS(t *testing.T) {
-	// Prepare for testing
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer os.RemoveAll(disk)
-
-	// Assign a new UUID.
-	uuid := mustGetUUID()
-
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolumeFS(disk, uuid); err != nil {
-		t.Fatal(err)
-	}
-
-	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
-	lk, err := lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	format := newFSFormatV1()
-	_, err = format.WriteTo(lk)
-	lk.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Loading corrupted format file
-	file, err := os.OpenFile((fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		t.Fatal("Should not fail here", err)
-	}
-	file.Write([]byte{'b'})
-	file.Close()
-
-	lk, err = lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	format = &formatConfigV1{}
-	_, err = format.ReadFrom(lk)
-	lk.Close()
-	if err == nil {
-		t.Fatal("Should return an error here")
-	}
-
-	// Loading format file from disk not found.
-	os.RemoveAll(disk)
-	_, err = lock.LockedOpenFile((fsFormatPath), os.O_RDONLY, 0600)
-	if err != nil && !os.IsNotExist(err) {
-		t.Fatal("Should return 'format.json' does not exist, but got", err)
 	}
 }
 

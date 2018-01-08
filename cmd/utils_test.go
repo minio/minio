@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -361,5 +362,21 @@ func TestContains(t *testing.T) {
 		if found != testCase.found {
 			t.Fatalf("Test %v: expected: %v, got: %v", i+1, testCase.found, found)
 		}
+	}
+}
+
+// Test jsonLoadFromSeeker.
+func TestJSONLoadFromSeeker(t *testing.T) {
+	format := newFormatFSV1()
+	b, err := json.Marshal(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotFormat formatFSV1
+	if err = jsonLoadFromSeeker(bytes.NewReader(b), &gotFormat); err != nil {
+		t.Fatal(err)
+	}
+	if *format != gotFormat {
+		t.Fatal("jsonLoadFromSeeker() failed to decode json")
 	}
 }
