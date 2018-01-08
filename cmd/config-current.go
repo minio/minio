@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"strconv"
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
@@ -108,46 +107,35 @@ func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 	s.Lock()
 	defer s.Unlock()
 
-	// Set the values
-	s.StorageClass.Standard = standardClass.Scheme + strconv.Itoa(standardClass.Parity)
-	s.StorageClass.RRS = rrsClass.Scheme + strconv.Itoa(rrsClass.Parity)
+	s.StorageClass.Standard = standardClass
+	s.StorageClass.RRS = rrsClass
 }
 
 // GetStorageClass reads storage class fields from current config, parses and validates it.
 // It returns the standard and reduced redundancy storage class struct
-func (s *serverConfig) GetStorageClass() (ssc, rrsc storageClass) {
+func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 	s.RLock()
 	defer s.RUnlock()
 
 	var err error
+	// Storage Class from config.json is already parsed and stored in s.StorageClass
+	// Now validate the storage class fields
+	ssc := s.StorageClass.Standard
+	rrsc := s.StorageClass.RRS
 
-	if s.StorageClass.Standard != "" {
-		// Parse the values read from config file into storageClass struct
-		ssc, err = parseStorageClass(s.StorageClass.Standard)
-		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.Standard)
-	}
-
-	if s.StorageClass.RRS != "" {
-		// Parse the values read from config file into storageClass struct
-		rrsc, err = parseStorageClass(s.StorageClass.RRS)
-		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.RRS)
-	}
-
-	// Validation is done after parsing both the storage classes. This is needed because we need one
-	// storage class value to deduce the correct value of the other storage class.
 	if rrsc.Scheme != "" {
 		err = validateRRSParity(rrsc.Parity, ssc.Parity)
-		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.RRS)
+		fatalIf(err, "Invalid value %s:%d set in config.json", rrsc.Scheme, rrsc.Parity)
 		globalIsStorageClass = true
 	}
 
 	if ssc.Scheme != "" {
 		err = validateSSParity(ssc.Parity, rrsc.Parity)
-		fatalIf(err, "Invalid value %s set in config.json", s.StorageClass.Standard)
+		fatalIf(err, "Invalid value %s:%d set in config.json", ssc.Scheme, ssc.Parity)
 		globalIsStorageClass = true
 	}
 
-	return
+	return s.StorageClass.Standard, s.StorageClass.RRS
 }
 
 // GetCredentials get current credentials.
@@ -169,11 +157,12 @@ func (s *serverConfig) Save() error {
 
 func newServerConfig() *serverConfig {
 	srvCfg := &serverConfig{
-		Version:    serverConfigVersion,
-		Credential: auth.MustGetNewCredentials(),
-		Region:     globalMinioDefaultRegion,
-		Browser:    true,
-		Notify:     &notifier{},
+		Version:      serverConfigVersion,
+		Credential:   auth.MustGetNewCredentials(),
+		Region:       globalMinioDefaultRegion,
+		Browser:      true,
+		StorageClass: storageClassConfig{},
+		Notify:       &notifier{},
 	}
 
 	// Make sure to initialize notification configs.
