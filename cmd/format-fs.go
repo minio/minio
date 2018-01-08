@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -74,30 +73,11 @@ func newFormatFSV2() (format *formatFSV2) {
 	return f
 }
 
-// Save to fs format.json
-func formatFSSave(f *os.File, data interface{}) error {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return errors2.Trace(err)
-	}
-	if err = f.Truncate(0); err != nil {
-		return errors2.Trace(err)
-	}
-	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	if err != nil {
-		return errors2.Trace(err)
-	}
-	return nil
-}
-
 // Returns the field formatMetaV1.Format i.e the string "fs" which is never likely to change.
 // We do not use this function in XL to get the format as the file is not fcntl-locked on XL.
 func formatMetaGetFormatBackendFS(r io.ReadSeeker) (string, error) {
 	format := &formatMetaV1{}
-	if err := jsonLoadFromSeeker(r, format); err != nil {
+	if err := jsonLoad(r, format); err != nil {
 		return "", err
 	}
 	if format.Version == formatMetaVersionV1 {
@@ -109,7 +89,7 @@ func formatMetaGetFormatBackendFS(r io.ReadSeeker) (string, error) {
 // Returns formatFS.FS.Version
 func formatFSGetVersion(r io.ReadSeeker) (string, error) {
 	format := &formatFSVersionDetect{}
-	if err := jsonLoadFromSeeker(r, format); err != nil {
+	if err := jsonLoad(r, format); err != nil {
 		return "", err
 	}
 	return format.FS.Version, nil
@@ -135,7 +115,7 @@ func formatFSMigrateV1ToV2(wlk *lock.LockedFile, fsPath string) error {
 		return err
 	}
 
-	return formatFSSave(wlk.File, newFormatFSV2())
+	return jsonSave(wlk.File, newFormatFSV2())
 }
 
 // Migrate the "fs" backend.
@@ -190,7 +170,7 @@ func createFormatFS(fsFormatPath string) error {
 		return nil
 	}
 
-	return formatFSSave(lk.File, newFormatFSV1())
+	return jsonSave(lk.File, newFormatFSV1())
 }
 
 // This function returns a read-locked format.json reference to the caller.

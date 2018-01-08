@@ -84,20 +84,14 @@ func (u *uploadsV1) IsEmpty() bool {
 }
 
 func (u *uploadsV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
-	// Serialize to prepare to write to disk.
-	var uplBytes []byte
-	uplBytes, err = json.Marshal(u)
+	if err = jsonSave(lk, u); err != nil {
+		return 0, err
+	}
+	fi, err := lk.Stat()
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
-	if err = lk.Truncate(0); err != nil {
-		return 0, errors.Trace(err)
-	}
-	_, err = lk.Write(uplBytes)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return int64(len(uplBytes)), nil
+	return fi.Size(), nil
 }
 
 func (u *uploadsV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {

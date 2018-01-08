@@ -265,9 +265,31 @@ func NewCustomHTTPTransport() http.RoundTripper {
 }
 
 // Load the json (typically from disk file).
-func jsonLoadFromSeeker(r io.ReadSeeker, data interface{}) error {
+func jsonLoad(r io.ReadSeeker, data interface{}) error {
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	return json.NewDecoder(r).Decode(data)
+}
+
+// Save to disk file in json format.
+func jsonSave(f interface {
+	io.WriteSeeker
+	Truncate(int64) error
+}, data interface{}) error {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	if err = f.Truncate(0); err != nil {
+		return err
+	}
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if err != nil {
+		return err
+	}
+	return nil
 }
