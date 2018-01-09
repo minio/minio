@@ -271,7 +271,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 |:---|:---|:---|
 | `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
 | `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `url` | _string_ | (Required) The Elasticsearch server's address. For example: `http://localhost:9200`. |
+| `url` | _string_ | (Required) The Elasticsearch server's address, with optional authentication info. For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`. |
 | `index` | _string_ | (Required) The name of an Elasticsearch index in which Minio will store documents. |
 
 An example of Elasticsearch configuration is as follows:
@@ -286,6 +286,8 @@ An example of Elasticsearch configuration is as follows:
     }
 },
 ```
+
+If Elasticsearch has authentication enabled, the credentials can be supplied to Minio via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
 After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:elasticsearch` at start-up if there were no errors.
 
@@ -529,8 +531,8 @@ Minio server also supports [NATS Streaming mode](http://nats.io/documentation/st
         }
     }
 },
-``` 
-Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting). 
+```
+Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
 
 ### Step 2: Enable bucket notification using Minio client
 
@@ -629,7 +631,7 @@ func main() {
 ```
 
 ```
-go run nats.go 
+go run nats.go
 2017/07/07 11:47:40 Connected
 2017/07/07 11:47:40 Subscribing to subject 'bucketevents'
 ```
