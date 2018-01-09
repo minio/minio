@@ -190,40 +190,6 @@ func TestS3SupportedAuthType(t *testing.T) {
 	}
 }
 
-// TestIsRequestUnsignedPayload - Test validates the Unsigned payload detection logic.
-func TestIsRequestUnsignedPayload(t *testing.T) {
-	testCases := []struct {
-		inputAmzContentHeader string
-		expectedResult        bool
-	}{
-		// Test case - 1.
-		// Test case with "X-Amz-Content-Sha256" header set to empty value.
-		{"", false},
-		// Test case - 2.
-		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD"
-		// The payload is flagged as unsigned When "X-Amz-Content-Sha256" header is set to  "UNSIGNED-PAYLOAD".
-		{unsignedPayload, true},
-		// Test case - 3.
-		// set to a random value.
-		{"abcd", false},
-	}
-
-	// creating an input HTTP request.
-	// Only the headers are relevant for this particular test.
-	inputReq, err := http.NewRequest("GET", "http://example.com", nil)
-	if err != nil {
-		t.Fatalf("Error initializing input HTTP request: %v", err)
-	}
-
-	for i, testCase := range testCases {
-		inputReq.Header.Set("X-Amz-Content-Sha256", testCase.inputAmzContentHeader)
-		actualResult := isRequestUnsignedPayload(inputReq)
-		if testCase.expectedResult != actualResult {
-			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)
-		}
-	}
-}
-
 func TestIsRequestPresignedSignatureV2(t *testing.T) {
 	testCases := []struct {
 		inputQueryKey   string
