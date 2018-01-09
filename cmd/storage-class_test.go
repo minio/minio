@@ -173,6 +173,7 @@ func testGetRedundancyCount(obj ObjectLayer, instanceType string, dirs []string,
 		{3, "", xl.storageDisks, 8, 8},
 		{4, reducedRedundancyStorageClass, xl.storageDisks, 9, 7},
 		{5, standardStorageClass, xl.storageDisks, 10, 6},
+		{6, "", xl.storageDisks, 9, 7},
 	}
 	for _, tt := range tests {
 		// Set env var for test case 4
@@ -182,6 +183,10 @@ func testGetRedundancyCount(obj ObjectLayer, instanceType string, dirs []string,
 		// Set env var for test case 5
 		if tt.name == 5 {
 			globalStandardStorageClass.Parity = 6
+		}
+		// Set env var for test case 6
+		if tt.name == 6 {
+			globalStandardStorageClass.Parity = 7
 		}
 		data, parity := getRedundancyCount(tt.sc, len(tt.disks))
 		if data != tt.expectedData {

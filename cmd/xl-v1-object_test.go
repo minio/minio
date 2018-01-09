@@ -112,6 +112,8 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 }
 
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
+	// Reset global storage class flags
+	resetGlobalStorageEnvs()
 	// Create an instance of xl backend.
 	obj, fsDirs, err := prepareXL16()
 	if err != nil {
