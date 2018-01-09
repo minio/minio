@@ -206,7 +206,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Fetch object from store.
-		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
+		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard, "")
 		err = errors.Cause(err)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)

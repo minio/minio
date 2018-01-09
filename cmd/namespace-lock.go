@@ -92,9 +92,9 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 	return clnts, myNode
 }
 
-// initNSLock - initialize name space lock map.
-func initNSLock(isDistXL bool) {
-	globalNSMutex = &nsLockMap{
+// newNSLock - return a new name space lock map.
+func newNSLock(isDistXL bool) *nsLockMap {
+	nsMutex := nsLockMap{
 		isDistXL: isDistXL,
 		lockMap:  make(map[nsParam]*nsLock),
 		counters: &lockStat{},
@@ -102,7 +102,13 @@ func initNSLock(isDistXL bool) {
 
 	// Initialize nsLockMap with entry for instrumentation information.
 	// Entries of <volume,path> -> stateInfo of locks
-	globalNSMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
+	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
+	return &nsMutex
+}
+
+// initNSLock - initialize name space lock map.
+func initNSLock(isDistXL bool) {
+	globalNSMutex = newNSLock(isDistXL)
 }
 
 // nsParam - carries name space resource.

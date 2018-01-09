@@ -43,7 +43,7 @@ func mkRange(offset, size int64) string {
 
 // AnonGetObject - performs a plain http GET request on a public resource,
 // fails if the resource is not public.
-func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+func (l *b2Objects) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	uri := fmt.Sprintf("%s/file/%s/%s", l.b2Client.DownloadURI, bucket, object)
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {

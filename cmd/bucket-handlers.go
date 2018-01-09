@@ -301,16 +301,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 				return
 			}
-			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
-			if timedOutErr := objectLock.GetLock(globalObjectTimeout); timedOutErr != nil {
-				dErrs[i] = timedOutErr
-			} else {
-				defer objectLock.Unlock()
-
-				dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
-				if dErr != nil {
-					dErrs[i] = dErr
-				}
+			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
+			if dErr != nil {
+				dErrs[i] = dErr
 			}
 		}(index, object)
 	}
@@ -558,13 +551,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
-
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.Unlock()
 
 	hashReader, err := hash.NewReader(fileBody, fileSize, "", "")
 	if err != nil {

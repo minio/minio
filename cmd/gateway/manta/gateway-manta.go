@@ -468,7 +468,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 // indicates the total length of the object.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
 		return errors.Trace(fmt.Errorf("Unexpected error"))
@@ -568,7 +568,7 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 // Uses Manta Snaplinks API.
 //
 // https://apidocs.joyent.com/manta/api.html#PutSnapLink
-func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
 	ctx := context.Background()
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),

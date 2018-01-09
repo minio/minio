@@ -32,7 +32,10 @@ func TestListLocksInfo(t *testing.T) {
 	// Acquire a few locks to populate lock instrumentation.
 	// Take 10 read locks on bucket1/prefix1/obj1
 	for i := 0; i < 10; i++ {
-		readLk := globalNSMutex.NewNSLock("bucket1", "prefix1/obj1")
+		readLk, err := newObjectLayerFn().GetRWLock("bucket1", "prefix1/obj1")
+		if err != nil {
+			t.Errorf("error getting lock, %s", err)
+		}
 		if readLk.GetRLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
 			t.Errorf("Failed to get read lock on iteration %d", i)
 		}
@@ -40,7 +43,10 @@ func TestListLocksInfo(t *testing.T) {
 
 	// Take write locks on bucket1/prefix/obj{11..19}
 	for i := 0; i < 10; i++ {
-		wrLk := globalNSMutex.NewNSLock("bucket1", fmt.Sprintf("prefix1/obj%d", 10+i))
+		wrLk, err := newObjectLayerFn().GetRWLock("bucket1", fmt.Sprintf("prefix1/obj%d", 10+i))
+		if err != nil {
+			t.Errorf("error getting lock, %s", err)
+		}
 		if wrLk.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
 			t.Errorf("Failed to get write lock on iteration %d", i)
 		}

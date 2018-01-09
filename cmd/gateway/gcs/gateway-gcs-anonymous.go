@@ -33,7 +33,7 @@ func toGCSPublicURL(bucket, object string) string {
 }
 
 // AnonGetObject - Get object anonymously
-func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)
 	if err != nil {
 		return gcsToObjectError(errors.Trace(err), bucket, object)

@@ -128,7 +128,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	setHeadGetRespHeaders(w, r.URL.Query())
 	httpWriter := ioutil.WriteOnClose(w)
 	// Reads the object at startOffset and writes to mw.
-	if err = getObject(bucket, object, startOffset, length, httpWriter); err != nil {
+	if err = getObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !httpWriter.HasWritten() {
 			// Error response only if no data has been written to client yet. i.e if
@@ -249,14 +249,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 		}
 	}
-
-	// Lock the object.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalOperationTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.Unlock()
 
 	var (
 		// Make sure we hex encode md5sum here.

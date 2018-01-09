@@ -169,7 +169,7 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 }
 
 // listMultipartUploadIDs - list all the upload ids from a marker up to 'count'.
-func listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]MultipartInfo, bool, error) {
+func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarker string, count int, disk StorageAPI) ([]MultipartInfo, bool, error) {
 	var uploads []MultipartInfo
 	// Read `uploads.json`.
 	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)

@@ -410,7 +410,7 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	return loi, nil
 }
 
-func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(dstFile)
 

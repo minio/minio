@@ -506,7 +506,7 @@ func (l *ossObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter 
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func ossGetObject(client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer) error {
+func ossGetObject(client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
 		return ossToObjectError(errors.Trace(fmt.Errorf("Invalid argument")), bucket, key)
 	}
@@ -539,8 +539,8 @@ func ossGetObject(client *oss.Client, bucket, key string, startOffset, length in
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *ossObjects) GetObject(bucket, key string, startOffset, length int64, writer io.Writer) error {
-	return ossGetObject(l.Client, bucket, key, startOffset, length, writer)
+func (l *ossObjects) GetObject(bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
+	return ossGetObject(l.Client, bucket, key, startOffset, length, writer, etag)
 }
 
 func translatePlainError(err error) error {
@@ -618,7 +618,7 @@ func (l *ossObjects) PutObject(bucket, object string, data *hash.Reader, metadat
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Client.Bucket(srcBucket)
 	if err != nil {
 		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
@@ -804,7 +804,7 @@ func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, par
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *ossObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, metadata map[string]string) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, metadata map[string]string, srcEtag string) (p minio.PartInfo, err error) {
 
 	bkt, err := l.Client.Bucket(destBucket)
 	if err != nil {

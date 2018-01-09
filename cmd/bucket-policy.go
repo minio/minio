@@ -148,15 +148,8 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 
-	// Acquire a read lock on policy config before reading.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	if err = objLock.GetRLock(globalOperationTimeout); err != nil {
-		return nil, err
-	}
-	defer objLock.RUnlock()
-
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, -1, &buffer)
+	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, -1, &buffer, "")
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
@@ -190,12 +183,6 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPol
 // if no policies are found.
 func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
-	// Acquire a write lock on policy config before modifying.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
 	err := objAPI.DeleteObject(minioMetaBucket, policyPath)
 	if err != nil {
 		err = errors.Cause(err)
@@ -215,13 +202,6 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 		return err
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
-	// Acquire a write lock on policy config before modifying.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	if err = objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)

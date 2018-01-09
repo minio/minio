@@ -542,7 +542,7 @@ func (xl xlObjects) HealObject(bucket, object string) (int, int, error) {
 	}
 
 	// Lock the object before healing.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
 		return 0, 0, err
 	}

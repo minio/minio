@@ -109,7 +109,7 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucketName, objectName))
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucketName, objectName))
 	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
 		return nil, false, errors.Trace(err)
 	}
@@ -408,7 +408,7 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return "", err
 	}
@@ -437,17 +437,34 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
-	startOffset int64, length int64, metadata map[string]string) (pi PartInfo, e error) {
+	startOffset int64, length int64, metadata map[string]string, srcEtag string) (pi PartInfo, e error) {
+
+	// Hold read locks on source object only if we are
+	// going to read data from source object.
+	objectSRLock := fs.nsMutex.NewNSLock(srcBucket, srcObject)
+	if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+		return pi, err
+	}
+	defer objectSRLock.RUnlock()
 
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
 		return pi, err
 	}
 
+	if srcEtag != "" {
+		etag, err := fs.getObjectETag(srcBucket, srcObject)
+		if err != nil {
+			return pi, toObjectErr(err, srcBucket, srcObject)
+		}
+		if etag != srcEtag {
+			return pi, toObjectErr(errors.Trace(InvalidETag{}), srcBucket, srcObject)
+		}
+	}
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcEtag); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
 			return
@@ -491,7 +508,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -557,7 +574,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	partPath := pathJoin(bucket, object, uploadID, partSuffix)
 	// Lock the part so that another part upload with same part-number gets blocked
 	// while the part is getting appended in the background.
-	partLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, partPath)
+	partLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, partPath)
 	if err = partLock.GetLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -689,7 +706,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
 		return lpi, errors.Trace(err)
 	}
@@ -714,6 +731,12 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return oi, err
 	}
 
+	// Hold write lock on the object.
+	destLock := fs.nsMutex.NewNSLock(bucket, object)
+	if err := destLock.GetLock(globalObjectTimeout); err != nil {
+		return oi, err
+	}
+	defer destLock.Unlock()
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(bucket, pathutil.Dir(object)) {
 		return oi, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
@@ -734,7 +757,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return oi, err
 	}
@@ -974,7 +997,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	objectMPartPathLock := fs.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return err

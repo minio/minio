@@ -417,11 +417,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
-
-	// Remove lock matching bucket/prefix held longer than duration.
-	for _, volLock := range volLocks {
-		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
-	}
+	newObjectLayerFn().ClearLocks(volLocks)
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
@@ -1074,7 +1070,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// Take a lock on minio/config.json. NB minio is a reserved
 	// bucket name and wouldn't conflict with normal object
 	// operations.
-	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
+	configLock, _ := newObjectLayerFn().GetRWLock(minioReservedBucket, minioConfigFile)
 	if configLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return
