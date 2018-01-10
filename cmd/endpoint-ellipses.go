@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,230 +18,168 @@ package cmd
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/ellipses"
 )
 
 // This file implements and supports ellipses pattern for
 // `minio server` command line arguments.
 
-var (
-	// Regex to extract ellipses syntax for distributed setup.
-	regexpTwoEllipses = regexp.MustCompile(`(^https?://.*)({[0-9]*\.\.\.[0-9]*})(.*)({[0-9]*\.\.\.[0-9]*})`)
-
-	// Regex to extract ellipses syntax for standalone setup.
-	regexpSingleEllipses = regexp.MustCompile(`(.*)({[0-9]*\.\.\.[0-9]*})`)
-
-	// Ellipses constants
-	openBraces  = "{"
-	closeBraces = "}"
-	ellipses    = "..."
+// Maximum number of unique args supported on the command line.
+const (
+	serverCommandLineArgsMax = 32
 )
 
 // Endpoint set represents parsed ellipses values, also provides
 // methods to get the sets of endpoints.
 type endpointSet struct {
-	ellipsesPattern
-	totalSize  uint64
-	setIndexes []uint64
+	argPatterns []ellipses.ArgPattern
+	endpoints   []string   // Endpoints saved from previous GetEndpoints().
+	setIndexes  [][]uint64 // All the sets.
 }
 
 // Supported set sizes this is used to find the optimal
 // single set size.
-var setSizes = []uint64{8, 10, 12, 14, 16}
+var setSizes = []uint64{4, 6, 8, 10, 12, 14, 16}
 
-// Function to look for if total size provided, is indeed
-// divisible with known set sizes.
-func isSetDivisible(setSize uint64) bool {
-	for _, i := range setSizes {
-		if setSize%i == 0 {
-			return true
+// getDivisibleSize - returns a greatest common divisor of
+// all the ellipses sizes.
+func getDivisibleSize(totalSizes []uint64) (result uint64) {
+	gcd := func(x, y uint64) uint64 {
+		for y != 0 {
+			x, y = y, x%y
 		}
+		return x
 	}
-	return false
+	if len(totalSizes) > 1 {
+		result = gcd(totalSizes[0], totalSizes[1])
+		totalSizes = totalSizes[2:]
+		for i := 0; i < len(totalSizes); i++ {
+			result = gcd(result, totalSizes[i])
+		}
+		return result
+	}
+	return gcd(totalSizes[0], totalSizes[0])
 }
 
 // getSetIndexes returns list of indexes which provides the set size
 // on each index, this function also determines the final set size
 // The final set size has the affinity towards choosing smaller
 // indexes
-func getSetIndexes(totalSize uint64) (setIndexes []uint64, err error) {
-	// Total size is lesser than the first element of the known
-	// set sizes, then choose the set size to be totalSize.
-	if totalSize < setSizes[0] {
-		return []uint64{totalSize}, nil
+func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, err error) {
+	if len(totalSizes) == 0 || len(args) == 0 {
+		return nil, errInvalidArgument
 	}
 
-	// Verify if the totalSize is divisible.
-	if !isSetDivisible(totalSize) {
-		return nil, fmt.Errorf("totalSize %d is not divisible with any %v", totalSize, setSizes)
-	}
-
-	var prevD = totalSize / setSizes[0]
-	var setSize uint64
-	for _, i := range setSizes {
-		if totalSize%i == 0 {
-			d := totalSize / i
-			if d <= prevD {
-				prevD = d
-				setSize = i
-			}
+	setIndexes = make([][]uint64, len(totalSizes))
+	for i, totalSize := range totalSizes {
+		// Check if totalSize has minimum range upto setSize
+		if totalSize < setSizes[0] {
+			return nil, fmt.Errorf("Invalid inputs (%s). Ellipses range or number of args %d should be atleast divisible by least possible set size %d",
+				args[i], totalSize, setSizes[0])
 		}
 	}
 
-	for i := uint64(0); i < prevD; i++ {
-		setIndexes = append(setIndexes, setSize)
+	var setSize uint64
+
+	commonSize := getDivisibleSize(totalSizes)
+	if commonSize > setSizes[len(setSizes)-1] {
+		prevD := commonSize / setSizes[0]
+		for _, i := range setSizes {
+			if commonSize%i == 0 {
+				d := commonSize / i
+				if d <= prevD {
+					prevD = d
+					setSize = i
+				}
+			}
+		}
+	} else {
+		setSize = commonSize
+	}
+
+	// isValidSetSize - checks whether given count is a valid set size for erasure coding.
+	isValidSetSize := func(count uint64) bool {
+		return (count >= setSizes[0] && count <= setSizes[len(setSizes)-1] && count%2 == 0)
+	}
+
+	// Check whether setSize is with the supported range.
+	if !isValidSetSize(setSize) {
+		return nil, fmt.Errorf("Invalid inputs (%s). Ellipses range or number of args %d should be atleast divisible by least possible set size %d",
+			args, setSize, setSizes[0])
+	}
+
+	for i := range totalSizes {
+		for j := uint64(0); j < totalSizes[i]/setSize; j++ {
+			setIndexes[i] = append(setIndexes[i], setSize)
+		}
 	}
 
 	return setIndexes, nil
+}
+
+func (s endpointSet) GetEndpoints() (endpoints []string) {
+	if len(s.endpoints) != 0 {
+		return s.endpoints
+	}
+	for _, argPattern := range s.argPatterns {
+		for _, lbls := range argPattern.Expand() {
+			endpoints = append(endpoints, strings.Join(lbls, ""))
+		}
+	}
+	s.endpoints = endpoints
+	return endpoints
 }
 
 // Get returns the sets representation of the endpoints
 // this function also intelligently decides on what will
 // be the right set size etc.
 func (s endpointSet) Get() (sets [][]string) {
-	sets = make([][]string, len(s.setIndexes))
-
-	var endpoints []string
-	if len(s.ellipsesPattern) == 2 {
-		// Loop through disks first for distributed and exhaust all hosts
-		// for better distributed erasure coded behavior.
-		for j := s.ellipsesPattern[1].start; j <= s.ellipsesPattern[1].end; j++ {
-			for i := s.ellipsesPattern[0].start; i <= s.ellipsesPattern[0].end; i++ {
-				endpoint := fmt.Sprintf("%s%d%s%d",
-					s.ellipsesPattern[0].prefix, i,
-					s.ellipsesPattern[1].prefix, j)
-				endpoints = append(endpoints, endpoint)
-			}
-		}
-	} else {
-		// In standalone we just loop through parsed pattern and create endpoints.
-		for i := s.ellipsesPattern[0].start; i <= s.ellipsesPattern[0].end; i++ {
-			endpoint := fmt.Sprintf("%s%d", s.ellipsesPattern[0].prefix, i)
-			endpoints = append(endpoints, endpoint)
-		}
-	}
-
-	var j = uint64(0)
+	var k = uint64(0)
+	endpoints := s.GetEndpoints()
 	for i := range s.setIndexes {
-		sets[i] = endpoints[j : s.setIndexes[i]+j]
-		j = s.setIndexes[i] + j
+		for j := range s.setIndexes[i] {
+			sets = append(sets, endpoints[k:s.setIndexes[i][j]+k])
+			k = s.setIndexes[i][j] + k
+		}
 	}
 
 	return sets
 }
 
-type ellipsesSubPattern struct {
-	prefix  string
-	pattern string
-	start   uint64
-	end     uint64
+func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
+	var totalSizes []uint64
+	for _, argPattern := range argPatterns {
+		var totalSize uint64 = 1
+		for _, p := range argPattern {
+			totalSize = totalSize * (p.End - (p.Start - 1))
+		}
+		totalSizes = append(totalSizes, totalSize)
+	}
+	return totalSizes
 }
 
-type ellipsesPattern []ellipsesSubPattern
-
-// Parses an ellipses range pattern of following style
-// `{1...64}`
-// `{33...64}`
-func parseEllipsesRange(pattern string) (start, end uint64, err error) {
-	if strings.Index(pattern, openBraces) == -1 {
-		return 0, 0, errInvalidArgument
-	}
-	if strings.Index(pattern, closeBraces) == -1 {
-		return 0, 0, errInvalidArgument
-	}
-
-	pattern = strings.TrimPrefix(pattern, openBraces)
-	pattern = strings.TrimSuffix(pattern, closeBraces)
-
-	ellipsesRange := strings.Split(pattern, "...")
-	if len(ellipsesRange) != 2 {
-		return 0, 0, errInvalidArgument
-	}
-
-	if start, err = strconv.ParseUint(ellipsesRange[0], 10, 64); err != nil {
-		return 0, 0, err
-	}
-
-	if end, err = strconv.ParseUint(ellipsesRange[1], 10, 64); err != nil {
-		return 0, 0, err
-	}
-
-	if start > end {
-		return 0, 0, fmt.Errorf("Incorrect range start %d cannot be bigger than end %d", start, end)
-	}
-
-	return start, end, nil
-}
-
-// parses the input args from command line into a structured form as
-// endpointSet which carries, parsed values of the input arg.
-func parseEndpointSet(arg string) (s endpointSet, err error) {
-	var parsedEllipses ellipsesPattern
-	// Check if we have two ellipses.
-	parts := regexpTwoEllipses.FindStringSubmatch(arg)
-	if len(parts) == 0 {
-		// We didn't find two ellipses, look if we have atleast one.
-		parts = regexpSingleEllipses.FindStringSubmatch(arg)
-		if len(parts) == 0 {
-			// We throw an error if arg doesn't have any recognizable ellipses pattern.
-			return s, fmt.Errorf("Invalid input (%s), no regex pattern found", arg)
-		}
-	}
-
-	// Regex matches even for more than 2 ellipses, we should simply detect
-	// by looking at repeated '...' ellipses patterns.
-	if strings.Count(arg, "...") >= 3 {
-		return s, fmt.Errorf("Invalid input (%s), contains more than 2 ellipses", arg)
-	}
-
-	// For standalone setup we only have one ellipses pattern.
-	if len(parts) == 3 {
-		parsedEllipses = []ellipsesSubPattern{
-			{
-				prefix:  parts[1],
-				pattern: parts[2],
-			},
-		}
-	} else {
-		parsedEllipses = []ellipsesSubPattern{
-			{
-				prefix:  parts[1],
-				pattern: parts[2],
-			},
-			{
-				prefix:  parts[3],
-				pattern: parts[4],
-			},
-		}
-	}
-
-	parsedEllipses[0].start, parsedEllipses[0].end, err = parseEllipsesRange(parsedEllipses[0].pattern)
-	if err != nil {
-		return s, err
-	}
-
-	if len(parsedEllipses) == 2 {
-		parsedEllipses[1].start, parsedEllipses[1].end, err = parseEllipsesRange(parsedEllipses[1].pattern)
+// Parse all arguments.
+func parseEndpointSet(args ...string) (ep endpointSet, err error) {
+	var argPatterns = make([]ellipses.ArgPattern, len(args))
+	for i, arg := range args {
+		patterns, err := ellipses.FindEllipsesPatterns(arg)
 		if err != nil {
-			return s, err
+			return endpointSet{}, err
 		}
+		argPatterns[i] = patterns
 	}
 
-	var totalSize uint64 = 1
-	for _, p := range parsedEllipses {
-		totalSize = totalSize * (p.end - (p.start - 1))
-	}
-
-	setIndexes, err := getSetIndexes(totalSize)
+	ep.setIndexes, err = getSetIndexes(args, getTotalSizes(argPatterns))
 	if err != nil {
-		return s, err
+		return endpointSet{}, err
 	}
 
-	return endpointSet{parsedEllipses, totalSize, setIndexes}, nil
+	ep.argPatterns = argPatterns
+
+	return ep, nil
 }
 
 // Parses all ellipses input arguments, expands them into corresponding
@@ -255,72 +193,59 @@ func getAllSets(args ...string) ([][]string, error) {
 	}
 
 	var setArgs [][]string
-	for _, arg := range args {
-		s, err := parseEndpointSet(arg)
+	if !ellipses.HasEllipses(args...) {
+		var setIndexes [][]uint64
+		// Check if we have more one args.
+		if len(args) > 1 {
+			var err error
+			setIndexes, err = getSetIndexes(args, []uint64{uint64(len(args))})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// We are in FS setup, proceed forward.
+			setIndexes = [][]uint64{[]uint64{uint64(len(args))}}
+		}
+		s := endpointSet{
+			endpoints:  args,
+			setIndexes: setIndexes,
+		}
+		setArgs = s.Get()
+	} else {
+		s, err := parseEndpointSet(args...)
 		if err != nil {
 			return nil, err
 		}
-		setArgs = append(setArgs, s.Get()...)
+		setArgs = s.Get()
 	}
 
-	prevSetSize := len(setArgs[0])
 	uniqueArgs := set.NewStringSet()
-	for i, args := range setArgs {
-		for _, arg := range args {
+	for _, sargs := range setArgs {
+		for _, arg := range sargs {
 			if uniqueArgs.Contains(arg) {
-				return nil, fmt.Errorf("Unable to proceed duplicate sets found, your input might have duplicate ellipses")
+				return nil, fmt.Errorf("Input args (%s) has duplicate ellipses", args)
 			}
 			uniqueArgs.Add(arg)
-		}
-		if len(args) != prevSetSize {
-			return nil, fmt.Errorf("Unexpected set sizes found, set %d is of length %d but expected %d", i+1, len(args), prevSetSize)
 		}
 	}
 
 	return setArgs, nil
 }
 
-// Returns true input args match either distributed
-// or standalone syntax format.
-func hasArgsWithEllipses(args ...string) (ok bool) {
-	ok = true
-	for _, arg := range args {
-		ok = ok && func() bool {
-			var parts []string
-			if parts = regexpTwoEllipses.FindStringSubmatch(arg); len(parts) == 0 {
-				return len(regexpSingleEllipses.FindStringSubmatch(arg)) != 0
-			}
-			return len(parts) != 0
-		}()
-	}
-	return ok
-}
-
-// CreateEndpointsFromEllipses - validates and creates new endpoints for given sets file.
-func CreateEndpointsFromEllipses(serverAddr string, args ...string) (string, EndpointList, SetupType, int, int, error) {
-	var setEndpoints EndpointList
-	var setupType SetupType
-
+// CreateServerEndpoints - validates and creates new endpoints from input args, supports
+// both ellipses and without ellipses transparently.
+func createServerEndpoints(serverAddr string, args ...string) (string, EndpointList, SetupType, int, int, error) {
 	setArgs, err := getAllSets(args...)
 	if err != nil {
-		return serverAddr, nil, setupType, 0, 0, err
+		return serverAddr, nil, -1, 0, 0, err
 	}
 
 	var endpoints EndpointList
-	for i, sets := range setArgs {
-		serverAddr, endpoints, setupType, err = CreateEndpoints(serverAddr, sets...)
-		if err != nil {
-			return serverAddr, setEndpoints, setupType, 0, 0, err
-		}
-
-		var newEndpoints EndpointList
-		for _, endpoint := range endpoints {
-			endpoint.SetIndex = i
-			newEndpoints = append(newEndpoints, endpoint)
-		}
-
-		setEndpoints = append(setEndpoints, newEndpoints...)
+	var setupType SetupType
+	serverAddr, endpoints, setupType, err = CreateEndpoints(serverAddr, setArgs...)
+	if err != nil {
+		return serverAddr, nil, -1, 0, 0, err
 	}
 
-	return serverAddr, setEndpoints, setupType, len(setArgs), len(setArgs[0]), nil
+	return serverAddr, endpoints, setupType, len(setArgs), len(setArgs[0]), nil
 }

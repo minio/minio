@@ -37,7 +37,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
 
-	disks, err := getRandomDisks(4)
+	disks, err := getRandomDisks(16)
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -64,12 +64,13 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	notificationXML += "</NotificationConfiguration>"
 	size := int64(len([]byte(notificationXML)))
 	reader := bytes.NewReader([]byte(notificationXML))
-	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, mustGetHashReader(t, reader, size, "", ""), nil); err != nil {
+	bucketConfigPath := bucketConfigPrefix + "/" + bucketName + "/" + bucketNotificationConfig
+	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPath, mustGetHashReader(t, reader, size, "", ""), nil); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
 	for i, d := range xl.storageDisks {
-		xl.storageDisks[i] = newNaughtyDisk(d.(*retryStorage), nil, errFaultyDisk)
+		xl.storageDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
 	}
 	// Test initEventNotifier() with faulty disks
 	for i := 1; i <= 3; i++ {

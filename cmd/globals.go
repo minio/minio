@@ -74,13 +74,11 @@ const (
 )
 
 var (
-	globalXLSets *xlSets
-
 	// Indicates the total number of erasure coded sets configured.
 	globalXLSetCount int
 
-	// Indicates per set disk count.
-	globalXLPerSetDiskCount int
+	// Indicates set drive count.
+	globalXLSetDriveCount int
 
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistXL = false

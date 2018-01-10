@@ -272,7 +272,6 @@ func TestListOnlineDisks(t *testing.T) {
 				t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
 					i+1, xlDisks[tamperedIndex])
 			}
-
 		}
 
 	}

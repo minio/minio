@@ -52,14 +52,15 @@ const (
 var (
 	// This struct literal represents the Admin API version that
 	// the server uses.
-	adminAPIVersionInfo = madmin.AdminAPIVersionInfo{"1"}
+	adminAPIVersionInfo = madmin.AdminAPIVersionInfo{
+		Version: "1",
+	}
 )
 
 // VersionHandler - GET /minio/admin/version
 // -----------
 // Returns Administration API version
 func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
-
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
@@ -555,7 +556,6 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 			writeSuccessResponseJSON(w, respBytes)
 		}
 	}
-	return
 }
 
 // GetConfigHandler - GET /minio/admin/v1/config

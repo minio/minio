@@ -127,9 +127,6 @@ func TestHashOrder(t *testing.T) {
 		if !reflect.DeepEqual(testCase.hashedOrder, hashedOrder) {
 			t.Errorf("Test case %d: Expected \"%v\" but failed \"%v\"", i+1, testCase.hashedOrder, hashedOrder)
 		}
-		if hashedOrderElement := hashOrderFirstElement(testCase.objectName, 16); hashedOrderElement != testCase.hashedOrder[0] {
-			t.Errorf("Test case %d: Expected \"%v\" but failed \"%v\"", i+1, testCase.hashedOrder[0], hashedOrderElement)
-		}
 	}
 
 	// Tests hashing order to fail for when order is '-1'.
@@ -137,12 +134,8 @@ func TestHashOrder(t *testing.T) {
 		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
 	}
 
-	if hashedOrder := hashOrder("This will fail", 0); hashedOrder[0] != []int{1}[0] {
-		t.Errorf("Test: Expected \"%v\" but got \"%v\"", []int{1}, hashedOrder)
-	}
-
-	if hashedOrderElement := hashOrderFirstElement("This will fail", -1); hashedOrderElement != -1 {
-		t.Errorf("Test: Expected \"-1\" but got \"%v\"", hashedOrderElement)
+	if hashedOrder := hashOrder("This will fail", 0); hashedOrder != nil {
+		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
 	}
 }
 

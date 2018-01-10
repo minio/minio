@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,47 +20,96 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/minio/minio/pkg/ellipses"
 )
+
+// Tests create endpoints with ellipses and without.
+func TestCreateServerEndpoints(t *testing.T) {
+	testCases := []struct {
+		serverAddr string
+		args       []string
+		success    bool
+	}{
+		// Invalid input.
+		{"", []string{}, false},
+		// Range cannot be negative.
+		{":9000", []string{"/export1{-1...1}"}, false},
+		// Range cannot start bigger than end.
+		{":9000", []string{"/export1{64...1}"}, false},
+		// Range can only be numeric.
+		{":9000", []string{"/export1{a...z}"}, false},
+		// Duplicate disks not allowed.
+		{":9000", []string{"/export1{1...32}", "/export1{1...32}"}, false},
+		// Same host cannot export same disk on two ports - special case localhost.
+		{":9001", []string{"http://localhost:900{1...2}/export{1...64}"}, false},
+
+		// Valid inputs.
+		{":9000", []string{"/export1"}, true},
+		{":9000", []string{"/export1", "/export2", "/export3", "/export4"}, true},
+		{":9000", []string{"/export1{1...64}"}, true},
+		{":9000", []string{"/export1{01...64}"}, true},
+		{":9000", []string{"/export1{1...32}", "/export1{33...64}"}, true},
+		{":9001", []string{"http://localhost:9001/export{1...64}"}, true},
+		{":9001", []string{"http://localhost:9001/export{01...64}"}, true},
+	}
+
+	for i, testCase := range testCases {
+		_, _, _, _, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
+		if err != nil && testCase.success {
+			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
+		}
+		if err == nil && !testCase.success {
+			t.Errorf("Test %d: Expected failure but passed instead", i+1)
+		}
+	}
+}
 
 // Test tests calculating set indexes.
 func TestGetSetIndexes(t *testing.T) {
 	testCases := []struct {
-		totalSize uint64
-		indexes   []uint64
-		success   bool
+		args       []string
+		totalSizes []uint64
+		indexes    [][]uint64
+		success    bool
 	}{
 		// Invalid inputs.
 		{
-			27,
+			[]string{"data{1...27}"},
+			[]uint64{27},
 			nil,
 			false,
 		},
 		// Valid inputs.
 		{
-			64,
-			[]uint64{16, 16, 16, 16},
+			[]string{"data{1...64}"},
+			[]uint64{64},
+			[][]uint64{[]uint64{16, 16, 16, 16}},
 			true,
 		},
 		{
-			24,
-			[]uint64{12, 12},
+			[]string{"data{1...24}"},
+			[]uint64{24},
+			[][]uint64{[]uint64{12, 12}},
 			true,
 		},
 		{
-			88,
-			[]uint64{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8},
+			[]string{"data/controller{1...11}/export{1...8}"},
+			[]uint64{88},
+			[][]uint64{[]uint64{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8}},
 			true,
 		},
 		{
-			4,
+			[]string{"data{1...4}"},
 			[]uint64{4},
+			[][]uint64{[]uint64{4}},
 			true,
 		},
 	}
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			gotIndexes, err := getSetIndexes(testCase.totalSize)
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}
@@ -105,44 +154,207 @@ func TestParseEndpointSet(t *testing.T) {
 			endpointSet{},
 			false,
 		},
-		// More than 2 ellipses per argument not supported.
+		// Range cannot be smaller than 4 minimum.
 		{
-			"http://minio{2...3}/export/set{1...64}/test{1...2}",
+			"/export{1..2}",
+			endpointSet{},
+			false,
+		},
+		// Unsupported characters.
+		{
+			"/export/test{1...2O}",
 			endpointSet{},
 			false,
 		},
 		// Tests valid inputs.
 		{
 			"/export/set{1...64}",
-			endpointSet{[]ellipsesSubPattern{
-				{
-					"/export/set",
-					"{1...64}",
-					1, 64,
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"/export/set",
+							"",
+							1, 64,
+						},
+					},
 				},
-			},
-				64,
-				[]uint64{16, 16, 16, 16},
+				nil,
+				[][]uint64{[]uint64{16, 16, 16, 16}},
 			},
 			true,
 		},
 		// Valid input for distributed setup.
 		{
 			"http://minio{2...3}/export/set{1...64}",
-			endpointSet{[]ellipsesSubPattern{
-				{
-					"http://minio",
-					"{2...3}",
-					2, 3,
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"",
+							"",
+							1, 64,
+						},
+						{
+							"http://minio",
+							"/export/set",
+							2, 3,
+						},
+					},
 				},
-				{
-					"/export/set",
-					"{1...64}",
-					1, 64,
-				},
+				nil,
+				[][]uint64{[]uint64{16, 16, 16, 16, 16, 16, 16, 16}},
 			},
-				128,
-				[]uint64{16, 16, 16, 16, 16, 16, 16, 16},
+			true,
+		},
+		// Supporting some advanced cases.
+		{
+			"http://minio{1...64}.mydomain.net/data",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"http://minio",
+							".mydomain.net/data",
+							1, 64,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16, 16, 16}},
+			},
+			true,
+		},
+		{
+			"http://rack{1...4}.mydomain.minio{1...16}/data",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"",
+							"/data",
+							1, 16,
+						},
+						{
+							"http://rack",
+							".mydomain.minio",
+							1, 4,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16, 16, 16}},
+			},
+			true,
+		},
+		// Supporting kubernetes cases.
+		{
+			"http://minio{0...15}.mydomain.net/data{0...1}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"",
+							"",
+							0, 1,
+						},
+						{
+							"http://minio",
+							".mydomain.net/data",
+							0, 15,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16}},
+			},
+			true,
+		},
+		// No host regex, just disks.
+		{
+			"http://server1/data{1...32}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"http://server1/data",
+							"",
+							1, 32,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16}},
+			},
+			true,
+		},
+		// No host regex, just disks with two position numerics.
+		{
+			"http://server1/data{01...32}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"http://server1/data",
+							"",
+							1, 32,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16}},
+			},
+			true,
+		},
+		// More than 2 ellipses are supported as well.
+		{
+			"http://minio{2...3}/export/set{1...64}/test{1...2}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"",
+							"",
+							1, 2,
+						},
+						{
+							"",
+							"/test",
+							1, 64,
+						},
+						{
+							"http://minio",
+							"/export/set",
+							2, 3,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{16, 16, 16, 16, 16, 16, 16, 16,
+					16, 16, 16, 16, 16, 16, 16, 16}},
+			},
+			true,
+		},
+		// More than 1 ellipses per argument for standalone setup.
+		{
+			"/export{1...10}/disk{1...10}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							"",
+							"",
+							1, 10,
+						},
+						{
+							"/export",
+							"/disk",
+							1, 10,
+						},
+					},
+				},
+				nil,
+				[][]uint64{[]uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}},
 			},
 			true,
 		},
@@ -159,144 +371,6 @@ func TestParseEndpointSet(t *testing.T) {
 			}
 			if !reflect.DeepEqual(testCase.es, gotEs) {
 				t.Errorf("Expected %v, got %v", testCase.es, gotEs)
-			}
-		})
-	}
-}
-
-// Test tests args with ellipses.
-func TestHasArgsWithEllipses(t *testing.T) {
-	testCases := []struct {
-		args       []string
-		expectedOk bool
-	}{
-		// Tests for all invalid inputs
-		{
-			[]string{"{1..64}"},
-			false,
-		},
-		{
-			[]string{"1...64"},
-			false,
-		},
-		{
-			[]string{"..."},
-			false,
-		},
-		{
-			[]string{"{-1...1}"},
-			false,
-		},
-		{
-			[]string{"{0...-1}"},
-			false,
-		},
-		{
-			[]string{"{1....4}"},
-			false,
-		},
-		// Test for valid input.
-		{
-			[]string{"{1...64}"},
-			true,
-		},
-		{
-			[]string{"{...}"},
-			true,
-		},
-		{
-			[]string{"{1...64}", "{65...128}"},
-			true,
-		},
-		{
-			[]string{"http://minio{2...3}/export/set{1...64}"},
-			true,
-		},
-		{
-			[]string{
-				"http://minio{2...3}/export/set{1...64}",
-				"http://minio{2...3}/export/set{65...128}",
-			},
-			true,
-		},
-	}
-
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			gotOk := hasArgsWithEllipses(testCase.args...)
-			if gotOk != testCase.expectedOk {
-				t.Errorf("Expected %t, got %t", testCase.expectedOk, gotOk)
-			}
-		})
-	}
-}
-
-// Test tests parsing ellipses range.
-func TestParseEllipsesRange(t *testing.T) {
-	testCases := []struct {
-		pattern string
-		success bool
-	}{
-		// Tests for all invalid inputs
-		{
-			"{1..64}",
-			false,
-		},
-		{
-			"{1...64} {65...128}",
-			false,
-		},
-		{
-			"1...64",
-			false,
-		},
-		{
-			"...",
-			false,
-		},
-		{
-			"{1...",
-			false,
-		},
-		{
-			"...64}",
-			false,
-		},
-		{
-			"{...}",
-			false,
-		},
-		{
-			"{-1...1}",
-			false,
-		},
-		{
-			"{0...-1}",
-			false,
-		},
-		{
-			"{64...1}",
-			false,
-		},
-		{
-			"{1....4}",
-			false,
-		},
-		// Test for valid input.
-		{
-			"{1...64}",
-			true,
-		},
-	}
-
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			_, _, err := parseEllipsesRange(testCase.pattern)
-			if err != nil && testCase.success {
-				t.Errorf("Expected success but failed instead %s", err)
-			}
-			if err == nil && !testCase.success {
-				t.Errorf("Expected failure but passed instead")
 			}
 		})
 	}

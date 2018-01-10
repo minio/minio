@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -39,30 +38,6 @@ func TestStorageInfo(t *testing.T) {
 
 	// Get storage info first attempt.
 	disks16Info := objLayer.StorageInfo()
-
-	// This test assumes homogenity between all disks,
-	// i.e if we loose one disk the effective storage
-	// usage values is assumed to decrease. If we have
-	// heterogenous environment this is not true all the time.
-	if disks16Info.Free <= 0 {
-		t.Fatalf("Diskinfo total free values should be greater 0")
-	}
-	if disks16Info.Total <= 0 {
-		t.Fatalf("Diskinfo total values should be greater 0")
-	}
-
-	storageDisks, err := initStorageDisks(mustGetNewEndpointList(fsDirs...))
-	if err != nil {
-		t.Fatal("Unexpected error: ", err)
-	}
-
-	objLayer, err = newXLObjects(storageDisks)
-	if err != nil {
-		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s. error %s", fsDirs[:4], err)
-	}
-
-	// Get storage info first attempt.
-	disks16Info = objLayer.StorageInfo()
 
 	// This test assumes homogenity between all disks,
 	// i.e if we loose one disk the effective storage
@@ -118,52 +93,5 @@ func TestSortingValidDisks(t *testing.T) {
 		if !reflect.DeepEqual(validDisksInfo, testCase.validDisksInfo) {
 			t.Errorf("Test %d: Expected %#v, Got %#v", i+1, testCase.validDisksInfo, validDisksInfo)
 		}
-	}
-}
-
-// TestNewXL - tests initialization of all input disks
-// and constructs a valid `XL` object
-func TestNewXL(t *testing.T) {
-	var nDisks = 16 // Maximum disks.
-	var erasureDisks []string
-	for i := 0; i < nDisks; i++ {
-		// Do not attempt to create this path, the test validates
-		// so that newXLObjects initializes non existing paths
-		// and successfully returns initialized object layer.
-		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-		erasureDisks = append(erasureDisks, disk)
-		defer os.RemoveAll(disk)
-	}
-
-	// No disks input.
-	_, err := newXLObjects(nil)
-	if err != errInvalidArgument {
-		t.Fatalf("Unable to initialize erasure, %s", err)
-	}
-
-	endpoints := mustGetNewEndpointList(erasureDisks...)
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal("Unexpected error: ", err)
-	}
-
-	_, err = waitForFormatXLDisks(true, endpoints, nil)
-	if err != errInvalidArgument {
-		t.Fatalf("Expecting error, got %s", err)
-	}
-
-	_, err = waitForFormatXLDisks(true, nil, storageDisks)
-	if err != errInvalidArgument {
-		t.Fatalf("Expecting error, got %s", err)
-	}
-
-	// Initializes all erasure disks
-	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
-	if err != nil {
-		t.Fatalf("Unable to format disks for erasure, %s", err)
-	}
-	_, err = newXLObjects(formattedDisks)
-	if err != nil {
-		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 }

@@ -91,8 +91,8 @@ func TestAdminStatus(t *testing.T) {
 	testAdminCmd(statusCmd, t)
 }
 
-// TestReInitDisks - test for Admin.ReInitDisks RPC service.
-func TestReInitDisks(t *testing.T) {
+// TestReInitFormat - test for Admin.ReInitFormat RPC service.
+func TestReInitFormat(t *testing.T) {
 	// Reset global variables to start afresh.
 	resetTestGlobals()
 
@@ -138,39 +138,12 @@ func TestReInitDisks(t *testing.T) {
 	}
 	authReply := AuthRPCReply{}
 
-	err = adminServer.ReInitDisks(&authArgs, &authReply)
+	err = adminServer.ReInitFormat(&ReInitFormatArgs{
+		AuthRPCArgs: authArgs,
+		DryRun:      false,
+	}, &authReply)
 	if err != nil {
 		t.Errorf("Expected to pass, but failed with %v", err)
-	}
-
-	token, err = authenticateNode(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Negative test case with admin rpc server setup for FS.
-	globalIsXL = false
-	fsAdminServer := adminCmd{}
-	fsArgs := LoginRPCArgs{
-		AuthToken:   token,
-		Version:     globalRPCAPIVersion,
-		RequestTime: UTCNow(),
-	}
-	fsReply := LoginRPCReply{}
-	err = fsAdminServer.Login(&fsArgs, &fsReply)
-	if err != nil {
-		t.Fatalf("Failed to login to fs admin server - %v", err)
-	}
-
-	authArgs = AuthRPCArgs{
-		AuthToken: token,
-		Version:   globalRPCAPIVersion,
-	}
-	authReply = AuthRPCReply{}
-	// Attempt ReInitDisks service on a FS backend.
-	err = fsAdminServer.ReInitDisks(&authArgs, &authReply)
-	if err != errUnsupportedBackend {
-		t.Errorf("Expected to fail with %v, but received %v",
-			errUnsupportedBackend, err)
 	}
 }
 

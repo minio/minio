@@ -528,58 +528,15 @@ func (h *healSequence) healDiskFormat() error {
 		return errServerNotInitialized
 	}
 
-	// Acquire lock on format.json
-	formatLock := globalNSMutex.NewNSLock(minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
-		return errFnHealFromAPIErr(err)
-	}
-	defer formatLock.Unlock()
-
-	// Create a new set of storage instances to heal format.json.
-	bootstrapDisks, err := initStorageDisks(globalEndpoints)
+	res, err := objectAPI.HealFormat(h.settings.DryRun)
 	if err != nil {
 		return errFnHealFromAPIErr(err)
 	}
 
-	// Wrap into retrying disks
-	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
-		time.Millisecond, time.Millisecond*5,
-		globalStorageHealthCheckInterval, globalStorageRetryThreshold)
-
-	// Heal format.json on available storage.
-	hres, err := healFormatXL(retryingDisks, h.settings.DryRun)
-	if err != nil {
-		return errFnHealFromAPIErr(err)
-	}
-
-	// reload object layer global only if we healed some disk
-	onlineBefore, onlineAfter := hres.GetOnlineCounts()
-	numHealed := onlineAfter - onlineBefore
-	if numHealed > 0 {
-		// Instantiate new object layer with newly formatted
-		// storage.
-		newObjectAPI, err := newXLObjects(retryingDisks)
-		if err != nil {
-			return errFnHealFromAPIErr(err)
-		}
-
-		// Set object layer with newly formatted storage to
-		// globalObjectAPI.
-		globalObjLayerMutex.Lock()
-		globalObjectAPI = newObjectAPI
-		globalObjLayerMutex.Unlock()
-
-		// Shutdown storage belonging to old object layer
-		// instance.
-		objectAPI.Shutdown()
-
-		// Inform peers to reinitialize storage with newly
-		// formatted storage.
-		reInitPeerDisks(globalAdminPeers)
-	}
+	peersReInitFormat(globalAdminPeers, h.settings.DryRun)
 
 	// Push format heal result
-	return h.pushHealResultItem(hres)
+	return h.pushHealResultItem(res)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
@@ -601,8 +558,7 @@ func (h *healSequence) healBuckets() error {
 	}
 
 	for _, bucket := range buckets {
-		err = h.healBucket(bucket.Name)
-		if err != nil {
+		if err = h.healBucket(bucket.Name); err != nil {
 			return err
 		}
 	}
@@ -615,19 +571,27 @@ func (h *healSequence) healBucket(bucket string) error {
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}
+
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
+		return err
+	}
+
 	results, err := objectAPI.HealBucket(bucket, h.settings.DryRun)
 	// push any available results before checking for error
 	for _, result := range results {
 		if perr := h.pushHealResultItem(result); perr != nil {
+			bucketLock.Unlock()
 			return perr
 		}
 	}
+	bucketLock.Unlock()
 	// handle heal-bucket error
 	if err != nil {
 		return err

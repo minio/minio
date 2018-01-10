@@ -78,6 +78,11 @@ func (a GatewayUnsupported) DeleteBucketPolicy(bucket string) error {
 	return errors.Trace(NotImplemented{})
 }
 
+// HealFormat - Not implemented stub
+func (a GatewayUnsupported) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+}
+
 // HealBucket - Not implemented stub
 func (a GatewayUnsupported) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error) {
 	return nil, errors.Trace(NotImplemented{})

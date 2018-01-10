@@ -36,12 +36,6 @@ var errDiskFull = errors.New("disk path full")
 // errDiskNotFound - cannot find the underlying configured disk anymore.
 var errDiskNotFound = errors.New("disk not found")
 
-// errDiskNotFoundFromNetError - cannot find the underlying configured disk anymore due to network error.
-var errDiskNotFoundFromNetError = errors.New("disk not found from net error")
-
-// errDiskNotFoundFromShutdown - cannot find the underlying configured disk anymore due to rpc shutdown.
-var errDiskNotFoundFromRPCShutdown = errors.New("disk not found from rpc shutdown")
-
 // errFaultyRemoteDisk - remote disk is faulty.
 var errFaultyRemoteDisk = errors.New("remote disk is faulty")
 

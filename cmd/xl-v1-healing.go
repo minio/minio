@@ -19,12 +19,15 @@ package cmd
 import (
 	"fmt"
 	"path"
-	"sort"
 	"sync"
 
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/madmin"
 )
+
+func (xl xlObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+}
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
@@ -37,16 +40,13 @@ func (xl xlObjects) HealBucket(bucket string, dryRun bool) (
 	}
 
 	// get write quorum for an object
-	writeQuorum := len(xl.storageDisks())/2 + 1
-	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
-	if err = bucketLock.GetLock(globalHealingTimeout); err != nil {
-		return nil, err
-	}
-	defer bucketLock.Unlock()
+	writeQuorum := len(xl.getDisks())/2 + 1
 
 	// Heal bucket.
-	if err := healBucket(xl.storageDisks(), bucket, writeQuorum); err != nil {
-		return err
+	var result madmin.HealResultItem
+	result, err = healBucket(xl.getDisks(), bucket, writeQuorum, dryRun)
+	if err != nil {
+		return nil, err
 	}
 	results = append(results, result)
 
@@ -84,10 +84,16 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			if _, err := disk.StatVol(bucket); err != nil {
+				if errors.Cause(err) == errDiskNotFound {
+					beforeState[index] = madmin.DriveStateOffline
+					afterState[index] = madmin.DriveStateOffline
+					dErrs[index] = err
+					return
+				}
 				if errors.Cause(err) != errVolumeNotFound {
 					beforeState[index] = madmin.DriveStateCorrupt
 					afterState[index] = madmin.DriveStateCorrupt
-					dErrs[index] = errors.Trace(err)
+					dErrs[index] = err
 					return
 				}
 
@@ -100,14 +106,14 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 				}
 
 				makeErr := disk.MakeVol(bucket)
-				dErrs[index] = errors.Trace(makeErr)
+				dErrs[index] = makeErr
 				if makeErr == nil {
 					afterState[index] = madmin.DriveStateOk
 				}
-			} else {
-				beforeState[index] = madmin.DriveStateOk
-				afterState[index] = madmin.DriveStateOk
+				return
 			}
+			beforeState[index] = madmin.DriveStateOk
+			afterState[index] = madmin.DriveStateOk
 		}(index, disk)
 	}
 
@@ -120,11 +126,31 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 		Bucket:    bucket,
 		DiskCount: len(storageDisks),
 	}
-	res.InitDrives()
 	for i, before := range beforeState {
-		drive := globalEndpoints.GetString(i)
-		res.DriveInfo.Before[drive] = before
-		res.DriveInfo.After[drive] = afterState[i]
+		if storageDisks[i] == nil {
+			res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: "",
+				State:    before,
+			})
+			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: "",
+				State:    afterState[i],
+			})
+			continue
+		}
+		drive := storageDisks[i].String()
+		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    before,
+		})
+		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    afterState[i],
+		})
 	}
 
 	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
@@ -214,61 +240,6 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 	return buckets, bucketsOcc, nil
 }
 
-// ListBucketsHeal - Find all buckets that need to be healed
-func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
-	listBuckets := []BucketInfo{}
-	// List all buckets that can be found in all disks
-	buckets, _, err := listAllBuckets(xl.storageDisks)
-	if err != nil {
-		return listBuckets, err
-	}
-
-	// Iterate over all buckets
-	for _, currBucket := range buckets {
-		listBuckets = append(listBuckets,
-			BucketInfo{currBucket.Name, currBucket.Created})
-	}
-
-	// Sort found buckets
-	sort.Sort(byBucketName(listBuckets))
-	return listBuckets, nil
-}
-
-// This function is meant for all the healing that needs to be done
-// during startup i.e healing of buckets, bucket metadata (policy.json,
-// notification.xml, listeners.json) etc. Currently this function
-// supports quick healing of buckets, bucket metadata.
-func quickHeal(xlObj xlObjects, writeQuorum int, readQuorum int) error {
-	// List all bucket name occurrence from all disks.
-	_, bucketOcc, err := listAllBuckets(xlObj.storageDisks())
-	if err != nil {
-		return err
-	}
-
-	// All bucket names and bucket metadata that should be healed.
-	for bucketName, occCount := range bucketOcc {
-		// Heal bucket only if healing is needed.
-		if occCount != len(xlObj.storageDisks()) {
-			bucketLock := xlObj.nsMutex.NewNSLock(bucketName, "")
-			if perr := bucketLock.GetLock(globalHealingTimeout); perr != nil {
-				return perr
-			}
-			defer bucketLock.Unlock()
-			// Heal bucket and then proceed to heal bucket metadata if any.
-			if _, err = healBucket(xlObj.storageDisks(), bucketName, writeQuorum, false); err == nil {
-				if _, err = healBucketMetadata(xlObj, bucketName, false); err == nil {
-					continue
-				}
-				return err
-			}
-			return err
-		}
-	}
-
-	// Success.
-	return nil
-}
-
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func healObject(storageDisks []StorageAPI, bucket string, object string,
 	quorum int, dryRun bool) (result madmin.HealResultItem, err error) {
@@ -303,7 +274,6 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 		// unable to reliably find the object size.
 		ObjectSize: -1,
 	}
-	result.InitDrives()
 
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
@@ -332,10 +302,6 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			// all remaining cases imply corrupt data/metadata
 			driveState = madmin.DriveStateCorrupt
 		}
-		drive := globalEndpoints.GetString(i)
-		result.DriveInfo.Before[drive] = driveState
-		// copy for 'after' state
-		result.DriveInfo.After[drive] = driveState
 
 		// an online disk without valid data/metadata is
 		// outdated and can be healed.
@@ -343,6 +309,30 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
 		}
+		if v == nil {
+			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: "",
+				State:    driveState,
+			})
+			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: "",
+				State:    driveState,
+			})
+			continue
+		}
+		drive := v.String()
+		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    driveState,
+		})
+		result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    driveState,
+		})
 	}
 
 	// If less than read quorum number of disks have all the parts
@@ -485,10 +475,14 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			return result, toObjectErr(errors.Trace(aErr), bucket, object)
 		}
 
-		realDiskIdx := unshuffleIndex(diskIndex,
-			latestMeta.Erasure.Distribution)
-		drive := globalEndpoints.GetString(realDiskIdx)
-		result.DriveInfo.After[drive] = madmin.DriveStateOk
+		realDiskIdx := unshuffleIndex(diskIndex, latestMeta.Erasure.Distribution)
+		if outDatedDisks[realDiskIdx] != nil {
+			for i, v := range result.After.Drives {
+				if v.Endpoint == outDatedDisks[realDiskIdx].String() {
+					result.After.Drives[i].State = madmin.DriveStateOk
+				}
+			}
+		}
 	}
 
 	// Set the size of the object in the heal result
@@ -506,7 +500,7 @@ func (xl xlObjects) HealObject(bucket, object string, dryRun bool) (hr madmin.He
 
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks
-	partsMetadata, errs := readAllXLMetadata(xl.storageDisks(), bucket, object)
+	partsMetadata, errs := readAllXLMetadata(xl.getDisks(), bucket, object)
 
 	// get read quorum for this object
 	var readQuorum int
@@ -523,5 +517,5 @@ func (xl xlObjects) HealObject(bucket, object string, dryRun bool) (hr madmin.He
 	defer objectLock.RUnlock()
 
 	// Heal the object.
-	return healObject(xl.storageDisks(), bucket, object, readQuorum, dryRun)
+	return healObject(xl.getDisks(), bucket, object, readQuorum, dryRun)
 }

@@ -49,14 +49,6 @@ func isErrorNetworkDisconnect(err error) bool {
 	return false
 }
 
-func isNetworkStorageConnected(disk StorageAPI) bool {
-	n, ok := disk.(*networkStorage)
-	if !ok {
-		return true
-	}
-	return n.connected
-}
-
 // Converts rpc.ServerError to underlying error. This function is
 // written so that the storageAPI errors are consistent across network
 // disks as well.
@@ -65,13 +57,8 @@ func toStorageErr(err error) error {
 		return nil
 	}
 
-	switch err.(type) {
-	case *net.OpError:
-		return errDiskNotFoundFromNetError
-	}
-
-	if err == rpc.ErrShutdown {
-		return errDiskNotFoundFromRPCShutdown
+	if isErrorNetworkDisconnect(err) {
+		return errDiskNotFound
 	}
 
 	switch err.Error() {
@@ -132,9 +119,8 @@ func newStorageRPC(endpoint Endpoint) StorageAPI {
 			disableReconnect: true,
 		}),
 	}
-	if err := disk.Init(); err == nil {
-		disk.connected = true
-	}
+	// Attempt a remote login.
+	disk.connected = disk.rpcClient.Login() == nil
 	return disk
 }
 
@@ -152,23 +138,21 @@ func (n *networkStorage) String() string {
 	return scheme + "://" + n.rpcClient.ServerAddr() + path.Join("/", serviceEndpoint)
 }
 
-// Init - attempts a login to reconnect.
-func (n *networkStorage) Init() error {
-	return toStorageErr(n.rpcClient.Login())
-}
-
-// Closes the underlying RPC connection.
 func (n *networkStorage) Close() error {
-	// Close the underlying connection.
 	n.connected = false
 	return toStorageErr(n.rpcClient.Close())
 }
 
+func (n *networkStorage) IsOnline() bool {
+	return n.connected
+}
+
 func (n *networkStorage) call(handler string, args interface {
 	SetAuthToken(string)
+	SetRPCAPIVersion(semVersion)
 }, reply interface{}) error {
 	if !n.connected {
-		return errDiskNotFoundFromNetError
+		return errDiskNotFound
 	}
 	if err := n.rpcClient.Call(handler, args, reply); err != nil {
 		if isErrorNetworkDisconnect(err) {
@@ -313,25 +297,19 @@ func (n *networkStorage) ListDir(volume, path string) (entries []string, err err
 // DeleteFile - Delete a file at path.
 func (n *networkStorage) DeleteFile(volume, path string) (err error) {
 	reply := AuthRPCReply{}
-	if err = n.call("Storage.DeleteFileHandler", &DeleteFileArgs{
+	return n.call("Storage.DeleteFileHandler", &DeleteFileArgs{
 		Vol:  volume,
 		Path: path,
-	}, &reply); err != nil {
-		return err
-	}
-	return nil
+	}, &reply)
 }
 
 // RenameFile - rename a remote file from source to destination.
 func (n *networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	reply := AuthRPCReply{}
-	if err = n.call("Storage.RenameFileHandler", &RenameFileArgs{
+	return n.call("Storage.RenameFileHandler", &RenameFileArgs{
 		SrcVol:  srcVolume,
 		SrcPath: srcPath,
 		DstVol:  dstVolume,
 		DstPath: dstPath,
-	}, &reply); err != nil {
-		return err
-	}
-	return nil
+	}, &reply)
 }

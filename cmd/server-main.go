@@ -81,20 +81,24 @@ EXAMPLES:
   2. Start minio server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
-  3. Start erasure coded minio server on a 12 disks server.
+  3. Start minio server on a 12 disks server.
       $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
           /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
           /mnt/export10/ /mnt/export11/ /mnt/export12/
 
-  4. Start erasure coded distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
+  4. Start distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
 
-  5. Start minio on a 64 drives.
+  5. Start minio server on 64 disks server.
       $ {{.HelpName}} /mnt/export{1...64}
 
+  6. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
+      $ export MINIO_ACCESS_KEY=minio
+      $ export MINIO_SECRET_KEY=miniostorage
+      $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
 `,
 }
 
@@ -109,15 +113,13 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 	var err error
 
-	if hasArgsWithEllipses(ctx.Args()...) {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLPerSetDiskCount, err = CreateEndpointsFromEllipses(serverAddr, ctx.Args()...)
-	} else {
-		globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
-		globalXLSetCount = 1
-		globalXLPerSetDiskCount = len(globalEndpoints)
+	if len(ctx.Args()) > serverCommandLineArgsMax {
+		fatalIf(errInvalidArgument, "Invalid total number of arguments (%d) passed, supported upto 32 unique arguments", len(ctx.Args()))
 	}
 
+	globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
+
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	if runtime.GOOS == "darwin" {
 		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -207,7 +209,7 @@ func serverMain(ctx *cli.Context) {
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
 		globalDsync, err = dsync.New(newDsyncNodes(globalEndpoints))
-		fatalIf(err, "Unable to initialize distributed locking clients")
+		fatalIf(err, "Unable to initialize distributed locking on %s", globalEndpoints)
 	}
 
 	// Initialize name space lock.
@@ -264,29 +266,17 @@ func serverMain(ctx *cli.Context) {
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
+
 	isFS := len(endpoints) == 1
 	if isFS {
 		// Initialize new FS object layer.
 		return newFSObjectLayer(endpoints[0].Path)
 	}
 
-	format, err := waitForFormatXLDisks(endpoints[0].IsLocal, endpoints, globalXLSetCount)
+	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
 	if err != nil {
 		return nil, err
 	}
 
-	objAPI := newXLSets(endpoints, format)
-
-	globalXLSets = objAPI
-	// Initialize and load bucket policies.
-	if err = initBucketPolicies(objAPI); err != nil {
-		return nil, err
-	}
-
-	// Initialize a new event notifier.
-	if err = initEventNotifier(objAPI); err != nil {
-		return nil, err
-	}
-
-	return objAPI, nil
+	return newXLSets(endpoints, format, len(format.XL.Sets), len(format.XL.Sets[0]))
 }

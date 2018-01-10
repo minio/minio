@@ -106,30 +106,17 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-// hashOrderFirstElement - is similar to hashOrder but returns
-// only one consistent number for any given key.
-func hashOrderFirstElement(key string, cardinality int) int {
-	if cardinality < 0 {
-		// Returns an -1 for cardinality <= 0.
-		return -1
-	}
-	return hashOrder(key, cardinality)[0]
-}
-
 // hashOrder - hashes input key to return consistent
 // hashed integer slice. Returned integer order is salted
 // with an input key. This results in consistent order.
 // NOTE: collisions are fine, we are not looking for uniqueness
 // in the slices returned.
 func hashOrder(key string, cardinality int) []int {
-	if cardinality < 0 {
+	if cardinality <= 0 {
 		// Returns an empty int slice for cardinality < 0.
 		return nil
 	}
-	if cardinality == 0 {
-		// Returns an int slice with one element for cardinality == 0.
-		return []int{1}
-	}
+
 	nums := make([]int, cardinality)
 	keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
 

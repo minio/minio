@@ -223,7 +223,7 @@ func TestSendNotificationEvent(t *testing.T) {
 
 	go func() {
 		// Send one empty notification event on listenChan
-		events := []NotificationEvent{NotificationEvent{}}
+		events := []NotificationEvent{{}}
 		l.sendNotificationEvent(events)
 		testCh <- struct{}{}
 	}()

@@ -126,23 +126,27 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 func TestServerSuite(t *testing.T) {
 	testCases := []*TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
-		&TestSuiteCommon{serverType: "FS", signer: signerV4},
+		{serverType: "FS", signer: signerV4},
 		// Init and run test on FS backend with signature v2.
-		&TestSuiteCommon{serverType: "FS", signer: signerV2},
+		{serverType: "FS", signer: signerV2},
 		// Init and run test on FS backend, with tls enabled.
-		&TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true},
+		{serverType: "FS", signer: signerV4, secure: true},
 		// Init and run test on XL backend.
-		&TestSuiteCommon{serverType: "XL", signer: signerV4},
+		{serverType: "XL", signer: signerV4},
+		// Init and run test on XLSet backend.
+		{serverType: "XLSet", signer: signerV4},
 	}
-	for _, testCase := range testCases {
-		runAllTests(testCase, &check{t, testCase.serverType})
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
+			runAllTests(testCase, &check{t, testCase.serverType})
+		})
 	}
 }
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
 func (s *TestSuiteCommon) SetUpSuite(c *check) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	c.Assert(err, nil)
 
 	if s.secure {

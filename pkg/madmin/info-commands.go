@@ -38,6 +38,10 @@ const (
 	// Add your own backend.
 )
 
+// DriveInfo - represents each drive info, describing
+// status, uuid and endpoint.
+type DriveInfo HealDriveInfo
+
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	// Total disk space.
@@ -52,8 +56,13 @@ type StorageInfo struct {
 		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks      int // Online disks during server startup.
 		OfflineDisks     int // Offline disks during server startup.
+		StandardSCData   int // Data disks for currently configured Standard storage class.
 		StandardSCParity int // Parity disks for currently configured Standard storage class.
+		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
 		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+
+		// List of all disk status, this is only meaningful if BackendType is Erasure.
+		Sets [][]DriveInfo
 	}
 }
 

@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"sort"
-	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/errors"
 )
@@ -32,54 +32,36 @@ const (
 
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
-
-	// Maximum erasure blocks.
-	maxErasureBlocks = 32
-
-	// Minimum erasure blocks.
-	minErasureBlocks = 4
 )
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	mutex *sync.Mutex
-
-	// ListObjects pool management.
-	listPool *treeWalkPool
-
-	// name space mutex for object layer
+	// name space mutex for object layer.
 	nsMutex *nsLockMap
+
+	// getDisks returns list of storageAPIs.
+	getDisks func() []StorageAPI
+
+	// Byte pools used for temporary i/o buffers.
+	bp *bpool.BytePoolCap
 
 	// Variable represents bucket policies in memory.
 	bucketPolicies *bucketPolicies
 
-	storageDisks func() []StorageAPI
+	// TODO: Deprecated only kept here for tests, should be removed in future.
+	storageDisks []StorageAPI
+
+	// TODO: ListObjects pool management, should be removed in future.
+	listPool *treeWalkPool
 }
 
 // list of all errors that can be ignored in tree walk operation in XL
 var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
-// newXLObjects - initialize new xl object layer.
-func newXLObjects(xls *xlSets, getDisks func() []StorageAPI) *xlObjects {
-	// Initialize list pool.
-	listPool := newTreeWalkPool(globalLookupTimeout)
-
-	// Initialize xl objects.
-	xl := &xlObjects{
-		mutex:        &sync.Mutex{},
-		listPool:     listPool,
-		nsMutex:      newNSLock(globalIsDistXL),
-		xls:          xls,
-		storageDisks: getDisks,
-	}
-
-	return xl
-}
-
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
-	for _, disk := range xl.storageDisks() {
+	for _, disk := range xl.getDisks() {
 		// This closes storage rpc client connections if any.
 		// Otherwise this is a no-op.
 		if disk == nil {
@@ -237,6 +219,5 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
-	storageInfo := getStorageInfo(xl.storageDisks())
-	return storageInfo
+	return getStorageInfo(xl.getDisks())
 }

@@ -16,7 +16,11 @@
 
 package cmd
 
-import "time"
+import (
+	"time"
+
+	"github.com/minio/minio/pkg/madmin"
+)
 
 // BackendType - represents different backend types.
 type BackendType int
@@ -45,8 +49,13 @@ type StorageInfo struct {
 		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks      int // Online disks during server startup.
 		OfflineDisks     int // Offline disks during server startup.
+		StandardSCData   int // Data disks for currently configured Standard storage class.
 		StandardSCParity int // Parity disks for currently configured Standard storage class.
+		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
 		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+
+		// List of all disk status, this is only meaningful if BackendType is Erasure.
+		Sets [][]madmin.DriveInfo
 	}
 }
 

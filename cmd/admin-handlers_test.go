@@ -253,10 +253,22 @@ func (atb *adminXLTestBed) CleanupHealTestData(t *testing.T) {
 // initTestObjLayer - Helper function to initialize an XL-based object
 // layer and set globalObjectAPI.
 func initTestXLObjLayer() (ObjectLayer, []string, error) {
-	objLayer, xlDirs, xlErr := prepareXL16()
-	if xlErr != nil {
-		return nil, nil, xlErr
+	xlDirs, err := getRandomDisks(16)
+	if err != nil {
+		return nil, nil, err
 	}
+	endpoints := mustGetNewEndpointList(xlDirs...)
+	format, err := waitForFormatXL(true, endpoints, 1, 16)
+	if err != nil {
+		removeRoots(xlDirs)
+		return nil, nil, err
+	}
+
+	objLayer, err := newXLSets(endpoints, format, 1, 16)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Make objLayer available to all internal services via globalObjectAPI.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer

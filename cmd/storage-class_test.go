@@ -82,19 +82,17 @@ func testValidateParity(obj ObjectLayer, instanceType string, dirs []string, t T
 	// Reset global storage class flags
 	resetGlobalStorageEnvs()
 
-	// Set globalEndpoints for a single node XL setup.
-	endpoints := globalEndpoints
+	// Set proper envs for a single node XL setup.
+	saveIsXL := globalIsXL
 	defer func() {
-		globalEndpoints = endpoints
+		globalIsXL = saveIsXL
 	}()
-
-	isXL := globalIsXL
-	defer func() {
-		globalIsXL = isXL
-	}()
-
 	globalIsXL = true
-	globalEndpoints = mustGetNewEndpointList(dirs...)
+	saveSetDriveCount := globalXLSetDriveCount
+	defer func() {
+		globalXLSetDriveCount = saveSetDriveCount
+	}()
+	globalXLSetCount = len(dirs)
 
 	tests := []struct {
 		rrsParity int
