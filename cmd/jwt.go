@@ -63,14 +63,11 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 		return "", errAuthentication
 	}
 
-	utcNow := UTCNow()
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: utcNow.Add(expiry).Unix(),
-		IssuedAt:  utcNow.Unix(),
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: UTCNow().Add(expiry).Unix(),
 		Subject:   accessKey,
 	})
-
-	return token.SignedString([]byte(serverCred.SecretKey))
+	return jwt.SignedString([]byte(serverCred.SecretKey))
 }
 
 func authenticateNode(accessKey, secretKey string) (string, error) {
@@ -127,7 +124,7 @@ func webRequestAuthenticate(req *http.Request) error {
 		return errAuthentication
 	}
 	if err = claims.Valid(); err != nil {
-		return err
+		return errAuthentication
 	}
 	if claims.Subject != globalServerConfig.GetCredential().AccessKey {
 		return errInvalidAccessKeyID
