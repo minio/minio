@@ -178,6 +178,7 @@ const (
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrHealNotImplemented
 )
 
 // error code to APIError structure, these fields carry respective
@@ -741,6 +742,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioObjectTampered",
 		Description:    errObjectTampered.Error(),
 		HTTPStatusCode: http.StatusPartialContent,
+	},
+	ErrHealNotImplemented: {
+		Code:           "XMinioHealNotImplemented",
+		Description:    "This server does not implement heal functionality.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",

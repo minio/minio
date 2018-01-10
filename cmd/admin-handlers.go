@@ -445,6 +445,12 @@ func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	// Validate query params.
 	vars := r.URL.Query()
 	bucket := vars.Get(string(mgmtBucket))
@@ -528,6 +534,12 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	// Validate query params.
 	vars := r.URL.Query()
 	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := extractListObjectsHealQuery(vars)
@@ -564,6 +576,12 @@ func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	// Get the list buckets to be healed.
 	bucketsInfo, err := objLayer.ListBucketsHeal()
 	if err != nil {
@@ -592,6 +610,12 @@ func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *htt
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
 		return
 	}
 
@@ -684,6 +708,12 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	vars := r.URL.Query()
 	bucket := vars.Get(string(mgmtBucket))
 	object := vars.Get(string(mgmtObject))
@@ -739,6 +769,12 @@ func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *htt
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
 		return
 	}
 
@@ -821,7 +857,7 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// heal-format is only applicable to single node XL and
 	// distributed XL setup.
 	if !globalIsXL {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
 		return
 	}
 
