@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestNewServer(t *testing.T) {
@@ -98,79 +99,83 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-var tlsCipherSuitesTests = []struct {
-	ciphers    []uint16
-	shouldFail bool
-}{
-	{ciphers: nil, shouldFail: false},
-	{ciphers: defaultCipherSuites, shouldFail: false},
-	{ciphers: unsupportedCipherSuites, shouldFail: true},
-}
+func TestServerTLSCiphers(t *testing.T) {
+	var unsupportedCipherSuites = []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,        // Broken cipher
+		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,     // Sweet32
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,   // No countermeasures against timing attacks
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,          // Broken cipher
 
-// Tests the server accepts only TLS connections when at least
-// one of the supported (secure) cipher suites is supported by the client.
-func TestTLSCiphers(t *testing.T) {
+		// all RSA-PKCS1-v1.5 ciphers are disabled - danger of Bleichenbacher attack variants
+		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,   // Sweet32
+		tls.TLS_RSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_RSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
+		tls.TLS_RSA_WITH_RC4_128_SHA,        // Broken cipher
+
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
+	}
+
 	certificate, err := getTLSCert()
 	if err != nil {
 		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
 	}
-	port := getNextPort()
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write(nil)
-	})
-	server := NewServer([]string{"127.0.0.1:" + port}, handler, &certificate)
-	go func() { server.Start() }()
-	defer server.Shutdown()
 
-	for !server.IsStarted() { // block until server is available
+	testCases := []struct {
+		ciphers            []uint16
+		resetServerCiphers bool
+		expectErr          bool
+	}{
+		{nil, false, false},
+		{defaultCipherSuites, false, false},
+		{unsupportedCipherSuites, false, true},
+		{nil, true, false},
 	}
-	for i, testCase := range tlsCipherSuitesTests {
-		client := http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-					CipherSuites:       testCase.ciphers,
+
+	for i, testCase := range testCases {
+		func() {
+			addr := "127.0.0.1:" + getNextPort()
+
+			server := NewServer([]string{addr},
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, "Hello, world")
+				}),
+				&certificate)
+			if testCase.resetServerCiphers {
+				// Use Go default ciphers.
+				server.TLSConfig.CipherSuites = nil
+			}
+
+			go func() {
+				server.Start()
+			}()
+			defer server.Shutdown()
+
+			client := http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true,
+						CipherSuites:       testCase.ciphers,
+					},
 				},
-			},
-		}
-		_, err := client.Get("https://127.0.0.1:" + port)
-		if err != nil && !testCase.shouldFail {
-			t.Errorf("Test %d: Failed to execute GET request: %s", i, err)
-		}
-		if err == nil && testCase.shouldFail {
-			t.Errorf("Test %d: Successfully connected to server but expected connection failure", i)
-		}
-	}
-}
+			}
 
-// Tests whether a client can successfully establish a TLS connection to
-// a server with the Go standard library default cipher suites.
-func TestStandardTLSCiphers(t *testing.T) {
-	certificate, err := getTLSCert()
-	if err != nil {
-		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
-	}
-	port := getNextPort()
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, world")
-	})
-	server := NewServer([]string{"127.0.0.1:" + port}, handler, &certificate)
-	server.TLSConfig.CipherSuites = nil // use Go standard ciphers
-	go func() { server.Start() }()
-	defer server.Shutdown()
+			// There is no guaranteed way to know whether the HTTP server is started successfully.
+			// The only option is to connect and check.  Hence below sleep is used as workaround.
+			time.Sleep(1 * time.Second)
 
-	for !server.IsStarted() { // block until server is available
-	}
-	client := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-	_, err = client.Get("https://127.0.0.1:" + port + "/")
-	if err != nil {
-		t.Fatalf("Failed to execute GET request: %s", err)
+			_, err := client.Get("https://" + addr)
+			expectErr := (err != nil)
+
+			if expectErr != testCase.expectErr {
+				t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+			}
+		}()
 	}
 }

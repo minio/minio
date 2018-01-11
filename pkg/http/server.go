@@ -122,9 +122,12 @@ func (srv *Server) Start() (err error) {
 
 // Shutdown - shuts down HTTP server.
 func (srv *Server) Shutdown() error {
+	srv.listenerMutex.Lock()
 	if srv.listener == nil {
+		srv.listenerMutex.Unlock()
 		return errors.New("server not initialized")
 	}
+	srv.listenerMutex.Unlock()
 
 	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
 		// shutdown in progress
@@ -153,11 +156,6 @@ func (srv *Server) Shutdown() error {
 	}
 }
 
-// IsStarted returns true if the server has started and can handle connections.
-func (srv *Server) IsStarted() bool {
-	return srv.listener != nil && srv.listener.acceptCh != nil
-}
-
 // Secure Go implementations of modern TLS ciphers
 // The following ciphers are excluded because:
 //  - RC4 ciphers:              RC4 is broken
@@ -175,28 +173,6 @@ var defaultCipherSuites = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-}
-
-var unsupportedCipherSuites = []uint16{
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,        // Broken cipher
-	tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,     // Sweet32
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,   // No countermeasures against timing attacks
-	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,      // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,          // Broken cipher
-
-	// all RSA-PKCS1-v1.5 ciphers are disabled - danger of Bleichenbacher attack variants
-	tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,   // Sweet32
-	tls.TLS_RSA_WITH_AES_128_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_RSA_WITH_AES_128_CBC_SHA256, // No countermeasures against timing attacks
-	tls.TLS_RSA_WITH_AES_256_CBC_SHA,    // Go stack contains (some) countermeasures against timing attacks (Lucky13)
-	tls.TLS_RSA_WITH_RC4_128_SHA,        // Broken cipher
-
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
 }
 
 // NewServer - creates new HTTP server using given arguments.
