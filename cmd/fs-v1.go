@@ -634,7 +634,6 @@ func (fs fsObjects) PutObject(bucket string, object string, data *hash.Reader, m
 	bytesWritten, err := fsCreateFile(fsTmpObjPath, data, buf, data.Size())
 	if err != nil {
 		fsRemoveFile(fsTmpObjPath)
-		errorIf(err, "Failed to create object %s/%s", bucket, object)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 

@@ -118,7 +118,6 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	var unescapedQueries []string
 	unescapedQueries, err = unescapeQueries(encodedQuery)
 	if err != nil {
-		errorIf(err, "Unable to unescape (%s)", encodedQuery)
 		return ErrInvalidQueryParams
 	}
 
@@ -242,7 +241,6 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 
 	unescapedQueries, err := unescapeQueries(encodedQuery)
 	if err != nil {
-		errorIf(err, "Unable to unescape (%s)", encodedQuery)
 		return ErrInvalidQueryParams
 	}
 

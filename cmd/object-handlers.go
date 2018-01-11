@@ -117,7 +117,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -245,7 +244,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -393,7 +391,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -488,7 +485,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err, "Unable to validate content-md5 format.")
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
 		return
 	}
@@ -500,7 +496,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sizeStr := r.Header.Get("x-amz-decoded-content-length")
 		size, err = strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil {
-			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -619,7 +614,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
-		errorIf(err, "Unable to create an object. %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -692,7 +686,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	uploadID, err := objectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
-		errorIf(err, "Unable to initiate new multipart upload id.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -767,7 +760,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -809,7 +801,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket,
 		dstObject, uploadID, partID, startOffset, length, nil)
 	if err != nil {
-		errorIf(err, "Unable to perform CopyObjectPart %s/%s", srcBucket, srcObject)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -861,7 +852,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		sizeStr := r.Header.Get("x-amz-decoded-content-length")
 		size, err = strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil {
-			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -940,7 +930,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
 	if err != nil {
-		errorIf(err, "Unable to create object part.")
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -948,7 +937,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	partInfo, err := objectAPI.PutObjectPart(bucket, object, uploadID, partID, hashReader)
 	if err != nil {
-		errorIf(err, "Unable to create object part.")
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -979,7 +967,6 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := objectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
-		errorIf(err, "Unable to abort multipart upload.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -1014,7 +1001,6 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	}
 	listPartsInfo, err := objectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		errorIf(err, "Unable to list uploaded parts.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -1047,13 +1033,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	completeMultipartBytes, err := goioutil.ReadAll(r.Body)
 	if err != nil {
-		errorIf(err, "Unable to complete multipart upload.")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 	complMultipartUpload := &CompleteMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
-		errorIf(err, "Unable to parse complete multipart upload XML.")
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
@@ -1083,7 +1067,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	objInfo, err := objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
-		errorIf(err, "Unable to complete multipart upload.")
 		err = errors.Cause(err)
 		switch oErr := err.(type) {
 		case PartTooSmall:
@@ -1102,7 +1085,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
 	encodedSuccessResponse := encodeResponse(response)
 	if err != nil {
-		errorIf(err, "Unable to parse CompleteMultipartUpload response")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}

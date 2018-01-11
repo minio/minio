@@ -115,7 +115,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// marshalled into S3 compatible XML header.
 	listObjectsInfo, err := objectAPI.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		errorIf(err, "Unable to list objects.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -161,7 +160,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// marshalled into S3 compatible XML header.
 	listObjectsInfo, err := objectAPI.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		errorIf(err, "Unable to list objects.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
