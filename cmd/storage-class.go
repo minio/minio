@@ -182,11 +182,13 @@ func validateSSParity(ssParity, rrsParity int) (err error) {
 
 // Returns the data and parity drive count based on storage class
 // If storage class is set using the env vars MINIO_STORAGE_CLASS_RRS and MINIO_STORAGE_CLASS_STANDARD
+// or config.json fields
 // -- corresponding values are returned
-// If storage class is not set using environment variables, default values are returned
+// If storage class is not set during startup, default values are returned
 // -- Default for Reduced Redundancy Storage class is, parity = 2 and data = N-Parity
 // -- Default for Standard Storage class is, parity = N/2, data = N/2
-// If storage class is not present in metadata, default value is data = N/2, parity = N/2
+// If storage class is empty
+// -- standard storage class is assumed and corresponding data and parity is returned
 func getRedundancyCount(sc string, totalDisks int) (data, parity int) {
 	parity = totalDisks / 2
 	switch sc {
@@ -198,7 +200,7 @@ func getRedundancyCount(sc string, totalDisks int) (data, parity int) {
 			// else fall back to default value
 			parity = defaultRRSParity
 		}
-	case standardStorageClass:
+	case standardStorageClass, "":
 		if globalStandardStorageClass.Parity != 0 {
 			// set the standard parity if available
 			parity = globalStandardStorageClass.Parity
