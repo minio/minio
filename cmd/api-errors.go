@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 
 	"github.com/minio/minio/pkg/auth"
@@ -175,6 +176,8 @@ const (
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
+	ErrAdminConfigTooLarge
+	ErrAdminConfigBadJSON
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -711,6 +714,17 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminConfigNoQuorum",
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrAdminConfigTooLarge: {
+		Code: "XMinioAdminConfigTooLarge",
+		Description: fmt.Sprintf("Configuration data provided exceeds the allowed maximum of %d bytes",
+			maxConfigJSONSize),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigBadJSON: {
+		Code:           "XMinioAdminConfigBadJSON",
+		Description:    "JSON configuration provided has objects with duplicate keys",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminCredentialsMismatch: {
 		Code:           "XMinioAdminCredentialsMismatch",
