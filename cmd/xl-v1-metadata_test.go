@@ -368,3 +368,45 @@ func TestPickValidXLMeta(t *testing.T) {
 		}
 	}
 }
+
+func TestIsXLMetaFormatValid(t *testing.T) {
+	tests := []struct {
+		name    int
+		version string
+		format  string
+		want    bool
+	}{
+		{1, "123", "fs", false},
+		{2, "123", xlMetaFormat, false},
+		{3, xlMetaVersion, "test", false},
+		{4, xlMetaVersion100, "hello", false},
+		{5, xlMetaVersion, xlMetaFormat, true},
+		{6, xlMetaVersion100, xlMetaFormat, true},
+	}
+	for _, tt := range tests {
+		if got := isXLMetaFormatValid(tt.version, tt.format); got != tt.want {
+			t.Errorf("Test %d: Expected %v but received %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestIsXLMetaErasureInfoValid(t *testing.T) {
+	tests := []struct {
+		name   int
+		data   int
+		parity int
+		want   bool
+	}{
+		{1, 5, 6, false},
+		{2, 5, 5, true},
+		{3, 0, 5, false},
+		{4, 5, 0, false},
+		{5, 5, 0, false},
+		{6, 5, 4, true},
+	}
+	for _, tt := range tests {
+		if got := isXLMetaErasureInfoValid(tt.data, tt.parity); got != tt.want {
+			t.Errorf("Test %d: Expected %v but received %v", tt.name, got, tt.want)
+		}
+	}
+}
