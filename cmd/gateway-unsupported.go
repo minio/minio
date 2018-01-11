@@ -159,8 +159,3 @@ func (a GatewayUnsupported) ListLocks(bucket, prefix string, duration time.Durat
 func (a GatewayUnsupported) ClearLocks([]VolumeLockInfo) error {
 	return errors.Trace(NotImplemented{})
 }
-
-// GetRWLock returns a RW locker for name space mutex held in object layer
-func (a GatewayUnsupported) GetRWLock(bucket, object string) (RWLocker, error) {
-	return nil, errors.Trace(NotImplemented{})
-}

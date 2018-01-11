@@ -131,12 +131,6 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errInvalidBucketName)
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return toJSONError(errOperationTimedOut)
-	}
-	defer bucketLock.Unlock()
-
 	if err := objectAPI.MakeBucketWithLocation(args.BucketName, globalServerConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
@@ -159,12 +153,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-
-	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return toJSONError(errOperationTimedOut)
-	}
-	defer bucketLock.Unlock()
 
 	err := objectAPI.DeleteBucket(args.BucketName)
 	if err != nil {

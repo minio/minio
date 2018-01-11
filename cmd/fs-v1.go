@@ -200,11 +200,6 @@ func (fs fsObjects) ClearLocks([]VolumeLockInfo) error {
 	return NotImplemented{}
 }
 
-// GetRWLock returns a RW locker for name space mutex held in object layer
-func (fs fsObjects) GetRWLock(bucket, object string) (RWLocker, error) {
-	return fs.nsMutex.NewNSLock(bucket, object), nil
-}
-
 /// Bucket operations
 
 // getBucketDir - will convert incoming bucket names to
@@ -235,6 +230,11 @@ func (fs fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 // MakeBucket - create a new bucket, returns if it
 // already exists.
 func (fs fsObjects) MakeBucketWithLocation(bucket, location string) error {
+	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
 	bucketDir, err := fs.getBucketDir(bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)

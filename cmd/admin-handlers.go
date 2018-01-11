@@ -1070,7 +1070,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// Take a lock on minio/config.json. NB minio is a reserved
 	// bucket name and wouldn't conflict with normal object
 	// operations.
-	configLock, _ := newObjectLayerFn().GetRWLock(minioReservedBucket, minioConfigFile)
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
 	if configLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return

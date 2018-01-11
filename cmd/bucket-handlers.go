@@ -397,13 +397,6 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer bucketLock.Unlock()
-
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(bucket, "")
 	if err != nil {

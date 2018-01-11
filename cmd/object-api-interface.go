@@ -63,5 +63,4 @@ type ObjectLayer interface {
 	// Locking operations
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ClearLocks([]VolumeLockInfo) error
-	GetRWLock(bucket, object string) (RWLocker, error)
 }

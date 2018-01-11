@@ -232,11 +232,6 @@ func (xl xlObjects) ClearLocks(volLocks []VolumeLockInfo) error {
 	return nil
 }
 
-// GetRWLock returns a RW locker for name space mutex held in object layer
-func (xl xlObjects) GetRWLock(bucket, object string) (RWLocker, error) {
-	return xl.nsMutex.NewNSLock(bucket, object), nil
-}
-
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []disk.Info
 
