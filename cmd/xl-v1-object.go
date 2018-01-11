@@ -115,7 +115,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	go func() {
 		var startOffset int64 // Read the whole file.
 		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			errorIf(gerr, "Unable to read object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
@@ -294,7 +294,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize)
 		if err != nil {
-			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
 		}
 

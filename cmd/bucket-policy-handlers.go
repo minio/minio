@@ -236,7 +236,6 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -295,7 +294,6 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -336,7 +334,6 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -344,7 +341,6 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// Read bucket access policy.
 	policy, err := readBucketPolicy(bucket, objAPI)
 	if err != nil {
-		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

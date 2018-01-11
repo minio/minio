@@ -88,7 +88,6 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]policy.Bucke
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
 	if err != nil {
-		errorIf(err, "Unable to list buckets.")
 		return nil, errors.Cause(err)
 	}
 
@@ -199,7 +198,6 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	defer objLock.Unlock()
 	err := objAPI.DeleteObject(minioMetaBucket, policyPath)
 	if err != nil {
-		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
 		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
@@ -242,7 +240,6 @@ func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI Objec
 	var bktPolicy policy.BucketAccessPolicy
 	err := parseBucketPolicy(bytes.NewReader(policyBytes), &bktPolicy)
 	if err != nil {
-		errorIf(err, "Unable to parse bucket policy.")
 		return ErrInvalidPolicyDocument
 	}
 
