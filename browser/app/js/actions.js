@@ -400,7 +400,6 @@ export const listObjects = () => {
 export const selectPrefix = prefix => {
   return (dispatch, getState) => {
     const {currentBucket, web} = getState()
-    dispatch(resetObjects())
     dispatch(setLoadPath(prefix))
     web.ListObjects({
       bucketName: currentBucket,
@@ -415,6 +414,7 @@ export const selectPrefix = prefix => {
           object.name = object.name.replace(`${prefix}`, '');
           return object
         })
+        dispatch(resetObjects())
         dispatch(appendObjects(
           objects,
           res.nextmarker,
