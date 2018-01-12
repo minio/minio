@@ -269,7 +269,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	xlFormat := parseXLFormat(xlMetaBuf)
 
 	// Validate if the xl.json we read is sane, return corrupted format.
-	if !isXLMetaValid(xlVersion, xlFormat) {
+	if !isXLMetaFormatValid(xlVersion, xlFormat) {
 		// For version mismatchs and unrecognized format, return corrupted format.
 		return si, nil, errors2.Trace(errCorruptedFormat)
 	}

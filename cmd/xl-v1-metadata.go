@@ -266,16 +266,23 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 }
 
 // IsValid - tells if the format is sane by validating the version
-// string and format style.
+// string, format and erasure info fields.
 func (m xlMetaV1) IsValid() bool {
-	return isXLMetaValid(m.Version, m.Format)
+	return isXLMetaFormatValid(m.Version, m.Format) &&
+		isXLMetaErasureInfoValid(m.Erasure.DataBlocks, m.Erasure.ParityBlocks)
 }
 
 // Verifies if the backend format metadata is sane by validating
 // the version string and format style.
-func isXLMetaValid(version, format string) bool {
+func isXLMetaFormatValid(version, format string) bool {
 	return ((version == xlMetaVersion || version == xlMetaVersion100) &&
 		format == xlMetaFormat)
+}
+
+// Verifies if the backend format metadata is sane by validating
+// the ErasureInfo, i.e. data and parity blocks.
+func isXLMetaErasureInfoValid(data, parity int) bool {
+	return ((data >= parity) && (data != 0) && (parity != 0))
 }
 
 // Converts metadata to object info.
