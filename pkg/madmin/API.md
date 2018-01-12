@@ -85,8 +85,8 @@ Fetch service status, replies disk space used, backend type and total disks offl
 |`backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or Erasure. |
 |`backend.OnlineDisks`| _int_ | Total number of disks online (only applies to Erasure backend), is empty for FS. |
 |`backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
-|`backend.ReadQuorum` | _int_ | Current total read quorum threshold before reads will be unavailable, is empty for FS. |
-|`backend.WriteQuorum` | _int_ | Current total write quorum threshold before writes will be unavailable, is empty for FS. |
+|`backend.StandardSCParity` | _int_ | Parity disks set for standard storage class, is empty for FS. |
+|`backend.RRSCParity` | _int_ | Parity disks set for reduced redundancy storage class, is empty for FS. |
 
 
  __Example__

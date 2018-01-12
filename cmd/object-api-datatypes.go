@@ -45,8 +45,8 @@ type StorageInfo struct {
 		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks      int // Online disks during server startup.
 		OfflineDisks     int // Offline disks during server startup.
-		standardSCParity int // Parity disks for currently configured Standard storage class.
-		rrSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+		StandardSCParity int // Parity disks for currently configured Standard storage class.
+		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
 	}
 }
 
