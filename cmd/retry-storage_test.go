@@ -18,12 +18,13 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	sha256 "github.com/minio/sha256-simd"
 )
 
 // Tests retry storage.

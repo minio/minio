@@ -19,7 +19,6 @@ package cmd
 import (
 	"bufio"
 	"crypto"
-	_ "crypto/sha256" // Needed for sha256 hash verifier.
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -33,6 +32,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/inconshreveable/go-update"
 	"github.com/minio/cli"
+	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 	"github.com/segmentio/go-prompt"
 )
 
