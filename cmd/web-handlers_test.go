@@ -887,7 +887,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	}
 
 	var byteBuffer bytes.Buffer
-	err = obj.GetObject(bucketName, objectName, 0, int64(len(content)), &byteBuffer)
+	err = obj.GetObject(bucketName, objectName, 0, int64(len(content)), &byteBuffer, "")
 	if err != nil {
 		t.Fatalf("Failed, %v", err)
 	}

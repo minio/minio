@@ -21,6 +21,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"sync"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
@@ -59,6 +60,9 @@ type xlObjects struct {
 
 	// Object cache enabled.
 	objCacheEnabled bool
+
+	// name space mutex for object layer
+	nsMutex *nsLockMap
 }
 
 // list of all errors that can be ignored in tree walk operation in XL
@@ -106,8 +110,8 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		mutex:        &sync.Mutex{},
 		storageDisks: newStorageDisks,
 		listPool:     listPool,
+		nsMutex:      newNSLock(globalIsDistXL),
 	}
-
 	// Get cache size if _MINIO_CACHE environment variable is set.
 	var maxCacheSize uint64
 	if !globalXLObjCacheDisabled {
@@ -167,6 +171,63 @@ func (xl xlObjects) Shutdown() error {
 			continue
 		}
 		disk.Close()
+	}
+	return nil
+}
+
+// Locking operations
+
+// List namespace locks held in object layer
+func (xl xlObjects) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	xl.nsMutex.lockMapMutex.Lock()
+	defer xl.nsMutex.lockMapMutex.Unlock()
+	// Fetch current time once instead of fetching system time for every lock.
+	timeNow := UTCNow()
+	volumeLocks := []VolumeLockInfo{}
+
+	for param, debugLock := range xl.nsMutex.debugLockMap {
+		if param.volume != bucket {
+			continue
+		}
+		// N B empty prefix matches all param.path.
+		if !hasPrefix(param.path, prefix) {
+			continue
+		}
+
+		volLockInfo := VolumeLockInfo{
+			Bucket:                param.volume,
+			Object:                param.path,
+			LocksOnObject:         debugLock.counters.total,
+			TotalBlockedLocks:     debugLock.counters.blocked,
+			LocksAcquiredOnObject: debugLock.counters.granted,
+		}
+		// Filter locks that are held on bucket, prefix.
+		for opsID, lockInfo := range debugLock.lockInfo {
+			// filter locks that were held for longer than duration.
+			elapsed := timeNow.Sub(lockInfo.since)
+			if elapsed < duration {
+				continue
+			}
+			// Add locks that are held for longer than duration.
+			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject,
+				OpsLockState{
+					OperationID: opsID,
+					LockSource:  lockInfo.lockSource,
+					LockType:    lockInfo.lType,
+					Status:      lockInfo.status,
+					Since:       lockInfo.since,
+				})
+			volumeLocks = append(volumeLocks, volLockInfo)
+		}
+	}
+	return volumeLocks, nil
+}
+
+// Clear namespace locks held in object layer
+func (xl xlObjects) ClearLocks(volLocks []VolumeLockInfo) error {
+	// Remove lock matching bucket/prefix held longer than duration.
+	for _, volLock := range volLocks {
+		xl.nsMutex.ForceUnlock(volLock.Bucket, volLock.Object)
 	}
 	return nil
 }

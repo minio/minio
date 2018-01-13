@@ -145,7 +145,7 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo minio.Bucket
 
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
-func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
 	h := make(http.Header)
 	if length > 0 && startOffset > 0 {
 		h.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))

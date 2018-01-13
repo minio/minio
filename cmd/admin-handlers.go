@@ -412,11 +412,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
-
-	// Remove lock matching bucket/prefix held longer than duration.
-	for _, volLock := range volLocks {
-		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
-	}
+	newObjectLayerFn().ClearLocks(volLocks)
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)

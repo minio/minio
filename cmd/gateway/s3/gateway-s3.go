@@ -254,7 +254,7 @@ func (l *s3Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter s
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *s3Objects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
+func (l *s3Objects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
 		return minio.ErrorRespToObjectError(errors.Trace(minio.InvalidRange{}), bucket, key)
 	}
@@ -298,7 +298,7 @@ func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, m
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket string, dstObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket string, dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
 	// metadata input is already a trickled down value from interpreting x-amz-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
@@ -354,7 +354,7 @@ func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string,
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, metadata map[string]string) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, metadata map[string]string, srcEtag string) (p minio.PartInfo, err error) {
 
 	completePart, err := l.Client.CopyObjectPart(srcBucket, srcObject, destBucket, destObject,
 		uploadID, partID, startOffset, length, metadata)

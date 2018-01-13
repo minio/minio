@@ -349,6 +349,13 @@ func (e PartTooBig) Error() string {
 	return "Part size bigger than the allowed limit"
 }
 
+// InvalidETag error returned when the etag has changed on disk
+type InvalidETag struct{}
+
+func (e InvalidETag) Error() string {
+	return "etag of the object has changed"
+}
+
 // NotImplemented If a feature is not implemented
 type NotImplemented struct{}
 

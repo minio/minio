@@ -379,7 +379,7 @@ func (l *b2Objects) ListObjectsV2(bucket, prefix, continuationToken, delimiter s
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *b2Objects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+func (l *b2Objects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return err
@@ -523,7 +523,7 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 
 // CopyObject copies a blob from source container to destination container.
 func (l *b2Objects) CopyObject(srcBucket string, srcObject string, dstBucket string,
-	dstObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+	dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
 	return objInfo, errors.Trace(minio.NotImplemented{})
 }
 

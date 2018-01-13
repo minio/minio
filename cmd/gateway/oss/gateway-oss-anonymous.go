@@ -29,8 +29,8 @@ func (l *ossObjects) AnonPutObject(bucket, object string, data *hash.Reader, met
 }
 
 // AnonGetObject - Get object anonymously
-func (l *ossObjects) AnonGetObject(bucket, key string, startOffset, length int64, writer io.Writer) error {
-	return ossGetObject(l.anonClient, bucket, key, startOffset, length, writer)
+func (l *ossObjects) AnonGetObject(bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
+	return ossGetObject(l.anonClient, bucket, key, startOffset, length, writer, etag)
 }
 
 // AnonGetObjectInfo - Get object info anonymously

@@ -131,12 +131,6 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errInvalidBucketName)
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return toJSONError(errOperationTimedOut)
-	}
-	defer bucketLock.Unlock()
-
 	if err := objectAPI.MakeBucketWithLocation(args.BucketName, globalServerConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
@@ -159,12 +153,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-
-	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return toJSONError(errOperationTimedOut)
-	}
-	defer bucketLock.Unlock()
 
 	err := objectAPI.DeleteBucket(args.BucketName)
 	if err != nil {
@@ -564,14 +552,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Lock the object.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalObjectTimeout) != nil {
-		writeWebErrorResponse(w, errOperationTimedOut)
-		return
-	}
-	defer objectLock.Unlock()
-
 	hashReader, err := hash.NewReader(r.Body, size, "", "")
 	if err != nil {
 		writeWebErrorResponse(w, err)
@@ -614,15 +594,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	// Lock the object before reading.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetRLock(globalObjectTimeout) != nil {
-		writeWebErrorResponse(w, errOperationTimedOut)
-		return
-	}
-	defer objectLock.RUnlock()
-
-	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
+	if err := objectAPI.GetObject(bucket, object, 0, -1, w, ""); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -686,7 +658,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer, "")
 		}
 
 		if !hasSuffix(object, slashSeparator) {

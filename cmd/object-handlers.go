@@ -107,14 +107,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Lock the object before reading.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetRLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.RUnlock()
-
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		apiErr := toAPIErrorCode(err)
@@ -182,7 +174,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	httpWriter := ioutil.WriteOnClose(writer)
 	// Reads the object at startOffset and writes to mw.
-	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter); err != nil {
+	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -233,14 +225,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
-
-	// Lock the object before reading.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetRLock(globalObjectTimeout) != nil {
-		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
-		return
-	}
-	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -362,32 +346,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
-
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
-	// Hold write lock on destination since in both cases
-	// - if source and destination are same
-	// - if source and destination are different
-	// it is the sole mutating state.
-	objectDWLock := globalNSMutex.NewNSLock(dstBucket, dstObject)
-	if objectDWLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectDWLock.Unlock()
-
-	// if source and destination are different, we have to hold
-	// additional read lock as well to protect against writes on
-	// source.
-	if !cpSrcDstSame {
-		// Hold read locks on source object only if we are
-		// going to read data from source object.
-		objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-		if objectSRLock.GetRLock(globalObjectTimeout) != nil {
-			writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-			return
-		}
-		defer objectSRLock.RUnlock()
-	}
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
@@ -424,7 +383,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	objInfo, err = objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, newMetadata)
+	objInfo, err = objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, newMetadata, objInfo.ETag)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -537,14 +496,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-
-	// Lock the object.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.Unlock()
 
 	var (
 		md5hex    = hex.EncodeToString(md5Bytes)
@@ -749,15 +700,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Hold read locks on source object only if we are
-	// going to read data from source object.
-	objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-	if objectSRLock.GetRLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectSRLock.RUnlock()
-
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -799,7 +741,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, length, nil)
+		dstObject, uploadID, partID, startOffset, length, nil, objInfo.ETag)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1056,14 +998,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		part.ETag = canonicalizeETag(part.ETag)
 		completeParts = append(completeParts, part)
 	}
-
-	// Hold write lock on the object.
-	destLock := globalNSMutex.NewNSLock(bucket, object)
-	if destLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer destLock.Unlock()
 
 	objInfo, err := objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {

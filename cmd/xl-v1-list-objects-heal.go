@@ -143,7 +143,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		}
 
 		// Check if the current object needs healing
-		objectLock := globalNSMutex.NewNSLock(bucket, objInfo.Name)
+		objectLock := xl.nsMutex.NewNSLock(bucket, objInfo.Name)
 		if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
 			return loi, err
 		}
@@ -223,12 +223,12 @@ func (xl xlObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
 }
 
 // Fetches list of multipart uploadIDs given bucket, keyMarker, uploadIDMarker.
-func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
+func (xl xlObjects) fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
 	maxUploads int, disks []StorageAPI) (uploads []MultipartInfo, end bool,
 	err error) {
 
 	// Hold a read lock on keyMarker path.
-	keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	keyMarkerLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, keyMarker))
 	if err = keyMarkerLock.GetRLock(globalHealingTimeout); err != nil {
 		return uploads, end, err
@@ -237,7 +237,7 @@ func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
 		if disk == nil {
 			continue
 		}
-		uploads, end, err = listMultipartUploadIDs(bucket, keyMarker,
+		uploads, end, err = xl.listMultipartUploadIDs(bucket, keyMarker,
 			uploadIDMarker, maxUploads, disk)
 		if err == nil ||
 			!errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
@@ -268,7 +268,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 	// List all upload ids for the given keyMarker, starting from
 	// uploadIDMarker.
 	if uploadIDMarker != "" {
-		uploads, _, err = fetchMultipartUploadIDs(bucket, keyMarker,
+		uploads, _, err = xl.fetchMultipartUploadIDs(bucket, keyMarker,
 			uploadIDMarker, maxUploads, xl.getLoadBalancedDisks())
 		if err != nil {
 			return lmi, err
@@ -349,7 +349,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			var newUploads []MultipartInfo
 			var end bool
 			uploadIDMarker = ""
-			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
+			newUploads, end, err = xl.fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
 				uploadsLeft, xl.getLoadBalancedDisks())
 			if err != nil {
 				return lmi, err

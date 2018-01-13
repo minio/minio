@@ -45,7 +45,7 @@ type Gateway interface {
 type GatewayLayer interface {
 	ObjectLayer
 
-	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
+	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
 	AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 
 	AnonPutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (ObjectInfo, error)
