@@ -665,7 +665,7 @@ func (fs fsObjects) putObject(bucket string, object string, data *hash.Reader, m
 		if fs.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
 		}
-		if err = fsMkdirAll(pathJoin(fs.fsPath, bucket, object)); err != nil {
+		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		var fi os.FileInfo
