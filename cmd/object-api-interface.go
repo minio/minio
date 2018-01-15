@@ -57,8 +57,6 @@ type ObjectLayer interface {
 	ListBucketsHeal() (buckets []BucketInfo, err error)
 	HealObject(bucket, object string) (int, int, error)
 	ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
-	ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-		delimiter string, maxUploads int) (ListMultipartsInfo, error)
 
 	// Locking operations
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
