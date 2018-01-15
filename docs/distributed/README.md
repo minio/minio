@@ -22,6 +22,8 @@ As with Minio in stand-alone mode, distributed Minio has a per tenant limit of m
 
 Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on.
 
+You can also use [storage classes](https://github.com/minio/minio/tree/master/docs/erasure/storage-class) to set custom data and parity distribution across total disks.
+
 ### Consistency Guarantees
 
 Minio follows strict **read-after-write** consistency model for all i/o operations both in distributed and standalone modes.
