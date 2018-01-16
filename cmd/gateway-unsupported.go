@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io"
+	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
@@ -38,7 +39,7 @@ func (a GatewayUnsupported) NewMultipartUpload(bucket string, object string, met
 }
 
 // CopyObjectPart copy part of object to other bucket and object
-func (a GatewayUnsupported) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string) (pi PartInfo, err error) {
+func (a GatewayUnsupported) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string, srcEtag string) (pi PartInfo, err error) {
 	return pi, errors.Trace(NotImplemented{})
 }
 
@@ -102,12 +103,6 @@ func (a GatewayUnsupported) ListObjectsHeal(bucket, prefix, marker, delimiter st
 	return loi, errors.Trace(NotImplemented{})
 }
 
-// ListUploadsHeal - Not implemented stub
-func (a GatewayUnsupported) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	return lmi, errors.Trace(NotImplemented{})
-}
-
 // AnonListObjects - List objects anonymously
 func (a GatewayUnsupported) AnonListObjects(bucket string, prefix string, marker string, delimiter string,
 	maxKeys int) (loi ListObjectsInfo, err error) {
@@ -132,7 +127,7 @@ func (a GatewayUnsupported) AnonPutObject(bucket, object string, data *hash.Read
 }
 
 // AnonGetObject downloads object anonymously.
-func (a GatewayUnsupported) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+func (a GatewayUnsupported) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
 	return errors.Trace(NotImplemented{})
 }
 
@@ -143,6 +138,18 @@ func (a GatewayUnsupported) AnonGetObjectInfo(bucket, object string) (objInfo Ob
 
 // CopyObject copies a blob from source container to destination container.
 func (a GatewayUnsupported) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string,
-	metadata map[string]string) (objInfo ObjectInfo, err error) {
+	metadata map[string]string, srcEtag string) (objInfo ObjectInfo, err error) {
 	return objInfo, errors.Trace(NotImplemented{})
+}
+
+// Locking operations
+
+// ListLocks lists namespace locks held in object layer
+func (a GatewayUnsupported) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	return []VolumeLockInfo{}, errors.Trace(NotImplemented{})
+}
+
+// ClearLocks clears namespace locks held in object layer
+func (a GatewayUnsupported) ClearLocks([]VolumeLockInfo) error {
+	return errors.Trace(NotImplemented{})
 }

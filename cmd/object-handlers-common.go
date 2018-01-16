@@ -230,12 +230,6 @@ func isETagEqual(left, right string) bool {
 // is a common function to be called from object handlers and
 // web handlers.
 func deleteObject(obj ObjectLayer, bucket, object string, r *http.Request) (err error) {
-	// Acquire a write lock before deleting the object.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if err = objectLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objectLock.Unlock()
 
 	// Proceed to delete the object.
 	if err = obj.DeleteObject(bucket, object); err != nil {

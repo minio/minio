@@ -122,7 +122,6 @@ func calculateSeedSignature(r *http.Request) (signature string, region string, d
 	var err error
 	date, err = time.Parse(iso8601Format, dateStr)
 	if err != nil {
-		errorIf(err, "Unable to parse date", dateStr)
 		return "", "", time.Time{}, ErrMalformedDate
 	}
 

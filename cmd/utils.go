@@ -37,6 +37,14 @@ import (
 	"github.com/pkg/profile"
 )
 
+// Close Http tracing file.
+func stopHTTPTrace() {
+	if globalHTTPTraceFile != nil {
+		errorIf(globalHTTPTraceFile.Close(), "Unable to close httpTraceFile %s", globalHTTPTraceFile.Name())
+		globalHTTPTraceFile = nil
+	}
+}
+
 // make a copy of http.Header
 func cloneHeader(h http.Header) http.Header {
 	h2 := make(http.Header, len(h))
@@ -254,4 +262,12 @@ func NewCustomHTTPTransport() http.RoundTripper {
 		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
 		DisableCompression:    true,
 	}
+}
+
+// Load the json (typically from disk file).
+func jsonLoadFromSeeker(r io.ReadSeeker, data interface{}) error {
+	if _, err := r.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return json.NewDecoder(r).Decode(data)
 }

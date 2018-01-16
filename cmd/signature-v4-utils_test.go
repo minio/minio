@@ -34,18 +34,37 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 		expectedResult bool
 	}{
 		// Test case - 1.
-		// Test case with "X-Amz-Content-Sha256" header set to empty value.
+		// Test case with "X-Amz-Content-Sha256" header set, but to empty value but we can't skip.
 		{"X-Amz-Content-Sha256", "", "", "", false},
+
 		// Test case - 2.
+		// Test case with "X-Amz-Content-Sha256" not set so we can skip.
+		{"", "", "", "", true},
+
+		// Test case - 3.
 		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD"
 		// When "X-Amz-Content-Sha256" header is set to  "UNSIGNED-PAYLOAD", validation of content sha256 has to be skipped.
-		{"X-Amz-Content-Sha256", unsignedPayload, "", "", true},
-		// Test case - 3.
-		// Enabling PreSigned Signature v4.
-		{"", "", "X-Amz-Credential", "", true},
+		{"X-Amz-Content-Sha256", unsignedPayload, "X-Amz-Credential", "", true},
+
 		// Test case - 4.
+		// Enabling PreSigned Signature v4, but X-Amz-Content-Sha256 not set has to be skipped.
+		{"", "", "X-Amz-Credential", "", true},
+
+		// Test case - 5.
+		// Enabling PreSigned Signature v4, but X-Amz-Content-Sha256 set and its not UNSIGNED-PAYLOAD, we shouldn't skip.
+		{"X-Amz-Content-Sha256", "somevalue", "X-Amz-Credential", "", false},
+
+		// Test case - 6.
+		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD" and its not presigned, we should skip.
+		{"X-Amz-Content-Sha256", unsignedPayload, "", "", true},
+
+		// Test case - 7.
 		// "X-Amz-Content-Sha256" not set and  PreSigned Signature v4 not enabled, sha256 checksum calculation is not skipped.
 		{"", "", "X-Amz-Credential", "", true},
+
+		// Test case - 8.
+		// "X-Amz-Content-Sha256" has a proper value cannot skip.
+		{"X-Amz-Content-Sha256", "somevalue", "", "", false},
 	}
 
 	for i, testCase := range testCases {
@@ -55,13 +74,17 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error initializing input HTTP request: %v", err)
 		}
-		if testCase.inputHeaderKey != "" {
-			inputReq.Header.Set(testCase.inputHeaderKey, testCase.inputHeaderValue)
-		}
 		if testCase.inputQueryKey != "" {
 			q := inputReq.URL.Query()
 			q.Add(testCase.inputQueryKey, testCase.inputQueryValue)
+			if testCase.inputHeaderKey != "" {
+				q.Add(testCase.inputHeaderKey, testCase.inputHeaderValue)
+			}
 			inputReq.URL.RawQuery = q.Encode()
+		} else {
+			if testCase.inputHeaderKey != "" {
+				inputReq.Header.Set(testCase.inputHeaderKey, testCase.inputHeaderValue)
+			}
 		}
 
 		actualResult := skipContentSha256Cksum(inputReq)
@@ -243,8 +266,10 @@ func TestGetContentSha256Cksum(t *testing.T) {
 		expected string // expected SHA256
 	}{
 		{"shastring", "", "shastring"},
+		{emptySHA256, "", emptySHA256},
 		{"", "", emptySHA256},
 		{"", "X-Amz-Credential=random", unsignedPayload},
+		{"", "X-Amz-Credential=random&X-Amz-Content-Sha256=" + unsignedPayload, unsignedPayload},
 		{"", "X-Amz-Credential=random&X-Amz-Content-Sha256=shastring", "shastring"},
 	}
 

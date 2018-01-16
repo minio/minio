@@ -73,6 +73,17 @@ docker service create --name="minio-service" --secret="access_key" --secret="sec
 
 Read more about `docker service` [here](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/)
 
+#### Minio Custom Access and Secret Key files
+To use other secret names follow the instuctions above and replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`). Run your service with
+```
+docker service create --name="minio-service" \
+  --secret="my_access_key" \
+  --secret="my_secret_key" \
+  --env="MINIO_ACCESS_KEY_FILE=my_access_key" \
+  --env="MINIO_SECRET_KEY_FILE=my_secret_key" \
+  minio/minio server /data
+```
+
 ### Retrieving Container ID
 To use Docker commands on a specific container, you need to know the `Container ID` for that container. To get the `Container ID`, run
 

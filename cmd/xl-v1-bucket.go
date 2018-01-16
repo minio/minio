@@ -33,6 +33,11 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return errors.Trace(BucketNameInvalid{Bucket: bucket})

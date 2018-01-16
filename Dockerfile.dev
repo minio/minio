@@ -6,6 +6,8 @@ ENV GOPATH /go
 ENV PATH $PATH:$GOPATH/bin
 ENV CGO_ENABLED 0
 ENV MINIO_UPDATE off
+ENV MINIO_ACCESS_KEY_FILE=access_key \
+    MINIO_SECRET_KEY_FILE=secret_key
 
 WORKDIR /go/src/github.com/minio/
 

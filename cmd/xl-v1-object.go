@@ -57,7 +57,40 @@ func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks [
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (oi ObjectInfo, e error) {
+func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (oi ObjectInfo, e error) {
+	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
+	// Hold write lock on destination since in both cases
+	// - if source and destination are same
+	// - if source and destination are different
+	// it is the sole mutating state.
+	objectDWLock := xl.nsMutex.NewNSLock(dstBucket, dstObject)
+	if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
+		return oi, err
+	}
+	defer objectDWLock.Unlock()
+	// if source and destination are different, we have to hold
+	// additional read lock as well to protect against writes on
+	// source.
+	if !cpSrcDstSame {
+		// Hold read locks on source object only if we are
+		// going to read data from source object.
+		objectSRLock := xl.nsMutex.NewNSLock(srcBucket, srcObject)
+		if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+			return oi, err
+		}
+		defer objectSRLock.RUnlock()
+	}
+
+	if srcEtag != "" {
+		objInfo, perr := xl.getObjectInfo(srcBucket, srcObject)
+		if perr != nil {
+			return oi, toObjectErr(perr, srcBucket, srcObject)
+		}
+		if objInfo.ETag != srcEtag {
+			return oi, toObjectErr(errors.Trace(InvalidETag{}), srcBucket, srcObject)
+		}
+	}
+
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
 
@@ -114,7 +147,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+		if gerr := xl.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, ""); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
@@ -127,7 +160,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		return oi, toObjectErr(errors.Trace(err), dstBucket, dstObject)
 	}
 
-	objInfo, err := xl.PutObject(dstBucket, dstObject, hashReader, metadata)
+	objInfo, err := xl.putObject(dstBucket, dstObject, hashReader, metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -144,7 +177,19 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+	// Lock the object before reading.
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer objectLock.RUnlock()
+	return xl.getObject(bucket, object, startOffset, length, writer, etag)
+}
+
+// getObject wrapper for xl GetObject
+func (xl xlObjects) getObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
@@ -294,7 +339,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize)
 		if err != nil {
-			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
 		}
 
@@ -312,6 +356,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
+	// Lock the object before reading.
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
+		return oi, err
+	}
+	defer objectLock.RUnlock()
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return oi, err
 	}
@@ -446,6 +497,17 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	// Lock the object.
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
+		return objInfo, err
+	}
+	defer objectLock.Unlock()
+	return xl.putObject(bucket, object, data, metadata)
+}
+
+// putObject wrapper for xl PutObject
+func (xl xlObjects) putObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
@@ -716,6 +778,13 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
+	// Acquire a write lock before deleting the object.
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	if perr := objectLock.GetLock(globalOperationTimeout); perr != nil {
+		return perr
+	}
+	defer objectLock.Unlock()
+
 	if err = checkDelObjArgs(bucket, object); err != nil {
 		return err
 	}

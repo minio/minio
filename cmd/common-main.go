@@ -102,7 +102,12 @@ func handleCommonEnvVars() {
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 
-	globalHTTPTrace = os.Getenv("MINIO_HTTP_TRACE") != ""
+	traceFile := os.Getenv("MINIO_HTTP_TRACE")
+	if traceFile != "" {
+		var err error
+		globalHTTPTraceFile, err = os.OpenFile(traceFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
+		fatalIf(err, "error opening file %s", traceFile)
+	}
 
 	globalDomainName = os.Getenv("MINIO_DOMAIN")
 	if globalDomainName != "" {

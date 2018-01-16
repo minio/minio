@@ -28,28 +28,6 @@ import (
 	"github.com/minio/minio/pkg/lock"
 )
 
-// Tests - fsMkdirAll()
-func TestFSMkdirAll(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
-	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
-	}
-	defer os.RemoveAll(path)
-
-	if err = fsMkdirAll(""); errors.Cause(err) != errInvalidArgument {
-		t.Fatal("Unexpected error", err)
-	}
-
-	if err = fsMkdirAll(pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")); errors.Cause(err) != errFileNameTooLong {
-		t.Fatal("Unexpected error", err)
-	}
-
-	if err = fsMkdirAll(pathJoin(path, "success-vol", "success-object")); err != nil {
-		t.Fatal("Unexpected error", err)
-	}
-}
-
 func TestFSRenameFile(t *testing.T) {
 	// create posix test setup
 	_, path, err := newPosixTestSetup()

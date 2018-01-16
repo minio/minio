@@ -725,7 +725,7 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken, delimiter 
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
+func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -813,7 +813,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string,
-	metadata map[string]string) (minio.ObjectInfo, error) {
+	metadata map[string]string, srcEtag string) (minio.ObjectInfo, error) {
 
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)

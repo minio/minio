@@ -306,7 +306,7 @@ func (xl xlObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 	// uploadIDMarker first.
 	if uploadIDMarker != "" {
 		// hold lock on keyMarker path
-		keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+		keyMarkerLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 			pathJoin(bucket, keyMarker))
 		if err = keyMarkerLock.GetRLock(globalListingTimeout); err != nil {
 			return lmi, err
@@ -315,7 +315,7 @@ func (xl xlObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 			if disk == nil {
 				continue
 			}
-			uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
+			uploads, _, err = xl.listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, disk)
 			if err == nil {
 				break
 			}
@@ -374,7 +374,7 @@ func (xl xlObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 
 			// For the new object entry we get all its
 			// pending uploadIDs.
-			entryLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+			entryLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 				pathJoin(bucket, entry))
 			if err = entryLock.GetRLock(globalListingTimeout); err != nil {
 				return lmi, err
@@ -384,7 +384,7 @@ func (xl xlObjects) listMultipartUploadsCleanup(bucket, prefix, keyMarker, uploa
 				if disk == nil {
 					continue
 				}
-				newUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
+				newUploads, end, err = xl.listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, disk)
 				if err == nil {
 					break
 				}
@@ -465,8 +465,14 @@ func (xl xlObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMark
 		if disk == nil {
 			continue
 		}
-
-		uploads, _, err := listMultipartUploadIDs(bucket, object, uploadIDMarker, maxUploads, disk)
+		// Hold the lock so that two parallel complete-multipart-uploads
+		// do not leave a stale uploads.json behind.
+		objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+		if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
+			return lmi, err
+		}
+		defer objectMPartPathLock.RUnlock()
+		uploads, _, err := xl.listMultipartUploadIDs(bucket, object, uploadIDMarker, maxUploads, disk)
 		if err != nil {
 			return lmi, err
 		}
@@ -525,7 +531,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	// This lock needs to be held for any changes to the directory
 	// contents of ".minio.sys/multipart/object/"
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return "", err
@@ -582,16 +588,33 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 // data is read from an existing object.
 //
 // Implements S3 compatible Upload Part Copy API.
-func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string) (pi PartInfo, e error) {
+func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string, srcEtag string) (pi PartInfo, e error) {
+	// Hold read locks on source object only if we are
+	// going to read data from source object.
+	objectSRLock := xl.nsMutex.NewNSLock(srcBucket, srcObject)
+	if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+		return pi, err
+	}
+	defer objectSRLock.RUnlock()
+
 	if err := checkNewMultipartArgs(srcBucket, srcObject, xl); err != nil {
 		return pi, err
 	}
 
+	if srcEtag != "" {
+		objInfo, err := xl.getObjectInfo(srcBucket, srcObject)
+		if err != nil {
+			return pi, toObjectErr(err, srcBucket, srcObject)
+		}
+		if objInfo.ETag != srcEtag {
+			return pi, toObjectErr(errors.Trace(InvalidETag{}), srcBucket, srcObject)
+		}
+	}
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+		if gerr := xl.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, ""); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
@@ -631,12 +654,20 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 		return pi, toObjectErr(errors.Trace(errInvalidArgument))
 	}
 
+	// Hold the lock so that two parallel complete-multipart-uploads
+	// do not leave a stale uploads.json behind.
+	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+		return pi, err
+	}
+	defer objectMPartPathLock.Unlock()
+
 	var partsMetadata []xlMetaV1
 	var errs []error
 	uploadIDPath := pathJoin(bucket, object, uploadID)
 
 	// pre-check upload id lock.
-	preUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	preUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	if err := preUploadIDLock.GetRLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -708,7 +739,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 	}
 
 	// post-upload check (write) lock
-	postUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	postUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -859,10 +890,16 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	if err := checkListPartsArgs(bucket, object, xl); err != nil {
 		return lpi, err
 	}
-
+	// Hold the lock so that two parallel complete-multipart-uploads
+	// do not leave a stale uploads.json behind.
+	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
+	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
+		return lpi, errors.Trace(err)
+	}
+	defer objectMPartPathLock.RUnlock()
 	// Hold lock so that there is no competing
 	// abort-multipart-upload or complete-multipart-upload.
-	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
 		return lpi, err
@@ -886,14 +923,19 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err := checkCompleteMultipartArgs(bucket, object, xl); err != nil {
 		return oi, err
 	}
-
+	// Hold write lock on the object.
+	destLock := xl.nsMutex.NewNSLock(bucket, object)
+	if err := destLock.GetLock(globalObjectTimeout); err != nil {
+		return oi, err
+	}
+	defer destLock.Unlock()
 	// Hold lock so that
 	//
 	// 1) no one aborts this multipart upload
 	//
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return oi, err
@@ -1034,7 +1076,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			// Prefetch the object from disk by triggering a fake GetObject call
 			// Unlike a regular single PutObject,  multipart PutObject is comes in
 			// stages and it is harder to cache.
-			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard, s3MD5)
 		}
 	}()
 
@@ -1075,7 +1117,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Hold the lock so that two parallel
 	// complete-multipart-uploads do not leave a stale
 	// uploads.json behind.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return oi, toObjectErr(err, bucket, object)
@@ -1155,7 +1197,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 
 	// hold lock so we don't compete with a complete, or abort
 	// multipart request.
-	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return toObjectErr(err, bucket, object)
@@ -1186,10 +1228,9 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	if err := checkAbortMultipartArgs(bucket, object, xl); err != nil {
 		return err
 	}
-
 	// Hold lock so that there is no competing
 	// complete-multipart-upload or put-object-part.
-	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return err

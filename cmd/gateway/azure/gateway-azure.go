@@ -554,7 +554,7 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimite
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// startOffset cannot be negative.
 	if startOffset < 0 {
 		return azureToObjectError(errors.Trace(minio.InvalidRange{}), bucket, object)
@@ -621,7 +621,7 @@ func (a *azureObjects) PutObject(bucket, object string, data *hash.Reader, metad
 
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent CopyBlob API.
-func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
 	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
 	azureMeta, props, err := s3MetaToAzureProperties(metadata)

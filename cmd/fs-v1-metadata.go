@@ -24,7 +24,6 @@ import (
 	pathutil "path"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
@@ -267,97 +266,6 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta.Format = fsMetaFormat
 	fsMeta.Minio.Release = ReleaseTag
 	return fsMeta
-}
-
-// Check if disk has already a valid format, holds a read lock and
-// upon success returns it to the caller to be closed.
-func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
-	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
-
-	rlk, err := lock.RLockedOpenFile((fsFormatPath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			// If format.json not found then
-			// its an unformatted disk.
-			return nil, errors.Trace(errUnformattedDisk)
-		}
-		return nil, errors.Trace(err)
-	}
-
-	var format = &formatConfigV1{}
-	if err = format.LoadFormat(rlk.LockedFile); err != nil {
-		rlk.Close()
-		return nil, err
-	}
-
-	// Check format FS.
-	if err = format.CheckFS(); err != nil {
-		rlk.Close()
-		return nil, err
-	}
-
-	//  Always return read lock here and should be closed by the caller.
-	return rlk, errors.Trace(err)
-}
-
-// Creates a new format.json if unformatted.
-func createFormatFS(fsPath string) error {
-	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
-
-	// Attempt a write lock on formatConfigFile `format.json`
-	// file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.TryLockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// Close the locked file upon return.
-	defer lk.Close()
-
-	// Load format on disk, checks if we are unformatted
-	// writes the new format.json
-	var format = &formatConfigV1{}
-	err = format.LoadFormat(lk)
-	if errors.Cause(err) == errUnformattedDisk {
-		_, err = newFSFormat().WriteTo(lk)
-		return err
-	}
-	return err
-}
-
-func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
-	// This loop validates format.json by holding a read lock and
-	// proceeds if disk unformatted to hold non-blocking WriteLock
-	// If for some reason non-blocking WriteLock fails and the error
-	// is lock.ErrAlreadyLocked i.e some other process is holding a
-	// lock we retry in the loop again.
-	for {
-		// Validate the `format.json` for expected values.
-		rlk, err = checkLockedValidFormatFS(fsPath)
-		switch {
-		case err == nil:
-			// Holding a read lock ensures that any write lock operation
-			// is blocked if attempted in-turn avoiding corruption on
-			// the backend disk.
-			return rlk, nil
-		case errors.Cause(err) == errUnformattedDisk:
-			if err = createFormatFS(fsPath); err != nil {
-				// Existing write locks detected.
-				if errors.Cause(err) == lock.ErrAlreadyLocked {
-					// Lock already present, sleep and attempt again.
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-
-				// Unexpected error, return.
-				return nil, err
-			}
-
-			// Loop will continue to attempt a read-lock on `format.json`.
-		default:
-			// Unhandled error return.
-			return nil, err
-		}
-	}
 }
 
 // Return if the part info in uploadedParts and CompleteParts are same.

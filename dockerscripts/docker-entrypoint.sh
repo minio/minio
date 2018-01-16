@@ -24,15 +24,15 @@ fi
 
 ## Look for docker secrets in default documented location.
 docker_secrets_env() {
-    local MINIO_ACCESS_KEY_FILE="/run/secrets/access_key"
-    local MINIO_SECRET_KEY_FILE="/run/secrets/secret_key"
+    local ACCESS_KEY_FILE="/run/secrets/$MINIO_ACCESS_KEY_FILE"
+    local SECRET_KEY_FILE="/run/secrets/$MINIO_SECRET_KEY_FILE"
 
-    if [ -f $MINIO_ACCESS_KEY_FILE -a -f $MINIO_SECRET_KEY_FILE ]; then
-        if [ -f $MINIO_ACCESS_KEY_FILE ]; then
-            export MINIO_ACCESS_KEY="$(cat "$MINIO_ACCESS_KEY_FILE")"
+    if [ -f $ACCESS_KEY_FILE -a -f $SECRET_KEY_FILE ]; then
+        if [ -f $ACCESS_KEY_FILE ]; then
+            export MINIO_ACCESS_KEY="$(cat "$ACCESS_KEY_FILE")"
         fi
-        if [ -f $MINIO_SECRET_KEY_FILE ]; then
-            export MINIO_SECRET_KEY="$(cat "$MINIO_SECRET_KEY_FILE")"
+        if [ -f $SECRET_KEY_FILE ]; then
+            export MINIO_SECRET_KEY="$(cat "$SECRET_KEY_FILE")"
         fi
     fi
 }

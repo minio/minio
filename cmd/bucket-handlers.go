@@ -128,7 +128,6 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	}
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
-		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -185,7 +184,6 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 
 	listMultipartsInfo, err := objectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
-		errorIf(err, "Unable to list multipart uploads.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -221,7 +219,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	// Invoke the list buckets.
 	bucketsInfo, err := objectAPI.ListBuckets()
 	if err != nil {
-		errorIf(err, "Unable to list buckets.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -304,16 +301,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				}
 				return
 			}
-			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
-			if timedOutErr := objectLock.GetLock(globalObjectTimeout); timedOutErr != nil {
-				dErrs[i] = timedOutErr
-			} else {
-				defer objectLock.Unlock()
-
-				dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
-				if dErr != nil {
-					dErrs[i] = dErr
-				}
+			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
+			if dErr != nil {
+				dErrs[i] = dErr
 			}
 		}(index, object)
 	}
@@ -335,7 +325,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			deletedObjects = append(deletedObjects, object)
 			continue
 		}
-		errorIf(err, "Unable to delete object. %s", object.ObjectName)
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{
 			Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
@@ -408,17 +397,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer bucketLock.Unlock()
-
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(bucket, "")
 	if err != nil {
-		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -546,13 +527,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	lengthRange := postPolicyForm.Conditions.ContentLengthRange
 	if lengthRange.Valid {
 		if fileSize < lengthRange.Min {
-			errorIf(err, "Unable to create object.")
 			writeErrorResponse(w, toAPIErrorCode(errDataTooSmall), r.URL)
 			return
 		}
 
 		if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
-			errorIf(err, "Unable to create object.")
 			writeErrorResponse(w, toAPIErrorCode(errDataTooLarge), r.URL)
 			return
 		}
@@ -566,13 +545,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.Unlock()
-
 	hashReader, err := hash.NewReader(fileBody, fileSize, "", "")
 	if err != nil {
 		errorIf(err, "Unable to initialize hashReader.")
@@ -582,7 +554,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
 	if err != nil {
-		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -662,7 +633,6 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	defer bucketLock.RUnlock()
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
-		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
@@ -696,7 +666,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {
-		errorIf(err, "Unable to delete a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

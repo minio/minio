@@ -83,6 +83,11 @@ func (xl xlObjects) HealBucket(bucket string) error {
 
 	// get write quorum for an object
 	writeQuorum := len(xl.storageDisks)/2 + 1
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
 
 	// Heal bucket.
 	if err := healBucket(xl.storageDisks, bucket, writeQuorum); err != nil {
@@ -95,11 +100,6 @@ func (xl xlObjects) HealBucket(bucket string) error {
 
 // Heal bucket - create buckets on disks where it does not exist.
 func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error {
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
 
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -316,6 +316,12 @@ func quickHeal(xlObj xlObjects, writeQuorum int, readQuorum int) error {
 	for bucketName, occCount := range bucketOcc {
 		// Heal bucket only if healing is needed.
 		if occCount != len(xlObj.storageDisks) {
+			bucketLock := xlObj.nsMutex.NewNSLock(bucketName, "")
+			if perr := bucketLock.GetLock(globalHealingTimeout); perr != nil {
+				return perr
+			}
+			defer bucketLock.Unlock()
+
 			// Heal bucket and then proceed to heal bucket metadata if any.
 			if err = healBucket(xlObj.storageDisks, bucketName, writeQuorum); err == nil {
 				if err = healBucketMetadata(xlObj, bucketName); err == nil {
@@ -542,7 +548,7 @@ func (xl xlObjects) HealObject(bucket, object string) (int, int, error) {
 	}
 
 	// Lock the object before healing.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
 		return 0, 0, err
 	}

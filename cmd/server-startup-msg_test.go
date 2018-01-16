@@ -38,8 +38,8 @@ func TestStorageInfoMsg(t *testing.T) {
 			Type             BackendType
 			OnlineDisks      int
 			OfflineDisks     int
-			standardSCParity int
-			rrSCParity       int
+			StandardSCParity int
+			RRSCParity       int
 		}{Erasure, 7, 1, 4, 5},
 	}
 
@@ -169,8 +169,8 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 15, 1, 5, 3},
 		}, "Objects with " + standardStorageClass + " class can withstand [4] drive failure(s).\n"},
 		{"2", StorageInfo{
@@ -180,8 +180,8 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 10, 0, 5, 3},
 		}, "Objects with " + standardStorageClass + " class can withstand [5] drive failure(s).\n"},
 		{"3", StorageInfo{
@@ -191,8 +191,8 @@ func TestGetStandardStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 12, 3, 6, 2},
 		}, "Objects with " + standardStorageClass + " class can withstand [3] drive failure(s).\n"},
 	}
@@ -216,8 +216,8 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 15, 1, 5, 3},
 		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
 		{"2", StorageInfo{
@@ -227,8 +227,8 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 16, 0, 5, 3},
 		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [3] drive failure(s).\n"},
 		{"3", StorageInfo{
@@ -238,8 +238,8 @@ func TestGetRRSStorageClassInfoMsg(t *testing.T) {
 				Type             BackendType
 				OnlineDisks      int
 				OfflineDisks     int
-				standardSCParity int
-				rrSCParity       int
+				StandardSCParity int
+				RRSCParity       int
 			}{Erasure, 12, 3, 6, 5},
 		}, "Objects with " + reducedRedundancyStorageClass + " class can withstand [2] drive failure(s).\n"},
 	}

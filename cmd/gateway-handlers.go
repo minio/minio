@@ -81,7 +81,6 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -129,7 +128,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	setHeadGetRespHeaders(w, r.URL.Query())
 	httpWriter := ioutil.WriteOnClose(w)
 	// Reads the object at startOffset and writes to mw.
-	if err = getObject(bucket, object, startOffset, length, httpWriter); err != nil {
+	if err = getObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !httpWriter.HasWritten() {
 			// Error response only if no data has been written to client yet. i.e if
@@ -199,7 +198,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
-		errorIf(err, "Unable to validate content-md5 format.")
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
 		return
 	}
@@ -211,7 +209,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		sizeStr := r.Header.Get("x-amz-decoded-content-length")
 		size, err = strconv.ParseInt(sizeStr, 10, 64)
 		if err != nil {
-			errorIf(err, "Unable to parse `x-amz-decoded-content-length` into its integer value", sizeStr)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -230,7 +227,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -253,14 +249,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 		}
 	}
-
-	// Lock the object.
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalOperationTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer objectLock.Unlock()
 
 	var (
 		// Make sure we hex encode md5sum here.
@@ -385,7 +373,6 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 	}
 	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -448,7 +435,6 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -511,7 +497,6 @@ func (api gatewayAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -545,21 +530,18 @@ func (api gatewayAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *h
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	bp, err := objAPI.GetBucketPolicies(bucket)
 	if err != nil {
-		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	policyBytes, err := json.Marshal(bp)
 	if err != nil {
-		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -631,7 +613,6 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(bucket, location)
 	if err != nil {
-		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -661,7 +642,6 @@ func (api gatewayAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http
 
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {
-		errorIf(err, "Unable to delete a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -733,7 +713,6 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 	// marshalled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		errorIf(err, "Unable to list objects.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -813,7 +792,6 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 	// serialized as XML and sent as S3 compatible response body.
 	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
-		errorIf(err, "Unable to list objects. Args to listObjectsV2 are bucket=%s, prefix=%s, token=%s, delimiter=%s", bucket, prefix, token, delimiter)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -871,7 +849,6 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 	}
 
 	if _, err := getBucketInfo(bucket); err != nil {
-		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
@@ -927,7 +904,6 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 	}
 
 	if _, err := getBucketInfo(bucket); err != nil {
-		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

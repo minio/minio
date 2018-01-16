@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -674,14 +674,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 	} else {
 		// Create top level directories if they don't exist.
 		// with mode 0777 mkdir honors system umask.
-		if err = os.MkdirAll(slashpath.Dir(filePath), 0777); err != nil {
-			// File path cannot be verified since one of the parents is a file.
-			if isSysErrNotDir(err) {
-				return nil, errFileAccessDenied
-			} else if isSysErrPathNotFound(err) {
-				// Add specific case for windows.
-				return nil, errFileAccessDenied
-			}
+		if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
 			return nil, err
 		}
 	}
@@ -970,25 +963,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 		// Destination does not exist, hence proceed with the rename.
 	}
-	// Creates all the parent directories, with mode 0777 mkdir honors system umask.
-	if err = os.MkdirAll(slashpath.Dir(dstFilePath), 0777); err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		if isSysErrNotDir(err) {
-			return errFileAccessDenied
-		} else if isSysErrPathNotFound(err) {
-			// This is a special case should be handled only for
-			// windows, because windows API does not return "not a
-			// directory" error message. Handle this specifically here.
-			return errFileAccessDenied
-		}
-		return err
-	}
-	// Finally attempt a rename.
-	err = os.Rename((srcFilePath), (dstFilePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errFileNotFound
-		}
+
+	if err = renameAll(srcFilePath, dstFilePath); err != nil {
 		return err
 	}
 

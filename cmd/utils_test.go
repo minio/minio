@@ -17,10 +17,13 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -46,6 +49,19 @@ func TestCloneHeader(t *testing.T) {
 		clonedHeader := cloneHeader(header)
 		if !reflect.DeepEqual(header, clonedHeader) {
 			t.Errorf("Test %d failed", i+1)
+		}
+	}
+}
+
+// Tests closing http tracing file.
+func TestStopHTTPTrace(t *testing.T) {
+	var err error
+	globalHTTPTraceFile, err = ioutil.TempFile("", "")
+	if err != nil {
+		defer os.Remove(globalHTTPTraceFile.Name())
+		stopHTTPTrace()
+		if globalHTTPTraceFile != nil {
+			t.Errorf("globalHTTPTraceFile is not nil, it is expected to be nil")
 		}
 	}
 }
@@ -346,5 +362,21 @@ func TestContains(t *testing.T) {
 		if found != testCase.found {
 			t.Fatalf("Test %v: expected: %v, got: %v", i+1, testCase.found, found)
 		}
+	}
+}
+
+// Test jsonLoadFromSeeker.
+func TestJSONLoadFromSeeker(t *testing.T) {
+	format := newFormatFSV1()
+	b, err := json.Marshal(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotFormat formatFSV1
+	if err = jsonLoadFromSeeker(bytes.NewReader(b), &gotFormat); err != nil {
+		t.Fatal(err)
+	}
+	if *format != gotFormat {
+		t.Fatal("jsonLoadFromSeeker() failed to decode json")
 	}
 }

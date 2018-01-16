@@ -21,10 +21,10 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"sync"
 	"time"
@@ -35,6 +35,8 @@ import (
 const (
 	minioAdminOpHeader   = "X-Minio-Operation"
 	minioConfigTmpFormat = "config-%s.json"
+
+	maxConfigJSONSize = 256 * 1024 // 256KiB
 )
 
 // Type-safe query params.
@@ -42,18 +44,14 @@ type mgmtQueryKey string
 
 // Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket         mgmtQueryKey = "bucket"
-	mgmtObject         mgmtQueryKey = "object"
-	mgmtPrefix         mgmtQueryKey = "prefix"
-	mgmtLockDuration   mgmtQueryKey = "duration"
-	mgmtDelimiter      mgmtQueryKey = "delimiter"
-	mgmtMarker         mgmtQueryKey = "marker"
-	mgmtKeyMarker      mgmtQueryKey = "key-marker"
-	mgmtMaxKey         mgmtQueryKey = "max-key"
-	mgmtDryRun         mgmtQueryKey = "dry-run"
-	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
-	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
-	mgmtUploadID       mgmtQueryKey = "upload-id"
+	mgmtBucket       mgmtQueryKey = "bucket"
+	mgmtObject       mgmtQueryKey = "object"
+	mgmtPrefix       mgmtQueryKey = "prefix"
+	mgmtLockDuration mgmtQueryKey = "duration"
+	mgmtDelimiter    mgmtQueryKey = "delimiter"
+	mgmtMarker       mgmtQueryKey = "marker"
+	mgmtMaxKey       mgmtQueryKey = "max-key"
+	mgmtDryRun       mgmtQueryKey = "dry-run"
 )
 
 // ServerVersion - server version
@@ -414,63 +412,10 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
-
-	// Remove lock matching bucket/prefix held longer than duration.
-	for _, volLock := range volLocks {
-		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
-	}
+	newObjectLayerFn().ClearLocks(volLocks)
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-// ListUploadsHealHandler - similar to listObjectsHealHandler
-// GET
-// /?heal&bucket=mybucket&prefix=myprefix&key-marker=mymarker&upload-id-marker=myuploadid&delimiter=mydelimiter&max-uploads=1000
-// - bucket is mandatory query parameter
-// - rest are optional query parameters List upto maxKey objects that
-// need healing in a given bucket matching the given prefix.
-func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Validate query params.
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
-
-	if err := checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter, objLayer); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	if maxUploads <= 0 || maxUploads > maxUploadsList {
-		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
-		return
-	}
-
-	// Get the list objects to be healed.
-	listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
-		keyMarker, uploadIDMarker, delimiter, maxUploads)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	listResponse := generateListMultipartUploadsResponse(bucket, listMultipartInfos)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
 }
 
 // extractListObjectsHealQuery - Validates query params for heal objects list management API.
@@ -528,6 +473,12 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	// Validate query params.
 	vars := r.URL.Query()
 	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := extractListObjectsHealQuery(vars)
@@ -564,6 +515,12 @@ func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	// Get the list buckets to be healed.
 	bucketsInfo, err := objLayer.ListBucketsHeal()
 	if err != nil {
@@ -592,6 +549,12 @@ func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *htt
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
 		return
 	}
 
@@ -684,6 +647,12 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
+		return
+	}
+
 	vars := r.URL.Query()
 	bucket := vars.Get(string(mgmtBucket))
 	object := vars.Get(string(mgmtObject))
@@ -723,81 +692,6 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
-// - x-minio-operation = upload
-// - bucket, object and upload-id are mandatory query parameters
-// Heal a given upload, if present.
-func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	object := vars.Get(string(mgmtObject))
-	uploadID := vars.Get(string(mgmtUploadID))
-	uploadObj := path.Join(bucket, object, uploadID)
-
-	// Validate bucket and object names as supplied via query
-	// parameters.
-	if err := checkBucketAndObjectNames(bucket, object); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Validate the bucket and object w.r.t backend representation
-	// of an upload.
-	if err := checkBucketAndObjectNames(minioMetaMultipartBucket,
-		uploadObj); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Check if upload exists.
-	if _, err := objLayer.GetObjectInfo(minioMetaMultipartBucket,
-		uploadObj); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// if dry-run is set in query params then perform validations
-	// and return success.
-	if isDryRun(vars) {
-		writeSuccessResponseHeadersOnly(w)
-		return
-	}
-
-	//We are able to use HealObject for healing an upload since an
-	//ongoing upload has the same backend representation as an
-	//object.  The 'object' corresponding to a given bucket,
-	//object and uploadID is
-	//.minio.sys/multipart/bucket/object/uploadID.
-	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Return 200 on success.
-	writeSuccessResponseJSON(w, jsonBytes)
-}
-
 // HealFormatHandler - POST /?heal&dry-run
 // - x-minio-operation = format
 // - bucket and object are both mandatory query parameters
@@ -821,7 +715,7 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// heal-format is only applicable to single node XL and
 	// distributed XL setup.
 	if !globalIsXL {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		writeErrorResponse(w, ErrHealNotImplemented, r.URL)
 		return
 	}
 
@@ -978,22 +872,39 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	}
 
 	// Read configuration bytes from request body.
-	configBytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
+	configBuf := make([]byte, maxConfigJSONSize+1)
+	n, err := io.ReadFull(r.Body, configBuf)
+	if err == nil {
+		// More than maxConfigSize bytes were available
+		writeErrorResponse(w, ErrAdminConfigTooLarge, r.URL)
+		return
+	}
+	if err != io.ErrUnexpectedEOF {
 		errorIf(err, "Failed to read config from request body.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	configBytes := configBuf[:n]
+
+	// Validate JSON provided in the request body: check the
+	// client has not sent JSON objects with duplicate keys.
+	if err = checkDupJSONKeys(string(configBytes)); err != nil {
+		errorIf(err, "config contains duplicate JSON entries.")
+		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
+		return
+	}
+
 	var config serverConfig
 	err = json.Unmarshal(configBytes, &config)
-
 	if err != nil {
-		errorIf(err, "Failed to unmarshal config from request body.")
+		errorIf(err, "Failed to unmarshal JSON configuration", err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	// If credentials for the server are provided via environment,
+	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		creds := globalServerConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"io"
 	"os"
 	pathutil "path"
@@ -85,24 +84,6 @@ func fsRemoveDir(dirPath string) (err error) {
 		} else if isSysErrNotEmpty(err) {
 			return errors.Trace(errVolumeNotEmpty)
 		}
-		return errors.Trace(err)
-	}
-
-	return nil
-}
-
-// Creates a new directory, parent dir is also recursively created
-// if it doesn't exist.
-func fsMkdirAll(dirPath string) (err error) {
-	if dirPath == "" {
-		return errors.Trace(errInvalidArgument)
-	}
-
-	if err = checkPathLength(dirPath); err != nil {
-		return errors.Trace(err)
-	}
-
-	if err = os.MkdirAll(dirPath, 0777); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -277,7 +258,7 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		return 0, errors.Trace(err)
 	}
 
-	if err := os.MkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 		return 0, errors.Trace(err)
 	}
 
@@ -374,19 +355,16 @@ func fsRenameFile(sourcePath, destPath string) error {
 	if err := checkPathLength(destPath); err != nil {
 		return errors.Trace(err)
 	}
+
 	// Verify if source path exists.
-	if _, err := os.Stat((sourcePath)); err != nil {
+	if _, err := os.Stat(sourcePath); err != nil {
 		return osErrToFSFileErr(err)
 	}
-	if err := os.MkdirAll(pathutil.Dir(destPath), 0777); err != nil {
+
+	if err := renameAll(sourcePath, destPath); err != nil {
 		return errors.Trace(err)
 	}
-	if err := os.Rename((sourcePath), (destPath)); err != nil {
-		if isSysErrCrossDevice(err) {
-			return errors.Trace(fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, sourcePath, destPath))
-		}
-		return errors.Trace(err)
-	}
+
 	return nil
 }
 

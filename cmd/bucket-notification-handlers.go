@@ -59,7 +59,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -113,7 +112,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	_, err := objectAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -328,7 +326,6 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to get bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

@@ -96,7 +96,7 @@ func main() {
 ```sh
 
 go run service-status.go
-2016/12/20 16:46:01 madmin.ServiceStatusMetadata{Total:177038229504, Free:120365559808, Backend:struct { Type madmin.BackendType; OnlineDisks int; OfflineDisks int; ReadQuorum int; WriteQuorum int }{Type:1, OnlineDisks:0, OfflineDisks:0, ReadQuorum:0, WriteQuorum:0}}
+2016/12/20 16:46:01 madmin.ServiceStatusMetadata{Total:177038229504, Free:120365559808, Backend:struct { Type madmin.BackendType; OnlineDisks int; OfflineDisks int; ReadQuorum int; WriteQuorum int }{Type:1, OnlineDisks:0, OfflineDisks:0, StandardSCParity:0, RRSCParity:0}}
 
 ```
 

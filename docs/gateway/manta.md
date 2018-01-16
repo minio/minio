@@ -7,7 +7,8 @@ Minio Gateway adds Amazon S3 compatibility to Manta Object Storage.
 docker run -p 9000:9000 --name manta-s3 \
  -e "MINIO_ACCESS_KEY=joyentaccountname" \
  -e "MINIO_SECRET_KEY=joyentkeyid" \
- -e "MINIO_KEY_MATERIAL=~/.ssh/id_rsa
+ -e "MANTA_KEY_MATERIAL=~/.ssh/id_rsa" \
+ -e "MANTA_SUBUSER=devuser"
  minio/minio gateway manta
 ```
 
@@ -15,7 +16,8 @@ docker run -p 9000:9000 --name manta-s3 \
 ```
 export MINIO_ACCESS_KEY=joyentaccountname
 export MINIO_SECRET_KEY=joyentkeyid
-export MINIO_KEY_MATERIAL=~/.ssh/id_rsa
+export MANTA_KEY_MATERIAL=~/.ssh/id_rsa
+export MANTA_SUBUSER=devuser
 minio gateway manta
 ```
 ## Test using Minio Browser

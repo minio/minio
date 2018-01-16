@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 
 	"github.com/minio/minio/pkg/auth"
@@ -175,9 +176,12 @@ const (
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
+	ErrAdminConfigTooLarge
+	ErrAdminConfigBadJSON
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrHealNotImplemented
 )
 
 // error code to APIError structure, these fields carry respective
@@ -712,6 +716,17 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminConfigTooLarge: {
+		Code: "XMinioAdminConfigTooLarge",
+		Description: fmt.Sprintf("Configuration data provided exceeds the allowed maximum of %d bytes",
+			maxConfigJSONSize),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigBadJSON: {
+		Code:           "XMinioAdminConfigBadJSON",
+		Description:    "JSON configuration provided has objects with duplicate keys",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminCredentialsMismatch: {
 		Code:           "XMinioAdminCredentialsMismatch",
 		Description:    "Credentials in config mismatch with server environment variables",
@@ -741,6 +756,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioObjectTampered",
 		Description:    errObjectTampered.Error(),
 		HTTPStatusCode: http.StatusPartialContent,
+	},
+	ErrHealNotImplemented: {
+		Code:           "XMinioHealNotImplemented",
+		Description:    "This server does not implement heal functionality.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
