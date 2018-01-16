@@ -201,8 +201,6 @@ func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string,
 	if lockInfo.status != blockedStatus {
 		return errors.Trace(LockInfoStateNotBlocked{param.volume, param.path, opsID})
 	}
-	// Clear the status by removing the entry for the given `opsID`.
-	delete(n.debugLockMap[param].lockInfo, opsID)
 
 	// Update global lock stats.
 	n.counters.lockTimedOut()

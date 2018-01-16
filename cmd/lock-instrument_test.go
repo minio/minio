@@ -637,3 +637,33 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		t.Errorf("Expected the count of all locks to be %v, but got %v", 0, globalNSMutex.counters.total)
 	}
 }
+
+// Test to assert that status change from blocked to none shouldn't remove lock info entry for ops
+// Ref: Logs from https://github.com/minio/minio/issues/5311
+func TestStatusBlockedToNone(t *testing.T) {
+	// Initialize namespace lock subsystem
+	initNSLock(false)
+
+	ns := globalNSMutex
+
+	volume, path := "bucket", "object"
+	param := nsParam{volume: volume, path: path}
+	lockSrc := "main.go:1"
+	opsID := "1"
+
+	err := ns.statusNoneToBlocked(param, lockSrc, opsID, false)
+	if err != nil {
+		t.Fatal("Failed to mark lock state to blocked")
+	}
+
+	err = ns.statusBlockedToNone(param, lockSrc, opsID, false)
+	if err != nil {
+		t.Fatal("Failed to mark lock state to none")
+	}
+
+	err = ns.deleteLockInfoEntryForOps(param, opsID)
+	if err != nil {
+		t.Fatalf("Expected deleting of lock entry for %s to pass but got %v", opsID, err)
+	}
+
+}
