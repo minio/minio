@@ -86,6 +86,9 @@ var (
 	// This flag is set to 'true' when MINIO_BROWSER env is set.
 	globalIsEnvBrowser = false
 
+	// This flag is true when MINIO_ENABLE_WEAK_SIGNATURE_V2 is set.
+	globalSignatureV2Enabled = false
+
 	// Set to true if credentials were passed from env, default is false.
 	globalIsEnvCreds = false
 
