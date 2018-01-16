@@ -103,12 +103,6 @@ func (a GatewayUnsupported) ListObjectsHeal(bucket, prefix, marker, delimiter st
 	return loi, errors.Trace(NotImplemented{})
 }
 
-// ListUploadsHeal - Not implemented stub
-func (a GatewayUnsupported) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	return lmi, errors.Trace(NotImplemented{})
-}
-
 // AnonListObjects - List objects anonymously
 func (a GatewayUnsupported) AnonListObjects(bucket string, prefix string, marker string, delimiter string,
 	maxKeys int) (loi ListObjectsInfo, err error) {

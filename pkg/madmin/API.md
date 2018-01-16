@@ -273,9 +273,9 @@ If object is successfully healed returns nil, otherwise returns error indicating
 
 | Value | Description |
 |---|---|
-|`HealNone` | Object/Upload wasn't healed on any of the disks |
-|`HealPartial` | Object/Upload was healed on some of the disks needing heal |
-| `HealOK` | Object/Upload was healed on all the disks needing heal |
+|`HealNone` | Object wasn't healed on any of the disks |
+|`HealPartial` | Object was healed on some of the disks needing heal |
+| `HealOK` | Object was healed on all the disks needing heal |
 
 
 __Example__
