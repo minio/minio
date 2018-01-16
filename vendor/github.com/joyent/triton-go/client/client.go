@@ -1,3 +1,11 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package client
 
 import (
@@ -5,7 +13,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,19 +21,21 @@ import (
 	"os"
 	"time"
 
-	"github.com/hashicorp/errwrap"
+	"github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/authentication"
+	"github.com/joyent/triton-go/errors"
+	pkgerrors "github.com/pkg/errors"
 )
 
 const nilContext = "nil context"
 
 var (
-	ErrDefaultAuth = errors.New("default SSH agent authentication requires SDC_KEY_ID / TRITON_KEY_ID and SSH_AUTH_SOCK")
-	ErrAccountName = errors.New("missing account name for Triton/Manta")
-	ErrMissingURL  = errors.New("missing Triton and/or Manta URL")
+	ErrDefaultAuth = pkgerrors.New("default SSH agent authentication requires SDC_KEY_ID / TRITON_KEY_ID and SSH_AUTH_SOCK")
+	ErrAccountName = pkgerrors.New("missing account name")
+	ErrMissingURL  = pkgerrors.New("missing API URL")
 
-	BadTritonURL = "invalid format of triton URL"
-	BadMantaURL  = "invalid format of manta URL"
+	InvalidTritonURL = "invalid format of Triton URL"
+	InvalidMantaURL  = "invalid format of Manta URL"
 )
 
 // Client represents a connection to the Triton Compute or Object Storage APIs.
@@ -55,12 +64,12 @@ func New(tritonURL string, mantaURL string, accountName string, signers ...authe
 
 	cloudURL, err := url.Parse(tritonURL)
 	if err != nil {
-		return nil, errwrap.Wrapf(BadTritonURL+": {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, InvalidTritonURL)
 	}
 
 	storageURL, err := url.Parse(mantaURL)
 	if err != nil {
-		return nil, errwrap.Wrapf(BadMantaURL+": {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, InvalidMantaURL)
 	}
 
 	authorizers := make([]authentication.Signer, 0)
@@ -124,7 +133,7 @@ func (c *Client) DefaultAuth() error {
 		}
 		defaultSigner, err := authentication.NewSSHAgentSigner(input)
 		if err != nil {
-			return errwrap.Wrapf("problem initializing NewSSHAgentSigner: {{err}}", err)
+			return pkgerrors.Wrapf(err, "unable to initialize NewSSHAgentSigner")
 		}
 		c.Authorizers = append(c.Authorizers, defaultSigner)
 	}
@@ -164,19 +173,20 @@ func doNotFollowRedirects(*http.Request, []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
-// TODO(justinwr): Deprecated?
-// func (c *Client) FormatURL(path string) string {
-// 	return fmt.Sprintf("%s%s", c.Endpoint, path)
-// }
-
-func (c *Client) DecodeError(statusCode int, body io.Reader) error {
-	err := &TritonError{
-		StatusCode: statusCode,
+func (c *Client) DecodeError(resp *http.Response, requestMethod string) error {
+	err := &errors.APIError{
+		StatusCode: resp.StatusCode,
 	}
 
-	errorDecoder := json.NewDecoder(body)
-	if err := errorDecoder.Decode(err); err != nil {
-		return errwrap.Wrapf("Error decoding error response: {{err}}", err)
+	if requestMethod != http.MethodHead && resp.Body != nil {
+		errorDecoder := json.NewDecoder(resp.Body)
+		if err := errorDecoder.Decode(err); err != nil {
+			return pkgerrors.Wrapf(err, "unable to decode error response")
+		}
+	}
+
+	if err.Message == "" {
+		err.Message = fmt.Sprintf("HTTP response returned status code %d", err.StatusCode)
 	}
 
 	return err
@@ -215,7 +225,7 @@ func (c *Client) ExecuteRequestURIParams(ctx context.Context, inputs RequestInpu
 
 	req, err := http.NewRequest(method, endpoint.String(), requestBody)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error constructing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to construct HTTP request")
 	}
 
 	dateHeader := time.Now().UTC().Format(time.RFC1123)
@@ -225,12 +235,12 @@ func (c *Client) ExecuteRequestURIParams(ctx context.Context, inputs RequestInpu
 	// outside that constructor).
 	authHeader, err := c.Authorizers[0].Sign(dateHeader)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error signing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to sign HTTP request")
 	}
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Version", "8")
-	req.Header.Set("User-Agent", "triton-go Client API")
+	req.Header.Set("Accept-Version", triton.CloudAPIMajorVersion)
+	req.Header.Set("User-Agent", triton.UserAgent())
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -238,14 +248,16 @@ func (c *Client) ExecuteRequestURIParams(ctx context.Context, inputs RequestInpu
 
 	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to execute HTTP request")
 	}
 
+	// We will only return a response from the API it is in the HTTP StatusCode 2xx range
+	// StatusMultipleChoices is StatusCode 300
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		return resp.Body, nil
 	}
 
-	return nil, c.DecodeError(resp.StatusCode, resp.Body)
+	return nil, c.DecodeError(resp, req.Method)
 }
 
 func (c *Client) ExecuteRequest(ctx context.Context, inputs RequestInput) (io.ReadCloser, error) {
@@ -271,7 +283,7 @@ func (c *Client) ExecuteRequestRaw(ctx context.Context, inputs RequestInput) (*h
 
 	req, err := http.NewRequest(method, endpoint.String(), requestBody)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error constructing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to construct HTTP request")
 	}
 
 	dateHeader := time.Now().UTC().Format(time.RFC1123)
@@ -281,12 +293,12 @@ func (c *Client) ExecuteRequestRaw(ctx context.Context, inputs RequestInput) (*h
 	// outside that constructor).
 	authHeader, err := c.Authorizers[0].Sign(dateHeader)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error signing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to sign HTTP request")
 	}
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Version", "8")
-	req.Header.Set("User-Agent", "triton-go c API")
+	req.Header.Set("Accept-Version", triton.CloudAPIMajorVersion)
+	req.Header.Set("User-Agent", triton.UserAgent())
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -294,10 +306,16 @@ func (c *Client) ExecuteRequestRaw(ctx context.Context, inputs RequestInput) (*h
 
 	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing HTTP request: {{err}}", err)
+		return nil, pkgerrors.Wrapf(err, "unable to execute HTTP request")
 	}
 
-	return resp, nil
+	// We will only return a response from the API it is in the HTTP StatusCode 2xx range
+	// StatusMultipleChoices is StatusCode 300
+	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		return resp, nil
+	}
+
+	return nil, c.DecodeError(resp, req.Method)
 }
 
 func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput) (io.ReadCloser, http.Header, error) {
@@ -321,7 +339,7 @@ func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput)
 
 	req, err := http.NewRequest(method, endpoint.String(), requestBody)
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error constructing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to construct HTTP request")
 	}
 
 	if body != nil && (headers == nil || headers.Get("Content-Type") == "") {
@@ -340,11 +358,11 @@ func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput)
 
 	authHeader, err := c.Authorizers[0].Sign(dateHeader)
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error signing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to sign HTTP request")
 	}
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "*/*")
-	req.Header.Set("User-Agent", "manta-go client API")
+	req.Header.Set("User-Agent", triton.UserAgent())
 
 	if query != nil {
 		req.URL.RawQuery = query.Encode()
@@ -352,29 +370,16 @@ func (c *Client) ExecuteRequestStorage(ctx context.Context, inputs RequestInput)
 
 	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error executing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to execute HTTP request")
 	}
 
+	// We will only return a response from the API it is in the HTTP StatusCode 2xx range
+	// StatusMultipleChoices is StatusCode 300
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		return resp.Body, resp.Header, nil
 	}
 
-	mantaError := &MantaError{
-		StatusCode: resp.StatusCode,
-	}
-
-	if req.Method != http.MethodHead {
-		errorDecoder := json.NewDecoder(resp.Body)
-		if err := errorDecoder.Decode(mantaError); err != nil {
-			return nil, nil, errwrap.Wrapf("Error decoding error response: {{err}}", err)
-		}
-	}
-
-	if mantaError.Message == "" {
-		mantaError.Message = fmt.Sprintf("HTTP response returned status code %d", resp.StatusCode)
-	}
-
-	return nil, nil, mantaError
+	return nil, nil, c.DecodeError(resp, req.Method)
 }
 
 type RequestNoEncodeInput struct {
@@ -397,7 +402,7 @@ func (c *Client) ExecuteRequestNoEncode(ctx context.Context, inputs RequestNoEnc
 
 	req, err := http.NewRequest(method, endpoint.String(), body)
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error constructing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to construct HTTP request")
 	}
 
 	if headers != nil {
@@ -413,11 +418,12 @@ func (c *Client) ExecuteRequestNoEncode(ctx context.Context, inputs RequestNoEnc
 
 	authHeader, err := c.Authorizers[0].Sign(dateHeader)
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error signing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to sign HTTP request")
 	}
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "*/*")
-	req.Header.Set("User-Agent", "manta-go client API")
+	req.Header.Set("Accept-Version", triton.CloudAPIMajorVersion)
+	req.Header.Set("User-Agent", triton.UserAgent())
 
 	if query != nil {
 		req.URL.RawQuery = query.Encode()
@@ -425,20 +431,14 @@ func (c *Client) ExecuteRequestNoEncode(ctx context.Context, inputs RequestNoEnc
 
 	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, nil, errwrap.Wrapf("Error executing HTTP request: {{err}}", err)
+		return nil, nil, pkgerrors.Wrapf(err, "unable to execute HTTP request")
 	}
 
+	// We will only return a response from the API it is in the HTTP StatusCode 2xx range
+	// StatusMultipleChoices is StatusCode 300
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		return resp.Body, resp.Header, nil
 	}
 
-	mantaError := &MantaError{
-		StatusCode: resp.StatusCode,
-	}
-
-	errorDecoder := json.NewDecoder(resp.Body)
-	if err := errorDecoder.Decode(mantaError); err != nil {
-		return nil, nil, errwrap.Wrapf("Error decoding error response: {{err}}", err)
-	}
-	return nil, nil, mantaError
+	return nil, nil, c.DecodeError(resp, req.Method)
 }
