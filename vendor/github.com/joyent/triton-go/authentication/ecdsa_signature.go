@@ -1,3 +1,11 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package authentication
 
 import (
@@ -6,7 +14,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hashicorp/errwrap"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -44,7 +52,7 @@ func newECDSASignature(signatureBlob []byte) (*ecdsaSignature, error) {
 	}
 
 	if err := ssh.Unmarshal(signatureBlob, &ecSig); err != nil {
-		return nil, errwrap.Wrapf("Error unmarshaling signature: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to unmarshall signature")
 	}
 
 	rValue := ecSig.R.Bytes()

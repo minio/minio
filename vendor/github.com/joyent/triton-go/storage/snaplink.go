@@ -1,3 +1,11 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package storage
 
 import (
@@ -5,8 +13,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hashicorp/errwrap"
 	"github.com/joyent/triton-go/client"
+	"github.com/pkg/errors"
 )
 
 type SnapLinksClient struct {
@@ -39,7 +47,7 @@ func (s *SnapLinksClient) Put(ctx context.Context, input *PutSnapLinkInput) erro
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing PutSnapLink request: {{err}}", err)
+		return errors.Wrapf(err, "unable to put snaplink")
 	}
 
 	return nil

@@ -1,14 +1,23 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package storage
 
 import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/errwrap"
+	"github.com/pkg/errors"
 )
 
 // SignURLInput represents parameters to a SignURL operation.
@@ -57,7 +66,7 @@ func (s *StorageClient) SignURL(input *SignURLInput) (*SignURLOutput, error) {
 		Method:     input.Method,
 		Algorithm:  strings.ToUpper(s.Client.Authorizers[0].DefaultAlgorithm()),
 		Expires:    strconv.FormatInt(time.Now().Add(input.ValidityPeriod).Unix(), 10),
-		KeyID:      fmt.Sprintf("/%s/keys/%s", s.Client.AccountName, s.Client.Authorizers[0].KeyFingerprint()),
+		KeyID:      path.Join("/", s.Client.AccountName, "keys", s.Client.Authorizers[0].KeyFingerprint()),
 	}
 
 	toSign := bytes.Buffer{}
@@ -73,7 +82,7 @@ func (s *StorageClient) SignURL(input *SignURLInput) (*SignURLOutput, error) {
 
 	signature, _, err := s.Client.Authorizers[0].SignRaw(toSign.String())
 	if err != nil {
-		return nil, errwrap.Wrapf("Error signing string: {{err}}", err)
+		return nil, errors.Wrapf(err, "error signing string")
 	}
 
 	output.Signature = signature

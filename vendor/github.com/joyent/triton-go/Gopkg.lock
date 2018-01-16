@@ -8,16 +8,10 @@
   revision = "d5467c17e7afe8d8f08f556c6c811a50c3feb28d"
 
 [[projects]]
-  name = "github.com/davecgh/go-spew"
-  packages = ["spew"]
-  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
-  version = "v1.1.0"
-
-[[projects]]
   branch = "master"
-  name = "github.com/hashicorp/errwrap"
+  name = "github.com/pkg/errors"
   packages = ["."]
-  revision = "7554cd9344cec97297fa6649b055a8c98c2a1e55"
+  revision = "e881fd58d78e04cf6d0de1217f8707c8cc2249bc"
 
 [[projects]]
   branch = "master"
@@ -29,11 +23,11 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["curve25519","ed25519","ed25519/internal/edwards25519","ssh","ssh/agent"]
-  revision = "bd6f299fb381e4c3393d1c4b1f0b94f5e77650c8"
+  revision = "0fcca4842a8d74bfddc2c96a073bd2a4d2a7a2e8"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "28853a8970ee33112a9e7998b18e658bed04d177537ec69db678189f0b8a9a7d"
+  inputs-digest = "f7efd974ae38e2ee077c4d2698df74128a04797460b5f9c833853ddfaa86a0a0"
   solver-name = "gps-cdcl"
   solver-version = 1

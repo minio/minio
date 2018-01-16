@@ -292,28 +292,34 @@
 			"revisionTime": "2016-01-12T19:33:35Z"
 		},
 		{
-			"checksumSHA1": "oINoQSRkPinChzwEHr3VatB9++Y=",
+			"checksumSHA1": "Lg8OHK87XRGCaipG+5+zFyN8OMw=",
 			"path": "github.com/joyent/triton-go",
-			"revision": "86ba9699869b6cd5ea3290faad7be659efc7d6ce",
-			"revisionTime": "2017-12-28T20:20:46Z"
+			"revision": "301e22abfa1d255ca4082a993fd6a880a79d4a57",
+			"revisionTime": "2018-01-15T16:36:36Z"
 		},
 		{
-			"checksumSHA1": "d6pxw8DLxYehLr92fWZTLEWVws8=",
+			"checksumSHA1": "Y03+L+I0FVZ2bMGWt1MHTDEyWM4=",
 			"path": "github.com/joyent/triton-go/authentication",
-			"revision": "86ba9699869b6cd5ea3290faad7be659efc7d6ce",
-			"revisionTime": "2017-12-28T20:20:46Z"
+			"revision": "301e22abfa1d255ca4082a993fd6a880a79d4a57",
+			"revisionTime": "2018-01-15T16:36:36Z"
 		},
 		{
-			"checksumSHA1": "GCHfn8d1Mhswm7n7IRnT0n/w+dw=",
+			"checksumSHA1": "MuJsGBr6HlXQYxZY9cM5rBk+Lns=",
 			"path": "github.com/joyent/triton-go/client",
-			"revision": "86ba9699869b6cd5ea3290faad7be659efc7d6ce",
-			"revisionTime": "2017-12-28T20:20:46Z"
+			"revision": "301e22abfa1d255ca4082a993fd6a880a79d4a57",
+			"revisionTime": "2018-01-15T16:36:36Z"
 		},
 		{
-			"checksumSHA1": "PJe3Rs8H466xR8o5audO8oWk44Q=",
+			"checksumSHA1": "Qika4tBD44y0MbC1YMLVJ9eB2xk=",
+			"path": "github.com/joyent/triton-go/errors",
+			"revision": "301e22abfa1d255ca4082a993fd6a880a79d4a57",
+			"revisionTime": "2018-01-15T16:36:36Z"
+		},
+		{
+			"checksumSHA1": "5v533ELM047YOiwHsyMaVzITpR0=",
 			"path": "github.com/joyent/triton-go/storage",
-			"revision": "86ba9699869b6cd5ea3290faad7be659efc7d6ce",
-			"revisionTime": "2017-12-28T20:20:46Z"
+			"revision": "301e22abfa1d255ca4082a993fd6a880a79d4a57",
+			"revisionTime": "2018-01-15T16:36:36Z"
 		},
 		{
 			"path": "github.com/klauspost/cpuid",
@@ -502,6 +508,12 @@
 			"path": "github.com/nats-io/nuid",
 			"revision": "289cccf02c178dc782430d534e3c1f5b72af807f",
 			"revisionTime": "2016-09-27T04:49:45Z"
+		},
+		{
+			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
+			"path": "github.com/pkg/errors",
+			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
+			"revisionTime": "2017-12-16T07:03:16Z"
 		},
 		{
 			"path": "github.com/pkg/profile",
