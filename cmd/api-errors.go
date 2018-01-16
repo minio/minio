@@ -165,6 +165,7 @@ const (
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
 	ErrInvalidRequest
+	ErrAccessDeniedAuthV2
 
 	// Minio storage class error codes
 	ErrInvalidStorageClass
@@ -775,7 +776,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Invalid Request",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-
+	ErrAccessDeniedAuthV2: {
+		Code:           "XMinioAccessDeniedAuthV2",
+		Description:    "This server has disabled authentication using Signature V2, please use Signature V4 instead.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	// Add your error structure here.
 }
 

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -222,21 +223,30 @@ func isSupportedS3AuthType(aType authType) bool {
 	return ok
 }
 
+// Check for signature version V2 request
+func isAuthTypeSignatureV2(aType authType) bool {
+	return aType == authTypeSigned || aType == authTypePresigned
+}
+
 // handler for validating incoming authorization headers.
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
-	if isSupportedS3AuthType(aType) {
+	switch {
+	case isAuthTypeSignatureV2(aType) && !globalSignatureV2Enabled:
+		errorIf(fmt.Errorf("signature V2 is disabled"),
+			"Use MINIO_ENABLE_WEAK_V2_SIGNATURE to enable if you really need it.")
+		writeErrorResponse(w, ErrAccessDeniedAuthV2, r.URL)
+	case isSupportedS3AuthType(aType):
 		// Let top level caller validate for anonymous and known signed requests.
 		a.handler.ServeHTTP(w, r)
-		return
-	} else if aType == authTypeJWT {
+	case aType == authTypeJWT:
 		// Validate Authorization header if its valid for JWT request.
 		if !isHTTPRequestValid(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		a.handler.ServeHTTP(w, r)
-		return
+	default:
+		writeErrorResponse(w, ErrSignatureVersionNotSupported, r.URL)
 	}
-	writeErrorResponse(w, ErrSignatureVersionNotSupported, r.URL)
 }

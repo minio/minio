@@ -79,6 +79,12 @@ func handleCommonEnvVars() {
 	// Check if object cache is disabled.
 	globalXLObjCacheDisabled = strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
 
+	// Check if weaker signature V2 is enabled
+	isSigV2Enabled := os.Getenv("MINIO_ENABLE_WEAK_V2_SIGNATURE")
+	if isSigV2Enabled != "" {
+		globalSignatureV2Enabled = true
+	}
+
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey != "" && secretKey != "" {
