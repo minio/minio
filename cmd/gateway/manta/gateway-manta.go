@@ -27,10 +27,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/hashicorp/errwrap"
 	triton "github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/authentication"
-	tclient "github.com/joyent/triton-go/client"
+	terrors "github.com/joyent/triton-go/errors"
 	"github.com/joyent/triton-go/storage"
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
@@ -340,7 +339,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
-		if tclient.IsResourceNotFoundError(err) {
+		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
 		return result, errors.Trace(err)
@@ -417,7 +416,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {
-		if tclient.IsResourceNotFoundError(err) {
+		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
 		return result, errors.Trace(err)
@@ -506,14 +505,10 @@ func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo minio.Obje
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
 	if err != nil {
-		errType := &tclient.MantaError{}
-		if errwrap.ContainsType(err, errType) {
-			mantaErr := errwrap.GetType(err, errType).(*tclient.MantaError)
-			if mantaErr.StatusCode == http.StatusNotFound {
-				return objInfo, minio.ObjectNotFound{
-					Bucket: bucket,
-					Object: object,
-				}
+		if terrors.IsStatusNotFoundCode(err) {
+			return objInfo, minio.ObjectNotFound{
+				Bucket: bucket,
+				Object: object,
 			}
 		}
 
