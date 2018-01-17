@@ -295,23 +295,27 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		}
 	}
 
+	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
+	_, rrscparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
+
+	// Total number of online data drives available
+	// This is the number of drives we report free and total space for
+	availableDataDisks := uint64(onlineDisks - sscParity)
+
 	// Return calculated storage info, choose the lowest Total and
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
 	storageInfo := StorageInfo{
-		Total: validDisksInfo[0].Total * uint64(onlineDisks) / 2,
-		Free:  validDisksInfo[0].Free * uint64(onlineDisks) / 2,
+		Total: validDisksInfo[0].Total * availableDataDisks,
+		Free:  validDisksInfo[0].Free * availableDataDisks,
 	}
 
 	storageInfo.Backend.Type = Erasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
 
-	_, scParity := getRedundancyCount(standardStorageClass, len(disks))
-	storageInfo.Backend.StandardSCParity = scParity
-
-	_, rrSCparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
-	storageInfo.Backend.RRSCParity = rrSCparity
+	storageInfo.Backend.StandardSCParity = sscParity
+	storageInfo.Backend.RRSCParity = rrscparity
 
 	return storageInfo
 }
