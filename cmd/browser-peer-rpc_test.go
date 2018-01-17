@@ -99,6 +99,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	rargs := &LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	rreply := &LoginRPCReply{}
@@ -113,10 +114,11 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Validate for success in loing handled with valid credetnails.
+	// Validate for success in login handled with valid credentials.
 	rargs = &LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	rreply = &LoginRPCReply{}

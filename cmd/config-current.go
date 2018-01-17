@@ -44,6 +44,7 @@ var (
 	// globalServerConfig server config.
 	globalServerConfig   *serverConfig
 	globalServerConfigMu sync.RWMutex
+	serverConfigHash     string
 )
 
 // GetVersion get current config version.
@@ -153,6 +154,16 @@ func (s *serverConfig) Save() error {
 
 	// Save config file.
 	return quick.Save(getConfigFile(), s)
+}
+
+// SetServerConfigHash sets the MD5 of current configuration
+func SetServerConfigHash(configFile string) {
+	serverConfigHash = md5FromFile(configFile)
+}
+
+// GetServerConfigHash returns the MD5 of current configuration
+func GetServerConfigHash() string {
+	return serverConfigHash
 }
 
 func newServerConfig() *serverConfig {

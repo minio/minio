@@ -65,6 +65,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	loginArgs := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	loginReply := LoginRPCReply{}

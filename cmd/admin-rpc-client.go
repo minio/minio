@@ -206,6 +206,9 @@ func (lc localAdminClient) CommitConfig(tmpFileName string) error {
 
 	err := os.Rename(tmpConfigFile, configFile)
 	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	// save the md5 sum
+	SetServerConfigHash(configFile)
+
 	return err
 }
 

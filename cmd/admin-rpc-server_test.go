@@ -43,6 +43,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	args := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	err = adminServer.Login(&args, &LoginRPCReply{})
@@ -104,6 +105,7 @@ func TestReInitDisks(t *testing.T) {
 	args := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	err = adminServer.Login(&args, &LoginRPCReply{})
@@ -131,6 +133,7 @@ func TestReInitDisks(t *testing.T) {
 	fsArgs := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	fsReply := LoginRPCReply{}
@@ -173,6 +176,7 @@ func TestGetConfig(t *testing.T) {
 	args := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
@@ -220,6 +224,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	args := LoginRPCArgs{
 		AuthToken:   token,
 		Version:     Version,
+		ConfigHash:  GetServerConfigHash(),
 		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}

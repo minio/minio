@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -270,4 +271,17 @@ func jsonLoadFromSeeker(r io.ReadSeeker, data interface{}) error {
 		return err
 	}
 	return json.NewDecoder(r).Decode(data)
+}
+
+// calculate MD5 hash of the config file
+func md5FromFile(filePath string) string {
+	h := md5.New()
+
+	cf, err := os.Open(filePath)
+	fatalIf(err, "Could not open file %s", filePath)
+
+	_, err = io.Copy(h, cf)
+	fatalIf(err, "Could not calculate MD5 hash for %s", filePath)
+
+	return string(h.Sum(nil))
 }
