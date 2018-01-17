@@ -12,9 +12,8 @@ tools:: ## Download and install all dev/code tools
 	go test -i $(TEST) || exit 1
 
 test:: ## Run unit tests
-	@echo "==> Running unit tests"
-	@echo $(TEST) | \
-		xargs -t go test -v $(TESTARGS) -timeout=30s -parallel=1 | grep -Ev 'TRITON_TEST|TestAcc'
+	@echo "==> Running unit test with coverage"
+	@./scripts/go-test-with-coverage.sh
 
 testacc:: ## Run acceptance tests
 	@echo "==> Running acceptance tests"

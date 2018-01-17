@@ -1,18 +1,26 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package storage
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/errwrap"
 	"github.com/joyent/triton-go/client"
+	"github.com/pkg/errors"
 )
 
 type JobClient struct {
@@ -99,11 +107,11 @@ type CreateJobOutput struct {
 // CreateJob submits a new job to be executed. This call is not
 // idempotent, so calling it twice will create two jobs.
 func (s *JobClient) Create(ctx context.Context, input *CreateJobInput) (*CreateJobOutput, error) {
-	path := fmt.Sprintf("/%s/jobs", s.client.AccountName)
+	fullPath := path.Join("/", s.client.AccountName, "jobs")
 
 	reqInput := client.RequestInput{
 		Method: http.MethodPost,
-		Path:   path,
+		Path:   fullPath,
 		Body:   input,
 	}
 	respBody, respHeaders, err := s.client.ExecuteRequestStorage(ctx, reqInput)
@@ -111,7 +119,7 @@ func (s *JobClient) Create(ctx context.Context, input *CreateJobInput) (*CreateJ
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing CreateJob request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to create job")
 	}
 
 	jobURI := respHeaders.Get("Location")
@@ -133,7 +141,7 @@ type AddJobInputsInput struct {
 
 // AddJobInputs submits inputs to an already created job.
 func (s *JobClient) AddInputs(ctx context.Context, input *AddJobInputsInput) error {
-	path := fmt.Sprintf("/%s/jobs/%s/live/in", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "in")
 	headers := &http.Header{}
 	headers.Set("Content-Type", "text/plain")
 
@@ -141,7 +149,7 @@ func (s *JobClient) AddInputs(ctx context.Context, input *AddJobInputsInput) err
 
 	reqInput := client.RequestNoEncodeInput{
 		Method:  http.MethodPost,
-		Path:    path,
+		Path:    fullPath,
 		Headers: headers,
 		Body:    reader,
 	}
@@ -150,7 +158,7 @@ func (s *JobClient) AddInputs(ctx context.Context, input *AddJobInputsInput) err
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing AddJobInputs request: {{err}}", err)
+		return errors.Wrap(err, "unable to add job inputs")
 	}
 
 	return nil
@@ -163,18 +171,18 @@ type EndJobInputInput struct {
 
 // EndJobInput submits inputs to an already created job.
 func (s *JobClient) EndInput(ctx context.Context, input *EndJobInputInput) error {
-	path := fmt.Sprintf("/%s/jobs/%s/live/in/end", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "in", "end")
 
 	reqInput := client.RequestNoEncodeInput{
 		Method: http.MethodPost,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, _, err := s.client.ExecuteRequestNoEncode(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing EndJobInput request: {{err}}", err)
+		return errors.Wrap(err, "unable to end job inputs")
 	}
 
 	return nil
@@ -194,18 +202,18 @@ type CancelJobInput struct {
 // 	- input is still open
 // 	- you have a long-running job
 func (s *JobClient) Cancel(ctx context.Context, input *CancelJobInput) error {
-	path := fmt.Sprintf("/%s/jobs/%s/live/cancel", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "cancel")
 
 	reqInput := client.RequestNoEncodeInput{
 		Method: http.MethodPost,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, _, err := s.client.ExecuteRequestNoEncode(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing CancelJob request: {{err}}", err)
+		return errors.Wrap(err, "unable to cancel job")
 	}
 
 	return nil
@@ -226,7 +234,7 @@ type ListJobsOutput struct {
 
 // ListJobs returns the list of jobs you currently have.
 func (s *JobClient) List(ctx context.Context, input *ListJobsInput) (*ListJobsOutput, error) {
-	path := fmt.Sprintf("/%s/jobs", s.client.AccountName)
+	fullPath := path.Join("/", s.client.AccountName, "jobs")
 	query := &url.Values{}
 	if input.RunningOnly {
 		query.Set("state", "running")
@@ -240,7 +248,7 @@ func (s *JobClient) List(ctx context.Context, input *ListJobsInput) (*ListJobsOu
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fullPath,
 		Query:  query,
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
@@ -248,7 +256,7 @@ func (s *JobClient) List(ctx context.Context, input *ListJobsInput) (*ListJobsOu
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing ListJobs request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to list jobs")
 	}
 
 	var results []*JobSummary
@@ -259,7 +267,7 @@ func (s *JobClient) List(ctx context.Context, input *ListJobsInput) (*ListJobsOu
 			if err == io.EOF {
 				break
 			}
-			return nil, errwrap.Wrapf("Error decoding ListJobs response: {{err}}", err)
+			return nil, errors.Wrap(err, "unable to decode list jobs response")
 		}
 		results = append(results, current)
 	}
@@ -288,24 +296,24 @@ type GetJobOutput struct {
 
 // GetJob returns the list of jobs you currently have.
 func (s *JobClient) Get(ctx context.Context, input *GetJobInput) (*GetJobOutput, error) {
-	path := fmt.Sprintf("/%s/jobs/%s/live/status", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "status")
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, _, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing GetJob request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get job")
 	}
 
 	job := &Job{}
 	decoder := json.NewDecoder(respBody)
 	if err = decoder.Decode(&job); err != nil {
-		return nil, errwrap.Wrapf("Error decoding GetJob response: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to decode get job response")
 	}
 
 	return &GetJobOutput{
@@ -329,18 +337,18 @@ type GetJobOutputOutput struct {
 // this like `tail -f`. If error is nil (i.e. the operation is successful), it is
 // your responsibility to close the io.ReadCloser named Items in the output.
 func (s *JobClient) GetOutput(ctx context.Context, input *GetJobOutputInput) (*GetJobOutputOutput, error) {
-	path := fmt.Sprintf("/%s/jobs/%s/live/out", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "out")
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing GetJobOutput request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get job output")
 	}
 
 	output := &GetJobOutputOutput{
@@ -371,18 +379,18 @@ type GetJobInputOutput struct {
 // this like `tail -f`. If error is nil (i.e. the operation is successful), it is
 // your responsibility to close the io.ReadCloser named Items in the output.
 func (s *JobClient) GetInput(ctx context.Context, input *GetJobInputInput) (*GetJobInputOutput, error) {
-	path := fmt.Sprintf("/%s/jobs/%s/live/in", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "in")
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing GetJobInput request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get job input")
 	}
 
 	output := &GetJobInputOutput{
@@ -413,18 +421,18 @@ type GetJobFailuresOutput struct {
 // this like `tail -f`. If error is nil (i.e. the operation is successful), it is
 // your responsibility to close the io.ReadCloser named Items in the output.
 func (s *JobClient) GetFailures(ctx context.Context, input *GetJobFailuresInput) (*GetJobFailuresOutput, error) {
-	path := fmt.Sprintf("/%s/jobs/%s/live/fail", s.client.AccountName, input.JobID)
+	fullPath := path.Join("/", s.client.AccountName, "jobs", input.JobID, "live", "fail")
 
 	reqInput := client.RequestInput{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fullPath,
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if respBody != nil {
 		defer respBody.Close()
 	}
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing GetJobFailures request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get job failures")
 	}
 
 	output := &GetJobFailuresOutput{

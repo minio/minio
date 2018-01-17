@@ -26,17 +26,13 @@
   name = "github.com/abdullin/seq"
 
 [[constraint]]
-  name = "github.com/davecgh/go-spew"
-  version = "1.1.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/hashicorp/errwrap"
-
-[[constraint]]
   branch = "master"
   name = "github.com/sean-/seed"
 
 [[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/pkg/errors"

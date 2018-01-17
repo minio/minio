@@ -1,3 +1,11 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package storage
 
 import (
@@ -10,8 +18,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/errwrap"
 	"github.com/joyent/triton-go/client"
+	"github.com/pkg/errors"
 )
 
 type DirectoryClient struct {
@@ -58,7 +66,7 @@ func (s *DirectoryClient) List(ctx context.Context, input *ListDirectoryInput) (
 	}
 	respBody, respHeader, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing List request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to list directory")
 	}
 	defer respBody.Close()
 
@@ -67,14 +75,14 @@ func (s *DirectoryClient) List(ctx context.Context, input *ListDirectoryInput) (
 	for scanner.Scan() {
 		current := &DirectoryEntry{}
 		if err := json.Unmarshal(scanner.Bytes(), current); err != nil {
-			return nil, errwrap.Wrapf("error decoding list response: {{err}}", err)
+			return nil, errors.Wrap(err, "unable to decode list directories response")
 		}
 
 		results = append(results, current)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, errwrap.Wrapf("error decoding list responses: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to decode list directories response")
 	}
 
 	output := &ListDirectoryOutput{
@@ -113,7 +121,7 @@ func (s *DirectoryClient) Put(ctx context.Context, input *PutDirectoryInput) err
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing Put request: {{err}}", err)
+		return errors.Wrap(err, "unable to put directory")
 	}
 
 	return nil
@@ -177,7 +185,7 @@ func deleteDirectory(c DirectoryClient, ctx context.Context, directoryPath _AbsC
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing DeleteDirectory request: {{err}}", err)
+		return errors.Wrap(err, "unable to delete directory")
 	}
 
 	return nil

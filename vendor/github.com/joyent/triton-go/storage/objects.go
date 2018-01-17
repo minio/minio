@@ -1,8 +1,15 @@
+//
+// Copyright (c) 2018, Joyent, Inc. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+
 package storage
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,8 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/errwrap"
 	"github.com/joyent/triton-go/client"
+	tt "github.com/joyent/triton-go/errors"
+	"github.com/pkg/errors"
 )
 
 type ObjectsClient struct {
@@ -53,7 +61,7 @@ func (s *ObjectsClient) GetInfo(ctx context.Context, input *GetInfoInput) (*GetI
 	}
 	_, respHeaders, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing get info request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get info")
 	}
 
 	response := &GetInfoOutput{
@@ -135,7 +143,7 @@ func (s *ObjectsClient) Get(ctx context.Context, input *GetObjectInput) (*GetObj
 	}
 	respBody, respHeaders, err := s.client.ExecuteRequestStorage(ctx, reqInput)
 	if err != nil {
-		return nil, errwrap.Wrapf("Error executing Get request: {{err}}", err)
+		return nil, errors.Wrap(err, "unable to get object")
 	}
 
 	response := &GetObjectOutput{
@@ -191,7 +199,7 @@ func (s *ObjectsClient) Delete(ctx context.Context, input *DeleteObjectInput) er
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing Delete request: {{err}}", err)
+		return errors.Wrap(err, "unable to delete object")
 	}
 
 	return nil
@@ -235,7 +243,7 @@ func (s *ObjectsClient) PutMetadata(ctx context.Context, input *PutObjectMetadat
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing PutMetadata request: {{err}}", err)
+		return errors.Wrap(err, "unable to put metadata")
 	}
 
 	return nil
@@ -333,7 +341,7 @@ func putObject(c ObjectsClient, ctx context.Context, input *PutObjectInput, absP
 		defer respBody.Close()
 	}
 	if err != nil {
-		return errwrap.Wrapf("Error executing Put request: {{err}}", err)
+		return errors.Wrap(err, "unable to put object")
 	}
 
 	return nil
@@ -370,12 +378,8 @@ func createDirectory(c ObjectsClient, ctx context.Context, absPath _AbsCleanPath
 func checkDirectoryTreeExists(c ObjectsClient, ctx context.Context, absPath _AbsCleanPath) (bool, error) {
 	exists, err := c.IsDir(ctx, string(absPath))
 	if err != nil {
-		errType := &client.MantaError{}
-		if errwrap.ContainsType(err, errType) {
-			mantaErr := errwrap.GetType(err, errType).(*client.MantaError)
-			if mantaErr.StatusCode == http.StatusNotFound {
-				return false, nil
-			}
+		if tt.IsResourceNotFoundError(err) {
+			return false, nil
 		}
 		return false, err
 	}
