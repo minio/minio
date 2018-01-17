@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -99,6 +100,19 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeAnonymous
 	}
 	return authTypeUnknown
+}
+
+// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
+// It does not accept presigned or JWT or anonymous requests.
+func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
+	s3Err := ErrAccessDenied
+	if getRequestAuthType(r) == authTypeSigned { // we only support V4 (no presign)
+		s3Err = isReqAuthenticated(r, region)
+	}
+	if s3Err != ErrNone {
+		errorIf(errors.New(getAPIError(s3Err).Description), "%s", dumpRequest(r))
+	}
+	return s3Err
 }
 
 func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) APIErrorCode {

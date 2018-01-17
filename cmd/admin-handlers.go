@@ -72,7 +72,7 @@ type ServerStatus struct {
 // Fetches server status information like total disk space available
 // to use, online disks, offline disks and quorum threshold.
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -114,7 +114,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 // Restarts minio server gracefully. In a distributed setup,  restarts
 // all the servers in the cluster.
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -139,7 +139,7 @@ type setCredsReq struct {
 // in the cluster.
 func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -257,7 +257,7 @@ type ServerInfo struct {
 // Get server information
 func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -341,7 +341,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 // ---------
 // Lists locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -383,7 +383,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -467,7 +467,7 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -509,7 +509,7 @@ func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -546,7 +546,7 @@ func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -641,7 +641,7 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -705,7 +705,7 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -772,7 +772,7 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 // Get config.json of this minio setup.
 func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -865,7 +865,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
