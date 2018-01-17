@@ -44,7 +44,7 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 	if marker != "" {
 		// Marker not common with prefix is not implemented.
 		if !hasPrefix(marker, prefix) {
-			return ErrNotImplemented
+			return ErrInvalidPrefixMarker
 		}
 	}
 	// Success.
@@ -107,9 +107,18 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
 	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+		// return empty response if invalid marker
+		//TODO: avoid this pattern when moving to errors package
+		if s3Error == ErrInvalidPrefixMarker {
+			listObjectsInfo := ListObjectsInfo{}
+			response := generateListObjectsV2Response(bucket, prefix, token, marker, startAfter, delimiter, fetchOwner, listObjectsInfo.IsTruncated, maxKeys, listObjectsInfo.Objects, listObjectsInfo.Prefixes)
+			writeSuccessResponseXML(w, encodeResponse(response))
+			return
+		}
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
+
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
@@ -151,6 +160,13 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 
 	// Validate all the query params before beginning to serve the request.
 	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+		// return empty response if invalid marker
+		//TODO: avoid this pattern when moving to errors package
+		if s3Error == ErrInvalidPrefixMarker {
+			response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, ListObjectsInfo{})
+			writeSuccessResponseXML(w, encodeResponse(response))
+			return
+		}
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
