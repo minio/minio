@@ -112,6 +112,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
+	// Get "json" flag from command line argument and
+	// enable json and quite modes if jason flag is turned on.
+	jsonFlag := ctx.Bool("json") || ctx.GlobalBool("json")
+	if jsonFlag {
+		log.EnableJSON()
+	}
+
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 	if quietFlag {

@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/mc/pkg/console"
 )
 
 // Helper to generate integer sequences into a friendlier user consumable format.
@@ -44,7 +43,7 @@ func printOnceFn() printOnceFunc {
 	var once sync.Once
 	return func(msg string) {
 		once.Do(func() {
-			console.Println(msg)
+			log.Println(msg)
 		})
 	}
 }
@@ -91,7 +90,7 @@ func getHealMsg(endpoints EndpointList, storageDisks []StorageAPI) string {
 
 // Prints regular message when we have sufficient disks to start the cluster.
 func printRegularMsg(endpoints EndpointList, storageDisks []StorageAPI, fn printOnceFunc) {
-	msg := getStorageInitMsg("\nInitializing data volume.", endpoints, storageDisks)
+	msg := getStorageInitMsg("Initializing data volume.", endpoints, storageDisks)
 	fn(msg)
 }
 
@@ -121,7 +120,7 @@ func getStorageInitMsg(titleMsg string, endpoints EndpointList, storageDisks []S
 
 // Prints initialization message when cluster is being initialized for the first time.
 func printFormatMsg(endpoints EndpointList, storageDisks []StorageAPI, fn printOnceFunc) {
-	msg := getStorageInitMsg("\nInitializing data volume for the first time.", endpoints, storageDisks)
+	msg := getStorageInitMsg("Initializing data volume for the first time.", endpoints, storageDisks)
 	fn(msg)
 }
 

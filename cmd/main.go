@@ -38,6 +38,10 @@ var globalFlags = []cli.Flag{
 		Name:  "quiet",
 		Usage: "Disable startup information.",
 	},
+	cli.BoolFlag{
+		Name:  "json",
+		Usage: "Output server logs and startup information in json format.",
+	},
 }
 
 // Help template for minio.

@@ -418,6 +418,21 @@ type serverConfigV15 struct {
 	Notify *notifier `json:"notify"`
 }
 
+// FileLogger is introduced to workaround the dependency about logrus
+type FileLogger struct {
+	Enable   bool   `json:"enable"`
+	Filename string `json:"filename"`
+}
+
+// ConsoleLogger is introduced to workaround the dependency about logrus
+type ConsoleLogger struct {
+	Enable bool `json:"enable"`
+}
+
+// Loggers struct is defined with FileLogger and ConsoleLogger
+// although they are removed from logging logic. They are
+// kept here just to workaround the dependency migration
+// code/logic has on them.
 type loggers struct {
 	sync.RWMutex
 	Console ConsoleLogger `json:"console"`

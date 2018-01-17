@@ -19,6 +19,8 @@ package cmd
 import (
 	"errors"
 	pathutil "path"
+	"runtime"
+	"strings"
 	"sync"
 
 	"fmt"
@@ -365,4 +367,19 @@ func (li *lockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error) {
 func (li *lockInstance) RUnlock() {
 	readLock := true
 	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
+}
+
+func getSource() string {
+	var funcName string
+	pc, filename, lineNum, ok := runtime.Caller(2)
+	if ok {
+		filename = pathutil.Base(filename)
+		funcName = strings.TrimPrefix(runtime.FuncForPC(pc).Name(),
+			"github.com/minio/minio/cmd.")
+	} else {
+		filename = "<unknown>"
+		lineNum = 0
+	}
+
+	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
 }

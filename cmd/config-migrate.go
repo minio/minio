@@ -1147,14 +1147,6 @@ func migrateV15ToV16() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv15.Browser
 
-	// Migrate console and file fields
-	if cv15.Logger.Console.Enable {
-		srvConfig.Logger.Console = NewConsoleLogger()
-	}
-	if cv15.Logger.File.Enable {
-		srvConfig.Logger.File = NewFileLogger(cv15.Logger.File.Filename)
-	}
-
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
 	}

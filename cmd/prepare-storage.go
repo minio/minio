@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -289,11 +288,9 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 			case Abort:
 				return reduceInitXLErrs(storageDisks, sErrs)
 			case FormatDisks:
-				console.Eraseline()
 				printFormatMsg(endpoints, storageDisks, printOnceFn())
 				return initFormatXL(storageDisks)
 			case InitObjectLayer:
-				console.Eraseline()
 				// Validate formats loaded before proceeding forward.
 				err := genericFormatCheckXL(formatConfigs, sErrs)
 				if err == nil {
@@ -308,7 +305,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				}
 				return err
 			case WaitForQuorum:
-				console.Printf(
+				log.Printf(
 					"Initializing data volume. Waiting for minimum %d servers to come online. (elapsed %s)\n",
 					len(storageDisks)/2+1, getElapsedTime(),
 				)
@@ -316,9 +313,9 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				// Print configuration errors.
 				return reduceInitXLErrs(storageDisks, sErrs)
 			case WaitForAll:
-				console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
+				log.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
 			case WaitForFormatting:
-				console.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
+				log.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
 			}
 		case <-globalServiceDoneCh:
 			return fmt.Errorf("Initializing data volumes gracefully stopped")
