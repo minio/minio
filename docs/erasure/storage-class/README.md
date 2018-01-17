@@ -9,7 +9,32 @@ set before starting Minio server. After the data and parity disks for each stora
 you can set the storage class of an object via request metadata field `x-amz-storage-class`. Minio server then honors the storage class by
 saving the object in specific number of data and parity disks.
 
-### Values for standard storage class (STANDARD)
+## Storage usage
+
+The selection of varying data and parity drives has a direct impact on the drive space usage. With storage class, you can optimise for high
+redundancy or better drive space utilisation.
+
+To get an idea of how various combinations of data and parity drives affect the storage usage, let’s take an example of a 100 MiB file stored
+on 16 drive Minio deployment. If you use eight data and eight parity drives, the file space usage will be approximately twice, i.e. 100 MiB
+file will take 200 MiB space. But, if you use ten data and six parity drives, same 100 MiB file takes around 160 MiB. If you use 14 data and
+two parity drives, 100 MiB file takes only approximately 114 MiB.
+
+Below is a list of data/parity drives and corresponding _approximate_ storage space usage on a 16 drive Minio deployment. The field _storage
+usage ratio_ is simply the drive space used by the file after erasure-encoding, divided by actual file size.
+
+| Total Drives (N) | Data Drives (D) | Parity Drives (P) | Storage Usage Ratio |
+|------------------|-----------------|-------------------|---------------------|
+|               16 |               8 |                 8 |                2.00 |
+|               16 |               9 |                 7 |                1.79 |
+|               16 |              10 |                 6 |                1.60 |
+|               16 |              11 |                 5 |                1.45 |
+|               16 |              12 |                 4 |                1.34 |
+|               16 |              13 |                 3 |                1.23 |
+|               16 |              14 |                 2 |                1.14 |
+
+You can calculate _approximate_ storage usage ratio using the formula - total drives (N) / data drives (D).
+
+### Allowed values for STANDARD storage class
 
 `STANDARD` storage class implies more parity than `REDUCED_REDUNDANCY` class. So, `STANDARD` parity disks should be
 
@@ -20,7 +45,7 @@ Parity blocks can not be higher than data blocks, so `STANDARD` storage class pa
 
 Default value for `STANDARD` storage class is `N/2` (N is the total number of drives).
 
-### Values for reduced redundancy storage class (REDUCED_REDUNDANCY)
+### Allowed values for REDUCED_REDUNDANCY storage class
 
 `REDUCED_REDUNDANCY` implies lesser parity than `STANDARD` class. So,`REDUCED_REDUNDANCY` parity disks should be
 
