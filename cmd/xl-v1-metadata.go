@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/errors"
+	sha256 "github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
 

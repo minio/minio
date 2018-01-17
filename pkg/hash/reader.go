@@ -19,12 +19,13 @@ package hash
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"hash"
 	"io"
+
+	sha256 "github.com/minio/sha256-simd"
 )
 
 var errNestedReader = errors.New("Nesting of Reader detected, not allowed")

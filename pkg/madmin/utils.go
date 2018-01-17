@@ -18,7 +18,6 @@ package madmin
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -26,6 +25,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	sha256 "github.com/minio/sha256-simd"
 
 	"github.com/minio/minio-go/pkg/s3utils"
 )

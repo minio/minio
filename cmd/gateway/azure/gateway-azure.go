@@ -19,7 +19,6 @@ package azure
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -38,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+	sha256 "github.com/minio/sha256-simd"
 
 	minio "github.com/minio/minio/cmd"
 )
