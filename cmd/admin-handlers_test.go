@@ -696,7 +696,7 @@ func TestValidateHealQueryParams(t *testing.T) {
 			marker:    "notmatchingmarker",
 			delimiter: "/",
 			maxKeys:   "10",
-			apiErr:    ErrNotImplemented,
+			apiErr:    ErrInvalidPrefixMarker,
 		},
 		// 8. Invalid params with unsupported delimiter.
 		{
@@ -812,7 +812,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 			marker:     "notmatchingmarker",
 			delimiter:  "/",
 			maxKeys:    "10",
-			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
+			statusCode: getAPIError(ErrInvalidPrefixMarker).HTTPStatusCode,
 		},
 		// 8. Invalid params with unsupported delimiter.
 		{

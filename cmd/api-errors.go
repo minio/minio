@@ -124,6 +124,7 @@ const (
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
 	ErrSlowDown
+	ErrInvalidPrefixMarker
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -524,6 +525,12 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Please reduce your request",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrInvalidPrefixMarker: {
+		Code:           "InvalidPrefixMarker",
+		Description:    "Invalid marker prefix combination",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
 		Code:           "AccessDenied",
