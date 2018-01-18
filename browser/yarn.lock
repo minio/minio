@@ -2894,6 +2894,10 @@ macaddress@^0.2.8:
   version "0.2.8"
   resolved "https://registry.yarnpkg.com/macaddress/-/macaddress-0.2.8.tgz#5904dc537c39ec6dbefeae902327135fa8511f12"
 
+material-design-iconic-font@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/material-design-iconic-font/-/material-design-iconic-font-2.2.0.tgz#66c3b1c880ef0cb87c02ca2a0f900ff0fe7f480d"
+
 math-expression-evaluator@^1.2.14:
   version "1.2.17"
   resolved "https://registry.yarnpkg.com/math-expression-evaluator/-/math-expression-evaluator-1.2.17.tgz#de819fdbcd84dccd8fae59c6aeb79615b9d266ac"
