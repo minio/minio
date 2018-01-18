@@ -64,7 +64,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	}
 	loginArgs := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	loginReply := LoginRPCReply{}
@@ -87,6 +87,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// Claim a lock
 	var result bool
@@ -120,6 +121,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
+	la2.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	err = locker.Lock(&la2, &result)
 	if err != nil {
@@ -143,6 +145,7 @@ func TestLockRpcServerUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// First test return of error when attempting to unlock a lock that does not exist
 	var result bool
@@ -188,6 +191,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// Claim a lock
 	var result bool
@@ -221,6 +225,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
+	la2.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	err = locker.RLock(&la2, &result)
 	if err != nil {
@@ -244,6 +249,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// First test return of error when attempting to unlock a read-lock that does not exist
 	var result bool
@@ -268,6 +274,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
+	la2.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// ... and create a second lock on same resource
 	err = locker.RLock(&la2, &result)
@@ -330,6 +337,7 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	laForce.SetAuthToken(token)
+	laForce.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// First test that UID should be empty
 	var result bool
@@ -352,6 +360,7 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// Create lock ... (so that we can force unlock)
 	err = locker.Lock(&la, &result)
@@ -394,6 +403,7 @@ func TestLockRpcServerExpired(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
+	la.SetRPCAPIVersion(globalRPCAPIVersion)
 
 	// Unknown lock at server will return expired = true
 	var expired bool

@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strings"
 	"sync"
 	"time"
 )
@@ -61,9 +62,10 @@ type authConfig struct {
 // AuthRPCClient is a authenticated RPC client which does authentication before doing Call().
 type AuthRPCClient struct {
 	sync.RWMutex             // Mutex to lock this object.
-	rpcClient    *rpc.Client // RPC Client to make any RPC call.
+	rpcClient    *rpc.Client // RPC client to make any RPC call.
 	config       authConfig  // Authentication configuration information.
 	authToken    string      // Authentication token.
+	version      semVersion  // RPC version.
 }
 
 // newAuthRPCClient - returns a JWT based authenticated (go) rpc client, which does automatic reconnect.
@@ -81,7 +83,8 @@ func newAuthRPCClient(config authConfig) *AuthRPCClient {
 	}
 
 	return &AuthRPCClient{
-		config: config,
+		config:  config,
+		version: globalRPCAPIVersion,
 	}
 }
 
@@ -117,7 +120,7 @@ func (authClient *AuthRPCClient) Login() (err error) {
 			loginMethod = authClient.config.serviceName + loginMethodName
 			loginArgs   = LoginRPCArgs{
 				AuthToken:   authToken,
-				Version:     Version,
+				Version:     globalRPCAPIVersion,
 				RequestTime: UTCNow(),
 			}
 		)
@@ -130,6 +133,11 @@ func (authClient *AuthRPCClient) Login() (err error) {
 		}
 
 		if err = rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
+			// gob doesn't provide any typed errors for us to reflect
+			// upon, this is the only way to return proper error.
+			if strings.Contains(err.Error(), "gob: wrong type") {
+				return errRPCAPIVersionUnsupported
+			}
 			return err
 		}
 
@@ -144,6 +152,7 @@ func (authClient *AuthRPCClient) Login() (err error) {
 // call makes a RPC call after logs into the server.
 func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
+	SetRPCAPIVersion(version semVersion)
 }, reply interface{}) (err error) {
 	if err = authClient.Login(); err != nil {
 		return err
@@ -153,6 +162,7 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 	authClient.RLock()
 	defer authClient.RUnlock()
 	args.SetAuthToken(authClient.authToken)
+	args.SetRPCAPIVersion(authClient.version)
 
 	// Do an RPC call.
 	return authClient.rpcClient.Call(serviceMethod, args, reply)
@@ -161,6 +171,7 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 // Call executes RPC call till success or globalAuthRPCRetryThreshold on ErrShutdown.
 func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
+	SetRPCAPIVersion(version semVersion)
 }, reply interface{}) (err error) {
 
 	// Done channel is used to close any lingering retry routine, as soon
@@ -180,6 +191,11 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 					continue
 				}
 			}
+		}
+		// gob doesn't provide any typed errors for us to reflect
+		// upon, this is the only way to return proper error.
+		if err != nil && strings.Contains(err.Error(), "gob: wrong type") {
+			err = errRPCAPIVersionUnsupported
 		}
 		break
 	}

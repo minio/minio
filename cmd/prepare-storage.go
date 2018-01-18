@@ -101,13 +101,13 @@ const (
 var configErrs = []error{
 	errInvalidAccessKeyID,
 	errAuthentication,
-	errServerVersionMismatch,
+	errRPCAPIVersionUnsupported,
 	errServerTimeMismatch,
 }
 
-// Quick error to actions converts looking for specific errors
+// Config errs to actions converts looking for specific config errors
 // which need to be returned quickly and server should wait instead.
-func quickErrToActions(errMap map[error]int) InitActions {
+func configErrsToActions(errMap map[error]int) InitActions {
 	var action InitActions
 	for _, configErr := range configErrs {
 		if errMap[configErr] > 0 {
@@ -168,7 +168,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	}
 
 	// Validates and converts specific config errors into WaitForConfig.
-	if quickErrToActions(errMap) == WaitForConfig {
+	if configErrsToActions(errMap) == WaitForConfig {
 		return WaitForConfig
 	}
 
@@ -311,13 +311,15 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				)
 			case WaitForConfig:
 				// Print configuration errors.
-				return reduceInitXLErrs(storageDisks, sErrs)
+				log.Printf(
+					"Initializing data volume. Waiting for configuration issues to be fixed (%s). (elapsed %s)\n",
+					reduceInitXLErrs(storageDisks, sErrs), getElapsedTime())
 			case WaitForAll:
 				log.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
 			case WaitForFormatting:
 				log.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
 			}
-		case <-globalServiceDoneCh:
+		case <-globalOSSignalCh:
 			return fmt.Errorf("Initializing data volumes gracefully stopped")
 		}
 	}

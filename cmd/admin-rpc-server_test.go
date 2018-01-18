@@ -42,7 +42,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	adminServer := adminCmd{}
 	args := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	err = adminServer.Login(&args, &LoginRPCReply{})
@@ -56,9 +56,10 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}()
 
 	sa := SignalServiceArgs{
-		AuthRPCArgs: AuthRPCArgs{AuthToken: token},
+		AuthRPCArgs: AuthRPCArgs{AuthToken: token, Version: globalRPCAPIVersion},
 		Sig:         cmd.toServiceSignal(),
 	}
+
 	genReply := AuthRPCReply{}
 	switch cmd {
 	case restartCmd, stopCmd:
@@ -123,7 +124,7 @@ func TestReInitDisks(t *testing.T) {
 
 	args := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	err = adminServer.Login(&args, &LoginRPCReply{})
@@ -133,6 +134,7 @@ func TestReInitDisks(t *testing.T) {
 
 	authArgs := AuthRPCArgs{
 		AuthToken: token,
+		Version:   globalRPCAPIVersion,
 	}
 	authReply := AuthRPCReply{}
 
@@ -150,7 +152,7 @@ func TestReInitDisks(t *testing.T) {
 	fsAdminServer := adminCmd{}
 	fsArgs := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	fsReply := LoginRPCReply{}
@@ -161,6 +163,7 @@ func TestReInitDisks(t *testing.T) {
 
 	authArgs = AuthRPCArgs{
 		AuthToken: token,
+		Version:   globalRPCAPIVersion,
 	}
 	authReply = AuthRPCReply{}
 	// Attempt ReInitDisks service on a FS backend.
@@ -192,7 +195,7 @@ func TestGetConfig(t *testing.T) {
 
 	args := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
@@ -203,6 +206,7 @@ func TestGetConfig(t *testing.T) {
 
 	authArgs := AuthRPCArgs{
 		AuthToken: token,
+		Version:   globalRPCAPIVersion,
 	}
 
 	configReply := ConfigReply{}
@@ -239,7 +243,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	}
 	args := LoginRPCArgs{
 		AuthToken:   token,
-		Version:     Version,
+		Version:     globalRPCAPIVersion,
 		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
@@ -254,6 +258,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	wArgs := WriteConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
 			AuthToken: token,
+			Version:   globalRPCAPIVersion,
 		},
 		TmpFileName: tmpFileName,
 		Buf:         buf,
@@ -271,6 +276,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	cArgs := CommitConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
 			AuthToken: token,
+			Version:   globalRPCAPIVersion,
 		},
 		FileName: tmpFileName,
 	}

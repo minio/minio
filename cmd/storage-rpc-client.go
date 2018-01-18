@@ -85,8 +85,8 @@ func toStorageErr(err error) error {
 		return errInvalidAccessKeyID
 	case errAuthentication.Error():
 		return errAuthentication
-	case errServerVersionMismatch.Error():
-		return errServerVersionMismatch
+	case errRPCAPIVersionUnsupported.Error():
+		return errRPCAPIVersionUnsupported
 	case errServerTimeMismatch.Error():
 		return errServerTimeMismatch
 	}

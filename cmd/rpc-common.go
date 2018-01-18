@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/minio/dsync"
@@ -33,10 +34,51 @@ func isRequestTimeAllowed(requestTime time.Time) bool {
 		utcNow.Sub(requestTime) > rpcSkewTimeAllowed)
 }
 
+// semVersion - RPC semantic versioning.
+type semVersion struct {
+	Major uint64
+	Minor uint64
+	Patch uint64
+}
+
+// semver comparator implementation based on the semver 2.0.0 https://semver.org/.
+func (v semVersion) Compare(o semVersion) int {
+	if v.Major != o.Major {
+		if v.Major > o.Major {
+			return 1
+		}
+		return -1
+	}
+	if v.Minor != o.Minor {
+		if v.Minor > o.Minor {
+			return 1
+		}
+		return -1
+	}
+	if v.Patch != o.Patch {
+		if v.Patch > o.Patch {
+			return 1
+		}
+		return -1
+	}
+	return 0
+}
+
+func (v semVersion) String() string {
+	b := make([]byte, 0, 5)
+	b = strconv.AppendUint(b, v.Major, 10)
+	b = append(b, '.')
+	b = strconv.AppendUint(b, v.Minor, 10)
+	b = append(b, '.')
+	b = strconv.AppendUint(b, v.Patch, 10)
+	return string(b)
+}
+
 // AuthRPCArgs represents minimum required arguments to make any authenticated RPC call.
 type AuthRPCArgs struct {
 	// Authentication token to be verified by the server for every RPC call.
 	AuthToken string
+	Version   semVersion
 }
 
 // SetAuthToken - sets the token to the supplied value.
@@ -44,8 +86,21 @@ func (args *AuthRPCArgs) SetAuthToken(authToken string) {
 	args.AuthToken = authToken
 }
 
+// SetRPCAPIVersion - sets the rpc version to the supplied value.
+func (args *AuthRPCArgs) SetRPCAPIVersion(version semVersion) {
+	args.Version = version
+}
+
 // IsAuthenticated - validated whether this auth RPC args are already authenticated or not.
 func (args AuthRPCArgs) IsAuthenticated() error {
+	// checks if rpc Version is not equal to current server rpc version.
+	// this is fine for now, but in future when we add backward compatible
+	// APIs we need to make sure to allow lesser versioned clients to
+	// talk over RPC, until then we are fine with this check.
+	if args.Version.Compare(globalRPCAPIVersion) != 0 {
+		return errRPCAPIVersionUnsupported
+	}
+
 	// Check whether the token is valid
 	if !isAuthTokenValid(args.AuthToken) {
 		return errInvalidToken
@@ -61,15 +116,18 @@ type AuthRPCReply struct{}
 // LoginRPCArgs - login username and password for RPC.
 type LoginRPCArgs struct {
 	AuthToken   string
-	Version     string
+	Version     semVersion
 	RequestTime time.Time
 }
 
 // IsValid - validates whether this LoginRPCArgs are valid for authentication.
 func (args LoginRPCArgs) IsValid() error {
-	// Check if version matches.
-	if args.Version != Version {
-		return errServerVersionMismatch
+	// checks if rpc Version is not equal to current server rpc version.
+	// this is fine for now, but in future when we add backward compatible
+	// APIs we need to make sure to allow lesser versioned clients to
+	// talk over RPC, until then we are fine with this check.
+	if args.Version.Compare(globalRPCAPIVersion) != 0 {
+		return errRPCAPIVersionUnsupported
 	}
 
 	if !isRequestTimeAllowed(args.RequestTime) {
