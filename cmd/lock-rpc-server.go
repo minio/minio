@@ -76,11 +76,12 @@ func startLockMaintenance(lockServers []*lockServer) {
 			for {
 				// Verifies every minute for locks held more than 2minutes.
 				select {
+				case <-globalServiceDoneCh:
+					// Stop the timer upon service closure and cleanup the go-routine.
+					ticker.Stop()
+					return
 				case <-ticker.C:
 					lk.lockMaintenance(lockValidityCheckInterval)
-				case <-globalServiceDoneCh:
-					// Stop the timer.
-					ticker.Stop()
 				}
 			}
 		}(locker)
