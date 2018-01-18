@@ -49,6 +49,7 @@ type DRWMutex struct {
 	writeLocks   []string   // Array of nodes that granted a write lock
 	readersLocks [][]string // Array of array of nodes that granted reader locks
 	m            sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
+	clnt         *Dsync
 }
 
 // Granted - represents a structure of a granted lock.
@@ -66,10 +67,11 @@ func isLocked(uid string) bool {
 }
 
 // NewDRWMutex - initializes a new dsync RW mutex.
-func NewDRWMutex(name string) *DRWMutex {
+func NewDRWMutex(name string, clnt *Dsync) *DRWMutex {
 	return &DRWMutex{
 		Name:       name,
-		writeLocks: make([]string, dnodeCount),
+		writeLocks: make([]string, clnt.dNodeCount),
+		clnt:       clnt,
 	}
 }
 
@@ -128,10 +130,10 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 	// Use incremental back-off algorithm for repeated attempts to acquire the lock
 	for range newRetryTimerSimple(doneCh) {
 		// Create temp array on stack.
-		locks := make([]string, dnodeCount)
+		locks := make([]string, dm.clnt.dNodeCount)
 
 		// Try to acquire the lock.
-		success := lock(clnts, &locks, dm.Name, isReadLock)
+		success := lock(dm.clnt, &locks, dm.Name, isReadLock)
 		if success {
 			dm.m.Lock()
 			defer dm.m.Unlock()
@@ -139,7 +141,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 			// If success, copy array to object
 			if isReadLock {
 				// Append new array of strings at the end
-				dm.readersLocks = append(dm.readersLocks, make([]string, dnodeCount))
+				dm.readersLocks = append(dm.readersLocks, make([]string, dm.clnt.dNodeCount))
 				// and copy stack array into last spot
 				copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
 			} else {
@@ -158,14 +160,14 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) bool {
+func lock(ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
 
 	// Create buffered channel of size equal to total number of nodes.
-	ch := make(chan Granted, dnodeCount)
+	ch := make(chan Granted, ds.dNodeCount)
 	defer close(ch)
 
 	var wg sync.WaitGroup
-	for index, c := range clnts {
+	for index, c := range ds.rpcClnts {
 
 		wg.Add(1)
 		// broadcast lock request to all nodes
@@ -181,8 +183,8 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 			args := LockArgs{
 				UID:             uid,
 				Resource:        lockName,
-				ServerAddr:      clnts[ownNode].ServerAddr(),
-				ServiceEndpoint: clnts[ownNode].ServiceEndpoint(),
+				ServerAddr:      ds.rpcClnts[ds.ownNode].ServerAddr(),
+				ServiceEndpoint: ds.rpcClnts[ds.ownNode].ServiceEndpoint(),
 			}
 
 			var locked bool
@@ -222,7 +224,7 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 		done := false
 		timeout := time.After(DRWMutexAcquireTimeout)
 
-		for ; i < dnodeCount; i++ { // Loop until we acquired all locks
+		for ; i < ds.dNodeCount; i++ { // Loop until we acquired all locks
 
 			select {
 			case grant := <-ch:
@@ -231,22 +233,22 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 					(*locks)[grant.index] = grant.lockUID
 				} else {
 					locksFailed++
-					if !isReadLock && locksFailed > dnodeCount-dquorum ||
-						isReadLock && locksFailed > dnodeCount-dquorumReads {
+					if !isReadLock && locksFailed > ds.dNodeCount-ds.dquorum ||
+						isReadLock && locksFailed > ds.dNodeCount-ds.dquorumReads {
 						// We know that we are not going to get the lock anymore,
 						// so exit out and release any locks that did get acquired
 						done = true
 						// Increment the number of grants received from the buffered channel.
 						i++
-						releaseAll(clnts, locks, lockName, isReadLock)
+						releaseAll(ds, locks, lockName, isReadLock)
 					}
 				}
 			case <-timeout:
 				done = true
 				// timeout happened, maybe one of the nodes is slow, count
 				// number of locks to check whether we have quorum or not
-				if !quorumMet(locks, isReadLock) {
-					releaseAll(clnts, locks, lockName, isReadLock)
+				if !quorumMet(locks, isReadLock, ds.dquorum, ds.dquorumReads) {
+					releaseAll(ds, locks, lockName, isReadLock)
 				}
 			}
 
@@ -256,7 +258,7 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 		}
 
 		// Count locks in order to determine whether we have quorum or not
-		quorum = quorumMet(locks, isReadLock)
+		quorum = quorumMet(locks, isReadLock, ds.dquorum, ds.dquorumReads)
 
 		// Signal that we have the quorum
 		wg.Done()
@@ -264,11 +266,11 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 		// Wait for the other responses and immediately release the locks
 		// (do not add them to the locks array because the DRWMutex could
 		//  already has been unlocked again by the original calling thread)
-		for ; i < dnodeCount; i++ {
+		for ; i < ds.dNodeCount; i++ {
 			grantToBeReleased := <-ch
 			if grantToBeReleased.isLocked() {
 				// release lock
-				sendRelease(clnts[grantToBeReleased.index], lockName, grantToBeReleased.lockUID, isReadLock)
+				sendRelease(ds, ds.rpcClnts[grantToBeReleased.index], lockName, grantToBeReleased.lockUID, isReadLock)
 			}
 		}
 	}(isReadLock)
@@ -276,9 +278,9 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 	wg.Wait()
 
 	// Verify that localhost server is actively participating in the lock (the lock maintenance relies on this fact)
-	if quorum && !isLocked((*locks)[ownNode]) {
+	if quorum && !isLocked((*locks)[ds.ownNode]) {
 		// If not, release lock (and try again later)
-		releaseAll(clnts, locks, lockName, isReadLock)
+		releaseAll(ds, locks, lockName, isReadLock)
 		quorum = false
 	}
 
@@ -286,7 +288,7 @@ func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) 
 }
 
 // quorumMet determines whether we have acquired the required quorum of underlying locks or not
-func quorumMet(locks *[]string, isReadLock bool) bool {
+func quorumMet(locks *[]string, isReadLock bool, quorum, quorumReads int) bool {
 
 	count := 0
 	for _, uid := range *locks {
@@ -295,21 +297,21 @@ func quorumMet(locks *[]string, isReadLock bool) bool {
 		}
 	}
 
-	var quorum bool
+	var metQuorum bool
 	if isReadLock {
-		quorum = count >= dquorumReads
+		metQuorum = count >= quorumReads
 	} else {
-		quorum = count >= dquorum
+		metQuorum = count >= quorum
 	}
 
-	return quorum
+	return metQuorum
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) {
-	for lock := 0; lock < dnodeCount; lock++ {
+func releaseAll(ds *Dsync, locks *[]string, lockName string, isReadLock bool) {
+	for lock := 0; lock < ds.dNodeCount; lock++ {
 		if isLocked((*locks)[lock]) {
-			sendRelease(clnts[lock], lockName, (*locks)[lock], isReadLock)
+			sendRelease(ds, ds.rpcClnts[lock], lockName, (*locks)[lock], isReadLock)
 			(*locks)[lock] = ""
 		}
 	}
@@ -321,7 +323,7 @@ func releaseAll(clnts []NetLocker, locks *[]string, lockName string, isReadLock 
 func (dm *DRWMutex) Unlock() {
 
 	// create temp array on stack
-	locks := make([]string, dnodeCount)
+	locks := make([]string, dm.clnt.dNodeCount)
 
 	{
 		dm.m.Lock()
@@ -342,11 +344,11 @@ func (dm *DRWMutex) Unlock() {
 		// Copy write locks to stack array
 		copy(locks, dm.writeLocks[:])
 		// Clear write locks array
-		dm.writeLocks = make([]string, dnodeCount)
+		dm.writeLocks = make([]string, dm.clnt.dNodeCount)
 	}
 
 	isReadLock := false
-	unlock(locks, dm.Name, isReadLock)
+	unlock(dm.clnt, locks, dm.Name, isReadLock)
 }
 
 // RUnlock releases a read lock held on dm.
@@ -355,7 +357,7 @@ func (dm *DRWMutex) Unlock() {
 func (dm *DRWMutex) RUnlock() {
 
 	// create temp array on stack
-	locks := make([]string, dnodeCount)
+	locks := make([]string, dm.clnt.dNodeCount)
 
 	{
 		dm.m.Lock()
@@ -370,19 +372,19 @@ func (dm *DRWMutex) RUnlock() {
 	}
 
 	isReadLock := true
-	unlock(locks, dm.Name, isReadLock)
+	unlock(dm.clnt, locks, dm.Name, isReadLock)
 }
 
-func unlock(locks []string, name string, isReadLock bool) {
+func unlock(ds *Dsync, locks []string, name string, isReadLock bool) {
 
 	// We don't need to synchronously wait until we have released all the locks (or the quorum)
 	// (a subsequent lock will retry automatically in case it would fail to get quorum)
 
-	for index, c := range clnts {
+	for index, c := range ds.rpcClnts {
 
 		if isLocked(locks[index]) {
 			// broadcast lock release to all nodes that granted the lock
-			sendRelease(c, name, locks[index], isReadLock)
+			sendRelease(ds, c, name, locks[index], isReadLock)
 		}
 	}
 }
@@ -394,24 +396,24 @@ func (dm *DRWMutex) ForceUnlock() {
 		defer dm.m.Unlock()
 
 		// Clear write locks array
-		dm.writeLocks = make([]string, dnodeCount)
+		dm.writeLocks = make([]string, dm.clnt.dNodeCount)
 		// Clear read locks array
 		dm.readersLocks = nil
 	}
 
-	for _, c := range clnts {
+	for _, c := range dm.clnt.rpcClnts {
 		// broadcast lock release to all nodes that granted the lock
-		sendRelease(c, dm.Name, "", false)
+		sendRelease(dm.clnt, c, dm.Name, "", false)
 	}
 }
 
 // sendRelease sends a release message to a node that previously granted a lock
-func sendRelease(c NetLocker, name, uid string, isReadLock bool) {
+func sendRelease(ds *Dsync, c NetLocker, name, uid string, isReadLock bool) {
 	args := LockArgs{
 		UID:             uid,
 		Resource:        name,
-		ServerAddr:      clnts[ownNode].ServerAddr(),
-		ServiceEndpoint: clnts[ownNode].ServiceEndpoint(),
+		ServerAddr:      ds.rpcClnts[ds.ownNode].ServerAddr(),
+		ServiceEndpoint: ds.rpcClnts[ds.ownNode].ServiceEndpoint(),
 	}
 	if len(uid) == 0 {
 		if _, err := c.ForceUnlock(args); err != nil {

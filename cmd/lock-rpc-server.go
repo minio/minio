@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"math/rand"
-	"path"
 	"sync"
 	"time"
 
@@ -64,49 +63,45 @@ type lockServer struct {
 }
 
 // Start lock maintenance from all lock servers.
-func startLockMaintenance(lockServers []*lockServer) {
-	for _, locker := range lockServers {
-		// Start loop for stale lock maintenance
-		go func(lk *lockServer) {
-			// Initialize a new ticker with a minute between each ticks.
-			ticker := time.NewTicker(lockMaintenanceInterval)
+func startLockMaintenance(lkSrv *lockServer) {
+	// Start loop for stale lock maintenance
+	go func(lk *lockServer) {
+		// Initialize a new ticker with a minute between each ticks.
+		ticker := time.NewTicker(lockMaintenanceInterval)
 
-			// Start with random sleep time, so as to avoid "synchronous checks" between servers
-			time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
-			for {
-				// Verifies every minute for locks held more than 2minutes.
-				select {
-				case <-globalServiceDoneCh:
-					// Stop the timer upon service closure and cleanup the go-routine.
-					ticker.Stop()
-					return
-				case <-ticker.C:
-					lk.lockMaintenance(lockValidityCheckInterval)
-				}
+		// Start with random sleep time, so as to avoid "synchronous checks" between servers
+		time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
+		for {
+			// Verifies every minute for locks held more than 2minutes.
+			select {
+			case <-globalServiceDoneCh:
+				// Stop the timer upon service closure and cleanup the go-routine.
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				lk.lockMaintenance(lockValidityCheckInterval)
 			}
-		}(locker)
-	}
+		}
+	}(lkSrv)
 }
 
 // Register distributed NS lock handlers.
 func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error {
 	// Start lock maintenance from all lock servers.
-	startLockMaintenance(globalLockServers)
+	startLockMaintenance(globalLockServer)
 
 	// Register initialized lock servers to their respective rpc endpoints.
-	return registerStorageLockers(mux, globalLockServers)
+	return registerStorageLockers(mux, globalLockServer)
 }
 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
-func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
-	for _, lockServer := range lockServers {
-		lockRPCServer := newRPCServer()
-		if err := lockRPCServer.RegisterName(lockServiceName, lockServer); err != nil {
-			return errors.Trace(err)
-		}
-		lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
-		lockRouter.Path(path.Join(lockServicePath, lockServer.ll.serviceEndpoint)).Handler(lockRPCServer)
+func registerStorageLockers(mux *router.Router, lkSrv *lockServer) error {
+	lockRPCServer := newRPCServer()
+	if err := lockRPCServer.RegisterName(lockServiceName, lkSrv); err != nil {
+		return errors.Trace(err)
 	}
+	lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
+	lockRouter.Path(lockServicePath).Handler(lockRPCServer)
 	return nil
 }
 

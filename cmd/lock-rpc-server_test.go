@@ -425,8 +425,8 @@ func TestLockRpcServerExpired(t *testing.T) {
 	}
 }
 
-// Test initialization of lock servers.
-func TestLockServers(t *testing.T) {
+// Test initialization of lock server.
+func TestLockServerInit(t *testing.T) {
 	if runtime.GOOS == globalWindowsOSName {
 		return
 	}
@@ -438,8 +438,10 @@ func TestLockServers(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	currentIsDistXL := globalIsDistXL
+	currentLockServer := globalLockServer
 	defer func() {
 		globalIsDistXL = currentIsDistXL
+		globalLockServer = currentLockServer
 	}()
 
 	case1Endpoints := mustGetNewEndpointList(
@@ -468,26 +470,27 @@ func TestLockServers(t *testing.T) {
 
 	globalMinioHost = ""
 	testCases := []struct {
-		isDistXL         bool
-		endpoints        EndpointList
-		totalLockServers int
+		isDistXL  bool
+		endpoints EndpointList
 	}{
 		// Test - 1 one lock server initialized.
-		{true, case1Endpoints, 1},
-		// Test - 2 two servers possible.
-		{true, case2Endpoints, 2},
+		{true, case1Endpoints},
+		// Test - similar endpoint hosts should
+		// converge to single lock server
+		// initialized.
+		{true, case2Endpoints},
 	}
 
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
 		globalIsDistXL = testCase.isDistXL
-		globalLockServers = nil
+		globalLockServer = nil
 		_, _ = newDsyncNodes(testCase.endpoints)
 		if err != nil {
 			t.Fatalf("Got unexpected error initializing lock servers: %v", err)
 		}
-		if len(globalLockServers) != testCase.totalLockServers {
-			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(globalLockServers))
+		if globalLockServer == nil && testCase.isDistXL {
+			t.Errorf("Test %d: Expected initialized lockServer, but got uninitialized", i+1)
 		}
 	}
 }
