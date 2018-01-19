@@ -57,7 +57,8 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 	if err := globalServerConfig.Save(); err != nil {
 		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
-
+		// save the md5
+		SetServerConfigHash(getConfigFile())
 		errorIf(err, "Unable to update the config with new credentials sent from browser RPC.")
 		return err
 	}

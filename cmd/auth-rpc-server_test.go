@@ -42,8 +42,9 @@ func TestLogin(t *testing.T) {
 		// Valid case.
 		{
 			args: LoginRPCArgs{
-				AuthToken: token,
-				Version:   Version,
+				AuthToken:  token,
+				Version:    Version,
+				ConfigHash: GetServerConfigHash(),
 			},
 			skewTime:    0,
 			expectedErr: nil,
@@ -51,8 +52,9 @@ func TestLogin(t *testing.T) {
 		// Valid username, password and request time, not version.
 		{
 			args: LoginRPCArgs{
-				AuthToken: token,
-				Version:   "INVALID-" + Version,
+				AuthToken:  token,
+				Version:    "INVALID-" + Version,
+				ConfigHash: GetServerConfigHash(),
 			},
 			skewTime:    0,
 			expectedErr: errServerVersionMismatch,
@@ -60,8 +62,9 @@ func TestLogin(t *testing.T) {
 		// Valid username, password and version, not request time
 		{
 			args: LoginRPCArgs{
-				AuthToken: token,
-				Version:   Version,
+				AuthToken:  token,
+				Version:    Version,
+				ConfigHash: GetServerConfigHash(),
 			},
 			skewTime:    20 * time.Minute,
 			expectedErr: errServerTimeMismatch,
@@ -69,8 +72,9 @@ func TestLogin(t *testing.T) {
 		// Invalid token, fails with authentication error
 		{
 			args: LoginRPCArgs{
-				AuthToken: "",
-				Version:   Version,
+				AuthToken:  "",
+				Version:    Version,
+				ConfigHash: GetServerConfigHash(),
 			},
 			skewTime:    0,
 			expectedErr: errAuthentication,

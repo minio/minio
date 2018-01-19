@@ -48,6 +48,8 @@ func initConfig() {
 		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
 		log.Println("Created minio configuration file successfully at " + getConfigDir())
 	}
+	// save the md5 sum
+	SetServerConfigHash(getConfigFile())
 }
 
 func handleCommonCmdArgs(ctx *cli.Context) {

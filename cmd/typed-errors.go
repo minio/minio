@@ -48,6 +48,9 @@ var errServerVersionMismatch = errors.New("Server versions do not match")
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
+// errServerConfigMismatch - server configs do not match.
+var errServerConfigMismatch = errors.New("Server configuration files do not match")
+
 // errInvalidBucketName - bucket name is reserved for Minio, usually
 // returned for 'minio', '.minio.sys', buckets with capital letters.
 var errInvalidBucketName = errors.New("The specified bucket is not valid")

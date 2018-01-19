@@ -33,6 +33,12 @@ func isRequestTimeAllowed(requestTime time.Time) bool {
 		utcNow.Sub(requestTime) > rpcSkewTimeAllowed)
 }
 
+// Checks current server config file hash against remote config file hash
+func configMatch(configHash string) bool {
+	// Check whether hash of the configuration files match
+	return GetServerConfigHash() == configHash
+}
+
 // AuthRPCArgs represents minimum required arguments to make any authenticated RPC call.
 type AuthRPCArgs struct {
 	// Authentication token to be verified by the server for every RPC call.
@@ -62,6 +68,7 @@ type AuthRPCReply struct{}
 type LoginRPCArgs struct {
 	AuthToken   string
 	Version     string
+	ConfigHash  string
 	RequestTime time.Time
 }
 
@@ -70,6 +77,10 @@ func (args LoginRPCArgs) IsValid() error {
 	// Check if version matches.
 	if args.Version != Version {
 		return errServerVersionMismatch
+	}
+
+	if !configMatch(args.ConfigHash) {
+		return errServerConfigMismatch
 	}
 
 	if !isRequestTimeAllowed(args.RequestTime) {

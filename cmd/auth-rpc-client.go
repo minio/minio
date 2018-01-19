@@ -109,6 +109,7 @@ func (authClient *AuthRPCClient) Login() (err error) {
 			loginArgs   = LoginRPCArgs{
 				AuthToken:   authClient.authToken,
 				Version:     Version,
+				ConfigHash:  GetServerConfigHash(),
 				RequestTime: UTCNow(),
 			}
 		)
