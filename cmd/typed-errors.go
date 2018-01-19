@@ -58,6 +58,3 @@ var errInvalidRange = errors.New("Invalid range")
 // errInvalidRangeSource - returned when given range value exceeds
 // the source object size.
 var errInvalidRangeSource = errors.New("Range specified exceeds source object size")
-
-// errOperationTimedOut - operation timed out.
-var errOperationTimedOut = errors.New("Operation timed out")
