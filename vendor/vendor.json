@@ -391,6 +391,12 @@
 			"revisionTime": "2016-02-15T17:25:11+05:30"
 		},
 		{
+			"checksumSHA1": "w7ykRf31om2J6832Py4Kz/PEnSI=",
+			"path": "github.com/minio/highwayhash",
+			"revision": "1ea1b5fce73b1d7abbd822a194b51f3736b1f23b",
+			"revisionTime": "2018-01-09T22:40:08Z"
+		},
+		{
 			"checksumSHA1": "7/Hdd23/j4/yt4BXa+h0kqz1yjw=",
 			"path": "github.com/minio/lsync",
 			"revision": "2d7c40f41402df6f0713a749a011cddc12d1b2f3",
