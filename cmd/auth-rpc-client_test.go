@@ -16,7 +16,12 @@
 
 package cmd
 
-import "testing"
+import (
+	"crypto/x509"
+	"os"
+	"path"
+	"testing"
+)
 
 // Tests authorized RPC client.
 func TestAuthRPCClient(t *testing.T) {
@@ -51,5 +56,83 @@ func TestAuthRPCClient(t *testing.T) {
 	}
 	if authRPC.ServiceEndpoint() != authCfg.serviceEndpoint {
 		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.ServiceEndpoint(), authCfg.serviceEndpoint)
+	}
+}
+
+// Test rpc dial test.
+func TestRPCDial(t *testing.T) {
+	prevRootCAs := globalRootCAs
+	defer func() {
+		globalRootCAs = prevRootCAs
+	}()
+
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(rootPath)
+
+	testServer := StartTestServer(t, "")
+	defer testServer.Stop()
+
+	cert, key, err := generateTLSCertKey("127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Set global root CAs.
+	globalRootCAs = x509.NewCertPool()
+	globalRootCAs.AppendCertsFromPEM(cert)
+
+	testServerTLS := StartTestTLSServer(t, "", cert, key)
+	defer testServerTLS.Stop()
+
+	adminEndpoint := path.Join(minioReservedBucketPath, adminPath)
+	testCases := []struct {
+		serverAddr     string
+		serverEndpoint string
+		success        bool
+		secure         bool
+	}{
+		// Empty server addr should fail.
+		{
+			serverAddr:     "",
+			serverEndpoint: adminEndpoint,
+			success:        false,
+		},
+		// Unexpected server addr should fail.
+		{
+			serverAddr:     "example.com",
+			serverEndpoint: adminEndpoint,
+			success:        false,
+		},
+		// Server addr connects but fails for CONNECT call.
+		{
+			serverAddr:     "example.com:80",
+			serverEndpoint: "/",
+			success:        false,
+		},
+		// Successful connecting to insecure RPC server.
+		{
+			serverAddr:     testServer.Server.Listener.Addr().String(),
+			serverEndpoint: adminEndpoint,
+			success:        true,
+		},
+		// Successful connecting to secure RPC server.
+		{
+			serverAddr:     testServerTLS.Server.Listener.Addr().String(),
+			serverEndpoint: adminEndpoint,
+			success:        true,
+			secure:         true,
+		},
+	}
+	for i, testCase := range testCases {
+		_, err = rpcDial(testCase.serverAddr, testCase.serverEndpoint, testCase.secure)
+		if err != nil && testCase.success {
+			t.Errorf("Test %d: Expected success but found failure instead %s", i+1, err)
+		}
+		if err == nil && !testCase.success {
+			t.Errorf("Test %d: Expected failure but found success instead", i+1)
+		}
 	}
 }

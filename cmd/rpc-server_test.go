@@ -19,6 +19,7 @@ package cmd
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	router "github.com/gorilla/mux"
@@ -32,10 +33,11 @@ type ArithReply struct {
 	C int
 }
 
-type Arith int
+type Arith struct {
+	AuthRPCServer
+}
 
 // Some of Arith's methods have value args, some have pointer args. That's deliberate.
-
 func (t *Arith) Add(args ArithArgs, reply *ArithReply) error {
 	reply.C = args.A + args.B
 	return nil
@@ -43,7 +45,9 @@ func (t *Arith) Add(args ArithArgs, reply *ArithReply) error {
 
 func TestGoHTTPRPC(t *testing.T) {
 	newServer := newRPCServer()
-	newServer.Register(new(Arith))
+	newServer.Register(&Arith{
+		AuthRPCServer: AuthRPCServer{},
+	})
 
 	mux := router.NewRouter().SkipClean(true)
 	mux.Path("/foo").Handler(newServer)
@@ -51,13 +55,30 @@ func TestGoHTTPRPC(t *testing.T) {
 	httpServer := httptest.NewServer(mux)
 	defer httpServer.Close()
 
-	client := newRPCClient(httpServer.Listener.Addr().String(), "/foo", false)
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(rootPath)
+
+	creds := globalServerConfig.GetCredential()
+	client := newAuthRPCClient(authConfig{
+		serverAddr:      httpServer.Listener.Addr().String(),
+		serviceName:     "Arith",
+		serviceEndpoint: "/foo",
+		accessKey:       creds.AccessKey,
+		secretKey:       creds.SecretKey,
+	})
 	defer client.Close()
+
+	if err = client.Login(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Synchronous calls
 	args := &ArithArgs{7, 8}
 	reply := new(ArithReply)
-	if err := client.Call("Arith.Add", args, reply); err != nil {
+	if err = client.rpcClient.Call("Arith.Add", args, reply); err != nil {
 		t.Errorf("Add: expected no error but got string %v", err)
 	}
 

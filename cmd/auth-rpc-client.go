@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,14 @@
 package cmd
 
 import (
+	"bufio"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"net/rpc"
 	"sync"
 	"time"
@@ -52,10 +60,10 @@ type authConfig struct {
 
 // AuthRPCClient is a authenticated RPC client which does authentication before doing Call().
 type AuthRPCClient struct {
-	sync.RWMutex            // Mutex to lock this object.
-	rpcClient    *RPCClient // Reconnectable RPC client to make any RPC call.
-	config       authConfig // Authentication configuration information.
-	authToken    string     // Authentication token.
+	sync.RWMutex             // Mutex to lock this object.
+	rpcClient    *rpc.Client // RPC Client to make any RPC call.
+	config       authConfig  // Authentication configuration information.
+	authToken    string      // Authentication token.
 }
 
 // newAuthRPCClient - returns a JWT based authenticated (go) rpc client, which does automatic reconnect.
@@ -73,8 +81,7 @@ func newAuthRPCClient(config authConfig) *AuthRPCClient {
 	}
 
 	return &AuthRPCClient{
-		rpcClient: newRPCClient(config.serverAddr, config.serviceEndpoint, config.secureConn),
-		config:    config,
+		config: config,
 	}
 }
 
@@ -99,23 +106,38 @@ func (authClient *AuthRPCClient) Login() (err error) {
 
 	// Attempt to login if not logged in already.
 	if authClient.authToken == "" {
-		authClient.authToken, err = authenticateNode(authClient.config.accessKey, authClient.config.secretKey)
+		var authToken string
+		authToken, err = authenticateNode(authClient.config.accessKey, authClient.config.secretKey)
 		if err != nil {
 			return err
 		}
+
 		// Login to authenticate your token.
 		var (
 			loginMethod = authClient.config.serviceName + loginMethodName
 			loginArgs   = LoginRPCArgs{
-				AuthToken:   authClient.authToken,
+				AuthToken:   authToken,
 				Version:     Version,
 				RequestTime: UTCNow(),
 			}
 		)
-		if err = authClient.rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
+
+		// Re-dial after we have disconnected or if its a fresh run.
+		var rpcClient *rpc.Client
+		rpcClient, err = rpcDial(authClient.config.serverAddr, authClient.config.serviceEndpoint, authClient.config.secureConn)
+		if err != nil {
 			return err
 		}
+
+		if err = rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
+			return err
+		}
+
+		// Initialize rpc client and auth token after a successful login.
+		authClient.authToken = authToken
+		authClient.rpcClient = rpcClient
 	}
+
 	return nil
 }
 
@@ -127,10 +149,10 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 		return err
 	} // On successful login, execute RPC call.
 
-	authClient.RLock()
 	// Set token before the rpc call.
+	authClient.RLock()
+	defer authClient.RUnlock()
 	args.SetAuthToken(authClient.authToken)
-	authClient.RUnlock()
 
 	// Do an RPC call.
 	return authClient.rpcClient.Call(serviceMethod, args, reply)
@@ -169,6 +191,10 @@ func (authClient *AuthRPCClient) Close() error {
 	authClient.Lock()
 	defer authClient.Unlock()
 
+	if authClient.rpcClient == nil {
+		return nil
+	}
+
 	authClient.authToken = ""
 	return authClient.rpcClient.Close()
 }
@@ -181,4 +207,88 @@ func (authClient *AuthRPCClient) ServerAddr() string {
 // ServiceEndpoint returns the RPC service endpoint of the connection.
 func (authClient *AuthRPCClient) ServiceEndpoint() string {
 	return authClient.config.serviceEndpoint
+}
+
+// default Dial timeout for RPC connections.
+const defaultDialTimeout = 3 * time.Second
+
+// Connect success message required from rpc server.
+const connectSuccessMessage = "200 Connected to Go RPC"
+
+// dial tries to establish a connection to serverAddr in a safe manner.
+// If there is a valid rpc.Cliemt, it returns that else creates a new one.
+func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient *rpc.Client, err error) {
+	if serverAddr == "" || serviceEndpoint == "" {
+		return nil, errInvalidArgument
+	}
+	d := &net.Dialer{
+		Timeout: defaultDialTimeout,
+	}
+	var conn net.Conn
+	if secureConn {
+		var hostname string
+		if hostname, _, err = net.SplitHostPort(serverAddr); err != nil {
+			return nil, &net.OpError{
+				Op:   "dial-http",
+				Net:  serverAddr + serviceEndpoint,
+				Addr: nil,
+				Err:  fmt.Errorf("Unable to parse server address <%s>: %s", serverAddr, err),
+			}
+		}
+		// ServerName in tls.Config needs to be specified to support SNI certificates.
+		conn, err = tls.DialWithDialer(d, "tcp", serverAddr, &tls.Config{
+			ServerName: hostname,
+			RootCAs:    globalRootCAs,
+		})
+	} else {
+		conn, err = d.Dial("tcp", serverAddr)
+	}
+
+	if err != nil {
+		// Print RPC connection errors that are worthy to display in log.
+		switch err.(type) {
+		case x509.HostnameError:
+			errorIf(err, "Unable to establish secure connection to %s", serverAddr)
+		}
+
+		return nil, &net.OpError{
+			Op:   "dial-http",
+			Net:  serverAddr + serviceEndpoint,
+			Addr: nil,
+			Err:  err,
+		}
+	}
+
+	// Check for network errors writing over the dialed conn.
+	if _, err = io.WriteString(conn, "CONNECT "+serviceEndpoint+" HTTP/1.0\n\n"); err != nil {
+		conn.Close()
+		return nil, &net.OpError{
+			Op:   "dial-http",
+			Net:  serverAddr + serviceEndpoint,
+			Addr: nil,
+			Err:  err,
+		}
+	}
+
+	// Attempt to read the HTTP response for the HTTP method CONNECT, upon
+	// success return the RPC connection instance.
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{
+		Method: http.MethodConnect,
+	})
+	if err != nil {
+		conn.Close()
+		return nil, &net.OpError{
+			Op:   "dial-http",
+			Net:  serverAddr + serviceEndpoint,
+			Addr: nil,
+			Err:  err,
+		}
+	}
+	if resp.Status != connectSuccessMessage {
+		conn.Close()
+		return nil, errors.New("unexpected HTTP response: " + resp.Status)
+	}
+
+	// Initialize rpc client.
+	return rpc.NewClient(conn), nil
 }

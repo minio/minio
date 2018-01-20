@@ -70,11 +70,13 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 
 	// Validate for invalid token.
 	args := SetAuthPeerArgs{Creds: creds}
-	args.AuthToken = "garbage"
-	rclient := newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
+	rclient := newAuthRPCClient(s.testAuthConf)
 	defer rclient.Close()
-	err = rclient.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
-	if err != nil {
+	if err = rclient.Login(); err != nil {
+		t.Fatal(err)
+	}
+	rclient.authToken = "garbage"
+	if err = rclient.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{}); err != nil {
 		if err.Error() != errInvalidToken.Error() {
 			t.Fatal(err)
 		}
@@ -90,20 +92,14 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	}
 
 	// Validate for failure in login handler with previous credentials.
-	rclient = newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
+	rclient = newAuthRPCClient(s.testAuthConf)
 	defer rclient.Close()
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rargs := &LoginRPCArgs{
-		AuthToken:   token,
-		Version:     Version,
-		RequestTime: UTCNow(),
-	}
-	rreply := &LoginRPCReply{}
-	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)
-	if err != nil {
+	rclient.authToken = token
+	if err = rclient.Login(); err != nil {
 		if err.Error() != errInvalidAccessKeyID.Error() {
 			t.Fatal(err)
 		}
@@ -113,14 +109,8 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Validate for success in loing handled with valid credetnails.
-	rargs = &LoginRPCArgs{
-		AuthToken:   token,
-		Version:     Version,
-		RequestTime: UTCNow(),
-	}
-	rreply = &LoginRPCReply{}
-	if err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply); err != nil {
+	rclient.authToken = token
+	if err = rclient.Login(); err != nil {
 		t.Fatal(err)
 	}
 }
