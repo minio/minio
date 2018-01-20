@@ -8,8 +8,7 @@ Events occurring on objects in a bucket can be monitored using bucket event noti
 | `s3:ObjectCreated:Post`    | `s3:ObjectRemoved:Delete`                  |
 | `s3:ObjectCreated:Copy`    | `s3:ObjectAccessed:Get`                    |
 
-Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.minio.io/docs/minio-client-complete-guide#events). Minio SDK's
-[`BucketNotification` APIs](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification) can also be used.
+Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.minio.io/docs/minio-client-complete-guide#events). Minio SDK's [`BucketNotification` APIs](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message Minio sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
 Bucket events can be published to the following targets:
 
