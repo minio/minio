@@ -107,20 +107,6 @@ func partsMetaFromModTimes(modTimes []time.Time, algorithm BitrotAlgorithm, chec
 	return partsMetadata
 }
 
-// toPosix - fetches *posix object from StorageAPI.
-func toPosix(disk StorageAPI) *posix {
-	retryDisk, ok := disk.(*retryStorage)
-	if !ok {
-		return nil
-	}
-	pDisk, ok := retryDisk.remoteStorage.(*posix)
-	if !ok {
-		return nil
-	}
-	return pDisk
-
-}
-
 // TestListOnlineDisks - checks if listOnlineDisks and outDatedDisks
 // are consistent with each other.
 func TestListOnlineDisks(t *testing.T) {
@@ -273,62 +259,22 @@ func TestListOnlineDisks(t *testing.T) {
 		partsMetadata := partsMetaFromModTimes(test.modTimes, DefaultBitrotAlgorithm, xlMeta.Erasure.Checksums)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
-		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
-		test.errs = newErrs
-		outdatedDisks := outDatedDisks(xlDisks, availableDisks, test.errs, partsMetadata, bucket, object)
-		if modTime.Equal(timeSentinel) {
-			t.Fatalf("Test %d: modTime should never be equal to timeSentinel, but found equal",
-				i+1)
-		}
-
-		if test._tamperBackend != noTamper {
-			if tamperedIndex != -1 && outdatedDisks[tamperedIndex] == nil {
-				t.Fatalf("Test %d: disk (%v) with part.1 missing is an outdated disk, but wasn't listed by outDatedDisks",
-					i+1, xlDisks[tamperedIndex])
-			}
-
-		}
-
 		if !modTime.Equal(test.expectedTime) {
 			t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
 				i+1, test.expectedTime, modTime)
 		}
 
-		// Check if a disk is considered both online and outdated,
-		// which is a contradiction, except if parts are missing.
-		overlappingDisks := make(map[string]*posix)
-		for _, availableDisk := range availableDisks {
-			if availableDisk == nil {
-				continue
+		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
+		test.errs = newErrs
+
+		if test._tamperBackend != noTamper {
+			if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
+				t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
+					i+1, xlDisks[tamperedIndex])
 			}
-			pDisk := toPosix(availableDisk)
-			overlappingDisks[pDisk.diskPath] = pDisk
+
 		}
 
-		for index, outdatedDisk := range outdatedDisks {
-			// ignore the intentionally tampered disk,
-			// this is expected to appear as outdated
-			// disk, since it doesn't have all the parts.
-			if index == tamperedIndex {
-				continue
-			}
-
-			if outdatedDisk == nil {
-				continue
-			}
-
-			pDisk := toPosix(outdatedDisk)
-			if _, ok := overlappingDisks[pDisk.diskPath]; ok {
-				t.Errorf("Test %d: Outdated disk %v was also detected as an online disk - %v %v",
-					i+1, pDisk, availableDisks, outdatedDisks)
-			}
-
-			// errors other than errFileNotFound doesn't imply that the disk is outdated.
-			if test.errs[index] != nil && test.errs[index] != errFileNotFound && outdatedDisk != nil {
-				t.Errorf("Test %d: error (%v) other than errFileNotFound doesn't imply that the disk (%v) could be outdated",
-					i+1, test.errs[index], pDisk)
-			}
-		}
 	}
 }
 
@@ -412,8 +358,8 @@ func TestDisksWithAllParts(t *testing.T) {
 		}
 	}
 
-	// Test that all disks are returned without any failures with unmodified
-	// meta data
+	// Test that all disks are returned without any failures with
+	// unmodified meta data
 	partsMetadata, errs = readAllXLMetadata(xlDisks, bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)

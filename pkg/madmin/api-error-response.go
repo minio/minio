@@ -54,7 +54,7 @@ func (e ErrorResponse) Error() string {
 }
 
 const (
-	reportIssue = "Please report this issue at https://github.com/minio/minio-go/issues."
+	reportIssue = "Please report this issue at https://github.com/minio/minio/issues."
 )
 
 // httpRespToErrorResponse returns a new encoded ErrorResponse
@@ -65,8 +65,8 @@ func httpRespToErrorResponse(resp *http.Response) error {
 		return ErrInvalidArgument(msg)
 	}
 	var errResp ErrorResponse
-	// Decode the xml error
-	err := xmlDecoder(resp.Body, &errResp)
+	// Decode the json error
+	err := jsonDecoder(resp.Body, &errResp)
 	if err != nil {
 		return ErrorResponse{
 			Code:    resp.Status,

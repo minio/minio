@@ -54,14 +54,16 @@ func TestListObjectsHeal(t *testing.T) {
 
 	// Put 5 objects under sane dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i), mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i),
+			mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
 	}
-	// Put 500 objects under unsane/subdir dir
+	// Put 5 objects under unsane/subdir dir
 	for i := 0; i < 5; i++ {
-		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i), mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i),
+			mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
@@ -101,7 +103,7 @@ func TestListObjectsHeal(t *testing.T) {
 		// Inexistent object
 		{bucketName, "inexistentObj", "", "", 1000, nil, 0},
 		// Test ListObjectsHeal when all objects are sane
-		{bucketName, "", "", "", 1000, nil, 0},
+		{bucketName, "", "", "", 1000, nil, 10},
 	}
 	for i, testCase := range testCases {
 		testFunc(testCase, i+1)
@@ -119,12 +121,12 @@ func TestListObjectsHeal(t *testing.T) {
 
 	testCases = []testData{
 		// Test ListObjectsHeal when all objects under unsane/ need to be healed
-		{bucketName, "", "", "", 1000, nil, 5},
+		{bucketName, "", "", "", 1000, nil, 10},
 		// List objects heal under unsane/, should return all elements
 		{bucketName, "unsane/", "", "", 1000, nil, 5},
-		// List healing objects under sane/, should return 0
-		{bucketName, "sane/", "", "", 1000, nil, 0},
-		// Max Keys == 200
+		// List healing objects under sane/
+		{bucketName, "sane/", "", "", 1000, nil, 5},
+		// Max Keys == 2
 		{bucketName, "unsane/", "", "", 2, nil, 2},
 		// Max key > 1000
 		{bucketName, "unsane/", "", "", 5000, nil, 5},

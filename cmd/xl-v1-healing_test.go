@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -46,7 +47,7 @@ func TestHealFormatXL(t *testing.T) {
 		t.Fatal(err)
 	}
 	xl := obj.(*xlObjects)
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -67,7 +68,7 @@ func TestHealFormatXL(t *testing.T) {
 		xl.storageDisks[i] = nil
 	}
 
-	if err = healFormatXL(xl.storageDisks); err != errXLReadQuorum {
+	if _, err = healFormatXL(xl.storageDisks, false); err != errXLReadQuorum {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -90,7 +91,7 @@ func TestHealFormatXL(t *testing.T) {
 		}
 		xl.storageDisks[i] = newNaughtyDisk(posixDisk, nil, errDiskFull)
 	}
-	if err = healFormatXL(xl.storageDisks); err != errXLReadQuorum {
+	if _, err = healFormatXL(xl.storageDisks, false); err != errXLReadQuorum {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -108,7 +109,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	xl.storageDisks[0] = nil
-	if err = healFormatXL(xl.storageDisks); err != nil && err.Error() != "cannot proceed with heal as some disks are offline" {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil && err.Error() != "cannot proceed with heal as some disks are offline" {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -129,7 +130,7 @@ func TestHealFormatXL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -150,7 +151,7 @@ func TestHealFormatXL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = healFormatXL(xl.storageDisks); err == nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err == nil {
 		t.Fatal("Should get a json parsing error, ")
 	}
 	removeRoots(fsDirs)
@@ -171,7 +172,7 @@ func TestHealFormatXL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -198,7 +199,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl.storageDisks[3] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
 	expectedErr := fmt.Errorf("cannot proceed with heal as %s", errSomeDiskOffline)
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		if err.Error() != expectedErr.Error() {
 			t.Fatal("Got an unexpected error: ", err)
 		}
@@ -228,7 +229,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl.storageDisks[3] = newNaughtyDisk(posixDisk, nil, errDiskAccessDenied)
 	expectedErr = fmt.Errorf("cannot proceed with heal as some disks had unhandled errors")
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		if err.Error() != expectedErr.Error() {
 			t.Fatal("Got an unexpected error: ", err)
 		}
@@ -254,7 +255,7 @@ func TestHealFormatXL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if _, err = healFormatXL(xl.storageDisks, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -446,14 +447,18 @@ func TestListBucketsHeal(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	bucketSet := set.CreateStringSet(saneBucket, corruptedBucketName)
+
 	// Check the number of buckets in list buckets heal result
-	if len(buckets) != 1 {
-		t.Fatalf("Length of missing buckets is incorrect, expected: 1, found: %d", len(buckets))
+	if len(buckets) != len(bucketSet) {
+		t.Fatalf("Length of missing buckets is incorrect, expected: 2, found: %d", len(buckets))
 	}
 
-	// Check the name of bucket in list buckets heal result
-	if buckets[0].Name != corruptedBucketName {
-		t.Fatalf("Name of missing bucket is incorrect, expected: %s, found: %s", corruptedBucketName, buckets[0].Name)
+	// Check each bucket name is in `bucketSet`v
+	for _, b := range buckets {
+		if !bucketSet.Contains(b.Name) {
+			t.Errorf("Bucket %v is missing from bucket set", b.Name)
+		}
 	}
 }
 
@@ -520,7 +525,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, _, err = obj.HealObject(bucket, object)
+	_, err = obj.HealObject(bucket, object, false)
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -536,7 +541,7 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, _, err = obj.HealObject(bucket, object)
+	_, err = obj.HealObject(bucket, object, false)
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if errors.Cause(err) != errXLReadQuorum {
 		t.Errorf("Expected %v but received %v", errDiskNotFound, err)

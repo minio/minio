@@ -278,7 +278,7 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 	formatConfigs, _ := loadAllFormats(storageDisks)
 
 	// Start healing disks
-	err = healFormatXLFreshDisks(storageDisks, formatConfigs)
+	err = healFormatXLFreshDisks(storageDisks, formatConfigs, false)
 	if err != nil {
 		t.Fatal("healing corrupted disk failed: ", err)
 	}
@@ -352,7 +352,7 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 	formatConfigs, _ := loadAllFormats(permutedStorageDisks)
 
 	// Start healing disks
-	err = healFormatXLCorruptedDisks(permutedStorageDisks, formatConfigs)
+	err = healFormatXLCorruptedDisks(permutedStorageDisks, formatConfigs, false)
 	if err != nil {
 		t.Fatal("healing corrupted disk failed: ", err)
 	}
@@ -761,7 +761,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 
 	xl := obj.(*xlObjects)
 	formatConfigs, _ := loadAllFormats(xl.storageDisks)
-	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs); err != nil {
+	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -784,7 +784,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
 	formatConfigs, _ = loadAllFormats(xl.storageDisks)
-	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs); err != errFaultyDisk {
+	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs, false); err != errFaultyDisk {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -806,7 +806,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		}
 	}
 	formatConfigs, _ = loadAllFormats(xl.storageDisks)
-	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs); err == nil {
+	if err = healFormatXLCorruptedDisks(xl.storageDisks, formatConfigs, false); err == nil {
 		t.Fatal("Should get a json parsing error, ")
 	}
 	removeRoots(fsDirs)
@@ -833,7 +833,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 	xl := obj.(*xlObjects)
 	formatConfigs, _ := loadAllFormats(xl.storageDisks)
-	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs); err != nil {
+	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -855,7 +855,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
 	formatConfigs, _ = loadAllFormats(xl.storageDisks)
-	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs); err != errFaultyDisk {
+	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs, false); err != errFaultyDisk {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -873,7 +873,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	xl = obj.(*xlObjects)
 	xl.storageDisks[0] = nil
 	formatConfigs, _ = loadAllFormats(xl.storageDisks)
-	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs); err != nil {
+	if err = healFormatXLFreshDisks(xl.storageDisks, formatConfigs, false); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)

@@ -34,7 +34,7 @@ import (
 
 const (
 	// Admin service names
-	serviceRestartRPC = "Admin.Restart"
+	signalServiceRPC  = "Admin.SignalService"
 	listLocksRPC      = "Admin.ListLocks"
 	reInitDisksRPC    = "Admin.ReInitDisks"
 	serverInfoDataRPC = "Admin.ServerInfoData"
@@ -56,7 +56,7 @@ type remoteAdminClient struct {
 // adminCmdRunner - abstracts local and remote execution of admin
 // commands like service stop and service restart.
 type adminCmdRunner interface {
-	Restart() error
+	SignalService(s serviceSignal) error
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
 	ServerInfoData() (ServerInfoData, error)
@@ -65,10 +65,16 @@ type adminCmdRunner interface {
 	CommitConfig(tmpFileName string) error
 }
 
-// Restart - Sends a message over channel to the go-routine
-// responsible for restarting the process.
-func (lc localAdminClient) Restart() error {
-	globalServiceSignalCh <- serviceRestart
+var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
+
+// SignalService - sends a restart or stop signal to the local server
+func (lc localAdminClient) SignalService(s serviceSignal) error {
+	switch s {
+	case serviceRestart, serviceStop:
+		globalServiceSignalCh <- s
+	default:
+		return errUnsupportedSignal
+	}
 	return nil
 }
 
@@ -77,25 +83,31 @@ func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Durati
 	return listLocksInfo(bucket, prefix, duration), nil
 }
 
-// Restart - Sends restart command to remote server via RPC.
-func (rc remoteAdminClient) Restart() error {
-	args := AuthRPCArgs{}
-	reply := AuthRPCReply{}
-	return rc.Call(serviceRestartRPC, &args, &reply)
+func (rc remoteAdminClient) SignalService(s serviceSignal) (err error) {
+	switch s {
+	case serviceRestart, serviceStop:
+		reply := AuthRPCReply{}
+		err = rc.Call(signalServiceRPC, &SignalServiceArgs{Sig: s},
+			&reply)
+	default:
+		err = errUnsupportedSignal
+	}
+	return err
+
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
 func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	listArgs := ListLocksQuery{
-		bucket:   bucket,
-		prefix:   prefix,
-		duration: duration,
+		Bucket:   bucket,
+		Prefix:   prefix,
+		Duration: duration,
 	}
 	var reply ListLocksReply
 	if err := rc.Call(listLocksRPC, &listArgs, &reply); err != nil {
 		return nil, err
 	}
-	return reply.volLocks, nil
+	return reply.VolLocks, nil
 }
 
 // ReInitDisks - There is nothing to do here, heal format REST API
@@ -225,7 +237,7 @@ func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
 	return nil
 }
 
-// adminPeer - represents an entity that implements Restart methods.
+// adminPeer - represents an entity that implements admin API RPCs.
 type adminPeer struct {
 	addr      string
 	cmdRunner adminCmdRunner
@@ -274,11 +286,11 @@ func initGlobalAdminPeers(endpoints EndpointList) {
 	globalAdminPeers = makeAdminPeers(endpoints)
 }
 
-// invokeServiceCmd - Invoke Restart command.
+// invokeServiceCmd - Invoke Restart/Stop command.
 func invokeServiceCmd(cp adminPeer, cmd serviceSignal) (err error) {
 	switch cmd {
-	case serviceRestart:
-		err = cp.cmdRunner.Restart()
+	case serviceRestart, serviceStop:
+		err = cp.cmdRunner.SignalService(cmd)
 	}
 	return err
 }

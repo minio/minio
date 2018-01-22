@@ -23,6 +23,7 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
@@ -38,8 +39,8 @@ func (a GatewayUnsupported) NewMultipartUpload(bucket string, object string, met
 	return "", errors.Trace(NotImplemented{})
 }
 
-// CopyObjectPart copy part of object to other bucket and object
-func (a GatewayUnsupported) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string, srcEtag string) (pi PartInfo, err error) {
+// CopyObjectPart copy part of object to uploadID for another object
+func (a GatewayUnsupported) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string, partID int, startOffset, length int64, metadata map[string]string, srcETag string) (pi PartInfo, err error) {
 	return pi, errors.Trace(NotImplemented{})
 }
 
@@ -79,8 +80,8 @@ func (a GatewayUnsupported) DeleteBucketPolicies(bucket string) error {
 }
 
 // HealBucket - Not implemented stub
-func (a GatewayUnsupported) HealBucket(bucket string) error {
-	return errors.Trace(NotImplemented{})
+func (a GatewayUnsupported) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error) {
+	return nil, errors.Trace(NotImplemented{})
 }
 
 // ListBucketsHeal - Not implemented stub
@@ -89,8 +90,8 @@ func (a GatewayUnsupported) ListBucketsHeal() (buckets []BucketInfo, err error) 
 }
 
 // HealObject - Not implemented stub
-func (a GatewayUnsupported) HealObject(bucket, object string) (int, int, error) {
-	return 0, 0, errors.Trace(NotImplemented{})
+func (a GatewayUnsupported) HealObject(bucket, object string, dryRun bool) (h madmin.HealResultItem, e error) {
+	return h, errors.Trace(NotImplemented{})
 }
 
 // ListObjectsV2 - Not implemented stub

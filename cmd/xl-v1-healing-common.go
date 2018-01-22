@@ -37,11 +37,7 @@ func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
 	for time, count := range timeOccurenceMap {
-		if count == maxima && time.After(modTime) {
-			maxima = count
-			modTime = time
-
-		} else if count > maxima {
+		if count > maxima || (count == maxima && time.After(modTime)) {
 			maxima = count
 			modTime = time
 		}
@@ -126,7 +122,7 @@ func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	// Count all lastest updated xlMeta values
+	// Count all latest updated xlMeta values
 	var count int
 	var latestXLMeta xlMetaV1
 
@@ -144,140 +140,13 @@ func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
 	return latestXLMeta, count
 }
 
-// outDatedDisks - return disks which don't have the latest object (i.e xl.json).
-// disks that are offline are not 'marked' outdated.
-func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata []xlMetaV1,
-	bucket, object string) (outDatedDisks []StorageAPI) {
-
-	outDatedDisks = make([]StorageAPI, len(disks))
-	for index, latestDisk := range latestDisks {
-		if latestDisk != nil {
-			continue
-		}
-		// disk either has an older xl.json or doesn't have one.
-		switch errors.Cause(errs[index]) {
-		case nil, errFileNotFound:
-			outDatedDisks[index] = disks[index]
-		}
-	}
-
-	return outDatedDisks
-}
-
-// Returns if the object should be healed.
-func xlShouldHeal(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) bool {
-	onlineDisks, _ := listOnlineDisks(disks, partsMetadata,
-		errs)
-	// Return true even if one of the disks have stale data.
-	for _, disk := range onlineDisks {
-		if disk == nil {
-			return true
-		}
-	}
-
-	// Check if all parts of an object are available and their
-	// checksums are valid.
-	availableDisks, _, err := disksWithAllParts(onlineDisks, partsMetadata,
-		errs, bucket, object)
-	if err != nil {
-		// Note: This error is due to failure of blake2b
-		// checksum computation of a part. It doesn't clearly
-		// indicate if the object needs healing. At this
-		// juncture healing could fail with the same
-		// error. So, we choose to return that there is no
-		// need to heal.
-		return false
-	}
-
-	// Return true even if one disk has xl.json or one or more
-	// parts missing.
-	for _, disk := range availableDisks {
-		if disk == nil {
-			return true
-		}
-	}
-
-	return false
-}
-
-// xlHealStat - returns a structure which describes how many data,
-// parity erasure blocks are missing and if it is possible to heal
-// with the blocks present.
-func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObjectInfo {
-	// Less than quorum erasure coded blocks of the object have the same create time.
-	// This object can't be healed with the information we have.
-	modTime, count := commonTime(listObjectModtimes(partsMetadata, errs))
-
-	// get read quorum for this object
-	readQuorum, _, err := objectQuorumFromMeta(xl, partsMetadata, errs)
-
-	if count < readQuorum || err != nil {
-		return HealObjectInfo{
-			Status:             quorumUnavailable,
-			MissingDataCount:   0,
-			MissingParityCount: 0,
-		}
-	}
-
-	// If there isn't a valid xlMeta then we can't heal the object.
-	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
-	if err != nil {
-		return HealObjectInfo{
-			Status:             corrupted,
-			MissingDataCount:   0,
-			MissingParityCount: 0,
-		}
-	}
-
-	// Compute heal statistics like bytes to be healed, missing
-	// data and missing parity count.
-	missingDataCount := 0
-	missingParityCount := 0
-
-	disksMissing := false
-	for i, err := range errs {
-		// xl.json is not found, which implies the erasure
-		// coded blocks are unavailable in the corresponding disk.
-		// First half of the disks are data and the rest are parity.
-		switch realErr := errors.Cause(err); realErr {
-		case errDiskNotFound:
-			disksMissing = true
-			fallthrough
-		case errFileNotFound:
-			if xlMeta.Erasure.Distribution[i]-1 < xlMeta.Erasure.DataBlocks {
-				missingDataCount++
-			} else {
-				missingParityCount++
-			}
-		}
-	}
-
-	// The object may not be healed completely, since some of the
-	// disks needing healing are unavailable.
-	if disksMissing {
-		return HealObjectInfo{
-			Status:             canPartiallyHeal,
-			MissingDataCount:   missingDataCount,
-			MissingParityCount: missingParityCount,
-		}
-	}
-
-	// This object can be healed. We have enough object metadata
-	// to reconstruct missing erasure coded blocks.
-	return HealObjectInfo{
-		Status:             canHeal,
-		MissingDataCount:   missingDataCount,
-		MissingParityCount: missingParityCount,
-	}
-}
-
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //
 // - disks which have all parts specified in the latest xl.json.
 //
-// - errs updated to have errFileNotFound in place of disks that had
-//   missing or corrupted parts.
+// - slice of errors about the state of data files on disk - can have
+//   a not-found error or a hash-mismatch error.
 //
 // - non-nil error if any of the disks failed unexpectedly (i.e. error
 //   other than file not found and not a checksum error).
@@ -286,11 +155,13 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	buffer := []byte{}
+	dataErrs := make([]error, len(onlineDisks))
 
 	for i, onlineDisk := range onlineDisks {
-		if onlineDisk == OfflineDisk {
+		if onlineDisk == nil {
 			continue
 		}
+
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
@@ -302,22 +173,25 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 			// verification happens even if a 0-length
 			// buffer is passed
 			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
-			if hErr != nil {
-				_, isCorrupted := hErr.(hashMismatchError)
-				if isCorrupted || hErr == errFileNotFound {
-					errs[i] = errFileNotFound
-					availableDisks[i] = OfflineDisk
-					break
-				}
+
+			_, isCorrupt := hErr.(hashMismatchError)
+			switch {
+			case isCorrupt:
+				fallthrough
+			case hErr == errFileNotFound, hErr == errVolumeNotFound:
+				dataErrs[i] = hErr
+				break
+			case hErr != nil:
+				// abort on unhandled errors
 				return nil, nil, errors.Trace(hErr)
 			}
 		}
 
-		if errs[i] == nil {
+		if dataErrs[i] == nil {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
 		}
 	}
 
-	return availableDisks, errs, nil
+	return availableDisks, dataErrs, nil
 }
