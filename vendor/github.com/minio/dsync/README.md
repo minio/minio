@@ -87,22 +87,26 @@ The system can be pushed to 75K locks/sec at 50% CPU load.
 Usage
 -----
 
+> NOTE: Previously if you were using `dsync.Init([]NetLocker, nodeIndex)` to initialize dsync has
+been changed to `dsync.New([]NetLocker, nodeIndex)` which returns a `*Dsync` object to be used in
+every instance of `NewDRWMutex("test", *Dsync)`
+
 ### Exclusive lock 
 
 Here is a simple example showing how to protect a single resource (drop-in replacement for `sync.Mutex`):
 
-```
+```go
 import (
-    "github.com/minio/dsync"
+	"github.com/minio/dsync"
 )
 
 func lockSameResource() {
 
-    // Create distributed mutex to protect resource 'test'
-	dm := dsync.NewDRWMutex("test")
+	// Create distributed mutex to protect resource 'test'
+	dm := dsync.NewDRWMutex("test", ds)
 
 	dm.Lock()
-    log.Println("first lock granted")
+	log.Println("first lock granted")
 
 	// Release 1st lock after 5 seconds
 	go func() {
@@ -111,10 +115,10 @@ func lockSameResource() {
 		dm.Unlock()
 	}()
 
-    // Try to acquire lock again, will block until initial lock is released
-    log.Println("about to lock same resource again...")
+	// Try to acquire lock again, will block until initial lock is released
+	log.Println("about to lock same resource again...")
 	dm.Lock()
-    log.Println("second lock granted")
+	log.Println("second lock granted")
 
 	time.Sleep(2 * time.Second)
 	dm.Unlock()
@@ -137,7 +141,7 @@ DRWMutex also supports multiple simultaneous read locks as shown below (analogou
 ```
 func twoReadLocksAndSingleWriteLock() {
 
-	drwm := dsync.NewDRWMutex("resource")
+	drwm := dsync.NewDRWMutex("resource", ds)
 
 	drwm.RLock()
 	log.Println("1st read lock acquired, waiting...")
@@ -160,7 +164,7 @@ func twoReadLocksAndSingleWriteLock() {
 	log.Println("Trying to acquire write lock, waiting...")
 	drwm.Lock()
 	log.Println("Write lock acquired, waiting...")
-	
+
 	time.Sleep(3 * time.Second)
 
 	drwm.Unlock()
