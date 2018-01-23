@@ -220,7 +220,7 @@ var (
 
 // TestGetValidServerConfig - test for getValidServerConfig.
 func TestGetValidServerConfig(t *testing.T) {
-	var c1, c2 serverConfigV13
+	var c1, c2 serverConfig
 	err := json.Unmarshal(config1, &c1)
 	if err != nil {
 		t.Fatalf("json unmarshal of %s failed: %v", string(config1), err)
@@ -233,7 +233,7 @@ func TestGetValidServerConfig(t *testing.T) {
 
 	// Valid config.
 	noErrs := []error{nil, nil, nil, nil}
-	serverConfigs := []serverConfigV13{c1, c2, c1, c1}
+	serverConfigs := []serverConfig{c1, c2, c1, c1}
 	validConfig, err := getValidServerConfig(serverConfigs, noErrs)
 	if err != nil {
 		t.Errorf("Expected a valid config but received %v instead", err)
@@ -244,7 +244,7 @@ func TestGetValidServerConfig(t *testing.T) {
 	}
 
 	// Invalid config - no quorum.
-	serverConfigs = []serverConfigV13{c1, c2, c2, c1}
+	serverConfigs = []serverConfig{c1, c2, c2, c1}
 	_, err = getValidServerConfig(serverConfigs, noErrs)
 	if err != errXLWriteQuorum {
 		t.Errorf("Expected to fail due to lack of quorum but received %v", err)
@@ -252,7 +252,7 @@ func TestGetValidServerConfig(t *testing.T) {
 
 	// All errors
 	allErrs := []error{errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound}
-	serverConfigs = []serverConfigV13{{}, {}, {}, {}}
+	serverConfigs = []serverConfig{{}, {}, {}, {}}
 	_, err = getValidServerConfig(serverConfigs, allErrs)
 	if err != errXLWriteQuorum {
 		t.Errorf("Expected to fail due to lack of quorum but received %v", err)

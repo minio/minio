@@ -67,7 +67,7 @@ type ServerInfoDataReply struct {
 // ConfigReply - wraps the server config response over RPC.
 type ConfigReply struct {
 	AuthRPCReply
-	Config []byte // json-marshalled bytes of serverConfigV13
+	Config []byte // json-marshalled bytes of serverConfig
 }
 
 // SignalService - Send a restart or stop signal to the service
