@@ -104,6 +104,11 @@ go get -u github.com/minio/minio
 ## 使用Minio客户端 `mc`进行验证
 `mc` 提供了一些UNIX常用命令的替代品，像ls, cat, cp, mirror, diff这些。 它支持文件系统和亚马逊S3云存储服务。 更多信息请参考 [mc快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide) 。
 
+## 已经存在的数据
+当在单块磁盘上部署Minio server,Minio server允许客户端访问数据目录下已经存在的数据。比如，如果Minio使用`minio server /mnt/data`启动，那么所有已经在`/mnt/data`目录下的数据都可以被客户端访问到。
+
+上述描述对所有网关后端同样有效。
+
 ## 了解更多
 - [Minio纠删码入门](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [`mc`快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide)
