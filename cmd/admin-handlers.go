@@ -575,6 +575,16 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Take a read lock on minio/config.json. NB minio is a
+	// reserved bucket name and wouldn't conflict with normal
+	// object operations.
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
+	if configLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponseJSON(w, ErrOperationTimedOut, r.URL)
+		return
+	}
+	defer configLock.RUnlock()
+
 	// Get config.json - in distributed mode, the configuration
 	// occurring on a quorum of the servers is returned.
 	configBytes, err := getPeerConfig(globalAdminPeers)
@@ -783,6 +793,15 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	// Take a lock on minio/config.json. Prevents concurrent
+	// config file/credentials updates.
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
+	if configLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponseJSON(w, ErrOperationTimedOut, r.URL)
+		return
+	}
+	defer configLock.Unlock()
 
 	// Notify all other Minio peers to update credentials
 	updateErrs := updateCredsOnPeers(creds)

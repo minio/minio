@@ -528,6 +528,13 @@ func (h *healSequence) healDiskFormat() error {
 		return errServerNotInitialized
 	}
 
+	// Acquire lock on format.json
+	formatLock := globalNSMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
+		return errFnHealFromAPIErr(err)
+	}
+	defer formatLock.Unlock()
+
 	// Create a new set of storage instances to heal format.json.
 	bootstrapDisks, err := initStorageDisks(globalEndpoints)
 	if err != nil {
