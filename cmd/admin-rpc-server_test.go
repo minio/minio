@@ -212,7 +212,7 @@ func TestGetConfig(t *testing.T) {
 		t.Errorf("Expected GetConfig to pass but failed with %v", err)
 	}
 
-	var config serverConfigV13
+	var config serverConfig
 	err = json.Unmarshal(configReply.Config, &config)
 	if err != nil {
 		t.Errorf("Expected json unmarshal to pass but failed with %v", err)
