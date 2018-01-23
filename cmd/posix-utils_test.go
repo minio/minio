@@ -50,6 +50,7 @@ func TestIsValidVolname(t *testing.T) {
 		{"tHIS-ENDS-WITH-UPPERCASE", true},
 		{"ThisBeginsAndEndsWithUpperCase", true},
 		{"una ñina", true},
+		{"lalalallalallalalalallalallalala-theString-size-is-greater-than-64", true},
 		// cases for which test should fail.
 		// passing invalid bucket names.
 		{"", false},
@@ -58,7 +59,6 @@ func TestIsValidVolname(t *testing.T) {
 		{"ab", false},
 		{"ab/", true},
 		{"......", true},
-		{"lalalallalallalalalallalallalala-theString-size-is-greater-than-64", false},
 	}
 
 	for i, testCase := range testCases {
