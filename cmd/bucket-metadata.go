@@ -85,7 +85,7 @@ func (lc *localBucketMetaState) UpdateBucketPolicy(args *SetBucketPolicyPeerArgs
 		return err
 	}
 
-	return globalBucketPolicies.SetBucketPolicy(args.Bucket, pCh)
+	return objAPI.RefreshBucketPolicy(args.Bucket)
 }
 
 // localBucketMetaState.SendEvent - sends event to local event notifier via

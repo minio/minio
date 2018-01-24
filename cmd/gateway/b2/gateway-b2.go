@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -108,10 +107,7 @@ func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error)
 	return &b2Objects{
 		creds:    creds,
 		b2Client: client,
-		anonClient: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
-		},
-		ctx: ctx,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -124,11 +120,10 @@ func (g *B2) Production() bool {
 // b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	minio.GatewayUnsupported
-	mu         sync.Mutex
-	creds      auth.Credentials
-	b2Client   *b2.B2
-	anonClient *http.Client
-	ctx        context.Context
+	mu       sync.Mutex
+	creds    auth.Credentials
+	b2Client *b2.B2
+	ctx      context.Context
 }
 
 // Convert B2 errors to minio object layer errors.

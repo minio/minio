@@ -18,17 +18,20 @@ package cmd
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
@@ -58,6 +61,9 @@ type fsObjects struct {
 
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
+
+	// Variable represents bucket policies in memory.
+	bucketPolicies *bucketPolicies
 }
 
 // Represents the background append file.
@@ -254,6 +260,11 @@ func (fs *fsObjects) MakeBucketWithLocation(bucket, location string) error {
 
 // GetBucketInfo - fetch bucket metadata info.
 func (fs *fsObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
+		return bi, e
+	}
+	defer bucketLock.RUnlock()
 	st, err := fs.statBucketDir(bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -310,6 +321,11 @@ func (fs *fsObjects) ListBuckets() ([]BucketInfo, error) {
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
 func (fs *fsObjects) DeleteBucket(bucket string) error {
+	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
 	bucketDir, err := fs.getBucketDir(bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -1041,4 +1057,64 @@ func (fs *fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, m
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL
 func (fs *fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
 	return []BucketInfo{}, errors.Trace(NotImplemented{})
+}
+
+// SetBucketPolicies sets policy on bucket
+func (fs *fsObjects) SetBucketPolicies(bucket string, policy policy.BucketAccessPolicy) error {
+	// Parse validate and save bucket policy.
+	policyBytes, err := json.Marshal(policy)
+	if err != nil {
+		return err
+	}
+	// Acquire a write lock on bucket before modifying its configuration.
+	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	// Release lock
+	defer bucketLock.Unlock()
+
+	return parseAndPersistBucketPolicy(bucket, policyBytes, fs)
+}
+
+// GetBucketPolicies will get policy on bucket
+func (fs *fsObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	return readBucketPolicy(bucket, fs)
+}
+
+// DeleteBucketPolicies deletes all policies on bucket
+func (fs *fsObjects) DeleteBucketPolicies(bucket string) error {
+	return persistAndNotifyBucketPolicyChange(bucket, policyChange{
+		true, policy.BucketAccessPolicy{},
+	}, fs)
+}
+
+// ListObjectsV2 lists all blobs in bucket filtered by prefix
+func (fs *fsObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	loi, err := fs.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
+	if err != nil {
+		return result, err
+	}
+
+	listObjectsV2Info := ListObjectsV2Info{
+		IsTruncated:           loi.IsTruncated,
+		ContinuationToken:     continuationToken,
+		NextContinuationToken: loi.NextMarker,
+		Objects:               loi.Objects,
+		Prefixes:              loi.Prefixes,
+	}
+	return listObjectsV2Info, err
+}
+
+// RefreshBucketPolicy refreshes cache policy with what's on disk.
+func (fs *fsObjects) RefreshBucketPolicy(bucket string) error {
+	policy, err := readBucketPolicy(bucket, fs)
+
+	if err != nil {
+		if reflect.DeepEqual(policy, emptyBucketPolicy) {
+			return fs.bucketPolicies.DeleteBucketPolicy(bucket)
+		}
+		return err
+	}
+	return fs.bucketPolicies.SetBucketPolicy(bucket, policy)
 }

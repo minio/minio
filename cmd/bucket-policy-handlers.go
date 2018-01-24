@@ -28,6 +28,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -261,10 +262,20 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
-	// Parse validate and save bucket policy.
-	if s3Error := parseAndPersistBucketPolicy(bucket, policyBytes, objAPI); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+	policyInfo := policy.BucketAccessPolicy{}
+	if err = json.Unmarshal(policyBytes, &policyInfo); err != nil {
+		writeErrorResponse(w, ErrInvalidPolicyDocument, r.URL)
+		return
+	}
+	if err = objAPI.SetBucketPolicies(bucket, policyInfo); err != nil {
+		err = errors.Cause(err)
+		switch err.(type) {
+		case NotImplemented:
+			// Return error for invalid bucket name.
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
+		default:
+			writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+		}
 		return
 	}
 
@@ -339,7 +350,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	policy, err := readBucketPolicy(bucket, objAPI)
+	policy, err := objAPI.GetBucketPolicies(bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

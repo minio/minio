@@ -125,15 +125,8 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error)
 		return nil, err
 	}
 
-	anonClient, err := miniogo.NewCore(endpoint, "", "", secure)
-	if err != nil {
-		return nil, err
-	}
-	anonClient.SetCustomTransport(minio.NewCustomHTTPTransport())
-
 	return &s3Objects{
-		Client:     client,
-		anonClient: anonClient,
+		Client: client,
 	}, nil
 }
 
@@ -145,8 +138,7 @@ func (g *S3) Production() bool {
 // s3Objects implements gateway for Minio and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
-	Client     *miniogo.Core
-	anonClient *miniogo.Core
+	Client *miniogo.Core
 }
 
 // Shutdown saves any gateway metadata to disk

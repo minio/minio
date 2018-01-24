@@ -17,9 +17,12 @@
 package cmd
 
 import (
+	"encoding/json"
+	"reflect"
 	"sort"
 	"sync"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -154,6 +157,11 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
+		return bi, e
+	}
+	defer bucketLock.RUnlock()
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return bi, BucketNameInvalid{Bucket: bucket}
@@ -219,6 +227,12 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 
 // DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(bucket string) error {
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
+
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -263,5 +277,57 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	if errors.Cause(err) == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
 	}
-	return toObjectErr(err, bucket)
+	if err != nil {
+		return toObjectErr(err, bucket)
+	}
+
+	return nil
+}
+
+// SetBucketPolicies sets policy on bucket
+func (xl xlObjects) SetBucketPolicies(bucket string, policy policy.BucketAccessPolicy) error {
+	// Parse validate and save bucket policy.
+	policyBytes, err := json.Marshal(policy)
+	if err != nil {
+		return err
+	}
+	// Acquire a write lock on bucket before modifying its configuration.
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	// Release lock after notifying peers
+	defer bucketLock.Unlock()
+
+	return parseAndPersistBucketPolicy(bucket, policyBytes, xl)
+}
+
+// GetBucketPolicies will get policy on bucket
+func (xl xlObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	// fetch bucket policy from cache.
+	bpolicy := xl.bucketPolicies.GetBucketPolicy(bucket)
+	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
+		return readBucketPolicy(bucket, xl)
+	}
+	return bpolicy, nil
+}
+
+// DeleteBucketPolicies deletes all policies on bucket
+func (xl xlObjects) DeleteBucketPolicies(bucket string) error {
+	return persistAndNotifyBucketPolicyChange(bucket, policyChange{
+		true, policy.BucketAccessPolicy{},
+	}, xl)
+}
+
+// RefreshBucketPolicy refreshes policy cache from disk
+func (xl xlObjects) RefreshBucketPolicy(bucket string) error {
+	policy, err := readBucketPolicy(bucket, xl)
+
+	if err != nil {
+		if reflect.DeepEqual(policy, emptyBucketPolicy) {
+			return xl.bucketPolicies.DeleteBucketPolicy(bucket)
+		}
+		return err
+	}
+	return xl.bucketPolicies.SetBucketPolicy(bucket, policy)
 }

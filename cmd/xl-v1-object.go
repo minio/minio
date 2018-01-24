@@ -845,3 +845,20 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	// Success.
 	return nil
 }
+
+// ListObjectsV2 lists all blobs in bucket filtered by prefix
+func (xl xlObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	loi, err := xl.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
+	if err != nil {
+		return result, err
+	}
+
+	listObjectsV2Info := ListObjectsV2Info{
+		IsTruncated:           loi.IsTruncated,
+		ContinuationToken:     continuationToken,
+		NextContinuationToken: loi.NextMarker,
+		Objects:               loi.Objects,
+		Prefixes:              loi.Prefixes,
+	}
+	return listObjectsV2Info, err
+}

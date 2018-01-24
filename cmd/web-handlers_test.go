@@ -543,7 +543,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, policy})
+	obj.SetBucketPolicies(bucketName, policy)
 
 	// Unauthenticated ListObjects with READ bucket policy should succeed.
 	err, reply = test("")
@@ -917,7 +917,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		Statements: []policy.Statement{getWriteOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, bp})
+	obj.SetBucketPolicies(bucketName, bp)
 
 	// Unauthenticated upload with WRITE policy should succeed.
 	code = test("", true)
@@ -1024,7 +1024,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, bp})
+	obj.SetBucketPolicies(bucketName, bp)
 
 	// Unauthenticated download with READ policy should succeed.
 	code, bodyContent = test("")

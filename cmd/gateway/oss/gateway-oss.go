@@ -125,14 +125,8 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error
 		return nil, err
 	}
 
-	anonClient, err := oss.New(g.host, "", "")
-	if err != nil {
-		return nil, err
-	}
-
 	return &ossObjects{
-		Client:     client,
-		anonClient: anonClient,
+		Client: client,
 	}, nil
 }
 
@@ -324,8 +318,7 @@ func ossToObjectError(err error, params ...string) error {
 // ossObjects implements gateway for Aliyun Object Storage Service.
 type ossObjects struct {
 	minio.GatewayUnsupported
-	Client     *oss.Client
-	anonClient *oss.Client
+	Client *oss.Client
 }
 
 // Shutdown saves any gateway metadata to disk

@@ -944,6 +944,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrPartsSizeUnequal
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case MalformedBucketPolicy:
+		apiErr = ErrMalformedPolicy
 	default:
 		apiErr = ErrInternalError
 	}

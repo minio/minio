@@ -384,6 +384,13 @@ func (e UnsupportedMetadata) Error() string {
 	return "Unsupported headers in Metadata"
 }
 
+// MalformedBucketPolicy - malformed bucket policy
+type MalformedBucketPolicy struct{}
+
+func (e MalformedBucketPolicy) Error() string {
+	return "Malformed bucket policy"
+}
+
 // isErrIncompleteBody - Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errors.Cause(err)
@@ -398,7 +405,7 @@ func isErrIncompleteBody(err error) bool {
 func isErrBucketPolicyNotFound(err error) bool {
 	err = errors.Cause(err)
 	switch err.(type) {
-	case BucketPolicyNotFound:
+	case PolicyNotFound:
 		return true
 	}
 	return false

@@ -171,7 +171,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if globalIsBrowserEnabled {
 		fatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
-	registerGatewayAPIRouter(router, newObject)
+	registerAPIRouter(router)
 
 	var handlerFns = []HandlerFunc{
 		// Validate all the incoming paths.

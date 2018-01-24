@@ -40,7 +40,8 @@ import (
 // Enforces bucket policies for a bucket for a given tatusaction.
 func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
-	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
+	objAPI := newObjectLayerFn()
+	if err := checkBucketExist(bucket, objAPI); err != nil {
 		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -55,12 +56,11 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 		return ErrInternalError
 	}
 
-	if globalBucketPolicies == nil {
+	// Fetch bucket policy, if policy is not set return access denied.
+	p, err := objAPI.GetBucketPolicies(bucket)
+	if err != nil {
 		return ErrAccessDenied
 	}
-
-	// Fetch bucket policy, if policy is not set return access denied.
-	p := globalBucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(p, emptyBucketPolicy) {
 		return ErrAccessDenied
 	}
@@ -89,12 +89,12 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 }
 
 // Check if the action is allowed on the bucket/prefix.
-func isBucketActionAllowed(action, bucket, prefix string) bool {
-	if globalBucketPolicies == nil {
+func isBucketActionAllowed(action, bucket, prefix string, objectAPI ObjectLayer) bool {
+
+	bp, err := objectAPI.GetBucketPolicies(bucket)
+	if err != nil {
 		return false
 	}
-
-	bp := globalBucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(bp, emptyBucketPolicy) {
 		return false
 	}
@@ -390,11 +390,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Validate if location sent by the client is valid, reject
-	// requests which do not follow valid region requirements.
-	if !isValidLocation(location) {
-		writeErrorResponse(w, ErrInvalidRegion, r.URL)
-		return
+	if !api.gateway {
+		// Validate if location sent by the client is valid, reject
+		// requests which do not follow valid region requirements.
+		if !isValidLocation(location) {
+			writeErrorResponse(w, ErrInvalidRegion, r.URL)
+			return
+		}
 	}
 
 	// Proceed to creating a bucket.
@@ -625,13 +627,6 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetRLock(globalObjectTimeout) != nil {
-		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
-		return
-	}
-	defer bucketLock.RUnlock()
-
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
@@ -681,7 +676,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// Notify all peers (including self) to update in-memory state
 	S3PeersUpdateBucketNotification(bucket, nil)
-
 	// Delete listener config, if present - ignore any errors.
 	_ = removeListenerConfig(bucket, objectAPI)
 

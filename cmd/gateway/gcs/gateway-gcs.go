@@ -42,7 +42,6 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	miniogo "github.com/minio/minio-go"
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -182,18 +181,10 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error
 		return nil, err
 	}
 
-	// Initialize a anonymous client with minio core APIs.
-	anonClient, err := miniogo.NewCore(googleStorageEndpoint, "", "", true)
-	if err != nil {
-		return nil, err
-	}
-	anonClient.SetCustomTransport(minio.NewCustomHTTPTransport())
-
 	gcs := &gcsGateway{
-		client:     client,
-		projectID:  g.projectID,
-		ctx:        ctx,
-		anonClient: anonClient,
+		client:    client,
+		projectID: g.projectID,
+		ctx:       ctx,
 	}
 
 	// Start background process to cleanup old files in minio.sys.tmp
@@ -349,10 +340,9 @@ func isValidGCSProjectIDFormat(projectID string) bool {
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
 	minio.GatewayUnsupported
-	client     *storage.Client
-	anonClient *miniogo.Core
-	projectID  string
-	ctx        context.Context
+	client    *storage.Client
+	projectID string
+	ctx       context.Context
 }
 
 const googleStorageEndpoint = "storage.googleapis.com"

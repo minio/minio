@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
+	errors2 "github.com/minio/minio/pkg/errors"
 )
 
 // Common bucket actions for both read and write policies.
@@ -572,46 +573,46 @@ func TestCheckbucketPolicyResources(t *testing.T) {
 	testCases := []struct {
 		inputPolicy policy.BucketAccessPolicy
 		// expected results.
-		apiErrCode APIErrorCode
+		errCode error
 		// Flag indicating whether the test should pass.
 		shouldPass bool
 	}{
 		// Test case - 1.
-		{bucketAccessPolicies[0], ErrNone, true},
+		{bucketAccessPolicies[0], nil, true},
 		// Test case - 2.
-		{bucketAccessPolicies[1], ErrNone, true},
+		{bucketAccessPolicies[1], nil, true},
 		// Test case - 3.
-		{bucketAccessPolicies[2], ErrNone, true},
+		{bucketAccessPolicies[2], nil, true},
 		// Test case - 4.
 		// contains invalidPrefixActions (check bucket-policy-parser.go).
 		// Resource prefix will not be equal to the bucket name in this case.
-		{bucketAccessPolicies[3], ErrMalformedPolicy, false},
+		{bucketAccessPolicies[3], MalformedBucketPolicy{}, false},
 		// Test case - 5.
 		// actions contain invalidPrefixActions (check bucket-policy-parser.go).
 		// Resource prefix bucket part is not equal to the bucket name in this case.
-		{bucketAccessPolicies[4], ErrMalformedPolicy, false},
+		{bucketAccessPolicies[4], MalformedBucketPolicy{}, false},
 		// Test case - 6.
 		// contracting policy statement with recursive resources.
 		// should result in ErrPolicyNesting.
-		{bucketAccessPolicies[5], ErrPolicyNesting, false},
+		{bucketAccessPolicies[5], PolicyNesting{}, false},
 		// Test case - 7.
 		// constructing policy statement with lexically close
 		// characters.
 		// should result in ErrNone.
-		{bucketAccessPolicies[6], ErrNone, true},
+		{bucketAccessPolicies[6], nil, true},
 	}
 	for i, testCase := range testCases {
-		apiErrCode := checkBucketPolicyResources("minio-bucket", testCase.inputPolicy)
-		if apiErrCode != ErrNone && testCase.shouldPass {
-			t.Errorf("Test %d: Expected to pass, but failed with Errocode %v", i+1, apiErrCode)
+		errCode := checkBucketPolicyResources("minio-bucket", testCase.inputPolicy)
+		if errCode != nil && testCase.shouldPass {
+			t.Errorf("Test %d: Expected to pass, but failed with Errocode %v", i+1, errCode)
 		}
-		if apiErrCode == ErrNone && !testCase.shouldPass {
-			t.Errorf("Test %d: Expected to fail with ErrCode %v, but passed instead", i+1, testCase.apiErrCode)
+		if errCode == nil && !testCase.shouldPass {
+			t.Errorf("Test %d: Expected to fail with ErrCode %v, but passed instead", i+1, testCase.errCode)
 		}
 		// Failed as expected, but does it fail for the expected reason.
-		if apiErrCode != ErrNone && !testCase.shouldPass {
-			if testCase.apiErrCode != apiErrCode {
-				t.Errorf("Test %d: Expected to fail with error code %v, but instead failed with error code %v", i+1, testCase.apiErrCode, apiErrCode)
+		if errCode != nil && !testCase.shouldPass {
+			if !isSameType(errors2.Cause(errCode), errors2.Cause(testCase.errCode)) {
+				t.Errorf("Test %d: Expected to fail with error code %v, but instead failed with error code %v", i+1, testCase.errCode, errCode)
 			}
 		}
 	}
