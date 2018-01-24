@@ -138,6 +138,7 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 	var contentBody io.Reader
 	if clientToken != "" {
 		queryVals.Set("clientToken", clientToken)
+		body = []byte{}
 	} else {
 		// Set a body only if clientToken is not given
 		contentBody = bytes.NewReader(body)
