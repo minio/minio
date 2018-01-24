@@ -18,27 +18,38 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
 
 // TestListLocksInfo - Test for listLocksInfo.
 func TestListLocksInfo(t *testing.T) {
-	// Initialize globalNSMutex to validate listing of lock
-	// instrumentation information.
+	// reset global variables to start afresh.
+	resetTestGlobals()
+	// Initialize minio server config.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(rootPath)
+	// Initializing new XL objectLayer.
+	objAPI, _, xlErr := initTestXLObjLayer()
+	if xlErr != nil {
+		t.Fatalf("failed to init object layer")
+	}
+	// Make objLayer available to all internal services via globalObjectAPI.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objAPI
+	globalObjLayerMutex.Unlock()
+	// Set globalIsXL to indicate that the setup uses an erasure code backend.
+	// initialize NSLock.
 	isDistXL := false
 	initNSLock(isDistXL)
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		t.Errorf("Failed to initialize object layer")
-	}
+
 	var nsMutex *nsLockMap
-	switch objAPI.(type) {
-	case *fsObjects:
-		nsMutex = objAPI.(*fsObjects).nsMutex
-	case *xlObjects:
-		nsMutex = objAPI.(*xlObjects).nsMutex
-	}
+
+	nsMutex = objAPI.(*xlObjects).nsMutex
 
 	// Acquire a few locks to populate lock instrumentation.
 	// Take 10 read locks on bucket1/prefix1/obj1

@@ -39,6 +39,8 @@ func TestGetSource(t *testing.T) {
 
 // Tests functionality provided by namespace lock.
 func TestNamespaceLockTest(t *testing.T) {
+	isDistXL := false
+	initNSLock(isDistXL)
 	// List of test cases.
 	testCases := []struct {
 		lk               func(s1, s2, s3 string, t time.Duration) bool
@@ -155,7 +157,8 @@ func TestNamespaceLockTest(t *testing.T) {
 }
 
 func TestNamespaceLockTimedOut(t *testing.T) {
-
+	isDistXL := false
+	initNSLock(isDistXL)
 	// Get write lock
 	if !globalNSMutex.Lock("my-bucket", "my-object", "abc", 60*time.Second) {
 		t.Fatalf("Failed to acquire lock")
@@ -199,7 +202,8 @@ func TestNamespaceLockTimedOut(t *testing.T) {
 
 // Tests functionality to forcefully unlock locks.
 func TestNamespaceForceUnlockTest(t *testing.T) {
-
+	isDistXL := false
+	initNSLock(isDistXL)
 	// Create lock.
 	lock := globalNSMutex.NewNSLock("bucket", "object")
 	if lock.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
