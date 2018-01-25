@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -25,8 +26,8 @@ import (
 
 // Test get offline/online uuids.
 func TestGetUUIDs(t *testing.T) {
-	fmtV2 := newFormatXLV2(4, 16)
-	formats := make([]*formatXLV2, 64)
+	fmtV2 := newFormatXLV3(4, 16)
+	formats := make([]*formatXLV3, 64)
 
 	for i := 0; i < 4; i++ {
 		for j := 0; j < 16; j++ {
@@ -195,6 +196,14 @@ func TestFormatXLMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	migratedVersion, err := formatXLGetVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migratedVersion != formatXLVersionV3 {
+		t.Fatal(fmt.Sprintf("expected version: %s, got: %s", formatXLVersionV3, migratedVersion))
+	}
+
 	m = &formatXLV1{}
 	m.Format = "unknown"
 	m.Version = formatMetaVersionV1
@@ -218,7 +227,7 @@ func TestFormatXLMigrate(t *testing.T) {
 	m = &formatXLV1{}
 	m.Format = formatBackendXL
 	m.Version = formatMetaVersionV1
-	m.XL.Version = "3"
+	m.XL.Version = "30"
 	m.XL.Disk = mustGetUUID()
 	m.XL.JBOD = []string{m.XL.Disk, mustGetUUID(), mustGetUUID(), mustGetUUID()}
 
@@ -239,12 +248,12 @@ func TestFormatXLMigrate(t *testing.T) {
 // Tests check format xl value.
 func TestCheckFormatXLValue(t *testing.T) {
 	testCases := []struct {
-		format  *formatXLV2
+		format  *formatXLV3
 		success bool
 	}{
 		// Invalid XL format version "2".
 		{
-			&formatXLV2{
+			&formatXLV3{
 				Version: "2",
 				Format:  "XL",
 				XL: struct {
@@ -260,7 +269,7 @@ func TestCheckFormatXLValue(t *testing.T) {
 		},
 		// Invalid XL format "Unknown".
 		{
-			&formatXLV2{
+			&formatXLV3{
 				Version: "1",
 				Format:  "Unknown",
 				XL: struct {
@@ -276,7 +285,7 @@ func TestCheckFormatXLValue(t *testing.T) {
 		},
 		// Invalid XL format version "0".
 		{
-			&formatXLV2{
+			&formatXLV3{
 				Version: "1",
 				Format:  "XL",
 				XL: struct {
@@ -305,8 +314,8 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	setCount := 2
 	disksPerSet := 16
 
-	format := newFormatXLV2(setCount, disksPerSet)
-	formats := make([]*formatXLV2, 32)
+	format := newFormatXLV3(setCount, disksPerSet)
+	formats := make([]*formatXLV3, 32)
 
 	for i := 0; i < setCount; i++ {
 		for j := 0; j < disksPerSet; j++ {
@@ -323,12 +332,12 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	}
 
 	// Check if the reference format and input formats are same.
-	if err = formatXLV2Check(quorumFormat, formats[0]); err != nil {
+	if err = formatXLV3Check(quorumFormat, formats[0]); err != nil {
 		t.Fatal(err)
 	}
 
 	// QuorumFormat has .This field empty on purpose, expect a failure.
-	if err = formatXLV2Check(formats[0], quorumFormat); err == nil {
+	if err = formatXLV3Check(formats[0], quorumFormat); err == nil {
 		t.Fatal("Unexpected success")
 	}
 
@@ -340,19 +349,19 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 
 	badFormat := *quorumFormat
 	badFormat.XL.Sets = nil
-	if err = formatXLV2Check(quorumFormat, &badFormat); err == nil {
+	if err = formatXLV3Check(quorumFormat, &badFormat); err == nil {
 		t.Fatal("Unexpected success")
 	}
 
 	badFormatUUID := *quorumFormat
 	badFormatUUID.XL.Sets[0][0] = "bad-uuid"
-	if err = formatXLV2Check(quorumFormat, &badFormatUUID); err == nil {
+	if err = formatXLV3Check(quorumFormat, &badFormatUUID); err == nil {
 		t.Fatal("Unexpected success")
 	}
 
 	badFormatSetSize := *quorumFormat
 	badFormatSetSize.XL.Sets[0] = nil
-	if err = formatXLV2Check(quorumFormat, &badFormatSetSize); err == nil {
+	if err = formatXLV3Check(quorumFormat, &badFormatSetSize); err == nil {
 		t.Fatal("Unexpected success")
 	}
 
@@ -371,8 +380,8 @@ func TestNewFormatSets(t *testing.T) {
 	setCount := 2
 	disksPerSet := 16
 
-	format := newFormatXLV2(setCount, disksPerSet)
-	formats := make([]*formatXLV2, 32)
+	format := newFormatXLV3(setCount, disksPerSet)
+	formats := make([]*formatXLV3, 32)
 	errs := make([]error, 32)
 
 	for i := 0; i < setCount; i++ {

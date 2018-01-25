@@ -174,7 +174,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
-	go fs.cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, globalServiceDoneCh)
+	go fs.cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
