@@ -115,7 +115,7 @@ func lookupEndpoint(urlStr string) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		if isNetErrorIgnored(err) {
-			errorIf(err, "Unable to lookup webhook endpoint %s", urlStr)
+			LogLookupWebhookFailed(err, urlStr)
 			return nil
 		}
 		return err

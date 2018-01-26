@@ -239,7 +239,7 @@ func isSavedUUIDInOrder(uuid string, formats []*formatXLV1) bool {
 		uuidIndex := findDiskIndex(uuid, format.XL.JBOD)
 		if uuidIndex == -1 {
 			// UUID not found.
-			errorIf(errDiskNotFound, "Disk %s not found in JBOD list", uuid)
+			LogErrorDiskNotFound(errDiskNotFound, uuid)
 			return false
 		}
 		// Save the position of UUID present in JBOD.
@@ -250,7 +250,7 @@ func isSavedUUIDInOrder(uuid string, formats []*formatXLV1) bool {
 	prevOrderIndex := orderIndexes[0]
 	for _, orderIndex := range orderIndexes {
 		if prevOrderIndex != orderIndex {
-			errorIf(errDiskOrderMismatch, "Disk %s is in wrong order wanted %d, saw %d ", uuid, prevOrderIndex, orderIndex)
+			LogDiskWrongOrder(errDiskOrderMismatch, uuid, prevOrderIndex, orderIndex)
 			return false
 		}
 	}

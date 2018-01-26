@@ -38,7 +38,7 @@ var localIP4 = mustGetLocalIP4()
 // mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
 func mustSplitHostPort(hostPort string) (host, port string) {
 	host, port, err := net.SplitHostPort(hostPort)
-	fatalIf(err, "Unable to split host port %s", hostPort)
+	LogFailedSplitHostPort(err, hostPort)
 	return host, port
 }
 
@@ -46,7 +46,7 @@ func mustSplitHostPort(hostPort string) (host, port string) {
 func mustGetLocalIP4() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
 	addrs, err := net.InterfaceAddrs()
-	fatalIf(err, "Unable to get IP addresses of this host.")
+	LogFailedGetIPAddress(err)
 
 	for _, addr := range addrs {
 		var ip net.IP
@@ -98,8 +98,7 @@ func getHostIP4(host string) (ipList set.StringSet, err error) {
 			if timeElapsed > time.Second {
 				// log the message to console about the host not being
 				// resolveable.
-				errorIf(err, "Unable to resolve host %s (%s)", host,
-					humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
+				LogFailedHostResolve(err, host, humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
 			}
 		}
 	}

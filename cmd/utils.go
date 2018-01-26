@@ -40,7 +40,7 @@ import (
 // Close Http tracing file.
 func stopHTTPTrace() {
 	if globalHTTPTraceFile != nil {
-		errorIf(globalHTTPTraceFile.Close(), "Unable to close httpTraceFile %s", globalHTTPTraceFile.Name())
+		LogHTTPTraceCloseFailed(globalHTTPTraceFile.Close(), globalHTTPTraceFile.Name())
 		globalHTTPTraceFile = nil
 	}
 }

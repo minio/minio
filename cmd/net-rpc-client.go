@@ -88,7 +88,7 @@ func (rpcClient *RPCClient) dial() (netRPCClient *rpc.Client, err error) {
 		// Print RPC connection errors that are worthy to display in log.
 		switch err.(type) {
 		case x509.HostnameError:
-			errorIf(err, "Unable to establish secure connection to %s", rpcClient.serverAddr)
+			LogFailedSecureConnection(err, rpcClient.serverAddr)
 		}
 
 		return nil, &net.OpError{

@@ -191,7 +191,7 @@ func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byt
 
 	err := rc.Call(writeTmpConfigRPC, &wArgs, &WriteConfigReply{})
 	if err != nil {
-		errorIf(err, "Failed to write temporary config file.")
+		LogFailedWriteTempConfig(err)
 		return err
 	}
 
@@ -205,7 +205,7 @@ func (lc localAdminClient) CommitConfig(tmpFileName string) error {
 	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
 
 	err := os.Rename(tmpConfigFile, configFile)
-	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	LogFailedConfigRename(err, tmpConfigFile, configFile)
 	return err
 }
 
@@ -218,7 +218,7 @@ func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
 	cReply := CommitConfigReply{}
 	err := rc.Call(commitConfigRPC, &cArgs, &cReply)
 	if err != nil {
-		errorIf(err, "Failed to rename config file.")
+		LogFailedRemoteConfigRename(err)
 		return err
 	}
 
@@ -422,7 +422,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	latestUptime := time.Duration(0)
 	for _, uptime := range uptimes {
 		if uptime.err != nil {
-			errorIf(uptime.err, "Unable to fetch uptime")
+			LogFailedFetchUptime(uptime.err)
 			continue
 		}
 
@@ -475,14 +475,14 @@ func getPeerConfig(peers adminPeers) ([]byte, error) {
 		// Unmarshal the received config files.
 		err := json.Unmarshal(configBytes, &serverConfigs[i])
 		if err != nil {
-			errorIf(err, "Failed to unmarshal serverConfig from ", peers[i].addr)
+			LogFailedUnMarshalPeerServerConfig(err, peers[i].addr)
 			return nil, err
 		}
 	}
 
 	configJSON, err := getValidServerConfig(serverConfigs, errs)
 	if err != nil {
-		errorIf(err, "Unable to find a valid server config")
+		LogFailedFindServerConfig(err)
 		return nil, errors.Trace(err)
 	}
 

@@ -98,7 +98,7 @@ func siaGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
 	// Validate gateway arguments.
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	minio.LogInvalidArguments(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host))
 
 	minio.StartGateway(ctx, &Sia{host})
 }
@@ -587,7 +587,7 @@ func (s *siaObjects) deleteTempFileWhenUploadCompletes(tempFile string, bucket, 
 		var err error
 		soi, err = s.findSiaObject(bucket, object)
 		if err != nil {
-			minio.ErrorIf(err, "Unable to find file uploaded to Sia path %s/%s", bucket, object)
+			minio.LogMissingSiaFilePath(err, bucket, object)
 			break
 		}
 

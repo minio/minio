@@ -2374,12 +2374,12 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 	if len(args) == 1 {
 		endpoint, err := NewEndpoint(args[0])
-		fatalIf(err, "unable to create new endpoint")
+		LogFailedCreateEndPoint(err)
 		endpoints = append(endpoints, endpoint)
 	} else {
 		var err error
 		endpoints, err = NewEndpointList(args...)
-		fatalIf(err, "unable to create new endpoint list")
+		LogFailedCreateEndPointList(err)
 	}
 
 	return endpoints

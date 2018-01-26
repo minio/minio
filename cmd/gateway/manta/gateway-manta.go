@@ -103,7 +103,7 @@ func mantaGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
 	// Validate gateway arguments.
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	minio.LogInvalidArguments(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host))
 
 	minio.StartGateway(ctx, &Manta{host})
 }

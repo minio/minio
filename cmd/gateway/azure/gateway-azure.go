@@ -101,7 +101,7 @@ func azureGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
 	// Validate gateway arguments.
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	minio.LogInvalidArguments(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host))
 
 	minio.StartGateway(ctx, &Azure{host})
 }
@@ -283,7 +283,7 @@ func azureToObjectError(err error, params ...string) error {
 	if !ok {
 		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
+		minio.LogExpectedTypeError(err)
 		return err
 	}
 
@@ -874,7 +874,7 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
 		derr := blob.Delete(nil)
-		minio.ErrorIf(derr, "unable to remove meta data object for upload ID %s", uploadID)
+		minio.LogFailedRemoveMetaDataObject(derr, uploadID)
 	}()
 
 	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)

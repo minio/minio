@@ -369,7 +369,7 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 // the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
 	if len(errs) != len(disks) {
-		errorIf(errors.New("unexpected disks/errors slice length"), "unable to evaluate internal disks")
+		LogInternalDiskEvaluateFailed(errors.New("unexpected disks/errors slice length"))
 		return nil
 	}
 	newDisks := make([]StorageAPI, len(disks))

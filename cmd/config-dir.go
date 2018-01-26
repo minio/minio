@@ -97,7 +97,7 @@ func (config *ConfigDir) GetPrivateKeyFile() string {
 
 func mustGetDefaultConfigDir() string {
 	homeDir, err := homedir.Dir()
-	fatalIf(err, "Unable to get home directory.")
+	LogGetHomeDirFailed(err)
 
 	return filepath.Join(homeDir, defaultMinioConfigDir)
 }

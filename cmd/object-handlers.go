@@ -134,7 +134,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 
 			// log the error.
-			errorIf(err, "Invalid request range")
+			LogInvalidRequestRange(err)
 		}
 	}
 
@@ -175,7 +175,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	httpWriter := ioutil.WriteOnClose(writer)
 	// Reads the object at startOffset and writes to mw.
 	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
-		errorIf(err, "Unable to write to client.")
+		LogClientWriteFailed(err)
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
@@ -367,7 +367,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	newMetadata, err := getCpObjMetadataFromHeader(r.Header, objInfo.UserDefined)
 	if err != nil {
-		errorIf(err, "found invalid http request header")
+		LogInvalidHTTPReqHeader(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -473,7 +473,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		errorIf(err, "found invalid http request header")
+		LogInvalidHTTPReqHeader(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -520,21 +520,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Initialize stream signature verifier.
 		reader, s3Err = newSignV4ChunkedReader(r)
 		if s3Err != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Err = isReqAuthenticatedV2(r)
 		if s3Err != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 
 	case authTypePresigned, authTypeSigned:
 		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
@@ -630,7 +627,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Extract metadata that needs to be saved.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		errorIf(err, "found invalid http request header")
+		LogInvalidHTTPReqHeader(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -713,7 +710,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		if hrange, err = parseCopyPartRange(rangeHeader, objInfo.Size); err != nil {
 			// Handle only errInvalidRange
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			errorIf(err, "Unable to extract range %s", rangeHeader)
+			LogFailedExtractRange(err, rangeHeader)
 			writeCopyPartErr(w, err, r.URL)
 			return
 		}
@@ -847,20 +844,17 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -1071,7 +1065,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// suppposed to reply only 204. Additionally log the error for
 	// investigation.
 	if err := deleteObject(objectAPI, bucket, object, r); err != nil {
-		errorIf(err, "Unable to delete an object %s", pathJoin(bucket, object))
+		LogDeleteObjectFailed(err, bucket, object)
 	}
 	writeSuccessNoContent(w)
 }

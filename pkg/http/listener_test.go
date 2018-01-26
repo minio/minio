@@ -205,7 +205,7 @@ func TestNewHTTPListener(t *testing.T) {
 		writeTimeout           time.Duration
 		updateBytesReadFunc    func(int)
 		updateBytesWrittenFunc func(int)
-		errorLogFunc           func(error, string, ...interface{})
+		errorLogFunc           func(error, string, string, map[string]string)
 		expectedErr            error
 	}{
 		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
@@ -480,10 +480,17 @@ func TestHTTPListenerAccept(t *testing.T) {
 func TestHTTPListenerAcceptPeekError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
+	errorFunc := func(err error, errorCode, msg string, args map[string]string) {
+		output := fmt.Sprintf("error: %v.  ", err)
+		output += "errorCode: " + errorCode
+		output += "message: " + msg
+		var argSlice []string
+
+		for key, value := range args {
+			argSlice = append(argSlice, key+"="+value)
+		}
+		output += "values: " + strings.Join(argSlice, " | ")
+		fmt.Println(output)
 	}
 
 	testCases := []struct {
@@ -540,10 +547,17 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 func TestHTTPListenerAcceptTLSError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
+	errorFunc := func(err error, errorCode, msg string, args map[string]string) {
+		output := fmt.Sprintf("error: %v.  ", err)
+		output += "errorCode: " + errorCode
+		output += "message: " + msg
+		var argSlice []string
+
+		for key, value := range args {
+			argSlice = append(argSlice, key+"="+value)
+		}
+		output += "values: " + strings.Join(argSlice, " | ")
+		fmt.Println(output)
 	}
 
 	testCases := []struct {
@@ -609,10 +623,17 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 func TestHTTPListenerAcceptError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
+	errorFunc := func(err error, errorCode, msg string, args map[string]string) {
+		output := fmt.Sprintf("error: %v.  ", err)
+		output += "errorCode: " + errorCode
+		output += "message: " + msg
+		var argSlice []string
+
+		for key, value := range args {
+			argSlice = append(argSlice, key+"="+value)
+		}
+		output += "values: " + strings.Join(argSlice, " | ")
+		fmt.Println(output)
 	}
 
 	testCases := []struct {

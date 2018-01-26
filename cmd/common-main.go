@@ -42,10 +42,10 @@ func checkUpdate(mode string) {
 func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
-		fatalIf(migrateConfig(), "Config migration failed.")
-		fatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
+		LogConfigMigrationFailed(migrateConfig())
+		LogFailedconfigLoad(loadConfig(), serverConfigVersion)
 	} else {
-		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+		LogConfigInitFailed(newConfig())
 		log.Println("Created minio configuration file successfully at " + getConfigDir())
 	}
 }
@@ -59,12 +59,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 			configDir = ctx.GlobalString("config-dir")
 		}
 		if configDir == "" {
-			fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
+			LogConfigDirEmpty(errors.New("empty directory"))
 		}
 
 		// Disallow relative paths, figure out absolute paths.
 		configDirAbs, err := filepath.Abs(configDir)
-		fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
+		LogFailedConfigDirAbsPath(err, configDir)
 
 		setConfigDir(configDirAbs)
 	}
@@ -83,7 +83,7 @@ func handleCommonEnvVars() {
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey != "" && secretKey != "" {
 		cred, err := auth.CreateCredentials(accessKey, secretKey)
-		fatalIf(err, "Invalid access/secret Key set in environment.")
+		LogInvalidCredsInEnv(err)
 
 		// credential Envs are set globally.
 		globalIsEnvCreds = true
@@ -93,7 +93,7 @@ func handleCommonEnvVars() {
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBrowserFlag(browser)
 		if err != nil {
-			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+			LogMinioBrowserEnvUnknownValue(errors.New("invalid value"), browser)
 		}
 
 		// browser Envs are set globally, this does not represent
@@ -106,7 +106,7 @@ func handleCommonEnvVars() {
 	if traceFile != "" {
 		var err error
 		globalHTTPTraceFile, err = os.OpenFile(traceFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-		fatalIf(err, "error opening file %s", traceFile)
+		LogErrorOpeningTraceFile(err, traceFile)
 	}
 
 	globalDomainName = os.Getenv("MINIO_DOMAIN")
@@ -126,25 +126,25 @@ func handleCommonEnvVars() {
 		// Check for environment variables and parse into storageClass struct
 		if ssc := os.Getenv(standardStorageClassEnv); ssc != "" {
 			globalStandardStorageClass, err = parseStorageClass(ssc)
-			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
+			LogInvalidEnvValue(err, standardStorageClassEnv)
 		}
 
 		if rrsc := os.Getenv(reducedRedundancyStorageClassEnv); rrsc != "" {
 			globalRRStorageClass, err = parseStorageClass(rrsc)
-			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
+			LogInvalidEnvValue(err, reducedRedundancyStorageClassEnv)
 		}
 
 		// Validation is done after parsing both the storage classes. This is needed because we need one
 		// storage class value to deduce the correct value of the other storage class.
 		if globalRRStorageClass.Scheme != "" {
 			err := validateRRSParity(globalRRStorageClass.Parity, globalStandardStorageClass.Parity)
-			fatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
+			LogInvalidEnvValue(err, reducedRedundancyStorageClassEnv)
 			globalIsStorageClass = true
 		}
 
 		if globalStandardStorageClass.Scheme != "" {
 			err := validateSSParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			fatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
+			LogInvalidEnvValue(err, standardStorageClassEnv)
 			globalIsStorageClass = true
 		}
 	}

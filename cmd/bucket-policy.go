@@ -154,7 +154,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
-		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
+		LogFailedBucketPolicyLoad(err, bucket)
 		return nil, errors.Cause(err)
 	}
 
@@ -198,18 +198,18 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAccessPolicy) error {
 	buf, err := json.Marshal(bpy)
 	if err != nil {
-		errorIf(err, "Unable to marshal bucket policy '%#v' to JSON", bpy)
+		LogFailedBucketPolicyMarshaltoJSON(err)
 		return err
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
-		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		LogFailedSetBucketPolicy(err, bucket)
 		return errors.Cause(err)
 	}
 
 	if _, err = objAPI.PutObject(minioMetaBucket, policyPath, hashReader, nil); err != nil {
-		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		LogFailedSetBucketPolicy(err, bucket)
 		return errors.Cause(err)
 	}
 	return nil
@@ -244,7 +244,7 @@ func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI Objec
 		case BucketNotFound:
 			return ErrNoSuchBucket
 		default:
-			errorIf(err, "Unable to save bucket policy.")
+			LogFailedSaveBucketPolicy(err)
 			return ErrInternalError
 		}
 	}

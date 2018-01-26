@@ -308,7 +308,7 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	case queueTypeWebhook:
 		mSqs.Type = queueTypeWebhook
 	default:
-		errorIf(errors.New("invalid SQS type"), "SQS type: %s", sqsType)
+		LogInvalidSqsType(errors.New("invalid SQS type"), sqsType)
 	} // Add more queues here.
 
 	mSqs.AccountID = strs[4]

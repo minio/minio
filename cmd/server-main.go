@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/minio/cli"
@@ -91,20 +92,20 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// Server address.
 	serverAddr := ctx.String("address")
-	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
+	LogInvalidAddressInCli(CheckLocalServerAddr(serverAddr), serverAddr)
 
 	var setupType SetupType
 	var err error
 
 	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
-	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
+	LogInvalidArgsInCli(err, serverAddr, strings.Join(ctx.Args(), " "))
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	if runtime.GOOS == "darwin" {
 		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 		// to IPv6 address ie minio will start listening on IPv6 address whereas another
 		// (non-)minio process is listening on IPv4 of given port.
 		// To avoid this error sutiation we check for port availability only for macOS.
-		fatalIf(checkPortAvailability(globalMinioPort), "Port %d already in use", globalMinioPort)
+		LogPortAlreadyInUse(checkPortAvailability(globalMinioPort), globalMinioPort)
 	}
 
 	globalIsXL = (setupType == XLSetupType)
@@ -152,7 +153,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Create certs path.
-	fatalIf(createConfigDir(), "Unable to create configuration directories.")
+	LogFailedCreateConfigDirs(createConfigDir())
 
 	// Initialize server config.
 	initConfig()
@@ -163,11 +164,10 @@ func serverMain(ctx *cli.Context) {
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL certificate file")
-
+	LogInvalidSSLCert(err)
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL && globalEndpoints.IsHTTPS() && !globalIsSSL {
-		fatalIf(errInvalidArgument, "No certificates found for HTTPS endpoints (%s)", globalEndpoints)
+		LogMissingHTTPSCerts(errInvalidArgument)
 	}
 
 	if !quietFlag {
@@ -182,12 +182,12 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Set system resources to maximum.
-	errorIf(setMaxResources(), "Unable to change resource limit")
+	LogResourceLimitChangeFailed(setMaxResources())
 
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
 		clnts, myNode := newDsyncNodes(globalEndpoints)
-		fatalIf(dsync.Init(clnts, myNode), "Unable to initialize distributed locking clients")
+		LogFailedInitDistributedLockingClients(dsync.Init(clnts, myNode))
 	}
 
 	// Initialize name space lock.
@@ -196,7 +196,7 @@ func serverMain(ctx *cli.Context) {
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
-	fatalIf(err, "Unable to configure one of server's RPC services.")
+	LogFailedConfigRPCService(err)
 
 	// Initialize S3 Peers inter-node communication only in distributed setup.
 	initGlobalS3Peers(globalEndpoints)
@@ -218,9 +218,9 @@ func serverMain(ctx *cli.Context) {
 
 	newObject, err := newObjectLayer(globalEndpoints)
 	if err != nil {
-		errorIf(err, "Initializing object layer failed")
+		LogInitObjectLayerFailed(err)
 		err = globalHTTPServer.Shutdown()
-		errorIf(err, "Unable to shutdown http server")
+		LogShutdownServerFailed(err)
 		os.Exit(1)
 	}
 

@@ -94,7 +94,7 @@ func ossGatewayMain(ctx *cli.Context) {
 
 	// Validate gateway arguments.
 	host := ctx.Args().First()
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	minio.LogInvalidArguments(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host))
 
 	minio.StartGateway(ctx, &OSS{host})
 }
@@ -262,7 +262,7 @@ func ossToObjectError(err error, params ...string) error {
 	if !ok {
 		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
+		minio.LogExpectedTypeError(err)
 		return err
 	}
 

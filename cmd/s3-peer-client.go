@@ -124,10 +124,7 @@ func (s3p s3Peers) SendUpdate(peerIndex []int, args BucketUpdater) []error {
 		for _, idx := range peerIndex {
 			// check idx is in array bounds.
 			if !(idx >= 0 && idx < len(s3p)) {
-				errorIf(
-					fmt.Errorf("Bad peer index %d input to SendUpdate()", idx),
-					"peerIndex out of bounds",
-				)
+				LogPeerIndexOutofBounds(fmt.Errorf("Bad peer index %d input to SendUpdate()", idx), idx)
 				continue
 			}
 			wg.Add(1)
@@ -146,11 +143,7 @@ func S3PeersUpdateBucketNotification(bucket string, ncfg *notificationConfig) {
 	setBNPArgs := &SetBucketNotificationPeerArgs{Bucket: bucket, NCfg: ncfg}
 	errs := globalS3Peers.SendUpdate(nil, setBNPArgs)
 	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket notification to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+		LogUpdateBucketNotificationError(err, globalS3Peers[idx].addr)
 	}
 }
 
@@ -160,11 +153,7 @@ func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
 	setBLPArgs := &SetBucketListenerPeerArgs{Bucket: bucket, LCfg: lcfg}
 	errs := globalS3Peers.SendUpdate(nil, setBLPArgs)
 	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket listener to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+		LogUpdateBucketListenerError(err, globalS3Peers[idx].addr)
 	}
 }
 
@@ -173,16 +162,12 @@ func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
 func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
 	byts, err := json.Marshal(pCh)
 	if err != nil {
-		errorIf(err, "Failed to marshal policyChange - this is a BUG!")
+		LogFailedPolicyChangeMarshal(err)
 		return
 	}
 	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
 	errs := globalS3Peers.SendUpdate(nil, setBPPArgs)
 	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket policy to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+		LogUpdateBucketPolicyError(err, globalS3Peers[idx].addr)
 	}
 }

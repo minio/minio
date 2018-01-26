@@ -57,7 +57,7 @@ func readDir(dirPath string) (entries []string, err error) {
 				var st os.FileInfo
 				st, err = os.Stat((path.Join(dirPath, fi.Name())))
 				if err != nil {
-					errorIf(err, "Unable to stat path %s", path.Join(dirPath, fi.Name()))
+					LogFailedStatPath(err, path.Join(dirPath, fi.Name()))
 					continue
 				}
 				// Append to entries if symbolic link exists and is valid.

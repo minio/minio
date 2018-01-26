@@ -72,15 +72,15 @@ var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolu
 func newXLObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(storageDisks)
-	fatalIf(err, "Unable to initialize XL object layer.")
+	LogFailedInitXLObjectLayer(err)
 
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(objAPI)
-	fatalIf(err, "Unable to load all bucket policies.")
+	LogFailedLoadBucketPolicies(err)
 
 	// Initialize a new event notifier.
 	err = initEventNotifier(objAPI)
-	fatalIf(err, "Unable to initialize event notification.")
+	LogFailedInitEventNotification(err)
 
 	// Success.
 	return objAPI, nil
@@ -116,7 +116,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	var maxCacheSize uint64
 	if !globalXLObjCacheDisabled {
 		maxCacheSize, err = GetMaxCacheSize()
-		errorIf(err, "Unable to get maximum cache size")
+		LogGetMaxCacheSizeFailed(err)
 
 		// Enable object cache if cache size is more than zero
 		xl.objCacheEnabled = maxCacheSize > 0
@@ -252,7 +252,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		}
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
+			LogFetchDiskInfoFailed(err, storageDisk.String())
 			if errors.IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue

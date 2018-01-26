@@ -52,12 +52,18 @@ func (level Level) String() string {
 	return lvlStr
 }
 
+type traceEntry struct {
+	Source    []string          `json:"source"`
+	Variables map[string]string `json:"variables,omitempty"`
+}
+
 type logEntry struct {
-	Level   string   `json:"level"`
-	Message string   `json:"message"`
-	Time    string   `json:"time"`
-	Cause   string   `json:"cause"`
-	Trace   []string `json:"trace"`
+	Level     string     `json:"level"`
+	Message   string     `json:"message"`
+	Time      string     `json:"time"`
+	Cause     string     `json:"cause"`
+	Trace     traceEntry `json:"trace"`
+	ErrorCode string     `json:"errorcode"`
 }
 
 // Logger - for console messages
@@ -153,8 +159,8 @@ func getTrace(traceLevel int) []string {
 	return trace
 }
 
-func logIf(level Level, err error, msg string,
-	data ...interface{}) {
+func logIf(level Level, err error, errorCode string, msg string,
+	tags map[string]string) {
 
 	isErrIgnored := func(err error) (ok bool) {
 		err = errors.Cause(err)
@@ -172,21 +178,26 @@ func logIf(level Level, err error, msg string,
 	if err == nil || isErrIgnored(err) {
 		return
 	}
-	cause := strings.Title(err.Error())
+
+	cause := err.Error()
+	if len(cause) > 0 {
+		cause = strings.ToUpper(cause[:1]) + cause[1:]
+	}
+
 	// Get full stack trace
-	trace := getTrace(3)
-	// Get time
-	timeOfError := UTCNow().Format(time.RFC3339Nano)
+	trace := getTrace(4)
+
 	// Output the formatted log message at console
 	var output string
-	message := fmt.Sprintf(msg, data...)
+
 	if log.json {
 		logJSON, err := json.Marshal(&logEntry{
-			Level:   level.String(),
-			Message: message,
-			Time:    timeOfError,
-			Cause:   cause,
-			Trace:   trace,
+			Level:     level.String(),
+			ErrorCode: errorCode,
+			Message:   msg,
+			Time:      UTCNow().Format(time.RFC3339Nano),
+			Cause:     cause,
+			Trace:     traceEntry{Source: trace, Variables: tags},
 		})
 		if err != nil {
 			panic("json marshal of logEntry failed: " + err.Error())
@@ -194,17 +205,19 @@ func logIf(level Level, err error, msg string,
 		output = string(logJSON)
 	} else {
 		// Add a sequence number and formatting for each stack trace
-		// No formatting is required for the first entry
-		trace[0] = "1: " + trace[0]
-		for i, element := range trace[1:] {
-			trace[i+1] = fmt.Sprintf("%8v: %s", i+2, element)
+		for i, element := range trace {
+			trace[i] = fmt.Sprintf("%8v: %s", i+1, element)
 		}
-		errMsg := fmt.Sprintf("[%s] [%s] %s (%s)",
-			timeOfError, level.String(), message, cause)
+		errMsg := colorRed(colorBold(" "+level.String()+"("+errorCode+") ")) + colorYellow(colorBold(msg+" ("+cause+")"))
 
-		output = fmt.Sprintf("\nTrace: %s\n%s",
-			strings.Join(trace, "\n"),
-			colorRed(colorBold(errMsg)))
+		var tagSlice []string
+
+		for key, value := range tags {
+			tagSlice = append(tagSlice, key+"="+value)
+		}
+		tagString := strings.Join(tagSlice, " | ")
+
+		output = colorBold("Trace: ") + tagString + "\n" + strings.Join(trace, "\n") + "\n" + colorBold(UTCNow().Format("15:04:05 Jan._2.2006")) + errMsg + "\n"
 	}
 	fmt.Println(output)
 
@@ -213,10 +226,10 @@ func logIf(level Level, err error, msg string,
 	}
 }
 
-func errorIf(err error, msg string, data ...interface{}) {
-	logIf(Error, err, msg, data...)
+func errorIf(err error, errorCode string, msg string, tags map[string]string) {
+	logIf(Error, err, errorCode, msg, tags)
 }
 
-func fatalIf(err error, msg string, data ...interface{}) {
-	logIf(Fatal, err, msg, data...)
+func fatalIf(err error, errorCode string, msg string, tags map[string]string) {
+	logIf(Fatal, err, errorCode, msg, tags)
 }

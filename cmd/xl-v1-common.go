@@ -66,7 +66,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 		if errors.IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 			continue
 		}
-		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)
+		LogStatXLObjectFileFailed(err, bucket, prefix, xlMetaJSONFile)
 	} // Exhausted all disks - return false.
 	return false
 }

@@ -223,7 +223,7 @@ func cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, obj Obj
 		case <-ticker.C:
 			bucketInfos, err := obj.ListBuckets()
 			if err != nil {
-				errorIf(err, "Unable to list buckets")
+				LogListBucketsFailed(err)
 				continue
 			}
 			for _, bucketInfo := range bucketInfos {
@@ -241,7 +241,7 @@ func cleanupStaleMultipartUpload(bucket string, expiry time.Duration, obj Object
 		prefix := ""
 		lmi, err = listFn(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
 		if err != nil {
-			errorIf(err, "Unable to list uploads")
+			LogListUploadsFailed(err)
 			return err
 		}
 

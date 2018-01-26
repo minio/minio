@@ -141,7 +141,7 @@ func b2ToObjectError(err error, params ...string) error {
 	if !ok {
 		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
+		minio.LogExpectedTypeError(err)
 		return err
 	}
 

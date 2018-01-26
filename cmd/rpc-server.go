@@ -34,7 +34,7 @@ func (server *rpcServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	conn, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
-		errorIf(err, "rpc hijacking failed for: %s", req.RemoteAddr)
+		LogRPCHijackingFailed(err, req.RemoteAddr)
 		return
 	}
 

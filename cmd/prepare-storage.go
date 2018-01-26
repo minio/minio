@@ -218,7 +218,7 @@ func printRetryMsg(sErrs []error, storageDisks []StorageAPI) {
 	for i, sErr := range sErrs {
 		switch sErr {
 		case errDiskNotFound, errFaultyDisk, errFaultyRemoteDisk:
-			errorIf(sErr, "Disk %s is still unreachable", storageDisks[i])
+			LogDiskUnreachable(sErr, storageDisks[i].String())
 		}
 	}
 }
@@ -276,8 +276,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				// first server has a wrong format and exit gracefully.
 				// refer - https://github.com/minio/minio/issues/4140
 				if retryCount > maxRetryAttempts {
-					errorIf(err, "%s : Detected disk in unexpected format",
-						storageDisks[index])
+					LogDiskWrongFormat(err, storageDisks[index].String())
 					continue
 				}
 				return err

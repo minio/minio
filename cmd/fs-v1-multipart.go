@@ -38,7 +38,7 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 		if errors.Cause(err) == errFileNotFound {
 			return false
 		}
-		errorIf(err, "Unable to access uploads.json "+uploadsIDPath)
+		LogFailedAccessUploadsJSON(err, uploadsIDPath)
 		return false
 	}
 	return true
@@ -465,7 +465,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 
 	go func() {
 		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcEtag); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
+			LogFailedReadObject(gerr, srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
 			return
 		}
@@ -770,7 +770,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				// In parallel execution, CompleteMultipartUpload could have deleted temporary
 				// state files/directory, it is safe to ignore errFileNotFound
 				if derr != errFileNotFound {
-					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+					LogFailedRemoveFile(derr, pathJoin(basePath, object), basePath)
 				}
 			}
 		}
@@ -1011,7 +1011,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 				// In parallel execution, AbortMultipartUpload could have deleted temporary
 				// state files/directory, it is safe to ignore errFileNotFound
 				if derr != errFileNotFound {
-					errorIf(derr, "unable to remove %s in %s", pathJoin(basePath, object), basePath)
+					LogFailedRemoveFile(derr, pathJoin(basePath, object), basePath)
 				}
 			}
 		}

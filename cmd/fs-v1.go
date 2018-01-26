@@ -179,7 +179,7 @@ func (fs fsObjects) Shutdown() error {
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
 	info, err := getDiskInfo((fs.fsPath))
-	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
+	LogGetDiskInfoFailed(err, fs.fsPath)
 	storageInfo := StorageInfo{
 		Total: info.Total,
 		Free:  info.Free,
@@ -409,7 +409,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	go func() {
 		var startOffset int64 // Read the whole file.
 		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, ""); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
+			LogFailedReadObject(gerr, srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
 			return
 		}
@@ -1006,7 +1006,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
-			errorIf(err, "Unable to fetch object info for %s", walkResult.entry)
+			LogGetObjectInfoFailed(err, bucket, walkResult.entry)
 			return loi, nil
 		}
 		nextMarker = objInfo.Name

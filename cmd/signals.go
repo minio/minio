@@ -39,11 +39,11 @@ func handleSignals() {
 		var err, oerr error
 
 		err = globalHTTPServer.Shutdown()
-		errorIf(err, "Unable to shutdown http server")
+		LogShutdownServerFailed(err)
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
 			oerr = objAPI.Shutdown()
-			errorIf(oerr, "Unable to shutdown object layer")
+			LogStopObjectLayerFailed(oerr)
 		}
 
 		return (err == nil && oerr == nil)
@@ -52,11 +52,11 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			errorIf(err, "http server exited abnormally")
+			LogServerExitAbnormal(err)
 			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
 				oerr = objAPI.Shutdown()
-				errorIf(oerr, "Unable to shutdown object layer")
+				LogStopObjectLayerFailed(oerr)
 			}
 
 			exit(err == nil && oerr == nil)
@@ -71,10 +71,10 @@ func handleSignals() {
 			case serviceRestart:
 				log.Println("Restarting on service signal")
 				err := globalHTTPServer.Shutdown()
-				errorIf(err, "Unable to shutdown http server")
+				LogShutdownServerFailed(err)
 				stopHTTPTrace()
 				rerr := restartProcess()
-				errorIf(rerr, "Unable to restart the server")
+				LogServerRestartFailed(rerr)
 
 				exit(err == nil && rerr == nil)
 			case serviceStop:

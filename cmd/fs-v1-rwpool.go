@@ -48,7 +48,7 @@ func (fsi *fsIOPool) lookupToRead(path string) (*lock.RLockedFile, bool) {
 		// If the file is closed and not removed from map is a bug.
 		if rlkFile.IsClosed() {
 			// Log this as an error.
-			errorIf(errUnexpected, "Unexpected entry found on the map %s", path)
+			LogUnexpectedMapEntry(errUnexpected, path)
 
 			// Purge the cached lock path from map.
 			delete(fsi.readersMap, path)

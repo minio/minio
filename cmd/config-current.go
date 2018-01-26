@@ -125,13 +125,13 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 
 	if rrsc.Scheme != "" {
 		err = validateRRSParity(rrsc.Parity, ssc.Parity)
-		fatalIf(err, "Invalid value %s:%d set in config.json", rrsc.Scheme, rrsc.Parity)
+		LogInvalidConfigJSONValue(err, rrsc.Scheme, rrsc.Parity)
 		globalIsStorageClass = true
 	}
 
 	if ssc.Scheme != "" {
 		err = validateSSParity(ssc.Parity, rrsc.Parity)
-		fatalIf(err, "Invalid value %s:%d set in config.json", ssc.Scheme, ssc.Parity)
+		LogInvalidConfigJSONValue(err, ssc.Scheme, ssc.Parity)
 		globalIsStorageClass = true
 	}
 

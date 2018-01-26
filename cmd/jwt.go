@@ -97,11 +97,11 @@ func isAuthTokenValid(tokenString string) bool {
 	var claims jwtgo.StandardClaims
 	jwtToken, err := jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
 	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
+		LogFailedJWTTokenParse(err)
 		return false
 	}
 	if err = claims.Valid(); err != nil {
-		errorIf(err, "Invalid claims in JWT token string")
+		LogInvaidJWTTokenClaims(err)
 		return false
 	}
 	return jwtToken.Valid && claims.Subject == globalServerConfig.GetCredential().AccessKey

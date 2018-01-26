@@ -139,11 +139,11 @@ EXAMPLES:
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		minio.ErrorIf(errGCSProjectIDNotFound, "project-id should be provided as argument or GOOGLE_APPLICATION_CREDENTIALS should be set with path to credentials.json")
+		minio.LogGCSMissingProjectID(errGCSProjectIDNotFound)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
-		minio.ErrorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
+		minio.LogGCSFailedToStart(errGCSInvalidProjectID, ctx.Args().First())
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 
@@ -234,7 +234,7 @@ func gcsToObjectError(err error, params ...string) error {
 	if !ok {
 		// Code should be fixed if this function is called without doing errors.Trace()
 		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
+		minio.LogExpectedTypeError(err)
 		return err
 	}
 
@@ -377,7 +377,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(bucket string) {
 		attrs, err := it.Next()
 		if err != nil {
 			if err != iterator.Done {
-				minio.ErrorIf(err, "Object listing error on bucket %s during purging of old files in minio.sys.tmp", bucket)
+				minio.LogGCSObjectListPurgeError(err, bucket)
 			}
 			return
 		}
@@ -385,7 +385,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(bucket string) {
 			// Delete files older than 2 weeks.
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 			if err != nil {
-				minio.ErrorIf(err, "Unable to delete %s/%s during purging of old files in minio.sys.tmp", bucket, attrs.Name)
+				minio.LogGCSDeleteObjectPurgeError(err, bucket, attrs.Name)
 				return
 			}
 		}
@@ -400,7 +400,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmp() {
 			attrs, err := it.Next()
 			if err != nil {
 				if err != iterator.Done {
-					minio.ErrorIf(err, "Bucket listing error during purging of old files in minio.sys.tmp")
+					minio.LogGCSListBucketPurgeError(err)
 				}
 				break
 			}

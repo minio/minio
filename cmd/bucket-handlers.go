@@ -50,7 +50,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 			// For no bucket found we return NoSuchBucket instead.
 			return ErrNoSuchBucket
 		}
-		errorIf(err, "Unable to read bucket policy.")
+		LogFailedReadBucketPolicy(err)
 		// Return internal error for any other errors so that we can investigate.
 		return ErrInternalError
 	}
@@ -271,7 +271,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Read incoming body XML bytes.
 	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
-		errorIf(err, "Unable to read HTTP body.")
+		LogFailedReadHTTPBody(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -279,7 +279,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Unmarshal list of keys to be deleted.
 	deleteObjects := &DeleteObjectsRequest{}
 	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
-		errorIf(err, "Unable to unmarshal delete objects request XML.")
+		LogFailedUnmarshalDeleteObjectsReqXML(err)
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
@@ -444,7 +444,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
 	if err != nil {
-		errorIf(err, "Unable to initialize multipart reader.")
+		LogFailedInitMultipartReader(err)
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
@@ -452,7 +452,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Read multipart data and save in memory and in the disk if needed
 	form, err := reader.ReadForm(maxFormMemory)
 	if err != nil {
-		errorIf(err, "Unable to initialize multipart reader.")
+		LogFailedInitMultipartReader(err)
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
@@ -463,7 +463,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract all form fields
 	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(form)
 	if err != nil {
-		errorIf(err, "Unable to parse form values.")
+		LogFailedParseFormValues(err)
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
@@ -540,14 +540,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract metadata to be saved from received Form.
 	metadata, err := extractMetadataFromHeader(formValues)
 	if err != nil {
-		errorIf(err, "found invalid http request header")
+		LogInvalidHTTPReqHeader(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 
 	hashReader, err := hash.NewReader(fileBody, fileSize, "", "")
 	if err != nil {
-		errorIf(err, "Unable to initialize hashReader.")
+		LogFailedInitHashReader(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

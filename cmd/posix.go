@@ -73,7 +73,7 @@ func isDirEmpty(dirname string) bool {
 	f, err := os.Open((dirname))
 	if err != nil {
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to access directory")
+			LogDirAccessFailed(err)
 		}
 
 		return false
@@ -83,7 +83,7 @@ func isDirEmpty(dirname string) bool {
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to list directory")
+			LogListDirFailed(err)
 		}
 
 		return false

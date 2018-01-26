@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -109,9 +108,6 @@ func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 	if getRequestAuthType(r) == authTypeSigned { // we only support V4 (no presign)
 		s3Err = isReqAuthenticated(r, region)
 	}
-	if s3Err != ErrNone {
-		errorIf(errors.New(getAPIError(s3Err).Description), "%s", dumpRequest(r))
-	}
 	return s3Err
 }
 
@@ -121,17 +117,9 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 	switch reqAuthType {
 	case authTypePresignedV2, authTypeSignedV2:
 		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-		}
-		return s3Error
+		return isReqAuthenticatedV2(r)
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, region)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-		}
-		return s3Error
+		return isReqAuthenticated(r, region)
 	}
 
 	if reqAuthType == authTypeAnonymous && policyAction != "" {
@@ -179,7 +167,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		errorIf(err, "Unable to read request body for signature verification")
+		LogFailedReadReqSignatureVerification(err)
 		return ErrInternalError
 	}
 

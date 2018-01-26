@@ -85,9 +85,9 @@ type httpListener struct {
 	tcpKeepAliveTimeout    time.Duration
 	readTimeout            time.Duration
 	writeTimeout           time.Duration
-	updateBytesReadFunc    func(int)                           // function to be called to update bytes read in BufConn.
-	updateBytesWrittenFunc func(int)                           // function to be called to update bytes written in BufConn.
-	errorLogFunc           func(error, string, ...interface{}) // function to be called on errors.
+	updateBytesReadFunc    func(int)                                      // function to be called to update bytes read in BufConn.
+	updateBytesWrittenFunc func(int)                                      // function to be called to update bytes written in BufConn.
+	errorLogFunc           func(error, string, string, map[string]string) // function to be called on errors.
 }
 
 // isRoutineNetErr returns true if error is due to a network timeout,
@@ -146,9 +146,12 @@ func (listener *httpListener) start() {
 				// saturation on a transport with read timeout set. All other kind of
 				// errors should be logged for further investigation. Thanks @brendanashworth.
 				if !isRoutineNetErr(err) {
+					m := make(map[string]string)
+					m["RemoteAddr"] = bufconn.RemoteAddr().String()
+					m["LocalAddr"] = bufconn.LocalAddr().String()
 					listener.errorLogFunc(err,
-						"Error in reading from new connection %s at server %s",
-						bufconn.RemoteAddr(), bufconn.LocalAddr())
+						"LogFailedReadingNewconnection", "Error in reading from new connection",
+						m)
 				}
 			}
 			bufconn.Close()
@@ -174,9 +177,12 @@ func (listener *httpListener) start() {
 			tlsConn := tls.Server(bufconn, listener.tlsConfig)
 			if err := tlsConn.Handshake(); err != nil {
 				if listener.errorLogFunc != nil {
+					m := make(map[string]string)
+					m["RemoteAddr"] = bufconn.RemoteAddr().String()
+					m["LocalAddr"] = bufconn.LocalAddr().String()
 					listener.errorLogFunc(err,
-						"TLS handshake failed with new connection %s at server %s",
-						bufconn.RemoteAddr(), bufconn.LocalAddr())
+						"LogFailedTLSHandshake", "TLS handshake failed with new connection",
+						m)
 				}
 				bufconn.Close()
 				return
@@ -190,9 +196,12 @@ func (listener *httpListener) start() {
 			data, err := bufconn.Peek(methodMaxLen)
 			if err != nil {
 				if !isRoutineNetErr(err) && listener.errorLogFunc != nil {
+					m := make(map[string]string)
+					m["RemoteAddr"] = bufconn.RemoteAddr().String()
+					m["LocalAddr"] = bufconn.LocalAddr().String()
 					listener.errorLogFunc(err,
-						"Error in reading from new TLS connection %s at server %s",
-						bufconn.RemoteAddr(), bufconn.LocalAddr())
+						"LogFailedReadingNewTLSConnection", "Error in reading from new TLS connection",
+						m)
 				}
 				bufconn.Close()
 				return
@@ -207,9 +216,12 @@ func (listener *httpListener) start() {
 		}
 
 		if listener.errorLogFunc != nil {
+			m := make(map[string]string)
+			m["RemoteAddr"] = bufconn.RemoteAddr().String()
+			m["LocalAddr"] = bufconn.LocalAddr().String()
 			listener.errorLogFunc(errors.New("junk message"),
-				"Received non-HTTP message from new connection %s at server %s",
-				bufconn.RemoteAddr(), bufconn.LocalAddr())
+				"LogNonHTTPMessage", "Received non-HTTP message from new connection",
+				m)
 		}
 
 		bufconn.Close()
@@ -300,7 +312,7 @@ func newHTTPListener(serverAddrs []string,
 	writeTimeout time.Duration,
 	updateBytesReadFunc func(int),
 	updateBytesWrittenFunc func(int),
-	errorLogFunc func(error, string, ...interface{})) (listener *httpListener, err error) {
+	errorLogFunc func(error, string, string, map[string]string)) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 	// Close all opened listeners on error

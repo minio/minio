@@ -392,7 +392,7 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 			}
 
 			ipList, err := getHostIP4(host)
-			fatalIf(err, "unexpected error when resolving host '%s'", host)
+			LogUnexpectedErrorResolvingHost(err, host)
 
 			// Filter ipList by IPs those start with '127.'.
 			loopBackIPs := ipList.FuncMatch(func(ip string, matchString string) bool {

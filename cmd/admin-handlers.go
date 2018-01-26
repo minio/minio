@@ -86,7 +86,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	uptime, err := getPeerUptimes(globalAdminPeers)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		errorIf(err, "Possibly failed to get uptime from majority of servers.")
+		LogUptimeFailure(err)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	jsonBytes, err := json.Marshal(serverStatus)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal storage info into json.")
+		LogFailedMarshalStorageInfo(err)
 		return
 	}
 	// Reply with storage information (across nodes in a
@@ -163,7 +163,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	var req setCredsReq
 	err = xml.Unmarshal(inputData, &req)
 	if err != nil {
-		errorIf(err, "Cannot unmarshal credentials request")
+		LogFailedUnMarshalCreds(err)
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
@@ -177,7 +177,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	// Notify all other Minio peers to update credentials
 	updateErrs := updateCredsOnPeers(creds)
 	for peer, err := range updateErrs {
-		errorIf(err, "Unable to update credentials on peer %s.", peer)
+		LogFailedPeerCredsUpdate(err, peer)
 	}
 
 	// Update local credentials in memory.
@@ -188,7 +188,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
 
-		errorIf(err, "Unable to update the config with new credentials.")
+		LogFailedCredsUpdate(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -281,7 +281,7 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 
 			serverInfoData, err := peer.cmdRunner.ServerInfoData()
 			if err != nil {
-				errorIf(err, "Unable to get server info from %s.", peer.addr)
+				LogFailedGetPeerInfo(err, peer.addr)
 				reply[idx].Error = err.Error()
 				return
 			}
@@ -296,7 +296,7 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 	jsonBytes, err := json.Marshal(reply)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal storage info into json.")
+		LogFailedMarshalStorageInfo(err)
 		return
 	}
 
@@ -327,7 +327,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 	}
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
-		errorIf(err, "Failed to parse duration passed as query value.")
+		LogFailedDurationParse(err)
 		return "", "", time.Duration(0), ErrInvalidDuration
 	}
 
@@ -359,7 +359,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to fetch lock information from remote nodes.")
+		LogFailedLockInfo(err)
 		return
 	}
 
@@ -367,7 +367,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal lock information into json.")
+		LogFailedMarshalLockInfo(err)
 		return
 	}
 
@@ -401,7 +401,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to fetch lock information from remote nodes.")
+		LogFailedLockInfo(err)
 		return
 	}
 
@@ -409,7 +409,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal lock information into json.")
+		LogFailedMarshalLockInfo(err)
 		return
 	}
 	newObjectLayerFn().ClearLocks(volLocks)
@@ -788,7 +788,7 @@ func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http
 	// returns local config.json.
 	configBytes, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
-		errorIf(err, "Failed to get config from peers")
+		LogFailedGetPeerConfig(err)
 		writeErrorResponse(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
@@ -880,7 +880,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 		return
 	}
 	if err != io.ErrUnexpectedEOF {
-		errorIf(err, "Failed to read config from request body.")
+		LogFailedConfigRead(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -890,7 +890,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// Validate JSON provided in the request body: check the
 	// client has not sent JSON objects with duplicate keys.
 	if err = checkDupJSONKeys(string(configBytes)); err != nil {
-		errorIf(err, "config contains duplicate JSON entries.")
+		LogDuplicateJSONEntry(err)
 		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
@@ -898,7 +898,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	var config serverConfig
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		errorIf(err, "Failed to unmarshal JSON configuration", err)
+		LogFailedUmarshalJSON(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

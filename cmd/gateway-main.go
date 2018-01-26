@@ -103,7 +103,7 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
 	if gw == nil {
-		fatalIf(errUnexpected, "Gateway implementation not initialized, exiting.")
+		LogGatewayImplUninit(errUnexpected)
 	}
 
 	// Validate if we have access, secret set through environment.
@@ -139,12 +139,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		errorIf(fmt.Errorf("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
+		LogGatewayCredsNotSet(fmt.Errorf("Access and secret keys not set"), gatewayName)
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
 	// Create certs path.
-	fatalIf(createConfigDir(), "Unable to create configuration directories.")
+	LogFailedCreateConfigDirs(createConfigDir())
 
 	// Initialize gateway config.
 	initConfig()
@@ -155,21 +155,21 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL certificate file")
+	LogInvalidSSLCert(err)
 
 	// Set system resources to maximum.
-	errorIf(setMaxResources(), "Unable to change resource limit")
+	LogResourceLimitChangeFailed(setMaxResources())
 
 	initNSLock(false) // Enable local namespace lock.
 
 	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
-	fatalIf(err, "Unable to initialize gateway layer")
+	LogFailedInitGatewayLayer(err)
 
 	router := mux.NewRouter().SkipClean(true)
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
-		fatalIf(registerWebRouter(router), "Unable to configure web browser")
+		LogFailedConfigureBrowser(registerWebRouter(router))
 	}
 	registerGatewayAPIRouter(router, newObject)
 

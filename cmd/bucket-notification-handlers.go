@@ -66,7 +66,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	// Attempt to successfully load notification config.
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
 	if err != nil && errors.Cause(err) != errNoSuchNotifications {
-		errorIf(err, "Unable to read notification configuration.")
+		LogFailedReadNotificationConfig(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -78,7 +78,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	notificationBytes, err := xml.Marshal(nConfig)
 	if err != nil {
 		// For any marshalling failure.
-		errorIf(err, "Unable to marshal notification configuration into XML.", err)
+		LogFailedMarshalNotificationconfig(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -131,7 +131,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		_, err = io.Copy(&buffer, r.Body)
 	}
 	if err != nil {
-		errorIf(err, "Unable to read incoming body.")
+		LogFailedReadIncomingBody(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -140,7 +140,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	// Unmarshal notification bytes.
 	notificationConfigBytes := buffer.Bytes()
 	if err = xml.Unmarshal(notificationConfigBytes, &notificationCfg); err != nil {
-		errorIf(err, "Unable to parse notification configuration XML.")
+		LogFailedParseNofiticationConfigXML(err)
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	} // Successfully marshalled notification configuration.
@@ -261,10 +261,10 @@ func (l *listenChan) waitForListener(w http.ResponseWriter) {
 	// Logs errors other than EPIPE and ECONNRESET.
 	// EPIPE and ECONNRESET indicate that the client stopped
 	// listening to notification events.
-	logClientError := func(err error, msg string) {
+	logClientError := func(err error, errorLogFunction func(error)) {
 		if oe, ok := err.(*net.OpError); ok && (oe.Err == syscall.EPIPE || oe.Err ==
 			syscall.ECONNRESET) {
-			errorIf(err, msg)
+			errorLogFunction(err)
 		}
 	}
 
@@ -274,12 +274,12 @@ func (l *listenChan) waitForListener(w http.ResponseWriter) {
 		select {
 		case events := <-l.dataCh:
 			if err := writeNotification(w, map[string][]NotificationEvent{"Records": events}); err != nil {
-				logClientError(err, "Unable to write notification")
+				logClientError(err, LogFailedNotificationWrite)
 				return
 			}
 		case <-time.After(globalSNSConnAlive):
 			if err := writeNotification(w, emptyEvent); err != nil {
-				logClientError(err, "Unable to write empty notification")
+				logClientError(err, LogFailedEmptyNotificationWrite)
 				return
 			}
 		}
@@ -379,7 +379,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	nListenCh := newListenChan()
 	// Add channel for listener events
 	if err = globalEventNotifier.AddListenerChan(accountARN, nListenCh); err != nil {
-		errorIf(err, "Error adding a listener!")
+		LogFailedAddListener(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -441,7 +441,7 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 	if globalIsDistXL {
 		err := persistListenerConfig(bucket, listenerCfgs, objAPI)
 		if err != nil {
-			errorIf(err, "Error persisting listener config when adding a listener.")
+			LogFailedPersistConfigInAddListener(err)
 			return err
 		}
 	}
@@ -484,7 +484,7 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	if globalIsDistXL {
 		err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
 		if err != nil {
-			errorIf(err, "Error persisting listener config when removing a listener.")
+			LogFailedPersistConfigInRemoveListener(err)
 			return
 		}
 	}

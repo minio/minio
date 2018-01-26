@@ -75,7 +75,7 @@ func isAMQPQueue(sqsArn arnSQS) bool {
 	// Connect to amqp server to validate.
 	amqpC, err := dialAMQP(amqpL)
 	if err != nil {
-		errorIf(err, "Unable to connect to amqp service. %#v", amqpL)
+		LogAMQPConnectFailed(err)
 		return false
 	}
 	defer amqpC.conn.Close()
@@ -94,7 +94,7 @@ func isMQTTQueue(sqsArn arnSQS) bool {
 	// Connect to mqtt server to validate.
 	mqttC, err := dialMQTT(mqttL)
 	if err != nil {
-		errorIf(err, "Unable to connect to mqtt service. %#v", mqttL)
+		LogMQTTConnectFailed(err)
 		return false
 	}
 	defer mqttC.Client.Disconnect(250)
@@ -113,7 +113,7 @@ func isNATSQueue(sqsArn arnSQS) bool {
 	// Connect to nats server to validate.
 	natsC, err := dialNATS(natsL, true)
 	if err != nil {
-		errorIf(err, "Unable to connect to nats service. %#v", natsL)
+		LogNATSConnectFailed(err)
 		return false
 	}
 	closeNATS(natsC)
@@ -141,7 +141,7 @@ func isRedisQueue(sqsArn arnSQS) bool {
 	// Connect to redis server to validate.
 	rPool, err := dialRedis(rNotify)
 	if err != nil {
-		errorIf(err, "Unable to connect to redis service. %#v", rNotify)
+		LogRedisConnectFailed(err)
 		return false
 	}
 	defer rPool.Close()
@@ -159,7 +159,7 @@ func isElasticQueue(sqsArn arnSQS) bool {
 	}
 	elasticC, err := dialElastic(esNotify)
 	if err != nil {
-		errorIf(err, "Unable to connect to elasticsearch service %#v", esNotify)
+		LogESConnectFailed(err)
 		return false
 	}
 	defer elasticC.Stop()
@@ -177,7 +177,7 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 	}
 	pgC, err := dialPostgreSQL(pgNotify)
 	if err != nil {
-		errorIf(err, "Unable to connect to PostgreSQL server %#v", pgNotify)
+		LogPostGreSQLConnectFailed(err)
 		return false
 	}
 	defer pgC.Close()
@@ -195,7 +195,7 @@ func isMySQLQueue(sqsArn arnSQS) bool {
 	}
 	myC, err := dialMySQL(msqlNotify)
 	if err != nil {
-		errorIf(err, "Unable to connect to MySQL server %#v", msqlNotify)
+		LogMySQLConnectFailed(err)
 		return false
 	}
 	defer myC.Close()
@@ -213,7 +213,7 @@ func isKafkaQueue(sqsArn arnSQS) bool {
 	}
 	kafkaC, err := dialKafka(kafkaNotifyCfg)
 	if err != nil {
-		errorIf(err, "Unable to dial Kafka server %#v", kafkaNotifyCfg)
+		LogKafkaDialFailed(err)
 		return false
 	}
 	defer kafkaC.Close()

@@ -56,14 +56,12 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -102,7 +100,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			// log the error.
-			errorIf(err, "Invalid request range")
+			LogInvalidRequestRange(err)
 		}
 	}
 
@@ -129,7 +127,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	httpWriter := ioutil.WriteOnClose(w)
 	// Reads the object at startOffset and writes to mw.
 	if err = getObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
-		errorIf(err, "Unable to write to client.")
+		LogClientWriteFailed(err)
 		if !httpWriter.HasWritten() {
 			// Error response only if no data has been written to client yet. i.e if
 			// partial data has already been written before an error
@@ -270,20 +268,17 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -300,7 +295,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := putObject(bucket, object, hashReader, metadata)
 	if err != nil {
-		errorIf(err, "Unable to save an object %s", r.URL.Path)
+		LogFailedSaveObject(err, r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -348,14 +343,12 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -456,7 +449,7 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 	// bucket policies are limited to 20KB in size, using a limit reader.
 	policyBytes, err := goioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
-		errorIf(err, "Unable to read from client.")
+		LogClientReadFailed(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -673,14 +666,12 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -746,14 +737,12 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -824,14 +813,12 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, globalServerConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -875,7 +862,6 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -886,7 +872,6 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 			s3Error = isReqAuthenticated(r, globalServerConfig.GetRegion())
 		}
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}

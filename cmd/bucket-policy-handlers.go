@@ -257,7 +257,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	// bucket policies are limited to 20KB in size, using a limit reader.
 	policyBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
 	if err != nil {
-		errorIf(err, "Unable to read from client.")
+		LogFailedClientRead(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -347,7 +347,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	policyBytes, err := json.Marshal(&policy)
 	if err != nil {
-		errorIf(err, "Unable to marshal bucket policy.")
+		LogFailedBucketPolicyMarshal(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

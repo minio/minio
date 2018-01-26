@@ -374,7 +374,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errors.Trace(errNoSuchNotifications)
 		}
-		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
+		LogFailedBucketNofificationLoad(err, bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errors.Trace(errNoSuchNotifications)
 		}
-		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
+		LogFailedBucketListenerLoad(err, bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
@@ -431,7 +431,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	var lCfg []listenerConfig
 	lConfigBytes := buffer.Bytes()
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
-		errorIf(err, "Unable to unmarshal listener config from JSON.")
+		LogFailedListenerConfigUnMarshal(err)
 		return nil, errors.Trace(err)
 	}
 
@@ -443,7 +443,7 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	// marshal to xml
 	buf, err := xml.Marshal(ncfg)
 	if err != nil {
-		errorIf(err, "Unable to marshal notification configuration into XML")
+		LogFailedNotificationConfigMarshalXML(err)
 		return err
 	}
 
@@ -453,12 +453,12 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	// write object to path
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
-		errorIf(err, "Unable to write bucket notification configuration.")
+		LogFailedBucketNotificationConfigWrite(err)
 		return err
 	}
 	_, err = obj.PutObject(minioMetaBucket, ncPath, hashReader, nil)
 	if err != nil {
-		errorIf(err, "Unable to write bucket notification configuration.")
+		LogFailedBucketNotificationConfigWrite(err)
 		return err
 	}
 	return nil
@@ -468,7 +468,7 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer) error {
 	buf, err := json.Marshal(lcfg)
 	if err != nil {
-		errorIf(err, "Unable to marshal listener config to JSON.")
+		LogFailedListenerConfigMarshal(err)
 		return err
 	}
 
@@ -478,14 +478,14 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	// write object to path
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
-		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		LogFailedWriteBucketListenerConfigToObjLayer(err)
 		return err
 	}
 
 	// write object to path
 	_, err = obj.PutObject(minioMetaBucket, lcPath, hashReader, nil)
 	if err != nil {
-		errorIf(err, "Unable to write bucket listener configuration to object layer.")
+		LogFailedWriteBucketListenerConfigToObjLayer(err)
 		return err
 	}
 	return nil
@@ -758,7 +758,7 @@ func initEventNotifier(objAPI ObjectLayer) error {
 	// Read all saved bucket notifications.
 	nConfigs, lConfigs, err := loadAllBucketNotifications(objAPI)
 	if err != nil {
-		errorIf(err, "Error loading bucket notifications - %v", err)
+		LogFailedBucketNotificationsLoad(err)
 		return err
 	}
 
@@ -777,7 +777,7 @@ func initEventNotifier(objAPI ObjectLayer) error {
 				listener.TargetServer,
 			)
 			if err != nil {
-				errorIf(err, "Unable to initialize listener target logger.")
+				LogFailedInitListenerTargetLogger(err)
 				//TODO: improve error
 				return fmt.Errorf("Error initializing listner target logger - %v", err)
 			}

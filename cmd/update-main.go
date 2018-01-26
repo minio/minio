@@ -154,7 +154,7 @@ func IsDocker() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	errorIf(err, "Error in docker check.")
+	LogDockerCheckError(err)
 
 	return err == nil
 }
@@ -184,7 +184,7 @@ func IsBOSH() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	errorIf(err, "Error in BOSH check.")
+	LogBOSHCheckError(err)
 
 	return err == nil
 }
@@ -199,7 +199,7 @@ func getHelmVersion(helmInfoFilePath string) string {
 		// Log errors and return "" as Minio can be deployed
 		// without Helm charts as well.
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to read %s", helmInfoFilePath)
+			LogReadHelmFileFailed(err, helmInfoFilePath)
 		}
 		return ""
 	}
