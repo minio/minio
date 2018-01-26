@@ -58,6 +58,13 @@ export MINIO_CERT_PASSWD=PASSWORD
 ``` 
 Please use your own password instead of PASSWORD.
 
+**Notice:**  
+The OpenSSL default format for encrypted private keys is PKCS-8. Minio only supports PKCS-1 encrypted private keys.
+An encrypted private PKCS-8 formated RSA key can be converted to an encrypted private PKCS-1 formated RSA key by:
+```sh
+openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
+```  
+
 **Generate the self-signed certificate**:
 
 ```sh
