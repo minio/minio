@@ -29,25 +29,36 @@ var exports = {
     filename: 'index_bundle.js'
   },
   module: {
-    loaders: [{
+    rules: [{
         test: /\.js$/,
         exclude: /(node_modules|bower_components)/,
-        loader: 'babel',
-        query: {
-              presets: ['react', 'es2015']
-            }
+        use: [{
+          loader: 'babel-loader',
+          options: {
+            presets: ['react', 'es2015']
+          }
+        }]
       }, {
         test: /\.less$/,
-        loader: 'style!css!less'
-      }, {
-        test: /\.json$/,
-        loader: 'json-loader'
+        use: [{
+          loader: 'style-loader'
+        }, {
+          loader: 'css-loader'
+        }, {
+          loader: 'less-loader'
+        }]
       }, {
         test: /\.css$/,
-        loader: 'style!css'
+        use: [{
+          loader: 'style-loader'
+        }, {
+          loader: 'css-loader'
+        }]
       }, {
         test: /\.(eot|woff|woff2|ttf|svg|png)/,
-        loader: 'url'
+        use: [{
+          loader: 'url-loader'
+        }]
       }]
   },
   node:{
@@ -79,7 +90,6 @@ var exports = {
 
 if (process.env.NODE_ENV === 'dev') {
   exports.entry = [
-    'webpack/hot/dev-server',
     'webpack-dev-server/client?http://localhost:8080',
     path.resolve(__dirname, 'app/index.js')
   ]

@@ -23,7 +23,7 @@
     "async": "^1.5.2",
     "babel-cli": "^6.14.0",
     "babel-core": "^6.14.0",
-    "babel-loader": "^6.2.5",
+    "babel-loader": "^7.1.2",
     "babel-plugin-syntax-object-rest-spread": "^6.13.0",
     "babel-plugin-transform-object-rest-spread": "^6.8.0",
     "babel-polyfill": "^6.23.0",
@@ -35,21 +35,21 @@
     "esformatter": "^0.10.0",
     "esformatter-jsx": "^7.4.1",
     "esformatter-jsx-ignore": "^1.0.6",
-    "html-webpack-plugin": "^2.22.0",
+    "html-webpack-plugin": "^2.30.1",
     "json-loader": "^0.5.4",
     "karma": "^0.13.22",
     "karma-chrome-launcher": "^0.2.3",
     "karma-cli": "^0.1.2",
     "karma-firefox-launcher": "^0.1.7",
     "karma-mocha": "^0.2.2",
-    "karma-webpack": "^1.7.0",
+    "karma-webpack": "^2.0.9",
     "less": "^2.7.1",
     "less-loader": "^2.2.3",
     "mocha": "^2.5.3",
     "purifycss-webpack-plugin": "^2.0.3",
     "style-loader": "^0.13.1",
     "url-loader": "^0.5.7",
-    "webpack-dev-server": "^1.14.1"
+    "webpack-dev-server": "^2.11.1"
   },
   "dependencies": {
     "bootstrap": "^3.3.6",
@@ -79,6 +79,6 @@
     "redux-thunk": "^1.0.3",
     "superagent": "^1.8.4",
     "superagent-es6-promise": "^1.0.0",
-    "webpack": "^1.12.11"
+    "webpack": "^3.10.0"
   }
 }
