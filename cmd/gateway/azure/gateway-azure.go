@@ -130,6 +130,10 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, err
 		}
 	}
 
+	if endpoint == fmt.Sprintf("%s.blob.%s", creds.AccessKey, storage.DefaultBaseURL) {
+		// If, by mistake, user provides endpoint as accountname.blob.core.windows.net
+		endpoint = storage.DefaultBaseURL
+	}
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
