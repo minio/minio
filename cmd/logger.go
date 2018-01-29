@@ -172,7 +172,8 @@ func logIf(level Level, err error, msg string,
 	if err == nil || isErrIgnored(err) {
 		return
 	}
-	cause := strings.Title(err.Error())
+	// Get the cause for the Error
+	cause := err.Error()
 	// Get full stack trace
 	trace := getTrace(3)
 	// Get time
