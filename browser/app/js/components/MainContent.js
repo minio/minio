@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
+import React from "react"
+import MobileHeader from "./MobileHeader"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets
-})
+export const MainContent = () => (
+  <div className="fe-body">
+    <MobileHeader />
+  </div>
+)
 
-export default rootReducer
+export default MainContent

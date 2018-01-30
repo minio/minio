@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
+export const TOGGLE_SIDEBAR = "common/TOGGLE_SIDEBAR"
+export const CLOSE_SIDEBAR = "common/CLOSE_SIDEBAR"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets
+export const toggleSidebar = () => ({
+  type: TOGGLE_SIDEBAR
 })
 
-export default rootReducer
+export const closeSidebar = () => ({
+  type: CLOSE_SIDEBAR
+})

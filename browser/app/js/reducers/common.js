@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
+import * as actionsCommon from "../actions/common"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets
-})
-
-export default rootReducer
+export default (state = { sidebarOpen: false }, action) => {
+  switch (action.type) {
+    case actionsCommon.TOGGLE_SIDEBAR:
+      return Object.assign({}, state, {
+        sidebarOpen: !state.sidebarOpen
+      })
+    case actionsCommon.CLOSE_SIDEBAR:
+      return Object.assign({}, state, {
+        sidebarOpen: false
+      })
+    default:
+      return state
+  }
+}
