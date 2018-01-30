@@ -440,7 +440,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
-	if err = checkBucketAndObjectNamesFS(bucket, object); err != nil {
+	if err = checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
 
@@ -572,22 +572,6 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
-// Checks bucket and object name validity, returns nil if both are valid.
-func checkBucketAndObjectNamesFS(bucket, object string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return errors.Trace(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if len(object) == 0 {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	if !IsValidObjectPrefix(object) {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-	return nil
-}
-
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
@@ -597,7 +581,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error
 	}
 	defer objectLock.RUnlock()
 
-	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
+	if err := checkGetObjArgs(bucket, object); err != nil {
 		return oi, err
 	}
 
@@ -775,7 +759,7 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	}
 	defer objectLock.Unlock()
 
-	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
+	if err := checkDelObjArgs(bucket, object); err != nil {
 		return err
 	}
 

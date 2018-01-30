@@ -21,5 +21,5 @@ package cmd
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
 func isValidVolname(volname string) bool {
-	return !(len(volname) < 3 || len(volname) > 63)
+	return !(len(volname) < 3)
 }
