@@ -91,27 +91,9 @@ func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 	s.StorageClass.RRS = rrsClass
 }
 
-// GetStorageClass reads storage class fields from current config, parses and validates it.
+// GetStorageClass reads storage class fields from current config.
 // It returns the standard and reduced redundancy storage class struct
 func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
-	var err error
-	// Storage Class from config.json is already parsed and stored in s.StorageClass
-	// Now validate the storage class fields
-	ssc := s.StorageClass.Standard
-	rrsc := s.StorageClass.RRS
-
-	if rrsc.Scheme != "" {
-		err = validateRRSParity(rrsc.Parity, ssc.Parity)
-		fatalIf(err, "Invalid value %s:%d set in config.json", rrsc.Scheme, rrsc.Parity)
-		globalIsStorageClass = true
-	}
-
-	if ssc.Scheme != "" {
-		err = validateSSParity(ssc.Parity, rrsc.Parity)
-		fatalIf(err, "Invalid value %s:%d set in config.json", ssc.Scheme, ssc.Parity)
-		globalIsStorageClass = true
-	}
-
 	return s.StorageClass.Standard, s.StorageClass.RRS
 }
 
@@ -172,12 +154,15 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 
 func newServerConfig() *serverConfig {
 	srvCfg := &serverConfig{
-		Version:      serverConfigVersion,
-		Credential:   auth.MustGetNewCredentials(),
-		Region:       globalMinioDefaultRegion,
-		Browser:      true,
-		StorageClass: storageClassConfig{},
-		Notify:       notifier{},
+		Version:    serverConfigVersion,
+		Credential: auth.MustGetNewCredentials(),
+		Region:     globalMinioDefaultRegion,
+		Browser:    true,
+		StorageClass: storageClassConfig{
+			Standard: storageClass{},
+			RRS:      storageClass{},
+		},
+		Notify: notifier{},
 	}
 
 	// Make sure to initialize notification configs.
