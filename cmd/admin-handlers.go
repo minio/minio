@@ -795,13 +795,17 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	}
 
 	// Take a lock on minio/config.json. Prevents concurrent
-	// config file/credentials updates.
+	// config file updates.
 	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
 	if configLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponseJSON(w, ErrOperationTimedOut, r.URL)
 		return
 	}
 	defer configLock.Unlock()
+
+	// Acquire lock before updating global configuration.
+	globalServerConfigMu.Lock()
+	defer globalServerConfigMu.Unlock()
 
 	// Notify all other Minio peers to update credentials
 	updateErrs := updateCredsOnPeers(creds)

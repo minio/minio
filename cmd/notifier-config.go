@@ -18,12 +18,10 @@ package cmd
 
 import (
 	"fmt"
-	"sync"
 )
 
 // Notifier represents collection of supported notification queues.
 type notifier struct {
-	sync.RWMutex
 	AMQP          amqpConfigs          `json:"amqp"`
 	NATS          natsConfigs          `json:"nats"`
 	ElasticSearch elasticSearchConfigs `json:"elasticsearch"`
@@ -33,7 +31,9 @@ type notifier struct {
 	Webhook       webhookConfigs       `json:"webhook"`
 	MySQL         mySQLConfigs         `json:"mysql"`
 	MQTT          mqttConfigs          `json:"mqtt"`
-	// Add new notification queues.
+	// Add new notification queues. IMPORTANT: When new queues are
+	// added, update `serverConfig.ConfigDiff()` to reflect the
+	// change.
 }
 
 type amqpConfigs map[string]amqpNotify
@@ -239,163 +239,109 @@ func (n *notifier) Validate() error {
 }
 
 func (n *notifier) SetAMQPByID(accountID string, amqpn amqpNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.AMQP[accountID] = amqpn
 }
 
 func (n *notifier) GetAMQP() map[string]amqpNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.AMQP.Clone()
 }
 
 func (n *notifier) GetAMQPByID(accountID string) amqpNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.AMQP[accountID]
 }
 
 func (n *notifier) SetMQTTByID(accountID string, mqttn mqttNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.MQTT[accountID] = mqttn
 }
 
 func (n *notifier) GetMQTT() map[string]mqttNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.MQTT.Clone()
 }
 
 func (n *notifier) GetMQTTByID(accountID string) mqttNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.MQTT[accountID]
 }
 
 func (n *notifier) SetNATSByID(accountID string, natsn natsNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.NATS[accountID] = natsn
 }
 
 func (n *notifier) GetNATS() map[string]natsNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.NATS.Clone()
 }
 
 func (n *notifier) GetNATSByID(accountID string) natsNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.NATS[accountID]
 }
 
 func (n *notifier) SetElasticSearchByID(accountID string, es elasticSearchNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.ElasticSearch[accountID] = es
 }
 
 func (n *notifier) GetElasticSearchByID(accountID string) elasticSearchNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.ElasticSearch[accountID]
 }
 
 func (n *notifier) GetElasticSearch() map[string]elasticSearchNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.ElasticSearch.Clone()
 }
 
 func (n *notifier) SetRedisByID(accountID string, r redisNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.Redis[accountID] = r
 }
 
 func (n *notifier) GetRedis() map[string]redisNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Redis.Clone()
 }
 
 func (n *notifier) GetRedisByID(accountID string) redisNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Redis[accountID]
 }
 
 func (n *notifier) GetWebhook() map[string]webhookNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Webhook.Clone()
 }
 
 func (n *notifier) GetWebhookByID(accountID string) webhookNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Webhook[accountID]
 }
 
 func (n *notifier) SetWebhookByID(accountID string, pgn webhookNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.Webhook[accountID] = pgn
 }
 
 func (n *notifier) SetPostgreSQLByID(accountID string, pgn postgreSQLNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.PostgreSQL[accountID] = pgn
 }
 
 func (n *notifier) GetPostgreSQL() map[string]postgreSQLNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.PostgreSQL.Clone()
 }
 
 func (n *notifier) GetPostgreSQLByID(accountID string) postgreSQLNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.PostgreSQL[accountID]
 }
 
 func (n *notifier) SetMySQLByID(accountID string, pgn mySQLNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.MySQL[accountID] = pgn
 }
 
 func (n *notifier) GetMySQL() map[string]mySQLNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.MySQL.Clone()
 }
 
 func (n *notifier) GetMySQLByID(accountID string) mySQLNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.MySQL[accountID]
 }
 
 func (n *notifier) SetKafkaByID(accountID string, kn kafkaNotify) {
-	n.Lock()
-	defer n.Unlock()
 	n.Kafka[accountID] = kn
 }
 
 func (n *notifier) GetKafka() map[string]kafkaNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Kafka.Clone()
 }
 
 func (n *notifier) GetKafkaByID(accountID string) kafkaNotify {
-	n.RLock()
-	defer n.RUnlock()
 	return n.Kafka[accountID]
 }

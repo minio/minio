@@ -50,6 +50,10 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 		return fmt.Errorf("Invalid credential passed")
 	}
 
+	// Acquire lock before updating global configuration.
+	globalServerConfigMu.Lock()
+	defer globalServerConfigMu.Unlock()
+
 	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(args.Creds)
 
