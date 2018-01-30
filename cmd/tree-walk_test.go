@@ -312,14 +312,17 @@ func TestListDir(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if len(entries) != 1 {
-		t.Fatal("Expected the number of entries to be 1")
+	if len(entries) != 2 {
+		t.Fatal("Expected the number of entries to be 2")
 	}
 	if entries[0] != file1 {
 		t.Fatal("Expected the entry to be file1")
 	}
+	if entries[1] != file2 {
+		t.Fatal("Expected the entry to be file2")
+	}
 
-	// Remove fsDir1 to test failover.
+	// Remove fsDir1, list should return entries from fsDir2
 	err = os.RemoveAll(fsDir1)
 	if err != nil {
 		t.Error(err)

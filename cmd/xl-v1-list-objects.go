@@ -16,18 +16,24 @@
 
 package cmd
 
-import "github.com/minio/minio/pkg/errors"
+import (
+	"sort"
+
+	"github.com/minio/minio/pkg/errors"
+)
 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
-// disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
+// disks - used for doing disk.ListDir()
 func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...StorageAPI) listDirFunc {
-	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
+	// Returns sorted merged entries from all the disks.
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool, err error) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
 			}
+			var entries []string
+			var newEntries []string
 			entries, err = disk.ListDir(bucket, prefixDir)
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
@@ -38,11 +44,24 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 				return nil, false, errors.Trace(err)
 			}
 
-			entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-			return entries, delayIsLeaf, nil
+			// Find elements in entries which are not in mergedEntries
+			for _, entry := range entries {
+				idx := sort.SearchStrings(mergedEntries, entry)
+				// if entry is already present in mergedEntries don't add.
+				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
+					continue
+				}
+				newEntries = append(newEntries, entry)
+			}
+
+			if len(newEntries) > 0 {
+				// Merge the entries and sort it.
+				mergedEntries = append(mergedEntries, newEntries...)
+				sort.Strings(mergedEntries)
+			}
 		}
-		// Nothing found in all disks
-		return nil, false, nil
+		mergedEntries, delayIsLeaf = filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
+		return mergedEntries, delayIsLeaf, nil
 	}
 	return listDir
 }
@@ -90,8 +109,10 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			var err error
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound
-				if errors.Cause(err) == errFileNotFound {
+				// Ignore errFileNotFound as the object might have got deleted in the interim period
+				// of listing and getObjectInfo()
+				// Ignore quorum error as it might be an entry from an outdated disk.
+				if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errXLReadQuorum {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)
