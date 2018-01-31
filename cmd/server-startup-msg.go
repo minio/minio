@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,19 +125,16 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 // Prints bucket notification configurations.
 func printEventNotifiers() {
-	if globalEventNotifier == nil {
-		// In case initEventNotifier() was not done or failed.
+	arns := globalNotificationSys.GetARNList()
+	if len(arns) == 0 {
 		return
 	}
-	// Get all configured external notification targets
-	externalTargets := globalEventNotifier.GetAllExternalTargets()
-	if len(externalTargets) == 0 {
-		return
-	}
+
 	arnMsg := colorBlue("SQS ARNs: ")
-	for queueArn := range externalTargets {
-		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 1), queueArn))
+	for _, arn := range arns {
+		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(arn), 1), arn))
 	}
+
 	log.Println(arnMsg)
 }
 

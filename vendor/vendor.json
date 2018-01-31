@@ -81,11 +81,6 @@
 			"revisionTime": "2017-09-13T22:19:17Z"
 		},
 		{
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "32055c351ea8b00b96d70f28db48d9840feaf0ec",
-			"revisionTime": "2016-07-12T20:17:32-04:00"
-		},
-		{
 			"checksumSHA1": "tX0Bq1gzqskL98nnB1X2rDqxH18=",
 			"path": "github.com/aliyun/aliyun-oss-go-sdk/oss",
 			"revision": "6fe16293d6b7af4f5c2450714c5b4825c8ad040c",

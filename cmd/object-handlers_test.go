@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -478,11 +478,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 	bytesData := bytes.Repeat([]byte{'a'}, bytesDataLen)
 	oneKData := bytes.Repeat([]byte("a"), 1*humanize.KiByte)
 
-	err := initEventNotifier(obj)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to initialize event notifiers <ERROR> %v", instanceType, err)
+	var err error
 
-	}
 	type streamFault int
 	const (
 		None streamFault = iota
@@ -787,12 +784,7 @@ func TestAPIPutObjectHandler(t *testing.T) {
 func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
 
-	// register event notifier.
-	err := initEventNotifier(obj)
-
-	if err != nil {
-		t.Fatal("Notifier initialization failed.")
-	}
+	var err error
 	objectName := "test-object"
 	// byte data for PutObject.
 	bytesData := generateBytesData(6 * humanize.KiByte)
@@ -1041,11 +1033,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
-	// register event notifier.
-	err := initEventNotifier(obj)
-	if err != nil {
-		t.Fatalf("Initializing event notifiers failed")
-	}
+	var err error
 
 	// set of byte data for PutObject.
 	// object has to be created before running tests for Copy Object.
@@ -1156,11 +1144,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	credentials auth.Credentials, t *testing.T) {
 
 	objectName := "test-object"
-	// register event notifier.
-	err := initEventNotifier(obj)
-	if err != nil {
-		t.Fatalf("Initializing event notifiers failed")
-	}
+	var err error
 
 	// set of byte data for PutObject.
 	// object has to be created before running tests for Copy Object.
@@ -1488,11 +1472,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	objectName := "test-object"
 	// object used for anonymous HTTP request test.
 	anonObject := "anon-object"
-	// register event notifier.
-	err := initEventNotifier(obj)
-	if err != nil {
-		t.Fatalf("Initializing event notifiers failed")
-	}
+	var err error
 
 	// set of byte data for PutObject.
 	// object has to be created before running tests for Copy Object.
@@ -2110,12 +2090,6 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	credentials auth.Credentials, t *testing.T) {
 
 	var err error
-	// register event notifier.
-	err = initEventNotifier(obj)
-
-	if err != nil {
-		t.Fatal("Notifier initialization failed.")
-	}
 
 	// object used for the test.
 	objectName := "test-object-new-multipart"
@@ -2465,12 +2439,6 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	credentials auth.Credentials, t *testing.T) {
 
 	var err error
-	// register event notifier.
-	err = initEventNotifier(obj)
-
-	if err != nil {
-		t.Fatal("Notifier initialization failed.")
-	}
 
 	// object used for the test.
 	objectName := "test-object-new-multipart"
@@ -2633,12 +2601,7 @@ func TestAPIDeleteObjectHandler(t *testing.T) {
 func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
 
-	// register event notifier.
-	err := initEventNotifier(obj)
-
-	if err != nil {
-		t.Fatal("Notifier initialization failed.")
-	}
+	var err error
 
 	objectName := "test-object"
 	// Object used for anonymous API request test.

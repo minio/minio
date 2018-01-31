@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,11 @@ func handleSignals() {
 
 	stopProcess := func() bool {
 		var err, oerr error
+
+		// globalNotificationSys is not initialized in gateway mode.
+		if globalNotificationSys != nil {
+			globalNotificationSys.RemoveAllRemoteTargets()
+		}
 
 		err = globalHTTPServer.Shutdown()
 		errorIf(err, "Unable to shutdown http server")

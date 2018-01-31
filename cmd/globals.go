@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,8 +114,7 @@ var (
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 
-	// Peer communication struct
-	globalS3Peers = s3Peers{}
+	globalNotificationSys *NotificationSys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -159,9 +158,6 @@ var (
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
-
-	// Keep connection active for clients actively using ListenBucketNotification.
-	globalSNSConnAlive = 5 * time.Second // Send a whitespace every 5 seconds.
 
 	// Storage classes
 	// Set to indicate if storage class is set up

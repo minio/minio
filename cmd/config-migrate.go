@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/event/target"
+	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -356,34 +359,55 @@ func migrateV5ToV6() error {
 	srvConfig.Logger.File = cv5.Logger.File
 	srvConfig.Logger.Syslog = cv5.Logger.Syslog
 
-	srvConfig.Notify.AMQP = map[string]amqpNotify{
-		"1": {
-			Enable:      cv5.Logger.AMQP.Enable,
-			URL:         cv5.Logger.AMQP.URL,
-			Exchange:    cv5.Logger.AMQP.Exchange,
-			RoutingKey:  cv5.Logger.AMQP.RoutingKey,
-			Mandatory:   cv5.Logger.AMQP.Mandatory,
-			Immediate:   cv5.Logger.AMQP.Immediate,
-			Durable:     cv5.Logger.AMQP.Durable,
-			Internal:    cv5.Logger.AMQP.Internal,
-			NoWait:      cv5.Logger.AMQP.NoWait,
-			AutoDeleted: cv5.Logger.AMQP.AutoDeleted,
-		},
+	if cv5.Logger.AMQP.URL != "" {
+		var url *xnet.URL
+		if url, err = xnet.ParseURL(cv5.Logger.AMQP.URL); err != nil {
+			return err
+		}
+		srvConfig.Notify.AMQP = map[string]target.AMQPArgs{
+			"1": {
+				Enable:      cv5.Logger.AMQP.Enable,
+				URL:         *url,
+				Exchange:    cv5.Logger.AMQP.Exchange,
+				RoutingKey:  cv5.Logger.AMQP.RoutingKey,
+				Mandatory:   cv5.Logger.AMQP.Mandatory,
+				Immediate:   cv5.Logger.AMQP.Immediate,
+				Durable:     cv5.Logger.AMQP.Durable,
+				Internal:    cv5.Logger.AMQP.Internal,
+				NoWait:      cv5.Logger.AMQP.NoWait,
+				AutoDeleted: cv5.Logger.AMQP.AutoDeleted,
+			},
+		}
 	}
-	srvConfig.Notify.ElasticSearch = map[string]elasticSearchNotify{
-		"1": {
-			Enable: cv5.Logger.ElasticSearch.Enable,
-			URL:    cv5.Logger.ElasticSearch.URL,
-			Index:  cv5.Logger.ElasticSearch.Index,
-		},
+
+	if cv5.Logger.ElasticSearch.URL != "" {
+		var url *xnet.URL
+		url, err = xnet.ParseURL(cv5.Logger.ElasticSearch.URL)
+		if err != nil {
+			return err
+		}
+		srvConfig.Notify.ElasticSearch = map[string]target.ElasticsearchArgs{
+			"1": {
+				Enable: cv5.Logger.ElasticSearch.Enable,
+				URL:    *url,
+				Index:  cv5.Logger.ElasticSearch.Index,
+			},
+		}
 	}
-	srvConfig.Notify.Redis = map[string]redisNotify{
-		"1": {
-			Enable:   cv5.Logger.Redis.Enable,
-			Addr:     cv5.Logger.Redis.Addr,
-			Password: cv5.Logger.Redis.Password,
-			Key:      cv5.Logger.Redis.Key,
-		},
+
+	if cv5.Logger.Redis.Addr != "" {
+		var addr *xnet.Host
+		if addr, err = xnet.ParseHost(cv5.Logger.Redis.Addr); err != nil {
+			return err
+		}
+		srvConfig.Notify.Redis = map[string]target.RedisArgs{
+			"1": {
+				Enable:   cv5.Logger.Redis.Enable,
+				Addr:     *addr,
+				Password: cv5.Logger.Redis.Password,
+				Key:      cv5.Logger.Redis.Key,
+			},
+		}
 	}
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
@@ -423,21 +447,21 @@ func migrateV6ToV7() error {
 	srvConfig.Logger.Console = cv6.Logger.Console
 	srvConfig.Logger.File = cv6.Logger.File
 	srvConfig.Logger.Syslog = cv6.Logger.Syslog
-	srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-	srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-	srvConfig.Notify.Redis = make(map[string]redisNotify)
+	srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+	srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+	srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
 	if len(cv6.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv6.Notify.AMQP
 	}
 	if len(cv6.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv6.Notify.ElasticSearch
 	}
 	if len(cv6.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv6.Notify.Redis
 	}
@@ -479,13 +503,13 @@ func migrateV7ToV8() error {
 	srvConfig.Logger.Console = cv7.Logger.Console
 	srvConfig.Logger.File = cv7.Logger.File
 	srvConfig.Logger.Syslog = cv7.Logger.Syslog
-	srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+	srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
 	srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
-	srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-	srvConfig.Notify.Redis = make(map[string]redisNotify)
-	srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+	srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+	srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+	srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
 	if len(cv7.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv7.Notify.AMQP
 	}
@@ -495,12 +519,12 @@ func migrateV7ToV8() error {
 		srvConfig.Notify.NATS = cv7.Notify.NATS
 	}
 	if len(cv7.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv7.Notify.ElasticSearch
 	}
 	if len(cv7.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv7.Notify.Redis
 	}
@@ -545,8 +569,8 @@ func migrateV8ToV9() error {
 
 	// check and set notifiers config
 	if len(cv8.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv8.Notify.AMQP
 	}
@@ -557,20 +581,20 @@ func migrateV8ToV9() error {
 		srvConfig.Notify.NATS = cv8.Notify.NATS
 	}
 	if len(cv8.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv8.Notify.ElasticSearch
 	}
 	if len(cv8.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv8.Notify.Redis
 	}
 	if len(cv8.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv8.Notify.PostgreSQL
 	}
@@ -613,8 +637,8 @@ func migrateV9ToV10() error {
 
 	// check and set notifiers config
 	if len(cv9.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv9.Notify.AMQP
 	}
@@ -625,20 +649,20 @@ func migrateV9ToV10() error {
 		srvConfig.Notify.NATS = cv9.Notify.NATS
 	}
 	if len(cv9.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv9.Notify.ElasticSearch
 	}
 	if len(cv9.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv9.Notify.Redis
 	}
 	if len(cv9.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv9.Notify.PostgreSQL
 	}
@@ -681,8 +705,8 @@ func migrateV10ToV11() error {
 
 	// check and set notifiers config
 	if len(cv10.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv10.Notify.AMQP
 	}
@@ -693,26 +717,26 @@ func migrateV10ToV11() error {
 		srvConfig.Notify.NATS = cv10.Notify.NATS
 	}
 	if len(cv10.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv10.Notify.ElasticSearch
 	}
 	if len(cv10.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv10.Notify.Redis
 	}
 	if len(cv10.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv10.Notify.PostgreSQL
 	}
 	// V10 will not have a Kafka config. So we initialize one here.
-	srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-	srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+	srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv10.Version, srvConfig.Version, err)
@@ -752,32 +776,32 @@ func migrateV11ToV12() error {
 
 	// check and set notifiers config
 	if len(cv11.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv11.Notify.AMQP
 	}
 	if len(cv11.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.ElasticSearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.ElasticSearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		srvConfig.Notify.ElasticSearch = cv11.Notify.ElasticSearch
 	}
 	if len(cv11.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv11.Notify.Redis
 	}
 	if len(cv11.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv11.Notify.PostgreSQL
 	}
 	if len(cv11.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv11.Notify.Kafka
 	}
@@ -785,14 +809,23 @@ func migrateV11ToV12() error {
 	// V12 will have an updated config of nats. So we create a new one or we
 	// update the old one if found.
 	if len(cv11.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
 		for k, v := range cv11.Notify.NATS {
-			n := natsNotify{}
+			if v.Address == "" {
+				continue
+			}
+
+			var addr *xnet.Host
+			addr, err = xnet.ParseHost(v.Address)
+			if err != nil {
+				return err
+			}
+			n := target.NATSArgs{}
 			n.Enable = v.Enable
-			n.Address = v.Address
+			n.Address = *addr
 			n.Subject = v.Subject
 			n.Username = v.Username
 			n.Password = v.Password
@@ -843,45 +876,45 @@ func migrateV12ToV13() error {
 
 	// check and set notifiers config
 	if len(cv12.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv12.Notify.AMQP
 	}
 	if len(cv12.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv12.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv12.Notify.ElasticSearch
 	}
 	if len(cv12.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv12.Notify.Redis
 	}
 	if len(cv12.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv12.Notify.PostgreSQL
 	}
 	if len(cv12.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv12.Notify.Kafka
 	}
 	if len(cv12.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv12.Notify.NATS
 	}
 
 	// V12 will not have a webhook config. So we initialize one here.
-	srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-	srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+	srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv12.Version, srvConfig.Version, err)
@@ -923,44 +956,44 @@ func migrateV13ToV14() error {
 
 	// check and set notifiers config
 	if len(cv13.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv13.Notify.AMQP
 	}
-	if len(cv13.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	if len(cv13.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv13.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv13.Notify.Elasticsearch
 	}
 	if len(cv13.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv13.Notify.Redis
 	}
 	if len(cv13.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv13.Notify.PostgreSQL
 	}
 	if len(cv13.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv13.Notify.Kafka
 	}
 	if len(cv13.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv13.Notify.NATS
 	}
 	if len(cv13.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv13.Notify.Webhook
 	}
@@ -1008,51 +1041,51 @@ func migrateV14ToV15() error {
 
 	// check and set notifiers config
 	if len(cv14.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv14.Notify.AMQP
 	}
-	if len(cv14.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	if len(cv14.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv14.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv14.Notify.Elasticsearch
 	}
 	if len(cv14.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv14.Notify.Redis
 	}
 	if len(cv14.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv14.Notify.PostgreSQL
 	}
 	if len(cv14.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv14.Notify.Kafka
 	}
 	if len(cv14.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv14.Notify.NATS
 	}
 	if len(cv14.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv14.Notify.Webhook
 	}
 
 	// V14 will not have mysql support, so we add that here.
-	srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-	srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+	srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+	srvConfig.Notify.MySQL["1"] = target.MySQLArgs{}
 
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv14.Browser
@@ -1096,50 +1129,50 @@ func migrateV15ToV16() error {
 
 	// check and set notifiers config
 	if len(cv15.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv15.Notify.AMQP
 	}
-	if len(cv15.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	if len(cv15.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv15.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv15.Notify.Elasticsearch
 	}
 	if len(cv15.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		srvConfig.Notify.Redis = cv15.Notify.Redis
 	}
 	if len(cv15.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv15.Notify.PostgreSQL
 	}
 	if len(cv15.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv15.Notify.Kafka
 	}
 	if len(cv15.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv15.Notify.NATS
 	}
 	if len(cv15.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv15.Notify.Webhook
 	}
 	if len(cv15.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{}
 	} else {
 		srvConfig.Notify.MySQL = cv15.Notify.MySQL
 	}
@@ -1189,80 +1222,80 @@ func migrateV16ToV17() error {
 
 	// check and set notifiers config
 	if len(cv16.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		srvConfig.Notify.AMQP = cv16.Notify.AMQP
 	}
-	if len(cv16.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	if len(cv16.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
 	} else {
 		// IMPORTANT NOTE: Future migrations should remove
 		// this as existing configuration will already contain
 		// a value for the "format" parameter.
-		for k, v := range cv16.Notify.ElasticSearch.Clone() {
-			v.Format = formatNamespace
-			cv16.Notify.ElasticSearch[k] = v
+		srvConfig.Notify.Elasticsearch = cv16.Notify.Elasticsearch
+		for k, v := range srvConfig.Notify.Elasticsearch {
+			v.Format = event.NamespaceFormat
+			srvConfig.Notify.Elasticsearch[k] = v
 		}
-		srvConfig.Notify.ElasticSearch = cv16.Notify.ElasticSearch
 	}
 	if len(cv16.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{}
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{}
 	} else {
 		// IMPORTANT NOTE: Future migrations should remove
 		// this as existing configuration will already contain
 		// a value for the "format" parameter.
-		for k, v := range cv16.Notify.Redis.Clone() {
-			v.Format = formatNamespace
-			cv16.Notify.Redis[k] = v
-		}
 		srvConfig.Notify.Redis = cv16.Notify.Redis
+		for k, v := range srvConfig.Notify.Redis {
+			v.Format = event.NamespaceFormat
+			srvConfig.Notify.Redis[k] = v
+		}
 	}
 	if len(cv16.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	} else {
 		// IMPORTANT NOTE: Future migrations should remove
 		// this as existing configuration will already contain
 		// a value for the "format" parameter.
-		for k, v := range cv16.Notify.PostgreSQL.Clone() {
-			v.Format = formatNamespace
-			cv16.Notify.PostgreSQL[k] = v
-		}
 		srvConfig.Notify.PostgreSQL = cv16.Notify.PostgreSQL
+		for k, v := range srvConfig.Notify.PostgreSQL {
+			v.Format = event.NamespaceFormat
+			srvConfig.Notify.PostgreSQL[k] = v
+		}
 	}
 	if len(cv16.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv16.Notify.Kafka
 	}
 	if len(cv16.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv16.Notify.NATS
 	}
 	if len(cv16.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv16.Notify.Webhook
 	}
 	if len(cv16.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{}
 	} else {
 		// IMPORTANT NOTE: Future migrations should remove
 		// this as existing configuration will already contain
 		// a value for the "format" parameter.
-		for k, v := range cv16.Notify.MySQL.Clone() {
-			v.Format = formatNamespace
-			cv16.Notify.MySQL[k] = v
-		}
 		srvConfig.Notify.MySQL = cv16.Notify.MySQL
+		for k, v := range srvConfig.Notify.MySQL {
+			v.Format = event.NamespaceFormat
+			srvConfig.Notify.MySQL[k] = v
+		}
 	}
 
 	// Load browser config from existing config in the file.
@@ -1310,60 +1343,60 @@ func migrateV17ToV18() error {
 
 	// check and set notifiers config
 	if len(cv17.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		// New deliveryMode parameter is added for AMQP,
 		// default value is already 0, so nothing to
 		// explicitly migrate here.
 		srvConfig.Notify.AMQP = cv17.Notify.AMQP
 	}
-	if len(cv17.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
-			Format: formatNamespace,
+	if len(cv17.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv17.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv17.Notify.Elasticsearch
 	}
 	if len(cv17.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.Redis = cv17.Notify.Redis
 	}
 	if len(cv17.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv17.Notify.PostgreSQL
 	}
 	if len(cv17.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv17.Notify.Kafka
 	}
 	if len(cv17.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv17.Notify.NATS
 	}
 	if len(cv17.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv17.Notify.Webhook
 	}
 	if len(cv17.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.MySQL = cv17.Notify.MySQL
@@ -1412,68 +1445,68 @@ func migrateV18ToV19() error {
 
 	// check and set notifiers config
 	if len(cv18.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
 		// New deliveryMode parameter is added for AMQP,
 		// default value is already 0, so nothing to
 		// explicitly migrate here.
 		srvConfig.Notify.AMQP = cv18.Notify.AMQP
 	}
-	if len(cv18.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
-			Format: formatNamespace,
+	if len(cv18.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv18.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv18.Notify.Elasticsearch
 	}
 	if len(cv18.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.Redis = cv18.Notify.Redis
 	}
 	if len(cv18.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv18.Notify.PostgreSQL
 	}
 	if len(cv18.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv18.Notify.Kafka
 	}
 	if len(cv18.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv18.Notify.NATS
 	}
 	if len(cv18.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv18.Notify.Webhook
 	}
 	if len(cv18.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.MySQL = cv18.Notify.MySQL
 	}
 
 	// V18 will not have mqtt support, so we add that here.
-	srvConfig.Notify.MQTT = make(map[string]mqttNotify)
-	srvConfig.Notify.MQTT["1"] = mqttNotify{}
+	srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+	srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
 
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv18.Browser
@@ -1516,69 +1549,66 @@ func migrateV19ToV20() error {
 	srvConfig.Logger.Console = cv19.Logger.Console
 	srvConfig.Logger.File = cv19.Logger.File
 
-	// check and set notifiers config
 	if len(cv19.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
-		// New deliveryMode parameter is added for AMQP,
-		// default value is already 0, so nothing to
-		// explicitly migrate here.
 		srvConfig.Notify.AMQP = cv19.Notify.AMQP
 	}
-	if len(cv19.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
-			Format: formatNamespace,
+	if len(cv19.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv19.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv19.Notify.Elasticsearch
 	}
 	if len(cv19.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.Redis = cv19.Notify.Redis
 	}
 	if len(cv19.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv19.Notify.PostgreSQL
 	}
 	if len(cv19.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv19.Notify.Kafka
 	}
 	if len(cv19.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv19.Notify.NATS
 	}
 	if len(cv19.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv19.Notify.Webhook
 	}
 	if len(cv19.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.MySQL = cv19.Notify.MySQL
 	}
+
 	if len(cv19.Notify.MQTT) == 0 {
-		srvConfig.Notify.MQTT = make(map[string]mqttNotify)
-		srvConfig.Notify.MQTT["1"] = mqttNotify{}
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
 	} else {
 		srvConfig.Notify.MQTT = cv19.Notify.MQTT
 	}
@@ -1620,69 +1650,66 @@ func migrateV20ToV21() error {
 		srvConfig.Region = globalMinioDefaultRegion
 	}
 
-	// check and set notifiers config
 	if len(cv20.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
-		// New deliveryMode parameter is added for AMQP,
-		// default value is already 0, so nothing to
-		// explicitly migrate here.
 		srvConfig.Notify.AMQP = cv20.Notify.AMQP
 	}
-	if len(cv20.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
-			Format: formatNamespace,
+	if len(cv20.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv20.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv20.Notify.Elasticsearch
 	}
 	if len(cv20.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.Redis = cv20.Notify.Redis
 	}
 	if len(cv20.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv20.Notify.PostgreSQL
 	}
 	if len(cv20.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv20.Notify.Kafka
 	}
 	if len(cv20.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv20.Notify.NATS
 	}
 	if len(cv20.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv20.Notify.Webhook
 	}
 	if len(cv20.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.MySQL = cv20.Notify.MySQL
 	}
+
 	if len(cv20.Notify.MQTT) == 0 {
-		srvConfig.Notify.MQTT = make(map[string]mqttNotify)
-		srvConfig.Notify.MQTT["1"] = mqttNotify{}
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
 	} else {
 		srvConfig.Notify.MQTT = cv20.Notify.MQTT
 	}
@@ -1727,69 +1754,66 @@ func migrateV21ToV22() error {
 		srvConfig.Region = globalMinioDefaultRegion
 	}
 
-	// check and set notifiers config
 	if len(cv21.Notify.AMQP) == 0 {
-		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
 	} else {
-		// New deliveryMode parameter is added for AMQP,
-		// default value is already 0, so nothing to
-		// explicitly migrate here.
 		srvConfig.Notify.AMQP = cv21.Notify.AMQP
 	}
-	if len(cv21.Notify.ElasticSearch) == 0 {
-		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
-			Format: formatNamespace,
+	if len(cv21.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
-		srvConfig.Notify.ElasticSearch = cv21.Notify.ElasticSearch
+		srvConfig.Notify.Elasticsearch = cv21.Notify.Elasticsearch
 	}
 	if len(cv21.Notify.Redis) == 0 {
-		srvConfig.Notify.Redis = make(map[string]redisNotify)
-		srvConfig.Notify.Redis["1"] = redisNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.Redis = cv21.Notify.Redis
 	}
 	if len(cv21.Notify.PostgreSQL) == 0 {
-		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.PostgreSQL = cv21.Notify.PostgreSQL
 	}
 	if len(cv21.Notify.Kafka) == 0 {
-		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
-		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 	} else {
 		srvConfig.Notify.Kafka = cv21.Notify.Kafka
 	}
 	if len(cv21.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
 	} else {
 		srvConfig.Notify.NATS = cv21.Notify.NATS
 	}
 	if len(cv21.Notify.Webhook) == 0 {
-		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
-		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 	} else {
 		srvConfig.Notify.Webhook = cv21.Notify.Webhook
 	}
 	if len(cv21.Notify.MySQL) == 0 {
-		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
-		srvConfig.Notify.MySQL["1"] = mySQLNotify{
-			Format: formatNamespace,
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
 		}
 	} else {
 		srvConfig.Notify.MySQL = cv21.Notify.MySQL
 	}
+
 	if len(cv21.Notify.MQTT) == 0 {
-		srvConfig.Notify.MQTT = make(map[string]mqttNotify)
-		srvConfig.Notify.MQTT["1"] = mqttNotify{}
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
 	} else {
 		srvConfig.Notify.MQTT = cv21.Notify.MQTT
 	}

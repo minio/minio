@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,21 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/hash"
 )
+
+// Implement a dummy flush writer.
+type flushWriter struct {
+	io.Writer
+}
+
+// Flush writer is a dummy writer compatible with http.Flusher and http.ResponseWriter.
+func (f *flushWriter) Flush()                            {}
+func (f *flushWriter) Write(b []byte) (n int, err error) { return f.Writer.Write(b) }
+func (f *flushWriter) Header() http.Header               { return http.Header{} }
+func (f *flushWriter) WriteHeader(code int)              {}
+
+func newFlushWriter(writer io.Writer) http.ResponseWriter {
+	return &flushWriter{writer}
+}
 
 // Tests private function writeWebErrorResponse.
 func TestWriteWebErrorResponse(t *testing.T) {

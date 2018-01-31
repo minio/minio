@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,13 +75,10 @@ func verifyError(c *check, response *http.Response, code, description string, st
 
 func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.SetUpSuite(c)
-	suite.TestBucketSQSNotificationWebHook(c)
 	suite.TestObjectDir(c)
-	suite.TestBucketSQSNotificationAMQP(c)
 	suite.TestBucketPolicy(c)
 	suite.TestDeleteBucket(c)
 	suite.TestDeleteBucketNotEmpty(c)
-	suite.TestListenBucketNotificationHandler(c)
 	suite.TestDeleteMultipleObjects(c)
 	suite.TestDeleteObject(c)
 	suite.TestNonExistentBucket(c)

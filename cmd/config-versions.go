@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/event/target"
 )
 
 /////////////////// Config V1 ///////////////////
@@ -226,23 +227,23 @@ type configV6 struct {
 // Notifier represents collection of supported notification queues in version
 // 1 without NATS streaming.
 type notifierV1 struct {
-	AMQP          map[string]amqpNotify          `json:"amqp"`
-	NATS          map[string]natsNotifyV1        `json:"nats"`
-	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
-	Redis         map[string]redisNotify         `json:"redis"`
-	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
-	Kafka         map[string]kafkaNotify         `json:"kafka"`
+	AMQP          map[string]target.AMQPArgs          `json:"amqp"`
+	NATS          map[string]natsNotifyV1             `json:"nats"`
+	ElasticSearch map[string]target.ElasticsearchArgs `json:"elasticsearch"`
+	Redis         map[string]target.RedisArgs         `json:"redis"`
+	PostgreSQL    map[string]target.PostgreSQLArgs    `json:"postgresql"`
+	Kafka         map[string]target.KafkaArgs         `json:"kafka"`
 }
 
 // Notifier represents collection of supported notification queues in version 2
 // with NATS streaming but without webhook.
 type notifierV2 struct {
-	AMQP          map[string]amqpNotify          `json:"amqp"`
-	NATS          map[string]natsNotify          `json:"nats"`
-	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
-	Redis         map[string]redisNotify         `json:"redis"`
-	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
-	Kafka         map[string]kafkaNotify         `json:"kafka"`
+	AMQP          map[string]target.AMQPArgs          `json:"amqp"`
+	NATS          map[string]target.NATSArgs          `json:"nats"`
+	ElasticSearch map[string]target.ElasticsearchArgs `json:"elasticsearch"`
+	Redis         map[string]target.RedisArgs         `json:"redis"`
+	PostgreSQL    map[string]target.PostgreSQLArgs    `json:"postgresql"`
+	Kafka         map[string]target.KafkaArgs         `json:"kafka"`
 }
 
 // configV7 server configuration version '7'.
@@ -366,6 +367,18 @@ type serverConfigV12 struct {
 
 	// Notification queue configuration.
 	Notify notifierV2 `json:"notify"`
+}
+
+type notifier struct {
+	AMQP          map[string]target.AMQPArgs          `json:"amqp"`
+	Elasticsearch map[string]target.ElasticsearchArgs `json:"elasticsearch"`
+	Kafka         map[string]target.KafkaArgs         `json:"kafka"`
+	MQTT          map[string]target.MQTTArgs          `json:"mqtt"`
+	MySQL         map[string]target.MySQLArgs         `json:"mysql"`
+	NATS          map[string]target.NATSArgs          `json:"nats"`
+	PostgreSQL    map[string]target.PostgreSQLArgs    `json:"postgresql"`
+	Redis         map[string]target.RedisArgs         `json:"redis"`
+	Webhook       map[string]target.WebhookArgs       `json:"webhook"`
 }
 
 // serverConfigV13 server configuration version '13' which is like

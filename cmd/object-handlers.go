@@ -32,6 +32,7 @@ import (
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
@@ -191,14 +192,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Notify object accessed via a GET request.
-	eventNotify(eventData{
-		Type:      ObjectAccessedGet,
-		Bucket:    bucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+	sendEvent(eventArgs{
+		EventName:  event.ObjectAccessedGet,
+		BucketName: bucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
@@ -267,14 +268,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Notify object accessed via a HEAD request.
-	eventNotify(eventData{
-		Type:      ObjectAccessedHead,
-		Bucket:    bucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+	sendEvent(eventArgs{
+		EventName:  event.ObjectAccessedHead,
+		BucketName: bucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
@@ -523,14 +524,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Notify object created event.
-	eventNotify(eventData{
-		Type:      ObjectCreatedCopy,
-		Bucket:    dstBucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+	sendEvent(eventArgs{
+		EventName:  event.ObjectCreatedCopy,
+		BucketName: dstBucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
@@ -706,14 +707,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Notify object created event.
-	eventNotify(eventData{
-		Type:      ObjectCreatedPut,
-		Bucket:    bucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+	sendEvent(eventArgs{
+		EventName:  event.ObjectCreatedPut,
+		BucketName: bucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
@@ -1303,14 +1304,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Notify object created event.
-	eventNotify(eventData{
-		Type:      ObjectCreatedCompleteMultipartUpload,
-		Bucket:    bucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+	sendEvent(eventArgs{
+		EventName:  event.ObjectCreatedCompleteMultipartUpload,
+		BucketName: bucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
