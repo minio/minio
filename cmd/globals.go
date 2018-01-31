@@ -213,6 +213,12 @@ var (
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
 	// Add new variable global values here.
+
+	// OPA
+	// OPA URL
+	globalOpaURL string
+	// Enable OPA
+	globalIsOPAEnabled bool
 )
 
 // global colors.

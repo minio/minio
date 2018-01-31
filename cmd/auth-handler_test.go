@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // Test get request auth type.
@@ -410,5 +411,82 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 		if s3Error := checkAdminRequestAuthType(testCase.Request, globalServerConfig.GetRegion()); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
 		}
+	}
+}
+
+func TestCheckRequestAuthTypeOpaEnabledUrlNotProvided(t *testing.T) {
+	path, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer func() {
+		os.RemoveAll(path)
+		globalIsOPAEnabled = false
+	}()
+
+	creds, err := auth.CreateCredentials("myuser", "mypassword")
+	if err != nil {
+		t.Fatalf("unable create credential, %s", err)
+	}
+
+	globalServerConfig.SetCredential(creds)
+
+	// Enable OPA
+	globalIsOPAEnabled = true
+
+	req := &http.Request{
+		URL: &url.URL{
+			Host:   "127.0.0.1:9000",
+			Scheme: httpScheme,
+			Path:   "/",
+		},
+		Header: http.Header{
+			"Authorization": []string{"Bearer 12313123"},
+		},
+	}
+
+	ctx := newContext(req, "ListBuckets")
+	s3Error := checkRequestAuthType(ctx, req, policy.ListAllMyBucketsAction, "", "")
+	if s3Error != ErrOpaPolicyDecision {
+		t.Errorf("Test: Unexpected s3error returned wanted %d, got %d", ErrOpaPolicyDecision, s3Error)
+	}
+}
+
+func TestCheckRequestAuthTypeOpaEnabledUrlProvided(t *testing.T) {
+	path, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer func() {
+		os.RemoveAll(path)
+		globalIsOPAEnabled = false
+	}()
+
+	creds, err := auth.CreateCredentials("myuser", "mypassword")
+	if err != nil {
+		t.Fatalf("unable create credential, %s", err)
+	}
+
+	globalServerConfig.SetCredential(creds)
+
+	// Enable OPA and set OPA URL
+	globalIsOPAEnabled = true
+	globalOpaURL = "http://127.0.0.1:8181/v1/data/minio/authz/allow"
+
+	req := &http.Request{
+		URL: &url.URL{
+			Host:   "127.0.0.1:9000",
+			Scheme: httpScheme,
+			Path:   "/",
+		},
+		Header: http.Header{
+			"Authorization": []string{"Bearer 12313123"},
+		},
+	}
+
+	ctx := newContext(req, "ListBuckets")
+	s3Error := checkRequestAuthType(ctx, req, policy.ListAllMyBucketsAction, "", "")
+	if s3Error != ErrOpaPolicyDecision {
+		t.Errorf("Test: Unexpected s3error returned wanted %d, got %d", ErrOpaPolicyDecision, s3Error)
 	}
 }

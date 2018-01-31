@@ -193,6 +193,9 @@ const (
 	ErrHealMissingBucket
 	ErrHealAlreadyRunning
 	ErrHealOverlappingPaths
+
+	// OPA policy decision related error
+	ErrOpaPolicyDecision
 )
 
 // error code to APIError structure, these fields carry respective
@@ -844,6 +847,12 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 
 	// Add your error structure here.
+
+	ErrOpaPolicyDecision: {
+		Code:           "PolicyDecisionError",
+		Description:    "User not authorized to perform this operation",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
