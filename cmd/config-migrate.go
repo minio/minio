@@ -1717,7 +1717,7 @@ func migrateV21ToV22() error {
 
 	// Copy over fields from V21 into V22 config struct
 	srvConfig := &serverConfigV22{
-		Notify: &notifier{},
+		Notify: notifier{},
 	}
 	srvConfig.Version = serverConfigVersion
 	srvConfig.Credential = cv21.Credential

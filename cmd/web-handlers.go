@@ -423,6 +423,10 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(err)
 	}
 
+	// Acquire lock before updating global configuration.
+	globalServerConfigMu.Lock()
+	defer globalServerConfigMu.Unlock()
+
 	// Notify all other Minio peers to update credentials
 	errsMap := updateCredsOnPeers(creds)
 

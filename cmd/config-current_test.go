@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/minio/minio/pkg/auth"
 	"github.com/tidwall/gjson"
 )
 
@@ -315,4 +316,93 @@ func TestValidateConfig(t *testing.T) {
 		}
 	}
 
+}
+
+func TestConfigDiff(t *testing.T) {
+	testCases := []struct {
+		s, t *serverConfig
+		diff string
+	}{
+		// 1
+		{&serverConfig{}, nil, "Given configuration is empty"},
+		// 2
+		{
+			&serverConfig{Credential: auth.Credentials{"u1", "p1"}},
+			&serverConfig{Credential: auth.Credentials{"u1", "p2"}},
+			"Credential configuration differs",
+		},
+		// 3
+		{&serverConfig{Region: "us-east-1"}, &serverConfig{Region: "us-west-1"}, "Region configuration differs"},
+		// 4
+		{&serverConfig{Browser: false}, &serverConfig{Browser: true}, "Browser configuration differs"},
+		// 5
+		{&serverConfig{Domain: "domain1"}, &serverConfig{Domain: "domain2"}, "Domain configuration differs"},
+		// 6
+		{
+			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 6}}},
+			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 4}}},
+			"StorageClass configuration differs",
+		},
+		// 7
+		{
+			&serverConfig{Notify: notifier{AMQP: map[string]amqpNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{AMQP: map[string]amqpNotify{"1": {Enable: false}}}},
+			"AMQP Notification configuration differs",
+		},
+		// 8
+		{
+			&serverConfig{Notify: notifier{NATS: map[string]natsNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{NATS: map[string]natsNotify{"1": {Enable: false}}}},
+			"NATS Notification configuration differs",
+		},
+		// 9
+		{
+			&serverConfig{Notify: notifier{ElasticSearch: map[string]elasticSearchNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{ElasticSearch: map[string]elasticSearchNotify{"1": {Enable: false}}}},
+			"ElasticSearch Notification configuration differs",
+		},
+		// 10
+		{
+			&serverConfig{Notify: notifier{Redis: map[string]redisNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Redis: map[string]redisNotify{"1": {Enable: false}}}},
+			"Redis Notification configuration differs",
+		},
+		// 11
+		{
+			&serverConfig{Notify: notifier{PostgreSQL: map[string]postgreSQLNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{PostgreSQL: map[string]postgreSQLNotify{"1": {Enable: false}}}},
+			"PostgreSQL Notification configuration differs",
+		},
+		// 12
+		{
+			&serverConfig{Notify: notifier{Kafka: map[string]kafkaNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Kafka: map[string]kafkaNotify{"1": {Enable: false}}}},
+			"Kafka Notification configuration differs",
+		},
+		// 13
+		{
+			&serverConfig{Notify: notifier{Webhook: map[string]webhookNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Webhook: map[string]webhookNotify{"1": {Enable: false}}}},
+			"Webhook Notification configuration differs",
+		},
+		// 14
+		{
+			&serverConfig{Notify: notifier{MySQL: map[string]mySQLNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{MySQL: map[string]mySQLNotify{"1": {Enable: false}}}},
+			"MySQL Notification configuration differs",
+		},
+		// 15
+		{
+			&serverConfig{Notify: notifier{MQTT: map[string]mqttNotify{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{MQTT: map[string]mqttNotify{"1": {Enable: false}}}},
+			"MQTT Notification configuration differs",
+		},
+	}
+
+	for i, testCase := range testCases {
+		got := testCase.s.ConfigDiff(testCase.t)
+		if got != testCase.diff {
+			t.Errorf("Test %d: got %s expected %s", i+1, got, testCase.diff)
+		}
+	}
 }

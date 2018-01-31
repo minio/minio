@@ -547,9 +547,11 @@ type serverConfigV21 struct {
 }
 
 // serverConfigV22 is just like version '21' with added support
-// for StorageClass
+// for StorageClass.
+//
+// IMPORTANT NOTE: When updating this struct make sure that
+// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV22 struct {
-	sync.RWMutex
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -562,5 +564,5 @@ type serverConfigV22 struct {
 	StorageClass storageClassConfig `json:"storageclass"`
 
 	// Notification queue configuration.
-	Notify *notifier `json:"notify"`
+	Notify notifier `json:"notify"`
 }

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
@@ -48,34 +49,22 @@ var (
 
 // GetVersion get current config version.
 func (s *serverConfig) GetVersion() string {
-	s.RLock()
-	defer s.RUnlock()
-
 	return s.Version
 }
 
 // SetRegion set a new region.
 func (s *serverConfig) SetRegion(region string) {
-	s.Lock()
-	defer s.Unlock()
-
 	// Save new region.
 	s.Region = region
 }
 
 // GetRegion get current region.
 func (s *serverConfig) GetRegion() string {
-	s.RLock()
-	defer s.RUnlock()
-
 	return s.Region
 }
 
 // SetCredential sets new credential and returns the previous credential.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
-	s.Lock()
-	defer s.Unlock()
-
 	// Save previous credential.
 	prevCred = s.Credential
 
@@ -88,25 +77,16 @@ func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Cred
 
 // GetCredentials get current credentials.
 func (s *serverConfig) GetCredential() auth.Credentials {
-	s.RLock()
-	defer s.RUnlock()
-
 	return s.Credential
 }
 
 // SetBrowser set if browser is enabled.
 func (s *serverConfig) SetBrowser(b bool) {
-	s.Lock()
-	defer s.Unlock()
-
 	// Set the new value.
 	s.Browser = BrowserFlag(b)
 }
 
 func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
-	s.Lock()
-	defer s.Unlock()
-
 	s.StorageClass.Standard = standardClass
 	s.StorageClass.RRS = rrsClass
 }
@@ -114,9 +94,6 @@ func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 // GetStorageClass reads storage class fields from current config, parses and validates it.
 // It returns the standard and reduced redundancy storage class struct
 func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
-	s.RLock()
-	defer s.RUnlock()
-
 	var err error
 	// Storage Class from config.json is already parsed and stored in s.StorageClass
 	// Now validate the storage class fields
@@ -140,19 +117,57 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 
 // GetCredentials get current credentials.
 func (s *serverConfig) GetBrowser() bool {
-	s.RLock()
-	defer s.RUnlock()
-
 	return bool(s.Browser)
 }
 
 // Save config.
 func (s *serverConfig) Save() error {
-	s.RLock()
-	defer s.RUnlock()
-
 	// Save config file.
 	return quick.Save(getConfigFile(), s)
+}
+
+// Returns the string describing a difference with the given
+// configuration object. If the given configuration object is
+// identical, an empty string is returned.
+func (s *serverConfig) ConfigDiff(t *serverConfig) string {
+	switch {
+	case t == nil:
+		return "Given configuration is empty"
+	case s.Credential != t.Credential:
+		return "Credential configuration differs"
+	case s.Region != t.Region:
+		return "Region configuration differs"
+	case s.Browser != t.Browser:
+		return "Browser configuration differs"
+	case s.Domain != t.Domain:
+		return "Domain configuration differs"
+	case s.StorageClass != t.StorageClass:
+		return "StorageClass configuration differs"
+	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
+		return "AMQP Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
+		return "NATS Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.ElasticSearch, t.Notify.ElasticSearch):
+		return "ElasticSearch Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.Redis, t.Notify.Redis):
+		return "Redis Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.PostgreSQL, t.Notify.PostgreSQL):
+		return "PostgreSQL Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.Kafka, t.Notify.Kafka):
+		return "Kafka Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.Webhook, t.Notify.Webhook):
+		return "Webhook Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.MySQL, t.Notify.MySQL):
+		return "MySQL Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
+		return "MQTT Notification configuration differs"
+	case reflect.DeepEqual(s, t):
+		return ""
+	default:
+		// This case will not happen unless this comparison
+		// function has become stale.
+		return "Configuration differs"
+	}
 }
 
 func newServerConfig() *serverConfig {
@@ -162,7 +177,7 @@ func newServerConfig() *serverConfig {
 		Region:       globalMinioDefaultRegion,
 		Browser:      true,
 		StorageClass: storageClassConfig{},
-		Notify:       &notifier{},
+		Notify:       notifier{},
 	}
 
 	// Make sure to initialize notification configs.

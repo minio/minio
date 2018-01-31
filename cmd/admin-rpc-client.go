@@ -23,7 +23,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -478,7 +477,7 @@ func getPeerConfig(peers adminPeers) ([]byte, error) {
 	// Find the maximally occurring config among peers in a
 	// distributed setup.
 
-	serverConfigs := make([]serverConfigV13, len(peers))
+	serverConfigs := make([]serverConfig, len(peers))
 	for i, configBytes := range configs {
 		if errs[i] != nil {
 			continue
@@ -505,7 +504,7 @@ func getPeerConfig(peers adminPeers) ([]byte, error) {
 
 // getValidServerConfig - finds the server config that is present in
 // quorum or more number of servers.
-func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (scv serverConfigV13, e error) {
+func getValidServerConfig(serverConfigs []serverConfig, errs []error) (scv serverConfig, e error) {
 	// majority-based quorum
 	quorum := len(serverConfigs)/2 + 1
 
@@ -548,7 +547,7 @@ func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (scv se
 				// seen. See example above for
 				// clarity.
 				continue
-			} else if j < i && reflect.DeepEqual(serverConfigs[i], serverConfigs[j]) {
+			} else if j < i && serverConfigs[i].ConfigDiff(&serverConfigs[j]) == "" {
 				// serverConfigs[i] is equal to
 				// serverConfigs[j], update
 				// serverConfigs[j]'s counter since it
@@ -567,7 +566,7 @@ func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (scv se
 
 	// We find the maximally occurring server config and check if
 	// there is quorum.
-	var configJSON serverConfigV13
+	var configJSON serverConfig
 	maxOccurrence := 0
 	for i, count := range configCounter {
 		if maxOccurrence < count {
