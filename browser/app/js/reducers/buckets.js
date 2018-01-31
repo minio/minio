@@ -17,7 +17,7 @@
 import * as actionsBuckets from "../actions/buckets"
 
 export default (
-  state = { list: [], filter: "", currentBucket: "" },
+  state = { list: [], filter: "", currentBucket: "", currentPrefix: "" },
   action
 ) => {
   switch (action.type) {
@@ -35,6 +35,11 @@ export default (
       return {
         ...state,
         currentBucket: action.bucket
+      }
+    case actionsBuckets.SET_CURRENT_PREFIX:
+      return {
+        ...state,
+        currentPrefix: action.prefix
       }
     default:
       return state

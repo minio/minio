@@ -20,7 +20,11 @@ import * as actionsCommon from "../../actions/common"
 describe("common reducer", () => {
   it("should return the initial state", () => {
     expect(reducer(undefined, {})).toEqual({
-      sidebarOpen: false
+      sidebarOpen: false,
+      storageInfo: {
+        total: 0,
+        free: 0
+      }
     })
   })
 

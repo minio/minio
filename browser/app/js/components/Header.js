@@ -14,26 +14,15 @@
  * limitations under the License.
  */
 
-import * as actionsCommon from "../actions/common"
+import React from "react"
+import Path from "./Path"
+import StorageInfo from "./StorageInfo"
 
-export default (
-  state = { sidebarOpen: false, storageInfo: { total: 0, free: 0 } },
-  action
-) => {
-  switch (action.type) {
-    case actionsCommon.TOGGLE_SIDEBAR:
-      return Object.assign({}, state, {
-        sidebarOpen: !state.sidebarOpen
-      })
-    case actionsCommon.CLOSE_SIDEBAR:
-      return Object.assign({}, state, {
-        sidebarOpen: false
-      })
-    case actionsCommon.SET_STORAGE_INFO:
-      return Object.assign({}, state, {
-        storageInfo: action.storageInfo
-      })
-    default:
-      return state
-  }
-}
+export const Header = () => (
+  <header className="fe-header">
+    <Path />
+    <StorageInfo />
+  </header>
+)
+
+export default Header

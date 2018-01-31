@@ -19,46 +19,44 @@ import * as actions from "../../actions/buckets"
 
 describe("buckets reducer", () => {
   it("should return the initial state", () => {
-    expect(reducer(undefined, {})).toEqual({
+    const initialState = reducer(undefined, {})
+    expect(initialState).toEqual({
       list: [],
       filter: "",
-      currentBucket: ""
+      currentBucket: "",
+      currentPrefix: ""
     })
   })
 
   it("should handle SET_BUCKETS", () => {
-    expect(
-      reducer(undefined, { type: actions.SET_LIST, buckets: ["bk1", "bk2"] })
-    ).toEqual({
-      list: ["bk1", "bk2"],
-      filter: "",
-      currentBucket: ""
+    const newState = reducer(undefined, {
+      type: actions.SET_LIST,
+      buckets: ["bk1", "bk2"]
     })
+    expect(newState.list).toEqual(["bk1", "bk2"])
   })
 
   it("should handle SET_BUCKETS_FILTER", () => {
-    expect(
-      reducer(undefined, {
-        type: actions.SET_FILTER,
-        filter: "test"
-      })
-    ).toEqual({
-      list: [],
-      filter: "test",
-      currentBucket: ""
+    const newState = reducer(undefined, {
+      type: actions.SET_FILTER,
+      filter: "test"
     })
+    expect(newState.filter).toEqual("test")
   })
 
   it("should handle SELECT_BUCKET", () => {
-    expect(
-      reducer(undefined, {
-        type: actions.SET_CURRENT_BUCKET,
-        bucket: "test"
-      })
-    ).toEqual({
-      list: [],
-      filter: "",
-      currentBucket: "test"
+    const newState = reducer(undefined, {
+      type: actions.SET_CURRENT_BUCKET,
+      bucket: "test"
     })
+    expect(newState.currentBucket).toEqual("test")
+  })
+
+  it("should handle SET_CURRENT_PREFIX", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_CURRENT_PREFIX,
+      prefix: "test"
+    })
+    expect(newState.currentPrefix).toEqual("test")
   })
 })

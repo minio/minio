@@ -15,14 +15,27 @@
  */
 
 import React from "react"
-import MobileHeader from "./MobileHeader"
-import Header from "./Header"
+import { shallow } from "enzyme"
+import { StorageInfo } from "../StorageInfo"
 
-export const MainContent = () => (
-  <div className="fe-body">
-    <MobileHeader />
-    <Header />
-  </div>
-)
+describe("StorageInfo", () => {
+  it("should render without crashing", () => {
+    shallow(
+      <StorageInfo
+        storageInfo={{ total: 100, free: 60 }}
+        fetchStorageInfo={jest.fn()}
+      />
+    )
+  })
 
-export default MainContent
+  it("should fetchStorageInfo before component is mounted", () => {
+    const fetchStorageInfo = jest.fn()
+    shallow(
+      <StorageInfo
+        storageInfo={{ total: 100, free: 60 }}
+        fetchStorageInfo={fetchStorageInfo}
+      />
+    )
+    expect(fetchStorageInfo).toHaveBeenCalled()
+  })
+})

@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+import web from "../web"
+
 export const TOGGLE_SIDEBAR = "common/TOGGLE_SIDEBAR"
 export const CLOSE_SIDEBAR = "common/CLOSE_SIDEBAR"
+export const SET_STORAGE_INFO = "common/SET_STORAGE_INFO"
 
 export const toggleSidebar = () => ({
   type: TOGGLE_SIDEBAR
@@ -23,4 +26,21 @@ export const toggleSidebar = () => ({
 
 export const closeSidebar = () => ({
   type: CLOSE_SIDEBAR
+})
+
+export const fetchStorageInfo = () => {
+  return function(dispatch) {
+    return web.StorageInfo().then(res => {
+      const storageInfo = {
+        total: res.storageInfo.Total,
+        free: res.storageInfo.Free
+      }
+      dispatch(setStorageInfo(storageInfo))
+    })
+  }
+}
+
+export const setStorageInfo = storageInfo => ({
+  type: SET_STORAGE_INFO,
+  storageInfo
 })
