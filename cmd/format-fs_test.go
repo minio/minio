@@ -62,8 +62,8 @@ func TestFSFormatFS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != formatFSVersionV1 {
-		t.Fatalf(`expected: %s, got: %s`, formatFSVersionV1, version)
+	if version != formatFSVersionV2 {
+		t.Fatalf(`expected: %s, got: %s`, formatFSVersionV2, version)
 	}
 
 	// Corrupt the format.json file and test the functions.

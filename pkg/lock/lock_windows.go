@@ -42,7 +42,7 @@ const (
 
 // lockedOpenFile is an internal function.
 func lockedOpenFile(path string, flag int, perm os.FileMode, lockType uint32) (*LockedFile, error) {
-	f, err := open(path, flag, perm)
+	f, err := Open(path, flag, perm)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func fixLongPath(path string) string {
 // perm param is ignored, on windows file perms/NT acls
 // are not octet combinations. Providing access to NT
 // acls is out of scope here.
-func open(path string, flag int, perm os.FileMode) (*os.File, error) {
+func Open(path string, flag int, perm os.FileMode) (*os.File, error) {
 	if path == "" {
 		return nil, syscall.ERROR_FILE_NOT_FOUND
 	}
@@ -190,6 +190,8 @@ func open(path string, flag int, perm os.FileMode) (*os.File, error) {
 		fallthrough
 	case syscall.O_WRONLY | syscall.O_CREAT:
 		access = syscall.GENERIC_READ | syscall.GENERIC_WRITE
+	case syscall.O_WRONLY | syscall.O_CREAT | syscall.O_APPEND:
+		access = syscall.FILE_APPEND_DATA
 	default:
 		return nil, fmt.Errorf("Unsupported flag (%d)", flag)
 	}

@@ -18,6 +18,7 @@ package ioutil
 
 import (
 	goioutil "io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -35,5 +36,40 @@ func TestCloseOnWriter(t *testing.T) {
 	writer.Close()
 	if !writer.HasWritten() {
 		t.Error("WriteOnCloser must be marked as HasWritten")
+	}
+}
+
+// Test for AppendFile.
+func TestAppendFile(t *testing.T) {
+	f, err := goioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name1 := f.Name()
+	defer os.Remove(name1)
+	f.WriteString("aaaaaaaaaa")
+	f.Close()
+
+	f, err = goioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name2 := f.Name()
+	defer os.Remove(name2)
+	f.WriteString("bbbbbbbbbb")
+	f.Close()
+
+	if err = AppendFile(name1, name2); err != nil {
+		t.Error(err)
+	}
+
+	b, err := goioutil.ReadFile(name1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expected := "aaaaaaaaaabbbbbbbbbb"
+	if string(b) != expected {
+		t.Errorf("AppendFile() failed, expected: %s, got %s", expected, string(b))
 	}
 }

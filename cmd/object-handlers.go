@@ -909,6 +909,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := objectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
+		errorIf(err, "AbortMultipartUpload failed")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

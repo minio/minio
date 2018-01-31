@@ -833,6 +833,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	result.Object = object
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
+	result.PartNumberMarker = partNumberMarker
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(xlParts) == 0 || maxParts == 0 {
