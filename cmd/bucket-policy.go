@@ -43,9 +43,13 @@ var globalBucketPolicies *bucketPolicies
 // Global bucket policies list, policies are enforced on each bucket looking
 // through the policies here.
 type bucketPolicies struct {
-	rwMutex *sync.RWMutex
+	// Object API to get/set bucket policies
+	objAPI ObjectLayer
+	// Always read policy from the backend
+	alwaysRefresh bool
 
-	// Collection of 'bucket' policies.
+	// Memory version of 'bucket' policies.
+	rwMutex             *sync.RWMutex
 	bucketPolicyConfigs map[string]policy.BucketAccessPolicy
 }
 
@@ -61,6 +65,17 @@ type policyChange struct {
 
 // Fetch bucket policy for a given bucket.
 func (bp bucketPolicies) GetBucketPolicy(bucket string) policy.BucketAccessPolicy {
+	if bp.alwaysRefresh {
+		p, err := readBucketPolicy(bucket, bp.objAPI)
+		// Log bucket policy reading error. We should not have this in all cases.
+		errorIf(err, "Unable to read bucket policy.")
+		if err == nil {
+			bp.rwMutex.Lock()
+			bp.bucketPolicyConfigs[bucket] = p
+			bp.rwMutex.Unlock()
+		}
+	}
+
 	bp.rwMutex.RLock()
 	defer bp.rwMutex.RUnlock()
 	return bp.bucketPolicyConfigs[bucket]
@@ -137,6 +152,8 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 	globalBucketPolicies = &bucketPolicies{
 		rwMutex:             &sync.RWMutex{},
 		bucketPolicyConfigs: policies,
+		objAPI:              objAPI,
+		alwaysRefresh:       objAPI.StorageInfo().Backend.Type == FS,
 	}
 
 	// Success.
