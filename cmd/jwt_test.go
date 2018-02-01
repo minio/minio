@@ -39,8 +39,8 @@ func testAuthenticate(authType string, t *testing.T) {
 		secretKey   string
 		expectedErr error
 	}{
-		// Access key (less than 5 chrs) too small.
-		{"user", cred.SecretKey, auth.ErrInvalidAccessKeyLength},
+		// Access key (less than 3 chrs) too small.
+		{"u1", cred.SecretKey, auth.ErrInvalidAccessKeyLength},
 		// Secret key (less than 8 chrs) too small.
 		{cred.AccessKey, "pass", auth.ErrInvalidSecretKeyLength},
 		// Authentication error.
