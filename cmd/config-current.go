@@ -131,7 +131,7 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
 		return "NATS Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.ElasticSearch, t.Notify.ElasticSearch):
+	case !reflect.DeepEqual(s.Notify.Elasticsearch, t.Notify.Elasticsearch):
 		return "ElasticSearch Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.Redis, t.Notify.Redis):
 		return "Redis Notification configuration differs"

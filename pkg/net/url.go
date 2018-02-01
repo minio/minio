@@ -62,6 +62,7 @@ func (u *URL) UnmarshalJSON(data []byte) (err error) {
 
 	// Allow empty string
 	if s == "" {
+		*u = URL{}
 		return nil
 	}
 

@@ -66,6 +66,7 @@ func (host *Host) UnmarshalJSON(data []byte) (err error) {
 
 	// Allow empty string
 	if s == "" {
+		*host = Host{}
 		return nil
 	}
 
