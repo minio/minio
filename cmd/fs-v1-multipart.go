@@ -35,13 +35,6 @@ import (
 	"github.com/minio/minio/pkg/hash"
 )
 
-const (
-	// Expiry duration after which the multipart uploads are deemed stale.
-	fsMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
-	// Cleanup interval when the stale multipart cleanup is initiated.
-	fsMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
-)
-
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
 func (fs *fsObjects) getUploadIDDir(bucket, object, uploadID string) string {
 	return pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(pathJoin(bucket, object))), uploadID)

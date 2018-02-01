@@ -109,13 +109,6 @@ func genFormatXLInvalidXLVersion() []*formatXLV1 {
 	return formatConfigs
 }
 
-func genFormatFS() *formatXLV1 {
-	format := &formatXLV1{}
-	format.Version = formatMetaVersionV1
-	format.Format = formatBackendFS
-	return format
-}
-
 // generates a invalid format.json version for XL backend.
 func genFormatXLInvalidJBODCount() []*formatXLV1 {
 	jbod := make([]string, 7)

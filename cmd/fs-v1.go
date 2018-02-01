@@ -799,12 +799,6 @@ func (fs *fsObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
-// list of all errors that can be ignored in tree walk operation in FS
-var fsTreeWalkIgnoredErrs = append(baseIgnoredErrs, []error{
-	errFileNotFound,
-	errVolumeNotFound,
-}...)
-
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
