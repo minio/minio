@@ -40,6 +40,26 @@ describe("Buckets actions", () => {
     })
   })
 
+  it("creates buckets/SET_LIST directly", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] }
+    ]
+    store.dispatch(actionsBuckets.setList(["test1", "test2"]))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/SET_FILTER directly", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_FILTER", filter: "test" }
+    ]
+    store.dispatch(actionsBuckets.setFilter("test"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
   it("should update browser url and creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
     const store = mockStore()
     const expectedActions = [
