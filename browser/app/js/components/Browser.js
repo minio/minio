@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
+ * Minio Cloud Storage (C) 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,35 +16,21 @@
 
 import React from "react"
 import classNames from "classnames"
-import ClickOutHandler from "react-onclickout"
 import { connect } from "react-redux"
+import SideBar from "./SideBar"
 
-import logo from "../../img/logo.svg"
-import Dropdown from "react-bootstrap/lib/Dropdown"
-import BucketSearch from "./BucketSearch"
-import BucketList from "./BucketList"
-import Host from "./Host"
-
-export const SideBar = () => {
-  return (
-    <ClickOutHandler>
+class Browser extends React.Component {
+  render() {
+    return (
       <div
         className={classNames({
-          "fe-sidebar": true
+          "file-explorer": true
         })}
       >
-        <div className="fes-header clearfix hidden-sm hidden-xs">
-          <img src={logo} alt="" />
-          <h2>Minio Browser</h2>
-        </div>
-        <div className="fes-list">
-          <BucketSearch />
-          <BucketList />
-        </div>
-        <Host />
+        <SideBar />
       </div>
-    </ClickOutHandler>
-  )
+    )
+  }
 }
 
-export default connect(state => state)(SideBar)
+export default connect(state => state)(Browser)
