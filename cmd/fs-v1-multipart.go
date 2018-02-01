@@ -588,7 +588,7 @@ func (fs *fsObjects) CompleteMultipartUpload(bucket string, object string, uploa
 	if err != nil {
 		return oi, toObjectErr(errors.Trace(err), bucket, object)
 	}
-	defer fs.rwPool.Close(fsMetaPath)
+	defer metaFile.Close()
 
 	fsMeta := fsMetaV1{}
 	// Read saved fs metadata for ongoing multipart.
