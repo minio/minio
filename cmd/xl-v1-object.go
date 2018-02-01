@@ -446,30 +446,48 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 
-	// Extracts xlStat and xlMetaMap.
-	xlStat, xlMetaMap, err := xl.readXLMetaStat(bucket, object)
+	// get Quorum for this object
+	readQuorum, _, err := objectQuorumFromMeta(xl, metaArr, errs)
 	if err != nil {
-		return ObjectInfo{}, err
+		return objInfo, toObjectErr(err, bucket, object)
+	}
+
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+		return objInfo, toObjectErr(reducedErr, bucket, object)
+	}
+
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(metaArr, errs)
+
+	// Reduce list of UUIDs to a single common value.
+	modTime, _ := commonTime(modTimes)
+
+	// Pick latest valid metadata.
+	xlMeta, err := pickValidXLMeta(metaArr, modTime)
+	if err != nil {
+		return objInfo, err
 	}
 
 	objInfo = ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,
 		Name:            object,
-		Size:            xlStat.Size,
-		ModTime:         xlStat.ModTime,
-		ContentType:     xlMetaMap["content-type"],
-		ContentEncoding: xlMetaMap["content-encoding"],
+		Size:            xlMeta.Stat.Size,
+		ModTime:         xlMeta.Stat.ModTime,
+		ContentType:     xlMeta.Meta["content-type"],
+		ContentEncoding: xlMeta.Meta["content-encoding"],
 	}
 
 	// Extract etag.
-	objInfo.ETag = extractETag(xlMetaMap)
+	objInfo.ETag = extractETag(xlMeta.Meta)
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
-	objInfo.UserDefined = cleanMetadata(xlMetaMap)
+	objInfo.UserDefined = cleanMetadata(xlMeta.Meta)
 
 	// Success.
 	return objInfo, nil
