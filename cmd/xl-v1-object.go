@@ -433,7 +433,10 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error
 	}
 
 	if hasSuffix(object, slashSeparator) {
-		return xl.getObjectInfoDir(bucket, object)
+		if oi, e = xl.getObjectInfoDir(bucket, object); e != nil {
+			return oi, toObjectErr(e, bucket, object)
+		}
+		return oi, nil
 	}
 
 	info, err := xl.getObjectInfo(bucket, object)
