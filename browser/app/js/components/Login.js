@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,115 +14,118 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import logo from '../../img/logo.svg'
-import Alert from 'react-bootstrap/lib/Alert'
-import * as actions from '../actions'
-import InputGroup from '../components/InputGroup'
+import React from "react"
+import { connect } from "react-redux"
+import classNames from "classnames"
+import logo from "../../img/logo.svg"
+import Alert from "./Alert"
+import * as actionsAlert from "../actions/alert"
+import InputGroup from "../components/InputGroup"
+import { minioBrowserPrefix } from "../constants"
+import web from "../web"
+import { Redirect } from "react-router-dom"
 
-export default class Login extends React.Component {
+export class Login extends React.Component {
   handleSubmit(event) {
     event.preventDefault()
-    const {web, dispatch, loginRedirectPath} = this.props
-    let message = ''
-    if (!document.getElementById('accessKey').value) {
-      message = 'Secret Key cannot be empty'
+    const { dispatch, history } = this.props
+    let message = ""
+    if (!document.getElementById("accessKey").value) {
+      message = "Secret Key cannot be empty"
     }
-    if (!document.getElementById('secretKey').value) {
-      message = 'Access Key cannot be empty'
+    if (!document.getElementById("secretKey").value) {
+      message = "Access Key cannot be empty"
     }
     if (message) {
-      dispatch(actions.showAlert({
-        type: 'danger',
-        message
-      }))
+      dispatch(
+        actionsAlert.set({
+          type: "danger",
+          message
+        })
+      )
       return
     }
-    web.Login({
-      username: document.getElementById('accessKey').value,
-      password: document.getElementById('secretKey').value
-    })
-      .then((res) => {
-        this.context.router.push(loginRedirectPath)
+    web
+      .Login({
+        username: document.getElementById("accessKey").value,
+        password: document.getElementById("secretKey").value
+      })
+      .then(res => {
+        history.push(minioBrowserPrefix)
       })
       .catch(e => {
-        dispatch(actions.setLoginError())
-        dispatch(actions.showAlert({
-          type: 'danger',
-          message: e.message
-        }))
+        dispatch(
+          actionsAlert.set({
+            type: "danger",
+            message: e.message
+          })
+        )
       })
   }
 
   componentWillMount() {
-    const {dispatch} = this.props
+    const { dispatch } = this.props
     // Clear out any stale message in the alert of previous page
-    dispatch(actions.showAlert({
-      type: 'danger',
-      message: ''
-    }))
-    document.body.classList.add('is-guest')
+    dispatch(actionsAlert.clear())
+    document.body.classList.add("is-guest")
   }
 
   componentWillUnmount() {
-    document.body.classList.remove('is-guest')
+    document.body.classList.remove("is-guest")
   }
 
-  hideAlert() {
-    const {dispatch} = this.props
-    dispatch(actions.hideAlert())
+  clearAlert() {
+    const { dispatch } = this.props
+    dispatch(actionsAlert.clear())
   }
 
   render() {
-    const {alert} = this.props
-    let alertBox = <Alert className={ 'alert animated ' + (alert.show ? 'fadeInDown' : 'fadeOutUp') } bsStyle={ alert.type } onDismiss={ this.hideAlert.bind(this) }>
-                     <div className='text-center'>
-                       { alert.message }
-                     </div>
-                   </Alert>
+    const { alert } = this.props
+    if (web.LoggedIn()) {
+      return <Redirect to={minioBrowserPrefix} />
+    }
+    let alertBox = <Alert {...alert} onDismiss={this.clearAlert.bind(this)} />
     // Make sure you don't show a fading out alert box on the initial web-page load.
-    if (!alert.message)
-      alertBox = ''
+    if (!alert.message) alertBox = ""
     return (
       <div className="login">
-        { alertBox }
+        {alertBox}
         <div className="l-wrap">
-          <form onSubmit={ this.handleSubmit.bind(this) }>
-            <InputGroup className="ig-dark"
+          <form onSubmit={this.handleSubmit.bind(this)}>
+            <InputGroup
+              className="ig-dark"
               label="Access Key"
               id="accessKey"
               name="username"
               type="text"
               spellCheck="false"
               required="required"
-              autoComplete="username">
-            </InputGroup>
-            <InputGroup className="ig-dark"
+              autoComplete="username"
+            />
+            <InputGroup
+              className="ig-dark"
               label="Secret Key"
               id="secretKey"
               name="password"
               type="password"
               spellCheck="false"
               required="required"
-              autoComplete="new-password">
-            </InputGroup>
+              autoComplete="new-password"
+            />
             <button className="lw-btn" type="submit">
-              <i className="fa fa-sign-in"></i>
+              <i className="fa fa-sign-in" />
             </button>
           </form>
         </div>
         <div className="l-footer">
-          <a className="lf-logo" href=""><img src={ logo } alt="" /></a>
-          <div className="lf-server">
-            { window.location.host }
-          </div>
+          <a className="lf-logo" href="">
+            <img src={logo} alt="" />
+          </a>
+          <div className="lf-server">{window.location.host}</div>
         </div>
       </div>
     )
   }
 }
 
-Login.contextTypes = {
-  router: React.PropTypes.object.isRequired
-}
+export default connect(state => state)(Login)
