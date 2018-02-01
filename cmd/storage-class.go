@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -54,6 +55,20 @@ type storageClassConfig struct {
 	RRS      storageClass `json:"rrs"`
 }
 
+// Validate SS and RRS parity when unmarshalling JSON.
+func (sCfg *storageClassConfig) UnmarshalJSON(data []byte) error {
+	type Alias storageClassConfig
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(sCfg),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	return validateParity(aux.Standard.Parity, aux.RRS.Parity)
+}
+
 // Validate if storage class in metadata
 // Only Standard and RRS Storage classes are supported
 func isValidStorageClassMeta(sc string) bool {
@@ -62,17 +77,15 @@ func isValidStorageClassMeta(sc string) bool {
 
 func (sc *storageClass) UnmarshalText(b []byte) error {
 	scStr := string(b)
-	if scStr != "" {
-		s, err := parseStorageClass(scStr)
-		if err != nil {
-			return err
-		}
-		sc.Parity = s.Parity
-		sc.Scheme = s.Scheme
-	} else {
-		sc = &storageClass{}
+	if scStr == "" {
+		return nil
 	}
-
+	s, err := parseStorageClass(scStr)
+	if err != nil {
+		return err
+	}
+	sc.Parity = s.Parity
+	sc.Scheme = s.Scheme
 	return nil
 }
 
@@ -115,68 +128,39 @@ func parseStorageClass(storageClassEnv string) (sc storageClass, err error) {
 	return sc, nil
 }
 
-// Validates the parity disks for Reduced Redundancy storage class
-func validateRRSParity(rrsParity, ssParity int) (err error) {
-	disks := len(globalEndpoints)
-	// disks < 4 means this is not a erasure coded setup and so storage class is not supported
-	if disks < 4 {
+// Validates the parity disks.
+func validateParity(ssParity, rrsParity int) (err error) {
+	if ssParity == 0 && rrsParity == 0 {
+		return nil
+	}
+
+	if !globalIsXL {
 		return fmt.Errorf("Setting storage class only allowed for erasure coding mode")
 	}
 
-	// Reduced redundancy storage class is not supported for 4 disks erasure coded setup.
-	if disks == 4 && rrsParity != 0 {
-		return fmt.Errorf("Reduced redundancy storage class not supported for " + strconv.Itoa(disks) + " disk setup")
+	// SS parity disks should be greater than or equal to minimumParityDisks. Parity below minimumParityDisks is not recommended.
+	if ssParity > 0 && ssParity < minimumParityDisks {
+		return fmt.Errorf("Standard storage class parity %d should be greater than or equal to %d", ssParity, minimumParityDisks)
 	}
 
 	// RRS parity disks should be greater than or equal to minimumParityDisks. Parity below minimumParityDisks is not recommended.
-	if rrsParity < minimumParityDisks {
-		return fmt.Errorf("Reduced redundancy storage class parity should be greater than or equal to " + strconv.Itoa(minimumParityDisks))
+	if rrsParity > 0 && rrsParity < minimumParityDisks {
+		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minimumParityDisks)
 	}
 
-	// Reduced redundancy implies lesser parity than standard storage class. So, RRS parity disks should be
-	// - less than N/2, if StorageClass parity is not set.
-	// - less than StorageClass Parity, if Storage class parity is set.
-	switch ssParity {
-	case 0:
-		if rrsParity >= disks/2 {
-			return fmt.Errorf("Reduced redundancy storage class parity disks should be less than " + strconv.Itoa(disks/2))
-		}
-	default:
-		if rrsParity >= ssParity {
-			return fmt.Errorf("Reduced redundancy storage class parity disks should be less than " + strconv.Itoa(ssParity))
-		}
+	if ssParity > len(globalEndpoints)/2 {
+		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, len(globalEndpoints)/2)
 	}
 
-	return nil
-}
-
-// Validates the parity disks for Standard storage class
-func validateSSParity(ssParity, rrsParity int) (err error) {
-	disks := len(globalEndpoints)
-	// disks < 4 means this is not a erasure coded setup and so storage class is not supported
-	if disks < 4 {
-		return fmt.Errorf("Setting storage class only allowed for erasure coding mode")
+	if rrsParity > len(globalEndpoints)/2 {
+		return fmt.Errorf("Reduced redundancy storage class parity %d should be less than  or equal to %d", rrsParity, len(globalEndpoints)/2)
 	}
 
-	// Standard storage class implies more parity than Reduced redundancy storage class. So, Standard storage parity disks should be
-	// - greater than or equal to 2, if RRS parity is not set.
-	// - greater than RRS Parity, if RRS parity is set.
-	switch rrsParity {
-	case 0:
-		if ssParity < minimumParityDisks {
-			return fmt.Errorf("Standard storage class parity disks should be greater than or equal to " + strconv.Itoa(minimumParityDisks))
-		}
-	default:
-		if ssParity <= rrsParity {
-			return fmt.Errorf("Standard storage class parity disks should be greater than " + strconv.Itoa(rrsParity))
+	if ssParity > 0 && rrsParity > 0 {
+		if ssParity < rrsParity {
+			return fmt.Errorf("Standard storage class parity disks %d should be greater than or equal to Reduced redundancy storage class parity disks %d", ssParity, rrsParity)
 		}
 	}
-
-	// Standard storage class parity should be less than or equal to N/2
-	if ssParity > disks/2 {
-		return fmt.Errorf("Standard storage class parity disks should be less than or equal to " + strconv.Itoa(disks/2))
-	}
-
 	return nil
 }
 
