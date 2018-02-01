@@ -18,15 +18,12 @@ package cmd
 
 import (
 	"fmt"
-	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/errors"
-	"github.com/minio/minio/pkg/objcache"
 )
 
 // XL constants.
@@ -36,9 +33,6 @@ const (
 
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
-
-	// Represents the minimum required RAM size to enable caching.
-	minRAMSize = 24 * humanize.GiByte
 
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
@@ -54,12 +48,6 @@ type xlObjects struct {
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
-
-	// Object cache for caching objects.
-	objCache *objcache.Cache
-
-	// Object cache enabled.
-	objCacheEnabled bool
 
 	// name space mutex for object layer
 	nsMutex *nsLockMap
@@ -111,28 +99,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		storageDisks: newStorageDisks,
 		listPool:     listPool,
 		nsMutex:      newNSLock(globalIsDistXL),
-	}
-	// Get cache size if _MINIO_CACHE environment variable is set.
-	var maxCacheSize uint64
-	if !globalXLObjCacheDisabled {
-		maxCacheSize, err = GetMaxCacheSize()
-		errorIf(err, "Unable to get maximum cache size")
-
-		// Enable object cache if cache size is more than zero
-		xl.objCacheEnabled = maxCacheSize > 0
-	}
-
-	// Check if object cache is enabled.
-	if xl.objCacheEnabled {
-		// Initialize object cache.
-		objCache, oerr := objcache.New(maxCacheSize, objcache.DefaultExpiry)
-		if oerr != nil {
-			return nil, oerr
-		}
-		objCache.OnEviction = func(key string) {
-			debug.FreeOSMemory()
-		}
-		xl.objCache = objCache
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.

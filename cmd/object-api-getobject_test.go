@@ -106,14 +106,6 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		// Test case - 5.
 		// Case with invalid object names.
 		{bucketName, "", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Object name invalid: "+bucketName+"#")},
-		// Test case - 6.
-		// 	Valid object and bucket names but non-existent bucket.
-		//	{"abc", "def", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket not found: abc")},
-		// A custom writer is sent as an argument.
-		// Its designed to return a EOF error after reading `n` bytes, where `n` is the argument when initializing the EOF writer.
-		// This is to simulate the case of cache not filling up completly, since the EOFWriter doesn't allow the write to complete,
-		// the cache gets filled up with partial data. The following up test case will read the object completly, tests the
-		// purging of the cache during the incomplete write.
 		//	Test case - 7.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[0], NewEOFWriter(buffers[0], 100), false, []byte{}, io.EOF},
 		// Test case with start offset set to 0 and length set to size of the object.
@@ -374,14 +366,6 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 		// Test case - 5.
 		// Case with invalid object names.
 		{bucketName, "", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Object name invalid: "+bucketName+"#")},
-		// Test case - 6.
-		// 	Valid object and bucket names but non-existent bucket.
-		//	{"abc", "def", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket not found: abc")},
-		// A custom writer is sent as an argument.
-		// Its designed to return a EOF error after reading `n` bytes, where `n` is the argument when initializing the EOF writer.
-		// This is to simulate the case of cache not filling up completly, since the EOFWriter doesn't allow the write to complete,
-		// the cache gets filled up with partial data. The following up test case will read the object completly, tests the
-		// purging of the cache during the incomplete write.
 		//	Test case - 7.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[0], NewEOFWriter(buffers[0], 100), false, []byte{}, io.EOF},
 		// Test case with start offset set to 0 and length set to size of the object.

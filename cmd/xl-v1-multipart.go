@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path"
 	"strings"
 	"sync"
@@ -1067,19 +1066,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if rErr != nil {
 		return oi, toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
-
-	defer func() {
-		if xl.objCacheEnabled {
-			// A new complete multipart upload invalidates any
-			// previously cached object in memory.
-			xl.objCache.Delete(path.Join(bucket, object))
-
-			// Prefetch the object from disk by triggering a fake GetObject call
-			// Unlike a regular single PutObject,  multipart PutObject is comes in
-			// stages and it is harder to cache.
-			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard, s3MD5)
-		}
-	}()
 
 	if xl.isObject(bucket, object) {
 		// Rename if an object already exists to temporary location.

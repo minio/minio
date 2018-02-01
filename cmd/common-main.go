@@ -76,9 +76,6 @@ func handleCommonEnvVars() {
 		globalProfiler = startProfiler(profiler)
 	}
 
-	// Check if object cache is disabled.
-	globalXLObjCacheDisabled = strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
-
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey != "" && secretKey != "" {
