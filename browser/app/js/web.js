@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-import { browserHistory } from 'react-router'
 import JSONrpc from './jsonrpc'
-import * as  actions from './actions'
 import { minioBrowserPrefix } from './constants.js'
 import Moment from 'moment'
 import storage from 'local-storage-fallback'
 
-export default class Web {
-  constructor(endpoint, dispatch) {
+class Web {
+  constructor(endpoint) {
     const namespace = 'Web'
-    this.dispatch = dispatch
     this.JSONrpc = new JSONrpc({
       endpoint,
       namespace
@@ -37,7 +34,7 @@ export default class Web {
       .catch(err => {
         if (err.status === 401) {
           storage.removeItem('token')
-          browserHistory.push(`${minioBrowserPrefix}/login`)
+          location.reload()
           throw new Error('Please re-login.')
         }
         if (err.status)
@@ -128,3 +125,7 @@ export default class Web {
     return this.makeCall('ListAllBucketPolicies', args)
   }
 }
+
+const web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`);
+
+export default web;
