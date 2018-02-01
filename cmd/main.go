@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,13 @@ var globalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: getConfigDir(),
-		Usage: "Path to configuration directory.",
+		Usage: func() string {
+			usage := "Path to configuration directory."
+			if getConfigDir() == "" {
+				usage = usage + "  This option must be set."
+			}
+			return usage
+		}(),
 	},
 	cli.BoolFlag{
 		Name:  "quiet",
