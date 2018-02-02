@@ -143,9 +143,8 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred         auth.Credentials
-	globalPublicCerts        []*x509.Certificate
-	globalXLObjCacheDisabled bool
+	globalActiveCred  auth.Credentials
+	globalPublicCerts []*x509.Certificate
 
 	globalIsEnvDomainName bool
 	globalDomainName      string // Root domain for virtual host style requests

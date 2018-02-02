@@ -1657,12 +1657,6 @@ func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) 
 		return nil, nil, err
 	}
 
-	// Disabling the cache for integration tests.
-	// Should use the object layer tests for validating cache.
-	if xl, ok := objLayer.(*xlObjects); ok {
-		xl.objCacheEnabled = false
-	}
-
 	// Success.
 	return objLayer, formattedDisks, nil
 }
