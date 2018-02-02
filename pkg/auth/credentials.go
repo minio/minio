@@ -25,7 +25,7 @@ import (
 
 const (
 	// Minimum length for Minio access key.
-	accessKeyMinLen = 5
+	accessKeyMinLen = 3
 
 	// Maximum length for Minio access key.
 	// There is no max length enforcement for access keys
