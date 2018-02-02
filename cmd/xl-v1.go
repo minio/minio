@@ -110,7 +110,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		mutex:        &sync.Mutex{},
 		storageDisks: newStorageDisks,
 		listPool:     listPool,
-		nsMutex:      newNSLock(globalIsDistXL),
+		nsMutex:      globalNSMutex,
 	}
 	// Get cache size if _MINIO_CACHE environment variable is set.
 	var maxCacheSize uint64

@@ -154,6 +154,15 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Set globalIsXL to indicate that the setup uses an erasure
+	// code backend.
+	globalIsXL = true
+
+	// initialize NSLock.
+	isDistXL := false
+	initNSLock(isDistXL)
+
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, xlDirs, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
@@ -164,14 +173,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalBootTime = UTCNow()
 
 	globalEndpoints = mustGetNewEndpointList(xlDirs...)
-
-	// Set globalIsXL to indicate that the setup uses an erasure
-	// code backend.
-	globalIsXL = true
-
-	// initialize NSLock.
-	isDistXL := false
-	initNSLock(isDistXL)
 
 	// Init global heal state
 	initAllHealState(globalIsXL)

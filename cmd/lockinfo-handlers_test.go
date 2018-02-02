@@ -33,6 +33,11 @@ func TestListLocksInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
+
+	// initialize NSLock before initializing object layer
+	isDistXL := false
+	initNSLock(isDistXL)
+
 	// Initializing new XL objectLayer.
 	objAPI, _, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
@@ -42,10 +47,6 @@ func TestListLocksInfo(t *testing.T) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objAPI
 	globalObjLayerMutex.Unlock()
-	// Set globalIsXL to indicate that the setup uses an erasure code backend.
-	// initialize NSLock.
-	isDistXL := false
-	initNSLock(isDistXL)
 
 	var nsMutex *nsLockMap
 

@@ -147,7 +147,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
-		nsMutex:       newNSLock(false),
+		nsMutex:       globalNSMutex,
 		listPool:      newTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 	}
