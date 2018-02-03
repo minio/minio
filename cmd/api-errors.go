@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
 
+	"github.com/coreos/etcd/client"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
@@ -864,6 +866,29 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
+	// SSE errors
+	case errInsecureSSERequest:
+		apiErr = ErrInsecureSSECustomerRequest
+	case errInvalidSSEAlgorithm:
+		apiErr = ErrInvalidSSECustomerAlgorithm
+	case errInvalidSSEKey:
+		apiErr = ErrInvalidSSECustomerKey
+	case errMissingSSEKey:
+		apiErr = ErrMissingSSECustomerKey
+	case errMissingSSEKeyMD5:
+		apiErr = ErrMissingSSECustomerKeyMD5
+	case errSSEKeyMD5Mismatch:
+		apiErr = ErrSSECustomerKeyMD5Mismatch
+	case errObjectTampered:
+		apiErr = ErrObjectTampered
+	case errEncryptedObject:
+		apiErr = ErrSSEEncryptedObject
+	case errInvalidSSEParameters:
+		apiErr = ErrInvalidSSECustomerParameters
+	case errSSEKeyMismatch:
+		apiErr = ErrAccessDenied // no access without correct key
+	case context.Canceled, context.DeadlineExceeded:
+		apiErr = ErrOperationTimedOut
 	}
 
 	if apiErr != ErrNone {
@@ -871,27 +896,12 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		return apiErr
 	}
 
-	switch err { // SSE errors
-	case errInsecureSSERequest:
-		return ErrInsecureSSECustomerRequest
-	case errInvalidSSEAlgorithm:
-		return ErrInvalidSSECustomerAlgorithm
-	case errInvalidSSEKey:
-		return ErrInvalidSSECustomerKey
-	case errMissingSSEKey:
-		return ErrMissingSSECustomerKey
-	case errMissingSSEKeyMD5:
-		return ErrMissingSSECustomerKeyMD5
-	case errSSEKeyMD5Mismatch:
-		return ErrSSECustomerKeyMD5Mismatch
-	case errObjectTampered:
-		return ErrObjectTampered
-	case errEncryptedObject:
-		return ErrSSEEncryptedObject
-	case errInvalidSSEParameters:
-		return ErrInvalidSSECustomerParameters
-	case errSSEKeyMismatch:
-		return ErrAccessDenied // no access without correct key
+	// etcd specific errors, a key is always a bucket for us return
+	// ErrNoSuchBucket in such a case.
+	if e, ok := err.(*client.Error); ok {
+		if e.Code == client.ErrorCodeKeyNotFound {
+			return ErrNoSuchBucket
+		}
 	}
 
 	switch err.(type) {

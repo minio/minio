@@ -18,15 +18,19 @@ package cmd
 
 import (
 	"errors"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	etcdc "github.com/coreos/etcd/client"
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 )
 
 // Check for updates and print a notification message
@@ -42,6 +46,18 @@ func checkUpdate(mode string) {
 }
 
 func initConfig() {
+	if globalEtcdClient != nil {
+		if err := loadConfig(); err != nil {
+			if etcdc.IsKeyNotFound(err) {
+				logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+				logger.Info("Created minio configuration file successfully at", globalEtcdClient.Endpoints())
+			} else {
+				logger.FatalIf(err, "Unable to load config version: '%s'.", serverConfigVersion)
+			}
+		}
+		return
+	}
+
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
 		logger.FatalIf(migrateConfig(), "Config migration failed")
@@ -124,6 +140,31 @@ func handleCommonEnvVars() {
 	}
 
 	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
+
+	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
+	if ok {
+		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
+		var err error
+		globalEtcdClient, err = etcdc.New(etcdc.Config{
+			Endpoints: etcdEndpoints,
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout: 10 * time.Second,
+			},
+		})
+		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
+	}
+
+	globalDomainIP = os.Getenv("MINIO_DOMAIN_IP")
+	if globalDomainName != "" && globalDomainIP != "" && globalEtcdClient != nil {
+		var err error
+		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIP, globalMinioPort, globalEtcdClient)
+		logger.FatalIf(err, "Unable to initialize DNS config for %s.", globalDomainName)
+	}
 
 	if drives := os.Getenv("MINIO_CACHE_DRIVES"); drives != "" {
 		driveList, err := parseCacheDrives(strings.Split(drives, cacheEnvDelimiter))

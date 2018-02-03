@@ -480,9 +480,9 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(creds)
 
-	// Save credentials to config file
-	if err := globalServerConfig.Save(); err != nil {
-		// As saving configurstion failed, restore previous credential in memory.
+	// Persist updated credentials.
+	if err = globalServerConfig.Save(getConfigFile()); err != nil {
+		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
 		logger.LogIf(context.Background(), err)
 		return toJSONError(err)

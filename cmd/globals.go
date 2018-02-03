@@ -22,11 +22,13 @@ import (
 	"runtime"
 	"time"
 
+	etcdc "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/dns"
 )
 
 // minio configuration related constants.
@@ -160,6 +162,7 @@ var (
 
 	globalIsEnvDomainName bool
 	globalDomainName      string // Root domain for virtual host style requests
+	globalDomainIP        string // Root domain IP address
 
 	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
@@ -174,15 +177,19 @@ var (
 	// Set to store standard storage class
 	globalStandardStorageClass storageClass
 
-	globalIsEnvWORM   bool
+	globalIsEnvWORM bool
+	// Is worm enabled
 	globalWORMEnabled bool
 
 	// Is Disk Caching set up
 	globalIsDiskCacheEnabled bool
+
 	// Disk cache drives
 	globalCacheDrives []string
+
 	// Disk cache excludes
 	globalCacheExcludes []string
+
 	// Disk cache expiry
 	globalCacheExpiry = 90
 
@@ -192,12 +199,18 @@ var (
 	// Current RPC version
 	globalRPCAPIVersion = RPCVersion{3, 0, 0}
 
-	// Add new variable global values here.
+	// Allocated etcd endpoint for config and bucket DNS.
+	globalEtcdClient etcdc.Client
+
+	// Allocated DNS config wrapper over etcd client.
+	globalDNSConfig dns.Config
 
 	// Default usage check interval value.
 	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
+
+	// Add new variable global values here.
 )
 
 // global colors.
