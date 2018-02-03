@@ -818,8 +818,8 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
-	if err = globalServerConfig.Save(); err != nil {
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+	if err = globalServerConfig.Save(getConfigFile()); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 

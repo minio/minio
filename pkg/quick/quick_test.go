@@ -36,7 +36,7 @@ func TestReadVersion(t *testing.T) {
 		Version string
 	}
 	saveMe := myStruct{"1"}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestReadVersionErr(t *testing.T) {
 		Version int
 	}
 	saveMe := myStruct{1}
-	_, err := New(&saveMe)
+	_, err := NewLocalConfig(&saveMe)
 	if err == nil {
 		t.Fatal("Unexpected should fail in initialization for bad input")
 	}
@@ -95,7 +95,7 @@ func TestSaveFailOnDir(t *testing.T) {
 		Version string
 	}
 	saveMe := myStruct{"1"}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestLoadFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail to load empty JSON")
 	}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestLoadFile(t *testing.T) {
 	}
 
 	saveMe = myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err = New(&saveMe)
+	config, err = NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ directories:
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ directories:
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = New(&loadMe)
+	config, err = NewLocalConfig(&loadMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestJSONFormat(t *testing.T) {
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestJSONFormat(t *testing.T) {
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = New(&loadMe)
+	config, err = NewLocalConfig(&loadMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestSaveLoad(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestSaveLoad(t *testing.T) {
 	}
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := New(&loadMe)
+	newConfig, err := NewLocalConfig(&loadMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestSaveBackup(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestSaveBackup(t *testing.T) {
 	}
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := New(&loadMe)
+	newConfig, err := NewLocalConfig(&loadMe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +424,7 @@ func TestSaveBackup(t *testing.T) {
 		t.Fatal("Expected to mismatch but succeeded instead")
 	}
 
-	config, err = New(&mismatch)
+	config, err = NewLocalConfig(&mismatch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,20 +442,20 @@ func TestDiff(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	type myNewStruct struct {
+	type myNewLocalConfigStruct struct {
 		Version string
 		// User     string
 		Password    string
 		Directories []string
 	}
 
-	mismatch := myNewStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := New(&mismatch)
+	mismatch := myNewLocalConfigStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
+	newConfig, err := NewLocalConfig(&mismatch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,13 +482,13 @@ func TestDeepDiff(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := New(&saveMe)
+	config, err := NewLocalConfig(&saveMe)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	mismatch := myStruct{"1", "Guest", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := New(&mismatch)
+	newConfig, err := NewLocalConfig(&mismatch)
 	if err != nil {
 		t.Fatal(err)
 	}

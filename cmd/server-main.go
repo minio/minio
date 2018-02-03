@@ -89,6 +89,13 @@ ENVIRONMENT VARIABLES:
   WORM:
      MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
 
+  BUCKET-DNS:
+     MINIO_DOMAIN:    To enable virtual-host-style requests.
+     MINIO_DOMAIN_IP: To enable virtual-host-style requests.
+
+  ETCD:
+     MINIO_ETCD_ENDPOINTS: Comma separated list of etcd endpoints.
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      $ {{.HelpName}} /home/shared

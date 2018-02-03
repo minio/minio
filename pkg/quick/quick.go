@@ -41,21 +41,21 @@ type Config interface {
 	DeepDiff(Config) ([]structs.Field, error)
 }
 
-// config - implements quick.Config interface
-type config struct {
+// localConfig - implements quick.Config interface
+type localConfig struct {
 	data interface{}
 	lock *sync.RWMutex
 }
 
 // Version returns the current config file format version
-func (d config) Version() string {
+func (d localConfig) Version() string {
 	st := structs.New(d.data)
 	f := st.Field("Version")
 	return f.Value().(string)
 }
 
 // String converts JSON config to printable string
-func (d config) String() string {
+func (d localConfig) String() string {
 	configBytes, _ := json.MarshalIndent(d.data, "", "\t")
 	return string(configBytes)
 }
@@ -63,7 +63,7 @@ func (d config) String() string {
 // Save writes config data to a file. Data format
 // is selected based on file extension or JSON if
 // not provided.
-func (d config) Save(filename string) error {
+func (d localConfig) Save(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -89,19 +89,19 @@ func (d config) Save(filename string) error {
 // Load - loads config from file and merge with currently set values
 // File content format is guessed from the file name extension, if not
 // available, consider that we have JSON.
-func (d config) Load(filename string) error {
+func (d localConfig) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	return loadFileConfig(filename, d.data)
 }
 
 // Data - grab internal data map for reading
-func (d config) Data() interface{} {
+func (d localConfig) Data() interface{} {
 	return d.data
 }
 
-//Diff  - list fields that are in A but not in B
-func (d config) Diff(c Config) ([]structs.Field, error) {
+// Diff  - list fields that are in A but not in B
+func (d localConfig) Diff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 
 	currFields := structs.Fields(d.Data())
@@ -123,7 +123,7 @@ func (d config) Diff(c Config) ([]structs.Field, error) {
 }
 
 // DeepDiff  - list fields in A that are missing or not equal to fields in B
-func (d config) DeepDiff(c Config) ([]structs.Field, error) {
+func (d localConfig) DeepDiff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 
 	currFields := structs.Fields(d.Data())
@@ -179,13 +179,13 @@ func writeFile(filename string, data []byte) error {
 	return safeFile.Close()
 }
 
-// New - instantiate a new config
-func New(data interface{}) (Config, error) {
+// NewLocalConfig - instantiate a new config r/w configs from local files.
+func NewLocalConfig(data interface{}) (Config, error) {
 	if err := checkData(data); err != nil {
 		return nil, err
 	}
 
-	d := new(config)
+	d := new(localConfig)
 	d.data = data
 	d.lock = new(sync.RWMutex)
 	return d, nil
@@ -204,7 +204,7 @@ func GetVersion(filename string) (version string, err error) {
 
 // Load - loads json config from filename for the a given struct data
 func Load(filename string, data interface{}) (qc Config, err error) {
-	if qc, err = New(data); err == nil {
+	if qc, err = NewLocalConfig(data); err == nil {
 		err = qc.Load(filename)
 	}
 	return qc, err
@@ -213,7 +213,7 @@ func Load(filename string, data interface{}) (qc Config, err error) {
 // Save - saves given configuration data into given file as JSON.
 func Save(filename string, data interface{}) (err error) {
 	var qc Config
-	if qc, err = New(data); err == nil {
+	if qc, err = NewLocalConfig(data); err == nil {
 		err = qc.Save(filename)
 	}
 
