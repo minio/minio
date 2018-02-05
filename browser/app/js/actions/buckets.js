@@ -19,7 +19,6 @@ import web from "../web"
 export const SET_LIST = "buckets/SET_LIST"
 export const SET_FILTER = "buckets/SET_FILTER"
 export const SET_CURRENT_BUCKET = "buckets/SET_CURRENT_BUCKET"
-export const SET_CURRENT_PREFIX = "buckets/SET_CURRENT_PREFIX"
 
 export const fetchBuckets = () => {
   return function(dispatch) {
@@ -48,12 +47,5 @@ export const setCurrentBucket = bucket => {
   return {
     type: SET_CURRENT_BUCKET,
     bucket
-  }
-}
-
-export const setCurrentPrefix = prefix => {
-  return {
-    type: SET_CURRENT_PREFIX,
-    prefix
   }
 }

@@ -38,17 +38,4 @@ describe("Buckets actions", () => {
       expect(actions).toEqual(expectedActions)
     })
   })
-
-  it("creates buckets/SET_CURRENT_PREFIX action", () => {
-    const store = mockStore()
-    const expectedActions = [
-      {
-        type: "buckets/SET_CURRENT_PREFIX",
-        prefix: "test"
-      }
-    ]
-    store.dispatch(actionsBuckets.setCurrentPrefix("test"))
-    const actions = store.getActions()
-    expect(actions).toEqual(expectedActions)
-  })
 })

@@ -14,40 +14,49 @@
  * limitations under the License.
  */
 
-import reducer from "../buckets"
-import * as actions from "../../actions/buckets"
+import reducer from "../objects"
+import * as actions from "../../actions/objects"
 
-describe("buckets reducer", () => {
+describe("objects reducer", () => {
   it("should return the initial state", () => {
     const initialState = reducer(undefined, {})
     expect(initialState).toEqual({
       list: [],
-      filter: "",
-      currentBucket: ""
+      sortBy: "",
+      sortOrder: false,
+      currentPrefix: ""
     })
   })
 
-  it("should handle SET_BUCKETS", () => {
+  it("should handle SET_LIST", () => {
     const newState = reducer(undefined, {
       type: actions.SET_LIST,
-      buckets: ["bk1", "bk2"]
+      objects: [{ name: "obj1" }, { name: "obj2" }]
     })
-    expect(newState.list).toEqual(["bk1", "bk2"])
+    expect(newState.list).toEqual([{ name: "obj1" }, { name: "obj2" }])
   })
 
-  it("should handle SET_BUCKETS_FILTER", () => {
+  it("should handle SET_SORT_BY", () => {
     const newState = reducer(undefined, {
-      type: actions.SET_FILTER,
-      filter: "test"
+      type: actions.SET_SORT_BY,
+      sortBy: "name"
     })
-    expect(newState.filter).toEqual("test")
+    expect(newState.sortBy).toEqual("name")
   })
 
-  it("should handle SELECT_BUCKET", () => {
+  it("should handle SET_SORT_ORDER", () => {
     const newState = reducer(undefined, {
-      type: actions.SET_CURRENT_BUCKET,
-      bucket: "test"
+      type: actions.SET_SORT_ORDER,
+      sortOrder: true
     })
-    expect(newState.currentBucket).toEqual("test")
+    expect(newState.sortOrder).toEqual(true)
+  })
+
+  it("should handle SET_CURRENT_PREFIX", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_CURRENT_PREFIX,
+      prefix: "test"
+    })
+    expect(newState.currentPrefix).toEqual("test")
   })
 })

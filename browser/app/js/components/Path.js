@@ -17,7 +17,7 @@
 import React from "react"
 import { connect } from "react-redux"
 import { getCurrentBucket, getCurrentPrefix } from "../selectors/buckets"
-import * as actionsBuckets from "../actions/buckets"
+import * as actionsObjects from "../actions/objects"
 
 export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   const onPrefixClick = (e, prefix) => {
@@ -57,13 +57,13 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
 const mapStateToProps = state => {
   return {
     currentBucket: getCurrentBucket(state),
-    currentPrefix: getCurrentPrefix(state)
+    currentPrefix: state.objects.currentPrefix
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectPrefix: prefix => dispatch(actionsBuckets.setCurrentPrefix(prefix))
+    selectPrefix: prefix => dispatch(actionsObjects.setCurrentPrefix(prefix))
   }
 }
 

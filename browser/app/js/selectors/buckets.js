@@ -26,5 +26,3 @@ export const getVisibleBuckets = createSelector(
 )
 
 export const getCurrentBucket = state => state.buckets.currentBucket
-
-export const getCurrentPrefix = state => state.buckets.currentPrefix

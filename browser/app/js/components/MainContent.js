@@ -17,11 +17,13 @@
 import React from "react"
 import MobileHeader from "./MobileHeader"
 import Header from "./Header"
+import ObjectsSection from "./ObjectsSection"
 
 export const MainContent = () => (
   <div className="fe-body">
     <MobileHeader />
     <Header />
+    <ObjectsSection />
   </div>
 )
 

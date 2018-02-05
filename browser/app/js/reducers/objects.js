@@ -14,27 +14,32 @@
  * limitations under the License.
  */
 
-import * as actionsBuckets from "../actions/buckets"
+import * as actionsObjects from "../actions/objects"
 
 export default (
-  state = { list: [], filter: "", currentBucket: "" },
+  state = { list: [], sortBy: "", sortOrder: false, currentPrefix: "" },
   action
 ) => {
   switch (action.type) {
-    case actionsBuckets.SET_LIST:
+    case actionsObjects.SET_LIST:
       return {
         ...state,
-        list: action.buckets
+        list: action.objects
       }
-    case actionsBuckets.SET_FILTER:
+    case actionsObjects.SET_SORT_BY:
       return {
         ...state,
-        filter: action.filter
+        sortBy: action.sortBy
       }
-    case actionsBuckets.SET_CURRENT_BUCKET:
+    case actionsObjects.SET_SORT_ORDER:
       return {
         ...state,
-        currentBucket: action.bucket
+        sortOrder: action.sortOrder
+      }
+    case actionsObjects.SET_CURRENT_PREFIX:
+      return {
+        ...state,
+        currentPrefix: action.prefix
       }
     default:
       return state
