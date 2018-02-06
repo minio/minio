@@ -190,8 +190,8 @@ func TestStorageErr(t *testing.T) {
 			err:         fmt.Errorf("%s", errAuthentication.Error()),
 		},
 		{
-			expectedErr: errServerVersionMismatch,
-			err:         fmt.Errorf("%s", errServerVersionMismatch.Error()),
+			expectedErr: errRPCAPIVersionUnsupported,
+			err:         fmt.Errorf("%s", errRPCAPIVersionUnsupported.Error()),
 		},
 		{
 			expectedErr: errServerTimeMismatch,

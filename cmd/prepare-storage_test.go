@@ -67,7 +67,7 @@ func TestReduceInitXLErrs(t *testing.T) {
 		{[]error{nil, nil, nil, nil}, ""},
 		{[]error{errUnformattedDisk, nil, nil, nil}, "\n[01/04] " + storageDisks[0].String() + " : unformatted disk found"},
 		{[]error{errUnformattedDisk, errUnformattedDisk, nil, nil}, "\n[01/04] " + storageDisks[0].String() + " : unformatted disk found" + "\n[02/04] " + storageDisks[1].String() + " : unformatted disk found"},
-		{[]error{errUnformattedDisk, errUnformattedDisk, errServerVersionMismatch, nil}, storageDisks[2].String() + ": Server versions do not match"},
+		{[]error{errUnformattedDisk, errUnformattedDisk, errRPCAPIVersionUnsupported, nil}, storageDisks[2].String() + ": Unsupported rpc API version"},
 	}
 	for i, test := range testCases {
 		actual := reduceInitXLErrs(storageDisks, test.sErrs)
@@ -123,23 +123,28 @@ func TestPrepForInitXL(t *testing.T) {
 	}
 	// Invalid access key id.
 	accessKeyIDErr := []error{
+		errInvalidAccessKeyID, errInvalidAccessKeyID, errInvalidAccessKeyID, errInvalidAccessKeyID,
 		errInvalidAccessKeyID, nil, nil, nil,
-		nil, nil, nil, nil,
 	}
 	// Authentication error.
 	authenticationErr := []error{
-		nil, nil, nil, nil,
-		errAuthentication, nil, nil, nil,
+		nil, nil, nil, errAuthentication,
+		errAuthentication, errAuthentication, errAuthentication, errAuthentication,
 	}
-	// Server version mismatch.
-	serverVersionMismatch := []error{
-		errServerVersionMismatch, nil, nil, nil,
-		errServerVersionMismatch, nil, nil, nil,
+	// Unsupported rpc API version.
+	rpcUnsupportedVersion := []error{
+		errRPCAPIVersionUnsupported, errRPCAPIVersionUnsupported, errRPCAPIVersionUnsupported, errRPCAPIVersionUnsupported,
+		errRPCAPIVersionUnsupported, nil, nil, nil,
 	}
 	// Server time mismatch.
 	serverTimeMismatch := []error{
-		nil, nil, nil, nil,
+		errServerTimeMismatch, errServerTimeMismatch, errServerTimeMismatch, errServerTimeMismatch,
 		errServerTimeMismatch, nil, nil, nil,
+	}
+	// Collection of config errs.
+	configErrs := []error{
+		errServerTimeMismatch, errServerTimeMismatch, errRPCAPIVersionUnsupported, errAuthentication,
+		errInvalidAccessKeyID, nil, nil, nil,
 	}
 	// Suggest to heal under formatted disks in quorum.
 	formattedDisksInQuorum := []error{
@@ -187,8 +192,9 @@ func TestPrepForInitXL(t *testing.T) {
 		// Config mistakes.
 		{true, accessKeyIDErr, 8, WaitForConfig},
 		{true, authenticationErr, 8, WaitForConfig},
-		{true, serverVersionMismatch, 8, WaitForConfig},
+		{true, rpcUnsupportedVersion, 8, WaitForConfig},
 		{true, serverTimeMismatch, 8, WaitForConfig},
+		{true, configErrs, 8, WaitForConfig},
 	}
 	for i, test := range testCases {
 		actual := prepForInitXL(test.firstDisk, test.errs, test.diskCount)

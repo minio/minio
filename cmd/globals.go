@@ -165,6 +165,9 @@ var (
 	// Set to store standard storage class
 	globalStandardStorageClass storageClass
 
+	// RPC version.
+	globalRPCAPIVersion = semVersion{1, 0, 0}
+
 	// Add new variable global values here.
 )
 

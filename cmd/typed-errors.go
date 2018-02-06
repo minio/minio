@@ -42,8 +42,8 @@ var errDataTooSmall = errors.New("Object size smaller than expected")
 // errServerNotInitialized - server not initialized.
 var errServerNotInitialized = errors.New("Server not initialized, please try again")
 
-// errServerVersionMismatch - server versions do not match.
-var errServerVersionMismatch = errors.New("Server versions do not match")
+// errRPCAPIVersionUnsupported - unsupported rpc API version.
+var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")

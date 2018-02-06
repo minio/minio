@@ -55,9 +55,8 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable to initialize storage disks, %s", err)
 	}
 	stServer := &storageServer{
-		storage:   storageDisks[0],
-		path:      "/disk1",
-		timestamp: UTCNow(),
+		storage: storageDisks[0],
+		path:    "/disk1",
 	}
 	return &testStorageRPCServer{
 		token:     token,
@@ -85,7 +84,10 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	// Following test cases are meant to exercise the invalid
 	// token code path of the storage RPC methods.
 	var err error
-	badAuthRPCArgs := AuthRPCArgs{AuthToken: "invalidToken"}
+	badAuthRPCArgs := AuthRPCArgs{
+		Version:   globalRPCAPIVersion,
+		AuthToken: "invalidToken",
+	}
 	badGenericVolArgs := GenericVolArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 		Vol:         "myvol",

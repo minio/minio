@@ -192,7 +192,9 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	storageInfoRequest := AuthRPCArgs{}
+	storageInfoRequest := AuthRPCArgs{
+		Version: globalRPCAPIVersion,
+	}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {
@@ -229,7 +231,9 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	rec := httptest.NewRecorder()
 
-	serverInfoRequest := AuthRPCArgs{}
+	serverInfoRequest := AuthRPCArgs{
+		Version: globalRPCAPIVersion,
+	}
 	serverInfoReply := &ServerInfoRep{}
 	req, err := newTestWebRPCRequest("Web.ServerInfo", authorization, serverInfoRequest)
 	if err != nil {
@@ -1493,7 +1497,9 @@ func TestWebCheckAuthorization(t *testing.T) {
 		"PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{}
+		args := &AuthRPCArgs{
+			Version: globalRPCAPIVersion,
+		}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
 		if nerr != nil {
@@ -1577,7 +1583,9 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{}
+		args := &AuthRPCArgs{
+			Version: globalRPCAPIVersion,
+		}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
 		if nerr != nil {
@@ -1690,7 +1698,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		RepArgs    interface{}
 	}{
 		{"MakeBucket", MakeBucketArgs{BucketName: bucketName}, WebGenericRep{}},
-		{"ListBuckets", AuthRPCArgs{}, ListBucketsRep{}},
+		{"ListBuckets", AuthRPCArgs{Version: globalRPCAPIVersion}, ListBucketsRep{}},
 		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
 		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
 		{"SetBucketPolicy", SetBucketPolicyArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
@@ -1714,7 +1722,9 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Test Web.StorageInfo
-	storageInfoRequest := AuthRPCArgs{}
+	storageInfoRequest := AuthRPCArgs{
+		Version: globalRPCAPIVersion,
+	}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {

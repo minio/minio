@@ -43,7 +43,7 @@ func TestLogin(t *testing.T) {
 		{
 			args: LoginRPCArgs{
 				AuthToken: token,
-				Version:   Version,
+				Version:   globalRPCAPIVersion,
 			},
 			skewTime:    0,
 			expectedErr: nil,
@@ -52,16 +52,16 @@ func TestLogin(t *testing.T) {
 		{
 			args: LoginRPCArgs{
 				AuthToken: token,
-				Version:   "INVALID-" + Version,
+				Version:   semVersion{2, 0, 0},
 			},
 			skewTime:    0,
-			expectedErr: errServerVersionMismatch,
+			expectedErr: errRPCAPIVersionUnsupported,
 		},
 		// Valid username, password and version, not request time
 		{
 			args: LoginRPCArgs{
 				AuthToken: token,
-				Version:   Version,
+				Version:   globalRPCAPIVersion,
 			},
 			skewTime:    20 * time.Minute,
 			expectedErr: errServerTimeMismatch,
@@ -70,7 +70,7 @@ func TestLogin(t *testing.T) {
 		{
 			args: LoginRPCArgs{
 				AuthToken: "",
-				Version:   Version,
+				Version:   globalRPCAPIVersion,
 			},
 			skewTime:    0,
 			expectedErr: errAuthentication,
