@@ -365,18 +365,47 @@ func TestContains(t *testing.T) {
 	}
 }
 
-// Test jsonLoadFromSeeker.
-func TestJSONLoadFromSeeker(t *testing.T) {
+// Test jsonLoad.
+func TestJSONLoad(t *testing.T) {
 	format := newFormatFSV1()
 	b, err := json.Marshal(format)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var gotFormat formatFSV1
-	if err = jsonLoadFromSeeker(bytes.NewReader(b), &gotFormat); err != nil {
+	if err = jsonLoad(bytes.NewReader(b), &gotFormat); err != nil {
 		t.Fatal(err)
 	}
 	if *format != gotFormat {
-		t.Fatal("jsonLoadFromSeeker() failed to decode json")
+		t.Fatal("jsonLoad() failed to decode json")
+	}
+}
+
+// Test jsonSave.
+func TestJSONSave(t *testing.T) {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	// Test to make sure formatFSSave overwrites and does not append.
+	format := newFormatFSV1()
+	if err = jsonSave(f, format); err != nil {
+		t.Fatal(err)
+	}
+	fi1, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = jsonSave(f, format); err != nil {
+		t.Fatal(err)
+	}
+	fi2, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi1.Size() != fi2.Size() {
+		t.Fatal("Size should not differ after jsonSave()", fi1.Size(), fi2.Size(), f.Name())
 	}
 }

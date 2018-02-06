@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
@@ -127,22 +126,14 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 }
 
 func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
-	var metadataBytes []byte
-	metadataBytes, err = json.Marshal(m)
+	if err = jsonSave(lk, m); err != nil {
+		return 0, err
+	}
+	fi, err := lk.Stat()
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
-
-	if err = lk.Truncate(0); err != nil {
-		return 0, errors.Trace(err)
-	}
-
-	if _, err = lk.Write(metadataBytes); err != nil {
-		return 0, errors.Trace(err)
-	}
-
-	// Success.
-	return int64(len(metadataBytes)), nil
+	return fi.Size(), nil
 }
 
 func parseFSVersion(fsMetaBuf []byte) string {
