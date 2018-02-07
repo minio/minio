@@ -26,4 +26,4 @@ after_success:
 - bash <(curl -s https://codecov.io/bash)
 
 go:
-- 1.9.1
+- 1.9.4
