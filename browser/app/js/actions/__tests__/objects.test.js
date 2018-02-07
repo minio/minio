@@ -90,6 +90,14 @@ describe("Objects actions", () => {
         objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
         isTruncated: false
+      },
+      {
+        type: "objects/SET_SORT_BY",
+        sortBy: ""
+      },
+      {
+        type: "objects/SET_SORT_ORDER",
+        sortOrder: false
       }
     ]
     return store.dispatch(actionsObjects.fetchObjects()).then(() => {

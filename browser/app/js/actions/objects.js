@@ -56,6 +56,8 @@ export const fetchObjects = () => {
           })
         }
         dispatch(setList(objects, res.nextmarker, res.istruncated))
+        dispatch(setSortBy(""))
+        dispatch(setSortOrder(false))
       })
   }
 }
