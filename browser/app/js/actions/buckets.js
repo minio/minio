@@ -25,6 +25,9 @@ export const fetchBuckets = () => {
     return web.ListBuckets().then(res => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
       dispatch(setList(buckets))
+      if (buckets.length > 0) {
+        dispatch(setCurrentBucket(buckets[0]))
+      }
     })
   }
 }
