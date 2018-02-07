@@ -53,4 +53,18 @@ describe("common reducer", () => {
       sidebarOpen: false
     })
   })
+
+  it("should handle SET_STORAGE_INFO", () => {
+    expect(
+      reducer(
+        {},
+        {
+          type: actionsCommon.SET_STORAGE_INFO,
+          storageInfo: { total: 100, free: 40 }
+        }
+      )
+    ).toEqual({
+      storageInfo: { total: 100, free: 40 }
+    })
+  })
 })
