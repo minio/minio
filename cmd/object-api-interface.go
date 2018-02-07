@@ -66,8 +66,12 @@ type ObjectLayer interface {
 	ClearLocks([]VolumeLockInfo) error
 
 	// Policy operations
-	SetBucketPolicies(string, policy.BucketAccessPolicy) error
-	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)
+	SetBucketPolicy(string, policy.BucketAccessPolicy) error
+	GetBucketPolicy(string) (policy.BucketAccessPolicy, error)
 	RefreshBucketPolicy(string) error
-	DeleteBucketPolicies(string) error
+	DeleteBucketPolicy(string) error
+
+	// Supported operations check
+	IsNotificationSupported() bool
+	IsEncryptionSupported() bool
 }

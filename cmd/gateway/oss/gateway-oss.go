@@ -109,8 +109,8 @@ func (g *OSS) Name() string {
 	return ossBackend
 }
 
-// NewGatewayLayer implements Gateway interface and returns OSS GatewayLayer.
-func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+// NewGatewayLayer implements Gateway interface and returns OSS ObjectLayer.
+func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 
 	// Regions and endpoints
@@ -913,12 +913,12 @@ func (l *ossObjects) CompleteMultipartUpload(bucket, object, uploadID string, up
 	return l.GetObjectInfo(bucket, object)
 }
 
-// SetBucketPolicies sets policy on bucket.
+// SetBucketPolicy sets policy on bucket.
 // OSS supports three types of bucket policies:
 // oss.ACLPublicReadWrite: readwrite in minio terminology
 // oss.ACLPublicRead: readonly in minio terminology
 // oss.ACLPrivate: none in minio terminology
-func (l *ossObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (l *ossObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	bucketPolicies := policy.GetPolicies(policyInfo.Statements, bucket)
 	if len(bucketPolicies) != 1 {
 		return errors.Trace(minio.NotImplemented{})
@@ -951,8 +951,8 @@ func (l *ossObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 	return nil
 }
 
-// GetBucketPolicies will get policy on bucket.
-func (l *ossObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+// GetBucketPolicy will get policy on bucket.
+func (l *ossObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	result, err := l.Client.GetBucketACL(bucket)
 	if err != nil {
 		return policy.BucketAccessPolicy{}, ossToObjectError(errors.Trace(err))
@@ -974,8 +974,8 @@ func (l *ossObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 	return policyInfo, nil
 }
 
-// DeleteBucketPolicies deletes all policies on bucket.
-func (l *ossObjects) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy deletes all policies on bucket.
+func (l *ossObjects) DeleteBucketPolicy(bucket string) error {
 	err := l.Client.SetBucketACL(bucket, oss.ACLPrivate)
 	if err != nil {
 		return ossToObjectError(errors.Trace(err), bucket)

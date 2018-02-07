@@ -63,18 +63,18 @@ func (a GatewayUnsupported) CompleteMultipartUpload(bucket string, object string
 	return oi, errors.Trace(NotImplemented{})
 }
 
-// SetBucketPolicies sets policy on bucket
-func (a GatewayUnsupported) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+// SetBucketPolicy sets policy on bucket
+func (a GatewayUnsupported) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	return errors.Trace(NotImplemented{})
 }
 
-// GetBucketPolicies will get policy on bucket
-func (a GatewayUnsupported) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, err error) {
+// GetBucketPolicy will get policy on bucket
+func (a GatewayUnsupported) GetBucketPolicy(bucket string) (bal policy.BucketAccessPolicy, err error) {
 	return bal, errors.Trace(NotImplemented{})
 }
 
-// DeleteBucketPolicies deletes all policies on bucket
-func (a GatewayUnsupported) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy deletes all policies on bucket
+func (a GatewayUnsupported) DeleteBucketPolicy(bucket string) error {
 	return errors.Trace(NotImplemented{})
 }
 
@@ -124,4 +124,14 @@ func (a GatewayUnsupported) ClearLocks([]VolumeLockInfo) error {
 // RefreshBucketPolicy refreshes cache policy with what's on disk.
 func (a GatewayUnsupported) RefreshBucketPolicy(bucket string) error {
 	return errors.Trace(NotImplemented{})
+}
+
+// IsNotificationSupported returns whether bucket notification is applicable for this layer.
+func (a GatewayUnsupported) IsNotificationSupported() bool {
+	return false
+}
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (a GatewayUnsupported) IsEncryptionSupported() bool {
+	return false
 }

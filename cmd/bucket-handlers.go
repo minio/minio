@@ -57,7 +57,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	}
 
 	// Fetch bucket policy, if policy is not set return access denied.
-	p, err := objAPI.GetBucketPolicies(bucket)
+	p, err := objAPI.GetBucketPolicy(bucket)
 	if err != nil {
 		return ErrAccessDenied
 	}
@@ -91,7 +91,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 // Check if the action is allowed on the bucket/prefix.
 func isBucketActionAllowed(action, bucket, prefix string, objectAPI ObjectLayer) bool {
 
-	bp, err := objectAPI.GetBucketPolicies(bucket)
+	bp, err := objectAPI.GetBucketPolicy(bucket)
 	if err != nil {
 		return false
 	}
@@ -390,13 +390,11 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !api.gateway {
-		// Validate if location sent by the client is valid, reject
-		// requests which do not follow valid region requirements.
-		if !isValidLocation(location) {
-			writeErrorResponse(w, ErrInvalidRegion, r.URL)
-			return
-		}
+	// Validate if location sent by the client is valid, reject
+	// requests which do not follow valid region requirements.
+	if !isValidLocation(location) {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
+		return
 	}
 
 	// Proceed to creating a bucket.
@@ -652,35 +650,11 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer bucketLock.Unlock()
-
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
-	// Delete bucket access policy, if present - ignore any errors.
-	_ = removeBucketPolicy(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, policyChange{true, policy.BucketAccessPolicy{}})
-
-	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketNotification(bucket, nil)
-	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
 
 	// Write success response.
 	writeSuccessNoContent(w)

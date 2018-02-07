@@ -84,16 +84,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
-	// Marker is set validate pre-condition.
-	if !api.gateway && marker != "" {
-		// Marker not common with prefix is not implemented.Send an empty response
-		if !hasPrefix(marker, prefix) {
-			listObjectsInfo := ListObjectsInfo{}
-			response := generateListObjectsV2Response(bucket, prefix, token, marker, startAfter, delimiter, fetchOwner, listObjectsInfo.IsTruncated, maxKeys, listObjectsInfo.Objects, listObjectsInfo.Prefixes)
-			writeSuccessResponseXML(w, encodeResponse(response))
-			return
-		}
-	}
 
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
@@ -139,22 +129,10 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	if maxKeys < 0 {
 		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
 		return
-	}
-	if !api.gateway {
-		// Validate all the query params before beginning to serve the request.
-		if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-		// Marker is set validate pre-condition.
-		if marker != "" {
-			// Marker not common with prefix is not implemented.Send an empty response
-			if !hasPrefix(marker, prefix) {
-				response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, ListObjectsInfo{})
-				writeSuccessResponseXML(w, encodeResponse(response))
-				return
-			}
-		}
+	} // Validate all the query params before beginning to serve the request.
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
 	}
 
 	// Inititate a list objects operation based on the input params.

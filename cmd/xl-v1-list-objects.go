@@ -87,6 +87,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	var eof bool
 	var nextMarker string
 	for i := 0; i < maxKeys; {
+
 		walkResult, ok := <-walkResultCh
 		if !ok {
 			// Closed channel.
@@ -153,6 +154,14 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
 		return loi, nil
+	}
+
+	// Marker is set validate pre-condition.
+	if marker != "" {
+		// Marker not common with prefix is not implemented.Send an empty response
+		if !hasPrefix(marker, prefix) {
+			return ListObjectsInfo{}, e
+		}
 	}
 
 	// For delimiter and prefix as '/' we do not list anything at all

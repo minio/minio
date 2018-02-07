@@ -28,14 +28,9 @@ type Gateway interface {
 	// Name returns the unique name of the gateway.
 	Name() string
 
-	// NewGatewayLayer returns a new gateway layer.
-	NewGatewayLayer(creds auth.Credentials) (GatewayLayer, error)
+	// NewGatewayLayer returns a new  ObjectLayer.
+	NewGatewayLayer(creds auth.Credentials) (ObjectLayer, error)
 
 	// Returns true if gateway is ready for production.
 	Production() bool
-}
-
-// GatewayLayer - interface to implement gateway mode.
-type GatewayLayer interface {
-	ObjectLayer
 }

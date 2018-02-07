@@ -95,9 +95,9 @@ func (g *B2) Name() string {
 	return b2Backend
 }
 
-// NewGatewayLayer returns b2 gateway layer, implements GatewayLayer interface to
+// NewGatewayLayer returns b2 gateway layer, implements ObjectLayer interface to
 // talk to B2 remote backend.
-func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	ctx := context.Background()
 	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
 	if err != nil {
@@ -689,11 +689,11 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 	return l.GetObjectInfo(bucket, object)
 }
 
-// SetBucketPolicies - B2 supports 2 types of bucket policies:
+// SetBucketPolicy - B2 supports 2 types of bucket policies:
 // bucketType.AllPublic - bucketTypeReadOnly means that anybody can download the files is the bucket;
 // bucketType.AllPrivate - bucketTypePrivate means that you need an authorization token to download them.
 // Default is AllPrivate for all buckets.
-func (l *b2Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (l *b2Objects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	var policies []minio.BucketAccessPolicy
 
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
@@ -721,9 +721,9 @@ func (l *b2Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAcc
 	return b2ToObjectError(errors.Trace(err))
 }
 
-// GetBucketPolicies, returns the current bucketType from B2 backend and convert
+// GetBucketPolicy, returns the current bucketType from B2 backend and convert
 // it into S3 compatible bucket policy info.
-func (l *b2Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+func (l *b2Objects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
@@ -739,8 +739,8 @@ func (l *b2Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy,
 	return policy.BucketAccessPolicy{}, errors.Trace(minio.PolicyNotFound{Bucket: bucket})
 }
 
-// DeleteBucketPolicies - resets the bucketType of bucket on B2 to 'allPrivate'.
-func (l *b2Objects) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy - resets the bucketType of bucket on B2 to 'allPrivate'.
+func (l *b2Objects) DeleteBucketPolicy(bucket string) error {
 	bkt, err := l.Bucket(bucket)
 	if err != nil {
 		return err

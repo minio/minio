@@ -113,9 +113,9 @@ func (g *Sia) Name() string {
 	return siaBackend
 }
 
-// NewGatewayLayer returns Sia gateway layer, implements GatewayLayer interface to
+// NewGatewayLayer returns Sia gateway layer, implements ObjectLayer interface to
 // talk to Sia backend.
-func (g *Sia) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+func (g *Sia) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	sia := &siaObjects{
 		Address: g.host,
 		// RootDir uses access key directly, provides partitioning for

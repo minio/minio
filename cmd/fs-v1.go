@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -347,7 +346,22 @@ func (fs *fsObjects) DeleteBucket(bucket string) error {
 	if err = fsRemoveAll(minioMetadataBucketDir); err != nil {
 		return toObjectErr(err, bucket)
 	}
+	// Delete bucket access policy, if present - ignore any errors.
+	_ = removeBucketPolicy(bucket, fs)
 
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket)
+
+	// Delete notification config, if present - ignore any errors.
+	_ = removeNotificationConfig(bucket, fs)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketNotification(bucket, nil)
+	// Delete listener config, if present - ignore any errors.
+	_ = removeListenerConfig(bucket, fs)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
 	return nil
 }
 
@@ -637,6 +651,9 @@ func (fs *fsObjects) parentDirIsObject(bucket, parent string) bool {
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
 func (fs *fsObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+	if err := checkPutObjectArgs(bucket, object, fs, data.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
 	// Lock the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -680,7 +697,7 @@ func (fs *fsObjects) putObject(bucket string, object string, data *hash.Reader, 
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
+	if err = checkPutObjectArgs(bucket, object, fs, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -888,7 +905,13 @@ func (fs *fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, fs); err != nil {
 		return loi, err
 	}
-
+	// Marker is set validate pre-condition.
+	if marker != "" {
+		// Marker not common with prefix is not implemented.Send an empty response
+		if !hasPrefix(marker, prefix) {
+			return ListObjectsInfo{}, e
+		}
+	}
 	if _, err := fs.statBucketDir(bucket); err != nil {
 		return loi, err
 	}
@@ -1059,34 +1082,23 @@ func (fs *fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
 	return []BucketInfo{}, errors.Trace(NotImplemented{})
 }
 
-// SetBucketPolicies sets policy on bucket
-func (fs *fsObjects) SetBucketPolicies(bucket string, policy policy.BucketAccessPolicy) error {
-	// Parse validate and save bucket policy.
-	policyBytes, err := json.Marshal(policy)
-	if err != nil {
-		return err
-	}
-	// Acquire a write lock on bucket before modifying its configuration.
-	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	// Release lock
-	defer bucketLock.Unlock()
-
-	return parseAndPersistBucketPolicy(bucket, policyBytes, fs)
+// SetBucketPolicy sets policy on bucket
+func (fs *fsObjects) SetBucketPolicy(bucket string, policy policy.BucketAccessPolicy) error {
+	return persistAndNotifyBucketPolicyChange(bucket, false, policy, fs)
 }
 
-// GetBucketPolicies will get policy on bucket
-func (fs *fsObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
-	return readBucketPolicy(bucket, fs)
+// GetBucketPolicy will get policy on bucket
+func (fs *fsObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+	policy := fs.bucketPolicies.GetBucketPolicy(bucket)
+	if reflect.DeepEqual(policy, emptyBucketPolicy) {
+		return readBucketPolicy(bucket, fs)
+	}
+	return policy, nil
 }
 
-// DeleteBucketPolicies deletes all policies on bucket
-func (fs *fsObjects) DeleteBucketPolicies(bucket string) error {
-	return persistAndNotifyBucketPolicyChange(bucket, policyChange{
-		true, policy.BucketAccessPolicy{},
-	}, fs)
+// DeleteBucketPolicy deletes all policies on bucket
+func (fs *fsObjects) DeleteBucketPolicy(bucket string) error {
+	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, fs)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
@@ -1117,4 +1129,14 @@ func (fs *fsObjects) RefreshBucketPolicy(bucket string) error {
 		return err
 	}
 	return fs.bucketPolicies.SetBucketPolicy(bucket, policy)
+}
+
+// IsNotificationSupported returns whether bucket notification is applicable for this layer.
+func (fs *fsObjects) IsNotificationSupported() bool {
+	return true
+}
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (fs *fsObjects) IsEncryptionSupported() bool {
+	return true
 }

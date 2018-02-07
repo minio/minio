@@ -117,7 +117,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !api.gateway {
+	if objectAPI.IsEncryptionSupported() {
 		if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -156,7 +156,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var writer io.Writer
 	writer = w
-	if !api.gateway {
+	if objectAPI.IsEncryptionSupported() {
 		if IsSSECustomerRequest(r.Header) {
 			writer, err = DecryptRequest(writer, r, objInfo.UserDefined)
 			if err != nil {
@@ -240,7 +240,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, apiErr)
 		return
 	}
-	if !api.gateway {
+	if objectAPI.IsEncryptionSupported() {
 		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -555,7 +555,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	if !api.gateway {
+	if objectAPI.IsEncryptionSupported() {
 		if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
 			reader, err = EncryptRequest(hashReader, r, metadata)
 			if err != nil {
@@ -577,7 +577,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
-	if !api.gateway {
+	if objectAPI.IsEncryptionSupported() {
 		if IsSSECustomerRequest(r.Header) {
 			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
 			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))

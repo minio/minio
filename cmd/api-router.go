@@ -22,7 +22,6 @@ import "net/http"
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
-	gateway   bool
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
@@ -32,10 +31,6 @@ func registerAPIRouter(mux *router.Router) {
 		ObjectAPI: newObjectLayerFn,
 	}
 
-	api.gateway = false
-	if _, ok := api.ObjectAPI().(GatewayLayer); ok {
-		api.gateway = true
-	}
 	// API Router
 	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 	var routers []*router.Router

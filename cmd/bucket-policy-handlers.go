@@ -267,7 +267,13 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, ErrInvalidPolicyDocument, r.URL)
 		return
 	}
-	if err = objAPI.SetBucketPolicies(bucket, policyInfo); err != nil {
+	// Parse check bucket policy.
+	if s3Error := checkBucketPolicyResources(bucket, policyInfo); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	if err = objAPI.SetBucketPolicy(bucket, policyInfo); err != nil {
 		err = errors.Cause(err)
 		switch err.(type) {
 		case NotImplemented:
@@ -311,10 +317,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Delete bucket access policy, by passing an empty policy
 	// struct.
-	err = persistAndNotifyBucketPolicyChange(bucket, policyChange{
-		true, policy.BucketAccessPolicy{},
-	}, objAPI)
-	if err != nil {
+	if err := objAPI.DeleteBucketPolicy(bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -350,7 +353,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	policy, err := objAPI.GetBucketPolicies(bucket)
+	policy, err := objAPI.GetBucketPolicy(bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

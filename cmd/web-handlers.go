@@ -718,7 +718,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
-	var policyInfo, err = objectAPI.GetBucketPolicies(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
 	if err != nil {
 		_, ok := errors.Cause(err).(BucketPolicyNotFound)
 		if !ok {
@@ -759,7 +759,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	var policyInfo, err = objectAPI.GetBucketPolicies(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
 	if err != nil {
 		_, ok := errors.Cause(err).(PolicyNotFound)
 		if !ok {
@@ -803,47 +803,25 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	var policyInfo, err = objectAPI.GetBucketPolicies(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
 	if err != nil {
-		if _, ok := errors.Cause(err).(BucketPolicyNotFound); !ok {
+		if _, ok := errors.Cause(err).(PolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
 		}
 		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
 	}
 
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
-	switch g := objectAPI.(type) {
-	case GatewayLayer:
-		if len(policyInfo.Statements) == 0 {
-			err = g.DeleteBucketPolicies(args.BucketName)
-			if err != nil {
-				return toJSONError(err, args.BucketName)
-			}
-			return nil
-		}
-		err = g.SetBucketPolicies(args.BucketName, policyInfo)
-		if err != nil {
-			return toJSONError(err)
-		}
-		return nil
-	}
 
 	if len(policyInfo.Statements) == 0 {
-		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{
-			true, policy.BucketAccessPolicy{},
-		}, objectAPI); err != nil {
+		if err = objectAPI.DeleteBucketPolicy(args.BucketName); err != nil {
 			return toJSONError(err, args.BucketName)
 		}
 		return nil
 	}
 
-	data, err := json.Marshal(policyInfo)
-	if err != nil {
-		return toJSONError(err)
-	}
-
 	// Parse validate and save bucket policy.
-	if err := parseAndPersistBucketPolicy(args.BucketName, data, objectAPI); err != nil {
+	if err := objectAPI.SetBucketPolicy(args.BucketName, policyInfo); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 

@@ -28,7 +28,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
-	errors2 "github.com/minio/minio/pkg/errors"
 )
 
 var emptyBucketPolicy = policy.BucketAccessPolicy{}
@@ -176,7 +175,7 @@ func resourcePrefix(resource string) string {
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
 // - Resources are validated against the given set of Actions.
 // -
-func checkBucketPolicyResources(bucket string, bucketPolicy policy.BucketAccessPolicy) error {
+func checkBucketPolicyResources(bucket string, bucketPolicy policy.BucketAccessPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
 	var resourceMap = set.NewStringSet()
@@ -188,13 +187,13 @@ func checkBucketPolicyResources(bucket string, bucketPolicy policy.BucketAccessP
 					// Resource prefix is not equal to bucket for
 					// prefix invalid actions, reject them.
 					if resourcePrefix != bucket {
-						return errors2.Trace(MalformedBucketPolicy{})
+						return ErrMalformedPolicy
 					}
 				} else {
 					// For all other actions validate if resourcePrefix begins
 					// with bucket name, if not reject them.
 					if strings.Split(resourcePrefix, "/")[0] != bucket {
-						return errors2.Trace(MalformedBucketPolicy{})
+						return ErrMalformedPolicy
 					}
 					// All valid resources collect them separately to verify nesting.
 					resourceMap.Add(resourcePrefix)
@@ -220,13 +219,13 @@ func checkBucketPolicyResources(bucket string, bucketPolicy policy.BucketAccessP
 		for _, otherResource := range resources {
 			// Common prefix reject such rules.
 			if hasPrefix(otherResource, resource) {
-				return errors2.Trace(PolicyNesting{})
+				return ErrPolicyNesting
 			}
 		}
 	}
 
 	// No errors found.
-	return nil
+	return ErrNone
 }
 
 // parseBucketPolicy - parses and validates if bucket policy is of

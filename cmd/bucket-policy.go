@@ -46,16 +46,6 @@ type bucketPolicies struct {
 	bucketPolicyConfigs map[string]policy.BucketAccessPolicy
 }
 
-// Represent a policy change
-type policyChange struct {
-	// isRemove is true if the policy change is to delete the
-	// policy on a bucket.
-	IsRemove bool
-
-	// represents the new policy for the bucket
-	BktPolicy policy.BucketAccessPolicy
-}
-
 // Fetch bucket policy for a given bucket.
 func (bp bucketPolicies) GetBucketPolicy(bucket string) policy.BucketAccessPolicy {
 	bp.rwMutex.RLock()
@@ -201,41 +191,25 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 	return nil
 }
 
-func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI ObjectLayer) error {
-	// Parse bucket policy.
-	var bktPolicy policy.BucketAccessPolicy
-	err := parseBucketPolicy(bytes.NewReader(policyBytes), &bktPolicy)
-	if err != nil {
-		return err
-	}
-
-	// Parse check bucket policy.
-	if err := checkBucketPolicyResources(bucket, bktPolicy); err != nil {
-		return err
-	}
-
-	return persistAndNotifyBucketPolicyChange(bucket, policyChange{false, bktPolicy}, objAPI)
-}
-
 // persistAndNotifyBucketPolicyChange - takes a policyChange argument,
 // persists it to storage, and notify nodes in the cluster about the
 // change. In-memory state is updated in response to the notification.
-func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
-	if pCh.IsRemove {
+func persistAndNotifyBucketPolicyChange(bucket string, isRemove bool, bktPolicy policy.BucketAccessPolicy, objAPI ObjectLayer) error {
+	if isRemove {
 		err := removeBucketPolicy(bucket, objAPI)
 		if err != nil {
 			return err
 		}
 	} else {
-		if reflect.DeepEqual(pCh.BktPolicy, emptyBucketPolicy) {
+		if reflect.DeepEqual(bktPolicy, emptyBucketPolicy) {
 			return errInvalidArgument
 		}
-		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
+		if err := writeBucketPolicy(bucket, objAPI, bktPolicy); err != nil {
 			return err
 		}
 	}
 
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, pCh)
+	S3PeersUpdateBucketPolicy(bucket)
 	return nil
 }

@@ -542,6 +542,10 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	// Validate put object input args.
+	if err = checkPutObjectArgs(bucket, object, xl, data.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
 	// Lock the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -597,7 +601,7 @@ func (xl xlObjects) putObject(bucket string, object string, data *hash.Reader, m
 	}
 
 	// Validate put object input args.
-	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
+	if err = checkPutObjectArgs(bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
 

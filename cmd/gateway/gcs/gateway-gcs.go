@@ -154,13 +154,13 @@ type GCS struct {
 	projectID string
 }
 
-// Name returns the name of gcs gatewaylayer.
+// Name returns the name of gcs ObjectLayer.
 func (g *GCS) Name() string {
 	return gcsBackend
 }
 
-// NewGatewayLayer returns gcs gatewaylayer.
-func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+// NewGatewayLayer returns gcs ObjectLayer.
+func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	ctx := context.Background()
 
 	var err error
@@ -1047,8 +1047,8 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	return fromGCSAttrsToObjectInfo(attrs), nil
 }
 
-// SetBucketPolicies - Set policy on bucket
-func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+// SetBucketPolicy - Set policy on bucket
+func (l *gcsGateway) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	var policies []minio.BucketAccessPolicy
 
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
@@ -1092,8 +1092,8 @@ func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 	return nil
 }
 
-// GetBucketPolicies - Get policy on bucket
-func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+// GetBucketPolicy - Get policy on bucket
+func (l *gcsGateway) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
 		return policy.BucketAccessPolicy{}, gcsToObjectError(errors.Trace(err), bucket)
@@ -1117,8 +1117,8 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 	return policyInfo, nil
 }
 
-// DeleteBucketPolicies - Delete all policies on bucket
-func (l *gcsGateway) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy - Delete all policies on bucket
+func (l *gcsGateway) DeleteBucketPolicy(bucket string) error {
 	// This only removes the storage.AllUsers policies
 	if err := l.client.Bucket(bucket).ACL().Delete(l.ctx, storage.AllUsers); err != nil {
 		return gcsToObjectError(errors.Trace(err), bucket)

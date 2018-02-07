@@ -107,31 +107,31 @@ func checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter
 
 // Checks for NewMultipartUpload arguments validity, also validates if bucket exists.
 func checkNewMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkPutObjectArgs(bucket, object, obj)
+	return checkObjectArgs(bucket, object, obj)
 }
 
 // Checks for PutObjectPart arguments validity, also validates if bucket exists.
 func checkPutObjectPartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkPutObjectArgs(bucket, object, obj)
+	return checkObjectArgs(bucket, object, obj)
 }
 
 // Checks for ListParts arguments validity, also validates if bucket exists.
 func checkListPartsArgs(bucket, object string, obj ObjectLayer) error {
-	return checkPutObjectArgs(bucket, object, obj)
+	return checkObjectArgs(bucket, object, obj)
 }
 
 // Checks for CompleteMultipartUpload arguments validity, also validates if bucket exists.
 func checkCompleteMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkPutObjectArgs(bucket, object, obj)
+	return checkObjectArgs(bucket, object, obj)
 }
 
 // Checks for AbortMultipartUpload arguments validity, also validates if bucket exists.
 func checkAbortMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkPutObjectArgs(bucket, object, obj)
+	return checkObjectArgs(bucket, object, obj)
 }
 
-// Checks for PutObject arguments validity, also validates if bucket exists.
-func checkPutObjectArgs(bucket, object string, obj ObjectLayer) error {
+// Checks Object arguments validity, also validates if bucket exists.
+func checkObjectArgs(bucket, object string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
@@ -142,6 +142,29 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer) error {
 	}
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
+		return errors.Trace(ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		})
+	}
+	return nil
+}
+
+// Checks for PutObject arguments validity, also validates if bucket exists.
+func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) error {
+	// Verify if bucket exists before validating object name.
+	// This is done on purpose since the order of errors is
+	// important here bucket does not exist error should
+	// happen before we return an error for invalid object name.
+	// FIXME: should be moved to handler layer.
+	if err := checkBucketExist(bucket, obj); err != nil {
+		return errors.Trace(err)
+	}
+
+	if len(object) == 0 ||
+		hasPrefix(object, slashSeparator) ||
+		(hasSuffix(object, slashSeparator) && size != 0) ||
+		!IsValidObjectPrefix(object) {
 		return errors.Trace(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
