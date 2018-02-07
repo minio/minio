@@ -39,4 +39,15 @@ describe("Buckets actions", () => {
       expect(actions).toEqual(expectedActions)
     })
   })
+
+  it("should update browser url and creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+    ]
+    store.dispatch(actionsBuckets.selectBucket("test1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+    expect(window.location.pathname).toBe("/test1")
+  })
 })

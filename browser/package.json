@@ -12,7 +12,7 @@
   "jest": {
     "setupTestFrameworkScriptFile": "./app/js/jest/setup.js",
     "testURL": "https://localhost:8080",
-    "moduleNameMapper" : {
+    "moduleNameMapper": {
       "\\.(css|scss|svg)$": "identity-obj-proxy"
     }
   },

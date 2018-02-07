@@ -14,22 +14,11 @@
  * limitations under the License.
  */
 
-import React from "react"
-import { connect } from "react-redux"
-import * as actionsBuckets from "../actions/buckets"
-import { getCurrentBucket } from "../selectors/buckets"
-import Bucket from "./Bucket"
+import createHistory from "history/createBrowserHistory"
+import { minioBrowserPrefix } from "./constants"
 
-const mapStateToProps = (state, ownProps) => {
-  return {
-    isActive: getCurrentBucket(state) === ownProps.bucket
-  }
-}
+const history = createHistory({
+  basename: minioBrowserPrefix
+})
 
-const mapDispatchToProps = dispatch => {
-  return {
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
-  }
-}
-
-export default connect(mapStateToProps, mapDispatchToProps)(Bucket)
+export default history
