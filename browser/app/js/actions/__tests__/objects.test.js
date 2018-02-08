@@ -106,6 +106,25 @@ describe("Objects actions", () => {
     })
   })
 
+  it("creates objects/APPEND_LIST after fetching more objects", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "" }
+    })
+    const expectedActions = [
+      {
+        type: "objects/APPEND_LIST",
+        objects: [{ name: "test1" }, { name: "test2" }],
+        marker: "test2",
+        isTruncated: false
+      }
+    ]
+    return store.dispatch(actionsObjects.fetchObjects(true)).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
   it("creates objects/SET_SORT_BY and objects/SET_SORT_ORDER when sortObjects is called", () => {
     const store = mockStore({
       objects: {

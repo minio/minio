@@ -23,6 +23,7 @@ import {
 } from "../utils"
 
 export const SET_LIST = "objects/SET_LIST"
+export const APPEND_LIST = "objects/APPEND_LIST"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
 export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
 export const SET_CURRENT_PREFIX = "objects/SET_CURRENT_PREFIX"
@@ -34,7 +35,14 @@ export const setList = (objects, marker, isTruncated) => ({
   isTruncated
 })
 
-export const fetchObjects = () => {
+export const appendList = (objects, marker, isTruncated) => ({
+  type: APPEND_LIST,
+  objects,
+  marker,
+  isTruncated
+})
+
+export const fetchObjects = append => {
   return function(dispatch, getState) {
     const {
       buckets: { currentBucket },
@@ -56,9 +64,13 @@ export const fetchObjects = () => {
             }
           })
         }
-        dispatch(setList(objects, res.nextmarker, res.istruncated))
-        dispatch(setSortBy(""))
-        dispatch(setSortOrder(false))
+        if (append) {
+          dispatch(appendList(objects, res.nextmarker, res.istruncated))
+        } else {
+          dispatch(setList(objects, res.nextmarker, res.istruncated))
+          dispatch(setSortBy(""))
+          dispatch(setSortOrder(false))
+        }
       })
   }
 }

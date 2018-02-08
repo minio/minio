@@ -17,14 +17,30 @@
 import * as actionsObjects from "../actions/objects"
 
 export default (
-  state = { list: [], sortBy: "", sortOrder: false, currentPrefix: "" },
+  state = {
+    list: [],
+    sortBy: "",
+    sortOrder: false,
+    currentPrefix: "",
+    marker: "",
+    isTruncated: false
+  },
   action
 ) => {
   switch (action.type) {
     case actionsObjects.SET_LIST:
       return {
         ...state,
-        list: action.objects
+        list: action.objects,
+        marker: action.marker,
+        isTruncated: action.isTruncated
+      }
+    case actionsObjects.APPEND_LIST:
+      return {
+        ...state,
+        list: [...state.list, ...action.objects],
+        marker: action.marker,
+        isTruncated: action.isTruncated
       }
     case actionsObjects.SET_SORT_BY:
       return {
@@ -39,7 +55,9 @@ export default (
     case actionsObjects.SET_CURRENT_PREFIX:
       return {
         ...state,
-        currentPrefix: action.prefix
+        currentPrefix: action.prefix,
+        marker: "",
+        isTruncated: false
       }
     default:
       return state

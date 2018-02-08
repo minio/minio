@@ -36,7 +36,8 @@ export class ObjectsListContainer extends React.Component {
     return (
       <div className="feb-container">
         <InfiniteScroll
-          loadMore={loadObjects}
+          pageStart={0}
+          loadMore={() => loadObjects(true)}
           hasMore={isTruncated}
           useWindow={true}
           initialLoad={false}
@@ -65,7 +66,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    loadObjects: () => dispatch(actionsObjects.fetchObjects())
+    loadObjects: append => dispatch(actionsObjects.fetchObjects(append))
   }
 }
 

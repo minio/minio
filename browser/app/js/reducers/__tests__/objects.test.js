@@ -24,16 +24,46 @@ describe("objects reducer", () => {
       list: [],
       sortBy: "",
       sortOrder: false,
-      currentPrefix: ""
+      currentPrefix: "",
+      marker: "",
+      isTruncated: false
     })
   })
 
   it("should handle SET_LIST", () => {
     const newState = reducer(undefined, {
       type: actions.SET_LIST,
-      objects: [{ name: "obj1" }, { name: "obj2" }]
+      objects: [{ name: "obj1" }, { name: "obj2" }],
+      marker: "obj2",
+      isTruncated: false
     })
     expect(newState.list).toEqual([{ name: "obj1" }, { name: "obj2" }])
+    expect(newState.marker).toBe("obj2")
+    expect(newState.isTruncated).toBeFalsy()
+  })
+
+  it("should handle APPEND_LIST", () => {
+    const newState = reducer(
+      {
+        list: [{ name: "obj1" }, { name: "obj2" }],
+        marker: "obj2",
+        isTruncated: true
+      },
+      {
+        type: actions.APPEND_LIST,
+        objects: [{ name: "obj3" }, { name: "obj4" }],
+        marker: "obj4",
+        isTruncated: false
+      }
+    )
+    expect(newState.list).toEqual([
+      { name: "obj1" },
+      { name: "obj2" },
+      { name: "obj3" },
+      { name: "obj4" }
+    ])
+    expect(newState.marker).toBe("obj4")
+    expect(newState.isTruncated).toBeFalsy()
   })
 
   it("should handle SET_SORT_BY", () => {
@@ -53,10 +83,15 @@ describe("objects reducer", () => {
   })
 
   it("should handle SET_CURRENT_PREFIX", () => {
-    const newState = reducer(undefined, {
-      type: actions.SET_CURRENT_PREFIX,
-      prefix: "test"
-    })
-    expect(newState.currentPrefix).toEqual("test")
+    const newState = reducer(
+      { currentPrefix: "test1/", marker: "abc", isTruncated: true },
+      {
+        type: actions.SET_CURRENT_PREFIX,
+        prefix: "test2/"
+      }
+    )
+    expect(newState.currentPrefix).toEqual("test2/")
+    expect(newState.marker).toEqual("")
+    expect(newState.isTruncated).toBeFalsy()
   })
 })
