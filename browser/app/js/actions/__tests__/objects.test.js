@@ -136,4 +136,17 @@ describe("Objects actions", () => {
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
   })
+
+  it("should update browser url and creates objects/SET_CURRENT_PREFIX action when selectPrefix is called", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test" }
+    })
+    const expectedActions = [
+      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" }
+    ]
+    store.dispatch(actionsObjects.selectPrefix("abc/"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+    expect(window.location.pathname.endsWith("/test/abc/")).toBeTruthy()
+  })
 })

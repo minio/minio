@@ -38,7 +38,7 @@ const mapStateToProps = (state, ownProps) => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectPrefix: prefix => dispatch(actionsObjects.setCurrentPrefix(prefix))
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
   }
 }
 

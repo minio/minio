@@ -15,6 +15,7 @@
  */
 
 import web from "../web"
+import history from "../history"
 import {
   sortObjectsByName,
   sortObjectsBySize,
@@ -96,6 +97,14 @@ export const setSortOrder = sortOrder => ({
   type: SET_SORT_ORDER,
   sortOrder
 })
+
+export const selectPrefix = prefix => {
+  return function(dispatch, getState) {
+    dispatch(setCurrentPrefix(prefix))
+    const currentBucket = getState().buckets.currentBucket
+    history.replace(`/${currentBucket}/${prefix}`)
+  }
+}
 
 export const setCurrentPrefix = prefix => {
   return {
