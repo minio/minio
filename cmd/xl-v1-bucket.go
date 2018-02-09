@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"reflect"
 	"sort"
 	"sync"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -154,6 +156,11 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
+		return bi, e
+	}
+	defer bucketLock.RUnlock()
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return bi, BucketNameInvalid{Bucket: bucket}
@@ -219,6 +226,13 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 
 // DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(bucket string) error {
+
+	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return err
+	}
+	defer bucketLock.Unlock()
+
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
@@ -240,12 +254,14 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 			defer wg.Done()
 			// Attempt to delete bucket.
 			err := disk.DeleteVol(bucket)
+
 			if err != nil {
 				dErrs[index] = errors.Trace(err)
 				return
 			}
 			// Cleanup all the previously incomplete multiparts.
 			err = cleanupDir(disk, minioMetaMultipartBucket, bucket)
+
 			if err != nil {
 				if errors.Cause(err) == errVolumeNotFound {
 					return
@@ -257,11 +273,73 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 	// Wait for all the delete vols to finish.
 	wg.Wait()
-
 	writeQuorum := len(xl.storageDisks)/2 + 1
 	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(err) == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
 	}
-	return toObjectErr(err, bucket)
+	if err != nil {
+		return toObjectErr(err, bucket)
+	}
+	// Delete bucket access policy, if present - ignore any errors.
+	_ = removeBucketPolicy(bucket, xl)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket)
+
+	// Delete notification config, if present - ignore any errors.
+	_ = removeNotificationConfig(bucket, xl)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketNotification(bucket, nil)
+	// Delete listener config, if present - ignore any errors.
+	_ = removeListenerConfig(bucket, xl)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
+
+	return nil
+}
+
+// SetBucketPolicy sets policy on bucket
+func (xl xlObjects) SetBucketPolicy(bucket string, policy policy.BucketAccessPolicy) error {
+	return persistAndNotifyBucketPolicyChange(bucket, false, policy, xl)
+}
+
+// GetBucketPolicy will get policy on bucket
+func (xl xlObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+	// fetch bucket policy from cache.
+	bpolicy := xl.bucketPolicies.GetBucketPolicy(bucket)
+	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
+		return readBucketPolicy(bucket, xl)
+	}
+	return bpolicy, nil
+}
+
+// DeleteBucketPolicy deletes all policies on bucket
+func (xl xlObjects) DeleteBucketPolicy(bucket string) error {
+	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, xl)
+}
+
+// RefreshBucketPolicy refreshes policy cache from disk
+func (xl xlObjects) RefreshBucketPolicy(bucket string) error {
+	policy, err := readBucketPolicy(bucket, xl)
+
+	if err != nil {
+		if reflect.DeepEqual(policy, emptyBucketPolicy) {
+			return xl.bucketPolicies.DeleteBucketPolicy(bucket)
+		}
+		return err
+	}
+	return xl.bucketPolicies.SetBucketPolicy(bucket, policy)
+}
+
+// IsNotificationSupported returns whether bucket notification is applicable for this layer.
+func (xl xlObjects) IsNotificationSupported() bool {
+	return true
+}
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (xl xlObjects) IsEncryptionSupported() bool {
+	return true
 }

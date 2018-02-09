@@ -20,6 +20,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -36,6 +37,7 @@ type ObjectLayer interface {
 	ListBuckets() (buckets []BucketInfo, err error)
 	DeleteBucket(bucket string) error
 	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
+	ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 
 	// Object operations.
 	GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
@@ -62,4 +64,14 @@ type ObjectLayer interface {
 	// Locking operations
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ClearLocks([]VolumeLockInfo) error
+
+	// Policy operations
+	SetBucketPolicy(string, policy.BucketAccessPolicy) error
+	GetBucketPolicy(string) (policy.BucketAccessPolicy, error)
+	RefreshBucketPolicy(string) error
+	DeleteBucketPolicy(string) error
+
+	// Supported operations check
+	IsNotificationSupported() bool
+	IsEncryptionSupported() bool
 }

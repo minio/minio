@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -170,13 +169,8 @@ func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
 
 // S3PeersUpdateBucketPolicy - Sends update bucket policy request to
 // all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
-	byts, err := json.Marshal(pCh)
-	if err != nil {
-		errorIf(err, "Failed to marshal policyChange - this is a BUG!")
-		return
-	}
-	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
+func S3PeersUpdateBucketPolicy(bucket string) {
+	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket}
 	errs := globalS3Peers.SendUpdate(nil, setBPPArgs)
 	for idx, err := range errs {
 		errorIf(

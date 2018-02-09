@@ -223,13 +223,6 @@ func TestGCSParseProjectID(t *testing.T) {
 	}
 }
 
-func TestGCSPublicURL(t *testing.T) {
-	gcsURL := toGCSPublicURL("bucket", "testing")
-	if gcsURL != "https://storage.googleapis.com/bucket/testing" {
-		t.Errorf(`Expected "https://storage.googleapis.com/bucket/testing", got %s"`, gcsURL)
-	}
-}
-
 func TestGCSToObjectError(t *testing.T) {
 	testCases := []struct {
 		params      []string

@@ -19,7 +19,6 @@ package azure
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"reflect"
 	"testing"
 
@@ -259,56 +258,6 @@ func TestAzureParseBlockID(t *testing.T) {
 				t.Errorf("Test %d: %s not equal to %s", i+1, md5, test.md5)
 			}
 		}
-	}
-}
-
-// Test azureListBlobsGetParameters()
-func TestAzureListBlobsGetParameters(t *testing.T) {
-
-	// Test values set 1
-	expectedURLValues := url.Values{}
-	expectedURLValues.Set("prefix", "test")
-	expectedURLValues.Set("delimiter", "_")
-	expectedURLValues.Set("marker", "marker")
-	expectedURLValues.Set("include", "metadata")
-	expectedURLValues.Set("maxresults", "20")
-	expectedURLValues.Set("timeout", "10")
-
-	setBlobParameters := storage.ListBlobsParameters{
-		Prefix:     "test",
-		Delimiter:  "_",
-		Marker:     "marker",
-		Include:    &storage.IncludeBlobDataset{Metadata: true},
-		MaxResults: 20,
-		Timeout:    10,
-	}
-
-	// Test values set 2
-	expectedURLValues1 := url.Values{}
-
-	setBlobParameters1 := storage.ListBlobsParameters{
-		Prefix:     "",
-		Delimiter:  "",
-		Marker:     "",
-		Include:    nil,
-		MaxResults: 0,
-		Timeout:    0,
-	}
-
-	testCases := []struct {
-		name string
-		args storage.ListBlobsParameters
-		want url.Values
-	}{
-		{"TestIfValuesSet", setBlobParameters, expectedURLValues},
-		{"TestIfValuesNotSet", setBlobParameters1, expectedURLValues1},
-	}
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			if got := azureListBlobsGetParameters(test.args); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("azureListBlobsGetParameters() = %v, want %v", got, test.want)
-			}
-		})
 	}
 }
 

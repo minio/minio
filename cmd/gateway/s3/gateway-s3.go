@@ -99,8 +99,8 @@ func (g *S3) Name() string {
 	return s3Backend
 }
 
-// NewGatewayLayer returns s3 gatewaylayer.
-func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+// NewGatewayLayer returns s3 ObjectLayer.
+func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	var endpoint string
 	var secure = true
@@ -125,15 +125,8 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error)
 		return nil, err
 	}
 
-	anonClient, err := miniogo.NewCore(endpoint, "", "", secure)
-	if err != nil {
-		return nil, err
-	}
-	anonClient.SetCustomTransport(minio.NewCustomHTTPTransport())
-
 	return &s3Objects{
-		Client:     client,
-		anonClient: anonClient,
+		Client: client,
 	}, nil
 }
 
@@ -145,8 +138,7 @@ func (g *S3) Production() bool {
 // s3Objects implements gateway for Minio and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
-	Client     *miniogo.Core
-	anonClient *miniogo.Core
+	Client *miniogo.Core
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -392,8 +384,8 @@ func (l *s3Objects) CompleteMultipartUpload(bucket string, object string, upload
 	return l.GetObjectInfo(bucket, object)
 }
 
-// SetBucketPolicies sets policy on bucket
-func (l *s3Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+// SetBucketPolicy sets policy on bucket
+func (l *s3Objects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	if err := l.Client.PutBucketPolicy(bucket, policyInfo); err != nil {
 		return minio.ErrorRespToObjectError(errors.Trace(err), bucket, "")
 	}
@@ -401,8 +393,8 @@ func (l *s3Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAcc
 	return nil
 }
 
-// GetBucketPolicies will get policy on bucket
-func (l *s3Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+// GetBucketPolicy will get policy on bucket
+func (l *s3Objects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
 		return policy.BucketAccessPolicy{}, minio.ErrorRespToObjectError(errors.Trace(err), bucket, "")
@@ -410,8 +402,8 @@ func (l *s3Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy,
 	return policyInfo, nil
 }
 
-// DeleteBucketPolicies deletes all policies on bucket
-func (l *s3Objects) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy deletes all policies on bucket
+func (l *s3Objects) DeleteBucketPolicy(bucket string) error {
 	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
 		return minio.ErrorRespToObjectError(errors.Trace(err), bucket, "")
 	}

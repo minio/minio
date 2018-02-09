@@ -398,7 +398,7 @@ func isErrIncompleteBody(err error) bool {
 func isErrBucketPolicyNotFound(err error) bool {
 	err = errors.Cause(err)
 	switch err.(type) {
-	case BucketPolicyNotFound:
+	case PolicyNotFound:
 		return true
 	}
 	return false

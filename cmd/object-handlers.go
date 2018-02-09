@@ -116,9 +116,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, apiErr, r.URL)
 		return
 	}
-	if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
-		writeErrorResponse(w, apiErr, r.URL)
-		return
+
+	if objectAPI.IsEncryptionSupported() {
+		if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
+			return
+		}
 	}
 
 	// Get request range.
@@ -153,26 +156,28 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var writer io.Writer
 	writer = w
-	if IsSSECustomerRequest(r.Header) {
-		writer, err = DecryptRequest(writer, r, objInfo.UserDefined)
-		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
-		}
-		w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
-		w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
+	if objectAPI.IsEncryptionSupported() {
+		if IsSSECustomerRequest(r.Header) {
+			writer, err = DecryptRequest(writer, r, objInfo.UserDefined)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
+			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
 
-		if startOffset != 0 || length < objInfo.Size {
-			writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-C requests with HTTP range are not supported yet
-			return
+			if startOffset != 0 || length < objInfo.Size {
+				writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-C requests with HTTP range are not supported yet
+				return
+			}
+			length = objInfo.EncryptedSize()
 		}
-		length = objInfo.EncryptedSize()
 	}
 
 	setObjectHeaders(w, objInfo, hrange)
 	setHeadGetRespHeaders(w, r.URL.Query())
-
 	httpWriter := ioutil.WriteOnClose(writer)
+
 	// Reads the object at startOffset and writes to mw.
 	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
@@ -235,13 +240,15 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, apiErr)
 		return
 	}
-	if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
-		writeErrorResponse(w, apiErr, r.URL)
-		return
-	} else if encrypted {
-		if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
-			writeErrorResponse(w, ErrSSEEncryptedObject, r.URL)
+	if objectAPI.IsEncryptionSupported() {
+		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
 			return
+		} else if encrypted {
+			if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
+				writeErrorResponse(w, ErrSSEEncryptedObject, r.URL)
+				return
+			}
 		}
 	}
 
@@ -548,18 +555,19 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		reader, err = EncryptRequest(hashReader, r, metadata)
-		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
-		}
-		info := ObjectInfo{Size: size}
-		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
-		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
+	if objectAPI.IsEncryptionSupported() {
+		if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+			reader, err = EncryptRequest(hashReader, r, metadata)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			info := ObjectInfo{Size: size}
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
 		}
 	}
 
@@ -569,10 +577,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
-	if IsSSECustomerRequest(r.Header) {
-		w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
-		w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
+	if objectAPI.IsEncryptionSupported() {
+		if IsSSECustomerRequest(r.Header) {
+			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
+			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
+		}
 	}
+
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.

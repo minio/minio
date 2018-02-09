@@ -43,12 +43,17 @@ const (
 // not enabled on the bucket, the operation returns an empty
 // NotificationConfiguration element.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
+	if !objAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -96,12 +101,17 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // By default, your bucket has no event notifications configured. That is,
 // the notification configuration will be an empty NotificationConfiguration.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
+	if !objectAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -294,7 +304,10 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
+	if !objAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return

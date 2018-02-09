@@ -117,7 +117,7 @@ func (g *Azure) Name() string {
 }
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
-func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	var endpoint = storage.DefaultBaseURL
 	var secure = true
@@ -959,13 +959,13 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	return a.GetObjectInfo(bucket, object)
 }
 
-// SetBucketPolicies - Azure supports three types of container policies:
+// SetBucketPolicy - Azure supports three types of container policies:
 // storage.ContainerAccessTypeContainer - readonly in minio terminology
 // storage.ContainerAccessTypeBlob - readonly without listing in minio terminology
 // storage.ContainerAccessTypePrivate - none in minio terminology
 // As the common denominator for minio and azure is readonly and none, we support
 // these two policies at the bucket level.
-func (a *azureObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (a *azureObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	var policies []minio.BucketAccessPolicy
 
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
@@ -993,8 +993,8 @@ func (a *azureObjects) SetBucketPolicies(bucket string, policyInfo policy.Bucket
 	return azureToObjectError(errors.Trace(err), bucket)
 }
 
-// GetBucketPolicies - Get the container ACL and convert it to canonical []bucketAccessPolicy
-func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+// GetBucketPolicy - Get the container ACL and convert it to canonical []bucketAccessPolicy
+func (a *azureObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	container := a.client.GetContainerReference(bucket)
 	perm, err := container.GetPermissions(nil)
@@ -1012,8 +1012,8 @@ func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPoli
 	return policyInfo, nil
 }
 
-// DeleteBucketPolicies - Set the container ACL to "private"
-func (a *azureObjects) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy - Set the container ACL to "private"
+func (a *azureObjects) DeleteBucketPolicy(bucket string) error {
 	perm := storage.ContainerPermissions{
 		AccessType:     storage.ContainerAccessTypePrivate,
 		AccessPolicies: nil,

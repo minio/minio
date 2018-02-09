@@ -16,8 +16,6 @@
 
 package cmd
 
-import "encoding/json"
-
 // BucketMetaState - Interface to update bucket metadata in-memory
 // state.
 type BucketMetaState interface {
@@ -79,13 +77,7 @@ func (lc *localBucketMetaState) UpdateBucketPolicy(args *SetBucketPolicyPeerArgs
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
-
-	var pCh policyChange
-	if err := json.Unmarshal(args.PChBytes, &pCh); err != nil {
-		return err
-	}
-
-	return globalBucketPolicies.SetBucketPolicy(args.Bucket, pCh)
+	return objAPI.RefreshBucketPolicy(args.Bucket)
 }
 
 // localBucketMetaState.SendEvent - sends event to local event notifier via

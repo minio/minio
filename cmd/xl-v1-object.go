@@ -542,6 +542,10 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	// Validate put object input args.
+	if err = checkPutObjectArgs(bucket, object, xl, data.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
 	// Lock the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -597,7 +601,7 @@ func (xl xlObjects) putObject(bucket string, object string, data *hash.Reader, m
 	}
 
 	// Validate put object input args.
-	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
+	if err = checkPutObjectArgs(bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -844,4 +848,21 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Success.
 	return nil
+}
+
+// ListObjectsV2 lists all blobs in bucket filtered by prefix
+func (xl xlObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	loi, err := xl.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
+	if err != nil {
+		return result, err
+	}
+
+	listObjectsV2Info := ListObjectsV2Info{
+		IsTruncated:           loi.IsTruncated,
+		ContinuationToken:     continuationToken,
+		NextContinuationToken: loi.NextMarker,
+		Objects:               loi.Objects,
+		Prefixes:              loi.Prefixes,
+	}
+	return listObjectsV2Info, err
 }

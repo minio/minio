@@ -96,9 +96,6 @@ type SetBucketPolicyPeerArgs struct {
 	AuthRPCArgs
 
 	Bucket string
-
-	// Policy change (serialized to JSON)
-	PChBytes []byte
 }
 
 // BucketUpdate - implements bucket policy updates,

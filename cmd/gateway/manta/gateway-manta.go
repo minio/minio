@@ -118,9 +118,9 @@ func (g *Manta) Name() string {
 	return mantaBackend
 }
 
-// NewGatewayLayer returns manta gateway layer, implements GatewayLayer interface to
+// NewGatewayLayer returns manta gateway layer, implements ObjectLayer interface to
 // talk to manta remote backend.
-func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.GatewayLayer, error) {
+func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	var signer authentication.Signer
 	var endpoint = defaultMantaURL

@@ -51,6 +51,8 @@ type xlObjects struct {
 
 	// name space mutex for object layer
 	nsMutex *nsLockMap
+	// Variable represents bucket policies in memory.
+	bucketPolicies *bucketPolicies
 }
 
 // list of all errors that can be ignored in tree walk operation in XL

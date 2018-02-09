@@ -430,7 +430,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
 	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
 	// unsigned request goes through and its validated again.
-	ExecObjectLayerAPIAnonTest(t, "PutBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
+	ExecObjectLayerAPIAnonTest(t, obj, "PutBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
@@ -447,6 +447,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
+
 }
 
 // Wrapper for calling Get Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
@@ -619,7 +620,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
 	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
 	// unsigned request goes through and its validated again.
-	ExecObjectLayerAPIAnonTest(t, "GetBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
+	ExecObjectLayerAPIAnonTest(t, obj, "GetBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
@@ -824,7 +825,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
 	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
 	// unsigned request goes through and its validated again.
-	ExecObjectLayerAPIAnonTest(t, "DeleteBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
+	ExecObjectLayerAPIAnonTest(t, obj, "DeleteBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request

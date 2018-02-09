@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"io"
 	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
@@ -64,18 +63,18 @@ func (a GatewayUnsupported) CompleteMultipartUpload(bucket string, object string
 	return oi, errors.Trace(NotImplemented{})
 }
 
-// SetBucketPolicies sets policy on bucket
-func (a GatewayUnsupported) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+// SetBucketPolicy sets policy on bucket
+func (a GatewayUnsupported) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	return errors.Trace(NotImplemented{})
 }
 
-// GetBucketPolicies will get policy on bucket
-func (a GatewayUnsupported) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, err error) {
+// GetBucketPolicy will get policy on bucket
+func (a GatewayUnsupported) GetBucketPolicy(bucket string) (bal policy.BucketAccessPolicy, err error) {
 	return bal, errors.Trace(NotImplemented{})
 }
 
-// DeleteBucketPolicies deletes all policies on bucket
-func (a GatewayUnsupported) DeleteBucketPolicies(bucket string) error {
+// DeleteBucketPolicy deletes all policies on bucket
+func (a GatewayUnsupported) DeleteBucketPolicy(bucket string) error {
 	return errors.Trace(NotImplemented{})
 }
 
@@ -104,39 +103,6 @@ func (a GatewayUnsupported) ListObjectsHeal(bucket, prefix, marker, delimiter st
 	return loi, errors.Trace(NotImplemented{})
 }
 
-// AnonListObjects - List objects anonymously
-func (a GatewayUnsupported) AnonListObjects(bucket string, prefix string, marker string, delimiter string,
-	maxKeys int) (loi ListObjectsInfo, err error) {
-	return loi, errors.Trace(NotImplemented{})
-}
-
-// AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (a GatewayUnsupported) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int,
-	fetchOwner bool, startAfter string) (loi ListObjectsV2Info, err error) {
-	return loi, errors.Trace(NotImplemented{})
-}
-
-// AnonGetBucketInfo - Get bucket metadata anonymously.
-func (a GatewayUnsupported) AnonGetBucketInfo(bucket string) (bi BucketInfo, err error) {
-	return bi, errors.Trace(NotImplemented{})
-}
-
-// AnonPutObject creates a new object anonymously with the incoming data,
-func (a GatewayUnsupported) AnonPutObject(bucket, object string, data *hash.Reader,
-	metadata map[string]string) (ObjectInfo, error) {
-	return ObjectInfo{}, errors.Trace(NotImplemented{})
-}
-
-// AnonGetObject downloads object anonymously.
-func (a GatewayUnsupported) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
-	return errors.Trace(NotImplemented{})
-}
-
-// AnonGetObjectInfo returns stat information about an object anonymously.
-func (a GatewayUnsupported) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	return objInfo, errors.Trace(NotImplemented{})
-}
-
 // CopyObject copies a blob from source container to destination container.
 func (a GatewayUnsupported) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string,
 	metadata map[string]string, srcEtag string) (objInfo ObjectInfo, err error) {
@@ -153,4 +119,19 @@ func (a GatewayUnsupported) ListLocks(bucket, prefix string, duration time.Durat
 // ClearLocks clears namespace locks held in object layer
 func (a GatewayUnsupported) ClearLocks([]VolumeLockInfo) error {
 	return errors.Trace(NotImplemented{})
+}
+
+// RefreshBucketPolicy refreshes cache policy with what's on disk.
+func (a GatewayUnsupported) RefreshBucketPolicy(bucket string) error {
+	return errors.Trace(NotImplemented{})
+}
+
+// IsNotificationSupported returns whether bucket notification is applicable for this layer.
+func (a GatewayUnsupported) IsNotificationSupported() bool {
+	return false
+}
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (a GatewayUnsupported) IsEncryptionSupported() bool {
+	return false
 }

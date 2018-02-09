@@ -40,7 +40,8 @@ import (
 // Enforces bucket policies for a bucket for a given tatusaction.
 func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
-	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
+	objAPI := newObjectLayerFn()
+	if err := checkBucketExist(bucket, objAPI); err != nil {
 		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -55,12 +56,11 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 		return ErrInternalError
 	}
 
-	if globalBucketPolicies == nil {
+	// Fetch bucket policy, if policy is not set return access denied.
+	p, err := objAPI.GetBucketPolicy(bucket)
+	if err != nil {
 		return ErrAccessDenied
 	}
-
-	// Fetch bucket policy, if policy is not set return access denied.
-	p := globalBucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(p, emptyBucketPolicy) {
 		return ErrAccessDenied
 	}
@@ -89,12 +89,12 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 }
 
 // Check if the action is allowed on the bucket/prefix.
-func isBucketActionAllowed(action, bucket, prefix string) bool {
-	if globalBucketPolicies == nil {
+func isBucketActionAllowed(action, bucket, prefix string, objectAPI ObjectLayer) bool {
+
+	bp, err := objectAPI.GetBucketPolicy(bucket)
+	if err != nil {
 		return false
 	}
-
-	bp := globalBucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(bp, emptyBucketPolicy) {
 		return false
 	}
@@ -625,13 +625,6 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetRLock(globalObjectTimeout) != nil {
-		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
-		return
-	}
-	defer bucketLock.RUnlock()
-
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
@@ -657,36 +650,11 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer bucketLock.Unlock()
-
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
-	// Delete bucket access policy, if present - ignore any errors.
-	_ = removeBucketPolicy(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, policyChange{true, policy.BucketAccessPolicy{}})
-
-	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketNotification(bucket, nil)
-
-	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(bucket, objectAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
 
 	// Write success response.
 	writeSuccessNoContent(w)
