@@ -15,21 +15,27 @@
  */
 
 import React from "react"
-import { connect } from "react-redux"
-import * as actionsBuckets from "../actions/buckets"
-import { getCurrentBucket } from "../selectors/buckets"
-import Bucket from "./Bucket"
+import { shallow } from "enzyme"
+import { StorageInfo } from "../StorageInfo"
 
-const mapStateToProps = (state, ownProps) => {
-  return {
-    isActive: getCurrentBucket(state) === ownProps.bucket
-  }
-}
+describe("StorageInfo", () => {
+  it("should render without crashing", () => {
+    shallow(
+      <StorageInfo
+        storageInfo={{ total: 100, free: 60 }}
+        fetchStorageInfo={jest.fn()}
+      />
+    )
+  })
 
-const mapDispatchToProps = dispatch => {
-  return {
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
-  }
-}
-
-export default connect(mapStateToProps, mapDispatchToProps)(Bucket)
+  it("should fetchStorageInfo before component is mounted", () => {
+    const fetchStorageInfo = jest.fn()
+    shallow(
+      <StorageInfo
+        storageInfo={{ total: 100, free: 60 }}
+        fetchStorageInfo={fetchStorageInfo}
+      />
+    )
+    expect(fetchStorageInfo).toHaveBeenCalled()
+  })
+})

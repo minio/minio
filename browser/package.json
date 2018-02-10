@@ -11,7 +11,10 @@
   },
   "jest": {
     "setupTestFrameworkScriptFile": "./app/js/jest/setup.js",
-    "testURL": "https://localhost:8080"
+    "testURL": "https://localhost:8080",
+    "moduleNameMapper": {
+      "\\.(css|scss|svg)$": "identity-obj-proxy"
+    }
   },
   "repository": {
     "type": "git",
@@ -60,6 +63,7 @@
     "font-awesome": "^4.7.0",
     "history": "^4.7.2",
     "humanize": "0.0.9",
+    "identity-obj-proxy": "^3.0.0",
     "json-loader": "^0.5.4",
     "local-storage-fallback": "^4.0.2",
     "material-design-iconic-font": "^2.2.0",

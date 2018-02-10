@@ -16,38 +16,26 @@
 
 import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
-import * as actionsBuckets from "../buckets"
+import * as actionsCommon from "../common"
 
 jest.mock("../../web", () => ({
-  ListBuckets: jest.fn(() => {
-    return Promise.resolve({ buckets: [{ name: "test1" }, { name: "test2" }] })
+  StorageInfo: jest.fn(() => {
+    return Promise.resolve({ storageInfo: { Total: 100, Free: 60 } })
   })
 }))
 
 const middlewares = [thunk]
 const mockStore = configureStore(middlewares)
 
-describe("Buckets actions", () => {
-  it("creates buckets/SET_LIST and buckets/SET_CURRENT_BUCKET after fetching the buckets", () => {
+describe("Common actions", () => {
+  it("creates common/SET_STORAGE_INFO after fetching the storage details ", () => {
     const store = mockStore()
     const expectedActions = [
-      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
-      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+      { type: "common/SET_STORAGE_INFO", storageInfo: { total: 100, free: 60 } }
     ]
-    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+    return store.dispatch(actionsCommon.fetchStorageInfo()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
-  })
-
-  it("should update browser url and creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
-    const store = mockStore()
-    const expectedActions = [
-      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
-    ]
-    store.dispatch(actionsBuckets.selectBucket("test1"))
-    const actions = store.getActions()
-    expect(actions).toEqual(expectedActions)
-    expect(window.location.pathname).toBe("/test1")
   })
 })
