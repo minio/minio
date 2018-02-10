@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
-import objects from "./objects"
+import React from "react"
+import ObjectsHeader from "./ObjectsHeader"
+import ObjectsListContainer from "./ObjectsListContainer"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets,
-  objects
-})
+export const ObjectsSection = () => (
+  <div>
+    <ObjectsHeader />
+    <ObjectsListContainer />
+  </div>
+)
 
-export default rootReducer
+export default ObjectsSection

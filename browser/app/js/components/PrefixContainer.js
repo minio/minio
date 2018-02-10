@@ -16,20 +16,30 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import * as actionsBuckets from "../actions/buckets"
-import { getCurrentBucket } from "../selectors/buckets"
-import Bucket from "./Bucket"
+import ObjectItem from "./ObjectItem"
+import * as actionsObjects from "../actions/objects"
+
+export const PrefixContainer = ({ object, currentPrefix, selectPrefix }) => {
+  const props = {
+    name: object.name,
+    contentType: object.contentType,
+    onClick: () => selectPrefix(`${currentPrefix}${object.name}`)
+  }
+
+  return <ObjectItem {...props} />
+}
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    isActive: getCurrentBucket(state) === ownProps.bucket
+    object: ownProps.object,
+    currentPrefix: state.objects.currentPrefix
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(Bucket)
+export default connect(mapStateToProps, mapDispatchToProps)(PrefixContainer)
