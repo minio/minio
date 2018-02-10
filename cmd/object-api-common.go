@@ -85,6 +85,25 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	}
 }
 
+func deleteBucketMetadata(bucket string, objAPI ObjectLayer) {
+	// Delete bucket access policy, if present - ignore any errors.
+	_ = removeBucketPolicy(bucket, objAPI)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket)
+
+	// Delete notification config, if present - ignore any errors.
+	_ = removeNotificationConfig(bucket, objAPI)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketNotification(bucket, nil)
+	// Delete listener config, if present - ignore any errors.
+	_ = removeListenerConfig(bucket, objAPI)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
+}
+
 // House keeping code for FS/XL and distributed Minio setup.
 func houseKeeping(storageDisks []StorageAPI) error {
 	var wg = &sync.WaitGroup{}

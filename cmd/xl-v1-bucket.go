@@ -281,22 +281,9 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
-	// Delete bucket access policy, if present - ignore any errors.
-	_ = removeBucketPolicy(bucket, xl)
 
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket)
-
-	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(bucket, xl)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketNotification(bucket, nil)
-	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(bucket, xl)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
+	// Delete all bucket metadata.
+	deleteBucketMetadata(bucket, xl)
 
 	return nil
 }
