@@ -22,46 +22,66 @@ import (
 	"testing"
 )
 
-// Test validates for duplicate configs.
-func TestCheckDuplicateConfigs(t *testing.T) {
+// Tests for overlapping rules.
+func TestHasOverlappingRules(t *testing.T) {
 	testCases := []struct {
-		qConfigs        []queueConfig
-		expectedErrCode APIErrorCode
+		rules    []filterRule
+		expected bool
 	}{
-		// Error for duplicate queue configs.
+		// Two different types with same prefixes is not allowed.
 		{
-			qConfigs: []queueConfig{
+			rules: []filterRule{
 				{
-					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+					Name:  "prefix",
+					Value: "",
 				},
 				{
-					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+					Name:  "prefix",
+					Value: "",
 				},
 			},
-			expectedErrCode: ErrOverlappingConfigs,
+			expected: true,
 		},
-		// Valid queue configs.
+		// Two different types of prefixes is allowed.
 		{
-			qConfigs: []queueConfig{
+			rules: []filterRule{
 				{
-					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+					Name:  "prefix",
+					Value: "xx/",
+				},
+				{
+					Name:  "prefix",
+					Value: "xxy/",
 				},
 			},
-			expectedErrCode: ErrNone,
+			expected: false,
+		},
+		// Prefix overlapping is not allowed.
+		{
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "xx",
+				},
+				{
+					Name:  "prefix",
+					Value: "xxy",
+				},
+			},
+			expected: true,
 		},
 	}
 
-	// ... validate for duplicate queue configs.
 	for i, testCase := range testCases {
-		errCode := checkDuplicateQueueConfigs(testCase.qConfigs)
-		if errCode != testCase.expectedErrCode {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		got := hasOverlappingRules(testCase.rules, strings.HasPrefix)
+		if got != testCase.expected {
+			t.Errorf("Test %d: Expected %t, got %t", i+1, testCase.expected, got)
 		}
 	}
 }
 
-// Tests for validating filter rules.
-func TestCheckFilterRules(t *testing.T) {
+// Tests for validating filter rule values.
+func TestCheckFilterRuleValues(t *testing.T) {
 	testCases := []struct {
 		rules           []filterRule
 		expectedErrCode APIErrorCode
@@ -80,43 +100,15 @@ func TestCheckFilterRules(t *testing.T) {
 			},
 			expectedErrCode: ErrNone,
 		},
-		// Invalid filter name.
-		{
-			rules: []filterRule{
-				{
-					Name:  "unknown",
-					Value: "test/test1",
-				},
-			},
-			expectedErrCode: ErrFilterNameInvalid,
-		},
-		// Cannot have duplicate prefixes.
+		// Empty prefix value is supported.
 		{
 			rules: []filterRule{
 				{
 					Name:  "prefix",
-					Value: "test/test1",
-				},
-				{
-					Name:  "prefix",
-					Value: "test/test1",
+					Value: "",
 				},
 			},
-			expectedErrCode: ErrFilterNamePrefix,
-		},
-		// Cannot have duplicate suffixes.
-		{
-			rules: []filterRule{
-				{
-					Name:  "suffix",
-					Value: ".jpg",
-				},
-				{
-					Name:  "suffix",
-					Value: ".txt",
-				},
-			},
-			expectedErrCode: ErrFilterNameSuffix,
+			expectedErrCode: ErrNone,
 		},
 		// Filter value cannot be bigger than > 1024.
 		{
@@ -131,7 +123,7 @@ func TestCheckFilterRules(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		errCode := checkFilterRules(testCase.rules)
+		errCode := checkFilterRuleValues(testCase.rules)
 		if errCode != testCase.expectedErrCode {
 			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
 		}

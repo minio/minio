@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -74,36 +75,54 @@ func isValidFilterName(filterName string) bool {
 	return isValidFilterNamePrefix(filterName) || isValidFilterNameSuffix(filterName)
 }
 
-// checkFilterRules - checks given list of filter rules if all of them are valid.
-func checkFilterRules(filterRules []filterRule) APIErrorCode {
-	ruleSetMap := make(map[string]string)
-	// Validate all filter rules.
-	for _, filterRule := range filterRules {
-		// Unknown filter rule name found, returns an appropriate error.
-		if !isValidFilterName(filterRule.Name) {
-			return ErrFilterNameInvalid
-		}
-
-		// Filter names should not be set twice per notification service
-		// configuration, if found return an appropriate error.
-		if _, ok := ruleSetMap[filterRule.Name]; ok {
-			if isValidFilterNamePrefix(filterRule.Name) {
-				return ErrFilterNamePrefix
-			} else if isValidFilterNameSuffix(filterRule.Name) {
-				return ErrFilterNameSuffix
-			} else {
-				return ErrFilterNameInvalid
+// hasOverlappingRules has for overlapping rules.
+func hasOverlappingRules(rules []filterRule, matchFn func(string, string) bool) bool {
+	var strs []string
+	for _, rule := range rules {
+		strs = append(strs, rule.Value)
+	}
+	sort.Strings(strs)
+	if len(strs) > 1 {
+		commonStr := strs[0]
+		for _, str := range strs[1:] {
+			if matchFn(str, commonStr) {
+				return true
 			}
 		}
+	}
+	return false
+}
 
+func checkFilterRuleValues(filterRules []filterRule) APIErrorCode {
+	ruleSet := set.NewStringSet()
+	// Validate all filter rules.
+	for _, filterRule := range filterRules {
 		if !IsValidObjectPrefix(filterRule.Value) {
 			return ErrFilterValueInvalid
 		}
 
 		// Set the new rule name to keep track of duplicates.
-		ruleSetMap[filterRule.Name] = filterRule.Value
+		ruleSet.Add(filterRule.Name)
 	}
-	// Success all prefixes validated.
+
+	// Success all filter rules validated.
+	return ErrNone
+}
+
+// checkFilterRules - checks given list of filter rules if all of them are valid.
+func checkFilterRulesPrefixSuffix(prefixFilterRules, suffixFilterRules []filterRule) APIErrorCode {
+	if s3Error := checkFilterRuleValues(prefixFilterRules); s3Error != ErrNone {
+		return s3Error
+	}
+	if s3Error := checkFilterRuleValues(suffixFilterRules); s3Error != ErrNone {
+		return s3Error
+	}
+	if hasOverlappingRules(prefixFilterRules, strings.HasPrefix) {
+		return ErrFilterNamePrefix
+	}
+	if hasOverlappingRules(suffixFilterRules, strings.HasSuffix) {
+		return ErrFilterNameSuffix
+	}
 	return ErrNone
 }
 
@@ -179,60 +198,59 @@ func isValidQueueID(queueARN string) bool {
 	return false
 }
 
-// Check - validates queue configuration and returns error if any.
-func checkQueueConfig(qConfig queueConfig) APIErrorCode {
-	// Check queue arn is valid.
-	if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Validate if the account ID is correct.
-	if !isValidQueueID(qConfig.QueueARN) {
-		return ErrARNNotification
-	}
-
-	// Check if valid events are set in queue config.
-	if s3Error := checkEvents(qConfig.Events); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Check if valid filters are set in queue config.
-	if s3Error := checkFilterRules(qConfig.Filter.Key.FilterRules); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Success.
-	return ErrNone
-}
-
 // Validates all incoming queue configs, checkQueueConfig validates if the
 // input fields for each queues is not malformed and has valid configuration
 // information.  If validation fails bucket notifications are not enabled.
 func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
+	var prefixFilterRules []filterRule
+	var suffixFilterRules []filterRule
+
 	for _, qConfig := range queueConfigs {
-		if s3Error := checkQueueConfig(qConfig); s3Error != ErrNone {
+		// Check queue arn is valid.
+		if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != ErrNone {
 			return s3Error
 		}
+
+		// Validate if the account ID is correct.
+		if !isValidQueueID(qConfig.QueueARN) {
+			return ErrARNNotification
+		}
+
+		// Check if valid events are set in queue config.
+		if s3Error := checkEvents(qConfig.Events); s3Error != ErrNone {
+			return s3Error
+		}
+
+		ruleSetPrefixes := set.NewStringSet()
+		ruleSetSuffixes := set.NewStringSet()
+		for _, filterRule := range qConfig.Filter.Key.FilterRules {
+			// Unknown filter rule name found, returns an appropriate error.
+			if !isValidFilterName(filterRule.Name) {
+				return ErrFilterNameInvalid
+			}
+
+			// Check if filter name prefix is duplicated, we should throw an error.
+			if isValidFilterNamePrefix(filterRule.Name) {
+				if ruleSetPrefixes.Contains(filterRule.Name) {
+					return ErrFilterNamePrefix
+				}
+				ruleSetPrefixes.Add(filterRule.Name)
+				prefixFilterRules = append(prefixFilterRules, filterRule)
+			}
+
+			// Check if filter name suffix is duplicated, we should throw an error.
+			if isValidFilterNameSuffix(filterRule.Name) {
+				if ruleSetSuffixes.Contains(filterRule.Name) {
+					return ErrFilterNameSuffix
+				}
+				ruleSetSuffixes.Add(filterRule.Name)
+				suffixFilterRules = append(suffixFilterRules, filterRule)
+			}
+		}
 	}
-	// Success.
-	return ErrNone
-}
 
-// Check all the queue configs for any duplicates.
-func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
-	queueConfigARNS := set.NewStringSet()
-
-	// Navigate through each configs and count the entries.
-	for _, config := range configs {
-		queueConfigARNS.Add(config.QueueARN)
-	}
-
-	if len(queueConfigARNS) != len(configs) {
-		return ErrOverlappingConfigs
-	}
-
-	// Success.
-	return ErrNone
+	// Check if valid filters are set in all queue configs.
+	return checkFilterRulesPrefixSuffix(prefixFilterRules, suffixFilterRules)
 }
 
 // Validates all the bucket notification configuration for their validity,
@@ -248,13 +266,6 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 	// Validate all queue configs.
 	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
 		return s3Error
-	}
-
-	// Check for duplicate queue configs.
-	if len(nConfig.QueueConfigs) > 1 {
-		if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
-			return s3Error
-		}
 	}
 
 	// Add validation for other configurations.
