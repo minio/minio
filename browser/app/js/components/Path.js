@@ -14,28 +14,57 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import connect from 'react-redux/lib/components/connect'
+import React from "react"
+import { connect } from "react-redux"
+import { getCurrentBucket, getCurrentPrefix } from "../selectors/buckets"
+import * as actionsObjects from "../actions/objects"
 
-let Path = ({currentBucket, currentPath, selectPrefix}) => {
+export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
+  const onPrefixClick = (e, prefix) => {
+    e.preventDefault()
+    selectPrefix(prefix)
+  }
   let dirPath = []
-  let path = ''
-  if (currentPath) {
-    path = currentPath.split('/').map((dir, i) => {
-      dirPath.push(dir)
-      let dirPath_ = dirPath.join('/') + '/'
-      return <span key={ i }><a href="" onClick={ (e) => selectPrefix(e, dirPath_) }>{ dir }</a></span>
+  let path = ""
+  if (currentPrefix) {
+    path = currentPrefix.split("/").map((dir, i) => {
+      if (dir) {
+        dirPath.push(dir)
+        let dirPath_ = dirPath.join("/") + "/"
+        return (
+          <span key={i}>
+            <a href="" onClick={e => onPrefixClick(e, dirPath_)}>
+              {dir}
+            </a>
+          </span>
+        )
+      }
     })
   }
 
   return (
-    <h2><span className="main"><a onClick={ (e) => selectPrefix(e, '') } href="">{ currentBucket }</a></span>{ path }</h2>
+    <h2>
+      <span className="main">
+        <a onClick={e => onPrefixClick(e, "")} href="">
+          {currentBucket}
+        </a>
+      </span>
+      {path}
+    </h2>
   )
 }
 
-export default connect(state => {
+const mapStateToProps = state => {
   return {
-    currentBucket: state.currentBucket,
-    currentPath: state.currentPath
+    currentBucket: getCurrentBucket(state),
+    currentPrefix: state.objects.currentPrefix
   }
-})(Path)
+}
+
+const mapDispatchToProps = dispatch => {
+  return {
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Path)

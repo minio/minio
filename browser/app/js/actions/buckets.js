@@ -15,6 +15,7 @@
  */
 
 import web from "../web"
+import history from "../history"
 
 export const SET_LIST = "buckets/SET_LIST"
 export const SET_FILTER = "buckets/SET_FILTER"
@@ -25,6 +26,9 @@ export const fetchBuckets = () => {
     return web.ListBuckets().then(res => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
       dispatch(setList(buckets))
+      if (buckets.length > 0) {
+        dispatch(selectBucket(buckets[0]))
+      }
     })
   }
 }
@@ -40,6 +44,13 @@ export const setFilter = filter => {
   return {
     type: SET_FILTER,
     filter
+  }
+}
+
+export const selectBucket = bucket => {
+  return function(dispatch) {
+    dispatch(setCurrentBucket(bucket))
+    history.push(`/${bucket}`)
   }
 }
 

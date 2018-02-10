@@ -14,17 +14,22 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
-import objects from "./objects"
+import React from "react"
+import humanize from "humanize"
+import Moment from "moment"
+import ObjectItem from "./ObjectItem"
+import * as actionsObjects from "../actions/objects"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets,
-  objects
-})
+export const ObjectContainer = ({ object }) => {
+  const actionButtons = []
+  const props = {
+    name: object.name,
+    contentType: object.contentType,
+    size: humanize.filesize(object.size),
+    lastModified: Moment(object.lastModified).format("lll"),
+    actionButtons: []
+  }
+  return <ObjectItem {...props} />
+}
 
-export default rootReducer
+export default ObjectContainer

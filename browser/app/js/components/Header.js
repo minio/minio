@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
-import objects from "./objects"
+import React from "react"
+import Path from "./Path"
+import StorageInfo from "./StorageInfo"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets,
-  objects
-})
+export const Header = () => (
+  <header className="fe-header">
+    <Path />
+    <StorageInfo />
+  </header>
+)
 
-export default rootReducer
+export default Header

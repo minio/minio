@@ -24,13 +24,15 @@ import Dropdown from "react-bootstrap/lib/Dropdown"
 import BucketSearch from "./BucketSearch"
 import BucketList from "./BucketList"
 import Host from "./Host"
+import * as actionsCommon from "../actions/common"
 
-export const SideBar = () => {
+export const SideBar = ({ sidebarOpen, clickOutside }) => {
   return (
-    <ClickOutHandler>
+    <ClickOutHandler onClickOut={clickOutside}>
       <div
         className={classNames({
-          "fe-sidebar": true
+          "fe-sidebar": true,
+          toggled: sidebarOpen
         })}
       >
         <div className="fes-header clearfix hidden-sm hidden-xs">
@@ -47,4 +49,16 @@ export const SideBar = () => {
   )
 }
 
-export default connect(state => state)(SideBar)
+const mapStateToProps = state => {
+  return {
+    sidebarOpen: state.common.sidebarOpen
+  }
+}
+
+const mapDispatchToProps = dispatch => {
+  return {
+    clickOutside: () => dispatch(actionsCommon.closeSidebar())
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(SideBar)

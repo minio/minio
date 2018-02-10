@@ -14,17 +14,11 @@
  * limitations under the License.
  */
 
-import { combineReducers } from "redux"
-import common from "./common"
-import alert from "./alert"
-import buckets from "./buckets"
-import objects from "./objects"
+import createHistory from "history/createBrowserHistory"
+import { minioBrowserPrefix } from "./constants"
 
-const rootReducer = combineReducers({
-  common,
-  alert,
-  buckets,
-  objects
+const history = createHistory({
+  basename: minioBrowserPrefix
 })
 
-export default rootReducer
+export default history
