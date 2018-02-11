@@ -15,18 +15,22 @@
  */
 
 import React from "react"
-import MobileHeader from "./MobileHeader"
-import Header from "./Header"
-import ObjectsSection from "../objects/ObjectsSection"
-import MainActions from "./MainActions"
+import { shallow, mount } from "enzyme"
+import { MainActions } from "../MainActions"
 
-export const MainContent = () => (
-  <div className="fe-body">
-    <MobileHeader />
-    <Header />
-    <ObjectsSection />
-    <MainActions />
-  </div>
-)
+describe("MainActions", () => {
+  it("should render without crashing", () => {
+    shallow(<MainActions />)
+  })
 
-export default MainContent
+  it("should call showMakeBucketModal when create bucket icon is clicked", () => {
+    const showMakeBucketModal = jest.fn()
+    const wrapper = shallow(
+      <MainActions showMakeBucketModal={showMakeBucketModal} />
+    )
+    wrapper
+      .find("#show-make-bucket")
+      .simulate("click", { preventDefault: jest.fn() })
+    expect(showMakeBucketModal).toHaveBeenCalled()
+  })
+})

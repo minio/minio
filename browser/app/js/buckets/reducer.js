@@ -17,7 +17,12 @@
 import * as actionsBuckets from "./actions"
 
 export default (
-  state = { list: [], filter: "", currentBucket: "" },
+  state = {
+    list: [],
+    filter: "",
+    currentBucket: "",
+    showMakeBucketModal: false
+  },
   action
 ) => {
   switch (action.type) {
@@ -25,6 +30,11 @@ export default (
       return {
         ...state,
         list: action.buckets
+      }
+    case actionsBuckets.ADD:
+      return {
+        ...state,
+        list: [action.bucket, ...state.list]
       }
     case actionsBuckets.SET_FILTER:
       return {
@@ -35,6 +45,11 @@ export default (
       return {
         ...state,
         currentBucket: action.bucket
+      }
+    case actionsBuckets.SHOW_MAKE_BUCKET_MODAL:
+      return {
+        ...state,
+        showMakeBucketModal: action.show
       }
     default:
       return state

@@ -20,6 +20,7 @@ import { Scrollbars } from "react-custom-scrollbars"
 import * as actionsBuckets from "./actions"
 import { getVisibleBuckets } from "./selectors"
 import BucketContainer from "./BucketContainer"
+import MakeBucketModal from "./MakeBucketModal"
 
 export class BucketList extends React.Component {
   componentWillMount() {
@@ -39,6 +40,7 @@ export class BucketList extends React.Component {
             ))}
           </ul>
         </Scrollbars>
+        <MakeBucketModal />
       </div>
     )
   }

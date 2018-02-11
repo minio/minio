@@ -16,10 +16,13 @@
 
 import web from "../web"
 import history from "../history"
+import * as alertActions from "../alert/actions"
 
 export const SET_LIST = "buckets/SET_LIST"
+export const ADD = "buckets/ADD"
 export const SET_FILTER = "buckets/SET_FILTER"
 export const SET_CURRENT_BUCKET = "buckets/SET_CURRENT_BUCKET"
+export const SHOW_MAKE_BUCKET_MODAL = "buckets/SHOW_MAKE_BUCKET_MODAL"
 
 export const fetchBuckets = () => {
   return function(dispatch) {
@@ -60,3 +63,40 @@ export const setCurrentBucket = bucket => {
     bucket
   }
 }
+
+export const makeBucket = bucket => {
+  return function(dispatch) {
+    return web
+      .MakeBucket({
+        bucketName: bucket
+      })
+      .then(() => {
+        dispatch(hideMakeBucketModal())
+        dispatch(addBucket(bucket))
+        dispatch(selectBucket(bucket))
+      })
+      .catch(err =>
+        dispatch(
+          actionsAlert.set({
+            type: "danger",
+            message: err.message
+          })
+        )
+      )
+  }
+}
+
+export const addBucket = bucket => ({
+  type: ADD,
+  bucket
+})
+
+export const showMakeBucketModal = () => ({
+  type: SHOW_MAKE_BUCKET_MODAL,
+  show: true
+})
+
+export const hideMakeBucketModal = () => ({
+  type: SHOW_MAKE_BUCKET_MODAL,
+  show: false
+})
