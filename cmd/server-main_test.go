@@ -36,7 +36,7 @@ func TestNewObjectLayer(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
-	_, ok := obj.(*fsObjects)
+	_, ok := obj.(*FSObjects)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}

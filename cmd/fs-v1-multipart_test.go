@@ -33,7 +33,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	// Close the go-routine, we are going to
 	// manually start it and test in this test case.
@@ -73,7 +73,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 
@@ -102,7 +102,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
@@ -134,7 +134,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
@@ -166,7 +166,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
@@ -200,7 +200,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
@@ -233,7 +233,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 
 	obj := initFSObjects(disk, t)
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 

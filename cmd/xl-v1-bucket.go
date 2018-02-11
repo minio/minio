@@ -291,7 +291,7 @@ func (xl xlObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, e
 	// fetch bucket policy from cache.
 	bpolicy := xl.bucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
-		return readBucketPolicy(bucket, xl)
+		return ReadBucketPolicy(bucket, xl)
 	}
 	return bpolicy, nil
 }
@@ -303,7 +303,7 @@ func (xl xlObjects) DeleteBucketPolicy(bucket string) error {
 
 // RefreshBucketPolicy refreshes policy cache from disk
 func (xl xlObjects) RefreshBucketPolicy(bucket string) error {
-	policy, err := readBucketPolicy(bucket, xl)
+	policy, err := ReadBucketPolicy(bucket, xl)
 
 	if err != nil {
 		if reflect.DeepEqual(policy, emptyBucketPolicy) {

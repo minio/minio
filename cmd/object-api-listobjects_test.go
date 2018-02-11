@@ -576,7 +576,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 // Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 	var err error
-	obj, err = newFSObjectLayer(disk)
+	obj, err = NewFSObjectLayer(disk)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}

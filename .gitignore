@@ -24,3 +24,4 @@ prime/
 snap/.snapcraft/
 stage/
 .sia_temp/
+buildcoveragecoverage.txt

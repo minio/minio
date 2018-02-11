@@ -44,7 +44,7 @@ func TestReadFSMetadata(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
@@ -79,7 +79,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
 	objectName := "object"

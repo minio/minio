@@ -56,7 +56,7 @@ func TestFSParentDirIsObject(t *testing.T) {
 		t.Fatalf("Unexpected object name returned got %s, expected %s", objInfo.Name, objectName)
 	}
 
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	testCases := []struct {
 		parentIsObject bool
 		objectName     string
@@ -101,16 +101,16 @@ func TestFSParentDirIsObject(t *testing.T) {
 // and constructs a valid `FS` object layer.
 func TestNewFS(t *testing.T) {
 	// Do not attempt to create this path, the test validates
-	// so that newFSObjectLayer initializes non existing paths
+	// so that NewFSObjectLayer initializes non existing paths
 	// and successfully returns initialized object layer.
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	_, err := newFSObjectLayer("")
+	_, err := NewFSObjectLayer("")
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = newFSObjectLayer(disk)
+	_, err = NewFSObjectLayer(disk)
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Disk is not in FS format."
 		if err.Error() == errMsg {
@@ -131,10 +131,10 @@ func TestFSShutdown(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 	// Create and return an fsObject with its path in the disk
-	prepareTest := func() (*fsObjects, string) {
+	prepareTest := func() (*FSObjects, string) {
 		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		obj := initFSObjects(disk, t)
-		fs := obj.(*fsObjects)
+		fs := obj.(*FSObjects)
 		objectContent := "12345"
 		obj.MakeBucketWithLocation(bucketName, "")
 		obj.PutObject(bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil)
@@ -164,7 +164,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
 	obj.MakeBucketWithLocation(bucketName, "")
@@ -266,7 +266,7 @@ func TestFSDeleteObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 
@@ -311,7 +311,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
 	err := obj.MakeBucketWithLocation(bucketName, "")
@@ -350,7 +350,7 @@ func TestFSListBuckets(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
 	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
