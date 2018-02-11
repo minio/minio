@@ -14,13 +14,22 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import React from "react"
+import { connect } from "react-redux"
+import * as actionsBuckets from "./actions"
+import { getCurrentBucket } from "./selectors"
+import Bucket from "./Bucket"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
-
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
+const mapStateToProps = (state, ownProps) => {
+  return {
+    isActive: getCurrentBucket(state) === ownProps.bucket
+  }
 }
+
+const mapDispatchToProps = dispatch => {
+  return {
+    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Bucket)

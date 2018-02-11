@@ -14,13 +14,22 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import React from "react"
+import humanize from "humanize"
+import Moment from "moment"
+import ObjectItem from "./ObjectItem"
+import * as actionsObjects from "./actions"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
-
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
+export const ObjectContainer = ({ object }) => {
+  const actionButtons = []
+  const props = {
+    name: object.name,
+    contentType: object.contentType,
+    size: humanize.filesize(object.size),
+    lastModified: Moment(object.lastModified).format("lll"),
+    actionButtons: []
+  }
+  return <ObjectItem {...props} />
 }
+
+export default ObjectContainer
