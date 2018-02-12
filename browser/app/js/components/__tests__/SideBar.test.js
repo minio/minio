@@ -16,19 +16,12 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { BucketList } from "../BucketList"
+import { SideBar } from "../SideBar"
 
-describe("BucketList", () => {
+describe("SideBar", () => {
   it("should render without crashing", () => {
-    const fetchBuckets = jest.fn()
-    shallow(<BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />)
+    shallow(<SideBar />)
   })
 
-  it("should call fetchBuckets before component is mounted", () => {
-    const fetchBuckets = jest.fn()
-    const wrapper = shallow(
-      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
-    )
-    expect(fetchBuckets).toHaveBeenCalled()
-  })
+  // ClickOutHandler test to be added when corresponding function is added
 })

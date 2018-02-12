@@ -16,19 +16,10 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { BucketList } from "../BucketList"
+import App from "../App"
 
-describe("BucketList", () => {
+describe("App", () => {
   it("should render without crashing", () => {
-    const fetchBuckets = jest.fn()
-    shallow(<BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />)
-  })
-
-  it("should call fetchBuckets before component is mounted", () => {
-    const fetchBuckets = jest.fn()
-    const wrapper = shallow(
-      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
-    )
-    expect(fetchBuckets).toHaveBeenCalled()
+    shallow(<App match={ {url: "/minio"} }/>)
   })
 })
