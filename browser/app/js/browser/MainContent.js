@@ -19,6 +19,7 @@ import MobileHeader from "./MobileHeader"
 import Header from "./Header"
 import ObjectsSection from "../objects/ObjectsSection"
 import MainActions from "./MainActions"
+import UploadModal from "../uploads/UploadModal"
 
 export const MainContent = () => (
   <div className="fe-body">
@@ -26,6 +27,7 @@ export const MainContent = () => (
     <Header />
     <ObjectsSection />
     <MainActions />
+    <UploadModal />
   </div>
 )
 

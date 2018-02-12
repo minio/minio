@@ -18,11 +18,19 @@ import React from "react"
 import { connect } from "react-redux"
 import { Dropdown, OverlayTrigger, Tooltip } from "react-bootstrap"
 import * as actionsBuckets from "../buckets/actions"
+import * as uploadsActions from "../uploads/actions"
 
-export const MainActions = ({ showMakeBucketModal }) => {
+export const MainActions = ({ uploadFile, showMakeBucketModal }) => {
+  const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
     <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
   )
+  const onFileUpload = e => {
+    e.preventDefault()
+    uploadFile(e.target.files[0])
+    e.target.value = null
+  }
+
   return (
     <Dropdown dropup className="feb-actions" id="fe-action-toggle">
       <Dropdown.Toggle noCaret className="feba-toggle">
@@ -31,6 +39,20 @@ export const MainActions = ({ showMakeBucketModal }) => {
         </span>
       </Dropdown.Toggle>
       <Dropdown.Menu>
+        <OverlayTrigger placement="left" overlay={uploadTooltip}>
+          <a href="#" className="feba-btn feba-upload">
+            <input
+              type="file"
+              onChange={onFileUpload}
+              style={{ display: "none" }}
+              id="file-input"
+            />
+            <label htmlFor="file-input">
+              {" "}
+              <i className="fa fa-cloud-upload" />{" "}
+            </label>
+          </a>
+        </OverlayTrigger>
         <OverlayTrigger placement="left" overlay={makeBucketTooltip}>
           <a
             href="#"
@@ -53,6 +75,7 @@ const mapStateToProps = state => state
 
 const mapDispatchToProps = dispatch => {
   return {
+    uploadFile: file => dispatch(uploadsActions.uploadFile(file)),
     showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal())
   }
 }
