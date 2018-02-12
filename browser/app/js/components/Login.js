@@ -28,21 +28,16 @@ import { Redirect } from "react-router-dom"
 export class Login extends React.Component {
   handleSubmit(event) {
     event.preventDefault()
-    const { dispatch, history } = this.props
+    const { showAlert, history } = this.props
     let message = ""
     if (!document.getElementById("accessKey").value) {
-      message = "Secret Key cannot be empty"
-    }
-    if (!document.getElementById("secretKey").value) {
       message = "Access Key cannot be empty"
     }
+    if (!document.getElementById("secretKey").value) {
+      message = "Secret Key cannot be empty"
+    }
     if (message) {
-      dispatch(
-        actionsAlert.set({
-          type: "danger",
-          message
-        })
-      )
+      showAlert("danger", message)
       return
     }
     web
@@ -54,19 +49,14 @@ export class Login extends React.Component {
         history.push(minioBrowserPrefix)
       })
       .catch(e => {
-        dispatch(
-          actionsAlert.set({
-            type: "danger",
-            message: e.message
-          })
-        )
+        showAlert("danger", e.message)
       })
   }
 
   componentWillMount() {
-    const { dispatch } = this.props
+    const { clearAlert } = this.props
     // Clear out any stale message in the alert of previous page
-    dispatch(actionsAlert.clear())
+    clearAlert()
     document.body.classList.add("is-guest")
   }
 
@@ -74,17 +64,12 @@ export class Login extends React.Component {
     document.body.classList.remove("is-guest")
   }
 
-  clearAlert() {
-    const { dispatch } = this.props
-    dispatch(actionsAlert.clear())
-  }
-
   render() {
-    const { alert } = this.props
+    const { clearAlert, alert } = this.props
     if (web.LoggedIn()) {
       return <Redirect to={minioBrowserPrefix} />
     }
-    let alertBox = <Alert {...alert} onDismiss={this.clearAlert.bind(this)} />
+    let alertBox = <Alert {...alert} onDismiss={clearAlert} />
     // Make sure you don't show a fading out alert box on the initial web-page load.
     if (!alert.message) alertBox = ""
     return (
@@ -128,4 +113,11 @@ export class Login extends React.Component {
   }
 }
 
-export default connect(state => state)(Login)
+const mapDispatchToProps = dispatch => {
+  return {
+    showAlert: (type, message) => dispatch(actionsAlert.set({type: type, message: message})),
+    clearAlert: () => dispatch(actionsAlert.clear())
+  }
+}
+
+export default connect(state => state, mapDispatchToProps)(Login)

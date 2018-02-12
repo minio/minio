@@ -54,4 +54,16 @@ describe("Alert actions", () => {
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
   })
+
+  it("creates alert/CLEAR action directly", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "alert/CLEAR"
+      }
+    ]
+    store.dispatch(actionsAlert.clear())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
 })
