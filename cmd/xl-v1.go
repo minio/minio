@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ const (
 	uploadsJSONFile = "uploads.json"
 
 	// Maximum erasure blocks.
-	maxErasureBlocks = 16
+	maxErasureBlocks = 32
 
 	// Minimum erasure blocks.
 	minErasureBlocks = 4
@@ -51,6 +51,7 @@ type xlObjects struct {
 
 	// name space mutex for object layer
 	nsMutex *nsLockMap
+
 	// Variable represents bucket policies in memory.
 	bucketPolicies *bucketPolicies
 }

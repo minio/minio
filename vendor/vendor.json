@@ -380,10 +380,10 @@
 			"revisionTime": "2017-02-27T07:32:28Z"
 		},
 		{
-			"checksumSHA1": "qhWQM7xmqaxFqADNTj8YPjE/8Ws=",
+			"checksumSHA1": "1AQVDkFvVxn1RMTLyjeDSESBhrc=",
 			"path": "github.com/minio/dsync",
-			"revision": "ed0989bc6c7b199f749fa6be0b7ee98d689b88c7",
-			"revisionTime": "2017-11-22T09:16:00Z"
+			"revision": "439a0961af700f80db84cc180fe324a89070fa65",
+			"revisionTime": "2018-01-23T12:12:34Z"
 		},
 		{
 			"path": "github.com/minio/go-homedir",

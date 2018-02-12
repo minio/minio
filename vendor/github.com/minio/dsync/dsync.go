@@ -18,6 +18,7 @@ package dsync
 
 import (
 	"errors"
+	"math"
 )
 
 // Dsync represents dsync client object which is initialized with
@@ -41,12 +42,10 @@ type Dsync struct {
 
 // New - initializes a new dsync object with input rpcClnts.
 func New(rpcClnts []NetLocker, rpcOwnNode int) (*Dsync, error) {
-	if len(rpcClnts) < 4 {
-		return nil, errors.New("Dsync is not designed for less than 4 nodes")
-	} else if len(rpcClnts) > 16 {
-		return nil, errors.New("Dsync is not designed for more than 16 nodes")
-	} else if len(rpcClnts)%2 != 0 {
-		return nil, errors.New("Dsync is not designed for an uneven number of nodes")
+	if len(rpcClnts) < 2 {
+		return nil, errors.New("Dsync is not designed for less than 2 nodes")
+	} else if len(rpcClnts) > 32 {
+		return nil, errors.New("Dsync is not designed for more than 32 nodes")
 	}
 
 	if rpcOwnNode > len(rpcClnts) {
@@ -55,8 +54,10 @@ func New(rpcClnts []NetLocker, rpcOwnNode int) (*Dsync, error) {
 
 	ds := &Dsync{}
 	ds.dNodeCount = len(rpcClnts)
-	ds.dquorum = ds.dNodeCount/2 + 1
-	ds.dquorumReads = ds.dNodeCount / 2
+
+	// With odd number of nodes, write and read quorum is basically the same
+	ds.dquorum = int(ds.dNodeCount/2) + 1
+	ds.dquorumReads = int(math.Ceil(float64(ds.dNodeCount) / 2.0))
 	ds.ownNode = rpcOwnNode
 
 	// Initialize node name and rpc path for each NetLocker object.

@@ -108,7 +108,7 @@ func TestNewEndpointList(t *testing.T) {
 		{[]string{"d1", "d2", "d3", "d1"}, fmt.Errorf("duplicate endpoints found")},
 		{[]string{"d1", "d2", "d3", "./d1"}, fmt.Errorf("duplicate endpoints found")},
 		{[]string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d1", "http://localhost/d4"}, fmt.Errorf("duplicate endpoints found")},
-		{[]string{"d1", "d2", "d3", "d4", "d5"}, fmt.Errorf("A total of 5 endpoints were found. For erasure mode it should be an even number between 4 and 16")},
+		{[]string{"d1", "d2", "d3", "d4", "d5"}, fmt.Errorf("A total of 5 endpoints were found. For erasure mode it should be an even number between 4 and 32")},
 		{[]string{"ftp://server/d1", "http://server/d2", "http://server/d3", "http://server/d4"}, fmt.Errorf("'ftp://server/d1': invalid URL endpoint format")},
 		{[]string{"d1", "http://localhost/d2", "d3", "d4"}, fmt.Errorf("mixed style endpoints are not supported")},
 		{[]string{"http://example.org/d1", "https://example.com/d1", "http://example.net/d1", "https://example.edut/d1"}, fmt.Errorf("mixed scheme is not supported")},
