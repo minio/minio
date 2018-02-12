@@ -16,19 +16,14 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { BucketList } from "../BucketList"
+import Browser from "../Browser"
+import configureStore from "redux-mock-store"
 
-describe("BucketList", () => {
+const mockStore = configureStore()
+
+describe("Browser", () => {
   it("should render without crashing", () => {
-    const fetchBuckets = jest.fn()
-    shallow(<BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />)
-  })
-
-  it("should call fetchBuckets before component is mounted", () => {
-    const fetchBuckets = jest.fn()
-    const wrapper = shallow(
-      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
-    )
-    expect(fetchBuckets).toHaveBeenCalled()
+    const store = mockStore()
+    shallow(<Browser store={store}/>)
   })
 })

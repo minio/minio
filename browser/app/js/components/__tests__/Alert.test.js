@@ -15,20 +15,20 @@
  */
 
 import React from "react"
-import { shallow } from "enzyme"
-import { BucketList } from "../BucketList"
+import { shallow, mount } from "enzyme"
+import Alert from "../Alert"
 
-describe("BucketList", () => {
+describe("Alert", () => {
   it("should render without crashing", () => {
-    const fetchBuckets = jest.fn()
-    shallow(<BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />)
+    shallow(<Alert />)
   })
 
-  it("should call fetchBuckets before component is mounted", () => {
-    const fetchBuckets = jest.fn()
-    const wrapper = shallow(
-      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
+  it("should call onDismiss when close button is clicked", () => {
+    const onDismiss = jest.fn()
+    const wrapper = mount(
+      <Alert show={true} type="danger" message="test" onDismiss={onDismiss}/>
     )
-    expect(fetchBuckets).toHaveBeenCalled()
+    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
+    expect(onDismiss).toHaveBeenCalled()
   })
 })
