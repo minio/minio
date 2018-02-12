@@ -27,7 +27,7 @@ describe("buckets reducer", () => {
     })
   })
 
-  it("should handle SET_BUCKETS", () => {
+  it("should handle SET_LIST", () => {
     const newState = reducer(undefined, {
       type: actions.SET_LIST,
       buckets: ["bk1", "bk2"]
@@ -35,7 +35,7 @@ describe("buckets reducer", () => {
     expect(newState.list).toEqual(["bk1", "bk2"])
   })
 
-  it("should handle SET_BUCKETS_FILTER", () => {
+  it("should handle SET_FILTER", () => {
     const newState = reducer(undefined, {
       type: actions.SET_FILTER,
       filter: "test"
@@ -43,7 +43,7 @@ describe("buckets reducer", () => {
     expect(newState.filter).toEqual("test")
   })
 
-  it("should handle SELECT_BUCKET", () => {
+  it("should handle SET_CURRENT_BUCKET", () => {
     const newState = reducer(undefined, {
       type: actions.SET_CURRENT_BUCKET,
       bucket: "test"
