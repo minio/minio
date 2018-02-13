@@ -17,6 +17,7 @@
 import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsBuckets from "../actions"
+import * as objectActions from "../../objects/actions"
 
 jest.mock("../../web", () => ({
   ListBuckets: jest.fn(() => {
@@ -25,6 +26,10 @@ jest.mock("../../web", () => ({
   MakeBucket: jest.fn(() => {
     return Promise.resolve()
   })
+}))
+
+jest.mock("../../objects/actions", () => ({
+  selectPrefix: () => dispatch => {}
 }))
 
 const middlewares = [thunk]

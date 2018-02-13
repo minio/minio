@@ -17,6 +17,7 @@
 import web from "../web"
 import history from "../history"
 import * as alertActions from "../alert/actions"
+import * as objectsActions from "../objects/actions"
 
 export const SET_LIST = "buckets/SET_LIST"
 export const ADD = "buckets/ADD"
@@ -53,6 +54,7 @@ export const setFilter = filter => {
 export const selectBucket = bucket => {
   return function(dispatch) {
     dispatch(setCurrentBucket(bucket))
+    dispatch(objectsActions.selectPrefix(""))
     history.push(`/${bucket}`)
   }
 }
@@ -77,7 +79,7 @@ export const makeBucket = bucket => {
       })
       .catch(err =>
         dispatch(
-          actionsAlert.set({
+          alertActions.set({
             type: "danger",
             message: err.message
           })
