@@ -346,22 +346,10 @@ func (fs *fsObjects) DeleteBucket(bucket string) error {
 	if err = fsRemoveAll(minioMetadataBucketDir); err != nil {
 		return toObjectErr(err, bucket)
 	}
-	// Delete bucket access policy, if present - ignore any errors.
-	_ = removeBucketPolicy(bucket, fs)
 
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket)
+	// Delete all bucket metadata.
+	deleteBucketMetadata(bucket, fs)
 
-	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(bucket, fs)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketNotification(bucket, nil)
-	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(bucket, fs)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
 	return nil
 }
 
