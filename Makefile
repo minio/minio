@@ -7,12 +7,12 @@ BUILD_LDFLAGS := '$(LDFLAGS)'
 all: build
 
 checks:
-	@echo "Check deps"
+	@echo "Checking dependencies"
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
-	@echo "Checking project is in GOPATH"
+	@echo "Checking for project in GOPATH"
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
-getdeps: checks
+getdeps:
 	@echo "Installing golint" && go get -u github.com/golang/lint/golint
 	@echo "Installing gocyclo" && go get -u github.com/fzipp/gocyclo
 	@echo "Installing deadcode" && go get -u github.com/remyoudompheng/go-misc/deadcode
@@ -67,8 +67,8 @@ coverage: build
 	@(env bash $(PWD)/buildscripts/go-coverage.sh)
 
 # Builds minio locally.
-build:
-	@echo "Building minio binary: $(PWD)/minio"
+build: checks
+	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 pkg-add:
@@ -88,12 +88,13 @@ pkg-list:
 
 # Builds minio and installs it to $GOPATH/bin.
 install: build
-	@echo "Installing minio binary: $(GOPATH)/bin/minio"
+	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
 	@cp $(PWD)/minio $(GOPATH)/bin/minio
-	@echo "\nInstallation successful. To learn more, try \"minio --help\"."
+	@echo "Installation successful. To learn more, try \"minio --help\"."
 
 clean:
 	@echo "Cleaning up all the generated files"
 	@find . -name '*.test' | xargs rm -fv
-	@rm -rf build
-	@rm -rf release
+	@rm -rvf minio
+	@rm -rvf build
+	@rm -rvf release
