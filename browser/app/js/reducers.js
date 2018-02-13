@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import { combineReducers } from "redux"
+import browser from "./browser/reducer"
+import alert from "./alert/reducer"
+import buckets from "./buckets/reducer"
+import objects from "./objects/reducer"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
+const rootReducer = combineReducers({
+  browser,
+  alert,
+  buckets,
+  objects
+})
 
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
-}
+export default rootReducer
