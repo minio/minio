@@ -556,7 +556,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		if IsSSECustomerRequest(r.Header) && size > 0 { // handle SSE-C requests
 			reader, err = EncryptRequest(hashReader, r, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
