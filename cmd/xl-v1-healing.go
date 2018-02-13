@@ -300,7 +300,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 				continue
 			}
-			break
+			return nil, nil, err
 		}
 		for _, volInfo := range volsInfo {
 			// StorageAPI can send volume names which are
@@ -316,7 +316,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			buckets[volInfo.Name] = volInfo
 		}
 	}
-	return buckets, bucketsOcc, err
+	return buckets, bucketsOcc, nil
 }
 
 // ListBucketsHeal - Find all buckets that need to be healed
