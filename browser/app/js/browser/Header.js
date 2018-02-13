@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import React from "react"
+import Path from "../objects/Path"
+import StorageInfo from "./StorageInfo"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
+export const Header = () => (
+  <header className="fe-header">
+    <Path />
+    <StorageInfo />
+  </header>
+)
 
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
-}
+export default Header

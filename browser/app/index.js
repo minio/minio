@@ -27,7 +27,7 @@ import { Provider } from "react-redux"
 import { minioBrowserPrefix } from "./js/constants"
 import configureStore from "./js/store/configure-store"
 import hideLoader from "./js/loader"
-import App from "./js/components/App"
+import App from "./js/App"
 
 const store = configureStore()
 
