@@ -14,13 +14,25 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import { getVisibleBuckets, getCurrentBucket } from "../selectors"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
+describe("getVisibleBuckets", () => {
+  let state
+  beforeEach(() => {
+    state = {
+      buckets: {
+        list: ["test1", "test11", "test2"]
+      }
+    }
+  })
 
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
-}
+  it("should return all buckets if no filter specified", () => {
+    state.buckets.filter = ""
+    expect(getVisibleBuckets(state)).toEqual(["test1", "test11", "test2"])
+  })
+
+  it("should return all matching buckets if filter is specified", () => {
+    state.buckets.filter = "test1"
+    expect(getVisibleBuckets(state)).toEqual(["test1", "test11"])
+  })
+})

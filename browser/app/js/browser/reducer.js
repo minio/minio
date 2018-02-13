@@ -14,13 +14,26 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import * as actionsCommon from "./actions"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
-
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
+export default (
+  state = { sidebarOpen: false, storageInfo: { total: 0, free: 0 } },
+  action
+) => {
+  switch (action.type) {
+    case actionsCommon.TOGGLE_SIDEBAR:
+      return Object.assign({}, state, {
+        sidebarOpen: !state.sidebarOpen
+      })
+    case actionsCommon.CLOSE_SIDEBAR:
+      return Object.assign({}, state, {
+        sidebarOpen: false
+      })
+    case actionsCommon.SET_STORAGE_INFO:
+      return Object.assign({}, state, {
+        storageInfo: action.storageInfo
+      })
+    default:
+      return state
+  }
 }
