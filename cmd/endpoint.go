@@ -334,7 +334,7 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 		return serverAddr, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
 	}
 
-	// Check whether same path is not used in endpoints of a host.
+	// Check whether same path is not used in endpoints of a host on different port.
 	{
 		pathIPMap := make(map[string]set.StringSet)
 		for _, endpoint := range endpoints {
@@ -349,11 +349,25 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 					err = fmt.Errorf("path '%s' can not be served by different port on same address", endpoint.Path)
 					return serverAddr, endpoints, setupType, err
 				}
-
 				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
 			} else {
 				pathIPMap[endpoint.Path] = hostIPSet
 			}
+		}
+	}
+
+	// Check whether same path is used for more than 1 local endpoints.
+	{
+		localPathSet := set.CreateStringSet()
+		for _, endpoint := range endpoints {
+			if !endpoint.IsLocal {
+				continue
+			}
+			if localPathSet.Contains(endpoint.Path) {
+				err = fmt.Errorf("path '%s' cannot be served by different address on same server", endpoint.Path)
+				return serverAddr, endpoints, setupType, err
+			}
+			localPathSet.Add(endpoint.Path)
 		}
 	}
 

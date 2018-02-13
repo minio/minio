@@ -257,7 +257,7 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 		}, XLSetupType, nil},
 		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://" + nonLoopBackIP + ":9001/export", "http://10.0.0.2:9001/export"}, "", EndpointList{}, -1, fmt.Errorf("path '/export' can not be served by different port on same address")},
-
+		{":9000", []string{"http://127.0.0.1:9000/export", "http://" + nonLoopBackIP + ":9000/export", "http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export"}, "", EndpointList{}, -1, fmt.Errorf("path '/export' cannot be served by different address on same server")},
 		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "", EndpointList{}, -1, fmt.Errorf("'localhost' resolves to loopback address is not allowed for distributed XL")},
 
 		// DistXL type
