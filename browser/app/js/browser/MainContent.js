@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import React from "react"
+import MobileHeader from "./MobileHeader"
+import Header from "./Header"
+import ObjectsSection from "../objects/ObjectsSection"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
+export const MainContent = () => (
+  <div className="fe-body">
+    <MobileHeader />
+    <Header />
+    <ObjectsSection />
+  </div>
+)
 
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
-}
+export default MainContent

@@ -14,13 +14,28 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import * as actionsAlert from "./actions"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
-
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
+const initialState = {
+  show: false,
+  type: "danger"
+}
+export default (state = initialState, action) => {
+  switch (action.type) {
+    case actionsAlert.SET:
+      return {
+        show: true,
+        id: action.alert.id,
+        type: action.alert.type,
+        message: action.alert.message
+      }
+    case actionsAlert.CLEAR:
+      if (action.alert && action.alert.id != state.id) {
+        return state
+      } else {
+        return initialState
+      }
+    default:
+      return state
+  }
 }

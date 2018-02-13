@@ -14,13 +14,29 @@
  * limitations under the License.
  */
 
-import { createStore, applyMiddleware } from "redux"
-import thunkMiddleware from "redux-thunk"
-import reducers from "../reducers"
+import * as actionsBuckets from "./actions"
 
-const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore)
-
-export default function configureStore(initialState) {
-  const store = createStoreWithMiddleware(reducers, initialState)
-  return store
+export default (
+  state = { list: [], filter: "", currentBucket: "" },
+  action
+) => {
+  switch (action.type) {
+    case actionsBuckets.SET_LIST:
+      return {
+        ...state,
+        list: action.buckets
+      }
+    case actionsBuckets.SET_FILTER:
+      return {
+        ...state,
+        filter: action.filter
+      }
+    case actionsBuckets.SET_CURRENT_BUCKET:
+      return {
+        ...state,
+        currentBucket: action.bucket
+      }
+    default:
+      return state
+  }
 }
