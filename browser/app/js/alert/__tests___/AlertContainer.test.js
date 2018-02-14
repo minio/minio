@@ -15,26 +15,20 @@
  */
 
 import React from "react"
-import classNames from "classnames"
-import { connect } from "react-redux"
-import SideBar from "./SideBar"
-import MainContent from "./MainContent"
-import AlertContainer from "../alert/AlertContainer"
+import { shallow, mount } from "enzyme"
+import { AlertContainer } from "../AlertContainer"
 
-class Browser extends React.Component {
-  render() {
-    return (
-      <div
-        className={classNames({
-          "file-explorer": true
-        })}
-      >
-        <SideBar />
-        <MainContent />
-        <AlertContainer />
-      </div>
+describe("Alert", () => {
+  it("should render without crashing", () => {
+    shallow(
+      <AlertContainer alert={{ show: true, type: "danger", message: "Test" }} />
     )
-  }
-}
+  })
 
-export default connect(state => state)(Browser)
+  it("should render nothing if message is empty", () => {
+    const wrapper = shallow(
+      <AlertContainer alert={{ show: true, type: "danger", message: "" }} />
+    )
+    expect(wrapper.find("Alert").length).toBe(0)
+  })
+})

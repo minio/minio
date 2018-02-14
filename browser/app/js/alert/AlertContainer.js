@@ -15,26 +15,26 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
-import SideBar from "./SideBar"
-import MainContent from "./MainContent"
-import AlertContainer from "../alert/AlertContainer"
+import Alert from "./Alert"
 
-class Browser extends React.Component {
-  render() {
-    return (
-      <div
-        className={classNames({
-          "file-explorer": true
-        })}
-      >
-        <SideBar />
-        <MainContent />
-        <AlertContainer />
-      </div>
-    )
+export const AlertContainer = ({ alert, clearAlert }) => {
+  if (!alert.message) {
+    return ""
+  }
+  return <Alert {...alert} onDismiss={clearAlert} />
+}
+
+const mapStateToProps = state => {
+  return {
+    alert: state.alert
   }
 }
 
-export default connect(state => state)(Browser)
+const mapDispatchToProps = dispatch => {
+  return {
+    clearAlert: () => dispatch(alertActions.clear())
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(AlertContainer)
