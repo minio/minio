@@ -36,7 +36,7 @@ import (
 const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 
 // DefaultBitrotAlgorithm is the default algorithm used for bitrot protection.
-var DefaultBitrotAlgorithm = HighwayHash256
+var DefaultBitrotAlgorithm = HighwayHash256G
 
 func init() {
 	hh256Key, err := hex.DecodeString(magicHighwayHash256Key)
@@ -66,17 +66,25 @@ const (
 	SHA256 = BitrotAlgorithm(crypto.SHA256)
 
 	// HighwayHash256 represents the HighwayHash-256 hash function
-	HighwayHash256         = BitrotAlgorithm(crypto.SHA3_256)                                   // we must define that HighwayHash-256 is SHA3-256 because there is no HighwayHash constant in golang/crypto yet.
-	magicHighwayHash256Key = "4be734fa8e238acd263e83e6bb968552040f935da39f441497e09d1322de36a0" // magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
+	// we must define that HighwayHash-256 is SHA3-256 because there is no HighwayHash constant in golang/crypto yet.
+	HighwayHash256 = BitrotAlgorithm(crypto.SHA3_256)
+
+	// HighwayHash256G represents the HighwayHash-256 hash function, but used per block (G means granular).
+	// we must define that HighwayHash-256 is SHA3-384 because there is no HighwayHash constant in golang/crypto yet.
+	HighwayHash256G = BitrotAlgorithm(crypto.SHA3_384)
+
+	// magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
+	magicHighwayHash256Key = "4be734fa8e238acd263e83e6bb968552040f935da39f441497e09d1322de36a0"
 
 	// BLAKE2b512 represents the BLAKE2b-256 hash function
 	BLAKE2b512 = BitrotAlgorithm(crypto.BLAKE2b_512)
 )
 
 var bitrotAlgorithms = map[BitrotAlgorithm]string{
-	SHA256:         "sha256",
-	BLAKE2b512:     "blake2b",
-	HighwayHash256: "highwayhash256",
+	SHA256:          "sha256",
+	BLAKE2b512:      "blake2b",
+	HighwayHash256:  "highwayhash256",
+	HighwayHash256G: "highwayhash256-g",
 }
 
 // New returns a new hash.Hash calculating the given bitrot algorithm. New panics
@@ -135,21 +143,27 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 type ChecksumInfo struct {
 	Name      string
 	Algorithm BitrotAlgorithm
-	Hash      []byte
+	Hash      []byte   // older style full part checksum
+	Hashes    [][]byte // newer style per block checksum
 }
 
 // MarshalJSON marshals the ChecksumInfo struct
 func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 	type checksuminfo struct {
-		Name      string `json:"name"`
-		Algorithm string `json:"algorithm"`
-		Hash      string `json:"hash"`
+		Name      string   `json:"name"`
+		Algorithm string   `json:"algorithm"`
+		Hash      string   `json:"hash,omitempty"`
+		Hashes    []string `json:"hashes,omitempty"`
 	}
 
 	info := checksuminfo{
 		Name:      c.Name,
 		Algorithm: c.Algorithm.String(),
 		Hash:      hex.EncodeToString(c.Hash),
+		Hashes:    make([]string, len(c.Hashes)),
+	}
+	for i, h := range c.Hashes {
+		info.Hashes[i] = hex.EncodeToString(h)
 	}
 	return json.Marshal(info)
 }
@@ -157,9 +171,10 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals the the given data into the ChecksumInfo struct
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	type checksuminfo struct {
-		Name      string `json:"name"`
-		Algorithm string `json:"algorithm"`
-		Hash      string `json:"hash"`
+		Name      string   `json:"name"`
+		Algorithm string   `json:"algorithm"`
+		Hash      string   `json:"hash,omitempty"`
+		Hashes    []string `json:"hashes,omitempty"`
 	}
 
 	var info checksuminfo
@@ -171,11 +186,21 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	if !c.Algorithm.Available() {
 		return errBitrotHashAlgoInvalid
 	}
-	c.Hash, err = hex.DecodeString(info.Hash)
-	if err != nil {
-		return err
-	}
 	c.Name = info.Name
+	if info.Hash != "" {
+		c.Hash, err = hex.DecodeString(info.Hash)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	c.Hashes = make([][]byte, len(info.Hashes))
+	for i := range c.Hashes {
+		c.Hashes[i], err = hex.DecodeString(info.Hashes[i])
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
