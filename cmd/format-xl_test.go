@@ -23,6 +23,56 @@ import (
 	"testing"
 )
 
+// Test get offline/online uuids.
+func TestGetUUIDs(t *testing.T) {
+	fmtV2 := newFormatXLV2(4, 16)
+	formats := make([]*formatXLV2, 64)
+
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 16; j++ {
+			newFormat := *fmtV2
+			newFormat.XL.This = fmtV2.XL.Sets[i][j]
+			formats[i*16+j] = &newFormat
+		}
+	}
+
+	gotCount := len(getOnlineUUIDs(fmtV2, formats))
+	if gotCount != 64 {
+		t.Errorf("Expected online count '64', got '%d'", gotCount)
+	}
+
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 16; j++ {
+			if j < 4 {
+				formats[i*16+j] = nil
+			}
+		}
+	}
+
+	gotCount = len(getOnlineUUIDs(fmtV2, formats))
+	if gotCount != 48 {
+		t.Errorf("Expected online count '48', got '%d'", gotCount)
+	}
+
+	gotCount = len(getOfflineUUIDs(fmtV2, formats))
+	if gotCount != 16 {
+		t.Errorf("Expected offline count '16', got '%d'", gotCount)
+	}
+
+	markUUIDsOffline(fmtV2, formats)
+	gotCount = 0
+	for i := range fmtV2.XL.Sets {
+		for j := range fmtV2.XL.Sets[i] {
+			if fmtV2.XL.Sets[i][j] == offlineDiskUUID {
+				gotCount++
+			}
+		}
+	}
+	if gotCount != 16 {
+		t.Errorf("Expected offline count '16', got '%d'", gotCount)
+	}
+}
+
 // Tests format xl get version.
 func TestFormatXLGetVersion(t *testing.T) {
 	// Get test root.

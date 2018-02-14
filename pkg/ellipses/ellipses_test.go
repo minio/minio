@@ -196,6 +196,11 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			false,
 			0,
 		},
+		{
+			"{4...02}",
+			false,
+			0,
+		},
 		// Test for valid input.
 		{
 			"{1...64}",
@@ -206,6 +211,16 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			"{1...64} {65...128}",
 			true,
 			4096,
+		},
+		{
+			"{01...036}",
+			true,
+			36,
+		},
+		{
+			"{001...036}",
+			true,
+			36,
 		},
 	}
 

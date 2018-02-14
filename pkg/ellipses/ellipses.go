@@ -37,12 +37,12 @@ var (
 // Parses an ellipses range pattern of following style
 // `{1...64}`
 // `{33...64}`
-func parseEllipsesRange(pattern string) (start, end uint64, err error) {
+func parseEllipsesRange(pattern string) (seq []string, err error) {
 	if strings.Index(pattern, openBraces) == -1 {
-		return 0, 0, errors.New("Invalid argument")
+		return nil, errors.New("Invalid argument")
 	}
 	if strings.Index(pattern, closeBraces) == -1 {
-		return 0, 0, errors.New("Invalid argument")
+		return nil, errors.New("Invalid argument")
 	}
 
 	pattern = strings.TrimPrefix(pattern, openBraces)
@@ -50,22 +50,31 @@ func parseEllipsesRange(pattern string) (start, end uint64, err error) {
 
 	ellipsesRange := strings.Split(pattern, ellipses)
 	if len(ellipsesRange) != 2 {
-		return 0, 0, errors.New("Invalid argument")
+		return nil, errors.New("Invalid argument")
 	}
 
+	var start, end uint64
 	if start, err = strconv.ParseUint(ellipsesRange[0], 10, 64); err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 
 	if end, err = strconv.ParseUint(ellipsesRange[1], 10, 64); err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 
 	if start > end {
-		return 0, 0, fmt.Errorf("Incorrect range start %d cannot be bigger than end %d", start, end)
+		return nil, fmt.Errorf("Incorrect range start %d cannot be bigger than end %d", start, end)
 	}
 
-	return start, end, nil
+	for i := start; i <= end; i++ {
+		if strings.HasPrefix(ellipsesRange[0], "0") && len(ellipsesRange[0]) > 1 || strings.HasPrefix(ellipsesRange[1], "0") {
+			seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dd", len(ellipsesRange[1])), i))
+		} else {
+			seq = append(seq, fmt.Sprintf("%d", i))
+		}
+	}
+
+	return seq, nil
 }
 
 // Pattern - ellipses pattern, describes the range and also the
@@ -73,8 +82,7 @@ func parseEllipsesRange(pattern string) (start, end uint64, err error) {
 type Pattern struct {
 	Prefix string
 	Suffix string
-	Start  uint64
-	End    uint64
+	Seq    []string
 }
 
 // argExpander - recursively expands labels into its respective forms.
@@ -111,16 +119,16 @@ func (a ArgPattern) Expand() [][]string {
 // Expand - expands a ellipses pattern.
 func (p Pattern) Expand() []string {
 	var labels []string
-	for i := p.Start; i <= p.End; i++ {
+	for i := range p.Seq {
 		switch {
 		case p.Prefix != "" && p.Suffix == "":
-			labels = append(labels, fmt.Sprintf("%s%d", p.Prefix, i))
+			labels = append(labels, fmt.Sprintf("%s%s", p.Prefix, p.Seq[i]))
 		case p.Suffix != "" && p.Prefix == "":
-			labels = append(labels, fmt.Sprintf("%d%s", i, p.Suffix))
+			labels = append(labels, fmt.Sprintf("%s%s", p.Seq[i], p.Suffix))
 		case p.Suffix == "" && p.Prefix == "":
-			labels = append(labels, fmt.Sprintf("%d", i))
+			labels = append(labels, fmt.Sprintf("%s", p.Seq[i]))
 		default:
-			labels = append(labels, fmt.Sprintf("%s%d%s", p.Prefix, i, p.Suffix))
+			labels = append(labels, fmt.Sprintf("%s%s%s", p.Prefix, p.Seq[i], p.Suffix))
 		}
 	}
 	return labels
@@ -152,15 +160,14 @@ func FindEllipsesPatterns(arg string) (ArgPattern, error) {
 	parts = parts[1:]
 	patternFound := regexpEllipses.MatchString(parts[0])
 	for patternFound {
-		start, end, err := parseEllipsesRange(parts[1])
+		seq, err := parseEllipsesRange(parts[1])
 		if err != nil {
 			return patterns, err
 		}
 		patterns = append(patterns, Pattern{
 			Prefix: "",
 			Suffix: parts[2],
-			Start:  start,
-			End:    end,
+			Seq:    seq,
 		})
 		parts = regexpEllipses.FindStringSubmatch(parts[0])
 		if len(parts) > 0 {
@@ -172,7 +179,7 @@ func FindEllipsesPatterns(arg string) (ArgPattern, error) {
 	}
 
 	if len(parts) > 0 {
-		start, end, err := parseEllipsesRange(parts[1])
+		seq, err := parseEllipsesRange(parts[1])
 		if err != nil {
 			return patterns, err
 		}
@@ -180,8 +187,7 @@ func FindEllipsesPatterns(arg string) (ArgPattern, error) {
 		patterns = append(patterns, Pattern{
 			Prefix: parts[0],
 			Suffix: parts[2],
-			Start:  start,
-			End:    end,
+			Seq:    seq,
 		})
 	}
 

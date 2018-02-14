@@ -123,6 +123,17 @@ func TestGetSetIndexes(t *testing.T) {
 	}
 }
 
+func getSequences(start int, number int, paddinglen int) (seq []string) {
+	for i := start; i <= number; i++ {
+		if paddinglen == 0 {
+			seq = append(seq, fmt.Sprintf("%d", i))
+		} else {
+			seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dd", paddinglen), i))
+		}
+	}
+	return seq
+}
+
 // Test tests parses endpoint ellipses input pattern.
 func TestParseEndpointSet(t *testing.T) {
 	testCases := []struct {
@@ -175,7 +186,7 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"/export/set",
 							"",
-							1, 64,
+							getSequences(1, 64, 0),
 						},
 					},
 				},
@@ -193,12 +204,12 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"",
 							"",
-							1, 64,
+							getSequences(1, 64, 0),
 						},
 						{
 							"http://minio",
 							"/export/set",
-							2, 3,
+							getSequences(2, 3, 0),
 						},
 					},
 				},
@@ -216,7 +227,7 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"http://minio",
 							".mydomain.net/data",
-							1, 64,
+							getSequences(1, 64, 0),
 						},
 					},
 				},
@@ -233,12 +244,12 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"",
 							"/data",
-							1, 16,
+							getSequences(1, 16, 0),
 						},
 						{
 							"http://rack",
 							".mydomain.minio",
-							1, 4,
+							getSequences(1, 4, 0),
 						},
 					},
 				},
@@ -256,12 +267,12 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"",
 							"",
-							0, 1,
+							getSequences(0, 1, 0),
 						},
 						{
 							"http://minio",
 							".mydomain.net/data",
-							0, 15,
+							getSequences(0, 15, 0),
 						},
 					},
 				},
@@ -279,7 +290,7 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"http://server1/data",
 							"",
-							1, 32,
+							getSequences(1, 32, 0),
 						},
 					},
 				},
@@ -297,7 +308,7 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"http://server1/data",
 							"",
-							1, 32,
+							getSequences(1, 32, 2),
 						},
 					},
 				},
@@ -315,17 +326,17 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"",
 							"",
-							1, 2,
+							getSequences(1, 2, 0),
 						},
 						{
 							"",
 							"/test",
-							1, 64,
+							getSequences(1, 64, 0),
 						},
 						{
 							"http://minio",
 							"/export/set",
-							2, 3,
+							getSequences(2, 3, 0),
 						},
 					},
 				},
@@ -344,12 +355,12 @@ func TestParseEndpointSet(t *testing.T) {
 						{
 							"",
 							"",
-							1, 10,
+							getSequences(1, 10, 0),
 						},
 						{
 							"/export",
 							"/disk",
-							1, 10,
+							getSequences(1, 10, 0),
 						},
 					},
 				},

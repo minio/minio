@@ -53,21 +53,17 @@ func getDivisibleSize(totalSizes []uint64) (result uint64) {
 		}
 		return x
 	}
-	if len(totalSizes) > 1 {
-		result = gcd(totalSizes[0], totalSizes[1])
-		totalSizes = totalSizes[2:]
-		for i := 0; i < len(totalSizes); i++ {
-			result = gcd(result, totalSizes[i])
-		}
-		return result
+	result = totalSizes[0]
+	for i := 1; i < len(totalSizes); i++ {
+		result = gcd(result, totalSizes[i])
 	}
-	return gcd(totalSizes[0], totalSizes[0])
+	return result
 }
 
 // getSetIndexes returns list of indexes which provides the set size
 // on each index, this function also determines the final set size
 // The final set size has the affinity towards choosing smaller
-// indexes
+// indexes (total sets)
 func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, err error) {
 	if len(totalSizes) == 0 || len(args) == 0 {
 		return nil, errInvalidArgument
@@ -120,7 +116,8 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	return setIndexes, nil
 }
 
-func (s endpointSet) GetEndpoints() (endpoints []string) {
+// Returns all the expanded endpoints, each argument is expanded separately.
+func (s endpointSet) getEndpoints() (endpoints []string) {
 	if len(s.endpoints) != 0 {
 		return s.endpoints
 	}
@@ -138,7 +135,7 @@ func (s endpointSet) GetEndpoints() (endpoints []string) {
 // be the right set size etc.
 func (s endpointSet) Get() (sets [][]string) {
 	var k = uint64(0)
-	endpoints := s.GetEndpoints()
+	endpoints := s.getEndpoints()
 	for i := range s.setIndexes {
 		for j := range s.setIndexes[i] {
 			sets = append(sets, endpoints[k:s.setIndexes[i][j]+k])
@@ -149,19 +146,22 @@ func (s endpointSet) Get() (sets [][]string) {
 	return sets
 }
 
+// Return the total size for each argument patterns.
 func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
 	var totalSizes []uint64
 	for _, argPattern := range argPatterns {
 		var totalSize uint64 = 1
 		for _, p := range argPattern {
-			totalSize = totalSize * (p.End - (p.Start - 1))
+			totalSize = totalSize * uint64(len(p.Seq))
 		}
 		totalSizes = append(totalSizes, totalSize)
 	}
 	return totalSizes
 }
 
-// Parse all arguments.
+// Parses all arguments and returns an endpointSet which is a collection
+// of endpoints following the ellipses pattern, this is what is used
+// by the object layer for initializing itself.
 func parseEndpointSet(args ...string) (ep endpointSet, err error) {
 	var argPatterns = make([]ellipses.ArgPattern, len(args))
 	for i, arg := range args {
