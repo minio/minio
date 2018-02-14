@@ -78,6 +78,11 @@ describe("Uploads actions", () => {
   })
 
   describe("uploadFile", () => {
+    const file = new Blob(["file content"], {
+      type: "text/plain"
+    })
+    file.name = "file1"
+
     it("creates alerts/SET action when currentBucket is not present", () => {
       const store = mockStore({
         buckets: { currentBucket: "" }
@@ -103,10 +108,6 @@ describe("Uploads actions", () => {
         buckets: { currentBucket: "test1" },
         objects: { currentPrefix: "pre1/" }
       })
-      const file = new Blob(["file content"], {
-        type: "text/plain"
-      })
-      file.name = "file1"
       const expectedActions = [
         {
           type: "uploads/ADD",
@@ -118,6 +119,31 @@ describe("Uploads actions", () => {
       store.dispatch(uploadsActions.uploadFile(file))
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
+    })
+
+    it("should open and send XMLHttpRequest", () => {
+      const open = jest.fn()
+      const send = jest.fn()
+      const xhrMockClass = () => ({
+        open: open,
+        send: send,
+        setRequestHeader: jest.fn(),
+        upload: {
+          addEventListener: jest.fn()
+        }
+      })
+      window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
+      const store = mockStore({
+        buckets: { currentBucket: "test1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      store.dispatch(uploadsActions.uploadFile(file))
+      expect(open).toHaveBeenCalledWith(
+        "PUT",
+        "https://localhost:8080/upload/test1/pre1/file1",
+        true
+      )
+      expect(send).toHaveBeenCalledWith(file)
     })
   })
 
