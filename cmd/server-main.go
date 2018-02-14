@@ -271,8 +271,8 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 		return nil, err
 	}
 
-	// Once XL formatted, initialize object layer.
-	newObject, err = newXLObjectLayer(formattedDisks)
+	// Once disks are formatted, initialize object layer.
+	newObject, err = newXLObjects(formattedDisks)
 	if err != nil {
 		return nil, err
 	}
