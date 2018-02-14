@@ -17,6 +17,7 @@
 import React from "react"
 import { connect } from "react-redux"
 import Alert from "./Alert"
+import * as alertActions from "./actions"
 
 export const AlertContainer = ({ alert, clearAlert }) => {
   if (!alert.message) {
