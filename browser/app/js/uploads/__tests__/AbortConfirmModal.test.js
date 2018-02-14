@@ -39,4 +39,11 @@ describe("AbortConfirmModal", () => {
     expect(abort.mock.calls[0][0]).toBe("a-b/-test1")
     expect(abort.mock.calls[1][0]).toBe("a-b/-test2")
   })
+
+  it("should call hideAbort when cancel is clicked", () => {
+    const hideAbort = jest.fn()
+    const wrapper = shallow(<AbortConfirmModal hideAbort={hideAbort} />)
+    wrapper.find("ConfirmModal").prop("cancelHandler")()
+    expect(hideAbort).toHaveBeenCalled()
+  })
 })
