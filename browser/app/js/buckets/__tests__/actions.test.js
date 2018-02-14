@@ -90,7 +90,6 @@ describe("Buckets actions", () => {
   it("creates buckets/SHOW_MAKE_BUCKET_MODAL buckets/ADD and buckets/SET_CURRENT_BUCKET after creating the bucket", () => {
     const store = mockStore()
     const expectedActions = [
-      { type: "buckets/SHOW_MAKE_BUCKET_MODAL", show: false },
       { type: "buckets/ADD", bucket: "test1" },
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]

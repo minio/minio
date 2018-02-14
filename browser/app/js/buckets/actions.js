@@ -73,7 +73,6 @@ export const makeBucket = bucket => {
         bucketName: bucket
       })
       .then(() => {
-        dispatch(hideMakeBucketModal())
         dispatch(addBucket(bucket))
         dispatch(selectBucket(bucket))
       })

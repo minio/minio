@@ -32,6 +32,7 @@ export class MakeBucketModal extends React.Component {
     const bucket = this.state.bucketName
     if (bucket) {
       makeBucket(bucket)
+      this.hideModal()
     }
   }
   hideModal() {
