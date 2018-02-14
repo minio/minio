@@ -22,9 +22,12 @@ import {
   sortObjectsByDate
 } from "../utils"
 import { getCurrentBucket } from "../buckets/selectors"
+import { getCurrentPrefix } from "./selectors"
+import * as alertActions from "../alert/actions"
 
 export const SET_LIST = "objects/SET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
+export const REMOVE = "objects/REMOVE"
 export const RESET = "objects/RESET"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
 export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
@@ -127,3 +130,32 @@ export const setCurrentPrefix = prefix => {
     prefix
   }
 }
+
+export const deleteObject = object => {
+  return function(dispatch, getState) {
+    const currentBucket = getCurrentBucket(getState())
+    const currentPrefix = getCurrentPrefix(getState())
+    const objectName = `${currentPrefix}${object}`
+    return web
+      .RemoveObject({
+        bucketName: currentBucket,
+        objects: [objectName]
+      })
+      .then(() => {
+        dispatch(removeObject(object))
+      })
+      .catch(e => {
+        dispatch(
+          alertActions.set({
+            type: "danger",
+            message: e.message
+          })
+        )
+      })
+  }
+}
+
+export const removeObject = object => ({
+  type: REMOVE,
+  object
+})

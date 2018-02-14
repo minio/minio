@@ -66,6 +66,28 @@ describe("objects reducer", () => {
     expect(newState.isTruncated).toBeFalsy()
   })
 
+  it("should handle REMOVE", () => {
+    const newState = reducer(
+      { list: [{ name: "obj1" }, { name: "obj2" }] },
+      {
+        type: actions.REMOVE,
+        object: "obj1"
+      }
+    )
+    expect(newState.list).toEqual([{ name: "obj2" }])
+  })
+
+  it("should handle REMOVE with non-existent object", () => {
+    const newState = reducer(
+      { list: [{ name: "obj1" }, { name: "obj2" }] },
+      {
+        type: actions.REMOVE,
+        object: "obj3"
+      }
+    )
+    expect(newState.list).toEqual([{ name: "obj1" }, { name: "obj2" }])
+  })
+
   it("should handle SET_SORT_BY", () => {
     const newState = reducer(undefined, {
       type: actions.SET_SORT_BY,

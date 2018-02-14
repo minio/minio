@@ -15,22 +15,22 @@
  */
 
 import React from "react"
-import humanize from "humanize"
-import Moment from "moment"
-import ObjectItem from "./ObjectItem"
-import ObjectActions from "./ObjectActions"
-import * as actionsObjects from "./actions"
+import ConfirmModal from "../browser/ConfirmModal"
 
-export const ObjectContainer = ({ object }) => {
-  const actionButtons = <ObjectActions object={object} />
-  const props = {
-    name: object.name,
-    contentType: object.contentType,
-    size: humanize.filesize(object.size),
-    lastModified: Moment(object.lastModified).format("lll"),
-    actionButtons: actionButtons
-  }
-  return <ObjectItem {...props} />
-}
+export const DeleteObjectConfirmModal = ({
+  deleteObject,
+  hideDeleteConfirmModal
+}) => (
+  <ConfirmModal
+    show={true}
+    icon="fa fa-exclamation-triangle mci-red"
+    text="Are you sure you want to delete?"
+    sub="This cannot be undone!"
+    okText="Delete"
+    cancelText="Cancel"
+    okHandler={deleteObject}
+    cancelHandler={hideDeleteConfirmModal}
+  />
+)
 
-export default ObjectContainer
+export default DeleteObjectConfirmModal

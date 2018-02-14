@@ -25,6 +25,12 @@ jest.mock("../../web", () => ({
       istruncated: false,
       nextmarker: "test2"
     })
+  }),
+  RemoveObject: jest.fn(({ bucketName, objects }) => {
+    if (!bucketName) {
+      return Promise.reject({ message: "Invalid bucket" })
+    }
+    return Promise.resolve({})
   })
 }))
 
@@ -168,5 +174,42 @@ describe("Objects actions", () => {
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
     expect(window.location.pathname.endsWith("/test/abc/")).toBeTruthy()
+  })
+
+  it("creates objects/REMOVE action", () => {
+    const store = mockStore()
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
+    store.dispatch(actionsObjects.removeObject("obj1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/REMOVE action when object is deleted", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
+    store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates alert/SET action when invalid bucket is provided", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    const expectedActions = [
+      {
+        type: "alert/SET",
+        alert: { type: "danger", message: "Invalid bucket", id: 0 }
+      }
+    ]
+    return store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
   })
 })

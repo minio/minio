@@ -16,6 +16,14 @@
 
 import * as actionsObjects from "./actions"
 
+const removeObject = (list, action) => {
+  const idx = list.findIndex(object => object.name === action.object)
+  if (idx == -1) {
+    return list
+  }
+  return [...list.slice(0, idx), ...list.slice(idx + 1)]
+}
+
 export default (
   state = {
     list: [],
@@ -41,6 +49,11 @@ export default (
         list: [...state.list, ...action.objects],
         marker: action.marker,
         isTruncated: action.isTruncated
+      }
+    case actionsObjects.REMOVE:
+      return {
+        ...state,
+        list: removeObject(state.list, action)
       }
     case actionsObjects.SET_SORT_BY:
       return {
