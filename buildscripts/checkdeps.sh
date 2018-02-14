@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Minio Cloud Storage, (C) 2014-2016 Minio, Inc.
+# Minio Cloud Storage, (C) 2014-2018 Minio, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -93,9 +93,7 @@ assert_is_supported_arch() {
             return
             ;;
         *)
-            echo "ERROR"
-            echo "Arch '${ARCH}' not supported."
-            echo "Supported Arch: [x86_64, amd64, aarch64, arm*]"
+            echo "Arch '${ARCH}' is not supported. Supported Arch: [x86_64, amd64, aarch64, arm*]"
             exit 1
     esac
 }
@@ -108,41 +106,31 @@ assert_is_supported_os() {
         Darwin )
             osx_host_version=$(env sw_vers -productVersion)
             if ! check_minimum_version "${OSX_VERSION}" "${osx_host_version}"; then
-                echo "ERROR"
-                echo "OSX version '${osx_host_version}' not supported."
-                echo "Minimum supported version: ${OSX_VERSION}"
+                echo "OSX version '${osx_host_version}' is not supported. Minimum supported version: ${OSX_VERSION}"
                 exit 1
             fi
             return
             ;;
         *)
-            echo "ERROR"
-            echo "OS '${KNAME}' is not supported."
-            echo "Supported OS: [Linux, FreeBSD, OpenBSD, NetBSD, Darwin, DragonFly]"
+            echo "OS '${KNAME}' is not supported. Supported OS: [Linux, FreeBSD, OpenBSD, NetBSD, Darwin, DragonFly]"
             exit 1
     esac
 }
 
 assert_check_golang_env() {
     if ! which go >/dev/null 2>&1; then
-        echo "ERROR"
-        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at"
-        echo "https://docs.minio.io/docs/how-to-install-golang"
+        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at https://docs.minio.io/docs/how-to-install-golang"
         exit 1
     fi
 
     installed_go_version=$(go version | sed 's/^.* go\([0-9.]*\).*$/\1/')
     if ! check_minimum_version "${GO_VERSION}" "${installed_go_version}"; then
-        echo "ERROR"
-        echo "Go version '${installed_go_version}' not supported."
-        echo "Minimum supported version: ${GO_VERSION}"
+        echo "Go runtime version '${installed_go_version}' is unsupported. Minimum supported version: ${GO_VERSION} to compile."
         exit 1
     fi
 
     if [ -z "${GOPATH}" ]; then
-        echo "ERROR"
-        echo "GOPATH environment variable missing, please refer to Go installation document"
-        echo "https://docs.minio.io/docs/how-to-install-golang"
+        echo "GOPATH environment variable missing, please refer to Go installation document at https://docs.minio.io/docs/how-to-install-golang"
         exit 1
     fi
 
@@ -152,9 +140,7 @@ assert_check_deps() {
     # support unusual Git versions such as: 2.7.4 (Apple Git-66)
     installed_git_version=$(git version | perl -ne '$_ =~ m/git version (.*?)( |$)/; print "$1\n";')
     if ! check_minimum_version "${GIT_VERSION}" "${installed_git_version}"; then
-        echo "ERROR"
-        echo "Git version '${installed_git_version}' not supported."
-        echo "Minimum supported version: ${GIT_VERSION}"
+        echo "Git version '${installed_git_version}' is not supported. Minimum supported version: ${GIT_VERSION}"
         exit 1
     fi
 }
