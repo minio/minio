@@ -14,23 +14,6 @@
  * limitations under the License.
  */
 
-import React from "react"
-import MobileHeader from "./MobileHeader"
-import Header from "./Header"
-import ObjectsSection from "../objects/ObjectsSection"
-import MainActions from "./MainActions"
-import MakeBucketModal from "../buckets/MakeBucketModal"
-import UploadModal from "../uploads/UploadModal"
+import { createSelector } from "reselect"
 
-export const MainContent = () => (
-  <div className="fe-body">
-    <MobileHeader />
-    <Header />
-    <ObjectsSection />
-    <MainActions />
-    <MakeBucketModal />
-    <UploadModal />
-  </div>
-)
-
-export default MainContent
+export const getCurrentPrefix = state => state.objects.currentPrefix

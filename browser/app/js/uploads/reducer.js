@@ -14,42 +14,52 @@
  * limitations under the License.
  */
 
-import * as actionsBuckets from "./actions"
+import * as uploadsActions from "./actions"
 
-export default (
-  state = {
-    list: [],
-    filter: "",
-    currentBucket: "",
-    showMakeBucketModal: false
-  },
-  action
-) => {
+const add = (files, action) => ({
+  ...files,
+  [action.slug]: {
+    loaded: 0,
+    size: action.size,
+    name: action.name
+  }
+})
+
+const updateProgress = (files, action) => ({
+  ...files,
+  [action.slug]: {
+    ...files[action.slug],
+    loaded: action.loaded
+  }
+})
+
+const stop = (files, action) => {
+  const newFiles = Object.assign({}, files)
+  delete newFiles[action.slug]
+  return newFiles
+}
+
+export default (state = { files: {}, showAbortModal: false }, action) => {
   switch (action.type) {
-    case actionsBuckets.SET_LIST:
+    case uploadsActions.ADD:
       return {
         ...state,
-        list: action.buckets
+        files: add(state.files, action)
       }
-    case actionsBuckets.ADD:
+    case uploadsActions.UPDATE_PROGRESS:
       return {
         ...state,
-        list: [action.bucket, ...state.list]
+        files: updateProgress(state.files, action)
       }
-    case actionsBuckets.SET_FILTER:
+    case uploadsActions.STOP:
       return {
         ...state,
-        filter: action.filter
+        files: stop(state.files, action)
       }
-    case actionsBuckets.SET_CURRENT_BUCKET:
+    case uploadsActions.SHOW_ABORT_MODAL:
       return {
         ...state,
-        currentBucket: action.bucket
-      }
-    case actionsBuckets.SHOW_MAKE_BUCKET_MODAL:
-      return {
-        ...state,
-        showMakeBucketModal: action.show
+        showAbortModal: action.show
       }
     default:
       return state

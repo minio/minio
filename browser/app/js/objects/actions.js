@@ -21,9 +21,11 @@ import {
   sortObjectsBySize,
   sortObjectsByDate
 } from "../utils"
+import { getCurrentBucket } from "../buckets/selectors"
 
 export const SET_LIST = "objects/SET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
+export const RESET = "objects/RESET"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
 export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
 export const SET_CURRENT_PREFIX = "objects/SET_CURRENT_PREFIX"
@@ -52,7 +54,7 @@ export const fetchObjects = append => {
       .ListObjects({
         bucketName: currentBucket,
         prefix: currentPrefix,
-        marker: marker
+        marker: append ? marker : ""
       })
       .then(res => {
         let objects = []
@@ -113,7 +115,8 @@ export const setSortOrder = sortOrder => ({
 export const selectPrefix = prefix => {
   return function(dispatch, getState) {
     dispatch(setCurrentPrefix(prefix))
-    const currentBucket = getState().buckets.currentBucket
+    dispatch(fetchObjects())
+    const currentBucket = getCurrentBucket(getState())
     history.replace(`/${currentBucket}/${prefix}`)
   }
 }

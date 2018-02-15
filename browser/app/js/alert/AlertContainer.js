@@ -15,22 +15,27 @@
  */
 
 import React from "react"
-import MobileHeader from "./MobileHeader"
-import Header from "./Header"
-import ObjectsSection from "../objects/ObjectsSection"
-import MainActions from "./MainActions"
-import MakeBucketModal from "../buckets/MakeBucketModal"
-import UploadModal from "../uploads/UploadModal"
+import { connect } from "react-redux"
+import Alert from "./Alert"
+import * as alertActions from "./actions"
 
-export const MainContent = () => (
-  <div className="fe-body">
-    <MobileHeader />
-    <Header />
-    <ObjectsSection />
-    <MainActions />
-    <MakeBucketModal />
-    <UploadModal />
-  </div>
-)
+export const AlertContainer = ({ alert, clearAlert }) => {
+  if (!alert.message) {
+    return ""
+  }
+  return <Alert {...alert} onDismiss={clearAlert} />
+}
 
-export default MainContent
+const mapStateToProps = state => {
+  return {
+    alert: state.alert
+  }
+}
+
+const mapDispatchToProps = dispatch => {
+  return {
+    clearAlert: () => dispatch(alertActions.clear())
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(AlertContainer)
