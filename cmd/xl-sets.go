@@ -100,6 +100,8 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV2, error) {
 
 	format, err := loadFormatXL(disk)
 	if err != nil {
+		// close the internal connection, to avoid fd leaks.
+		disk.Close()
 		return nil, nil, err
 	}
 
@@ -341,12 +343,12 @@ func (s *xlSets) MakeBucketWithLocation(bucket, location string) error {
 	}
 
 	errs := g.Wait()
-	// Upon even a single error we undo all previously created buckets.
+	// Upon even a single write quorum error we undo all previously created buckets.
 	for _, err := range errs {
-		if err != nil {
+		if _, ok := err.(InsufficientWriteQuorum); ok {
 			undoMakeBucketSets(bucket, s.sets, errs)
-			return err
 		}
+		return err
 	}
 
 	// Success.
@@ -476,13 +478,13 @@ func (s *xlSets) DeleteBucket(bucket string) error {
 	}
 
 	errs := g.Wait()
-	// For any failure, we undo all the delete buckets operation
-	// by creating all the buckets.
+	// For any write quorum failure, we undo all the delete buckets operation
+	// by creating all the buckets again.
 	for _, err := range errs {
-		if err != nil {
+		if _, ok := err.(InsufficientWriteQuorum); ok {
 			undoDeleteBucketSets(bucket, s.sets, errs)
-			return err
 		}
+		return err
 	}
 
 	// Delete all bucket metadata.

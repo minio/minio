@@ -266,6 +266,8 @@ func loadFormatXLAll(endpoints EndpointList) ([]*formatXLV2, []error) {
 			defer wg.Done()
 			format, lErr := loadFormatXL(disk)
 			if lErr != nil {
+				// close the internal connection, to avoid fd leaks.
+				disk.Close()
 				sErrs[index] = lErr
 				return
 			}

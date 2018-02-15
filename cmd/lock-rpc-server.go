@@ -326,7 +326,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 		})
 
 		// Close the connection regardless of the call response.
-		c.rpcClient.Close()
+		c.AuthRPCClient.Close()
 
 		// For successful response, verify if lock is indeed active or stale.
 		if expired {
