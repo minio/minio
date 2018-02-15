@@ -29,7 +29,7 @@ describe("ObjectActions", () => {
     )
     wrapper
       .find("a")
-      .first()
+      .last()
       .simulate("click", { preventDefault: jest.fn() })
     expect(wrapper.state("showDeleteConfirmation")).toBeTruthy()
     expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(1)
@@ -41,7 +41,7 @@ describe("ObjectActions", () => {
     )
     wrapper
       .find("a")
-      .first()
+      .last()
       .simulate("click", { preventDefault: jest.fn() })
     wrapper.find("DeleteObjectConfirmModal").prop("hideDeleteConfirmModal")()
     wrapper.update()
@@ -60,9 +60,36 @@ describe("ObjectActions", () => {
     )
     wrapper
       .find("a")
-      .first()
+      .last()
       .simulate("click", { preventDefault: jest.fn() })
     wrapper.find("DeleteObjectConfirmModal").prop("deleteObject")()
     expect(deleteObject).toHaveBeenCalledWith("obj1")
+  })
+
+  it("should call shareObject with object and expiry", () => {
+    const shareObject = jest.fn()
+    const wrapper = shallow(
+      <ObjectActions
+        object={{ name: "obj1" }}
+        currentPrefix={"pre1/"}
+        shareObject={shareObject}
+      />
+    )
+    wrapper
+      .find("a")
+      .first()
+      .simulate("click", { preventDefault: jest.fn() })
+    expect(shareObject).toHaveBeenCalledWith("obj1", 5, 0, 0)
+  })
+
+  it("should render ShareObjectModal when an object is shared", () => {
+    const wrapper = shallow(
+      <ObjectActions
+        object={{ name: "obj1" }}
+        currentPrefix={"pre1/"}
+        showShareObjectModal={true}
+      />
+    )
+    expect(wrapper.find("Connect(ShareObjectModal)").length).toBe(1)
   })
 })

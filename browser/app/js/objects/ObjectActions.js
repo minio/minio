@@ -17,8 +17,14 @@
 import React from "react"
 import { connect } from "react-redux"
 import { Dropdown } from "react-bootstrap"
+import ShareObjectModal from "./ShareObjectModal"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
 import * as objectsActions from "./actions"
+import {
+  SHARE_OBJECT_DAYS,
+  SHARE_OBJECT_HOURS,
+  SHARE_OBJECT_MINUTES
+} from "../constants"
 
 export class ObjectActions extends React.Component {
   constructor(props) {
@@ -26,6 +32,16 @@ export class ObjectActions extends React.Component {
     this.state = {
       showDeleteConfirmation: false
     }
+  }
+  shareObject(e) {
+    e.preventDefault()
+    const { object, shareObject } = this.props
+    shareObject(
+      object.name,
+      SHARE_OBJECT_DAYS,
+      SHARE_OBJECT_HOURS,
+      SHARE_OBJECT_MINUTES
+    )
   }
   deleteObject() {
     const { object, deleteObject } = this.props
@@ -41,11 +57,18 @@ export class ObjectActions extends React.Component {
     })
   }
   render() {
-    const { object, currentPrefix } = this.props
+    const { object, showShareObjectModal } = this.props
     return (
       <Dropdown id={`obj-actions-${object.name}`}>
         <Dropdown.Toggle noCaret className="fia-toggle" />
         <Dropdown.Menu>
+          <a
+            href=""
+            className="fiad-action"
+            onClick={this.shareObject.bind(this)}
+          >
+            <i className="fa fa-copy" />
+          </a>
           <a
             href=""
             className="fiad-action"
@@ -54,6 +77,7 @@ export class ObjectActions extends React.Component {
             <i className="fa fa-trash" />
           </a>
         </Dropdown.Menu>
+        {showShareObjectModal && <ShareObjectModal object={object} />}
         {this.state.showDeleteConfirmation && (
           <DeleteObjectConfirmModal
             deleteObject={this.deleteObject.bind(this)}
@@ -68,12 +92,14 @@ export class ObjectActions extends React.Component {
 const mapStateToProps = (state, ownProps) => {
   return {
     object: ownProps.object,
-    currentPrefix: state.objects.currentPrefix
+    showShareObjectModal: state.objects.shareObject.show
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
+    shareObject: (object, days, hours, minutes) =>
+      dispatch(objectsActions.shareObject(object, days, hours, minutes)),
     deleteObject: object => dispatch(objectsActions.deleteObject(object))
   }
 }

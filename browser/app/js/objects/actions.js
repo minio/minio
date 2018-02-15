@@ -28,10 +28,10 @@ import * as alertActions from "../alert/actions"
 export const SET_LIST = "objects/SET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
 export const REMOVE = "objects/REMOVE"
-export const RESET = "objects/RESET"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
 export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
 export const SET_CURRENT_PREFIX = "objects/SET_CURRENT_PREFIX"
+export const SET_SHARE_OBJECT = "objects/SET_SHARE_OBJECT"
 
 export const setList = (objects, marker, isTruncated) => ({
   type: SET_LIST,
@@ -158,4 +158,51 @@ export const deleteObject = object => {
 export const removeObject = object => ({
   type: REMOVE,
   object
+})
+
+export const shareObject = (object, days, hours, minutes) => {
+  return function(dispatch, getState) {
+    const currentBucket = getCurrentBucket(getState())
+    const currentPrefix = getCurrentPrefix(getState())
+    const objectName = `${currentPrefix}${object}`
+    const expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
+    return web
+      .PresignedGet({
+        host: location.host,
+        bucket: currentBucket,
+        object: objectName,
+        expiry
+      })
+      .then(obj => {
+        dispatch(showShareObject(object, obj.url))
+        dispatch(
+          alertActions.set({
+            type: "success",
+            message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`
+          })
+        )
+      })
+      .catch(err => {
+        dispatch(
+          alertActions.set({
+            type: "danger",
+            message: err.message
+          })
+        )
+      })
+  }
+}
+
+export const showShareObject = (object, url) => ({
+  type: SET_SHARE_OBJECT,
+  show: true,
+  object,
+  url
+})
+
+export const hideShareObject = (object, url) => ({
+  type: SET_SHARE_OBJECT,
+  show: false,
+  object: "",
+  url: ""
 })

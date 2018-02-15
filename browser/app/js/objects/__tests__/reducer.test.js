@@ -26,7 +26,12 @@ describe("objects reducer", () => {
       sortOrder: false,
       currentPrefix: "",
       marker: "",
-      isTruncated: false
+      isTruncated: false,
+      shareObject: {
+        show: false,
+        object: "",
+        url: ""
+      }
     })
   })
 
@@ -115,5 +120,19 @@ describe("objects reducer", () => {
     expect(newState.currentPrefix).toEqual("test2/")
     expect(newState.marker).toEqual("")
     expect(newState.isTruncated).toBeFalsy()
+  })
+
+  it("should handle SET_SHARE_OBJECT", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_SHARE_OBJECT,
+      show: true,
+      object: "a.txt",
+      url: "test"
+    })
+    expect(newState.shareObject).toEqual({
+      show: true,
+      object: "a.txt",
+      url: "test"
+    })
   })
 })

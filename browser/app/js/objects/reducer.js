@@ -31,7 +31,12 @@ export default (
     sortOrder: false,
     currentPrefix: "",
     marker: "",
-    isTruncated: false
+    isTruncated: false,
+    shareObject: {
+      show: false,
+      object: "",
+      url: ""
+    }
   },
   action
 ) => {
@@ -71,6 +76,15 @@ export default (
         currentPrefix: action.prefix,
         marker: "",
         isTruncated: false
+      }
+    case actionsObjects.SET_SHARE_OBJECT:
+      return {
+        ...state,
+        shareObject: {
+          show: action.show,
+          object: action.object,
+          url: action.url
+        }
       }
     default:
       return state

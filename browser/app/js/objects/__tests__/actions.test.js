@@ -17,6 +17,7 @@
 import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsObjects from "../actions"
+import * as alertActions from "../../alert/actions"
 
 jest.mock("../../web", () => ({
   ListObjects: jest.fn(() => {
@@ -31,6 +32,12 @@ jest.mock("../../web", () => ({
       return Promise.reject({ message: "Invalid bucket" })
     }
     return Promise.resolve({})
+  }),
+  PresignedGet: jest.fn(({ bucket, object }) => {
+    if (!bucket) {
+      return Promise.reject({ message: "Invalid bucket" })
+    }
+    return Promise.resolve({ url: "https://test.com/bk1/pre1/b.txt" })
   })
 }))
 
@@ -211,5 +218,87 @@ describe("Objects actions", () => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
+  })
+
+  it("creates objects/SET_SHARE_OBJECT action for showShareObject", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/SET_SHARE_OBJECT",
+        show: true,
+        object: "b.txt",
+        url: "test"
+      }
+    ]
+    store.dispatch(actionsObjects.showShareObject("b.txt", "test"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/SET_SHARE_OBJECT action for hideShareObject", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/SET_SHARE_OBJECT",
+        show: false,
+        object: "",
+        url: ""
+      }
+    ]
+    store.dispatch(actionsObjects.hideShareObject())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/SET_SHARE_OBJECT when object is shared", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    const expectedActions = [
+      {
+        type: "objects/SET_SHARE_OBJECT",
+        show: true,
+        object: "a.txt",
+        url: "https://test.com/bk1/pre1/b.txt"
+      },
+      {
+        type: "alert/SET",
+        alert: {
+          type: "success",
+          message: "Object shared. Expires in 1 days 0 hours 0 minutes",
+          id: alertActions.alertId
+        }
+      }
+    ]
+    return store
+      .dispatch(actionsObjects.shareObject("a.txt", 1, 0, 0))
+      .then(() => {
+        const actions = store.getActions()
+        expect(actions).toEqual(expectedActions)
+      })
+  })
+
+  it("creates alert/SET when shareObject is failed", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    const expectedActions = [
+      {
+        type: "alert/SET",
+        alert: {
+          type: "danger",
+          message: "Invalid bucket",
+          id: alertActions.alertId
+        }
+      }
+    ]
+    return store
+      .dispatch(actionsObjects.shareObject("a.txt", 1, 0, 0))
+      .then(() => {
+        const actions = store.getActions()
+        expect(actions).toEqual(expectedActions)
+      })
   })
 })
