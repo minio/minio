@@ -87,7 +87,7 @@ describe("Buckets actions", () => {
     expect(actions).toEqual(expectedActions)
   })
 
-  it("creates buckets/SHOW_MAKE_BUCKET_MODAL buckets/ADD and buckets/SET_CURRENT_BUCKET after creating the bucket", () => {
+  it("creates buckets/ADD and buckets/SET_CURRENT_BUCKET after creating the bucket", () => {
     const store = mockStore()
     const expectedActions = [
       { type: "buckets/ADD", bucket: "test1" },

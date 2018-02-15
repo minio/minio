@@ -19,6 +19,7 @@ import MobileHeader from "./MobileHeader"
 import Header from "./Header"
 import ObjectsSection from "../objects/ObjectsSection"
 import MainActions from "./MainActions"
+import MakeBucketModal from "../buckets/MakeBucketModal"
 import UploadModal from "../uploads/UploadModal"
 
 export const MainContent = () => (
@@ -27,6 +28,7 @@ export const MainContent = () => (
     <Header />
     <ObjectsSection />
     <MainActions />
+    <MakeBucketModal />
     <UploadModal />
   </div>
 )
