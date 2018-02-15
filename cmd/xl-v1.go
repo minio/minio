@@ -101,7 +101,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		mutex:        &sync.Mutex{},
 		storageDisks: newStorageDisks,
 		listPool:     listPool,
-		nsMutex:      newNSLock(globalIsDistXL),
+		nsMutex:      globalNSMutex,
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
