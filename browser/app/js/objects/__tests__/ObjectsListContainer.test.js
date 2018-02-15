@@ -36,22 +36,4 @@ describe("ObjectsList", () => {
       { name: "test2.jpg" }
     ])
   })
-
-  it("should call loadObjects when currentBucket is changed", () => {
-    const loadObjects = jest.fn()
-    const wrapper = shallow(
-      <ObjectsListContainer currentBucket="test1" loadObjects={loadObjects} />
-    )
-    wrapper.setProps({ currentBucket: "test2" })
-    expect(loadObjects).toHaveBeenCalled()
-  })
-
-  it("should call loadObjects when currentPrefix is changed", () => {
-    const loadObjects = jest.fn()
-    const wrapper = shallow(
-      <ObjectsListContainer currentPrefix="abc/" loadObjects={loadObjects} />
-    )
-    wrapper.setProps({ currentPrefix: "abc/xyz/" })
-    expect(loadObjects).toHaveBeenCalled()
-  })
 })

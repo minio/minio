@@ -15,22 +15,20 @@
  */
 
 import React from "react"
-import MobileHeader from "./MobileHeader"
-import Header from "./Header"
-import ObjectsSection from "../objects/ObjectsSection"
-import MainActions from "./MainActions"
-import MakeBucketModal from "../buckets/MakeBucketModal"
-import UploadModal from "../uploads/UploadModal"
+import { shallow, mount } from "enzyme"
+import { AlertContainer } from "../AlertContainer"
 
-export const MainContent = () => (
-  <div className="fe-body">
-    <MobileHeader />
-    <Header />
-    <ObjectsSection />
-    <MainActions />
-    <MakeBucketModal />
-    <UploadModal />
-  </div>
-)
+describe("Alert", () => {
+  it("should render without crashing", () => {
+    shallow(
+      <AlertContainer alert={{ show: true, type: "danger", message: "Test" }} />
+    )
+  })
 
-export default MainContent
+  it("should render nothing if message is empty", () => {
+    const wrapper = shallow(
+      <AlertContainer alert={{ show: true, type: "danger", message: "" }} />
+    )
+    expect(wrapper.find("Alert").length).toBe(0)
+  })
+})

@@ -17,11 +17,19 @@
 import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsBuckets from "../actions"
+import * as objectActions from "../../objects/actions"
 
 jest.mock("../../web", () => ({
   ListBuckets: jest.fn(() => {
     return Promise.resolve({ buckets: [{ name: "test1" }, { name: "test2" }] })
+  }),
+  MakeBucket: jest.fn(() => {
+    return Promise.resolve()
   })
+}))
+
+jest.mock("../../objects/actions", () => ({
+  selectPrefix: () => dispatch => {}
 }))
 
 const middlewares = [thunk]
@@ -40,24 +48,6 @@ describe("Buckets actions", () => {
     })
   })
 
-  it("creates buckets/SET_LIST directly", () => {
-    const store = mockStore()
-    const expectedActions = [
-      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] }
-    ]
-    store.dispatch(actionsBuckets.setList(["test1", "test2"]))
-    const actions = store.getActions()
-    expect(actions).toEqual(expectedActions)
-  })
-
-  it("creates buckets/SET_FILTER directly", () => {
-    const store = mockStore()
-    const expectedActions = [{ type: "buckets/SET_FILTER", filter: "test" }]
-    store.dispatch(actionsBuckets.setFilter("test"))
-    const actions = store.getActions()
-    expect(actions).toEqual(expectedActions)
-  })
-
   it("should update browser url and creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
     const store = mockStore()
     const expectedActions = [
@@ -67,5 +57,45 @@ describe("Buckets actions", () => {
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
     expect(window.location.pathname).toBe("/test1")
+  })
+
+  it("creates buckets/SHOW_MAKE_BUCKET_MODAL for showMakeBucketModal", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SHOW_MAKE_BUCKET_MODAL", show: true }
+    ]
+    store.dispatch(actionsBuckets.showMakeBucketModal())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/SHOW_MAKE_BUCKET_MODAL for hideMakeBucketModal", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SHOW_MAKE_BUCKET_MODAL", show: false }
+    ]
+    store.dispatch(actionsBuckets.hideMakeBucketModal())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/ADD action", () => {
+    const store = mockStore()
+    const expectedActions = [{ type: "buckets/ADD", bucket: "test" }]
+    store.dispatch(actionsBuckets.addBucket("test"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/ADD and buckets/SET_CURRENT_BUCKET after creating the bucket", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/ADD", bucket: "test1" },
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+    ]
+    return store.dispatch(actionsBuckets.makeBucket("test1")).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
   })
 })

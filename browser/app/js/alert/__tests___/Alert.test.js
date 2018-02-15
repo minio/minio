@@ -26,7 +26,7 @@ describe("Alert", () => {
   it("should call onDismiss when close button is clicked", () => {
     const onDismiss = jest.fn()
     const wrapper = mount(
-      <Alert show={true} type="danger" message="test" onDismiss={onDismiss}/>
+      <Alert show={true} type="danger" message="test" onDismiss={onDismiss} />
     )
     wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
     expect(onDismiss).toHaveBeenCalled()

@@ -19,6 +19,7 @@ import classNames from "classnames"
 import { connect } from "react-redux"
 import SideBar from "./SideBar"
 import MainContent from "./MainContent"
+import AlertContainer from "../alert/AlertContainer"
 
 class Browser extends React.Component {
   render() {
@@ -30,6 +31,7 @@ class Browser extends React.Component {
       >
         <SideBar />
         <MainContent />
+        <AlertContainer />
       </div>
     )
   }
