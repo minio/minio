@@ -164,7 +164,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	// Initialize and load bucket policies.
-	if err = initBucketPolicies(fs); err != nil {
+	fs.bucketPolicies, err = loadBucketPolicies(fs)
+	if err != nil {
 		return nil, fmt.Errorf("Unable to load all bucket policies. %s", err)
 	}
 

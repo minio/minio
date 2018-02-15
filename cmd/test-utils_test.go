@@ -1652,7 +1652,7 @@ func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) 
 		return nil, nil, err
 	}
 
-	objLayer, err := newXLObjectLayer(formattedDisks)
+	objLayer, err := newXLObjects(formattedDisks)
 	if err != nil {
 		return nil, nil, err
 	}
