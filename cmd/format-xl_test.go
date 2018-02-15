@@ -302,29 +302,11 @@ func TestCheckFormatXLValue(t *testing.T) {
 
 // Tests getFormatXLInQuorum()
 func TestGetFormatXLInQuorumCheck(t *testing.T) {
-	fsDirs, err := getRandomDisks(16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, fsDir := range fsDirs {
-		os.RemoveAll(fsDir)
-	}
-	endpoints1 := mustGetNewEndpointList(fsDirs...)
-	fsDirs, err = getRandomDisks(16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, fsDir := range fsDirs {
-		os.RemoveAll(fsDir)
-	}
-	endpoints2 := mustGetNewEndpointList(fsDirs...)
-
 	setCount := 2
 	disksPerSet := 16
 
-	endpoints := append(endpoints1, endpoints2...)
 	format := newFormatXLV2(setCount, disksPerSet)
-	formats := make([]*formatXLV2, len(endpoints))
+	formats := make([]*formatXLV2, 32)
 
 	for i := 0; i < setCount; i++ {
 		for j := 0; j < disksPerSet; j++ {
@@ -350,6 +332,12 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 		t.Fatal("Unexpected success")
 	}
 
+	formats[0] = nil
+	quorumFormat, err = getFormatXLInQuorum(formats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	badFormat := *quorumFormat
 	badFormat.XL.Sets = nil
 	if err = formatXLV2Check(quorumFormat, &badFormat); err == nil {
@@ -366,5 +354,45 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	badFormatSetSize.XL.Sets[0] = nil
 	if err = formatXLV2Check(quorumFormat, &badFormatSetSize); err == nil {
 		t.Fatal("Unexpected success")
+	}
+
+	for i := range formats {
+		if i < 17 {
+			formats[i] = nil
+		}
+	}
+	if _, err = getFormatXLInQuorum(formats); err == nil {
+		t.Fatal("Unexpected success")
+	}
+}
+
+// Initialize new format sets.
+func TestNewFormatSets(t *testing.T) {
+	setCount := 2
+	disksPerSet := 16
+
+	format := newFormatXLV2(setCount, disksPerSet)
+	formats := make([]*formatXLV2, 32)
+	errs := make([]error, 32)
+
+	for i := 0; i < setCount; i++ {
+		for j := 0; j < disksPerSet; j++ {
+			newFormat := *format
+			newFormat.XL.This = format.XL.Sets[i][j]
+			formats[i*disksPerSet+j] = &newFormat
+		}
+	}
+
+	quorumFormat, err := getFormatXLInQuorum(formats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 16th disk is unformatted.
+	errs[15] = errUnformattedDisk
+
+	newFormats := newHealFormatSets(quorumFormat, setCount, disksPerSet, formats, errs)
+	if newFormats == nil {
+		t.Fatal("Unexpected failure")
 	}
 }
