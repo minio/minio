@@ -22,15 +22,6 @@ import * as actionsObjects from "./actions"
 import ObjectsList from "./ObjectsList"
 
 export class ObjectsListContainer extends React.Component {
-  componentWillReceiveProps(nextProps) {
-    const { currentBucket, currentPrefix, loadObjects } = this.props
-    if (
-      currentBucket != nextProps.currentBucket ||
-      currentPrefix != nextProps.currentPrefix
-    ) {
-      loadObjects()
-    }
-  }
   render() {
     const { objects, isTruncated, currentBucket, loadObjects } = this.props
     return (
