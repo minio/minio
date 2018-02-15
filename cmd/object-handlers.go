@@ -240,7 +240,8 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, apiErr)
 		return
 	}
-	if objectAPI.IsEncryptionSupported() {
+
+	if objectAPI.IsEncryptionSupported() && !objInfo.IsDir {
 		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -342,17 +343,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
+		// SSE-C is not implemented for CopyObject operations yet
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
 	// Check if metadata directive is valid.
 	if !isMetadataDirectiveValid(r.Header) {
 		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
 		return
 	}
 
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		// SSE-C is not implemented for CopyObject operations yet
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
-	}
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
