@@ -18,9 +18,9 @@ import React from "react"
 import { shallow, mount } from "enzyme"
 import { ShareObjectModal } from "../ShareObjectModal"
 import {
-  SHARE_OBJECT_DAYS,
-  SHARE_OBJECT_HOURS,
-  SHARE_OBJECT_MINUTES
+  SHARE_OBJECT_EXPIRY_DAYS,
+  SHARE_OBJECT_EXPIRY_HOURS,
+  SHARE_OBJECT_EXPIRY_MINUTES
 } from "../../constants"
 
 jest.mock("../../web", () => ({
@@ -95,9 +95,9 @@ describe("ShareObjectModal", () => {
         />
       )
       expect(wrapper.state("expiry")).toEqual({
-        days: SHARE_OBJECT_DAYS,
-        hours: SHARE_OBJECT_HOURS,
-        minutes: SHARE_OBJECT_MINUTES
+        days: SHARE_OBJECT_EXPIRY_DAYS,
+        hours: SHARE_OBJECT_EXPIRY_HOURS,
+        minutes: SHARE_OBJECT_EXPIRY_MINUTES
       })
     })
 

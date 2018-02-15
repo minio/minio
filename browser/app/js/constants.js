@@ -24,6 +24,6 @@ export const READ_ONLY = "readonly"
 export const WRITE_ONLY = "writeonly"
 export const READ_WRITE = "readwrite"
 
-export const SHARE_OBJECT_DAYS = 5
-export const SHARE_OBJECT_HOURS = 0
-export const SHARE_OBJECT_MINUTES = 0
+export const SHARE_OBJECT_EXPIRY_DAYS = 5
+export const SHARE_OBJECT_EXPIRY_HOURS = 0
+export const SHARE_OBJECT_EXPIRY_MINUTES = 0

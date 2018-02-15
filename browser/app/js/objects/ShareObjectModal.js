@@ -22,9 +22,9 @@ import web from "../web"
 import * as objectsActions from "./actions"
 import * as alertActions from "../alert/actions"
 import {
-  SHARE_OBJECT_DAYS,
-  SHARE_OBJECT_HOURS,
-  SHARE_OBJECT_MINUTES
+  SHARE_OBJECT_EXPIRY_DAYS,
+  SHARE_OBJECT_EXPIRY_HOURS,
+  SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
 export class ShareObjectModal extends React.Component {
@@ -32,9 +32,9 @@ export class ShareObjectModal extends React.Component {
     super(props)
     this.state = {
       expiry: {
-        days: SHARE_OBJECT_DAYS,
-        hours: SHARE_OBJECT_HOURS,
-        minutes: SHARE_OBJECT_MINUTES
+        days: SHARE_OBJECT_EXPIRY_DAYS,
+        hours: SHARE_OBJECT_EXPIRY_HOURS,
+        minutes: SHARE_OBJECT_EXPIRY_MINUTES
       }
     }
     this.expiryRange = {

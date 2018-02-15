@@ -21,9 +21,9 @@ import ShareObjectModal from "./ShareObjectModal"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
 import * as objectsActions from "./actions"
 import {
-  SHARE_OBJECT_DAYS,
-  SHARE_OBJECT_HOURS,
-  SHARE_OBJECT_MINUTES
+  SHARE_OBJECT_EXPIRY_DAYS,
+  SHARE_OBJECT_EXPIRY_HOURS,
+  SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
 export class ObjectActions extends React.Component {
@@ -38,9 +38,9 @@ export class ObjectActions extends React.Component {
     const { object, shareObject } = this.props
     shareObject(
       object.name,
-      SHARE_OBJECT_DAYS,
-      SHARE_OBJECT_HOURS,
-      SHARE_OBJECT_MINUTES
+      SHARE_OBJECT_EXPIRY_DAYS,
+      SHARE_OBJECT_EXPIRY_HOURS,
+      SHARE_OBJECT_EXPIRY_MINUTES
     )
   }
   deleteObject() {
