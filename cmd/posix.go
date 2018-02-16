@@ -610,7 +610,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 		return 0, errIsNotRegular
 	}
 
-	if verifier != nil && !verifier.IsVerified() {
+	if verifier != nil {
 		bufp := s.pool.Get().(*[]byte)
 		defer s.pool.Put(bufp)
 
