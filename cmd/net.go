@@ -85,7 +85,7 @@ func getHostIP4(host string) (ipList set.StringSet, err error) {
 		// Mark the starting time
 		startTime := time.Now()
 		// wait for hosts to resolve in exponentialbackoff manner
-		for _ = range newRetryTimerSimple(doneCh) {
+		for range newRetryTimerSimple(doneCh) {
 			// Retry infinitely on Kubernetes and Docker swarm.
 			// This is needed as the remote hosts are sometime
 			// not available immediately.

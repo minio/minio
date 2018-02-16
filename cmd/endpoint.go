@@ -23,7 +23,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -45,7 +44,8 @@ const (
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
-	IsLocal bool
+	IsLocal  bool
+	SetIndex int
 }
 
 func (endpoint Endpoint) String() string {
@@ -166,21 +166,6 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 // EndpointList - list of same type of endpoint.
 type EndpointList []Endpoint
 
-// Swap - helper method for sorting.
-func (endpoints EndpointList) Swap(i, j int) {
-	endpoints[i], endpoints[j] = endpoints[j], endpoints[i]
-}
-
-// Len - helper method for sorting.
-func (endpoints EndpointList) Len() int {
-	return len(endpoints)
-}
-
-// Less - helper method for sorting.
-func (endpoints EndpointList) Less(i, j int) bool {
-	return endpoints[i].String() < endpoints[j].String()
-}
-
 // IsHTTPS - returns true if secure for URLEndpointType.
 func (endpoints EndpointList) IsHTTPS() bool {
 	return endpoints[0].IsHTTPS()
@@ -197,16 +182,6 @@ func (endpoints EndpointList) GetString(i int) string {
 
 // NewEndpointList - returns new endpoint list based on input args.
 func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
-	// isValidDistribution - checks whether given count is a valid distribution for erasure coding.
-	isValidDistribution := func(count int) bool {
-		return (count >= minErasureBlocks && count <= maxErasureBlocks && count%2 == 0)
-	}
-
-	// Check whether no. of args are valid for XL distribution.
-	if !isValidDistribution(len(args)) {
-		return nil, fmt.Errorf("A total of %d endpoints were found. For erasure mode it should be an even number between %d and %d", len(args), minErasureBlocks, maxErasureBlocks)
-	}
-
 	var endpointType EndpointType
 	var scheme string
 
@@ -236,8 +211,6 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 		endpoints = append(endpoints, endpoint)
 	}
 
-	sort.Sort(endpoints)
-
 	return endpoints, nil
 }
 
@@ -258,7 +231,7 @@ func checkCrossDeviceMounts(endpoints EndpointList) (err error) {
 }
 
 // CreateEndpoints - validates and creates new endpoints for given args.
-func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, SetupType, error) {
+func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList, SetupType, error) {
 	var endpoints EndpointList
 	var setupType SetupType
 	var err error
@@ -271,9 +244,9 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	_, serverAddrPort := mustSplitHostPort(serverAddr)
 
 	// For single arg, return FS setup.
-	if len(args) == 1 {
+	if len(args) == 1 && len(args[0]) == 1 {
 		var endpoint Endpoint
-		endpoint, err = NewEndpoint(args[0])
+		endpoint, err = NewEndpoint(args[0][0])
 		if err != nil {
 			return serverAddr, endpoints, setupType, err
 		}
@@ -290,14 +263,25 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 		return serverAddr, endpoints, setupType, nil
 	}
 
-	// Convert args to endpoints
-	if endpoints, err = NewEndpointList(args...); err != nil {
-		return serverAddr, endpoints, setupType, err
-	}
+	for i, iargs := range args {
+		var newEndpoints EndpointList
+		// Convert args to endpoints
+		var eps EndpointList
+		eps, err = NewEndpointList(iargs...)
+		if err != nil {
+			return serverAddr, endpoints, setupType, err
+		}
 
-	// Check for cross device mounts if any.
-	if err = checkCrossDeviceMounts(endpoints); err != nil {
-		return serverAddr, endpoints, setupType, err
+		// Check for cross device mounts if any.
+		if err = checkCrossDeviceMounts(eps); err != nil {
+			return serverAddr, endpoints, setupType, err
+		}
+
+		for _, ep := range eps {
+			ep.SetIndex = i
+			newEndpoints = append(newEndpoints, ep)
+		}
+		endpoints = append(endpoints, newEndpoints...)
 	}
 
 	// Return XL setup when all endpoints are path style.
@@ -439,6 +423,23 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 			// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
 			endpoints[i].IsLocal = false
 		}
+	}
+
+	uniqueArgs := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		uniqueArgs.Add(endpoint.Host)
+	}
+
+	// Error out if we have more than serverCommandLineArgsMax unique servers.
+	if len(uniqueArgs.ToSlice()) > serverCommandLineArgsMax {
+		err := fmt.Errorf("Unsupported number of endpoints (%s), total number of servers cannot be more than %d", endpoints, serverCommandLineArgsMax)
+		return serverAddr, endpoints, setupType, err
+	}
+
+	// Error out if we have less than 2 unique servers.
+	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistXLSetupType {
+		err := fmt.Errorf("Unsupported number of endpoints (%s), minimum number of servers cannot be less than 2 in distributed setup", endpoints)
+		return serverAddr, endpoints, setupType, err
 	}
 
 	setupType = DistXLSetupType

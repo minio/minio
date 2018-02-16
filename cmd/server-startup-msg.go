@@ -51,10 +51,6 @@ func printStartupMessage(apiEndPoints []string) {
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
 		printStorageInfo(objAPI.StorageInfo())
-		// Storage class info only printed for Erasure backend
-		if objAPI.StorageInfo().Backend.Type == Erasure {
-			printStorageClassInfoMsg(objAPI.StorageInfo())
-		}
 	}
 
 	// Prints credential, region and browser access.
@@ -180,33 +176,6 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	if storageInfo.Backend.Type == Erasure {
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
 		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
-	}
-	return msg
-}
-
-func printStorageClassInfoMsg(storageInfo StorageInfo) {
-	standardClassMsg := getStandardStorageClassInfoMsg(storageInfo)
-	rrsClassMsg := getRRSStorageClassInfoMsg(storageInfo)
-	storageClassMsg := fmt.Sprintf(getFormatStr(len(standardClassMsg), 3), standardClassMsg) + fmt.Sprintf(getFormatStr(len(rrsClassMsg), 3), rrsClassMsg)
-	// Print storage class section only if data is present
-	if storageClassMsg != "" {
-		log.Println(colorBlue("Storage Class:"))
-		log.Println(storageClassMsg)
-	}
-}
-
-func getStandardStorageClassInfoMsg(storageInfo StorageInfo) string {
-	var msg string
-	if maxDiskFailures := storageInfo.Backend.StandardSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-		msg += fmt.Sprintf("Objects with "+standardStorageClass+" class can withstand [%d] drive failure(s).\n", maxDiskFailures)
-	}
-	return msg
-}
-
-func getRRSStorageClassInfoMsg(storageInfo StorageInfo) string {
-	var msg string
-	if maxDiskFailures := storageInfo.Backend.RRSCParity - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-		msg += fmt.Sprintf("Objects with "+reducedRedundancyStorageClass+" class can withstand [%d] drive failure(s).\n", maxDiskFailures)
 	}
 	return msg
 }

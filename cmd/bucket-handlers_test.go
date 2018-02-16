@@ -35,7 +35,6 @@ func TestGetBucketLocationHandler(t *testing.T) {
 
 func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
-	initBucketPolicies(obj)
 
 	// test cases with sample input and expected output.
 	testCases := []struct {
@@ -180,7 +179,6 @@ func TestHeadBucketHandler(t *testing.T) {
 
 func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
-	initBucketPolicies(obj)
 
 	// test cases with sample input and expected output.
 	testCases := []struct {
@@ -287,7 +285,6 @@ func TestListMultipartUploadsHandler(t *testing.T) {
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
 func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
-	initBucketPolicies(obj)
 
 	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
 	// and success responses.
@@ -618,7 +615,6 @@ func TestAPIDeleteMultipleObjectsHandler(t *testing.T) {
 
 func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
-	initBucketPolicies(obj)
 
 	var err error
 	// register event notifier.
@@ -822,7 +818,6 @@ func testIsBucketActionAllowedHandler(obj ObjectLayer, instanceType, bucketName 
 		{"s3:ListObject", "mybucket", "abc", false, false},
 	}
 	for i, testCase := range testCases {
-		initBucketPolicies(obj)
 		isAllowed := isBucketActionAllowed(testCase.action, testCase.bucket, testCase.prefix, obj)
 		if isAllowed != testCase.shouldPass {
 			t.Errorf("Case %d: Expected the response status to be `%t`, but instead found `%t`", i+1, testCase.shouldPass, isAllowed)

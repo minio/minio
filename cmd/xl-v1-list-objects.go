@@ -110,10 +110,11 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			var err error
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound as the object might have got deleted in the interim period
-				// of listing and getObjectInfo()
-				// Ignore quorum error as it might be an entry from an outdated disk.
-				if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errXLReadQuorum {
+				// Ignore errFileNotFound as the object might have got
+				// deleted in the interim period of listing and getObjectInfo(),
+				// ignore quorum error as it might be an entry from an outdated disk.
+				switch errors.Cause(err) {
+				case errFileNotFound, errXLReadQuorum:
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)

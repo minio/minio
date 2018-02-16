@@ -34,8 +34,8 @@ import (
 const (
 	// Admin service names
 	signalServiceRPC  = "Admin.SignalService"
+	reInitFormatRPC   = "Admin.ReInitFormat"
 	listLocksRPC      = "Admin.ListLocks"
-	reInitDisksRPC    = "Admin.ReInitDisks"
 	serverInfoDataRPC = "Admin.ServerInfoData"
 	getConfigRPC      = "Admin.GetConfig"
 	writeTmpConfigRPC = "Admin.WriteTmpConfig"
@@ -56,8 +56,8 @@ type remoteAdminClient struct {
 // commands like service stop and service restart.
 type adminCmdRunner interface {
 	SignalService(s serviceSignal) error
+	ReInitFormat(dryRun bool) error
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-	ReInitDisks() error
 	ServerInfoData() (ServerInfoData, error)
 	GetConfig() ([]byte, error)
 	WriteTmpConfig(tmpFileName string, configBytes []byte) error
@@ -77,6 +77,16 @@ func (lc localAdminClient) SignalService(s serviceSignal) error {
 	return nil
 }
 
+// ReInitFormat - re-initialize disk format.
+func (lc localAdminClient) ReInitFormat(dryRun bool) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+	_, err := objectAPI.HealFormat(dryRun)
+	return err
+}
+
 // ListLocks - Fetches lock information from local lock instrumentation.
 func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	return listLocksInfo(bucket, prefix, duration), nil
@@ -92,7 +102,14 @@ func (rc remoteAdminClient) SignalService(s serviceSignal) (err error) {
 		err = errUnsupportedSignal
 	}
 	return err
+}
 
+// ReInitFormat - re-initialize disk format, remotely.
+func (rc remoteAdminClient) ReInitFormat(dryRun bool) error {
+	reply := AuthRPCReply{}
+	return rc.Call(reInitFormatRPC, &ReInitFormatArgs{
+		DryRun: dryRun,
+	}, &reply)
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
@@ -107,20 +124,6 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Durat
 		return nil, err
 	}
 	return reply.VolLocks, nil
-}
-
-// ReInitDisks - There is nothing to do here, heal format REST API
-// handler has already formatted and reinitialized the local disks.
-func (lc localAdminClient) ReInitDisks() error {
-	return nil
-}
-
-// ReInitDisks - Signals peers via RPC to reinitialize their disks and
-// object layer.
-func (rc remoteAdminClient) ReInitDisks() error {
-	args := AuthRPCArgs{}
-	reply := AuthRPCReply{}
-	return rc.Call(reInitDisksRPC, &args, &reply)
 }
 
 // ServerInfoData - Returns the server info of this server.
@@ -240,6 +243,7 @@ func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
 type adminPeer struct {
 	addr      string
 	cmdRunner adminCmdRunner
+	isLocal   bool
 }
 
 // type alias for a collection of adminPeer.
@@ -254,6 +258,7 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 	adminPeerList = append(adminPeerList, adminPeer{
 		thisPeer,
 		localAdminClient{},
+		true,
 	})
 
 	hostSet := set.CreateStringSet(globalMinioAddr)
@@ -278,6 +283,26 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 	}
 
 	return adminPeerList
+}
+
+// peersReInitFormat - reinitialize remote object layers to new format.
+func peersReInitFormat(peers adminPeers, dryRun bool) error {
+	errs := make([]error, len(peers))
+
+	// Send ReInitFormat RPC call to all nodes.
+	// for local adminPeer this is a no-op.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			if !peer.isLocal {
+				errs[idx] = peer.cmdRunner.ReInitFormat(dryRun)
+			}
+		}(i, peer)
+	}
+	wg.Wait()
+	return nil
 }
 
 // Initialize global adminPeer collection.
@@ -361,24 +386,6 @@ func listPeerLocksInfo(peers adminPeers, bucket, prefix string, duration time.Du
 		groupedLockInfos = append(groupedLockInfos, volLocks...)
 	}
 	return groupedLockInfos, nil
-}
-
-// reInitPeerDisks - reinitialize disks and object layer on peer servers to use the new format.
-func reInitPeerDisks(peers adminPeers) error {
-	errs := make([]error, len(peers))
-
-	// Send ReInitDisks RPC call to all nodes.
-	// for local adminPeer this is a no-op.
-	wg := sync.WaitGroup{}
-	for i, peer := range peers {
-		wg.Add(1)
-		go func(idx int, peer adminPeer) {
-			defer wg.Done()
-			errs[idx] = peer.cmdRunner.ReInitDisks()
-		}(i, peer)
-	}
-	wg.Wait()
-	return nil
 }
 
 // uptimeSlice - used to sort uptimes in chronological order.

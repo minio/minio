@@ -43,6 +43,7 @@ type posix struct {
 	ioErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	diskPath   string
 	pool       sync.Pool
+	connected  bool
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -137,6 +138,8 @@ func newPosix(path string) (StorageAPI, error) {
 		return nil, err
 	}
 
+	st.connected = true
+
 	// Success.
 	return st, nil
 }
@@ -218,14 +221,13 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-// Init - this is a dummy call.
-func (s *posix) Init() error {
+func (s *posix) Close() error {
+	s.connected = false
 	return nil
 }
 
-// Close - this is a dummy call.
-func (s *posix) Close() error {
-	return nil
+func (s *posix) IsOnline() bool {
+	return s.connected
 }
 
 // DiskInfo provides current information about disk space usage,
@@ -249,6 +251,9 @@ func (s *posix) getVolDir(volume string) (string, error) {
 // checkDiskFound - validates if disk is available,
 // returns errDiskNotFound if not found.
 func (s *posix) checkDiskFound() (err error) {
+	if !s.IsOnline() {
+		return errDiskNotFound
+	}
 	_, err = os.Stat((s.diskPath))
 	if err != nil {
 		if os.IsNotExist(err) {

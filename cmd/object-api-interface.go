@@ -56,6 +56,7 @@ type ObjectLayer interface {
 	CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Healing operations.
+	HealFormat(dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error)
 	HealObject(bucket, object string, dryRun bool) (madmin.HealResultItem, error)
 	ListBucketsHeal() (buckets []BucketInfo, err error)

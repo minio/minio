@@ -33,6 +33,7 @@ func TestListLocksInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
+
 	// Initializing new XL objectLayer.
 	objAPI, _, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
@@ -49,7 +50,7 @@ func TestListLocksInfo(t *testing.T) {
 
 	var nsMutex *nsLockMap
 
-	nsMutex = objAPI.(*xlObjects).nsMutex
+	nsMutex = objAPI.(*xlSets).sets[0].nsMutex
 
 	// Acquire a few locks to populate lock instrumentation.
 	// Take 10 read locks on bucket1/prefix1/obj1

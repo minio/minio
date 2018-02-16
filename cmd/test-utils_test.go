@@ -55,6 +55,7 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -71,6 +72,9 @@ func init() {
 
 	// Set system resources to maximum.
 	setMaxResources()
+
+	log = NewLogger()
+	log.EnableQuiet()
 }
 
 // concurreny level for certain parallel tests.
@@ -166,6 +170,36 @@ func prepareFS() (ObjectLayer, string, error) {
 	return obj, fsDirs[0], nil
 }
 
+func prepareXL32() (ObjectLayer, []string, error) {
+	fsDirs1, err := getRandomDisks(16)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	endpoints1 := mustGetNewEndpointList(fsDirs1...)
+	fsDirs2, err := getRandomDisks(16)
+	if err != nil {
+		removeRoots(fsDirs1)
+		return nil, nil, err
+	}
+	endpoints2 := mustGetNewEndpointList(fsDirs2...)
+
+	endpoints := append(endpoints1, endpoints2...)
+	fsDirs := append(fsDirs1, fsDirs2...)
+	format, err := waitForFormatXL(true, endpoints, 2, 16)
+	if err != nil {
+		removeRoots(fsDirs)
+		return nil, nil, err
+	}
+
+	objAPI, err := newXLSets(endpoints, format, 2, 16)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return objAPI, fsDirs, nil
+}
+
 func prepareXL(nDisks int) (ObjectLayer, []string, error) {
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -211,6 +245,9 @@ const (
 
 	// XLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
 	XLTestStr string = "XL"
+
+	// XLSetsTestStr is the string which is used as notation for XL sets object layer in the unit tests.
+	XLSetsTestStr string = "XLSet"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
@@ -290,7 +327,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := globalServerConfig.GetCredential()
 
 	testServer.Obj = objLayer
-	testServer.Disks = mustGetNewEndpointList(disks...)
+	for _, disk := range disks {
+		testServer.Disks = append(testServer.Disks, mustGetNewEndpointList(disk)...)
+	}
 	testServer.Root = root
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
@@ -1640,21 +1679,65 @@ func getRandomDisks(N int) ([]string, error) {
 	return erasureDisks, nil
 }
 
-// initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) {
+// Initialize object layer with the supplied disks, objectLayer is nil upon any error.
+func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
+	// For FS only, directly use the disk.
+	isFS := len(endpoints) == 1
+	if isFS {
+		// Initialize new FS object layer.
+		return newFSObjectLayer(endpoints[0].Path)
+	}
+
+	_, err = waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)
+	if err != nil {
+		return nil, err
+	}
+
 	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
+	// Initialize list pool.
+	listPool := newTreeWalkPool(globalLookupTimeout)
+
+	// Initialize xl objects.
+	xl := &xlObjects{
+		listPool:     listPool,
+		storageDisks: storageDisks,
+		nsMutex:      newNSLock(false),
+		bp:           bpool.NewBytePoolCap(4, blockSizeV1, blockSizeV1*2),
+	}
+
+	xl.getDisks = func() []StorageAPI {
+		return xl.storageDisks
+	}
+
+	// Initialize and load bucket policies.
+	xl.bucketPolicies, err = initBucketPolicies(xl)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize a new event notifier.
+	if err = initEventNotifier(xl); err != nil {
+		return nil, err
+	}
+
+	return xl, nil
+}
+
+// initObjectLayer - Instantiates object layer and returns it.
+func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) {
+	objLayer, err := newTestObjectLayer(endpoints)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	objLayer, err := newXLObjectLayer(formattedDisks)
-	if err != nil {
-		return nil, nil, err
+	var formattedDisks []StorageAPI
+	// Should use the object layer tests for validating cache.
+	if xl, ok := objLayer.(*xlObjects); ok {
+		formattedDisks = xl.storageDisks
 	}
 
 	// Success.
@@ -1678,13 +1761,6 @@ func removeDiskN(disks []string, n int) {
 	}
 }
 
-// Makes a entire new copy of a StorageAPI slice.
-func deepCopyStorageDisks(storageDisks []StorageAPI) []StorageAPI {
-	newStorageDisks := make([]StorageAPI, len(storageDisks))
-	copy(newStorageDisks, storageDisks)
-	return newStorageDisks
-}
-
 // Initializes storage disks with 'N' errored disks, N disks return 'err' for each disk access.
 func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *testing.T) []StorageAPI {
 	if offline > len(storageDisks) {
@@ -1692,35 +1768,9 @@ func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *
 	}
 
 	for i := 0; i < offline; i++ {
-		storageDisks[i] = &naughtyDisk{disk: &retryStorage{
-			remoteStorage:    storageDisks[i],
-			maxRetryAttempts: 1,
-			retryUnit:        time.Millisecond,
-			retryCap:         time.Millisecond * 10,
-		}, defaultErr: err}
+		storageDisks[i] = &naughtyDisk{disk: storageDisks[i], defaultErr: err}
 	}
 	return storageDisks
-}
-
-// Initializes storage disks with 'N' offline disks, N disks returns 'errDiskNotFound' for each disk access.
-func prepareNOfflineDisks(storageDisks []StorageAPI, offline int, t *testing.T) []StorageAPI {
-	return prepareNErroredDisks(storageDisks, offline, errDiskNotFound, t)
-}
-
-// Initializes backend storage disks.
-func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
-	nDisks := 16
-	fsDirs, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal("Unexpected error: ", err)
-	}
-
-	_, storageDisks, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
-	if err != nil {
-		removeRoots(fsDirs)
-		t.Fatal("Unable to initialize storage disks", err)
-	}
-	return storageDisks, fsDirs
 }
 
 // creates a bucket for the tests and returns the bucket name.
@@ -1749,10 +1799,13 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 }
 
 // prepare test backend.
-// create FS/XL bankend.
+// create FS/XL/XLSet backend.
 // return object layer, backend disks.
 func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
+	// Total number of disks for XL sets backend is set to 32.
+	case XLSetsTestStr:
+		return prepareXL32()
 	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
 		return prepareXL16()
@@ -2388,7 +2441,6 @@ func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 		endpoints, err = NewEndpointList(args...)
 		fatalIf(err, "unable to create new endpoint list")
 	}
-
 	return endpoints
 }
 

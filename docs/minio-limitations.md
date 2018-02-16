@@ -4,8 +4,9 @@
 
 |Item|Specification|
 |:---|:---|
-|Maximum number of drives| 16|
-|Minimum number of drives| 4|
+|Maximum number of servers| 32|
+|Minimum number of servers| 02|
+|Maximum number of drives per server| Unlimited|
 |Read quorum| N/2|
 |Write quorum| N/2+1|
 
@@ -48,6 +49,7 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 - ObjectACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent
+- ObjectVersions
 
 ### Object name restrictions on Minio.
 

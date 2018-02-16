@@ -1,10 +1,8 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
-
-
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -75,6 +73,13 @@ const (
 	DriveStateMissing        = "missing"
 )
 
+// HealDriveInfo - struct for an individual drive info item.
+type HealDriveInfo struct {
+	UUID     string `json:"uuid"`
+	Endpoint string `json:"endpoint"`
+	State    string `json:"state"`
+}
+
 // HealResultItem - struct for an individual heal result item
 type HealResultItem struct {
 	ResultIndex  int64        `json:"resultId"`
@@ -85,33 +90,87 @@ type HealResultItem struct {
 	ParityBlocks int          `json:"parityBlocks,omitempty"`
 	DataBlocks   int          `json:"dataBlocks,omitempty"`
 	DiskCount    int          `json:"diskCount"`
-	DriveInfo    struct {
-		// below maps are from drive endpoint to drive state
-		Before map[string]string `json:"before"`
-		After  map[string]string `json:"after"`
-	} `json:"drives"`
+	SetCount     int          `json:"setCount"`
+	// below slices are from drive info.
+	Before struct {
+		Drives []HealDriveInfo `json:"drives"`
+	} `json:"before"`
+	After struct {
+		Drives []HealDriveInfo `json:"drives"`
+	} `json:"after"`
 	ObjectSize int64 `json:"objectSize"`
 }
 
-// InitDrives - initialize maps used to represent drive info
-func (hri *HealResultItem) InitDrives() {
-	hri.DriveInfo.Before = make(map[string]string)
-	hri.DriveInfo.After = make(map[string]string)
+// GetMissingCounts - returns the number of missing disks before
+// and after heal
+func (hri *HealResultItem) GetMissingCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateMissing {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateMissing {
+			a++
+		}
+	}
+	return
 }
 
-// GetOnlineCounts - returns the number of online disks before and
-// after heal
+// GetOfflineCounts - returns the number of offline disks before
+// and after heal
+func (hri *HealResultItem) GetOfflineCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateOffline {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateOffline {
+			a++
+		}
+	}
+	return
+}
+
+// GetCorruptedCounts - returns the number of corrupted disks before
+// and after heal
+func (hri *HealResultItem) GetCorruptedCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateCorrupt {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateCorrupt {
+			a++
+		}
+	}
+	return
+}
+
+// GetOnlineCounts - returns the number of online disks before
+// and after heal
 func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
 	if hri == nil {
 		return
 	}
-	for _, v := range hri.DriveInfo.Before {
-		if v == DriveStateOk {
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateOk {
 			b++
 		}
 	}
-	for _, v := range hri.DriveInfo.After {
-		if v == DriveStateOk {
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateOk {
 			a++
 		}
 	}

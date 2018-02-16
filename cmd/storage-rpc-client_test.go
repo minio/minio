@@ -126,11 +126,11 @@ func TestStorageErr(t *testing.T) {
 			err:         fmt.Errorf("%s", io.ErrUnexpectedEOF.Error()),
 		},
 		{
-			expectedErr: errDiskNotFoundFromNetError,
+			expectedErr: errDiskNotFound,
 			err:         &net.OpError{},
 		},
 		{
-			expectedErr: errDiskNotFoundFromRPCShutdown,
+			expectedErr: errDiskNotFound,
 			err:         rpc.ErrShutdown,
 		},
 		{

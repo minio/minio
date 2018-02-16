@@ -148,12 +148,12 @@ func validateParity(ssParity, rrsParity int) (err error) {
 		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minimumParityDisks)
 	}
 
-	if ssParity > len(globalEndpoints)/2 {
-		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, len(globalEndpoints)/2)
+	if ssParity > globalXLSetDriveCount/2 {
+		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, globalXLSetDriveCount/2)
 	}
 
-	if rrsParity > len(globalEndpoints)/2 {
-		return fmt.Errorf("Reduced redundancy storage class parity %d should be less than  or equal to %d", rrsParity, len(globalEndpoints)/2)
+	if rrsParity > globalXLSetDriveCount/2 {
+		return fmt.Errorf("Reduced redundancy storage class parity %d should be less than  or equal to %d", rrsParity, globalXLSetDriveCount/2)
 	}
 
 	if ssParity > 0 && rrsParity > 0 {

@@ -112,10 +112,11 @@ func diskCount(disks []StorageAPI) int {
 // NOTE: collisions are fine, we are not looking for uniqueness
 // in the slices returned.
 func hashOrder(key string, cardinality int) []int {
-	if cardinality < 0 {
-		// Returns an empty int slice for negative cardinality.
+	if cardinality <= 0 {
+		// Returns an empty int slice for cardinality < 0.
 		return nil
 	}
+
 	nums := make([]int, cardinality)
 	keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
 

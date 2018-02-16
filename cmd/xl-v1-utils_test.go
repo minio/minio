@@ -125,12 +125,16 @@ func TestHashOrder(t *testing.T) {
 	for i, testCase := range testCases {
 		hashedOrder := hashOrder(testCase.objectName, 16)
 		if !reflect.DeepEqual(testCase.hashedOrder, hashedOrder) {
-			t.Errorf("Test case %d: Expected \"%#v\" but failed \"%#v\"", i+1, testCase.hashedOrder, hashedOrder)
+			t.Errorf("Test case %d: Expected \"%v\" but failed \"%v\"", i+1, testCase.hashedOrder, hashedOrder)
 		}
 	}
 
 	// Tests hashing order to fail for when order is '-1'.
 	if hashedOrder := hashOrder("This will fail", -1); hashedOrder != nil {
+		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
+	}
+
+	if hashedOrder := hashOrder("This will fail", 0); hashedOrder != nil {
 		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
 	}
 }

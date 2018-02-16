@@ -159,69 +159,6 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	return newStorageRPC(endpoint), nil
 }
 
-var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
-
-// Initializes meta volume on all input storage disks.
-func initMetaVolume(storageDisks []StorageAPI) error {
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls. Create minio meta volume, if it doesn't exist yet.
-	var wg = &sync.WaitGroup{}
-
-	// Initialize errs to collect errors inside go-routine.
-	var errs = make([]error, len(storageDisks))
-
-	// Initialize all disks in parallel.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			// Ignore create meta volume on disks which are not found.
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			// Indicate this wait group is done.
-			defer wg.Done()
-
-			// Attempt to create `.minio.sys`.
-			err := disk.MakeVol(minioMetaBucket)
-			if err != nil {
-				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-					errs[index] = err
-					return
-				}
-			}
-			err = disk.MakeVol(minioMetaTmpBucket)
-			if err != nil {
-				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-					errs[index] = err
-					return
-				}
-			}
-			err = disk.MakeVol(minioMetaMultipartBucket)
-			if err != nil {
-				if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-					errs[index] = err
-					return
-				}
-			}
-		}(index, disk)
-	}
-
-	// Wait for all cleanup to finish.
-	wg.Wait()
-
-	// Return upon first error.
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		return toObjectErr(err, minioMetaBucket)
-	}
-
-	// Return success here.
-	return nil
-}
-
 // Cleanup a directory recursively.
 func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	var delFunc func(string) error

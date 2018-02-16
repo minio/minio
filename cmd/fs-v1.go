@@ -164,7 +164,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	// Initialize and load bucket policies.
-	if err = initBucketPolicies(fs); err != nil {
+	fs.bucketPolicies, err = initBucketPolicies(fs)
+	if err != nil {
 		return nil, fmt.Errorf("Unable to load all bucket policies. %s", err)
 	}
 
@@ -174,6 +175,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	go fs.cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, globalServiceDoneCh)
+
 	// Return successfully initialized object layer.
 	return fs, nil
 }
@@ -1046,6 +1048,11 @@ func (fs *fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 	// Success.
 	return result, nil
+}
+
+// HealFormat - no-op for fs, Valid only for XL.
+func (fs *fsObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
 }
 
 // HealObject - no-op for fs. Valid only for XL.

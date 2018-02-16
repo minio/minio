@@ -28,8 +28,8 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
-	Init() (err error)
-	Close() (err error)
+	IsOnline() bool // Returns true if disk is online.
+	Close() error
 	DiskInfo() (info disk.Info, err error)
 
 	// Volume operations.

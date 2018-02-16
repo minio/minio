@@ -30,8 +30,6 @@ import (
 
 const adminPath = "/admin"
 
-var errUnsupportedBackend = fmt.Errorf("not supported for non erasure-code backend")
-
 // adminCmd - exports RPC methods for service status, stop and
 // restart commands.
 type adminCmd struct {
@@ -80,6 +78,21 @@ func (s *adminCmd) SignalService(args *SignalServiceArgs, reply *AuthRPCReply) e
 	return nil
 }
 
+// ReInitFormatArgs - provides dry-run information to re-initialize format.json
+type ReInitFormatArgs struct {
+	AuthRPCArgs
+	DryRun bool
+}
+
+// ReInitFormat - re-init 'format.json'
+func (s *adminCmd) ReInitFormat(args *ReInitFormatArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
+	}
+	_, err := newObjectLayerFn().HealFormat(args.DryRun)
+	return err
+}
+
 // ListLocks - lists locks held by requests handled by this server instance.
 func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error {
 	if err := query.IsAuthenticated(); err != nil {
@@ -87,47 +100,6 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	}
 	volLocks := listLocksInfo(query.Bucket, query.Prefix, query.Duration)
 	*reply = ListLocksReply{VolLocks: volLocks}
-	return nil
-}
-
-// ReInitDisk - reinitialize storage disks and object layer to use the
-// new format.
-func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	if !globalIsXL {
-		return errUnsupportedBackend
-	}
-
-	// Get the current object layer instance.
-	objLayer := newObjectLayerFn()
-
-	// Initialize new disks to include the newly formatted disks.
-	bootstrapDisks, err := initStorageDisks(globalEndpoints)
-	if err != nil {
-		return err
-	}
-
-	// Wrap into retrying disks
-	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
-		time.Millisecond, time.Millisecond*5, globalStorageHealthCheckInterval, globalStorageRetryThreshold)
-
-	// Initialize new object layer with newly formatted disks.
-	newObjectAPI, err := newXLObjects(retryingDisks)
-	if err != nil {
-		return err
-	}
-
-	// Replace object layer with newly formatted storage.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObjectAPI
-	globalObjLayerMutex.Unlock()
-
-	// Shutdown storage belonging to old object layer instance.
-	objLayer.Shutdown()
-
 	return nil
 }
 

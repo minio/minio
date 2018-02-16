@@ -127,6 +127,13 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetRLock(globalObjectTimeout); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	defer bucketLock.RUnlock()
+
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -396,6 +403,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrInvalidRegion, r.URL)
 		return
 	}
+
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(bucket, "")

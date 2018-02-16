@@ -25,8 +25,8 @@ import (
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 	// Based on the random shuffling return back randomized disks.
-	for _, i := range hashOrder(UTCNow().String(), len(xl.storageDisks)) {
-		disks = append(disks, xl.storageDisks[i-1])
+	for _, i := range hashOrder(UTCNow().String(), len(xl.getDisks())) {
+		disks = append(disks, xl.getDisks()[i-1])
 	}
 	return disks
 }

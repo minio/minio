@@ -76,14 +76,15 @@ func (bp *bucketPolicies) DeleteBucketPolicy(bucket string) error {
 }
 
 // Intialize all bucket policies.
-func initBucketPolicies(objAPI ObjectLayer) error {
+func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 	if objAPI == nil {
-		return errInvalidArgument
+		return nil, errInvalidArgument
 	}
+
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
 	if err != nil {
-		return errors.Cause(err)
+		return nil, errors.Cause(err)
 	}
 
 	policies := make(map[string]policy.BucketAccessPolicy)
@@ -95,7 +96,7 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 			// other unexpected errors during net.Dial.
 			if !errors.IsErrIgnored(pErr, errDiskNotFound) {
 				if !isErrBucketPolicyNotFound(pErr) {
-					return errors.Cause(pErr)
+					return nil, errors.Cause(pErr)
 				}
 			}
 			// Continue to load other bucket policies if possible.
@@ -103,20 +104,12 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 		}
 		policies[bucket.Name] = bp
 	}
-	// Populate global bucket collection.
-	bPolicies := &bucketPolicies{
+
+	// Return all bucket policies.
+	return &bucketPolicies{
 		rwMutex:             &sync.RWMutex{},
 		bucketPolicyConfigs: policies,
-	}
-	switch objAPI.(type) {
-	case *fsObjects:
-		objAPI.(*fsObjects).bucketPolicies = bPolicies
-	case *xlObjects:
-		objAPI.(*xlObjects).bucketPolicies = bPolicies
-	}
-
-	// Success.
-	return nil
+	}, nil
 }
 
 // readBucketPolicyJSON - reads bucket policy for an input bucket, returns BucketPolicyNotFound

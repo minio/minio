@@ -410,7 +410,7 @@ func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []object
 	}
 	// If all errors were ignored, reduce to maximal occurrence
 	// based on the read quorum.
-	readQuorum := len(xl.storageDisks) / 2
+	readQuorum := len(xl.getDisks()) / 2
 	return nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
 }
 
@@ -438,7 +438,7 @@ func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMe
 	}
 	// If all errors were ignored, reduce to maximal occurrence
 	// based on the read quorum.
-	readQuorum := len(xl.storageDisks) / 2
+	readQuorum := len(xl.getDisks()) / 2
 	return statInfo{}, nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
 }
 

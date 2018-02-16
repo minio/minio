@@ -46,7 +46,16 @@ var serverCmd = cli.Command{
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR1 [DIR2..]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64}
+
+DIR:
+  DIR points to a directory on a filesystem. When you want to combine
+  multiple drives into a single large system, pass one directory per
+  filesystem separated by space. You may also use a '...' convention
+  to abbreviate the directory arguments. Remote directories in a
+  distributed setup are encoded as HTTP(s) URIs.
+
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -72,16 +81,24 @@ EXAMPLES:
   2. Start minio server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
-  3. Start erasure coded minio server on a 12 disks server.
+  3. Start minio server on a 12 disks server.
       $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
           /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
           /mnt/export10/ /mnt/export11/ /mnt/export12/
 
-  4. Start erasure coded distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
+  4. Start distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
+
+  5. Start minio server on 64 disks server.
+      $ {{.HelpName}} /mnt/export{1...64}
+
+  6. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
+      $ export MINIO_ACCESS_KEY=minio
+      $ export MINIO_SECRET_KEY=miniostorage
+      $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
 `,
 }
 
@@ -96,8 +113,13 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 	var err error
 
-	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
+	if len(ctx.Args()) > serverCommandLineArgsMax {
+		fatalIf(errInvalidArgument, "Invalid total number of arguments (%d) passed, supported upto 32 unique arguments", len(ctx.Args()))
+	}
+
+	globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
+
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	if runtime.GOOS == "darwin" {
 		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -128,7 +150,7 @@ func serverHandleEnvVars() {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	if !ctx.Args().Present() || ctx.Args().First() == "help" {
+	if (!ctx.IsSet("sets") && !ctx.Args().Present()) || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
@@ -187,7 +209,7 @@ func serverMain(ctx *cli.Context) {
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
 		globalDsync, err = dsync.New(newDsyncNodes(globalEndpoints))
-		fatalIf(err, "Unable to initialize distributed locking clients")
+		fatalIf(err, "Unable to initialize distributed locking on %s", globalEndpoints)
 	}
 
 	// Initialize name space lock.
@@ -244,39 +266,17 @@ func serverMain(ctx *cli.Context) {
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
+
 	isFS := len(endpoints) == 1
 	if isFS {
 		// Initialize new FS object layer.
 		return newFSObjectLayer(endpoints[0].Path)
 	}
 
-	// Initialize storage disks.
-	storageDisks, err := initStorageDisks(endpoints)
+	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
 	if err != nil {
 		return nil, err
 	}
 
-	// Wait for formatting disks for XL backend.
-	var formattedDisks []StorageAPI
-
-	// First disk argument check if it is local.
-	firstDisk := endpoints[0].IsLocal
-	formattedDisks, err = waitForFormatXLDisks(firstDisk, endpoints, storageDisks)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cleanup objects that weren't successfully written into the namespace.
-	if err = houseKeeping(storageDisks); err != nil {
-		return nil, err
-	}
-
-	// Once XL formatted, initialize object layer.
-	newObject, err = newXLObjectLayer(formattedDisks)
-	if err != nil {
-		return nil, err
-	}
-
-	// XL initialized, return.
-	return newObject, nil
+	return newXLSets(endpoints, format, len(format.XL.Sets), len(format.XL.Sets[0]))
 }
