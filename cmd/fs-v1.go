@@ -361,7 +361,7 @@ func (fs *FSObjects) DeleteBucket(bucket string) error {
 // if source object and destination object are same we only
 // update metadata.
 func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
-	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
 	// - if source and destination are different
@@ -387,18 +387,9 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 		return oi, toObjectErr(err, srcBucket)
 	}
 
-	// Stat the file to get file size.
-	fi, err := fsStatFile(pathJoin(fs.fsPath, srcBucket, srcObject))
-	if err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
-	}
-
-	// Check if this request is only metadata update.
-	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	if cpMetadataOnly {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fsMetaJSONFile)
-		var wlk *lock.LockedFile
-		wlk, err = fs.rwPool.Write(fsMetaPath)
+		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
 			return oi, toObjectErr(errors.Trace(err), srcBucket, srcObject)
 		}
@@ -412,38 +403,34 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
+		// Stat the file to get file size.
+		fi, err := fsStatFile(pathJoin(fs.fsPath, srcBucket, srcObject))
+		if err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
+		}
+
 		// Return the new object info.
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
 
-	// Length of the file to read.
-	length := fi.Size()
-
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
 	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(gerr)
+		if gerr := fs.getObject(srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, !cpSrcDstSame); gerr != nil {
+			if gerr = srcInfo.Writer.Close(); gerr != nil {
+				errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			}
 			return
 		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signalling we wrote all data.
+		if gerr := srcInfo.Writer.Close(); gerr != nil {
+			errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			return
+		}
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	objInfo, err := fs.putObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.UserDefined)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	objInfo, err := fs.putObject(dstBucket, dstObject, hashReader, srcInfo.UserDefined)
-	if err != nil {
-		return oi, toObjectErr(err, dstBucket, dstObject)
-	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	return objInfo, nil
 }
@@ -465,11 +452,11 @@ func (fs *FSObjects) GetObject(bucket, object string, offset int64, length int64
 		return err
 	}
 	defer objectLock.RUnlock()
-	return fs.getObject(bucket, object, offset, length, writer, etag)
+	return fs.getObject(bucket, object, offset, length, writer, etag, true)
 }
 
 // getObject - wrapper for GetObject
-func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
+func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string, lock bool) (err error) {
 	if _, err = fs.statBucketDir(bucket); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -492,11 +479,13 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 
 	if bucket != minioMetaBucket {
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		_, err = fs.rwPool.Open(fsMetaPath)
-		if err != nil && err != errFileNotFound {
-			return toObjectErr(errors.Trace(err), bucket, object)
+		if lock {
+			_, err = fs.rwPool.Open(fsMetaPath)
+			if err != nil && err != errFileNotFound {
+				return toObjectErr(errors.Trace(err), bucket, object)
+			}
+			defer fs.rwPool.Close(fsMetaPath)
 		}
-		defer fs.rwPool.Close(fsMetaPath)
 	}
 
 	if etag != "" {

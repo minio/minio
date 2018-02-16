@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,4 +63,54 @@ func (w *WriteOnCloser) HasWritten() bool { return w.hasWritten }
 // WriteOnClose takes an io.Writer and returns an ioutil.WriteOnCloser.
 func WriteOnClose(w io.Writer) *WriteOnCloser {
 	return &WriteOnCloser{w, false}
+}
+
+// LimitWriter implements io.WriteCloser.
+//
+// This is implemented such that we want to restrict
+// an enscapsulated writer upto a certain length
+// and skip a certain number of bytes.
+type LimitWriter struct {
+	io.Writer
+	skipBytes int64
+	wLimit    int64
+}
+
+// Implements the io.Writer interface limiting upto
+// configured length, also skips the first N bytes.
+func (w *LimitWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	var n1 int
+	if w.skipBytes > 0 {
+		if w.skipBytes >= int64(len(p)) {
+			w.skipBytes = w.skipBytes - int64(len(p))
+			return n, nil
+		}
+		p = p[w.skipBytes:]
+		w.skipBytes = 0
+	}
+	if w.wLimit == 0 {
+		return n, nil
+	}
+	if w.wLimit < int64(len(p)) {
+		n1, err = w.Writer.Write(p[:w.wLimit])
+		w.wLimit = w.wLimit - int64(n1)
+		return n, err
+	}
+	n1, err = w.Writer.Write(p)
+	w.wLimit = w.wLimit - int64(n1)
+	return n, err
+}
+
+// Close closes the LimitWriter. It behaves like io.Closer.
+func (w *LimitWriter) Close() error {
+	if closer, ok := w.Writer.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// LimitedWriter takes an io.Writer and returns an ioutil.LimitWriter.
+func LimitedWriter(w io.Writer, skipBytes int64, limit int64) *LimitWriter {
+	return &LimitWriter{w, skipBytes, limit}
 }

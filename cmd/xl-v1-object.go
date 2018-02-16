@@ -80,28 +80,7 @@ func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks [
 // if source object and destination object are same we only
 // update metadata.
 func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
-	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
-	// Hold write lock on destination since in both cases
-	// - if source and destination are same
-	// - if source and destination are different
-	// it is the sole mutating state.
-	objectDWLock := xl.nsMutex.NewNSLock(dstBucket, dstObject)
-	if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
-		return oi, err
-	}
-	defer objectDWLock.Unlock()
-	// if source and destination are different, we have to hold
-	// additional read lock as well to protect against writes on
-	// source.
-	if !cpSrcDstSame {
-		// Hold read locks on source object only if we are
-		// going to read data from source object.
-		objectSRLock := xl.nsMutex.NewNSLock(srcBucket, srcObject)
-		if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
-			return oi, err
-		}
-		defer objectSRLock.RUnlock()
-	}
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.getDisks(), srcBucket, srcObject)
@@ -132,8 +111,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	length := xlMeta.Stat.Size
 
 	// Check if this request is only metadata update.
-	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	if cpMetadataOnly {
+	if cpSrcDstSame {
 		xlMeta.Meta = srcInfo.UserDefined
 		partsMetadata := make([]xlMetaV1, len(xl.getDisks()))
 		// Update `xl.json` content on each disks.

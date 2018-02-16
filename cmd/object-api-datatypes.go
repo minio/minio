@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"io"
 	"time"
 
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -98,6 +100,11 @@ type ObjectInfo struct {
 
 	// User-Defined metadata
 	UserDefined map[string]string
+
+	// Implements writer and reader used by CopyObject API
+	Writer       io.WriteCloser `json:"-"`
+	Reader       *hash.Reader   `json:"-"`
+	metadataOnly bool
 }
 
 // ListPartsInfo - represents list of all parts.

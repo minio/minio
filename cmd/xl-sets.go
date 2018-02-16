@@ -551,39 +551,48 @@ func (s *xlSets) CopyObject(srcBucket, srcObject, destBucket, destObject string,
 	destSet := s.getHashedSet(destObject)
 
 	// Check if this request is only metadata update.
-	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
-	if cpMetadataOnly {
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		return srcSet.CopyObject(srcBucket, srcObject, destBucket, destObject, srcInfo)
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		if gerr := srcSet.GetObject(srcBucket, srcObject, 0, srcInfo.Size, pipeWriter, srcInfo.ETag); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	hashReader, err := hash.NewReader(pipeReader, srcInfo.Size, "", "")
-	if err != nil {
-		pipeReader.CloseWithError(err)
-		return srcInfo, toObjectErr(errors.Trace(err), destBucket, destObject)
-	}
-
-	objInfo, err = destSet.PutObject(destBucket, destObject, hashReader, srcInfo.UserDefined)
-	if err != nil {
-		pipeReader.CloseWithError(err)
+	// Hold write lock on destination since in both cases
+	// - if source and destination are same
+	// - if source and destination are different
+	// it is the sole mutating state.
+	objectDWLock := destSet.nsMutex.NewNSLock(destBucket, destObject)
+	if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 		return objInfo, err
 	}
+	defer objectDWLock.Unlock()
+	// if source and destination are different, we have to hold
+	// additional read lock as well to protect against writes on
+	// source.
+	if !cpSrcDstSame {
+		// Hold read locks on source object only if we are
+		// going to read data from source object.
+		objectSRLock := srcSet.nsMutex.NewNSLock(srcBucket, srcObject)
+		if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+			return objInfo, err
+		}
+		defer objectSRLock.RUnlock()
+	}
 
-	// Explicitly close the reader.
-	pipeReader.Close()
+	go func() {
+		if gerr := srcSet.getObject(srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+			if gerr = srcInfo.Writer.Close(); gerr != nil {
+				errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			}
+			return
+		}
+		// Close writer explicitly signalling we wrote all data.
+		if gerr := srcInfo.Writer.Close(); gerr != nil {
+			errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			return
+		}
+	}()
 
-	return objInfo, nil
+	return destSet.putObject(destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
 }
 
 // Returns function "listDir" of the type listDirFunc.
