@@ -16,12 +16,22 @@
 
 import * as actionsBuckets from "./actions"
 
+const removeBucket = (list, action) => {
+  const idx = list.findIndex(bucket => bucket === action.bucket)
+  if (idx == -1) {
+    return list
+  }
+  return [...list.slice(0, idx), ...list.slice(idx + 1)]
+}
+
 export default (
   state = {
     list: [],
     filter: "",
     currentBucket: "",
-    showMakeBucketModal: false
+    showMakeBucketModal: false,
+    policies: [],
+    showBucketPolicy: false
   },
   action
 ) => {
@@ -35,6 +45,11 @@ export default (
       return {
         ...state,
         list: [action.bucket, ...state.list]
+      }
+    case actionsBuckets.REMOVE:
+      return {
+        ...state,
+        list: removeBucket(state.list, action),
       }
     case actionsBuckets.SET_FILTER:
       return {
@@ -50,6 +65,16 @@ export default (
       return {
         ...state,
         showMakeBucketModal: action.show
+      }
+    case actionsBuckets.SET_POLICIES:
+      return {
+        ...state,
+        policies: action.policies
+      }
+    case actionsBuckets.SHOW_BUCKET_POLICY:
+      return {
+        ...state,
+        showBucketPolicy: action.show
       }
     default:
       return state

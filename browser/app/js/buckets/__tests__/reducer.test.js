@@ -22,8 +22,10 @@ describe("buckets reducer", () => {
     const initialState = reducer(undefined, {})
     expect(initialState).toEqual({
       list: [],
+      policies: [],
       filter: "",
       currentBucket: "",
+      showBucketPolicy: false,
       showMakeBucketModal: false
     })
   })
@@ -47,6 +49,17 @@ describe("buckets reducer", () => {
     expect(newState.list).toEqual(["test3", "test1", "test2"])
   })
 
+  it("should handle REMOVE", () => {
+    const newState = reducer(
+      { list: ["test1", "test2"] },
+      {
+        type: actions.REMOVE,
+        bucket: "test2"
+      }
+    )
+    expect(newState.list).toEqual(["test1"])
+  })
+
   it("should handle SET_FILTER", () => {
     const newState = reducer(undefined, {
       type: actions.SET_FILTER,
@@ -63,6 +76,22 @@ describe("buckets reducer", () => {
     expect(newState.currentBucket).toEqual("test")
   })
 
+  it("should handle SET_POLICIES", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_POLICIES,
+      policies: ["test1", "test2"]
+    })
+    expect(newState.policies).toEqual(["test1", "test2"])
+  })
+
+  it("should handle SHOW_BUCKET_POLICY", () => {
+    const newState = reducer(undefined, {
+      type: actions.SHOW_BUCKET_POLICY,
+      show: true
+    })
+    expect(newState.showBucketPolicy).toBeTruthy()
+  })
+  
   it("should handle SHOW_MAKE_BUCKET_MODAL", () => {
     const newState = reducer(undefined, {
       type: actions.SHOW_MAKE_BUCKET_MODAL,
