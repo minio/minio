@@ -49,6 +49,9 @@ jest.mock("../../web", () => ({
     .mockImplementationOnce(() => {
       return Promise.reject({ message: "Error in creating token" })
     })
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
+    })
 }))
 
 const middlewares = [thunk]
@@ -371,6 +374,72 @@ describe("Objects actions", () => {
         const actions = store.getActions()
         expect(actions).toEqual(expectedActions)
       })
+    })
+  })
+
+  it("creates objects/CHECKED_LIST_ADD action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_ADD",
+        object: "obj1"
+      }
+    ]
+    store.dispatch(actionsObjects.checkObject("obj1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/CHECKED_LIST_REMOVE action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_REMOVE",
+        object: "obj1"
+      }
+    ]
+    store.dispatch(actionsObjects.uncheckObject("obj1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/CHECKED_LIST_RESET action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_RESET"
+      }
+    ]
+    store.dispatch(actionsObjects.resetCheckedList())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("should download checked objects", () => {
+    const open = jest.fn()
+    const send = jest.fn()
+    const xhrMockClass = () => ({
+      open: open,
+      send: send
+    })
+    window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
+
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/", checkedList: ["obj1"] }
+    })
+    return store.dispatch(actionsObjects.downloadCheckedObjects()).then(() => {
+      const requestUrl = `${
+        location.origin
+      }${minioBrowserPrefix}/zip?token=test`
+      expect(open).toHaveBeenCalledWith("POST", requestUrl, true)
+      expect(send).toHaveBeenCalledWith(
+        JSON.stringify({
+          bucketName: "bk1",
+          prefix: "pre1/",
+          objects: ["obj1"]
+        })
+      )
     })
   })
 })

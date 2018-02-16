@@ -21,9 +21,11 @@ import ObjectsSection from "../objects/ObjectsSection"
 import MainActions from "./MainActions"
 import MakeBucketModal from "../buckets/MakeBucketModal"
 import UploadModal from "../uploads/UploadModal"
+import ObjectsBulkActions from "../objects/ObjectsBulkActions"
 
 export const MainContent = () => (
   <div className="fe-body">
+    <ObjectsBulkActions />
     <MobileHeader />
     <Header />
     <ObjectsSection />

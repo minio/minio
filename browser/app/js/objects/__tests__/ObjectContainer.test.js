@@ -25,7 +25,7 @@ describe("ObjectContainer", () => {
 
   it("should render ObjectItem with props", () => {
     const wrapper = shallow(<ObjectContainer object={{ name: "test1.jpg" }} />)
-    expect(wrapper.find("ObjectItem").length).toBe(1)
-    expect(wrapper.find("ObjectItem").prop("name")).toBe("test1.jpg")
+    expect(wrapper.find("Connect(ObjectItem)").length).toBe(1)
+    expect(wrapper.find("Connect(ObjectItem)").prop("name")).toBe("test1.jpg")
   })
 })
