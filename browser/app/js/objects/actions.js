@@ -24,6 +24,7 @@ import {
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix } from "./selectors"
 import * as alertActions from "../alert/actions"
+import { minioBrowserPrefix } from "../constants"
 
 export const SET_LIST = "objects/SET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
@@ -206,3 +207,37 @@ export const hideShareObject = (object, url) => ({
   object: "",
   url: ""
 })
+
+export const downloadObject = object => {
+  return function(dispatch, getState) {
+    const currentBucket = getCurrentBucket(getState())
+    const currentPrefix = getCurrentPrefix(getState())
+    const objectName = `${currentPrefix}${object}`
+    const encObjectName = encodeURI(objectName)
+    if (web.LoggedIn()) {
+      return web
+        .CreateURLToken()
+        .then(res => {
+          const url = `${
+            window.location.origin
+          }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=${
+            res.token
+          }`
+          window.location = url
+        })
+        .catch(err => {
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message
+            })
+          )
+        })
+    } else {
+      const url = `${
+        window.location.origin
+      }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=''`
+      window.location = url
+    }
+  }
+}

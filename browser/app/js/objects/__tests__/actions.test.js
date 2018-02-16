@@ -18,8 +18,10 @@ import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsObjects from "../actions"
 import * as alertActions from "../../alert/actions"
+import { minioBrowserPrefix } from "../../constants"
 
 jest.mock("../../web", () => ({
+  LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
   ListObjects: jest.fn(() => {
     return Promise.resolve({
       objects: [{ name: "test1" }, { name: "test2" }],
@@ -38,7 +40,15 @@ jest.mock("../../web", () => ({
       return Promise.reject({ message: "Invalid bucket" })
     }
     return Promise.resolve({ url: "https://test.com/bk1/pre1/b.txt" })
-  })
+  }),
+  CreateURLToken: jest
+    .fn()
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
+    })
+    .mockImplementationOnce(() => {
+      return Promise.reject({ message: "Error in creating token" })
+    })
 }))
 
 const middlewares = [thunk]
@@ -300,5 +310,67 @@ describe("Objects actions", () => {
         const actions = store.getActions()
         expect(actions).toEqual(expectedActions)
       })
+  })
+
+  describe("Download object", () => {
+    it("should download the object non-LoggedIn users", () => {
+      const setLocation = jest.fn()
+      Object.defineProperty(window, "location", {
+        set(url) {
+          setLocation(url)
+        }
+      })
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      store.dispatch(actionsObjects.downloadObject("obj1"))
+      const url = `${
+        window.location.origin
+      }${minioBrowserPrefix}/download/bk1/${encodeURI("pre1/obj1")}?token=''`
+      expect(setLocation).toHaveBeenCalledWith(url)
+    })
+
+    it("should download the object for LoggedIn users", () => {
+      const setLocation = jest.fn()
+      Object.defineProperty(window, "location", {
+        set(url) {
+          setLocation(url)
+        }
+      })
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
+        const url = `${
+          window.location.origin
+        }${minioBrowserPrefix}/download/bk1/${encodeURI(
+          "pre1/obj1"
+        )}?token=test`
+        expect(setLocation).toHaveBeenCalledWith(url)
+      })
+    })
+
+    it("create alert/SET action when CreateUrlToken fails", () => {
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      const expectedActions = [
+        {
+          type: "alert/SET",
+          alert: {
+            type: "danger",
+            message: "Error in creating token",
+            id: alertActions.alertId
+          }
+        }
+      ]
+      return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
+        const actions = store.getActions()
+        expect(actions).toEqual(expectedActions)
+      })
+    })
   })
 })

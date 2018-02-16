@@ -15,13 +15,14 @@
  */
 
 import React from "react"
+import { connect } from "react-redux"
 import humanize from "humanize"
 import Moment from "moment"
 import ObjectItem from "./ObjectItem"
 import ObjectActions from "./ObjectActions"
 import * as actionsObjects from "./actions"
 
-export const ObjectContainer = ({ object }) => {
+export const ObjectContainer = ({ object, downloadObject }) => {
   const actionButtons = <ObjectActions object={object} />
   const props = {
     name: object.name,
@@ -30,7 +31,13 @@ export const ObjectContainer = ({ object }) => {
     lastModified: Moment(object.lastModified).format("lll"),
     actionButtons: actionButtons
   }
-  return <ObjectItem {...props} />
+  return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
 }
 
-export default ObjectContainer
+const mapDispatchToProps = dispatch => {
+  return {
+    downloadObject: object => dispatch(actionsObjects.downloadObject(object))
+  }
+}
+
+export default connect(state => state, mapDispatchToProps)(ObjectContainer)
