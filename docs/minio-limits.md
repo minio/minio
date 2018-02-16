@@ -14,7 +14,7 @@
 
 |Item|Specification|
 |:---|:---|
-|Web browser upload size limit| 5GiB|
+|Web browser upload size limit| 5 TiB|
 
 ### Limits of S3 API
 
@@ -22,7 +22,7 @@
 |:---|:---|
 |Maximum number of buckets| no-limit|
 |Maximum number of objects per bucket| no-limit|
-|Maximum object size|	5 TiB|
+|Maximum object size| 5 TiB|
 |Minimum object size| 0 B|
 |Maximum object size per PUT operation| 5 TiB|
 |Maximum number of parts per upload| 	10,000|
@@ -31,9 +31,10 @@
 |Maximum number of objects returned per list objects request| 1000|
 |Maximum number of multipart uploads returned per list multipart uploads request| 1000|
 
+### List of Amazon S3 API's not supported on Minio
 We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [github issue](https://github.com/minio/minio/issues).
 
-###  List of Amazon S3 Bucket API's not supported on Minio.
+#### List of Amazon S3 Bucket API's not supported on Minio
 
 - BucketACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
@@ -45,12 +46,11 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 - BucketRequestPayment
 - BucketTagging
 
-### List of Amazon S3 Object API's not supported on Minio.
+#### List of Amazon S3 Object API's not supported on Minio
 
 - ObjectACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent
 - ObjectVersions
 
-### Object name restrictions on Minio.
-
+### Object name restrictions on Minio
 Object names that contain characters `^*|\&#34; are unsupported on Windows and other file systems which do not support filenames with these characters.
