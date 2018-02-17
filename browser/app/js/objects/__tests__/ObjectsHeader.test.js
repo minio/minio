@@ -48,6 +48,26 @@ describe("ObjectsHeader", () => {
     ).toBeTruthy()
   })
 
+  it("should render size column with desc class when objects are sorted by size", () => {
+    const sortObjects = jest.fn()
+    const wrapper = shallow(
+      <ObjectsHeader sortObjects={sortObjects} sortSizeOrder={true} />
+    )
+    expect(
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc")
+    ).toBeTruthy()
+  })
+
+  it("should render last modified column with desc class when objects are sorted by last modified", () => {
+    const sortObjects = jest.fn()
+    const wrapper = shallow(
+      <ObjectsHeader sortObjects={sortObjects} sortLastModifiedOrder={true} />
+    )
+    expect(
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc")
+    ).toBeTruthy()
+  })
+
   it("should call sortObjects when a column is clicked", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
