@@ -46,21 +46,24 @@ export class ShareObjectModal extends React.Component {
   updateExpireValue(param, inc) {
     let expiry = Object.assign({}, this.state.expiry)
 
-    var newValue = expiry[param] + inc
-    const { min, max } = this.expiryRange[param]
-    if (newValue < min || newValue > max) {
+    // Not allowing any increments if days is already max
+    if (expiry.days == this.expiryRange["days"].max && inc > 0) {
       return
     }
-    expiry[param] = newValue
 
-    if (
-      (param == "days" && newValue == max) ||
-      expiry.days + expiry.hours + expiry.minutes == 0
-    ) {
-      expiry.days = this.expiryRange["days"].max
+    const { min, max } = this.expiryRange[param]
+    expiry[param] = expiry[param] + inc
+    if (expiry[param] < min || expiry[param] > max) {
+      return
+    }
+
+    if (expiry.days == this.expiryRange["days"].max) {
       expiry.hours = 0
       expiry.minutes = 0
+    } else if (expiry.days + expiry.hours + expiry.minutes == 0) {
+      expiry.days = this.expiryRange["days"].max
     }
+
     this.setState({
       expiry
     })

@@ -142,6 +142,31 @@ describe("ShareObjectModal", () => {
       expect(shareObject).toHaveBeenCalled()
     })
 
+    it("should not allow increasing hours and minutes when days is max", () => {
+      const shareObject = jest.fn()
+      const wrapper = shallow(
+        <ShareObjectModal
+          object={{ name: "obj1" }}
+          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
+          shareObject={shareObject}
+        />
+      )
+      wrapper.setState({
+        expiry: {
+          days: 7,
+          hours: 0,
+          minutes: 0
+        }
+      })
+      wrapper.find("#increase-hours").simulate("click")
+      expect(wrapper.state("expiry")).toEqual({
+        days: 7,
+        hours: 0,
+        minutes: 0
+      })
+      expect(shareObject).not.toHaveBeenCalled()
+    })
+
     it("should set days to MAX when all of them are 0", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
