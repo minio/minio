@@ -16,17 +16,16 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { SideBar } from "../SideBar"
+import { ObjectContainer } from "../ObjectContainer"
 
-describe("SideBar", () => {
+describe("ObjectContainer", () => {
   it("should render without crashing", () => {
-    shallow(<SideBar />)
+    shallow(<ObjectContainer object={{ name: "test1.jpg" }} />)
   })
 
-  it("should call clickOutside when the user clicks outside the sidebar", () => {
-    const clickOutside = jest.fn()
-    const wrapper = shallow(<SideBar clickOutside={clickOutside} />)
-    wrapper.simulate("clickOut", { preventDefault: jest.fn() })
-    expect(clickOutside).toHaveBeenCalled()
+  it("should render ObjectItem with props", () => {
+    const wrapper = shallow(<ObjectContainer object={{ name: "test1.jpg" }} />)
+    expect(wrapper.find("ObjectItem").length).toBe(1)
+    expect(wrapper.find("ObjectItem").prop("name")).toBe("test1.jpg")
   })
 })

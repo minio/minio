@@ -36,4 +36,11 @@ describe("ObjectsList", () => {
       { name: "test2.jpg" }
     ])
   })
+
+  it("should show the loading indicator at the bottom if there are more elements to display", () => {
+    const wrapper = shallow(
+      <ObjectsListContainer currentBucket="test1" isTruncated={true} />
+    )
+    expect(wrapper.find(".text-center").prop("style")).toHaveProperty("display", "block")
+  })
 })
