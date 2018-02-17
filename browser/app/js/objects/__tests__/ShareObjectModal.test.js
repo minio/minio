@@ -87,13 +87,12 @@ describe("ShareObjectModal", () => {
   })
 
   describe("Update expiry values", () => {
+    const props = {
+      object: { name: "obj1" },
+      shareObjectDetails: { show: true, object: "obj1", url: "test" }
+    }
     it("should have default expiry values", () => {
-      const wrapper = shallow(
-        <ShareObjectModal
-          object={{ name: "obj1" }}
-          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-        />
-      )
+      const wrapper = shallow(<ShareObjectModal {...props} />)
       expect(wrapper.state("expiry")).toEqual({
         days: SHARE_OBJECT_EXPIRY_DAYS,
         hours: SHARE_OBJECT_EXPIRY_HOURS,
@@ -101,55 +100,10 @@ describe("ShareObjectModal", () => {
       })
     })
 
-    it("should not allow expiry values less than minimum value", () => {
+    it("should not allow any increments when days is already max", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal
-          object={{ name: "obj1" }}
-          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-          shareObject={shareObject}
-        />
-      )
-      wrapper.find("#decrease-hours").simulate("click")
-      expect(wrapper.state("expiry").hours).toBe(0)
-      wrapper.find("#decrease-minutes").simulate("click")
-      expect(wrapper.state("expiry").minutes).toBe(0)
-      expect(shareObject).not.toHaveBeenCalled()
-    })
-
-    it("should set hours and minutes to 0 when days is max", () => {
-      const shareObject = jest.fn()
-      const wrapper = shallow(
-        <ShareObjectModal
-          object={{ name: "obj1" }}
-          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-          shareObject={shareObject}
-        />
-      )
-      wrapper.setState({
-        expiry: {
-          days: 6,
-          hours: 5,
-          minutes: 30
-        }
-      })
-      wrapper.find("#increase-days").simulate("click")
-      expect(wrapper.state("expiry")).toEqual({
-        days: 7,
-        hours: 0,
-        minutes: 0
-      })
-      expect(shareObject).toHaveBeenCalled()
-    })
-
-    it("should not allow increasing hours and minutes when days is max", () => {
-      const shareObject = jest.fn()
-      const wrapper = shallow(
-        <ShareObjectModal
-          object={{ name: "obj1" }}
-          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-          shareObject={shareObject}
-        />
+        <ShareObjectModal {...props} shareObject={shareObject} />
       )
       wrapper.setState({
         expiry: {
@@ -167,14 +121,69 @@ describe("ShareObjectModal", () => {
       expect(shareObject).not.toHaveBeenCalled()
     })
 
-    it("should set days to MAX when all of them are 0", () => {
+    it("should not allow expiry values less than minimum value", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal
-          object={{ name: "obj1" }}
-          shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-          shareObject={shareObject}
-        />
+        <ShareObjectModal {...props} shareObject={shareObject} />
+      )
+      wrapper.setState({
+        expiry: {
+          days: 5,
+          hours: 0,
+          minutes: 0
+        }
+      })
+      wrapper.find("#decrease-hours").simulate("click")
+      expect(wrapper.state("expiry").hours).toBe(0)
+      wrapper.find("#decrease-minutes").simulate("click")
+      expect(wrapper.state("expiry").minutes).toBe(0)
+      expect(shareObject).not.toHaveBeenCalled()
+    })
+
+    it("should not allow expiry values more than maximum value", () => {
+      const shareObject = jest.fn()
+      const wrapper = shallow(
+        <ShareObjectModal {...props} shareObject={shareObject} />
+      )
+      wrapper.setState({
+        expiry: {
+          days: 1,
+          hours: 23,
+          minutes: 59
+        }
+      })
+      wrapper.find("#increase-hours").simulate("click")
+      expect(wrapper.state("expiry").hours).toBe(23)
+      wrapper.find("#increase-minutes").simulate("click")
+      expect(wrapper.state("expiry").minutes).toBe(59)
+      expect(shareObject).not.toHaveBeenCalled()
+    })
+
+    it("should set hours and minutes to 0 when days reaches max", () => {
+      const shareObject = jest.fn()
+      const wrapper = shallow(
+        <ShareObjectModal {...props} shareObject={shareObject} />
+      )
+      wrapper.setState({
+        expiry: {
+          days: 6,
+          hours: 5,
+          minutes: 30
+        }
+      })
+      wrapper.find("#increase-days").simulate("click")
+      expect(wrapper.state("expiry")).toEqual({
+        days: 7,
+        hours: 0,
+        minutes: 0
+      })
+      expect(shareObject).toHaveBeenCalled()
+    })
+
+    it("should set days to MAX when all of them becomes 0", () => {
+      const shareObject = jest.fn()
+      const wrapper = shallow(
+        <ShareObjectModal {...props} shareObject={shareObject} />
       )
       wrapper.setState({
         expiry: {
