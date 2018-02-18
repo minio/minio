@@ -19,12 +19,14 @@ import { connect } from "react-redux"
 import { Dropdown } from "react-bootstrap"
 import * as browserActions from "./actions"
 import AboutModal from "./AboutModal"
+import ChangePasswordModal from "./ChangePasswordModal"
 
 export class BrowserDropdown extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showAboutModal: false
+      showAboutModal: false,
+      showChangePasswordModal: false
     }
   }
   showAbout(e) {
@@ -36,6 +38,17 @@ export class BrowserDropdown extends React.Component {
   hideAbout() {
     this.setState({
       showAboutModal: false
+    })
+  }
+  showChangePassword(e) {
+    e.preventDefault()
+    this.setState({
+      showChangePasswordModal: true
+    })
+  }
+  hideChangePassword() {
+    this.setState({
+      showChangePasswordModal: false
     })
   }
   componentDidMount() {
@@ -100,9 +113,15 @@ export class BrowserDropdown extends React.Component {
               )}
             </li>
             <li>
-              <a href="" onClick={settingsFunc}>
+              <a href="" onClick={this.showChangePassword.bind(this)}>
                 Change Password <i className="fa fa-cog" />
               </a>
+              {this.state.showChangePasswordModal && (
+                <ChangePasswordModal
+                  serverInfo={serverInfo}
+                  hideChangePassword={this.hideChangePassword.bind(this)}
+                />
+              )}
             </li>
             <li>
               <a href="" onClick={logoutFunc}>
