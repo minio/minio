@@ -182,13 +182,14 @@ describe("Objects actions", () => {
     expect(actions).toEqual(expectedActions)
   })
 
-  it("should update browser url and creates objects/SET_CURRENT_PREFIX action when selectPrefix is called", () => {
+  it("should update browser url and creates objects/SET_CURRENT_PREFIX and objects/CHECKED_LIST_RESET actions when selectPrefix is called", () => {
     const store = mockStore({
       buckets: { currentBucket: "test" },
       objects: { currentPrefix: "" }
     })
     const expectedActions = [
-      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" }
+      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
     const actions = store.getActions()
