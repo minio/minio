@@ -15,18 +15,27 @@
  */
 
 import React from "react"
-import Path from "../objects/Path"
-import StorageInfo from "./StorageInfo"
-import BrowserDropdown from "./BrowserDropdown"
+import { shallow } from "enzyme"
+import { AboutModal } from "../AboutModal"
 
-export const Header = () => (
-  <header className="fe-header">
-    <Path />
-    <StorageInfo />
-    <ul className="feh-actions">
-      <BrowserDropdown />
-    </ul>
-  </header>
-)
+describe("AboutModal", () => {
+  const serverInfo = {
+    version: "test",
+    memory: "test",
+    platform: "test",
+    runtime: "test"
+  }
 
-export default Header
+  it("should render without crashing", () => {
+    shallow(<AboutModal serverInfo={serverInfo} />)
+  })
+
+  it("should call hideAbout when close button is clicked", () => {
+    const hideAbout = jest.fn()
+    const wrapper = shallow(
+      <AboutModal serverInfo={serverInfo} hideAbout={hideAbout} />
+    )
+    wrapper.find("button").simulate("click")
+    expect(hideAbout).toHaveBeenCalled()
+  })
+})
