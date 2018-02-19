@@ -18,6 +18,8 @@ import React from "react"
 import { connect } from "react-redux"
 import { Dropdown } from "react-bootstrap"
 import * as browserActions from "./actions"
+import web from "../web"
+import history from "../history"
 import AboutModal from "./AboutModal"
 import ChangePasswordModal from "./ChangePasswordModal"
 
@@ -70,6 +72,11 @@ export class BrowserDropdown extends React.Component {
     if (el.msRequestFullscreen) {
       el.msRequestFullscreen()
     }
+  }
+  logout(e) {
+    e.preventDefault()
+    web.Logout()
+    history.replace("/login")
   }
   render() {
     const { aboutFunc, settingsFunc, logoutFunc } = this.props
@@ -124,7 +131,7 @@ export class BrowserDropdown extends React.Component {
               )}
             </li>
             <li>
-              <a href="" onClick={logoutFunc}>
+              <a href="" id="logout" onClick={this.logout}>
                 Sign Out <i className="fa fa-sign-out" />
               </a>
             </li>

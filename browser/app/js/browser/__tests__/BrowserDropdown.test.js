@@ -52,4 +52,12 @@ describe("BrowserDropdown", () => {
     expect(wrapper.state("showAboutModal")).toBeTruthy()
     expect(wrapper.find("AboutModal").length).toBe(1)
   })
+
+  it("should logout and redirect to /login when logout is clicked", () => {
+    const wrapper = shallow(
+      <BrowserDropdown serverInfo={serverInfo} fetchServerInfo={jest.fn()} />
+    )
+    wrapper.find("#logout").simulate("click", { preventDefault: jest.fn() })
+    expect(window.location.pathname.endsWith("/login")).toBeTruthy()
+  })
 })
