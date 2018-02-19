@@ -26,7 +26,12 @@ describe("objects reducer", () => {
       sortOrder: false,
       currentPrefix: "",
       marker: "",
-      isTruncated: false
+      isTruncated: false,
+      shareObject: {
+        show: false,
+        object: "",
+        url: ""
+      }
     })
   })
 
@@ -66,6 +71,28 @@ describe("objects reducer", () => {
     expect(newState.isTruncated).toBeFalsy()
   })
 
+  it("should handle REMOVE", () => {
+    const newState = reducer(
+      { list: [{ name: "obj1" }, { name: "obj2" }] },
+      {
+        type: actions.REMOVE,
+        object: "obj1"
+      }
+    )
+    expect(newState.list).toEqual([{ name: "obj2" }])
+  })
+
+  it("should handle REMOVE with non-existent object", () => {
+    const newState = reducer(
+      { list: [{ name: "obj1" }, { name: "obj2" }] },
+      {
+        type: actions.REMOVE,
+        object: "obj3"
+      }
+    )
+    expect(newState.list).toEqual([{ name: "obj1" }, { name: "obj2" }])
+  })
+
   it("should handle SET_SORT_BY", () => {
     const newState = reducer(undefined, {
       type: actions.SET_SORT_BY,
@@ -93,5 +120,19 @@ describe("objects reducer", () => {
     expect(newState.currentPrefix).toEqual("test2/")
     expect(newState.marker).toEqual("")
     expect(newState.isTruncated).toBeFalsy()
+  })
+
+  it("should handle SET_SHARE_OBJECT", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_SHARE_OBJECT,
+      show: true,
+      object: "a.txt",
+      url: "test"
+    })
+    expect(newState.shareObject).toEqual({
+      show: true,
+      object: "a.txt",
+      url: "test"
+    })
   })
 })
