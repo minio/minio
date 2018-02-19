@@ -16,6 +16,14 @@
 
 import * as actionsObjects from "./actions"
 
+const removeObject = (list, action) => {
+  const idx = list.findIndex(object => object.name === action.object)
+  if (idx == -1) {
+    return list
+  }
+  return [...list.slice(0, idx), ...list.slice(idx + 1)]
+}
+
 export default (
   state = {
     list: [],
@@ -23,7 +31,12 @@ export default (
     sortOrder: false,
     currentPrefix: "",
     marker: "",
-    isTruncated: false
+    isTruncated: false,
+    shareObject: {
+      show: false,
+      object: "",
+      url: ""
+    }
   },
   action
 ) => {
@@ -42,6 +55,11 @@ export default (
         marker: action.marker,
         isTruncated: action.isTruncated
       }
+    case actionsObjects.REMOVE:
+      return {
+        ...state,
+        list: removeObject(state.list, action)
+      }
     case actionsObjects.SET_SORT_BY:
       return {
         ...state,
@@ -58,6 +76,15 @@ export default (
         currentPrefix: action.prefix,
         marker: "",
         isTruncated: false
+      }
+    case actionsObjects.SET_SHARE_OBJECT:
+      return {
+        ...state,
+        shareObject: {
+          show: action.show,
+          object: action.object,
+          url: action.url
+        }
       }
     default:
       return state

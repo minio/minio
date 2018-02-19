@@ -18,16 +18,17 @@ import React from "react"
 import humanize from "humanize"
 import Moment from "moment"
 import ObjectItem from "./ObjectItem"
+import ObjectActions from "./ObjectActions"
 import * as actionsObjects from "./actions"
 
 export const ObjectContainer = ({ object }) => {
-  const actionButtons = []
+  const actionButtons = <ObjectActions object={object} />
   const props = {
     name: object.name,
     contentType: object.contentType,
     size: humanize.filesize(object.size),
     lastModified: Moment(object.lastModified).format("lll"),
-    actionButtons: []
+    actionButtons: actionButtons
   }
   return <ObjectItem {...props} />
 }
