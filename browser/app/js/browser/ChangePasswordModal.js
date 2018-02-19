@@ -79,8 +79,6 @@ export class ChangePasswordModal extends React.Component {
 
   // Save the auth params and set them.
   setAuth(e) {
-    e.preventDefault()
-
     const { showAlert } = this.props
     const accessKey = this.state.accessKey
     const secretKey = this.state.secretKey
@@ -104,9 +102,6 @@ export class ChangePasswordModal extends React.Component {
   }
 
   generateAuth(e) {
-    e.preventDefault()
-    const { dispatch } = this.props
-
     web.GenerateAuth().then(data => {
       this.setState({
         accessKey: data.accessKey,
@@ -161,6 +156,7 @@ export class ChangePasswordModal extends React.Component {
         </ModalBody>
         <div className="modal-footer">
           <button
+            id="generate-keys"
             className={
               "btn btn-primary " + (this.state.keysReadOnly ? "hidden" : "")
             }
@@ -169,6 +165,7 @@ export class ChangePasswordModal extends React.Component {
             Generate
           </button>
           <button
+            id="update-keys"
             className={
               "btn btn-success " + (this.state.keysReadOnly ? "hidden" : "")
             }
@@ -176,7 +173,11 @@ export class ChangePasswordModal extends React.Component {
           >
             Update
           </button>
-          <button className="btn btn-link" onClick={hideChangePassword}>
+          <button
+            id="cancel-change-password"
+            className="btn btn-link"
+            onClick={hideChangePassword}
+          >
             Cancel
           </button>
         </div>
