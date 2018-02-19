@@ -17,7 +17,7 @@
 export const SET = "alert/SET"
 export const CLEAR = "alert/CLEAR"
 
-let alertId = 0
+export let alertId = 0
 
 export const set = alert => {
   const id = alertId++

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,23 @@
  * limitations under the License.
  */
 
-// File for all the browser constants.
+import React from "react"
+import ConfirmModal from "../browser/ConfirmModal"
 
-// minioBrowserPrefix absolute path.
-var p = window.location.pathname
-export const minioBrowserPrefix = p.slice(0, p.indexOf("/", 1))
+export const DeleteObjectConfirmModal = ({
+  deleteObject,
+  hideDeleteConfirmModal
+}) => (
+  <ConfirmModal
+    show={true}
+    icon="fa fa-exclamation-triangle mci-red"
+    text="Are you sure you want to delete?"
+    sub="This cannot be undone!"
+    okText="Delete"
+    cancelText="Cancel"
+    okHandler={deleteObject}
+    cancelHandler={hideDeleteConfirmModal}
+  />
+)
 
-export const READ_ONLY = "readonly"
-export const WRITE_ONLY = "writeonly"
-export const READ_WRITE = "readwrite"
-
-export const SHARE_OBJECT_EXPIRY_DAYS = 5
-export const SHARE_OBJECT_EXPIRY_HOURS = 0
-export const SHARE_OBJECT_EXPIRY_MINUTES = 0
+export default DeleteObjectConfirmModal
