@@ -611,13 +611,13 @@ func (l *ossObjects) PutObject(bucket, object string, data *hash.Reader, metadat
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
+func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Client.Bucket(srcBucket)
 	if err != nil {
 		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 
-	opts := make([]oss.Option, 0, len(metadata)+1)
+	opts := make([]oss.Option, 0, len(srcInfo.UserDefined)+1)
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
 	// metadata input is already a trickled down value from interpreting x-oss-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
@@ -625,7 +625,7 @@ func (l *ossObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 	opts = append(opts, oss.MetadataDirective(oss.MetaReplace))
 
 	// Build OSS metadata
-	opts, err = appendS3MetaToOSSOptions(opts, metadata)
+	opts, err = appendS3MetaToOSSOptions(opts, srcInfo.UserDefined)
 	if err != nil {
 		return objInfo, ossToObjectError(err, srcBucket, srcObject)
 	}
@@ -797,7 +797,7 @@ func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, par
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *ossObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, metadata map[string]string, srcEtag string) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, srcInfo minio.ObjectInfo) (p minio.PartInfo, err error) {
 
 	bkt, err := l.Client.Bucket(destBucket)
 	if err != nil {
@@ -805,7 +805,7 @@ func (l *ossObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(nil, metadata)
+	opts, err := appendS3MetaToOSSOptions(nil, srcInfo.UserDefined)
 	if err != nil {
 		return p, ossToObjectError(err, srcBucket, srcObject)
 	}

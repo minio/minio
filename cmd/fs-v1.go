@@ -360,7 +360,7 @@ func (fs *FSObjects) DeleteBucket(bucket string) error {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (oi ObjectInfo, e error) {
+func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
@@ -392,15 +392,6 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
-	if srcEtag != "" {
-		etag, perr := fs.getObjectETag(srcBucket, srcObject)
-		if perr != nil {
-			return oi, toObjectErr(perr, srcBucket, srcObject)
-		}
-		if etag != srcEtag {
-			return oi, toObjectErr(errors.Trace(InvalidETag{}), srcBucket, srcObject)
-		}
-	}
 
 	// Check if this request is only metadata update.
 	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
@@ -416,7 +407,7 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
-		fsMeta.Meta = metadata
+		fsMeta.Meta = srcInfo.UserDefined
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
@@ -433,7 +424,7 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, ""); gerr != nil {
+		if gerr := fs.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
 			return
@@ -446,7 +437,7 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
-	objInfo, err := fs.putObject(dstBucket, dstObject, hashReader, metadata)
+	objInfo, err := fs.putObject(dstBucket, dstObject, hashReader, srcInfo.UserDefined)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}

@@ -290,13 +290,14 @@ func (l *s3Objects) PutObject(bucket string, object string, data *hash.Reader, m
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket string, dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
+func (l *s3Objects) CopyObject(srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
 	// metadata input is already a trickled down value from interpreting x-amz-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
-	metadata["x-amz-metadata-directive"] = "REPLACE"
-	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, metadata); err != nil {
+	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
+	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
+	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(dstBucket, dstObject)
@@ -346,10 +347,13 @@ func (l *s3Objects) PutObjectPart(bucket string, object string, uploadID string,
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, metadata map[string]string, srcEtag string) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, srcInfo minio.ObjectInfo) (p minio.PartInfo, err error) {
 
+	srcInfo.UserDefined = map[string]string{
+		"x-amz-copy-source-if-match": srcInfo.ETag,
+	}
 	completePart, err := l.Client.CopyObjectPart(srcBucket, srcObject, destBucket, destObject,
-		uploadID, partID, startOffset, length, metadata)
+		uploadID, partID, startOffset, length, srcInfo.UserDefined)
 	if err != nil {
 		return p, minio.ErrorRespToObjectError(errors.Trace(err), srcBucket, srcObject)
 	}

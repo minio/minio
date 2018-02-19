@@ -546,30 +546,21 @@ func (s *xlSets) DeleteObject(bucket string, object string) (err error) {
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
-func (s *xlSets) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string, srcEtag string) (objInfo ObjectInfo, err error) {
-	if len(s.sets) == 1 {
-		return s.sets[0].CopyObject(srcBucket, srcObject, destBucket, destObject, metadata, srcEtag)
-	}
-
+func (s *xlSets) CopyObject(srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
-
-	objInfo, err = srcSet.GetObjectInfo(srcBucket, srcObject)
-	if err != nil {
-		return objInfo, err
-	}
 
 	// Check if this request is only metadata update.
 	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
 	if cpMetadataOnly {
-		return srcSet.CopyObject(srcBucket, srcObject, destBucket, destObject, metadata, srcEtag)
+		return srcSet.CopyObject(srcBucket, srcObject, destBucket, destObject, srcInfo)
 	}
 
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		if gerr := srcSet.GetObject(srcBucket, srcObject, 0, objInfo.Size, pipeWriter, srcEtag); gerr != nil {
+		if gerr := srcSet.GetObject(srcBucket, srcObject, 0, srcInfo.Size, pipeWriter, srcInfo.ETag); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
@@ -577,13 +568,13 @@ func (s *xlSets) CopyObject(srcBucket, srcObject, destBucket, destObject string,
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, objInfo.Size, "", "")
+	hashReader, err := hash.NewReader(pipeReader, srcInfo.Size, "", "")
 	if err != nil {
 		pipeReader.CloseWithError(err)
-		return objInfo, toObjectErr(errors.Trace(err), destBucket, destObject)
+		return srcInfo, toObjectErr(errors.Trace(err), destBucket, destObject)
 	}
 
-	objInfo, err = destSet.PutObject(destBucket, destObject, hashReader, metadata)
+	objInfo, err = destSet.PutObject(destBucket, destObject, hashReader, srcInfo.UserDefined)
 	if err != nil {
 		pipeReader.CloseWithError(err)
 		return objInfo, err
@@ -778,11 +769,7 @@ func (s *xlSets) NewMultipartUpload(bucket, object string, metadata map[string]s
 
 // Copies a part of an object from source hashedSet to destination hashedSet.
 func (s *xlSets) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
-	startOffset int64, length int64, metadata map[string]string, srcEtag string) (partInfo PartInfo, err error) {
-	if len(s.sets) == 1 {
-		return s.sets[0].CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset,
-			length, metadata, srcEtag)
-	}
+	startOffset int64, length int64, srcInfo ObjectInfo) (partInfo PartInfo, err error) {
 
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
@@ -790,11 +777,12 @@ func (s *xlSets) CopyObjectPart(srcBucket, srcObject, destBucket, destObject str
 	// Initialize pipe to stream from source.
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		if gerr := srcSet.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcEtag); gerr != nil {
+		if gerr := srcSet.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
+
 		// Close writer explicitly signalling we wrote all data.
 		pipeWriter.Close()
 		return

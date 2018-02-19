@@ -516,12 +516,6 @@ func (l *b2Objects) PutObject(bucket string, object string, data *h2.Reader, met
 	}, nil
 }
 
-// CopyObject copies a blob from source container to destination container.
-func (l *b2Objects) CopyObject(srcBucket string, srcObject string, dstBucket string,
-	dstObject string, metadata map[string]string, srcEtag string) (objInfo minio.ObjectInfo, err error) {
-	return objInfo, errors.Trace(minio.NotImplemented{})
-}
-
 // DeleteObject deletes a blob in bucket
 func (l *b2Objects) DeleteObject(bucket string, object string) error {
 	bkt, err := l.Bucket(bucket)
