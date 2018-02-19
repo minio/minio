@@ -56,6 +56,10 @@ $ git push origin my-new-feature
 ### Create a Pull Request
 Pull requests can be created via GitHub. Refer to [this document](https://help.github.com/articles/creating-a-pull-request/) for detailed steps on how to create a pull request. After a Pull Request gets peer reviewed and approved, it will be merged.
 
+### Triage Issues
+
+In addition to contributing code, you can help to triage issues. This can include reproducing bug reports, or asking for vital information such as version numbers or reproduction instructions. If you would like to start triaging issues, one easy way to get started is to [subscribe to minio/minio on CodeTriage](https://www.codetriage.com/minio/minio).
+
 ## FAQs
 ### How does ``Minio`` manages dependencies? 
 ``Minio`` manages its dependencies using [govendor](https://github.com/kardianos/govendor). To add a dependency
