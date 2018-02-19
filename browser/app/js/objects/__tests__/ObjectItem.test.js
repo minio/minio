@@ -44,7 +44,7 @@ describe("ObjectItem", () => {
     expect(checkObject).toHaveBeenCalledWith("test")
   })
 
-  it("should with checked checkbox", () => {
+  it("should render checked checkbox", () => {
     const wrapper = shallow(<ObjectItem name={"test"} checked={true} />)
     expect(wrapper.find("input[type='checkbox']").prop("checked")).toBeTruthy()
   })
