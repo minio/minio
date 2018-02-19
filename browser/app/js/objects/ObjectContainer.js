@@ -21,17 +21,29 @@ import Moment from "moment"
 import ObjectItem from "./ObjectItem"
 import ObjectActions from "./ObjectActions"
 import * as actionsObjects from "./actions"
+import { getCheckedList } from "./selectors"
 
-export const ObjectContainer = ({ object, downloadObject }) => {
-  const actionButtons = <ObjectActions object={object} />
-  const props = {
+export const ObjectContainer = ({
+  object,
+  checkedObjectsCount,
+  downloadObject
+}) => {
+  let props = {
     name: object.name,
     contentType: object.contentType,
     size: humanize.filesize(object.size),
-    lastModified: Moment(object.lastModified).format("lll"),
-    actionButtons: actionButtons
+    lastModified: Moment(object.lastModified).format("lll")
+  }
+  if (checkedObjectsCount == 0) {
+    props.actionButtons = <ObjectActions object={object} />
   }
   return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
+}
+
+const mapStateToProps = state => {
+  return {
+    checkedObjectsCount: getCheckedList(state).length
+  }
 }
 
 const mapDispatchToProps = dispatch => {
@@ -40,4 +52,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(state => state, mapDispatchToProps)(ObjectContainer)
+export default connect(mapStateToProps, mapDispatchToProps)(ObjectContainer)
