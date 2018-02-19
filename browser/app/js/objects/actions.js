@@ -289,7 +289,6 @@ export const downloadCheckedObjects = () => {
             location.origin
           }${minioBrowserPrefix}/zip?token=${res.token}`
           downloadZip(requestUrl, req, dispatch)
-          console.log(requestUrl)
         })
         .catch(err =>
           dispatch(
