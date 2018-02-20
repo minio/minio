@@ -270,7 +270,7 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 	isFS := len(endpoints) == 1
 	if isFS {
 		// Initialize new FS object layer.
-		return newFSObjectLayer(endpoints[0].Path)
+		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
 	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)

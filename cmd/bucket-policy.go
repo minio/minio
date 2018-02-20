@@ -90,7 +90,7 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 	policies := make(map[string]policy.BucketAccessPolicy)
 	// Loads bucket policy.
 	for _, bucket := range buckets {
-		bp, pErr := readBucketPolicy(bucket.Name, objAPI)
+		bp, pErr := ReadBucketPolicy(bucket.Name, objAPI)
 		if pErr != nil {
 			// net.Dial fails for rpc client or any
 			// other unexpected errors during net.Dial.
@@ -130,9 +130,9 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	return &buffer, nil
 }
 
-// readBucketPolicy - reads bucket policy for an input bucket, returns BucketPolicyNotFound
+// ReadBucketPolicy - reads bucket policy for an input bucket, returns BucketPolicyNotFound
 // if bucket policy is not found. This function also parses the bucket policy into an object.
-func readBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPolicy, error) {
+func ReadBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPolicy, error) {
 	// Read bucket policy JSON.
 	bucketPolicyReader, err := readBucketPolicyJSON(bucket, objAPI)
 	if err != nil {

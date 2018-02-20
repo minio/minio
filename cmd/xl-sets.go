@@ -433,7 +433,7 @@ func (s *xlSets) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, erro
 	// fetch bucket policy from cache.
 	bpolicy := s.bucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
-		return readBucketPolicy(bucket, s)
+		return ReadBucketPolicy(bucket, s)
 	}
 	return bpolicy, nil
 }
@@ -445,7 +445,7 @@ func (s *xlSets) DeleteBucketPolicy(bucket string) error {
 
 // RefreshBucketPolicy refreshes policy cache from disk
 func (s *xlSets) RefreshBucketPolicy(bucket string) error {
-	policy, err := readBucketPolicy(bucket, s)
+	policy, err := ReadBucketPolicy(bucket, s)
 	if err != nil {
 		if reflect.DeepEqual(policy, emptyBucketPolicy) {
 			return s.bucketPolicies.DeleteBucketPolicy(bucket)

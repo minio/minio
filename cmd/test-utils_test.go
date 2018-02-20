@@ -163,7 +163,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, err := newFSObjectLayer(fsDirs[0])
+	obj, err := NewFSObjectLayer(fsDirs[0])
 	if err != nil {
 		return nil, "", err
 	}
@@ -221,7 +221,7 @@ func prepareXL16() (ObjectLayer, []string, error) {
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 	newTestConfig(globalMinioDefaultRegion)
 	var err error
-	obj, err = newFSObjectLayer(disk)
+	obj, err = NewFSObjectLayer(disk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1685,7 +1685,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	isFS := len(endpoints) == 1
 	if isFS {
 		// Initialize new FS object layer.
-		return newFSObjectLayer(endpoints[0].Path)
+		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
 	_, err = waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)

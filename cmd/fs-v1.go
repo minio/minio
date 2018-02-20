@@ -37,8 +37,8 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-// fsObjects - Implements fs object layer.
-type fsObjects struct {
+// FSObjects - Implements fs object layer.
+type FSObjects struct {
 	// Path to be exported over S3 API.
 	fsPath string
 
@@ -93,8 +93,8 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
-// newFSObjectLayer - initialize new fs object layer.
-func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
+// NewFSObjectLayer - initialize new fs object layer.
+func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}
@@ -146,7 +146,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	// Initialize fs objects.
-	fs := &fsObjects{
+	fs := &FSObjects{
 		fsPath: fsPath,
 		fsUUID: fsUUID,
 		rwPool: &fsIOPool{
@@ -180,8 +180,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	return fs, nil
 }
 
-// Should be called when process shuts down.
-func (fs *fsObjects) Shutdown() error {
+// Shutdown - should be called when process shuts down.
+func (fs *FSObjects) Shutdown() error {
 	fs.fsFormatRlk.Close()
 
 	// Cleanup and delete tmp uuid.
@@ -189,7 +189,7 @@ func (fs *fsObjects) Shutdown() error {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (fs *fsObjects) StorageInfo() StorageInfo {
+func (fs *FSObjects) StorageInfo() StorageInfo {
 	info, err := getDiskInfo((fs.fsPath))
 	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
 	storageInfo := StorageInfo{
@@ -202,13 +202,13 @@ func (fs *fsObjects) StorageInfo() StorageInfo {
 
 // Locking operations
 
-// List namespace locks held in object layer
-func (fs *fsObjects) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+// ListLocks - List namespace locks held in object layer
+func (fs *FSObjects) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	return []VolumeLockInfo{}, NotImplemented{}
 }
 
-// Clear namespace locks held in object layer
-func (fs *fsObjects) ClearLocks([]VolumeLockInfo) error {
+// ClearLocks - Clear namespace locks held in object layer
+func (fs *FSObjects) ClearLocks([]VolumeLockInfo) error {
 	return NotImplemented{}
 }
 
@@ -217,7 +217,7 @@ func (fs *fsObjects) ClearLocks([]VolumeLockInfo) error {
 // getBucketDir - will convert incoming bucket names to
 // corresponding valid bucket names on the backend in a platform
 // compatible way for all operating systems.
-func (fs *fsObjects) getBucketDir(bucket string) (string, error) {
+func (fs *FSObjects) getBucketDir(bucket string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", errors.Trace(BucketNameInvalid{Bucket: bucket})
@@ -227,7 +227,7 @@ func (fs *fsObjects) getBucketDir(bucket string) (string, error) {
 	return bucketDir, nil
 }
 
-func (fs *fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
+func (fs *FSObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 	bucketDir, err := fs.getBucketDir(bucket)
 	if err != nil {
 		return nil, err
@@ -239,9 +239,9 @@ func (fs *fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 	return st, nil
 }
 
-// MakeBucket - create a new bucket, returns if it
+// MakeBucketWithLocation - create a new bucket, returns if it
 // already exists.
-func (fs *fsObjects) MakeBucketWithLocation(bucket, location string) error {
+func (fs *FSObjects) MakeBucketWithLocation(bucket, location string) error {
 	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return err
@@ -260,7 +260,7 @@ func (fs *fsObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo - fetch bucket metadata info.
-func (fs *fsObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+func (fs *FSObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
 	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
 		return bi, e
@@ -280,7 +280,7 @@ func (fs *fsObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 }
 
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.
-func (fs *fsObjects) ListBuckets() ([]BucketInfo, error) {
+func (fs *FSObjects) ListBuckets() ([]BucketInfo, error) {
 	if err := checkPathLength(fs.fsPath); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -321,7 +321,7 @@ func (fs *fsObjects) ListBuckets() ([]BucketInfo, error) {
 
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
-func (fs *fsObjects) DeleteBucket(bucket string) error {
+func (fs *FSObjects) DeleteBucket(bucket string) error {
 	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return err
@@ -360,7 +360,7 @@ func (fs *fsObjects) DeleteBucket(bucket string) error {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (fs *fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (oi ObjectInfo, e error) {
+func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string, srcEtag string) (oi ObjectInfo, e error) {
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
@@ -463,7 +463,7 @@ func (fs *fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (fs *fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
+func (fs *FSObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
 	if err = checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
@@ -478,7 +478,7 @@ func (fs *fsObjects) GetObject(bucket, object string, offset int64, length int64
 }
 
 // getObject - wrapper for GetObject
-func (fs *fsObjects) getObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
+func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
 	if _, err = fs.statBucketDir(bucket); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -549,7 +549,7 @@ func (fs *fsObjects) getObject(bucket, object string, offset int64, length int64
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (fs *fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
+func (fs *FSObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
 	fi, err := fsStatDir(pathJoin(fs.fsPath, bucket, object))
 	if err != nil && errors.Cause(err) != errFileAccessDenied {
@@ -597,7 +597,7 @@ func (fs *fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e erro
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (fs *fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
+func (fs *FSObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
@@ -619,7 +619,7 @@ func (fs *fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e erro
 // This function does the following check, suppose
 // object is "a/b/c/d", stat makes sure that objects ""a/b/c""
 // "a/b" and "a" do not exist.
-func (fs *fsObjects) parentDirIsObject(bucket, parent string) bool {
+func (fs *FSObjects) parentDirIsObject(bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
 		if p == "." || p == "/" {
@@ -640,7 +640,7 @@ func (fs *fsObjects) parentDirIsObject(bucket, parent string) bool {
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs *fsObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	if err := checkPutObjectArgs(bucket, object, fs, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -654,7 +654,7 @@ func (fs *fsObjects) PutObject(bucket string, object string, data *hash.Reader, 
 }
 
 // putObject - wrapper for PutObject
-func (fs *fsObjects) putObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -778,7 +778,7 @@ func (fs *fsObjects) putObject(bucket string, object string, data *hash.Reader, 
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
-func (fs *fsObjects) DeleteObject(bucket, object string) error {
+func (fs *FSObjects) DeleteObject(bucket, object string) error {
 	// Acquire a write lock before deleting the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalOperationTimeout); err != nil {
@@ -825,7 +825,7 @@ func (fs *fsObjects) DeleteObject(bucket, object string) error {
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
-func (fs *fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
+func (fs *FSObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
@@ -842,7 +842,7 @@ func (fs *fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 
 // getObjectETag is a helper function, which returns only the md5sum
 // of the file on the disk.
-func (fs *fsObjects) getObjectETag(bucket, entry string) (string, error) {
+func (fs *FSObjects) getObjectETag(bucket, entry string) (string, error) {
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fsMetaJSONFile)
 
 	// Read `fs.json` to perhaps contend with
@@ -891,7 +891,7 @@ func (fs *fsObjects) getObjectETag(bucket, entry string) (string, error) {
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
-func (fs *fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (fs *FSObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, fs); err != nil {
 		return loi, err
 	}
@@ -1051,53 +1051,53 @@ func (fs *fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 }
 
 // HealFormat - no-op for fs, Valid only for XL.
-func (fs *fsObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
+func (fs *FSObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs *fsObjects) HealObject(bucket, object string, dryRun bool) (
+func (fs *FSObjects) HealObject(bucket, object string, dryRun bool) (
 	res madmin.HealResultItem, err error) {
 	return res, errors.Trace(NotImplemented{})
 }
 
 // HealBucket - no-op for fs, Valid only for XL.
-func (fs *fsObjects) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem,
+func (fs *FSObjects) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem,
 	error) {
 	return nil, errors.Trace(NotImplemented{})
 }
 
 // ListObjectsHeal - list all objects to be healed. Valid only for XL
-func (fs *fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (fs *FSObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	return loi, errors.Trace(NotImplemented{})
 }
 
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL
-func (fs *fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
+func (fs *FSObjects) ListBucketsHeal() ([]BucketInfo, error) {
 	return []BucketInfo{}, errors.Trace(NotImplemented{})
 }
 
 // SetBucketPolicy sets policy on bucket
-func (fs *fsObjects) SetBucketPolicy(bucket string, policy policy.BucketAccessPolicy) error {
+func (fs *FSObjects) SetBucketPolicy(bucket string, policy policy.BucketAccessPolicy) error {
 	return persistAndNotifyBucketPolicyChange(bucket, false, policy, fs)
 }
 
 // GetBucketPolicy will get policy on bucket
-func (fs *fsObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+func (fs *FSObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	policy := fs.bucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(policy, emptyBucketPolicy) {
-		return readBucketPolicy(bucket, fs)
+		return ReadBucketPolicy(bucket, fs)
 	}
 	return policy, nil
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
-func (fs *fsObjects) DeleteBucketPolicy(bucket string) error {
+func (fs *FSObjects) DeleteBucketPolicy(bucket string) error {
 	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, fs)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
-func (fs *fsObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+func (fs *FSObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
 	loi, err := fs.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {
 		return result, err
@@ -1114,8 +1114,8 @@ func (fs *fsObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter 
 }
 
 // RefreshBucketPolicy refreshes cache policy with what's on disk.
-func (fs *fsObjects) RefreshBucketPolicy(bucket string) error {
-	policy, err := readBucketPolicy(bucket, fs)
+func (fs *FSObjects) RefreshBucketPolicy(bucket string) error {
+	policy, err := ReadBucketPolicy(bucket, fs)
 
 	if err != nil {
 		if reflect.DeepEqual(policy, emptyBucketPolicy) {
@@ -1127,11 +1127,11 @@ func (fs *fsObjects) RefreshBucketPolicy(bucket string) error {
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
-func (fs *fsObjects) IsNotificationSupported() bool {
+func (fs *FSObjects) IsNotificationSupported() bool {
 	return true
 }
 
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
-func (fs *fsObjects) IsEncryptionSupported() bool {
+func (fs *FSObjects) IsEncryptionSupported() bool {
 	return true
 }
