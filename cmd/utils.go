@@ -246,8 +246,8 @@ func ToS3ETag(etag string) string {
 
 // NewCustomHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
-// This sets the value for MaxIdleConns from 2 (go default) to
-// 100.
+// This sets the value for MaxIdleConnsPerHost from 2 (go default)
+// to 100.
 func NewCustomHTTPTransport() http.RoundTripper {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -256,6 +256,7 @@ func NewCustomHTTPTransport() http.RoundTripper {
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
