@@ -220,6 +220,9 @@ func bucketPolicyConditionMatch(conditions policy.ConditionKeyMap, statement pol
 // This implementation of the PUT operation uses the policy
 // subresource to add to or replace a policy on a bucket
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.putBucketPolicyHandler)(w, r)
+}
+func (api objectAPIHandlers) putBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -294,6 +297,9 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.deleteBucketPolicyHandler)(w, r)
+}
+func (api objectAPIHandlers) deleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -331,6 +337,10 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.getBucketPolicyHandler)(w, r)
+}
+
+func (api objectAPIHandlers) getBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)

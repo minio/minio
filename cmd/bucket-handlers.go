@@ -108,6 +108,10 @@ func isBucketActionAllowed(action, bucket, prefix string, objectAPI ObjectLayer)
 // -------------------------
 // This operation returns bucket location.
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.getBucketLocationHandler)(w, r)
+}
+
+func (api objectAPIHandlers) getBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -162,6 +166,9 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 // uploads in the response.
 //
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.listMultipartUploadsHandler)(w, r)
+}
+func (api objectAPIHandlers) listMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -207,6 +214,10 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.listBucketsHandler)(w, r)
+}
+
+func (api objectAPIHandlers) listBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -240,6 +251,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.deleteMultipleObjectsHandler)(w, r)
+}
+func (api objectAPIHandlers) deleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -374,6 +388,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.putBucketHandler)(w, r)
+}
+func (api objectAPIHandlers) putBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -429,6 +446,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 // This implementation of the POST operation handles object creation with a specified
 // signature policy in multipart/form-data
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.postPolicyBucketHandler)(w, r)
+}
+func (api objectAPIHandlers) postPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -625,6 +645,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.headBucketHandler)(w, r)
+}
+func (api objectAPIHandlers) headBucketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -649,6 +672,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.deleteBucketHandler)(w, r)
+}
+
+func (api objectAPIHandlers) deleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
