@@ -345,8 +345,6 @@ type gcsGateway struct {
 	ctx       context.Context
 }
 
-const googleStorageEndpoint = "storage.googleapis.com"
-
 // Returns projectID from the GOOGLE_APPLICATION_CREDENTIALS file.
 func gcsParseProjectID(credsFile string) (projectID string, err error) {
 	contents, err := ioutil.ReadFile(credsFile)
