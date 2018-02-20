@@ -25,6 +25,7 @@ import BucketSearch from "../buckets/BucketSearch"
 import BucketList from "../buckets/BucketList"
 import Host from "./Host"
 import * as actionsCommon from "./actions"
+import web from "../web"
 
 export const SideBar = ({ sidebarOpen, clickOutside }) => {
   return (
@@ -40,7 +41,7 @@ export const SideBar = ({ sidebarOpen, clickOutside }) => {
           <h2>Minio Browser</h2>
         </div>
         <div className="fes-list">
-          <BucketSearch />
+          {web.LoggedIn() && <BucketSearch />}
           <BucketList />
         </div>
         <Host />
