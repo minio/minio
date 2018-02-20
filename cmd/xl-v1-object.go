@@ -777,8 +777,11 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 
 	var writeQuorum int
 	var err error
+
+	isDir := hasSuffix(object, slashSeparator)
+
 	// If its a directory request, no need to read metadata.
-	if !hasSuffix(object, slashSeparator) {
+	if !isDir {
 		// Read metadata associated with the object from all disks.
 		metaArr, errs := readAllXLMetadata(xl.getDisks(), bucket, object)
 
@@ -800,13 +803,20 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 			continue
 		}
 		wg.Add(1)
-		go func(index int, disk StorageAPI) {
+		go func(index int, disk StorageAPI, isDir bool) {
 			defer wg.Done()
-			err := cleanupDir(disk, bucket, object)
+			var err error
+			if isDir {
+				// DeleteFile() simply tries to remove a directory
+				// and will succeed only if that directory is empty.
+				err = disk.DeleteFile(bucket, object)
+			} else {
+				err = cleanupDir(disk, bucket, object)
+			}
 			if err != nil && errors.Cause(err) != errVolumeNotFound {
 				dErrs[index] = err
 			}
-		}(index, disk)
+		}(index, disk, isDir)
 	}
 
 	// Wait for all routines to finish.
