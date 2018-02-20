@@ -932,14 +932,14 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat((srcVolumeDir))
+	_, err = os.Stat(srcVolumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		}
 		return err
 	}
-	_, err = os.Stat((dstVolumeDir))
+	_, err = os.Stat(dstVolumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -953,23 +953,24 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return errFileAccessDenied
 	}
 	srcFilePath := slashpath.Join(srcVolumeDir, srcPath)
-	if err = checkPathLength((srcFilePath)); err != nil {
+	if err = checkPathLength(srcFilePath); err != nil {
 		return err
 	}
 	dstFilePath := slashpath.Join(dstVolumeDir, dstPath)
-	if err = checkPathLength((dstFilePath)); err != nil {
+	if err = checkPathLength(dstFilePath); err != nil {
 		return err
 	}
 	if srcIsDir {
-		// If source is a directory we expect the destination to be non-existent always.
-		_, err = os.Stat((dstFilePath))
-		if err == nil {
+		// If source is a directory, we expect the destination to be non-existent but we
+		// we still need to allow overwriting an empty directory since it represents
+		// an object empty directory.
+		_, err = os.Stat(dstFilePath)
+		if err == nil && !isDirEmpty(dstFilePath) {
 			return errFileAccessDenied
 		}
 		if !os.IsNotExist(err) {
 			return err
 		}
-		// Destination does not exist, hence proceed with the rename.
 	}
 
 	if err = renameAll(srcFilePath, dstFilePath); err != nil {
