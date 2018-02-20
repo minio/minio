@@ -24,8 +24,9 @@ import (
 
 	"encoding/hex"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/errors"
-	"github.com/minio/sha256-simd"
+	sha256 "github.com/minio/sha256-simd"
 )
 
 const (
@@ -373,7 +374,7 @@ func checkFormatXLValue(formatXL *formatXLV2) error {
 
 // Check all format values.
 func checkFormatXLValues(formats []*formatXLV2) error {
-	for _, formatXL := range formats {
+	for i, formatXL := range formats {
 		if formatXL == nil {
 			continue
 		}
@@ -381,8 +382,8 @@ func checkFormatXLValues(formats []*formatXLV2) error {
 			return err
 		}
 		if len(formats) != len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]) {
-			return fmt.Errorf("Number of disks %d did not match the backend format %d",
-				len(formats), len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]))
+			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
+				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]))
 		}
 	}
 	return nil
