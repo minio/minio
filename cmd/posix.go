@@ -24,6 +24,7 @@ import (
 	slashpath "path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -860,9 +861,13 @@ func deleteFile(basePath, deletePath string) error {
 		return err
 	}
 
-	// Recursively go down the next path and delete again.
-	// Errors for parent directories shouldn't trickle down.
-	deleteFile(basePath, slashpath.Dir(deletePath))
+	// Trailing slash is removed when found to ensure
+	// slashpath.Dir() to work as intended.
+	deletePath = strings.TrimSuffix(deletePath, slashSeparator)
+	deletePath = slashpath.Dir(deletePath)
+
+	// Delete parent directory. Errors for parent directories shouldn't trickle down.
+	deleteFile(basePath, deletePath)
 
 	return nil
 }
