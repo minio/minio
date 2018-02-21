@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	http2 "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -65,6 +66,7 @@ type authConfig struct {
 type AuthRPCClient struct {
 	sync.RWMutex             // Mutex to lock this object.
 	rpcClient    *rpc.Client // RPC client to make any RPC call.
+	conn         net.Conn    // Underlying *net.Conn*.
 	config       authConfig  // Authentication configuration information.
 	authToken    string      // Authentication token.
 	version      semVersion  // RPC version.
@@ -128,12 +130,18 @@ func (authClient *AuthRPCClient) Login() (err error) {
 		)
 
 		// Re-dial after we have disconnected or if its a fresh run.
-		var rpcClient *rpc.Client
-		rpcClient, err = rpcDial(authClient.config.serverAddr, authClient.config.serviceEndpoint, authClient.config.secureConn)
+		var conn net.Conn
+		conn, err = rpcDial(authClient.config.serverAddr, authClient.config.serviceEndpoint, authClient.config.secureConn)
 		if err != nil {
 			return err
 		}
 
+		// Set timeout for login.
+		conn.SetDeadline(UTCNow().Add(defaultDialTimeout))
+		// Flush timeout so that RPC readloop doesn't exit.
+		defer conn.SetDeadline(time.Time{})
+
+		rpcClient := rpc.NewClient(conn)
 		if err = rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
 			// Closing the connection here.
 			rpcClient.Close()
@@ -146,9 +154,10 @@ func (authClient *AuthRPCClient) Login() (err error) {
 			return err
 		}
 
-		// Initialize rpc client and auth token after a successful login.
+		// Initialize rpc client, auth token and underlying conn after a successful login.
 		authClient.authToken = authToken
 		authClient.rpcClient = rpcClient
+		authClient.conn = conn
 	}
 
 	return nil
@@ -173,14 +182,21 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 	return authClient.rpcClient.Call(serviceMethod, args, reply)
 }
 
+// SetDeadline - set deadline timeouts.
+func (authClient *AuthRPCClient) SetDeadline(t time.Time) {
+	authClient.RLock()
+	defer authClient.RUnlock()
+	authClient.conn.SetDeadline(t)
+}
+
 // Call executes RPC call till success or globalAuthRPCRetryThreshold on ErrShutdown.
 func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
 	SetRPCAPIVersion(version semVersion)
 }, reply interface{}) (err error) {
 
-	// Done channel is used to close any lingering retry routine, as soon
-	// as this function returns.
+	// Done channel is used to close any lingering retry routine,
+	// as soon as this function returns.
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -243,14 +259,17 @@ const connectSuccessMessage = "200 Connected to Go RPC"
 
 // dial tries to establish a connection to serverAddr in a safe manner.
 // If there is a valid rpc.Cliemt, it returns that else creates a new one.
-func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient *rpc.Client, err error) {
+func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (conn net.Conn, err error) {
 	if serverAddr == "" || serviceEndpoint == "" {
 		return nil, errInvalidArgument
 	}
+
 	d := &net.Dialer{
 		Timeout: defaultDialTimeout,
+		// Set keep alives as well to detect if server is down.
+		KeepAlive: http2.DefaultTCPKeepAliveTimeout,
 	}
-	var conn net.Conn
+
 	if secureConn {
 		var hostname string
 		if hostname, _, err = net.SplitHostPort(serverAddr); err != nil {
@@ -317,6 +336,5 @@ func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient 
 		return nil, fmt.Errorf("Unexpected HTTP response: %s from %s/%s", resp.Status, serverAddr, serviceEndpoint)
 	}
 
-	// Initialize rpc client.
-	return rpc.NewClient(conn), nil
+	return conn, nil
 }
