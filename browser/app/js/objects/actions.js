@@ -83,6 +83,10 @@ export const fetchObjects = append => {
         }
         dispatch(setPrefixWritable(res.writable))
       })
+      .catch(err => {
+        dispatch(alertActions.set({ type: "danger", message: err.message }))
+        history.push("/login")
+      })
   }
 }
 
