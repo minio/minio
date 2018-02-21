@@ -238,7 +238,6 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			wlk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again.
-				wlk.Close()
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
