@@ -43,13 +43,14 @@ type ObjectLayer interface {
 	GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
 	GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 	PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
-	CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string, srcETag string) (objInfo ObjectInfo, err error)
+	CopyObject(srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error)
 	DeleteObject(bucket, object string) error
 
 	// Multipart operations.
 	ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
 	NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error)
-	CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, metadata map[string]string, srcEtag string) (info PartInfo, err error)
+	CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
+		startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error)
 	PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
 	ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
 	AbortMultipartUpload(bucket, object, uploadID string) error

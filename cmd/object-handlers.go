@@ -288,9 +288,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 // Extract metadata relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Metadata-Directive.
 func getCpObjMetadataFromHeader(header http.Header, defaultMeta map[string]string) (map[string]string, error) {
-	// Make sure to remove saved etag if any, CopyObject calculates a new one.
-	delete(defaultMeta, "etag")
-
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isMetadataReplace(header) {
@@ -357,29 +354,32 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 
-	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
+	srcInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPreconditions(w, r, objInfo) {
+	if checkCopyObjectPreconditions(w, r, srcInfo) {
 		return
 	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
-	if isMaxObjectSize(objInfo.Size) {
+	if isMaxObjectSize(srcInfo.Size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
 
-	newMetadata, err := getCpObjMetadataFromHeader(r.Header, objInfo.UserDefined)
+	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(r.Header, srcInfo.UserDefined)
 	if err != nil {
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
+
+	// Make sure to remove saved etag if any, CopyObject calculates a new one.
+	delete(srcInfo.UserDefined, "etag")
 
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects.
@@ -392,7 +392,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	objInfo, err = objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, newMetadata, objInfo.ETag)
+	objInfo, err := objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -713,7 +713,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
+	srcInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -723,7 +723,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var hrange *httpRange
 	rangeHeader := r.Header.Get("x-amz-copy-source-range")
 	if rangeHeader != "" {
-		if hrange, err = parseCopyPartRange(rangeHeader, objInfo.Size); err != nil {
+		if hrange, err = parseCopyPartRange(rangeHeader, srcInfo.Size); err != nil {
 			// Handle only errInvalidRange
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
 			errorIf(err, "Unable to extract range %s", rangeHeader)
@@ -733,13 +733,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPartPreconditions(w, r, objInfo) {
+	if checkCopyObjectPartPreconditions(w, r, srcInfo) {
 		return
 	}
 
 	// Get the object.
 	var startOffset int64
-	length := objInfo.Size
+	length := srcInfo.Size
 	if hrange != nil {
 		length = hrange.getLength()
 		startOffset = hrange.offsetBegin
@@ -751,10 +751,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Make sure to remove all metadata from source for for multipart operations.
+	srcInfo.UserDefined = nil
+
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, length, nil, objInfo.ETag)
+		dstObject, uploadID, partID, startOffset, length, srcInfo)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

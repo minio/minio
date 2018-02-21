@@ -239,7 +239,7 @@ func (fs *FSObjects) NewMultipartUpload(bucket, object string, meta map[string]s
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
-	startOffset int64, length int64, metadata map[string]string, srcEtag string) (pi PartInfo, e error) {
+	startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
 
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
 		return pi, toObjectErr(errors.Trace(err))
@@ -249,7 +249,7 @@ func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, 
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcEtag); gerr != nil {
+		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
 			return
