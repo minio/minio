@@ -31,7 +31,8 @@ describe("objects reducer", () => {
         show: false,
         object: "",
         url: ""
-      }
+      },
+      checkedList: []
     })
   })
 
@@ -134,5 +135,34 @@ describe("objects reducer", () => {
       object: "a.txt",
       url: "test"
     })
+  })
+
+  it("should handle CHECKED_LIST_ADD", () => {
+    const newState = reducer(undefined, {
+      type: actions.CHECKED_LIST_ADD,
+      object: "obj1"
+    })
+    expect(newState.checkedList).toEqual(["obj1"])
+  })
+
+  it("should handle SELECTED_LIST_REMOVE", () => {
+    const newState = reducer(
+      { checkedList: ["obj1", "obj2"] },
+      {
+        type: actions.CHECKED_LIST_REMOVE,
+        object: "obj1"
+      }
+    )
+    expect(newState.checkedList).toEqual(["obj2"])
+  })
+
+  it("should handle CHECKED_LIST_RESET", () => {
+    const newState = reducer(
+      { checkedList: ["obj1", "obj2"] },
+      {
+        type: actions.CHECKED_LIST_RESET
+      }
+    )
+    expect(newState.checkedList).toEqual([])
   })
 })

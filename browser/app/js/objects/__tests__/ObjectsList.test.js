@@ -27,7 +27,7 @@ describe("ObjectsList", () => {
     const wrapper = shallow(
       <ObjectsList objects={[{ name: "test1.jpg" }, { name: "test2.jpg" }]} />
     )
-    expect(wrapper.find("ObjectContainer").length).toBe(2)
+    expect(wrapper.find("Connect(ObjectContainer)").length).toBe(2)
   })
 
   it("should render PrefixContainer for every prefix", () => {

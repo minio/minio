@@ -34,4 +34,27 @@ describe("ObjectItem", () => {
     wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
     expect(onClick).toHaveBeenCalled()
   })
+
+  it("should call checkObject when the object/prefix is checked", () => {
+    const checkObject = jest.fn()
+    const wrapper = shallow(
+      <ObjectItem name={"test"} checked={false} checkObject={checkObject} />
+    )
+    wrapper.find("input[type='checkbox']").simulate("change")
+    expect(checkObject).toHaveBeenCalledWith("test")
+  })
+
+  it("should render checked checkbox", () => {
+    const wrapper = shallow(<ObjectItem name={"test"} checked={true} />)
+    expect(wrapper.find("input[type='checkbox']").prop("checked")).toBeTruthy()
+  })
+
+  it("should call uncheckObject when the object/prefix is unchecked", () => {
+    const uncheckObject = jest.fn()
+    const wrapper = shallow(
+      <ObjectItem name={"test"} checked={true} uncheckObject={uncheckObject} />
+    )
+    wrapper.find("input[type='checkbox']").simulate("change")
+    expect(uncheckObject).toHaveBeenCalledWith("test")
+  })
 })
