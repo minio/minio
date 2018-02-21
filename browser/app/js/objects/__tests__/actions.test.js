@@ -18,8 +18,10 @@ import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsObjects from "../actions"
 import * as alertActions from "../../alert/actions"
+import { minioBrowserPrefix } from "../../constants"
 
 jest.mock("../../web", () => ({
+  LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
   ListObjects: jest.fn(() => {
     return Promise.resolve({
       objects: [{ name: "test1" }, { name: "test2" }],
@@ -38,7 +40,18 @@ jest.mock("../../web", () => ({
       return Promise.reject({ message: "Invalid bucket" })
     }
     return Promise.resolve({ url: "https://test.com/bk1/pre1/b.txt" })
-  })
+  }),
+  CreateURLToken: jest
+    .fn()
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
+    })
+    .mockImplementationOnce(() => {
+      return Promise.reject({ message: "Error in creating token" })
+    })
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
+    })
 }))
 
 const middlewares = [thunk]
@@ -169,13 +182,14 @@ describe("Objects actions", () => {
     expect(actions).toEqual(expectedActions)
   })
 
-  it("should update browser url and creates objects/SET_CURRENT_PREFIX action when selectPrefix is called", () => {
+  it("should update browser url and creates objects/SET_CURRENT_PREFIX and objects/CHECKED_LIST_RESET actions when selectPrefix is called", () => {
     const store = mockStore({
       buckets: { currentBucket: "test" },
       objects: { currentPrefix: "" }
     })
     const expectedActions = [
-      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" }
+      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
     const actions = store.getActions()
@@ -300,5 +314,133 @@ describe("Objects actions", () => {
         const actions = store.getActions()
         expect(actions).toEqual(expectedActions)
       })
+  })
+
+  describe("Download object", () => {
+    it("should download the object non-LoggedIn users", () => {
+      const setLocation = jest.fn()
+      Object.defineProperty(window, "location", {
+        set(url) {
+          setLocation(url)
+        }
+      })
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      store.dispatch(actionsObjects.downloadObject("obj1"))
+      const url = `${
+        window.location.origin
+      }${minioBrowserPrefix}/download/bk1/${encodeURI("pre1/obj1")}?token=''`
+      expect(setLocation).toHaveBeenCalledWith(url)
+    })
+
+    it("should download the object for LoggedIn users", () => {
+      const setLocation = jest.fn()
+      Object.defineProperty(window, "location", {
+        set(url) {
+          setLocation(url)
+        }
+      })
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
+        const url = `${
+          window.location.origin
+        }${minioBrowserPrefix}/download/bk1/${encodeURI(
+          "pre1/obj1"
+        )}?token=test`
+        expect(setLocation).toHaveBeenCalledWith(url)
+      })
+    })
+
+    it("create alert/SET action when CreateUrlToken fails", () => {
+      const store = mockStore({
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
+      })
+      const expectedActions = [
+        {
+          type: "alert/SET",
+          alert: {
+            type: "danger",
+            message: "Error in creating token",
+            id: alertActions.alertId
+          }
+        }
+      ]
+      return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
+        const actions = store.getActions()
+        expect(actions).toEqual(expectedActions)
+      })
+    })
+  })
+
+  it("creates objects/CHECKED_LIST_ADD action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_ADD",
+        object: "obj1"
+      }
+    ]
+    store.dispatch(actionsObjects.checkObject("obj1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/CHECKED_LIST_REMOVE action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_REMOVE",
+        object: "obj1"
+      }
+    ]
+    store.dispatch(actionsObjects.uncheckObject("obj1"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates objects/CHECKED_LIST_RESET action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "objects/CHECKED_LIST_RESET"
+      }
+    ]
+    store.dispatch(actionsObjects.resetCheckedList())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("should download checked objects", () => {
+    const open = jest.fn()
+    const send = jest.fn()
+    const xhrMockClass = () => ({
+      open: open,
+      send: send
+    })
+    window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
+
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/", checkedList: ["obj1"] }
+    })
+    return store.dispatch(actionsObjects.downloadCheckedObjects()).then(() => {
+      const requestUrl = `${
+        location.origin
+      }${minioBrowserPrefix}/zip?token=test`
+      expect(open).toHaveBeenCalledWith("POST", requestUrl, true)
+      expect(send).toHaveBeenCalledWith(
+        JSON.stringify({
+          bucketName: "bk1",
+          prefix: "pre1/",
+          objects: ["obj1"]
+        })
+      )
+    })
   })
 })
