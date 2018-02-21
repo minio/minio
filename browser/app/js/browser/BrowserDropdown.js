@@ -79,7 +79,6 @@ export class BrowserDropdown extends React.Component {
     history.replace("/login")
   }
   render() {
-    const { aboutFunc, settingsFunc, logoutFunc } = this.props
     const { serverInfo } = this.props
     return (
       <li>
