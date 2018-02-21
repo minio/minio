@@ -25,8 +25,8 @@ describe("PrefixContainer", () => {
 
   it("should render ObjectItem with props", () => {
     const wrapper = shallow(<PrefixContainer object={{ name: "abc/" }} />)
-    expect(wrapper.find("ObjectItem").length).toBe(1)
-    expect(wrapper.find("ObjectItem").prop("name")).toBe("abc/")
+    expect(wrapper.find("Connect(ObjectItem)").length).toBe(1)
+    expect(wrapper.find("Connect(ObjectItem)").prop("name")).toBe("abc/")
   })
 
   it("should call selectPrefix when the prefix is clicked", () => {
@@ -38,7 +38,7 @@ describe("PrefixContainer", () => {
         selectPrefix={selectPrefix}
       />
     )
-    wrapper.find("ObjectItem").prop("onClick")()
+    wrapper.find("Connect(ObjectItem)").prop("onClick")()
     expect(selectPrefix).toHaveBeenCalledWith("xyz/abc/")
   })
 })

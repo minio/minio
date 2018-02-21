@@ -16,8 +16,8 @@
 
 import * as actionsObjects from "./actions"
 
-const removeObject = (list, action) => {
-  const idx = list.findIndex(object => object.name === action.object)
+const removeObject = (list, objectToRemove, lookup) => {
+  const idx = list.findIndex(object => lookup(object) === objectToRemove)
   if (idx == -1) {
     return list
   }
@@ -36,7 +36,8 @@ export default (
       show: false,
       object: "",
       url: ""
-    }
+    },
+    checkedList: []
   },
   action
 ) => {
@@ -58,7 +59,7 @@ export default (
     case actionsObjects.REMOVE:
       return {
         ...state,
-        list: removeObject(state.list, action)
+        list: removeObject(state.list, action.object, object => object.name)
       }
     case actionsObjects.SET_SORT_BY:
       return {
@@ -85,6 +86,25 @@ export default (
           object: action.object,
           url: action.url
         }
+      }
+    case actionsObjects.CHECKED_LIST_ADD:
+      return {
+        ...state,
+        checkedList: [...state.checkedList, action.object]
+      }
+    case actionsObjects.CHECKED_LIST_REMOVE:
+      return {
+        ...state,
+        checkedList: removeObject(
+          state.checkedList,
+          action.object,
+          object => object
+        )
+      }
+    case actionsObjects.CHECKED_LIST_RESET:
+      return {
+        ...state,
+        checkedList: []
       }
     default:
       return state
