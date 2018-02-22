@@ -36,7 +36,7 @@ You'll need the path to the shared volume, e.g. `/path/to/nfs-volume`. Then run 
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server /path/to/nfs-volume
+minio gateway nas /path/to/nfs-volume
 ```
 
 #### Minio shared mode on Windows 2012 Server
@@ -46,7 +46,7 @@ You'll need the path to the shared volume, e.g. `\\remote-server\smb`. Then run 
 ```cmd
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
-minio.exe server \\remote-server\smb\export
+minio.exe gateway nas \\remote-server\smb\export
 ```
 
 *Windows Tip*
@@ -57,7 +57,7 @@ If a remote volume, e.g. `\\remote-server\smb` is mounted as a drive, e.g. `M:\`
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
 net use m: \\remote-server\smb\export /P:Yes
-minio.exe server M:\export
+minio.exe gateway nas M:\export
 ```
 
 ## 3. Test your setup
