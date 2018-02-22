@@ -21,6 +21,15 @@ import * as actionsCommon from "../actions"
 jest.mock("../../web", () => ({
   StorageInfo: jest.fn(() => {
     return Promise.resolve({ storageInfo: { Total: 100, Free: 60 } })
+  }),
+  ServerInfo: jest.fn(() => {
+    return Promise.resolve({
+      MinioVersion: "test",
+      MinioMemory: "test",
+      MinioPlatform: "test",
+      MinioRuntime: "test",
+      MinioGlobalInfo: "test"
+    })
   })
 }))
 
@@ -34,6 +43,26 @@ describe("Common actions", () => {
       { type: "common/SET_STORAGE_INFO", storageInfo: { total: 100, free: 60 } }
     ]
     return store.dispatch(actionsCommon.fetchStorageInfo()).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates common/SET_SERVER_INFO after fetching the server details", () => {
+    const store = mockStore()
+    const expectedActions = [
+      {
+        type: "common/SET_SERVER_INFO",
+        serverInfo: {
+          version: "test",
+          memory: "test",
+          platform: "test",
+          runtime: "test",
+          info: "test"
+        }
+      }
+    ]
+    return store.dispatch(actionsCommon.fetchServerInfo()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })

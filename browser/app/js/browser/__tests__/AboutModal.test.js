@@ -15,29 +15,27 @@
  */
 
 import React from "react"
-import Path from "../objects/Path"
-import StorageInfo from "./StorageInfo"
-import BrowserDropdown from "./BrowserDropdown"
-import web from "../web"
-import { minioBrowserPrefix } from "../constants"
+import { shallow } from "enzyme"
+import { AboutModal } from "../AboutModal"
 
-export const Header = () => {
-  const loggedIn = web.LoggedIn()
-  return (
-    <header className="fe-header">
-      <Path />
-      {loggedIn && <StorageInfo />}
-      <ul className="feh-actions">
-        {loggedIn ? (
-          <BrowserDropdown />
-        ) : (
-          <a className="btn btn-danger" href={minioBrowserPrefix + "/login"}>
-            Login
-          </a>
-        )}
-      </ul>
-    </header>
-  )
-}
+describe("AboutModal", () => {
+  const serverInfo = {
+    version: "test",
+    memory: "test",
+    platform: "test",
+    runtime: "test"
+  }
 
-export default Header
+  it("should render without crashing", () => {
+    shallow(<AboutModal serverInfo={serverInfo} />)
+  })
+
+  it("should call hideAbout when close button is clicked", () => {
+    const hideAbout = jest.fn()
+    const wrapper = shallow(
+      <AboutModal serverInfo={serverInfo} hideAbout={hideAbout} />
+    )
+    wrapper.find("button").simulate("click")
+    expect(hideAbout).toHaveBeenCalled()
+  })
+})
