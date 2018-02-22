@@ -21,7 +21,7 @@ import "material-design-iconic-font/dist/css/material-design-iconic-font.min.css
 
 import React from "react"
 import ReactDOM from "react-dom"
-import { BrowserRouter, Router, Route } from "react-router-dom"
+import { Router, Route } from "react-router-dom"
 import { Provider } from "react-redux"
 
 import history from "./js/history"

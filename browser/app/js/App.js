@@ -20,7 +20,6 @@ import Browser from "./browser/Browser"
 import Login from "./browser/Login"
 import web from "./web"
 import { minioBrowserPrefix } from "./constants"
-import { withRouter } from "react-router"
 
 const AuthorizedRoute = ({ component: Component, ...rest }) => (
   <Route
