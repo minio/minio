@@ -101,6 +101,9 @@ type ObjectInfo struct {
 	// User-Defined metadata
 	UserDefined map[string]string
 
+	// List of individual parts, maximum size of upto 10,000
+	Parts []objectPartInfo `json:"-"`
+
 	// Implements writer and reader used by CopyObject API
 	Writer       io.WriteCloser `json:"-"`
 	Reader       *hash.Reader   `json:"-"`
@@ -137,6 +140,9 @@ type ListPartsInfo struct {
 
 	// List of all parts.
 	Parts []PartInfo
+
+	// Any metadata set during InitMultipartUpload, including encryption headers.
+	UserDefined map[string]string
 
 	EncodingType string // Not supported yet.
 }

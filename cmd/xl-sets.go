@@ -783,36 +783,20 @@ func (s *xlSets) CopyObjectPart(srcBucket, srcObject, destBucket, destObject str
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
 
-	// Initialize pipe to stream from source.
-	pipeReader, pipeWriter := io.Pipe()
 	go func() {
-		if gerr := srcSet.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.GetObject(srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+			if gerr = srcInfo.Writer.Close(); gerr != nil {
+				errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+				return
+			}
+		}
+		if gerr := srcInfo.Writer.Close(); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
-
-		// Close writer explicitly signalling we wrote all data.
-		pipeWriter.Close()
-		return
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "")
-	if err != nil {
-		pipeReader.CloseWithError(err)
-		return partInfo, toObjectErr(errors.Trace(err), destBucket, destObject)
-	}
-
-	partInfo, err = destSet.PutObjectPart(destBucket, destObject, uploadID, partID, hashReader)
-	if err != nil {
-		pipeReader.CloseWithError(err)
-		return partInfo, err
-	}
-
-	// Close the pipe
-	pipeReader.Close()
-
-	return partInfo, nil
+	return destSet.PutObjectPart(destBucket, destObject, uploadID, partID, srcInfo.Reader)
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.

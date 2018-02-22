@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/hex"
 	"fmt"
-	"io"
 	"path"
 	"strings"
 	"sync"
@@ -600,30 +599,24 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		return pi, err
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
 	go func() {
-		if gerr := xl.getObject(srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
+		if gerr := xl.getObject(srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+			if gerr = srcInfo.Writer.Close(); gerr != nil {
+				errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			}
 			return
 		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signalling we wrote all data.
+		if gerr := srcInfo.Writer.Close(); gerr != nil {
+			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			return
+		}
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, srcInfo.Reader)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, hashReader)
-	if err != nil {
-		return pi, toObjectErr(err, dstBucket, dstObject)
-	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	// Success.
 	return partInfo, nil
@@ -817,7 +810,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 
 	uploadIDPath := path.Join(bucket, object, uploadID)
 
-	xlParts, err := xl.readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
+	xlParts, xlMeta, err := xl.readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
 		return lpi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
@@ -828,6 +821,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
+	result.UserDefined = xlMeta
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(xlParts) == 0 || maxParts == 0 {
@@ -1111,20 +1105,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return oi, toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
-	objInfo := ObjectInfo{
-		IsDir:           false,
-		Bucket:          bucket,
-		Name:            object,
-		Size:            xlMeta.Stat.Size,
-		ModTime:         xlMeta.Stat.ModTime,
-		ETag:            xlMeta.Meta["etag"],
-		ContentType:     xlMeta.Meta["content-type"],
-		ContentEncoding: xlMeta.Meta["content-encoding"],
-		UserDefined:     xlMeta.Meta,
-	}
-
 	// Success, return object info.
-	return objInfo, nil
+	return xlMeta.ToObjectInfo(bucket, object), nil
 }
 
 // Wrapper which removes all the uploaded parts.

@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"io"
 	"net/http"
@@ -66,8 +68,18 @@ const (
 	// Currently AWS supports only AES256. So the SSE-C key size is fixed to 32 bytes.
 	SSECustomerKeySize = 32
 
+	// SSEIVSize is the size of the IV data
+	SSEIVSize = 32 // 32 bytes
+
 	// SSECustomerAlgorithmAES256 the only valid S3 SSE-C encryption algorithm identifier.
 	SSECustomerAlgorithmAES256 = "AES256"
+
+	// SSE dare package block size.
+	sseDAREPackageBlockSize = 64 * 1024 // 64KiB bytes
+
+	// SSE dare package meta padding bytes.
+	sseDAREPackageMetaSize = 32 // 32 bytes
+
 )
 
 // SSE-C key derivation, key verification and key update:
@@ -238,7 +250,7 @@ func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
 		return errObjectTampered
 	}
 	iv, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
-	if err != nil || len(iv) != 32 {
+	if err != nil || len(iv) != SSEIVSize {
 		return errObjectTampered
 	}
 	sealedKey, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionSealedKey])
@@ -286,7 +298,7 @@ func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
 	return nil
 }
 
-func newEncryptReader(content io.Reader, key []byte, metadata map[string]string) (io.Reader, error) {
+func newEncryptMetadata(key []byte, metadata map[string]string) ([]byte, error) {
 	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
 
 	// security notice:
@@ -297,7 +309,7 @@ func newEncryptReader(content io.Reader, key []byte, metadata map[string]string)
 	//    authenticated en/decryption scheme. The DARE format will generate an 8 byte nonce which must
 	//    be repeated in addition to reveal the object encryption key.
 	//    [ P(coll) ~= 1 / 2^((256 + 64) / 2) ]
-	nonce := make([]byte, 64) // generate random values for key derivation
+	nonce := make([]byte, 32+SSEIVSize) // generate random values for key derivation
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
@@ -320,14 +332,24 @@ func newEncryptReader(content io.Reader, key []byte, metadata map[string]string)
 		return nil, errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
 	}
 
+	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
+	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
+	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
+
+	return objectEncryptionKey, nil
+}
+
+func newEncryptReader(content io.Reader, key []byte, metadata map[string]string) (io.Reader, error) {
+	objectEncryptionKey, err := newEncryptMetadata(key, metadata)
+	if err != nil {
+		return nil, err
+	}
+
 	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey})
 	if err != nil {
 		return nil, errInvalidSSEKey
 	}
 
-	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
-	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
-	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
 	return reader, nil
 }
 
@@ -353,12 +375,12 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, metadata map[string]s
 	return newDecryptWriter(client, key, 0, metadata)
 }
 
-func newDecryptWriter(client io.Writer, key []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
+func decryptObjectInfo(key []byte, metadata map[string]string) ([]byte, error) {
 	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 { // currently DARE-SHA256 is the only option
 		return nil, errObjectTampered
 	}
 	iv, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
-	if err != nil || len(iv) != 32 {
+	if err != nil || len(iv) != SSEIVSize {
 		return nil, errObjectTampered
 	}
 	sealedKey, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionSealedKey])
@@ -380,9 +402,21 @@ func newDecryptWriter(client io.Writer, key []byte, seqNumber uint32, metadata m
 		// To provide strict AWS S3 compatibility we return: access denied.
 		return nil, errSSEKeyMismatch
 	}
+	return objectEncryptionKey.Bytes(), nil
+}
 
+func newDecryptWriter(client io.Writer, key []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
+	objectEncryptionKey, err := decryptObjectInfo(key, metadata)
+	if err != nil {
+		return nil, err
+
+	}
+	return newDecryptWriterWithObjectKey(client, objectEncryptionKey, seqNumber, metadata)
+}
+
+func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
 	writer, err := sio.DecryptWriter(client, sio.Config{
-		Key:            objectEncryptionKey.Bytes(),
+		Key:            objectEncryptionKey,
 		SequenceNumber: seqNumber,
 	})
 	if err != nil {
@@ -412,16 +446,208 @@ func DecryptRequest(client io.Writer, r *http.Request, metadata map[string]strin
 	return DecryptRequestWithSequenceNumber(client, r, 0, metadata)
 }
 
-// getStartOffset - get sequence number, start offset and rlength.
-func getStartOffset(offset, length int64) (seqNumber uint32, startOffset int64, rlength int64) {
-	seqNumber = uint32(offset / (64 * 1024))
-	startOffset = int64(seqNumber) * (64*1024 + 32)
+// DecryptBlocksWriter - decrypts multipart parts, while implementing a io.Writer compatible interface.
+type DecryptBlocksWriter struct {
+	// Original writer where the plain data will be written
+	writer io.Writer
+	// Current decrypter for the current encrypted data block
+	decrypter io.WriteCloser
+	// Start sequence number
+	startSeqNum uint32
+	// Current part index
+	partIndex int
+	// Parts information
+	parts    []objectPartInfo
+	req      *http.Request
+	metadata map[string]string
 
-	rlength = (length / (64 * 1024)) * (64*1024 + 32)
-	if length%(64*1024) > 0 {
-		rlength += 64*1024 + 32
+	partEncRelOffset int64
+
+	// Customer Key
+	customerKeyHeader string
+}
+
+func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
+	m := make(map[string]string)
+	for k, v := range w.metadata {
+		m[k] = v
 	}
-	return seqNumber, startOffset, rlength
+	// Initialize the first decrypter, new decrypters will be initialized in Write() operation as needed.
+	w.req.Header.Set(SSECustomerKey, w.customerKeyHeader)
+	key, err := ParseSSECustomerRequest(w.req)
+	if err != nil {
+		return err
+	}
+
+	objectEncryptionKey, err := decryptObjectInfo(key, m)
+	if err != nil {
+		return err
+	}
+
+	var partIDbin [4]byte
+	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
+
+	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+	mac.Write(partIDbin[:])
+	partEncryptionKey := mac.Sum(nil)
+
+	delete(m, SSECustomerKey) // make sure we do not save the key by accident
+
+	decrypter, err := newDecryptWriterWithObjectKey(w.writer, partEncryptionKey, w.startSeqNum, m)
+	if err != nil {
+		return err
+	}
+
+	if w.decrypter != nil {
+		err = w.decrypter.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	w.decrypter = decrypter
+	return nil
+}
+
+func (w *DecryptBlocksWriter) Write(p []byte) (int, error) {
+	var err error
+	var n1 int
+	if int64(len(p)) < w.parts[w.partIndex].Size-w.partEncRelOffset {
+		n1, err = w.decrypter.Write(p)
+		if err != nil {
+			return 0, err
+		}
+		w.partEncRelOffset += int64(n1)
+	} else {
+		n1, err = w.decrypter.Write(p[:w.parts[w.partIndex].Size-w.partEncRelOffset])
+		if err != nil {
+			return 0, err
+		}
+
+		// We should now proceed to next part, reset all values appropriately.
+		w.partEncRelOffset = 0
+		w.startSeqNum = 0
+
+		w.partIndex++
+
+		err = w.buildDecrypter(w.partIndex + 1)
+		if err != nil {
+			return 0, err
+		}
+
+		n1, err = w.decrypter.Write(p[n1:])
+		if err != nil {
+			return 0, err
+		}
+
+		w.partEncRelOffset += int64(n1)
+	}
+
+	return len(p), nil
+}
+
+// Close closes the LimitWriter. It behaves like io.Closer.
+func (w *DecryptBlocksWriter) Close() error {
+	if w.decrypter != nil {
+		err := w.decrypter.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	if closer, ok := w.writer.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// DecryptBlocksRequest - setup a struct which can decrypt many concatenated encrypted data
+// parts information helps to know the boundaries of each encrypted data block.
+func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length int64, objInfo ObjectInfo) (io.WriteCloser, int64, int64, error) {
+	seqNumber, encStartOffset, encLength := getEncryptedStartOffset(startOffset, length)
+
+	// Encryption length cannot be bigger than the file size, if it is
+	// which is allowed in AWS S3, we simply default to EncryptedSize().
+	if encLength+encStartOffset > objInfo.EncryptedSize() {
+		encLength = objInfo.EncryptedSize() - encStartOffset
+	}
+
+	if len(objInfo.Parts) == 0 || !objInfo.IsEncryptedMultipart() {
+		writer, err := DecryptRequestWithSequenceNumber(client, r, seqNumber, objInfo.UserDefined)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		return writer, encStartOffset, encLength, nil
+	}
+
+	var partStartIndex int
+	var partStartOffset = startOffset
+	// Skip parts until final offset maps to a particular part offset.
+	for i, part := range objInfo.Parts {
+		decryptedSize, err := decryptedSize(part.Size)
+		if err != nil {
+			return nil, -1, -1, err
+		}
+
+		partStartIndex = i
+
+		// Offset is smaller than size we have reached the
+		// proper part offset, break out we start from
+		// this part index.
+		if partStartOffset < decryptedSize {
+			break
+		}
+
+		// Continue to look for next part.
+		partStartOffset -= decryptedSize
+	}
+
+	startSeqNum := partStartOffset / sseDAREPackageBlockSize
+	partEncRelOffset := int64(startSeqNum) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+
+	w := &DecryptBlocksWriter{
+		writer:            client,
+		startSeqNum:       uint32(startSeqNum),
+		partEncRelOffset:  partEncRelOffset,
+		parts:             objInfo.Parts,
+		partIndex:         partStartIndex,
+		req:               r,
+		customerKeyHeader: r.Header.Get(SSECustomerKey),
+		metadata:          objInfo.UserDefined,
+	}
+
+	w.buildDecrypter(partStartIndex + 1)
+
+	return w, encStartOffset, encLength, nil
+}
+
+// getEncryptedStartOffset - fetch sequence number, encrypted start offset and encrypted length.
+func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset int64, encLength int64) {
+	onePkgSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+
+	seqNumber = uint32(offset / sseDAREPackageBlockSize)
+	encOffset = int64(seqNumber) * onePkgSize
+	// The math to compute the encrypted length is always
+	// originalLength i.e (offset+length-1) to be divided under
+	// 64KiB blocks which is the payload size for each encrypted
+	// block. This is then multiplied by final package size which
+	// is basically 64KiB + 32. Finally negate the encrypted offset
+	// to get the final encrypted length on disk.
+	encLength = ((offset+length)/sseDAREPackageBlockSize)*onePkgSize - encOffset
+
+	// Check for the remainder, to figure if we need one extract package to read from.
+	if (offset+length)%sseDAREPackageBlockSize > 0 {
+		encLength += onePkgSize
+	}
+
+	return seqNumber, encOffset, encLength
+}
+
+// IsEncryptedMultipart - is the encrypted content multiparted?
+func (o *ObjectInfo) IsEncryptedMultipart() bool {
+	_, ok := o.UserDefined[ReservedMetadataPrefix+"Encrypted-Multipart"]
+	return ok
 }
 
 // IsEncrypted returns true if the object is marked as encrypted.
@@ -438,6 +664,34 @@ func (o *ObjectInfo) IsEncrypted() bool {
 	return false
 }
 
+// IsEncrypted returns true if the object is marked as encrypted.
+func (li *ListPartsInfo) IsEncrypted() bool {
+	if _, ok := li.UserDefined[ServerSideEncryptionIV]; ok {
+		return true
+	}
+	if _, ok := li.UserDefined[ServerSideEncryptionSealAlgorithm]; ok {
+		return true
+	}
+	if _, ok := li.UserDefined[ServerSideEncryptionSealedKey]; ok {
+		return true
+	}
+	return false
+}
+
+func decryptedSize(encryptedSize int64) (int64, error) {
+	if encryptedSize == 0 {
+		return encryptedSize, nil
+	}
+	size := (encryptedSize / (sseDAREPackageBlockSize + sseDAREPackageMetaSize)) * sseDAREPackageBlockSize
+	if mod := encryptedSize % (sseDAREPackageBlockSize + sseDAREPackageMetaSize); mod > 0 {
+		if mod < sseDAREPackageMetaSize+1 {
+			return -1, errObjectTampered // object is not 0 size but smaller than the smallest valid encrypted object
+		}
+		size += mod - sseDAREPackageMetaSize
+	}
+	return size, nil
+}
+
 // DecryptedSize returns the size of the object after decryption in bytes.
 // It returns an error if the object is not encrypted or marked as encrypted
 // but has an invalid size.
@@ -446,26 +700,17 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !o.IsEncrypted() {
 		panic("cannot compute decrypted size of an object which is not encrypted")
 	}
-	if o.Size == 0 {
-		return o.Size, nil
-	}
-	size := (o.Size / (32 + 64*1024)) * (64 * 1024)
-	if mod := o.Size % (32 + 64*1024); mod > 0 {
-		if mod < 33 {
-			return -1, errObjectTampered // object is not 0 size but smaller than the smallest valid encrypted object
-		}
-		size += mod - 32
-	}
-	return size, nil
+
+	return decryptedSize(o.Size)
 }
 
 // EncryptedSize returns the size of the object after encryption.
 // An encrypted object is always larger than a plain object
 // except for zero size objects.
 func (o *ObjectInfo) EncryptedSize() int64 {
-	size := (o.Size / (64 * 1024)) * (32 + 64*1024)
-	if mod := o.Size % (64 * 1024); mod > 0 {
-		size += mod + 32
+	size := (o.Size / sseDAREPackageBlockSize) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	if mod := o.Size % (sseDAREPackageBlockSize); mod > 0 {
+		size += mod + sseDAREPackageMetaSize
 	}
 	return size
 }

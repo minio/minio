@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"crypto/hmac"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
@@ -32,6 +34,8 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
+	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/sio"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -163,13 +167,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
 
-			var sequenceNumber uint32
-			sequenceNumber, startOffset, length = getStartOffset(startOffset, length)
-			if length > objInfo.EncryptedSize() {
-				length = objInfo.EncryptedSize()
-			}
-
-			writer, err = DecryptRequestWithSequenceNumber(writer, r, sequenceNumber, objInfo.UserDefined)
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, startOffset, length, objInfo)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -747,10 +745,25 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		// SSE-C is not implemented for multipart operations yet
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
+	var encMetadata = map[string]string{}
+
+	if objectAPI.IsEncryptionSupported() {
+		if IsSSECustomerRequest(r.Header) {
+			key, err := ParseSSECustomerRequest(r)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			_, err = newEncryptMetadata(key, encMetadata)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			// Set this for multipart only operations, we need to differentiate during
+			// decryption if the file was actually multipart or not.
+			encMetadata[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
+		}
 	}
 
 	// Extract metadata that needs to be saved.
@@ -759,6 +772,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
+	}
+
+	// We need to preserve the encryption headers set in EncryptRequest,
+	// so we do not want to override them, copy them instead.
+	for k, v := range encMetadata {
+		metadata[k] = v
 	}
 
 	uploadID, err := objectAPI.NewMultipartUpload(bucket, object, metadata)
@@ -788,12 +807,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
-
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		// SSE-C is not implemented for multipart operations yet
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -832,6 +845,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if objectAPI.IsEncryptionSupported() {
+		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
+			return
+		}
+	}
+
 	// Get request range.
 	var hrange *httpRange
 	rangeHeader := r.Header.Get("x-amz-copy-source-range")
@@ -864,8 +884,70 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Make sure to remove all metadata from source for for multipart operations.
-	srcInfo.UserDefined = nil
+	// Initialize pipe.
+	pipeReader, pipeWriter := io.Pipe()
+
+	var writer io.WriteCloser = pipeWriter
+	var reader io.Reader = pipeReader
+	if objectAPI.IsEncryptionSupported() {
+		var li ListPartsInfo
+		li, err = objectAPI.ListObjectParts(dstBucket, dstObject, uploadID, 0, 1)
+		if err != nil {
+			pipeWriter.CloseWithError(err)
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		if li.IsEncrypted() {
+			if !IsSSECustomerRequest(r.Header) {
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				return
+			}
+			var key []byte
+			key, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			// Calculating object encryption key
+			var objectEncryptionKey []byte
+			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: objectEncryptionKey})
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+		if IsSSECopyCustomerRequest(r.Header) {
+			// Response writer should be limited early on for decryption upto required length,
+			// additionally also skipping mod(offset)64KiB boundaries.
+			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+
+			writer, startOffset, length, err = DecryptBlocksRequest(pipeWriter, r, startOffset, length, srcInfo)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+	}
+
+	hashReader, err := hash.NewReader(reader, length, "", "") // do not try to verify encrypted content
+	if err != nil {
+		pipeWriter.CloseWithError(err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	srcInfo.Reader = hashReader
+	srcInfo.Writer = writer
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
@@ -875,6 +957,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	// Close the pipe after successful operation.
+	pipeReader.Close()
 
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
 	encodedSuccessResponse := encodeResponse(response)
@@ -905,12 +990,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
-		return
-	}
-
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		// SSE-C is not implemented for multipart operations yet
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -956,8 +1035,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	var (
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
-		reader    = r.Body
+		reader    io.Reader
 	)
+	reader = r.Body
 
 	switch rAuthType {
 	default:
@@ -1004,6 +1084,55 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+
+	if objectAPI.IsEncryptionSupported() {
+		var li ListPartsInfo
+		li, err = objectAPI.ListObjectParts(bucket, object, uploadID, 0, 1)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		if li.IsEncrypted() {
+			if !IsSSECustomerRequest(r.Header) {
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				return
+			}
+			var key []byte
+			key, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			// Calculating object encryption key
+			var objectEncryptionKey []byte
+			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			var partIDbin [4]byte
+			binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
+
+			mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+			mac.Write(partIDbin[:])
+			partEncryptionKey := mac.Sum(nil)
+
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+
+			info := ObjectInfo{Size: size}
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
 	}
 
 	partInfo, err := objectAPI.PutObjectPart(bucket, object, uploadID, partID, hashReader)

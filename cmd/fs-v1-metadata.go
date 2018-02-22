@@ -121,6 +121,9 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	// response headers. e.g, X-Minio-* or X-Amz-*.
 	objInfo.UserDefined = cleanMetadata(m.Meta)
 
+	// All the parts per object.
+	objInfo.Parts = m.Parts
+
 	// Success..
 	return objInfo
 }
@@ -158,6 +161,28 @@ func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
 	return metaMap
 }
 
+func parseFSPartsArray(fsMetaBuf []byte) []objectPartInfo {
+	// Get xlMetaV1.Parts array
+	var partsArray []objectPartInfo
+
+	partsArrayResult := gjson.GetBytes(fsMetaBuf, "parts")
+	partsArrayResult.ForEach(func(key, part gjson.Result) bool {
+		partJSON := part.String()
+		number := gjson.Get(partJSON, "number").Int()
+		name := gjson.Get(partJSON, "name").String()
+		etag := gjson.Get(partJSON, "etag").String()
+		size := gjson.Get(partJSON, "size").Int()
+		partsArray = append(partsArray, objectPartInfo{
+			Number: int(number),
+			Name:   name,
+			ETag:   etag,
+			Size:   size,
+		})
+		return true
+	})
+	return partsArray
+}
+
 func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
 	fi, err := lk.Stat()
@@ -185,6 +210,9 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	if !isFSMetaValid(m.Version, m.Format) {
 		return 0, errors.Trace(errCorruptedFormat)
 	}
+
+	// obtain parts information
+	m.Parts = parseFSPartsArray(fsMetaBuf)
 
 	// obtain metadata.
 	m.Meta = parseFSMetaMap(fsMetaBuf)

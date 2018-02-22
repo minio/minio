@@ -129,6 +129,7 @@ const (
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
 	ErrInsecureSSECustomerRequest
+	ErrSSEMultipartEncrypted
 	ErrSSEEncryptedObject
 	ErrInvalidEncryptionParameters
 	ErrInvalidSSECustomerAlgorithm
@@ -629,6 +630,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInsecureSSECustomerRequest: {
 		Code:           "InvalidRequest",
 		Description:    errInsecureSSERequest.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSSEMultipartEncrypted: {
+		Code:           "InvalidRequest",
+		Description:    "The multipart upload initiate requested encryption. Subsequent part requests must include the appropriate encryption parameters.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSSEEncryptedObject: {
