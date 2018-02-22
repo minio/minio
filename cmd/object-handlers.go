@@ -1083,6 +1083,17 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	info, err := objectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to get an object info %s", pathJoin(bucket, object))
+		writeErrorResponse(w, ErrDeleteFailed, r.URL)
+		return
+	}
+	if info.IsEncrypted() {
+		writeErrorResponse(w, ErrDeleteFailed, r.URL)
+		return
+	}
+
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	// Ignore delete object errors while replying to client, since we are
 	// suppposed to reply only 204. Additionally log the error for

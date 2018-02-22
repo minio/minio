@@ -125,6 +125,7 @@ const (
 	ErrMaximumExpires
 	ErrSlowDown
 	ErrInvalidPrefixMarker
+	ErrDeleteFailed
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -664,6 +665,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrSSECustomerKeyMD5Mismatch: {
 		Code:           "InvalidArgument",
 		Description:    errSSEKeyMD5Mismatch.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrDeleteFailed: {
+		Code:           "InvalidRequest",
+		Description:    "Failed to delete object",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
