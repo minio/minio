@@ -24,7 +24,8 @@ describe("common reducer", () => {
       storageInfo: {
         total: 0,
         free: 0
-      }
+      },
+      serverInfo: {}
     })
   })
 
@@ -65,6 +66,27 @@ describe("common reducer", () => {
       )
     ).toEqual({
       storageInfo: { total: 100, free: 40 }
+    })
+  })
+
+  it("should handle SET_SERVER_INFO", () => {
+    expect(
+      reducer(undefined, {
+        type: actionsCommon.SET_SERVER_INFO,
+        serverInfo: {
+          version: "test",
+          memory: "test",
+          platform: "test",
+          runtime: "test",
+          info: "test"
+        }
+      }).serverInfo
+    ).toEqual({
+      version: "test",
+      memory: "test",
+      platform: "test",
+      runtime: "test",
+      info: "test"
     })
   })
 })

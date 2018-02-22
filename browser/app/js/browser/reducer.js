@@ -17,7 +17,11 @@
 import * as actionsCommon from "./actions"
 
 export default (
-  state = { sidebarOpen: false, storageInfo: { total: 0, free: 0 } },
+  state = {
+    sidebarOpen: false,
+    storageInfo: { total: 0, free: 0 },
+    serverInfo: {}
+  },
   action
 ) => {
   switch (action.type) {
@@ -33,6 +37,8 @@ export default (
       return Object.assign({}, state, {
         storageInfo: action.storageInfo
       })
+    case actionsCommon.SET_SERVER_INFO:
+      return { ...state, serverInfo: action.serverInfo }
     default:
       return state
   }
