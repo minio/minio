@@ -35,7 +35,7 @@ Minio共享模式是为了解决在真实场景中存在的一些问题，而且
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server /path/to/nfs-volume
+minio gateway nas /path/to/nfs-volume
 ```
 
 #### Minio shared mode on Windows 2012 Server
@@ -45,7 +45,7 @@ minio server /path/to/nfs-volume
 ```cmd
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
-minio.exe server \\remote-server\smb\export
+minio.exe gateway nas \\remote-server\smb\export
 ```
 
 *Windows提示*
@@ -56,7 +56,7 @@ minio.exe server \\remote-server\smb\export
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
 net use m: \\remote-server\smb\export /P:Yes
-minio.exe server M:\export
+minio.exe gateway nas M:\export
 ```
 
 ## 3. 验证

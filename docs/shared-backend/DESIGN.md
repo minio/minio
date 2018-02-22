@@ -25,12 +25,12 @@ Example 1: Start Minio instance on a shared backend mounted and available at `/p
 
 On linux server1
 ```shell
-minio server /path/to/nfs-volume
+minio gateway nas /path/to/nfs-volume
 ```
 
 On linux server2
 ```shell
-minio server /path/to/nfs-volume
+minio gateway nas /path/to/nfs-volume
 ```
 
 ### Windows 2012 Server
@@ -39,24 +39,24 @@ Example 1: Start Minio instance on a shared backend mounted and available at `\\
 
 On windows server1
 ```cmd
-minio.exe server \\remote-server\cifs\data
+minio.exe gateway nas \\remote-server\cifs\data
 ```
 
 On windows server2
 ```cmd
-minio.exe server \\remote-server\cifs\data
+minio.exe gateway nas \\remote-server\cifs\data
 ```
 
 Alternatively if `\\remote-server\cifs` is mounted as `D:\` drive.
 
 On windows server1
 ```cmd
-minio.exe server D:\data
+minio.exe gateway nas D:\data
 ```
 
 On windows server2
 ```cmd
-minio.exe server D:\data
+minio.exe gateway nas D:\data
 ```
 
 Architecture
