@@ -46,7 +46,7 @@ export class Login extends React.Component {
         password: document.getElementById("secretKey").value
       })
       .then(res => {
-        history.push(minioBrowserPrefix)
+        history.push("/")
       })
       .catch(e => {
         showAlert("danger", e.message)
@@ -67,7 +67,7 @@ export class Login extends React.Component {
   render() {
     const { clearAlert, alert } = this.props
     if (web.LoggedIn()) {
-      return <Redirect to={minioBrowserPrefix} />
+      return <Redirect to={"/"} />
     }
     let alertBox = <Alert {...alert} onDismiss={clearAlert} />
     // Make sure you don't show a fading out alert box on the initial web-page load.
