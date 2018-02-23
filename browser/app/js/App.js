@@ -34,7 +34,7 @@ const AuthorizedRoute = ({ component: Component, ...rest }) => (
   />
 )
 
-export const App = ({ match }) => {
+export const App = () => {
   return (
     <Switch>
       <AuthorizedRoute exact path={"/"} component={Browser} />
