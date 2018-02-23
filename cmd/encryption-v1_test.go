@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,31 @@ import (
 	"net/http"
 	"testing"
 )
+
+var isSSECopyCustomerRequestTests = []struct {
+	headers    map[string]string
+	sseRequest bool
+}{
+	{headers: map[string]string{SSECopyCustomerAlgorithm: "AES256", SSECopyCustomerKey: "key", SSECopyCustomerKeyMD5: "md5"}, sseRequest: true},                    // 0
+	{headers: map[string]string{SSECopyCustomerAlgorithm: "AES256"}, sseRequest: true},                                                                             // 1
+	{headers: map[string]string{SSECopyCustomerKey: "key"}, sseRequest: true},                                                                                      // 2
+	{headers: map[string]string{SSECopyCustomerKeyMD5: "md5"}, sseRequest: true},                                                                                   // 3
+	{headers: map[string]string{}, sseRequest: false},                                                                                                              // 4
+	{headers: map[string]string{SSECopyCustomerAlgorithm + " ": "AES256", " " + SSECopyCustomerKey: "key", SSECopyCustomerKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
+	{headers: map[string]string{SSECopyCustomerAlgorithm: "", SSECopyCustomerKey: "", SSECopyCustomerKeyMD5: ""}, sseRequest: false},                               // 6
+}
+
+func TestIsSSECopyCustomerRequest(t *testing.T) {
+	for i, test := range isSSECopyCustomerRequestTests {
+		headers := http.Header{}
+		for k, v := range test.headers {
+			headers.Set(k, v)
+		}
+		if IsSSECopyCustomerRequest(headers) != test.sseRequest {
+			t.Errorf("Test %d: Expected IsSSECopyCustomerRequest to return %v", i, test.sseRequest)
+		}
+	}
+}
 
 var isSSECustomerRequestTests = []struct {
 	headers    map[string]string
@@ -142,6 +167,108 @@ func TestParseSSECustomerRequest(t *testing.T) {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
 		key := request.Header.Get(SSECustomerKey)
+		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
+			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
+		}
+
+	}
+}
+
+var parseSSECopyCustomerRequestTests = []struct {
+	headers map[string]string
+	useTLS  bool
+	err     error
+}{
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=", // 0
+			SSECopyCustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+		},
+		useTLS: true, err: nil,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=", // 1
+			SSECopyCustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+		},
+		useTLS: false, err: errInsecureSSERequest,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES 256",
+			SSECopyCustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=", // 2
+			SSECopyCustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+		},
+		useTLS: true, err: errInvalidSSEAlgorithm,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "NjE0SL87s+ZhYtaTrg5eI5cjhCQLGPVMKenPG2bCJFw=", // 3
+			SSECopyCustomerKeyMD5:    "H+jq/LwEOEO90YtiTuNFVw==",
+		},
+		useTLS: true, err: errSSEKeyMD5Mismatch,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       " jE0SL87s+ZhYtaTrg5eI5cjhCQLGPVMKenPG2bCJFw=", // 4
+			SSECopyCustomerKeyMD5:    "H+jq/LwEOEO90YtiTuNFVw==",
+		},
+		useTLS: true, err: errInvalidSSEKey,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "NjE0SL87s+ZhYtaTrg5eI5cjhCQLGPVMKenPG2bCJFw=", // 5
+			SSECopyCustomerKeyMD5:    " +jq/LwEOEO90YtiTuNFVw==",
+		},
+		useTLS: true, err: errSSEKeyMD5Mismatch,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "vFQ9ScFOF6Tu/BfzMS+rVMvlZGJHi5HmGJenJfrfKI45", // 6
+			SSECopyCustomerKeyMD5:    "9KPgDdZNTHimuYCwnJTp5g==",
+		},
+		useTLS: true, err: errInvalidSSEKey,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "", // 7
+			SSECopyCustomerKeyMD5:    "9KPgDdZNTHimuYCwnJTp5g==",
+		},
+		useTLS: true, err: errMissingSSEKey,
+	},
+	{
+		headers: map[string]string{
+			SSECopyCustomerAlgorithm: "AES256",
+			SSECopyCustomerKey:       "vFQ9ScFOF6Tu/BfzMS+rVMvlZGJHi5HmGJenJfrfKI45", // 8
+			SSECopyCustomerKeyMD5:    "",
+		},
+		useTLS: true, err: errMissingSSEKeyMD5,
+	},
+}
+
+func TestParseSSECopyCustomerRequest(t *testing.T) {
+	defer func(flag bool) { globalIsSSL = flag }(globalIsSSL)
+	for i, test := range parseSSECopyCustomerRequestTests {
+		headers := http.Header{}
+		for k, v := range test.headers {
+			headers.Set(k, v)
+		}
+		request := &http.Request{}
+		request.Header = headers
+		globalIsSSL = test.useTLS
+
+		_, err := ParseSSECopyCustomerRequest(request)
+		if err != test.err {
+			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
+		}
+		key := request.Header.Get(SSECopyCustomerKey)
 		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
 			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
 		}

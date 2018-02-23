@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"io"
 	goioutil "io/ioutil"
 	"net"
@@ -158,19 +159,24 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	writer = w
 	if objectAPI.IsEncryptionSupported() {
 		if IsSSECustomerRequest(r.Header) {
-			writer, err = DecryptRequest(writer, r, objInfo.UserDefined)
+			// Response writer should be limited early on for decryption upto required length,
+			// additionally also skipping mod(offset)64KiB boundaries.
+			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+
+			var sequenceNumber uint32
+			sequenceNumber, startOffset, length = getStartOffset(startOffset, length)
+			if length > objInfo.EncryptedSize() {
+				length = objInfo.EncryptedSize()
+			}
+
+			writer, err = DecryptRequestWithSequenceNumber(writer, r, sequenceNumber, objInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
+
 			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
 			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
-
-			if startOffset != 0 || length < objInfo.Size {
-				writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-C requests with HTTP range are not supported yet
-				return
-			}
-			length = objInfo.EncryptedSize()
 		}
 	}
 
@@ -178,14 +184,16 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setHeadGetRespHeaders(w, r.URL.Query())
 	httpWriter := ioutil.WriteOnClose(writer)
 
-	// Reads the object at startOffset and writes to mw.
+	// Reads the object at startOffset and writes to httpWriter.
 	if err = objectAPI.GetObject(bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
+		httpWriter.Close()
 		return
 	}
+
 	if err = httpWriter.Close(); err != nil {
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -241,7 +249,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if objectAPI.IsEncryptionSupported() && !objInfo.IsDir {
+	if objectAPI.IsEncryptionSupported() {
 		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -287,7 +295,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 // Extract metadata relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Metadata-Directive.
-func getCpObjMetadataFromHeader(header http.Header, defaultMeta map[string]string) (map[string]string, error) {
+func getCpObjMetadataFromHeader(header http.Header, userMeta map[string]string) (map[string]string, error) {
+	// Make a copy of the supplied metadata to avoid
+	// to change the original one.
+	defaultMeta := make(map[string]string, len(userMeta))
+	for k, v := range userMeta {
+		defaultMeta[k] = v
+	}
+
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isMetadataReplace(header) {
@@ -340,24 +355,24 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if IsSSECustomerRequest(r.Header) { // handle SSE-C requests
-		// SSE-C is not implemented for CopyObject operations yet
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
-	}
-
 	// Check if metadata directive is valid.
 	if !isMetadataDirectiveValid(r.Header) {
 		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
 		return
 	}
 
-	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
-
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	srcInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+
+	if objectAPI.IsEncryptionSupported() {
+		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
+			return
+		}
 	}
 
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
@@ -371,24 +386,118 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Initialize pipe.
+	pipeReader, pipeWriter := io.Pipe()
+
+	// We have to copy metadata only if source and destination are same.
+	// this changes for encryption which can be observed below.
+	if cpSrcDstSame {
+		srcInfo.metadataOnly = true
+	}
+
+	var writer io.WriteCloser = pipeWriter
+	var reader io.Reader = pipeReader
+	var encMetadata = make(map[string]string)
+	if objectAPI.IsEncryptionSupported() {
+		var oldKey, newKey []byte
+		sseCopyC := IsSSECopyCustomerRequest(r.Header)
+		sseC := IsSSECustomerRequest(r.Header)
+		if sseCopyC {
+			oldKey, err = ParseSSECopyCustomerRequest(r)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+		if sseC {
+			newKey, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				pipeReader.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+		// AWS S3 implementation requires us to only rotate keys
+		// when/ both keys are provided and destination is same
+		// otherwise we proceed to encrypt/decrypt.
+		if len(oldKey) > 0 && len(newKey) > 0 && cpSrcDstSame {
+			for k, v := range srcInfo.UserDefined {
+				encMetadata[k] = v
+			}
+			if err = rotateKey(oldKey, newKey, encMetadata); err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		} else {
+			if sseCopyC {
+				// Source is encrypted make sure to save the encrypted size.
+				if srcInfo.IsEncrypted() {
+					srcInfo.Size = srcInfo.EncryptedSize()
+				}
+				writer, err = newDecryptWriter(pipeWriter, oldKey, 0, srcInfo.UserDefined)
+				if err != nil {
+					pipeWriter.CloseWithError(err)
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
+				// We are not only copying just metadata instead
+				// we are creating a new object at this point, even
+				// if source and destination are same objects.
+				srcInfo.metadataOnly = false
+			}
+			if sseC {
+				reader, err = newEncryptReader(pipeReader, newKey, encMetadata)
+				if err != nil {
+					pipeReader.CloseWithError(err)
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
+				// We are not only copying just metadata instead
+				// we are creating a new object at this point, even
+				// if source and destination are same objects.
+				srcInfo.metadataOnly = false
+			}
+		}
+	}
+	srcInfo.Writer = writer
+
 	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(r.Header, srcInfo.UserDefined)
 	if err != nil {
+		pipeReader.CloseWithError(err)
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
+	}
+
+	// We need to preserve the encryption headers set in EncryptRequest,
+	// so we do not want to override them, copy them instead.
+	for k, v := range encMetadata {
+		srcInfo.UserDefined[k] = v
 	}
 
 	// Make sure to remove saved etag if any, CopyObject calculates a new one.
 	delete(srcInfo.UserDefined, "etag")
 
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
-	// desination are same objects.
-	if !isMetadataReplace(r.Header) && cpSrcDstSame {
+	// desination are same objects. Apply this restriction also when
+	// metadataOnly is true indicating that we are not overwriting the object.
+	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly {
+		pipeReader.CloseWithError(fmt.Errorf("invalid copy dest"))
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(w, ErrInvalidCopyDest, r.URL)
 		return
 	}
+
+	hashReader, err := hash.NewReader(reader, srcInfo.Size, "", "") // do not try to verify encrypted content
+	if err != nil {
+		pipeReader.CloseWithError(err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	srcInfo.Reader = hashReader
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
@@ -397,6 +506,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	pipeReader.Close()
 
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
@@ -557,8 +668,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
 	if objectAPI.IsEncryptionSupported() {
-		if IsSSECustomerRequest(r.Header) && size > 0 { // handle SSE-C requests
+		if IsSSECustomerRequest(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
 			reader, err = EncryptRequest(hashReader, r, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -578,6 +690,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	if objectAPI.IsEncryptionSupported() {
 		if IsSSECustomerRequest(r.Header) {
