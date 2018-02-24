@@ -25,7 +25,6 @@ import { Router, Route } from "react-router-dom"
 import { Provider } from "react-redux"
 
 import history from "./js/history"
-import { minioBrowserPrefix } from "./js/constants"
 import configureStore from "./js/store/configure-store"
 import hideLoader from "./js/loader"
 import App from "./js/App"

@@ -21,7 +21,6 @@ import logo from "../../img/logo.svg"
 import Alert from "../alert/Alert"
 import * as actionsAlert from "../alert/actions"
 import InputGroup from "./InputGroup"
-import { minioBrowserPrefix } from "../constants"
 import web from "../web"
 import { Redirect } from "react-router-dom"
 
