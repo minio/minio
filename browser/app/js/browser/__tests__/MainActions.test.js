@@ -18,9 +18,35 @@ import React from "react"
 import { shallow, mount } from "enzyme"
 import { MainActions } from "../MainActions"
 
+jest.mock("../../web", () => ({
+  LoggedIn: jest
+    .fn(() => true)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(false)
+}))
+
 describe("MainActions", () => {
   it("should render without crashing", () => {
     shallow(<MainActions />)
+  })
+
+  it("should not show any actions when user has not LoggedIn and prefixWritable is false", () => {
+    const wrapper = shallow(<MainActions />)
+    expect(wrapper.find("#show-make-bucket").length).toBe(0)
+    expect(wrapper.find("#file-input").length).toBe(0)
+  })
+
+  it("should show only file upload action when user has not LoggedIn and prefixWritable is true", () => {
+    const wrapper = shallow(<MainActions prefixWritable={true} />)
+    expect(wrapper.find("#show-make-bucket").length).toBe(0)
+    expect(wrapper.find("#file-input").length).toBe(1)
+  })
+
+  it("should show make bucket upload file actions when user has LoggedIn", () => {
+    const wrapper = shallow(<MainActions />)
+    expect(wrapper.find("#show-make-bucket").length).toBe(1)
+    expect(wrapper.find("#file-input").length).toBe(1)
   })
 
   it("should call showMakeBucketModal when create bucket icon is clicked", () => {

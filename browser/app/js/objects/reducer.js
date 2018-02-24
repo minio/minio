@@ -32,6 +32,7 @@ export default (
     currentPrefix: "",
     marker: "",
     isTruncated: false,
+    prefixWritable: false,
     shareObject: {
       show: false,
       object: "",
@@ -77,6 +78,11 @@ export default (
         currentPrefix: action.prefix,
         marker: "",
         isTruncated: false
+      }
+    case actionsObjects.SET_PREFIX_WRITABLE:
+      return {
+        ...state,
+        prefixWritable: action.prefixWritable
       }
     case actionsObjects.SET_SHARE_OBJECT:
       return {

@@ -21,10 +21,10 @@ import "material-design-iconic-font/dist/css/material-design-iconic-font.min.css
 
 import React from "react"
 import ReactDOM from "react-dom"
-import { BrowserRouter, Route } from "react-router-dom"
+import { Router, Route } from "react-router-dom"
 import { Provider } from "react-redux"
 
-import { minioBrowserPrefix } from "./js/constants"
+import history from "./js/history"
 import configureStore from "./js/store/configure-store"
 import hideLoader from "./js/loader"
 import App from "./js/App"
@@ -33,9 +33,9 @@ const store = configureStore()
 
 ReactDOM.render(
   <Provider store={store}>
-    <BrowserRouter>
-      <Route path={minioBrowserPrefix} component={App} />
-    </BrowserRouter>
+    <Router history={history}>
+      <App />
+    </Router>
   </Provider>,
   document.getElementById("root")
 )

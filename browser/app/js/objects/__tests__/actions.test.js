@@ -26,7 +26,8 @@ jest.mock("../../web", () => ({
     return Promise.resolve({
       objects: [{ name: "test1" }, { name: "test2" }],
       istruncated: false,
-      nextmarker: "test2"
+      nextmarker: "test2",
+      writable: false
     })
   }),
   RemoveObject: jest.fn(({ bucketName, objects }) => {
@@ -124,6 +125,10 @@ describe("Objects actions", () => {
       {
         type: "objects/SET_SORT_ORDER",
         sortOrder: false
+      },
+      {
+        type: "objects/SET_PREFIX_WRITABLE",
+        prefixWritable: false
       }
     ]
     return store.dispatch(actionsObjects.fetchObjects()).then(() => {
@@ -143,6 +148,10 @@ describe("Objects actions", () => {
         objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
         isTruncated: false
+      },
+      {
+        type: "objects/SET_PREFIX_WRITABLE",
+        prefixWritable: false
       }
     ]
     return store.dispatch(actionsObjects.fetchObjects(true)).then(() => {
@@ -195,6 +204,16 @@ describe("Objects actions", () => {
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
     expect(window.location.pathname.endsWith("/test/abc/")).toBeTruthy()
+  })
+
+  it("create objects/SET_PREFIX_WRITABLE action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "objects/SET_PREFIX_WRITABLE", prefixWritable: true }
+    ]
+    store.dispatch(actionsObjects.setPrefixWritable(true))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
   })
 
   it("creates objects/REMOVE action", () => {
