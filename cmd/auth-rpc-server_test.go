@@ -52,7 +52,7 @@ func TestLogin(t *testing.T) {
 		{
 			args: LoginRPCArgs{
 				AuthToken: token,
-				Version:   semVersion{2, 0, 0},
+				Version:   semVersion{3, 0, 0},
 			},
 			skewTime:    0,
 			expectedErr: errRPCAPIVersionUnsupported,
