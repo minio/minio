@@ -34,13 +34,15 @@ const AuthorizedRoute = ({ component: Component, ...rest }) => (
   />
 )
 
-export const App = ({ match }) => (
-  <Switch>
-    <AuthorizedRoute exact path={match.url} component={Browser} />
-    <Route path={`${match.url}/login`} component={Login} />
-    <AuthorizedRoute path={`${match.url}/:bucket/*`} component={Browser} />
-    <AuthorizedRoute path={`${match.url}/:bucket`} component={Browser} />
-  </Switch>
-)
+export const App = () => {
+  return (
+    <Switch>
+      <AuthorizedRoute exact path={"/"} component={Browser} />
+      <Route path={"/login"} component={Login} />
+      <Route path={"/:bucket/*"} component={Browser} />
+      <Route path={"/:bucket"} component={Browser} />
+    </Switch>
+  )
+}
 
 export default App

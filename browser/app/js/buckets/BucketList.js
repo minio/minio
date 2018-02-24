@@ -20,11 +20,22 @@ import { Scrollbars } from "react-custom-scrollbars"
 import * as actionsBuckets from "./actions"
 import { getVisibleBuckets } from "./selectors"
 import BucketContainer from "./BucketContainer"
+import web from "../web"
+import history from "../history"
+import { pathSlice } from "../utils"
 
 export class BucketList extends React.Component {
   componentWillMount() {
-    const { fetchBuckets } = this.props
-    fetchBuckets()
+    const { fetchBuckets, setBucketList, selectBucket } = this.props
+    if (web.LoggedIn()) {
+      fetchBuckets()
+    } else {
+      const { bucket, prefix } = pathSlice(history.location.pathname)
+      if (bucket) {
+        setBucketList([bucket])
+        selectBucket(bucket, prefix)
+      }
+    }
   }
   render() {
     const { visibleBuckets } = this.props
@@ -52,7 +63,9 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    fetchBuckets: () => dispatch(actionsBuckets.fetchBuckets())
+    fetchBuckets: () => dispatch(actionsBuckets.fetchBuckets()),
+    setBucketList: buckets => dispatch(actionsBuckets.setList(buckets)),
+    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
   }
 }
 

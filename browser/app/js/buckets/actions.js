@@ -18,6 +18,7 @@ import web from "../web"
 import history from "../history"
 import * as alertActions from "../alert/actions"
 import * as objectsActions from "../objects/actions"
+import { pathSlice } from "../utils"
 
 export const SET_LIST = "buckets/SET_LIST"
 export const ADD = "buckets/ADD"
@@ -31,7 +32,12 @@ export const fetchBuckets = () => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
       dispatch(setList(buckets))
       if (buckets.length > 0) {
-        dispatch(selectBucket(buckets[0]))
+        const { bucket, prefix } = pathSlice(history.location.pathname)
+        if (bucket && buckets.indexOf(bucket) > -1) {
+          dispatch(selectBucket(bucket, prefix))
+        } else {
+          dispatch(selectBucket(buckets[0]))
+        }
       }
     })
   }
@@ -51,11 +57,10 @@ export const setFilter = filter => {
   }
 }
 
-export const selectBucket = bucket => {
+export const selectBucket = (bucket, prefix) => {
   return function(dispatch) {
     dispatch(setCurrentBucket(bucket))
-    dispatch(objectsActions.selectPrefix(""))
-    history.push(`/${bucket}`)
+    dispatch(objectsActions.selectPrefix(prefix || ""))
   }
 }
 

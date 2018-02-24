@@ -32,6 +32,7 @@ export const REMOVE = "objects/REMOVE"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
 export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
 export const SET_CURRENT_PREFIX = "objects/SET_CURRENT_PREFIX"
+export const SET_PREFIX_WRITABLE = "objects/SET_PREFIX_WRITABLE"
 export const SET_SHARE_OBJECT = "objects/SET_SHARE_OBJECT"
 export const CHECKED_LIST_ADD = "objects/CHECKED_LIST_ADD"
 export const CHECKED_LIST_REMOVE = "objects/CHECKED_LIST_REMOVE"
@@ -80,6 +81,11 @@ export const fetchObjects = append => {
           dispatch(setSortBy(""))
           dispatch(setSortOrder(false))
         }
+        dispatch(setPrefixWritable(res.writable))
+      })
+      .catch(err => {
+        dispatch(alertActions.set({ type: "danger", message: err.message }))
+        history.push("/login")
       })
   }
 }
@@ -135,6 +141,11 @@ export const setCurrentPrefix = prefix => {
     prefix
   }
 }
+
+export const setPrefixWritable = prefixWritable => ({
+  type: SET_PREFIX_WRITABLE,
+  prefixWritable
+})
 
 export const deleteObject = object => {
   return function(dispatch, getState) {
