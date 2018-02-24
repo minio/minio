@@ -17,10 +17,16 @@
 import React from "react"
 import { connect } from "react-redux"
 import { Dropdown, OverlayTrigger, Tooltip } from "react-bootstrap"
+import web from "../web"
 import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
+import { getPrefixWritable } from "../objects/selectors"
 
-export const MainActions = ({ uploadFile, showMakeBucketModal }) => {
+export const MainActions = ({
+  prefixWritable,
+  uploadFile,
+  showMakeBucketModal
+}) => {
   const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
     <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
@@ -31,47 +37,59 @@ export const MainActions = ({ uploadFile, showMakeBucketModal }) => {
     e.target.value = null
   }
 
-  return (
-    <Dropdown dropup className="feb-actions" id="fe-action-toggle">
-      <Dropdown.Toggle noCaret className="feba-toggle">
-        <span>
-          <i className="fa fa-plus" />
-        </span>
-      </Dropdown.Toggle>
-      <Dropdown.Menu>
-        <OverlayTrigger placement="left" overlay={uploadTooltip}>
-          <a href="#" className="feba-btn feba-upload">
-            <input
-              type="file"
-              onChange={onFileUpload}
-              style={{ display: "none" }}
-              id="file-input"
-            />
-            <label htmlFor="file-input">
-              {" "}
-              <i className="fa fa-cloud-upload" />{" "}
-            </label>
-          </a>
-        </OverlayTrigger>
-        <OverlayTrigger placement="left" overlay={makeBucketTooltip}>
-          <a
-            href="#"
-            id="show-make-bucket"
-            className="feba-btn feba-bucket"
-            onClick={e => {
-              e.preventDefault()
-              showMakeBucketModal()
-            }}
-          >
-            <i className="fa fa-hdd-o" />
-          </a>
-        </OverlayTrigger>
-      </Dropdown.Menu>
-    </Dropdown>
-  )
+  const loggedIn = web.LoggedIn()
+
+  if (loggedIn || prefixWritable) {
+    return (
+      <Dropdown dropup className="feb-actions" id="fe-action-toggle">
+        <Dropdown.Toggle noCaret className="feba-toggle">
+          <span>
+            <i className="fa fa-plus" />
+          </span>
+        </Dropdown.Toggle>
+        <Dropdown.Menu>
+          <OverlayTrigger placement="left" overlay={uploadTooltip}>
+            <a href="#" className="feba-btn feba-upload">
+              <input
+                type="file"
+                onChange={onFileUpload}
+                style={{ display: "none" }}
+                id="file-input"
+              />
+              <label htmlFor="file-input">
+                {" "}
+                <i className="fa fa-cloud-upload" />{" "}
+              </label>
+            </a>
+          </OverlayTrigger>
+          {loggedIn && (
+            <OverlayTrigger placement="left" overlay={makeBucketTooltip}>
+              <a
+                href="#"
+                id="show-make-bucket"
+                className="feba-btn feba-bucket"
+                onClick={e => {
+                  e.preventDefault()
+                  showMakeBucketModal()
+                }}
+              >
+                <i className="fa fa-hdd-o" />
+              </a>
+            </OverlayTrigger>
+          )}
+        </Dropdown.Menu>
+      </Dropdown>
+    )
+  } else {
+    return <noscript />
+  }
 }
 
-const mapStateToProps = state => state
+const mapStateToProps = state => {
+  return {
+    prefixWritable: getPrefixWritable(state)
+  }
+}
 
 const mapDispatchToProps = dispatch => {
   return {

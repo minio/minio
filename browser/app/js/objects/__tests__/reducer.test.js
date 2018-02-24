@@ -27,6 +27,7 @@ describe("objects reducer", () => {
       currentPrefix: "",
       marker: "",
       isTruncated: false,
+      prefixWritable: false,
       shareObject: {
         show: false,
         object: "",
@@ -121,6 +122,14 @@ describe("objects reducer", () => {
     expect(newState.currentPrefix).toEqual("test2/")
     expect(newState.marker).toEqual("")
     expect(newState.isTruncated).toBeFalsy()
+  })
+
+  it("should handle SET_PREFIX_WRITABLE", () => {
+    const newState = reducer(undefined, {
+      type: actions.SET_PREFIX_WRITABLE,
+      prefixWritable: true
+    })
+    expect(newState.prefixWritable).toBeTruthy()
   })
 
   it("should handle SET_SHARE_OBJECT", () => {

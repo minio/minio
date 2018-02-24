@@ -18,6 +18,7 @@ import configureStore from "redux-mock-store"
 import thunk from "redux-thunk"
 import * as actionsBuckets from "../actions"
 import * as objectActions from "../../objects/actions"
+import history from "../../history"
 
 jest.mock("../../web", () => ({
   ListBuckets: jest.fn(() => {
@@ -36,7 +37,7 @@ const middlewares = [thunk]
 const mockStore = configureStore(middlewares)
 
 describe("Buckets actions", () => {
-  it("creates buckets/SET_LIST and buckets/SET_CURRENT_BUCKET after fetching the buckets", () => {
+  it("creates buckets/SET_LIST and buckets/SET_CURRENT_BUCKET with first bucket after fetching the buckets", () => {
     const store = mockStore()
     const expectedActions = [
       { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
@@ -48,7 +49,35 @@ describe("Buckets actions", () => {
     })
   })
 
-  it("should update browser url and creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
+  it("creates buckets/SET_CURRENT_BUCKET with bucket name in the url after fetching buckets", () => {
+    history.push("/test2")
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test2" }
+    ]
+    window.location
+    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates buckets/SET_CURRENT_BUCKET with first bucket when the bucket in url is not exists after fetching buckets", () => {
+    history.push("/test3")
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+    ]
+    window.location
+    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
     const store = mockStore()
     const expectedActions = [
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
@@ -56,7 +85,6 @@ describe("Buckets actions", () => {
     store.dispatch(actionsBuckets.selectBucket("test1"))
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
-    expect(window.location.pathname).toBe("/test1")
   })
 
   it("creates buckets/SHOW_MAKE_BUCKET_MODAL for showMakeBucketModal", () => {

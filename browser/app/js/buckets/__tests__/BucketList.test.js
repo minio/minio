@@ -16,7 +16,15 @@
 
 import React from "react"
 import { shallow } from "enzyme"
+import history from "../../history"
 import { BucketList } from "../BucketList"
+
+jest.mock("../../web", () => ({
+  LoggedIn: jest
+    .fn(() => false)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(true)
+}))
 
 describe("BucketList", () => {
   it("should render without crashing", () => {
@@ -30,5 +38,20 @@ describe("BucketList", () => {
       <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
     )
     expect(fetchBuckets).toHaveBeenCalled()
+  })
+
+  it("should call setBucketList and selectBucket before component is mounted when the user has not loggedIn", () => {
+    const setBucketList = jest.fn()
+    const selectBucket = jest.fn()
+    history.push("/bk1/pre1")
+    const wrapper = shallow(
+      <BucketList
+        visibleBuckets={[]}
+        setBucketList={setBucketList}
+        selectBucket={selectBucket}
+      />
+    )
+    expect(setBucketList).toHaveBeenCalledWith(["bk1"])
+    expect(selectBucket).toHaveBeenCalledWith("bk1", "pre1")
   })
 })
