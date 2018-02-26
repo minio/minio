@@ -17,8 +17,8 @@ env:
 script:
 ## Run all the tests
 - make
-- diff -au <(gofmt -d cmd) <(printf "")
-- diff -au <(gofmt -d pkg) <(printf "")
+- diff -au <(gofmt -s -d cmd) <(printf "")
+- diff -au <(gofmt -s -d pkg) <(printf "")
 - make test GOFLAGS="-timeout 15m -race -v"
 - make coverage
 

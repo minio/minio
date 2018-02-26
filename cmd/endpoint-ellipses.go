@@ -204,7 +204,7 @@ func getAllSets(args ...string) ([][]string, error) {
 			}
 		} else {
 			// We are in FS setup, proceed forward.
-			setIndexes = [][]uint64{[]uint64{uint64(len(args))}}
+			setIndexes = [][]uint64{{uint64(len(args))}}
 		}
 		s := endpointSet{
 			endpoints:  args,
