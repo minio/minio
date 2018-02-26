@@ -55,13 +55,14 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 		return "", err
 	}
 
-	serverCred := globalServerConfig.GetCredential()
+	// Find a valid set of credentials for the passed in key.
+	serverCred := globalServerConfig.GetCredentialForKey(accessKey)
 
 	if serverCred.AccessKey != passedCredential.AccessKey {
 		return "", errInvalidAccessKeyID
 	}
 
-	if !serverCred.Equal(passedCredential) {
+	if !serverCred.IsValid() || !serverCred.Equal(passedCredential) {
 		return "", errAuthentication
 	}
 
@@ -89,9 +90,16 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 		return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
 	}
 
-	return []byte(globalServerConfig.GetCredential().SecretKey), nil
+	subject := jwtToken.Claims.(*jwtgo.StandardClaims).Subject
+	creds := globalServerConfig.GetCredentialForKey(subject)
+	if !creds.IsValid() {
+		return nil, fmt.Errorf("Invalid key %v", subject)
+	}
+
+	return []byte(creds.SecretKey), nil
 }
 
+// Allows for a valid token on any bucket.
 func isAuthTokenValid(tokenString string) bool {
 	if tokenString == "" {
 		return false
@@ -106,30 +114,58 @@ func isAuthTokenValid(tokenString string) bool {
 		logger.LogIf(context.Background(), err)
 		return false
 	}
-	return jwtToken.Valid && claims.Subject == globalServerConfig.GetCredential().AccessKey
-}
 
-func isHTTPRequestValid(req *http.Request) bool {
-	return webRequestAuthenticate(req) == nil
-}
-
-func getTokenAccessKey(req *http.Request) string {
-	var claims jwtgo.StandardClaims
-	_, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
-	if err != nil {
-		return ""
-	}
-	if err = claims.Valid(); err != nil {
-		return ""
+	if !jwtToken.Valid {
+		return false
 	}
 
-	return claims.Subject
+	serverCred := globalServerConfig.GetCredentialForKey(claims.Subject)
+
+	return serverCred.IsValid() && claims.Subject == serverCred.AccessKey
+}
+
+func isHTTPRequestValid(req *http.Request, bucket string) bool {
+	return webRequestAuthenticate(req, bucket) == nil
+}
+
+func isHTTPRequestValidAnyKey(req *http.Request) bool {
+	err, _ := webRequestAuthenticateAnyKey(req)
+	return err == nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) error {
+func webRequestAuthenticateAnyKey(req *http.Request) (error, string) {
+	var claims jwtgo.StandardClaims
+	jwtToken, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
+	if err != nil {
+		if err == jwtreq.ErrNoTokenInRequest {
+			return errNoAuthToken, ""
+		}
+		return errAuthentication, ""
+	}
+	if err = claims.Valid(); err != nil {
+		return errAuthentication, ""
+	}
+
+	if !jwtToken.Valid {
+		return errAuthentication, ""
+	}
+
+	serverCreds := globalServerConfig.GetCredentialForKey(claims.Subject)
+	if serverCreds.IsValid() && serverCreds.AccessKey == claims.Subject {
+		return nil, claims.Subject
+	}
+
+	return errInvalidAccessKeyID, ""
+}
+
+// Check if the request is authenticated.
+// Returns an error and the access key that matched.
+// Error returns nil if the request is authenticated. errNoAuthToken if token missing.
+// Returns errAuthentication for all other errors.
+func webRequestAuthenticate(req *http.Request, bucket string) error {
 	var claims jwtgo.StandardClaims
 	jwtToken, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
 	if err != nil {
@@ -141,11 +177,34 @@ func webRequestAuthenticate(req *http.Request) error {
 	if err = claims.Valid(); err != nil {
 		return errAuthentication
 	}
-	if claims.Subject != globalServerConfig.GetCredential().AccessKey {
-		return errInvalidAccessKeyID
-	}
+
 	if !jwtToken.Valid {
 		return errAuthentication
 	}
+
+	// Check the master key first.
+	if claims.Subject != globalServerConfig.GetCredential().AccessKey {
+		// If this token isn't for the master key, check the bucket key.
+		bucketCred := globalServerConfig.GetCredentialForBucket(bucket)
+		if !bucketCred.IsValid() || claims.Subject != bucketCred.AccessKey {
+			return errInvalidAccessKeyID
+		}
+	}
 	return nil
+}
+
+// Return the bucket name for this authentication request, or "" for global or invalid tokens.
+func webRequestAuthenticateGetBucket(req *http.Request) (error, string) {
+	var err, accessKey = webRequestAuthenticateAnyKey(req)
+
+	if err != nil {
+		return err, ""
+	}
+
+	bucket := globalServerConfig.GetBucketForKey(accessKey)
+	if bucket == "" {
+		return errInvalidAccessKeyID, ""
+	}
+
+	return nil, bucket
 }

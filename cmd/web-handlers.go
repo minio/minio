@@ -64,7 +64,7 @@ type ServerInfoRep struct {
 
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValidAnyKey(r) {
 		return toJSONError(errAuthentication)
 	}
 	host, err := os.Hostname()
@@ -105,7 +105,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValidAnyKey(r) {
 		return toJSONError(errAuthentication)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo(context.Background())
@@ -124,7 +124,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, "") {
 		return toJSONError(errAuthentication)
 	}
 
@@ -152,7 +152,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, "") {
 		return toJSONError(errAuthentication)
 	}
 
@@ -198,11 +198,14 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
+
 	listBuckets := objectAPI.ListBuckets
 	if web.CacheAPI() != nil {
 		listBuckets = web.CacheAPI().ListBuckets
 	}
-	authErr := webRequestAuthenticate(r)
+
+	// Authenticate the request, and figure out if it corresponds to a specific bucket.
+	authErr, keyBucket := webRequestAuthenticateGetBucket(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
@@ -211,6 +214,11 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(err)
 	}
 	for _, bucket := range buckets {
+		// If this key only has access to one bucket, skip all buckets but that one.
+		if keyBucket != "" && keyBucket != bucket.Name {
+			continue
+		}
+
 		reply.Buckets = append(reply.Buckets, WebBucketInfo{
 			Name:         bucket.Name,
 			CreationDate: bucket.Created,
@@ -277,7 +285,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		ObjectName:      args.Prefix + "/",
 	})
 
-	if authErr := webRequestAuthenticate(r); authErr != nil {
+	if authErr := webRequestAuthenticate(r, args.BucketName); authErr != nil {
 		if authErr == errAuthentication {
 			return toJSONError(authErr)
 		}
@@ -338,7 +346,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if web.CacheAPI() != nil {
 		listObjects = web.CacheAPI().ListObjects
 	}
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.BucketName) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -424,7 +432,7 @@ type GenerateAuthReply struct {
 }
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, "") {
 		return toJSONError(errAuthentication)
 	}
 	cred, err := auth.GetNewCredentials()
@@ -451,7 +459,7 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.Bucket) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -501,8 +509,9 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	token := ""
-	// If the current token access key isn't the master, get a new token.
-	if getTokenAccessKey(r) != globalServerConfig.GetCredential().AccessKey {
+	// If the current token access key isn't the master one, get a new token.
+	_, accessKey := webRequestAuthenticateAnyKey(r)
+	if accessKey != globalServerConfig.GetCredential().AccessKey {
 		var err error = nil
 		// As we have updated access/secret key, generate new auth token.
 		token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
@@ -538,7 +547,7 @@ type GetAuthReply struct {
 
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *GetAuthArgs, reply *GetAuthReply) error {
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.Bucket) {
 		return toJSONError(errAuthentication)
 	}
 	creds := globalServerConfig.GetCredentialForBucket(args.Bucket)
@@ -556,12 +565,12 @@ type URLTokenReply struct {
 
 // CreateURLToken creates a URL token (short-lived) for GET requests.
 func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
-	if !isHTTPRequestValid(r) {
+	err, key := webRequestAuthenticateAnyKey(r)
+	if err != nil {
 		return toJSONError(errAuthentication)
 	}
 
-	creds := globalServerConfig.GetCredential()
-
+	creds := globalServerConfig.GetCredentialForKey(key)
 	token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		return toJSONError(err)
@@ -588,7 +597,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if authErr := webRequestAuthenticate(r); authErr != nil {
+	if authErr := webRequestAuthenticate(r, bucket); authErr != nil {
 		if authErr == errAuthentication {
 			writeWebErrorResponse(w, errAuthentication)
 			return
@@ -810,7 +819,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.BucketName) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -858,7 +867,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.BucketName) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -905,7 +914,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.BucketName) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -986,7 +995,7 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	if !isHTTPRequestValid(r) {
+	if !isHTTPRequestValid(r, args.BucketName) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -1002,7 +1011,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 
 // Returns presigned url for GET method.
 func presignedGet(host, bucket, object string, expiry int64) string {
-	cred := globalServerConfig.GetCredential()
+	cred := globalServerConfig.GetCredentialForBucket(bucket)
 	region := globalServerConfig.GetRegion()
 
 	accessKey := cred.AccessKey
