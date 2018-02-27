@@ -75,14 +75,14 @@ func (sys *NotificationSys) DeleteBucket(bucketName string) map[xnet.Host]error 
 }
 
 // UpdateBucketPolicy - calls UpdateBucketPolicy RPC call on all peers.
-func (sys *NotificationSys) UpdateBucketPolicy(bucketName string, changes policyChange) map[xnet.Host]error {
+func (sys *NotificationSys) UpdateBucketPolicy(bucketName string) map[xnet.Host]error {
 	errors := make(map[xnet.Host]error)
 	var wg sync.WaitGroup
 	for addr, client := range sys.peerRPCClientMap {
 		wg.Add(1)
 		go func(addr xnet.Host, client *PeerRPCClient) {
 			defer wg.Done()
-			if err := client.UpdateBucketPolicy(bucketName, changes); err != nil {
+			if err := client.UpdateBucketPolicy(bucketName); err != nil {
 				errors[addr] = err
 			}
 		}(addr, client)

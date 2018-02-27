@@ -202,13 +202,5 @@ func persistAndNotifyBucketPolicyChange(bucket string, isRemove bool, bktPolicy 
 		}
 	}
 
-	if err := globalBucketPolicies.SetBucketPolicy(bucket, pCh); err != nil {
-		return err
-	}
-
-	for addr, err := range globalNotificationSys.UpdateBucketPolicy(bucket, pCh) {
-		errorIf(err, "unable to update policy change in remote peer %v", addr)
-	}
-
 	return nil
 }

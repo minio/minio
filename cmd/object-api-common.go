@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,19 +89,11 @@ func deleteBucketMetadata(bucket string, objAPI ObjectLayer) {
 	// Delete bucket access policy, if present - ignore any errors.
 	_ = removeBucketPolicy(bucket, objAPI)
 
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket)
-
 	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(bucket, objAPI)
+	_ = removeNotificationConfig(objAPI, bucket)
 
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketNotification(bucket, nil)
 	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(bucket, objAPI)
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
+	_ = removeListenerConfig(objAPI, bucket)
 }
 
 // House keeping code for FS/XL and distributed Minio setup.
@@ -193,4 +185,24 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	}
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
+}
+
+// Removes notification.xml for a given bucket, only used during DeleteBucket.
+func removeNotificationConfig(objAPI ObjectLayer, bucket string) error {
+	// Verify bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+
+	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+
+	return objAPI.DeleteObject(minioMetaBucket, ncPath)
+}
+
+// Remove listener configuration from storage layer. Used when a bucket is deleted.
+func removeListenerConfig(objAPI ObjectLayer, bucket string) error {
+	// make the path
+	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
+
+	return objAPI.DeleteObject(minioMetaBucket, lcPath)
 }

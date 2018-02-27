@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/event/target"
 	"github.com/tidwall/gjson"
 )
 
@@ -295,56 +296,56 @@ func TestConfigDiff(t *testing.T) {
 		},
 		// 7
 		{
-			&serverConfig{Notify: notifier{AMQP: map[string]amqpNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{AMQP: map[string]amqpNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{AMQP: map[string]target.AMQPArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{AMQP: map[string]target.AMQPArgs{"1": {Enable: false}}}},
 			"AMQP Notification configuration differs",
 		},
 		// 8
 		{
-			&serverConfig{Notify: notifier{NATS: map[string]natsNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{NATS: map[string]natsNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{NATS: map[string]target.NATSArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{NATS: map[string]target.NATSArgs{"1": {Enable: false}}}},
 			"NATS Notification configuration differs",
 		},
 		// 9
 		{
-			&serverConfig{Notify: notifier{ElasticSearch: map[string]elasticSearchNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{ElasticSearch: map[string]elasticSearchNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{Elasticsearch: map[string]target.ElasticsearchArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Elasticsearch: map[string]target.ElasticsearchArgs{"1": {Enable: false}}}},
 			"ElasticSearch Notification configuration differs",
 		},
 		// 10
 		{
-			&serverConfig{Notify: notifier{Redis: map[string]redisNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{Redis: map[string]redisNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{Redis: map[string]target.RedisArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Redis: map[string]target.RedisArgs{"1": {Enable: false}}}},
 			"Redis Notification configuration differs",
 		},
 		// 11
 		{
-			&serverConfig{Notify: notifier{PostgreSQL: map[string]postgreSQLNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{PostgreSQL: map[string]postgreSQLNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{PostgreSQL: map[string]target.PostgreSQLArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{PostgreSQL: map[string]target.PostgreSQLArgs{"1": {Enable: false}}}},
 			"PostgreSQL Notification configuration differs",
 		},
 		// 12
 		{
-			&serverConfig{Notify: notifier{Kafka: map[string]kafkaNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{Kafka: map[string]kafkaNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{Kafka: map[string]target.KafkaArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Kafka: map[string]target.KafkaArgs{"1": {Enable: false}}}},
 			"Kafka Notification configuration differs",
 		},
 		// 13
 		{
-			&serverConfig{Notify: notifier{Webhook: map[string]webhookNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{Webhook: map[string]webhookNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{Webhook: map[string]target.WebhookArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{Webhook: map[string]target.WebhookArgs{"1": {Enable: false}}}},
 			"Webhook Notification configuration differs",
 		},
 		// 14
 		{
-			&serverConfig{Notify: notifier{MySQL: map[string]mySQLNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{MySQL: map[string]mySQLNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{MySQL: map[string]target.MySQLArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{MySQL: map[string]target.MySQLArgs{"1": {Enable: false}}}},
 			"MySQL Notification configuration differs",
 		},
 		// 15
 		{
-			&serverConfig{Notify: notifier{MQTT: map[string]mqttNotify{"1": {Enable: true}}}},
-			&serverConfig{Notify: notifier{MQTT: map[string]mqttNotify{"1": {Enable: false}}}},
+			&serverConfig{Notify: notifier{MQTT: map[string]target.MQTTArgs{"1": {Enable: true}}}},
+			&serverConfig{Notify: notifier{MQTT: map[string]target.MQTTArgs{"1": {Enable: false}}}},
 			"MQTT Notification configuration differs",
 		},
 	}

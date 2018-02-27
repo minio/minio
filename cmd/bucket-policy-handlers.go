@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,6 +285,10 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	for addr, err := range globalNotificationSys.UpdateBucketPolicy(bucket) {
+		errorIf(err, "unable to update policy change in remote peer %v", addr)
+	}
+
 	// Success.
 	writeSuccessNoContent(w)
 }
@@ -320,6 +324,10 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	if err := objAPI.DeleteBucketPolicy(bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+
+	for addr, err := range globalNotificationSys.UpdateBucketPolicy(bucket) {
+		errorIf(err, "unable to update policy change in remote peer %v", addr)
 	}
 
 	// Success.

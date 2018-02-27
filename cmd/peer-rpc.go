@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 
@@ -50,17 +49,16 @@ func (receiver *PeerRPCReceiver) DeleteBucket(args *DeleteBucketArgs, reply *Aut
 type UpdateBucketPolicyArgs struct {
 	AuthRPCArgs
 	BucketName string
-	Data       []byte
 }
 
 // UpdateBucketPolicy - handles update bucket policy RPC call which sets bucket policies to given bucket in global BucketPolicies object.
 func (receiver *PeerRPCReceiver) UpdateBucketPolicy(args *UpdateBucketPolicyArgs, reply *AuthRPCArgs) error {
-	var changes policyChange
-	if err := json.Unmarshal(args.Data, &changes); err != nil {
-		return err
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		// If the object layer is just coming up then it will load the policy from the disk.
+		return nil
 	}
-
-	return globalBucketPolicies.SetBucketPolicy(args.BucketName, changes)
+	return objectAPI.RefreshBucketPolicy(args.BucketName)
 }
 
 // PutBucketNotificationArgs - put bucket notification RPC arguments.
@@ -191,15 +189,9 @@ func (rpcClient *PeerRPCClient) DeleteBucket(bucketName string) error {
 }
 
 // UpdateBucketPolicy - calls update bucket policy RPC.
-func (rpcClient *PeerRPCClient) UpdateBucketPolicy(bucketName string, changes policyChange) error {
-	data, err := json.Marshal(changes)
-	if err != nil {
-		return err
-	}
-
+func (rpcClient *PeerRPCClient) UpdateBucketPolicy(bucketName string) error {
 	args := UpdateBucketPolicyArgs{
 		BucketName: bucketName,
-		Data:       data,
 	}
 	reply := AuthRPCReply{}
 	return rpcClient.Call("Peer.UpdateBucketPolicy", &args, &reply)

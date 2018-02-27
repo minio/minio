@@ -693,17 +693,8 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := removeBucketPolicy(bucket, objectAPI); err != nil {
-		errorIf(err, "unable to remove bucket policy")
-	}
-
 	// Notify all peers (including self) to update in-memory state
-	changes := policyChange{true, policy.BucketAccessPolicy{}}
-	if err := globalBucketPolicies.SetBucketPolicy(bucket, changes); err != nil {
-		errorIf(err, "unable to update policy change on this peer")
-	}
-
-	for addr, err := range globalNotificationSys.UpdateBucketPolicy(bucket, changes) {
+	for addr, err := range globalNotificationSys.UpdateBucketPolicy(bucket) {
 		errorIf(err, "unable to update policy change in remote peer %v", addr)
 	}
 
