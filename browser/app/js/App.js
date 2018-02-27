@@ -19,28 +19,12 @@ import { Route, Switch, Redirect } from "react-router-dom"
 import Browser from "./browser/Browser"
 import Login from "./browser/Login"
 import web from "./web"
-import { minioBrowserPrefix } from "./constants"
-
-const AuthorizedRoute = ({ component: Component, ...rest }) => (
-  <Route
-    {...rest}
-    render={props =>
-      web.LoggedIn() ? (
-        <Component {...props} />
-      ) : (
-        <Redirect to={`${minioBrowserPrefix}/login`} />
-      )
-    }
-  />
-)
 
 export const App = () => {
   return (
     <Switch>
-      <AuthorizedRoute exact path={"/"} component={Browser} />
       <Route path={"/login"} component={Login} />
-      <Route path={"/:bucket/*"} component={Browser} />
-      <Route path={"/:bucket"} component={Browser} />
+      <Route path={"/:bucket?/*"} component={Browser} />
     </Switch>
   )
 }
