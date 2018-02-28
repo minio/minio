@@ -17,42 +17,89 @@
 package cmd
 
 import (
+	"net/http"
 	"testing"
 )
 
 // Tests object location.
 func TestObjectLocation(t *testing.T) {
 	testCases := []struct {
-		host, proto, bucket, object string
-		expectedLocation            string
+		request          *http.Request
+		bucket, object   string
+		domain           string
+		expectedLocation string
 	}{
 		// Server binding to localhost IP with https.
 		{
-			host:             "127.0.0.1:9000",
-			proto:            httpsScheme,
+			request: &http.Request{
+				Host: "127.0.0.1:9000",
+				Header: map[string][]string{
+					"X-Forwarded-Scheme": {httpScheme},
+				},
+			},
+			bucket:           "testbucket1",
+			object:           "test/1.txt",
+			expectedLocation: "http://127.0.0.1:9000/testbucket1/test/1.txt",
+		},
+		{
+			request: &http.Request{
+				Host: "127.0.0.1:9000",
+				Header: map[string][]string{
+					"X-Forwarded-Scheme": {httpsScheme},
+				},
+			},
 			bucket:           "testbucket1",
 			object:           "test/1.txt",
 			expectedLocation: "https://127.0.0.1:9000/testbucket1/test/1.txt",
 		},
 		// Server binding to fqdn.
 		{
-			host:             "s3.mybucket.org",
-			proto:            httpScheme,
+			request: &http.Request{
+				Host: "s3.mybucket.org",
+				Header: map[string][]string{
+					"X-Forwarded-Scheme": {httpScheme},
+				},
+			},
 			bucket:           "mybucket",
 			object:           "test/1.txt",
 			expectedLocation: "http://s3.mybucket.org/mybucket/test/1.txt",
 		},
 		// Server binding to fqdn.
 		{
-			host:             "mys3.mybucket.org",
-			proto:            "",
+			request: &http.Request{
+				Host:   "mys3.mybucket.org",
+				Header: map[string][]string{},
+			},
 			bucket:           "mybucket",
 			object:           "test/1.txt",
 			expectedLocation: "http://mys3.mybucket.org/mybucket/test/1.txt",
 		},
+		// Server with virtual domain name.
+		{
+			request: &http.Request{
+				Host:   "mys3.bucket.org",
+				Header: map[string][]string{},
+			},
+			domain:           "mys3.bucket.org",
+			bucket:           "mybucket",
+			object:           "test/1.txt",
+			expectedLocation: "http://mybucket.mys3.bucket.org/test/1.txt",
+		},
+		{
+			request: &http.Request{
+				Host: "mys3.bucket.org",
+				Header: map[string][]string{
+					"X-Forwarded-Scheme": {httpsScheme},
+				},
+			},
+			domain:           "mys3.bucket.org",
+			bucket:           "mybucket",
+			object:           "test/1.txt",
+			expectedLocation: "https://mybucket.mys3.bucket.org/test/1.txt",
+		},
 	}
 	for i, testCase := range testCases {
-		gotLocation := getObjectLocation(testCase.host, testCase.proto, testCase.bucket, testCase.object)
+		gotLocation := getObjectLocation(testCase.request, testCase.domain, testCase.bucket, testCase.object)
 		if testCase.expectedLocation != gotLocation {
 			t.Errorf("Test %d: expected %s, got %s", i+1, testCase.expectedLocation, gotLocation)
 		}

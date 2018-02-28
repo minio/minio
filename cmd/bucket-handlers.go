@@ -572,8 +572,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	port := r.Header.Get("X-Forward-Proto")
-	location := getObjectLocation(r.Host, port, bucket, object)
+	location := getObjectLocation(r, globalDomainName, bucket, object)
 	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
 	w.Header().Set("Location", location)
 
