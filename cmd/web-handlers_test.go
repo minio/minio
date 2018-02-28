@@ -1385,7 +1385,8 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	}
 
 	testCaseResult1 := []BucketAccessPolicy{{
-		Prefix: bucketName + "/hello*",
+		Bucket: bucketName,
+		Prefix: "hello",
 		Policy: policy.BucketPolicyReadWrite,
 	}}
 	testCases := []struct {

@@ -62,14 +62,9 @@ func cloneHeader(h http.Header) http.Header {
 }
 
 // Convert url path into bucket and object name.
-func urlPath2BucketObjectName(u *url.URL) (bucketName, objectName string) {
-	if u == nil {
-		// Empty url, return bucket and object names.
-		return
-	}
-
+func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
 	// Trim any preceding slash separator.
-	urlPath := strings.TrimPrefix(u.Path, slashSeparator)
+	urlPath := strings.TrimPrefix(path, slashSeparator)
 
 	// Split urlpath using slash separator into a given number of
 	// expected tokens.

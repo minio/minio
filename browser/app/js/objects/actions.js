@@ -58,7 +58,8 @@ export const fetchObjects = append => {
       buckets: { currentBucket },
       objects: { currentPrefix, marker }
     } = getState()
-    return web
+    if (currentBucket) {
+      return web
       .ListObjects({
         bucketName: currentBucket,
         prefix: currentPrefix,
@@ -87,6 +88,7 @@ export const fetchObjects = append => {
         dispatch(alertActions.set({ type: "danger", message: err.message }))
         history.push("/login")
       })
+    } 
   }
 }
 

@@ -205,12 +205,6 @@ func TestURL2BucketObjectName(t *testing.T) {
 			bucket: "bucket",
 			object: "///object////",
 		},
-		// Test case 8 url is not allocated.
-		{
-			u:      nil,
-			bucket: "",
-			object: "",
-		},
 		// Test case 9 url path is empty.
 		{
 			u:      &url.URL{},
@@ -221,7 +215,7 @@ func TestURL2BucketObjectName(t *testing.T) {
 
 	// Validate all test cases.
 	for i, testCase := range testCases {
-		bucketName, objectName := urlPath2BucketObjectName(testCase.u)
+		bucketName, objectName := urlPath2BucketObjectName(testCase.u.Path)
 		if bucketName != testCase.bucket {
 			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.bucket, bucketName)
 		}

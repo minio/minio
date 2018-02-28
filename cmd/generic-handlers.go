@@ -280,7 +280,7 @@ func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	default:
 		// For all other requests reject access to reserved
 		// buckets
-		bucketName, _ := urlPath2BucketObjectName(r.URL)
+		bucketName, _ := urlPath2BucketObjectName(r.URL.Path)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 			return
@@ -439,7 +439,7 @@ var notimplementedObjectResourceNames = map[string]bool{
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	bucketName, objectName := urlPath2BucketObjectName(r.URL)
+	bucketName, objectName := urlPath2BucketObjectName(r.URL.Path)
 
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
