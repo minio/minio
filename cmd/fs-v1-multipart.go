@@ -417,7 +417,7 @@ func (fs *FSObjects) ListObjectParts(bucket, object, uploadID string, partNumber
 	for partNumber, etag := range partsMap {
 		parts = append(parts, PartInfo{PartNumber: partNumber, ETag: etag})
 	}
-	sort.SliceStable(parts, func(i int, j int) bool {
+	sort.Slice(parts, func(i int, j int) bool {
 		return parts[i].PartNumber < parts[j].PartNumber
 	})
 	i := 0

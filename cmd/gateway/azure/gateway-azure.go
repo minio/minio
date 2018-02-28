@@ -806,7 +806,7 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 	for _, part := range partsMap {
 		parts = append(parts, part)
 	}
-	sort.SliceStable(parts, func(i int, j int) bool {
+	sort.Slice(parts, func(i int, j int) bool {
 		return parts[i].PartNumber < parts[j].PartNumber
 	})
 	partsCount := 0
