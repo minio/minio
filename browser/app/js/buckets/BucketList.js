@@ -34,6 +34,8 @@ export class BucketList extends React.Component {
       if (bucket) {
         setBucketList([bucket])
         selectBucket(bucket, prefix)
+      } else {
+        history.replace("/login")
       }
     }
   }
