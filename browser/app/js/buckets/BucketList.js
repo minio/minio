@@ -28,7 +28,7 @@ export class BucketList extends React.Component {
   componentWillMount() {
     const { fetchBuckets, setBucketList, selectBucket } = this.props
     if (web.LoggedIn()) {
-      fetchBuckets()
+      fetchBuckets("list")
     } else {
       const { bucket, prefix } = pathSlice(history.location.pathname)
       if (bucket) {
@@ -63,7 +63,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    fetchBuckets: () => dispatch(actionsBuckets.fetchBuckets()),
+    fetchBuckets: action => dispatch(actionsBuckets.fetchBuckets(action)),
     setBucketList: buckets => dispatch(actionsBuckets.setList(buckets)),
     selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
   }
