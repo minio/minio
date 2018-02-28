@@ -158,7 +158,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	}
 	cred, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
-		return toJSONError(authErr)
+		return toJSONError(errAuthentication)
 	}
 	// only master key can perform this action
 	serverCred := globalServerConfig.GetCredential()
@@ -261,19 +261,15 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	cred, authErr := webRequestAuthenticate(r)
-	if authErr != nil {
-		return toJSONError(authErr)
-	}
-	var restrictedPrefix string
-	restrictedPrefix, valid := cred.GetValidFilterPrefix(args.BucketName, args.Prefix)
-	if !valid {
-		return toJSONError(errAuthentication)
-	}
 	prefix := args.Prefix + "test" // To test if GetObject/PutObject with the specified prefix is allowed.
 	readable := isBucketActionAllowed("s3:GetObject", args.BucketName, prefix, objectAPI)
 	writable := isBucketActionAllowed("s3:PutObject", args.BucketName, prefix, objectAPI)
+	cred, authErr := webRequestAuthenticate(r)
 	switch {
+	case authErr == errAuthentication:
+		return toJSONError(errAuthentication)
+	case authErr == nil:
+		break
 	case readable && writable:
 		reply.Writable = true
 		break
@@ -282,6 +278,14 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	case writable:
 		reply.Writable = true
 		return nil
+	default:
+		return toJSONError(errAuthentication)
+	}
+
+	var restrictedPrefix string
+	restrictedPrefix, valid := cred.GetValidFilterPrefix(args.BucketName, args.Prefix)
+	if !valid {
+		return toJSONError(errAuthentication)
 	}
 
 	lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
@@ -578,11 +582,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 
 	cred, authErr := webRequestAuthenticate(r)
-	if authErr != nil {
-		writeWebErrorResponse(w, errAuthentication)
-		return
-	}
-	if !cred.Verified(bucket, object) {
+	if authErr == nil && !cred.Verified(bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
@@ -640,16 +640,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 
 	cred, authErr := tokenAuthenticate(token)
-	if authErr != nil {
-		writeWebErrorResponse(w, errAuthentication)
-		return
-	}
-	if !cred.Verified(bucket, object) {
+	if authErr == nil && !cred.Verified(bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
 
-	if !isBucketActionAllowed("s3:GetObject", bucket, object, objectAPI) {
+	if authErr != nil && !isBucketActionAllowed("s3:GetObject", bucket, object, objectAPI) {
 		log.Printf("[1] Download %q", filepath.Join("/", bucket, object))
 		writeWebErrorResponse(w, errAuthentication)
 		return
@@ -932,18 +928,18 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-
-	if args.BucketName == "" || args.ObjectName == "" {
-		return &json2.Error{
-			Message: "Bucket and Object are mandatory arguments.",
-		}
-	}
 	cred, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 	if !cred.Verified(args.BucketName, args.ObjectName) {
 		return toJSONError(errAuthentication)
+	}
+
+	if args.BucketName == "" || args.ObjectName == "" {
+		return &json2.Error{
+			Message: "Bucket and Object are mandatory arguments.",
+		}
 	}
 
 	reply.UIVersion = browser.UIVersion

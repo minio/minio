@@ -95,6 +95,9 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 		if err != ErrNone {
 			return nil, errors.New(getAPIError(err).Description)
 		}
+		if cred.AccessKey != accessKey {
+			return nil, errInvalidAccessKeyID
+		}
 		return []byte(cred.SecretKey), nil
 	}
 
