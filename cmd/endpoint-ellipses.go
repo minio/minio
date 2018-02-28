@@ -165,9 +165,9 @@ func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
 func parseEndpointSet(args ...string) (ep endpointSet, err error) {
 	var argPatterns = make([]ellipses.ArgPattern, len(args))
 	for i, arg := range args {
-		patterns, err := ellipses.FindEllipsesPatterns(arg)
-		if err != nil {
-			return endpointSet{}, err
+		patterns, perr := ellipses.FindEllipsesPatterns(arg)
+		if perr != nil {
+			return endpointSet{}, perr
 		}
 		argPatterns[i] = patterns
 	}
