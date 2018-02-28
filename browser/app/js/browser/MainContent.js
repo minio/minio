@@ -23,13 +23,16 @@ import BucketPolicyModal from "../buckets/BucketPolicyModal"
 import MakeBucketModal from "../buckets/MakeBucketModal"
 import UploadModal from "../uploads/UploadModal"
 import ObjectsBulkActions from "../objects/ObjectsBulkActions"
+import Dropzone from "../uploads/Dropzone"
 
 export const MainContent = () => (
   <div className="fe-body">
     <ObjectsBulkActions />
     <MobileHeader />
-    <Header />
-    <ObjectsSection />
+    <Dropzone>
+      <Header />
+      <ObjectsSection />
+    </Dropzone>
     <MainActions />
     <BucketPolicyModal />
     <MakeBucketModal />
