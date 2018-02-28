@@ -84,7 +84,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 	}
 	readLen += lastChunkSize
 	var buffers [][]byte
-	buffers, err = s.readConcurrent(volume, path, 0, readLen, verifiers)
+	buffers, _, err = s.readConcurrent(volume, path, 0, readLen, verifiers)
 	if err != nil {
 		return f, err
 	}
@@ -92,38 +92,44 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 	// Scan part files on disk, block-by-block reconstruct it and
 	// write to stale disks.
 	blocks := make([][]byte, len(s.disks))
-	availableCount := 0
-	for i := range blocks {
-		if buffers[i] != nil {
-			blocks[i] = make([]byte, chunksize)
-			availableCount++
-		} else {
-			blocks[i] = make([]byte, 0, chunksize)
+
+	if numBlocks > 1 {
+		// Allocate once for all the equal length blocks. The
+		// last block may have a different length - allocation
+		// for this happens inside the for loop below.
+		for i := range blocks {
+			if len(buffers[i]) == 0 {
+				blocks[i] = make([]byte, chunksize)
+			}
 		}
 	}
 
+	var buffOffset int64
 	for blockNumber := int64(0); blockNumber < numBlocks; blockNumber++ {
-		if blockNumber == numBlocks-1 {
+		if blockNumber == numBlocks-1 && lastChunkSize != chunksize {
 			for i := range blocks {
-				if buffers[i] != nil {
+				if len(buffers[i]) == 0 {
 					blocks[i] = make([]byte, lastChunkSize)
-				} else {
-					blocks[i] = make([]byte, 0, lastChunkSize)
-				}
-			}
-		} else {
-			for i := range blocks {
-				if buffers[i] == nil {
-					blocks[i] = blocks[i][0:0]
 				}
 			}
 		}
 
 		for i := range blocks {
-			if buffers[i] != nil {
-				_ = copy(blocks[i], buffers[i][blockNumber*chunksize:])
+			if len(buffers[i]) == 0 {
+				blocks[i] = blocks[i][0:0]
 			}
 		}
+
+		csize := chunksize
+		if blockNumber == numBlocks-1 {
+			csize = lastChunkSize
+		}
+		for i := range blocks {
+			if len(buffers[i]) != 0 {
+				blocks[i] = buffers[i][buffOffset : buffOffset+csize]
+			}
+		}
+		buffOffset += csize
 
 		if err = s.ErasureDecodeDataAndParityBlocks(blocks); err != nil {
 			return f, err

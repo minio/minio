@@ -28,7 +28,8 @@ type errIdx struct {
 }
 
 func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64,
-	verifiers []*BitrotVerifier) (buffers [][]byte, err error) {
+	verifiers []*BitrotVerifier) (buffers [][]byte, needsReconstruction bool,
+	err error) {
 
 	errChan := make(chan errIdx)
 	stageBuffers := make([][]byte, len(s.disks))
@@ -60,6 +61,7 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 				// A disk failed to return data, so we
 				// request an additional disk if possible
 				if launchIndex < s.dataBlocks+s.parityBlocks {
+					needsReconstruction = true
 					// requiredBlocks++
 					go readDisk(launchIndex)
 					launchIndex++
@@ -142,52 +144,53 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 	}
 
 	var buffers [][]byte
-	buffers, err = s.readConcurrent(volume, path, partDataStartIndex, partDataLength, verifiers)
+	var needsReconstruction bool
+	buffers, needsReconstruction, err = s.readConcurrent(volume, path,
+		partDataStartIndex, partDataLength, verifiers)
 	if err != nil {
 		// Could not read enough disks.
 		return
 	}
 
+	numChunks := ceilFrac(partDataLength, chunksize)
 	blocks := make([][]byte, len(s.disks))
-	needsReconstruction := false
-	for i := range blocks {
-		if buffers[i] != nil {
-			blocks[i] = make([]byte, chunksize)
-		} else {
-			blocks[i] = make([]byte, 0, chunksize)
-			if i < s.dataBlocks {
-				needsReconstruction = true
+
+	if needsReconstruction && numChunks > 1 {
+		// Allocate once for all the equal length blocks. The
+		// last block may have a different length - allocation
+		// for this happens inside the for loop below.
+		for i := range blocks {
+			if len(buffers[i]) == 0 {
+				blocks[i] = make([]byte, chunksize)
 			}
 		}
 	}
 
-	numChunks := ceilFrac(partDataLength, chunksize)
-	copyLen := chunksize
+	var buffOffset int64
 	for chunkNumber := int64(0); chunkNumber < numChunks; chunkNumber++ {
-		if chunkNumber == numChunks-1 {
-			if partDataLength%chunksize != 0 {
-				copyLen = partDataLength % chunksize
-			}
-			for i := range blocks {
-				if len(buffers[i]) != 0 {
-					blocks[i] = make([]byte, copyLen)
-				} else {
-					blocks[i] = make([]byte, 0, copyLen)
-				}
-			}
-		} else {
+		if chunkNumber == numChunks-1 && partDataLength%chunksize != 0 {
+			chunksize = partDataLength % chunksize
+			// We allocate again as the last chunk has a
+			// different size.
 			for i := range blocks {
 				if len(buffers[i]) == 0 {
-					blocks[i] = blocks[i][0:0]
+					blocks[i] = make([]byte, chunksize)
 				}
 			}
 		}
 
 		for i := range blocks {
-			if len(buffers[i]) != 0 {
-				_ = copy(blocks[i], buffers[i][chunkNumber*chunksize:])
+			if len(buffers[i]) == 0 {
+				blocks[i] = blocks[i][0:0]
 			}
 		}
+
+		for i := range blocks {
+			if len(buffers[i]) != 0 {
+				blocks[i] = buffers[i][buffOffset : buffOffset+chunksize]
+			}
+		}
+		buffOffset += chunksize
 
 		if needsReconstruction {
 			if err = s.ErasureDecodeDataBlocks(blocks); err != nil {
