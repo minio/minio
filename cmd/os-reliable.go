@@ -17,9 +17,9 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path"
+	"io"
 )
 
 // Wrapper functions to os.MkdirAll, which calls reliableMkdirAll
@@ -66,6 +66,30 @@ func reliableMkdirAll(dirPath string, mode os.FileMode) (err error) {
 	return err
 }
 
+// Copy File used if we cant rename
+func copyFileContents(src, dst string) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+	if _, err = io.Copy(out, in); err != nil {
+		return
+	}
+	err = out.Sync()
+	return
+}
+
 // Wrapper function to os.Rename, which calls reliableMkdirAll
 // and reliableRenameAll. This is to ensure that if there is a
 // racy parent directory delete in between we can simply retry
@@ -91,7 +115,10 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
 		} else if isSysErrCrossDevice(err) {
-			return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
+			// return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
+			if err = copyFileContents(srcFilePath, dstFilePath); err != nil {
+				err = os.Remove(srcFilePath)
+			}
 		} else if os.IsNotExist(err) {
 			return errFileNotFound
 		}
@@ -113,6 +140,10 @@ func reliableRename(srcFilePath, dstFilePath string) (err error) {
 			if os.IsNotExist(err) && i == 0 {
 				i++
 				continue
+			} else {
+				if err = copyFileContents(srcFilePath, dstFilePath); err != nil {
+					err = os.Remove(srcFilePath)
+				}
 			}
 		}
 		break
