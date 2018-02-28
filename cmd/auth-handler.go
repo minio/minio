@@ -104,34 +104,34 @@ func getRequestAuthType(r *http.Request) authType {
 
 // checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
 // It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
-	s3Err := ErrAccessDenied
+func checkAdminRequestAuthType(r *http.Request, region string) (cred CustomCredentials, s3Error APIErrorCode) {
+	s3Error = ErrAccessDenied
 	if getRequestAuthType(r) == authTypeSigned { // we only support V4 (no presign)
-		s3Err = isReqAuthenticated(r, region)
+		cred, s3Error = isReqAuthenticated(r, region)
 	}
-	if s3Err != ErrNone {
-		errorIf(errors.New(getAPIError(s3Err).Description), "%s", dumpRequest(r))
+	if s3Error != ErrNone {
+		errorIf(errors.New(getAPIError(s3Error).Description), "%s", dumpRequest(r))
 	}
-	return s3Err
+	return
 }
 
-func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) APIErrorCode {
+func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) (cred CustomCredentials, s3Error APIErrorCode) {
 	reqAuthType := getRequestAuthType(r)
 
 	switch reqAuthType {
 	case authTypePresignedV2, authTypeSignedV2:
 		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
+		cred, s3Error = isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 		}
-		return s3Error
+		return
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, region)
+		cred, s3Error = isReqAuthenticated(r, region)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 		}
-		return s3Error
+		return
 	}
 
 	if reqAuthType == authTypeAnonymous && policyAction != "" {
@@ -139,25 +139,28 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 		sourceIP := getSourceIPAddress(r)
 		resource, err := getResource(r.URL.Path, r.Host, globalDomainName)
 		if err != nil {
-			return ErrInternalError
+			s3Error = ErrInternalError
+			return
 		}
-		return enforceBucketPolicy(bucket, policyAction, resource,
+		s3Error = enforceBucketPolicy(bucket, policyAction, resource,
 			r.Referer(), sourceIP, r.URL.Query())
+		return
 	}
 
 	// By default return ErrAccessDenied
-	return ErrAccessDenied
+	s3Error = ErrAccessDenied
+	return
 }
 
 // Verify if request has valid AWS Signature Version '2'.
-func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
+func isReqAuthenticatedV2(r *http.Request) (cred CustomCredentials, s3Error APIErrorCode) {
 	if isRequestSignatureV2(r) {
 		return doesSignV2Match(r)
 	}
 	return doesPresignV2SignatureMatch(r)
 }
 
-func reqSignatureV4Verify(r *http.Request, region string) (s3Error APIErrorCode) {
+func reqSignatureV4Verify(r *http.Request, region string) (cred CustomCredentials, s3Error APIErrorCode) {
 	sha256sum := getContentSha256Cksum(r)
 	switch {
 	case isRequestSignatureV4(r):
@@ -165,22 +168,25 @@ func reqSignatureV4Verify(r *http.Request, region string) (s3Error APIErrorCode)
 	case isRequestPresignedSignatureV4(r):
 		return doesPresignedSignatureMatch(sha256sum, r, region)
 	default:
-		return ErrAccessDenied
+		s3Error = ErrAccessDenied
+		return
 	}
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
+func isReqAuthenticated(r *http.Request, region string) (cred CustomCredentials, s3Error APIErrorCode) {
 	if r == nil {
-		return ErrInternalError
+		s3Error = ErrInternalError
+		return
 	}
-	if errCode := reqSignatureV4Verify(r, region); errCode != ErrNone {
-		return errCode
+	if cred, s3Error = reqSignatureV4Verify(r, region); s3Error != ErrNone {
+		return
 	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to read request body for signature verification")
-		return ErrInternalError
+		s3Error = ErrInternalError
+		return
 	}
 
 	// Populate back the payload.
@@ -189,12 +195,13 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	// Verify Content-Md5, if payload is set.
 	if r.Header.Get("Content-Md5") != "" {
 		if r.Header.Get("Content-Md5") != getMD5HashBase64(payload) {
-			return ErrBadDigest
+			s3Error = ErrBadDigest
+			return
 		}
 	}
 
 	if skipContentSha256Cksum(r) {
-		return ErrNone
+		return
 	}
 
 	// Verify that X-Amz-Content-Sha256 Header == sha256(payload)
@@ -204,9 +211,10 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
 	}
 	if sum != "" && sum != getSHA256Hash(payload) {
-		return ErrContentSHA256Mismatch
+		s3Error = ErrContentSHA256Mismatch
+		return
 	}
-	return ErrNone
+	return
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.

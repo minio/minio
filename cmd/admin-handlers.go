@@ -61,9 +61,14 @@ var (
 // -----------
 // Returns Administration API version
 func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -81,9 +86,14 @@ func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request)
 // ----------
 // Returns server version and uptime.
 func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -126,9 +136,14 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 // Restarts/Stops minio server gracefully. In a distributed setup,
 // restarts all the servers in the cluster.
 func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -218,9 +233,14 @@ type ServerInfo struct {
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -305,9 +325,14 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 // Lists locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -348,9 +373,14 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 // Clear locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -454,9 +484,14 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -563,9 +598,14 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -669,9 +709,14 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -766,16 +811,21 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	r *http.Request) {
 
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	cred, adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponseJSON(w, ErrAccessDenied, r.URL)
 		return
 	}
 
 	// Avoid setting new credentials when they are already passed
 	// by the environment.
 	if globalIsEnvCreds {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
@@ -790,7 +840,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 

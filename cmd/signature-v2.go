@@ -65,8 +65,11 @@ var resourceList = []string{
 }
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalServerConfig.GetCredential()
 	accessKey := formValues.Get("AWSAccessKeyId")
+	cred, err := globalServerConfig.GetCredentialByKey(accessKey)
+	if err != ErrNone {
+		return err
+	}
 	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
@@ -95,9 +98,7 @@ func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error)
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
 // returns ErrNone if matches. S3 errors otherwise.
-func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+func doesPresignV2SignatureMatch(r *http.Request) (cred CustomCredentials, s3Error APIErrorCode) {
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
 	tokens := strings.SplitN(r.RequestURI, "?", 2)
@@ -118,14 +119,16 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	var unescapedQueries []string
 	unescapedQueries, err = unescapeQueries(encodedQuery)
 	if err != nil {
-		return ErrInvalidQueryParams
+		s3Error = ErrInvalidQueryParams
+		return
 	}
 
 	// Extract the necessary values from presigned query, construct a list of new filtered queries.
 	for _, query := range unescapedQueries {
 		keyval := strings.SplitN(query, "=", 2)
 		if len(keyval) != 2 {
-			return ErrInvalidQueryParams
+			s3Error = ErrInvalidQueryParams
+			return
 		}
 		switch keyval[0] {
 		case "AWSAccessKeyId":
@@ -141,36 +144,52 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 
 	// Invalid values returns error.
 	if accessKey == "" || gotSignature == "" || expires == "" {
-		return ErrInvalidQueryParams
+		s3Error = ErrInvalidQueryParams
+		return
+	}
+
+	// Access credentials.
+	cred, s3Error = globalServerConfig.GetCredentialByKey(accessKey)
+	if s3Error != ErrNone {
+		return
 	}
 
 	// Validate if access key id same.
 	if accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		s3Error = ErrInvalidAccessKeyID
+		return
 	}
 
 	// Make sure the request has not expired.
 	expiresInt, err := strconv.ParseInt(expires, 10, 64)
 	if err != nil {
-		return ErrMalformedExpires
+		s3Error = ErrMalformedExpires
+		return
 	}
 
 	// Check if the presigned URL has expired.
 	if expiresInt < UTCNow().Unix() {
-		return ErrExpiredPresignRequest
+		s3Error = ErrExpiredPresignRequest
+		return
 	}
 
 	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
 	if err != nil {
-		return ErrInvalidRequest
+		s3Error = ErrInvalidRequest
+		return
 	}
 
-	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
+	// if cred.Scope != "" && !strings.HasPrefix(encodedResource, cred.Scope) {
+	// 	return ErrAccessDenied
+	// }
+
+	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires, cred.SecretKey)
 	if !compareSignatureV2(gotSignature, expectedSignature) {
-		return ErrSignatureDoesNotMatch
+		s3Error = ErrSignatureDoesNotMatch
+		return
 	}
 
-	return ErrNone
+	return
 }
 
 // Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;
@@ -216,19 +235,24 @@ func validateV2AuthHeader(v2Auth string) APIErrorCode {
 	}
 
 	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-	if keySignFields[0] != cred.AccessKey {
+	accessKey := keySignFields[0]
+	cred, errCode := globalServerConfig.GetCredentialByKey(accessKey)
+	if errCode != ErrNone {
+		return errCode
+	}
+	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
 	return ErrNone
 }
 
-func doesSignV2Match(r *http.Request) APIErrorCode {
+func doesSignV2Match(r *http.Request) (cred CustomCredentials, s3Error APIErrorCode) {
 	v2Auth := r.Header.Get("Authorization")
 
 	if apiError := validateV2AuthHeader(v2Auth); apiError != ErrNone {
-		return apiError
+		s3Error = apiError
+		return
 	}
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
@@ -241,24 +265,38 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 
 	unescapedQueries, err := unescapeQueries(encodedQuery)
 	if err != nil {
-		return ErrInvalidQueryParams
+		s3Error = ErrInvalidQueryParams
+		return
 	}
 
 	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
 	if err != nil {
-		return ErrInvalidRequest
+		s3Error = ErrInvalidRequest
+		return
 	}
 
-	prefix := fmt.Sprintf("%s %s:", signV2Algorithm, globalServerConfig.GetCredential().AccessKey)
-	if !strings.HasPrefix(v2Auth, prefix) {
-		return ErrSignatureDoesNotMatch
+	if !strings.HasPrefix(v2Auth, signV2Algorithm) {
+		s3Error = ErrSignatureDoesNotMatch
+		return
 	}
+	splits := strings.SplitN(v2Auth[len(signV2Algorithm)+1:], ":", 2)
+	if len(splits) != 2 {
+		s3Error = ErrSignatureDoesNotMatch
+		return
+	}
+	accessKey := splits[0]
+	// Access credentials.
+	cred, s3Error = globalServerConfig.GetCredentialByKey(accessKey)
+	if s3Error != ErrNone {
+		return
+	}
+	prefix := fmt.Sprintf("%s %s:", signV2Algorithm, cred.AccessKey)
 	v2Auth = v2Auth[len(prefix):]
-	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)
+	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header, cred.SecretKey)
 	if !compareSignatureV2(v2Auth, expectedAuth) {
-		return ErrSignatureDoesNotMatch
+		s3Error = ErrSignatureDoesNotMatch
 	}
-	return ErrNone
+	return
 }
 
 func calculateSignatureV2(stringToSign string, secret string) string {
@@ -268,17 +306,15 @@ func calculateSignatureV2(stringToSign string, secret string) string {
 }
 
 // Return signature-v2 for the presigned request.
-func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
-	cred := globalServerConfig.GetCredential()
+func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string, secret string) string {
 	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, expires)
-	return calculateSignatureV2(stringToSign, cred.SecretKey)
+	return calculateSignatureV2(stringToSign, secret)
 }
 
 // Return the signature v2 of a given request.
-func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
-	cred := globalServerConfig.GetCredential()
+func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, secret string) string {
 	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, "")
-	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
+	signature := calculateSignatureV2(stringToSign, secret)
 	return signature
 }
 

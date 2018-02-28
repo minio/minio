@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -62,13 +63,19 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	// Extract all the listObjectsV2 query params to their native values.
 	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
+	restrictedPrefix, valid := cred.GetValidFilterPrefix(bucket, prefix)
+	if !valid {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
 
 	// In ListObjectsV2 'continuation-token' is the marker.
 	marker := token
@@ -94,6 +101,23 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
+	if cred.Scope != "" {
+		var objects []ObjectInfo
+		for _, object := range listObjectsV2Info.Objects {
+			if strings.HasPrefix(object.Name, restrictedPrefix) {
+				objects = append(objects, object)
+			}
+		}
+		listObjectsV2Info.Objects = objects
+		var prefixes []string
+		for _, prefix := range listObjectsV2Info.Prefixes {
+			if strings.HasPrefix(prefix, restrictedPrefix) {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+		listObjectsV2Info.Prefixes = prefixes
+	}
+
 	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
 
 	// Write success response.
@@ -116,13 +140,19 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	// Extract all the litsObjectsV1 query params to their native values.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
+	restrictedPrefix, valid := cred.GetValidFilterPrefix(bucket, prefix)
+	if !valid {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
 
 	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
 	// does not throw an error.
@@ -142,6 +172,22 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+	if cred.Scope != "" {
+		var objects []ObjectInfo
+		for _, object := range listObjectsInfo.Objects {
+			if strings.HasPrefix(object.Name, restrictedPrefix) {
+				objects = append(objects, object)
+			}
+		}
+		listObjectsInfo.Objects = objects
+		var prefixes []string
+		for _, prefix := range listObjectsInfo.Prefixes {
+			if strings.HasPrefix(prefix, restrictedPrefix) {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+		listObjectsInfo.Prefixes = prefixes
 	}
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, listObjectsInfo)
 
