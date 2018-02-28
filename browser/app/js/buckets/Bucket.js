@@ -16,6 +16,7 @@
 
 import React from "react"
 import classNames from "classnames"
+import BucketDropdown from "./BucketDropdown"
 
 export const Bucket = ({ bucket, isActive, selectBucket }) => {
   return (
@@ -36,6 +37,7 @@ export const Bucket = ({ bucket, isActive, selectBucket }) => {
       >
         {bucket}
       </a>
+      <BucketDropdown bucket={bucket}/>
     </li>
   )
 }

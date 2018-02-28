@@ -26,6 +26,9 @@ jest.mock("../../web", () => ({
   }),
   MakeBucket: jest.fn(() => {
     return Promise.resolve()
+  }),
+  DeleteBucket: jest.fn(() => {
+    return Promise.resolve()
   })
 }))
 
@@ -43,7 +46,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]
-    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
@@ -57,7 +60,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test2" }
     ]
     window.location
-    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
@@ -71,7 +74,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]
     window.location
-    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
@@ -107,10 +110,48 @@ describe("Buckets actions", () => {
     expect(actions).toEqual(expectedActions)
   })
 
+  it("creates buckets/SHOW_BUCKET_POLICY for showBucketPolicy", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SHOW_BUCKET_POLICY", show: true }
+    ]
+    store.dispatch(actionsBuckets.showBucketPolicy())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/SHOW_BUCKET_POLICY for hideBucketPolicy", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SHOW_BUCKET_POLICY", show: false }
+    ]
+    store.dispatch(actionsBuckets.hideBucketPolicy())
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/SET_POLICIES action", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "buckets/SET_POLICIES", policies: ["test1", "test2"] }
+    ]
+    store.dispatch(actionsBuckets.setPolicies(["test1", "test2"]))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
   it("creates buckets/ADD action", () => {
     const store = mockStore()
     const expectedActions = [{ type: "buckets/ADD", bucket: "test" }]
     store.dispatch(actionsBuckets.addBucket("test"))
+    const actions = store.getActions()
+    expect(actions).toEqual(expectedActions)
+  })
+
+  it("creates buckets/REMOVE action", () => {
+    const store = mockStore()
+    const expectedActions = [{ type: "buckets/REMOVE", bucket: "test" }]
+    store.dispatch(actionsBuckets.removeBucket("test"))
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
   })
@@ -122,6 +163,21 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]
     return store.dispatch(actionsBuckets.makeBucket("test1")).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates alert/SET, buckets/REMOVE, buckets/SET_LIST and buckets/SET_CURRENT_BUCKET " + 
+     "after deleting the bucket", () => {
+    const store = mockStore()
+    const expectedActions = [
+      { type: "alert/SET", alert: {id: 0, message: "Bucket 'test3' has been deleted.", type: "info"} },
+      { type: "buckets/REMOVE", bucket: "test3" },
+      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+    ]
+    return store.dispatch(actionsBuckets.deleteBucket("test3")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
