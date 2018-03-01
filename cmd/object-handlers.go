@@ -693,14 +693,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Err = isReqAuthenticatedV2(r)
+		s3Err = isReqAuthenticatedV2(r, bucket)
 		if s3Err != ErrNone {
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
 
 	case authTypePresigned, authTypeSigned:
-		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
+		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion(), bucket); s3Err != ErrNone {
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
@@ -1165,13 +1165,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
+		s3Error := isReqAuthenticatedV2(r, bucket)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion(), bucket); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}

@@ -1004,14 +1004,17 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 			Message: "Bucket and Object are mandatory arguments.",
 		}
 	}
+
+	// Get the user's key for signing.
+	_, key := webRequestAuthenticateAnyKey(r)
 	reply.UIVersion = browser.UIVersion
-	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry)
+	reply.URL = presignedGet(args.HostName, args.BucketName, key, args.ObjectName, args.Expiry)
 	return nil
 }
 
 // Returns presigned url for GET method.
-func presignedGet(host, bucket, object string, expiry int64) string {
-	cred := globalServerConfig.GetCredentialForBucket(bucket)
+func presignedGet(host, bucket, key, object string, expiry int64) string {
+	cred := globalServerConfig.GetCredentialForKey(key)
 	region := globalServerConfig.GetRegion()
 
 	accessKey := cred.AccessKey

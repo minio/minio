@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"github.com/minio/minio/pkg/auth"
 )
 
 // Signature and API related constants.
@@ -65,11 +66,17 @@ var resourceList = []string{
 }
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalServerConfig.GetCredential()
+
+	// The access key had better match the master key or the bucket key.
 	accessKey := formValues.Get("AWSAccessKeyId")
+	cred := globalServerConfig.GetCredential()
 	if accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		cred = globalServerConfig.GetCredentialForBucket(formValues.Get("Bucket"))
+		if !cred.IsValid() || cred.AccessKey != accessKey {
+			return ErrInvalidAccessKeyID
+		}
 	}
+
 	policy := formValues.Get("Policy")
 	signature := formValues.Get("Signature")
 	if !compareSignatureV2(signature, calculateSignatureV2(policy, cred.SecretKey)) {
@@ -95,9 +102,7 @@ func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error)
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
 // returns ErrNone if matches. S3 errors otherwise.
-func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+func doesPresignV2SignatureMatch(r *http.Request, bucket string) APIErrorCode {
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
 	tokens := strings.SplitN(r.RequestURI, "?", 2)
@@ -144,9 +149,13 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrInvalidQueryParams
 	}
 
-	// Validate if access key id same.
+	// The access key had better match the master key or the bucket key.
+	cred := globalServerConfig.GetCredential()
 	if accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		cred = globalServerConfig.GetCredentialForBucket(bucket)
+		if !cred.IsValid() || cred.AccessKey != accessKey {
+			return ErrInvalidAccessKeyID
+		}
 	}
 
 	// Make sure the request has not expired.
@@ -165,7 +174,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrInvalidRequest
 	}
 
-	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
+	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires, cred)
 	if !compareSignatureV2(gotSignature, expectedSignature) {
 		return ErrSignatureDoesNotMatch
 	}
@@ -193,41 +202,44 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/auth-request-sig-v2.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
 
-func validateV2AuthHeader(v2Auth string) APIErrorCode {
+func validateV2AuthHeader(v2Auth string, bucket string) (APIErrorCode, auth.Credentials) {
+	cred := globalServerConfig.GetCredential()
 	if v2Auth == "" {
-		return ErrAuthHeaderEmpty
+		return ErrAuthHeaderEmpty, cred
 	}
 	// Verify if the header algorithm is supported or not.
 	if !strings.HasPrefix(v2Auth, signV2Algorithm) {
-		return ErrSignatureVersionNotSupported
+		return ErrSignatureVersionNotSupported, cred
 	}
 
 	// below is V2 Signed Auth header format, splitting on `space` (after the `AWS` string).
 	// Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature
 	authFields := strings.Split(v2Auth, " ")
 	if len(authFields) != 2 {
-		return ErrMissingFields
+		return ErrMissingFields, cred
 	}
 
 	// Then will be splitting on ":", this will seprate `AWSAccessKeyId` and `Signature` string.
 	keySignFields := strings.Split(strings.TrimSpace(authFields[1]), ":")
 	if len(keySignFields) != 2 {
-		return ErrMissingFields
+		return ErrMissingFields, cred
 	}
 
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+	// The access key had better match the master key or the bucket key.
 	if keySignFields[0] != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		cred = globalServerConfig.GetCredentialForBucket(bucket)
+		if !cred.IsValid() || cred.AccessKey != keySignFields[0] {
+			return ErrInvalidAccessKeyID, cred
+		}
 	}
 
-	return ErrNone
+	return ErrNone, cred
 }
 
-func doesSignV2Match(r *http.Request) APIErrorCode {
+func doesSignV2Match(r *http.Request, bucket string) APIErrorCode {
 	v2Auth := r.Header.Get("Authorization")
-
-	if apiError := validateV2AuthHeader(v2Auth); apiError != ErrNone {
+	apiError, cred := validateV2AuthHeader(v2Auth, bucket)
+	if apiError != ErrNone {
 		return apiError
 	}
 
@@ -254,7 +266,7 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return ErrSignatureDoesNotMatch
 	}
 	v2Auth = v2Auth[len(prefix):]
-	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header)
+	expectedAuth := signatureV2(r.Method, encodedResource, strings.Join(unescapedQueries, "&"), r.Header, cred)
 	if !compareSignatureV2(v2Auth, expectedAuth) {
 		return ErrSignatureDoesNotMatch
 	}
@@ -268,15 +280,13 @@ func calculateSignatureV2(stringToSign string, secret string) string {
 }
 
 // Return signature-v2 for the presigned request.
-func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
-	cred := globalServerConfig.GetCredential()
+func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string, cred auth.Credentials) string {
 	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, expires)
 	return calculateSignatureV2(stringToSign, cred.SecretKey)
 }
 
 // Return the signature v2 of a given request.
-func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
-	cred := globalServerConfig.GetCredential()
+func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, cred auth.Credentials) string {
 	stringToSign := getStringToSignV2(method, encodedResource, encodedQuery, headers, "")
 	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
 	return signature
