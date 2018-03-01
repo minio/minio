@@ -253,7 +253,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		} else if encrypted {
 			if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
-				writeErrorResponse(w, ErrSSEEncryptedObject, r.URL)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
