@@ -290,7 +290,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 		}
 
 		// Check if it matches!
-		err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region)
+		_, err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region)
 		if err != testCase.expected {
 			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
 		}

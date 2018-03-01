@@ -117,13 +117,17 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", globalServerConfig.GetRegion())
+		cred, s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", globalServerConfig.GetRegion())
 	}
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && restrictedBkt != bucket {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -171,12 +175,19 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucketMultipartUploads", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:ListBucketMultipartUploads", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+	restrictedPrefix, valid := cred.GetValidFilterPrefix(bucket, prefix)
+	if !valid {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
+
 	if maxUploads < 0 {
 		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
 		return
@@ -193,6 +204,22 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+	if cred.Scope != "" {
+		var uploads []MultipartInfo
+		for _, upload := range listMultipartsInfo.Uploads {
+			if strings.HasPrefix(upload.Object, restrictedPrefix) {
+				uploads = append(uploads, upload)
+			}
+		}
+		listMultipartsInfo.Uploads = uploads
+		var prefixes []string
+		for _, prefix := range listMultipartsInfo.CommonPrefixes {
+			if strings.HasPrefix(prefix, restrictedPrefix) {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+		listMultipartsInfo.CommonPrefixes = prefixes
 	}
 	// generate response
 	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo)
@@ -214,10 +241,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	// ListBuckets does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
+	cred, s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send listBuckets() call signed with region that is configured.
-		s3Error = checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+		cred, s3Error = checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
 	}
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -228,6 +255,20 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && len(bucketsInfo) > 0 {
+		var idx int
+		for {
+			if bucketsInfo[idx].Name == restrictedBkt {
+				break
+			}
+			idx++
+		}
+		if idx < len(bucketsInfo) {
+			bucketsInfo = []BucketInfo{bucketsInfo[idx]}
+		} else {
+			bucketsInfo = nil
+		}
 	}
 
 	// Generate response.
@@ -249,8 +290,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var authError APIErrorCode
-	if authError = checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion()); authError != ErrNone {
+	cred, authError := checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion())
+	if authError != ErrNone {
 		// In the event access is denied, a 200 response should still be returned
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 		if authError != ErrAccessDenied {
@@ -301,7 +342,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			defer wg.Done()
 			// If the request is denied access, each item
 			// should be marked as 'AccessDenied'
-			if authError == ErrAccessDenied {
+			if authError == ErrAccessDenied || !cred.Verified(bucket, obj.ObjectName) {
 				dErrs[i] = PrefixAccessDenied{
 					Bucket: bucket,
 					Object: obj.ObjectName,
@@ -381,9 +422,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// PutBucket does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+	cred, s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
 	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -634,8 +680,14 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponseHeadersOnly(w, s3Error)
+		return
+	}
+
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && restrictedBkt != bucket {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -656,8 +708,14 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	// DeleteBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	serverCred := globalServerConfig.GetCredential()
+	if cred.AccessKey != serverCred.AccessKey {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 

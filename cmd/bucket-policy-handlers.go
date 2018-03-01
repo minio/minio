@@ -226,13 +226,19 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && cred.Scope[1:] == restrictedBkt && restrictedBkt != bucket {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
@@ -300,13 +306,19 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && cred.Scope[1:] == restrictedBkt && restrictedBkt != bucket {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)
@@ -337,13 +349,19 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	if restrictedBkt := cred.Bucket(); restrictedBkt != "" && restrictedBkt != bucket {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
 
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(bucket)

@@ -53,8 +53,11 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 		return "", err
 	}
 
-	serverCred := globalServerConfig.GetCredential()
-
+	// Access credentials.
+	serverCred, errCode := globalServerConfig.GetCredentialByKey(passedCredential.AccessKey)
+	if errCode != ErrNone {
+		return "", errInvalidAccessKeyID
+	}
 	if serverCred.AccessKey != passedCredential.AccessKey {
 		return "", errInvalidAccessKeyID
 	}
@@ -86,51 +89,66 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 	if _, ok := jwtToken.Method.(*jwtgo.SigningMethodHMAC); !ok {
 		return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
 	}
+	if claims, ok := jwtToken.Claims.(*jwtgo.StandardClaims); ok {
+		accessKey := claims.Subject
+		cred, err := globalServerConfig.GetCredentialByKey(accessKey)
+		if err != ErrNone {
+			return nil, errors.New(getAPIError(err).Description)
+		}
+		if cred.AccessKey != accessKey {
+			return nil, errInvalidAccessKeyID
+		}
+		return []byte(cred.SecretKey), nil
+	}
 
-	return []byte(globalServerConfig.GetCredential().SecretKey), nil
+	return nil, errors.New("Unknown token format")
 }
 
 func isAuthTokenValid(tokenString string) bool {
 	if tokenString == "" {
 		return false
 	}
-	var claims jwtgo.StandardClaims
-	jwtToken, err := jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
-	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
-		return false
-	}
-	if err = claims.Valid(); err != nil {
-		errorIf(err, "Invalid claims in JWT token string")
-		return false
-	}
-	return jwtToken.Valid && claims.Subject == globalServerConfig.GetCredential().AccessKey
+	_, err := tokenAuthenticate(tokenString)
+	return err == nil
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
-	return webRequestAuthenticate(req) == nil
+	_, err := webRequestAuthenticate(req)
+	return err == nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) error {
+func webRequestAuthenticate(req *http.Request) (cred CustomCredentials, err error) {
 	var claims jwtgo.StandardClaims
-	jwtToken, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
+	_, err = jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return errNoAuthToken
+			err = errNoAuthToken
+			return
 		}
-		return errAuthentication
+		err = errAuthentication
+		return
 	}
-	if err = claims.Valid(); err != nil {
-		return errAuthentication
+	cred, errCode := globalServerConfig.GetCredentialByKey(claims.Subject)
+	if errCode != ErrNone {
+		err = errors.New(getAPIError(errCode).Description)
+		return
 	}
-	if claims.Subject != globalServerConfig.GetCredential().AccessKey {
-		return errInvalidAccessKeyID
+	return cred, nil
+}
+
+func tokenAuthenticate(tokenString string) (cred CustomCredentials, err error) {
+	var claims jwtgo.StandardClaims
+	_, err = jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
+	if err != nil {
+		return
 	}
-	if !jwtToken.Valid {
-		return errAuthentication
+	cred, errCode := globalServerConfig.GetCredentialByKey(claims.Subject)
+	if errCode != ErrNone {
+		err = errors.New(getAPIError(errCode).Description)
+		return
 	}
-	return nil
+	return cred, nil
 }

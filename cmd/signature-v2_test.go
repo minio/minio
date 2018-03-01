@@ -135,7 +135,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			// Should be set since we are simulating a http server.
 			req.RequestURI = req.URL.RequestURI()
 			// Check if it matches!
-			errCode := doesPresignV2SignatureMatch(req)
+			_, errCode := doesPresignV2SignatureMatch(req)
 			if errCode != testCase.expected {
 				t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(errCode))
 			}
@@ -146,7 +146,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			}
 			// Should be set since we are simulating a http server.
 			req.RequestURI = req.URL.RequestURI()
-			errCode := doesPresignV2SignatureMatch(req)
+			_, errCode := doesPresignV2SignatureMatch(req)
 			if errCode != testCase.expected {
 				t.Errorf("(%d) expected to get success, instead got %s", i, niceError(errCode))
 			}

@@ -353,7 +353,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 
 	// Validates all testcases.
 	for _, testCase := range testCases {
-		if s3Error := isReqAuthenticated(testCase.req, globalServerConfig.GetRegion()); s3Error != testCase.s3Error {
+		if _, s3Error := isReqAuthenticated(testCase.req, globalServerConfig.GetRegion()); s3Error != testCase.s3Error {
 			t.Fatalf("Unexpected s3error returned wanted %d, got %d", testCase.s3Error, s3Error)
 		}
 	}
@@ -382,7 +382,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 		{Request: mustNewPresignedRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrCode: ErrAccessDenied},
 	}
 	for i, testCase := range testCases {
-		if s3Error := checkAdminRequestAuthType(testCase.Request, globalServerConfig.GetRegion()); s3Error != testCase.ErrCode {
+		if _, s3Error := checkAdminRequestAuthType(testCase.Request, globalServerConfig.GetRegion()); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
 		}
 	}

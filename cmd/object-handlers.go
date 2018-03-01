@@ -103,9 +103,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -234,9 +238,13 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:GetObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponseHeadersOnly(w, s3Error)
 		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -334,9 +342,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
+	}
+	if !cred.Verified(dstBucket, dstObject) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 	}
 
 	// TODO: Reject requests where body/payload is present, for now we don't even read it.
@@ -353,6 +365,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
 		return
+	}
+	if !cred.Verified(srcBucket, srcObject) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 	}
 
 	// Check if metadata directive is valid.
@@ -622,6 +637,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 		reader    io.Reader
 		s3Err     APIErrorCode
+		cred      CustomCredentials
 	)
 	reader = r.Body
 	switch rAuthType {
@@ -644,8 +660,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
+		cred = reader.(*s3ChunkedReader).cred
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Err = isReqAuthenticatedV2(r)
+		cred, s3Err = isReqAuthenticatedV2(r)
 		if s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Err, r.URL)
@@ -653,7 +670,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 	case authTypePresigned, authTypeSigned:
-		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
+		if cred, s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Err, r.URL)
 			return
@@ -661,6 +678,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r)
 		}
+	}
+
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 	}
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
@@ -734,8 +755,13 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -786,8 +812,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(dstBucket, dstObject) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -808,6 +839,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		return
+	}
+	if !cred.Verified(srcBucket, srcObject) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -957,6 +992,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
 		reader    = r.Body
+		s3Error   APIErrorCode
+		cred      CustomCredentials
 	)
 
 	switch rAuthType {
@@ -966,29 +1003,29 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+		if s3Error = enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
 			r.Referer(), getSourceIPAddress(r), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+		cred = reader.(*s3ChunkedReader).cred
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
+		cred, s3Error = isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
+		if cred, s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
@@ -997,6 +1034,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r)
 		}
+	}
+
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex)
@@ -1031,8 +1073,13 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:AbortMultipartUpload", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:AbortMultipartUpload", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -1057,8 +1104,13 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListMultipartUploadParts", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:ListMultipartUploadParts", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -1095,8 +1147,13 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
@@ -1191,8 +1248,15 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
+	fmt.Printf("Del: %s/%s\n", bucket, object)
+
+	cred, s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion())
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if !cred.Verified(bucket, object) {
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
