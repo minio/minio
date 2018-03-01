@@ -56,6 +56,11 @@ Its main properties are:
 
 DARE and `github.com/minio/sio` are finalized and can be used in production.
 
+We also provide a CLI tool to en/decrypt arbitrary data streams directly from
+your command line:
+
+**Install ncrypt:** `go get -u github.com/minio/sio/cmd/ncrypt && ncrypt -h`
+
 ## Performance
 
 Cipher            |   8 KB   |   64 KB   |   512 KB  |  1 MB
