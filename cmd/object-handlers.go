@@ -256,6 +256,8 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				writeErrorResponse(w, ErrSSEEncryptedObject, r.URL)
 				return
 			}
+			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
+			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
 		}
 	}
 
