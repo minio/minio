@@ -89,6 +89,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
+		if hasPrefix(k, ReservedMetadataPrefix) {
+			// Do not need to send any internal metadata
+			// values to client.
+			continue
+		}
 		w.Header().Set(k, v)
 	}
 
