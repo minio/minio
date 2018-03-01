@@ -312,6 +312,9 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 	// response headers. e.g, X-Minio-* or X-Amz-*.
 	objInfo.UserDefined = cleanMetadata(m.Meta)
 
+	// All the parts per object.
+	objInfo.Parts = m.Parts
+
 	// Success.
 	return objInfo
 }
@@ -388,16 +391,16 @@ func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xmv xlMetaV1, e err
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
 // readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, err error) {
+func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, xlMeta map[string]string, err error) {
 	var ignoredErrs []error
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			ignoredErrs = append(ignoredErrs, errDiskNotFound)
 			continue
 		}
-		xlMetaParts, err = readXLMetaParts(disk, bucket, object)
+		xlMetaParts, xlMeta, err = readXLMetaParts(disk, bucket, object)
 		if err == nil {
-			return xlMetaParts, nil
+			return xlMetaParts, xlMeta, nil
 		}
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
@@ -406,12 +409,12 @@ func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []object
 			continue
 		}
 		// Error is not ignored, return right here.
-		return nil, err
+		return nil, nil, err
 	}
 	// If all errors were ignored, reduce to maximal occurrence
 	// based on the read quorum.
 	readQuorum := len(xl.getDisks()) / 2
-	return nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
+	return nil, nil, reduceReadQuorumErrs(ignoredErrs, nil, readQuorum)
 }
 
 // readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
