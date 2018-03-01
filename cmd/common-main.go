@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,23 +51,36 @@ func initConfig() {
 }
 
 func handleCommonCmdArgs(ctx *cli.Context) {
-	// Set configuration directory.
-	{
-		// Get configuration directory from command line argument.
-		configDir := ctx.String("config-dir")
-		if !ctx.IsSet("config-dir") && ctx.GlobalIsSet("config-dir") {
-			configDir = ctx.GlobalString("config-dir")
+
+	var configDir string
+
+	if ctx.IsSet("config-dir") {
+		configDir = ctx.String("config-dir")
+	} else if ctx.GlobalIsSet("config-dir") {
+		configDir = ctx.GlobalString("config-dir")
+		// cli package does not expose parent's "config-dir" option.  Below code is workaround.
+		if configDir == "" || configDir == getConfigDir() {
+			if ctx.Parent().GlobalIsSet("config-dir") {
+				configDir = ctx.Parent().GlobalString("config-dir")
+			}
 		}
+	} else {
+		// Neither local nor global config-dir option is provided.  In this case, try to use
+		// default config directory.
+		configDir = getConfigDir()
 		if configDir == "" {
-			fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
+			fatalIf(errors.New("missing option"), "config-dir option must be provided.")
 		}
-
-		// Disallow relative paths, figure out absolute paths.
-		configDirAbs, err := filepath.Abs(configDir)
-		fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
-
-		setConfigDir(configDirAbs)
 	}
+
+	if configDir == "" {
+		fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
+	}
+
+	// Disallow relative paths, figure out absolute paths.
+	configDirAbs, err := filepath.Abs(configDir)
+	fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
+	setConfigDir(configDirAbs)
 }
 
 func handleCommonEnvVars() {

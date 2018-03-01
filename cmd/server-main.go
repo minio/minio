@@ -156,13 +156,13 @@ func serverMain(ctx *cli.Context) {
 
 	// Get "json" flag from command line argument and
 	// enable json and quite modes if jason flag is turned on.
-	jsonFlag := ctx.Bool("json") || ctx.GlobalBool("json")
+	jsonFlag := ctx.IsSet("json") || ctx.GlobalIsSet("json")
 	if jsonFlag {
 		log.EnableJSON()
 	}
 
 	// Get quiet flag from command line argument.
-	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	quietFlag := ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
 	if quietFlag {
 		log.EnableQuiet()
 	}
