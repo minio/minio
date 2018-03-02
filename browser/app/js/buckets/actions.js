@@ -29,7 +29,7 @@ export const SHOW_MAKE_BUCKET_MODAL = "buckets/SHOW_MAKE_BUCKET_MODAL"
 export const SHOW_BUCKET_POLICY = "buckets/SHOW_BUCKET_POLICY"
 export const SET_POLICIES = "buckets/SET_POLICIES"
 
-export const fetchBuckets = action => {
+export const fetchBuckets = () => {
   return function(dispatch) {
     return web.ListBuckets().then(res => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
@@ -41,7 +41,7 @@ export const fetchBuckets = action => {
         } else {
           dispatch(selectBucket(buckets[0]))
         }
-      } else if (action === "delete") {
+      } else {
         dispatch(selectBucket(""))
         history.replace("/")
       }
@@ -112,7 +112,7 @@ export const deleteBucket = bucket => {
           })
         )
         dispatch(removeBucket(bucket))
-        dispatch(fetchBuckets("delete"))
+        dispatch(fetchBuckets())
       })
       .catch(err => { 
         dispatch(

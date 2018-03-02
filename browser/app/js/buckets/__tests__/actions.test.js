@@ -46,7 +46,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]
-    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
@@ -60,7 +60,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test2" }
     ]
     window.location
-    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
@@ -74,7 +74,7 @@ describe("Buckets actions", () => {
       { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
     ]
     window.location
-    return store.dispatch(actionsBuckets.fetchBuckets("list")).then(() => {
+    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
     })
