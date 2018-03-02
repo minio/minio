@@ -398,6 +398,10 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
+		if _, err = fsMeta.ReadFrom(wlk); err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
+		}
+
 		fsMeta.Meta = srcInfo.UserDefined
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)

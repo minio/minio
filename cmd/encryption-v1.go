@@ -28,6 +28,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/minio/minio/pkg/ioutil"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
@@ -426,6 +427,7 @@ func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte,
 	delete(metadata, ServerSideEncryptionIV)
 	delete(metadata, ServerSideEncryptionSealAlgorithm)
 	delete(metadata, ServerSideEncryptionSealedKey)
+	delete(metadata, ReservedMetadataPrefix+"Encrypted-Multipart")
 	return writer, nil
 }
 
@@ -463,6 +465,7 @@ type DecryptBlocksWriter struct {
 
 	partEncRelOffset int64
 
+	copySource bool
 	// Customer Key
 	customerKeyHeader string
 }
@@ -473,8 +476,15 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 		m[k] = v
 	}
 	// Initialize the first decrypter, new decrypters will be initialized in Write() operation as needed.
-	w.req.Header.Set(SSECustomerKey, w.customerKeyHeader)
-	key, err := ParseSSECustomerRequest(w.req)
+	var key []byte
+	var err error
+	if w.copySource {
+		w.req.Header.Set(SSECopyCustomerKey, w.customerKeyHeader)
+		key, err = ParseSSECopyCustomerRequest(w.req)
+	} else {
+		w.req.Header.Set(SSECustomerKey, w.customerKeyHeader)
+		key, err = ParseSSECustomerRequest(w.req)
+	}
 	if err != nil {
 		return err
 	}
@@ -491,14 +501,24 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	delete(m, SSECustomerKey) // make sure we do not save the key by accident
+	// make sure we do not save the key by accident
+	if w.copySource {
+		delete(m, SSECopyCustomerKey)
+	} else {
+		delete(m, SSECustomerKey)
+	}
 
-	decrypter, err := newDecryptWriterWithObjectKey(w.writer, partEncryptionKey, w.startSeqNum, m)
+	// make sure to provide a NopCloser such that a Close
+	// on sio.decryptWriter doesn't close the underlying writer's
+	// close which perhaps can close the stream prematurely.
+	decrypter, err := newDecryptWriterWithObjectKey(ioutil.NopCloser(w.writer), partEncryptionKey, w.startSeqNum, m)
 	if err != nil {
 		return err
 	}
 
 	if w.decrypter != nil {
+		// Pro-actively close the writer such that any pending buffers
+		// are flushed already before we allocate a new decrypter.
 		err = w.decrypter.Close()
 		if err != nil {
 			return err
@@ -561,9 +581,17 @@ func (w *DecryptBlocksWriter) Close() error {
 	return nil
 }
 
+// DecryptAllBlocksCopyRequest - setup a struct which can decrypt many concatenated encrypted data
+// parts information helps to know the boundaries of each encrypted data block, this function decrypts
+// all parts starting from part-1.
+func DecryptAllBlocksCopyRequest(client io.Writer, r *http.Request, objInfo ObjectInfo) (io.WriteCloser, int64, error) {
+	w, _, size, err := DecryptBlocksRequest(client, r, 0, objInfo.Size, objInfo, true)
+	return w, size, err
+}
+
 // DecryptBlocksRequest - setup a struct which can decrypt many concatenated encrypted data
 // parts information helps to know the boundaries of each encrypted data block.
-func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length int64, objInfo ObjectInfo) (io.WriteCloser, int64, int64, error) {
+func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length int64, objInfo ObjectInfo, copySource bool) (io.WriteCloser, int64, int64, error) {
 	seqNumber, encStartOffset, encLength := getEncryptedStartOffset(startOffset, length)
 
 	// Encryption length cannot be bigger than the file size, if it is
@@ -573,11 +601,16 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 	}
 
 	if len(objInfo.Parts) == 0 || !objInfo.IsEncryptedMultipart() {
-		writer, err := DecryptRequestWithSequenceNumber(client, r, seqNumber, objInfo.UserDefined)
+		var writer io.WriteCloser
+		var err error
+		if copySource {
+			writer, err = DecryptCopyRequest(client, r, objInfo.UserDefined)
+		} else {
+			writer, err = DecryptRequestWithSequenceNumber(client, r, seqNumber, objInfo.UserDefined)
+		}
 		if err != nil {
 			return nil, 0, 0, err
 		}
-
 		return writer, encStartOffset, encLength, nil
 	}
 
@@ -614,10 +647,28 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 		partIndex:         partStartIndex,
 		req:               r,
 		customerKeyHeader: r.Header.Get(SSECustomerKey),
-		metadata:          objInfo.UserDefined,
+		copySource:        copySource,
 	}
 
-	w.buildDecrypter(partStartIndex + 1)
+	w.metadata = map[string]string{}
+	// Copy encryption metadata for internal use.
+	for k, v := range objInfo.UserDefined {
+		w.metadata[k] = v
+	}
+
+	// Purge all the encryption headers.
+	delete(objInfo.UserDefined, ServerSideEncryptionIV)
+	delete(objInfo.UserDefined, ServerSideEncryptionSealAlgorithm)
+	delete(objInfo.UserDefined, ServerSideEncryptionSealedKey)
+	delete(objInfo.UserDefined, ReservedMetadataPrefix+"Encrypted-Multipart")
+
+	if w.copySource {
+		w.customerKeyHeader = r.Header.Get(SSECopyCustomerKey)
+	}
+
+	if err := w.buildDecrypter(partStartIndex + 1); err != nil {
+		return nil, 0, 0, err
+	}
 
 	return w, encStartOffset, encLength, nil
 }

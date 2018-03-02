@@ -114,3 +114,15 @@ func (w *LimitWriter) Close() error {
 func LimitedWriter(w io.Writer, skipBytes int64, limit int64) *LimitWriter {
 	return &LimitWriter{w, skipBytes, limit}
 }
+
+type nopCloser struct {
+	io.Writer
+}
+
+func (nopCloser) Close() error { return nil }
+
+// NopCloser returns a WriteCloser with a no-op Close method wrapping
+// the provided Writer w.
+func NopCloser(w io.Writer) io.WriteCloser {
+	return nopCloser{w}
+}
