@@ -43,6 +43,9 @@ const (
 // not enabled on the bucket, the operation returns an empty
 // NotificationConfiguration element.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.getBucketNotificationHandler)(w, r)
+}
+func (api objectAPIHandlers) getBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -101,6 +104,9 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // By default, your bucket has no event notifications configured. That is,
 // the notification configuration will be an empty NotificationConfiguration.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.putBucketNotificationHandler)(w, r)
+}
+func (api objectAPIHandlers) putBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -298,6 +304,9 @@ func (l *listenChan) waitForListener(w http.ResponseWriter) {
 
 // ListenBucketNotificationHandler - list bucket notifications.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	httpTraceAll(api.listenBucketNotificationHandler)(w, r)
+}
+func (api objectAPIHandlers) listenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
