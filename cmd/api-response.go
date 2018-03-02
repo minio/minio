@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"path"
 	"time"
+
+	"github.com/minio/minio/pkg/handlers"
 )
 
 const (
@@ -281,14 +283,20 @@ func getURLScheme(tls bool) string {
 }
 
 // getObjectLocation gets the fully qualified URL of an object.
-func getObjectLocation(host, proto, bucket, object string) string {
+func getObjectLocation(r *http.Request, domain, bucket, object string) string {
+	proto := handlers.GetSourceScheme(r)
 	if proto == "" {
 		proto = getURLScheme(globalIsSSL)
 	}
-	u := url.URL{
-		Host:   host,
+	u := &url.URL{
+		Host:   r.Host,
 		Path:   path.Join(slashSeparator, bucket, object),
 		Scheme: proto,
+	}
+	// If domain is set then we need to use bucket DNS style.
+	if domain != "" {
+		u.Host = bucket + "." + domain
+		u.Path = path.Join(slashSeparator, object)
 	}
 	return u.String()
 }

@@ -28,6 +28,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -472,17 +473,6 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Helper function to fetch client address - we use the
-	// X-forwarded-for header if one is present.
-	getClientAddress := func() string {
-		addr := r.RemoteAddr
-		fwdFor := r.Header.Get("X-Forwarded-For")
-		if fwdFor == "" {
-			return addr
-		}
-		return fwdFor
-	}
-
 	type healResp struct {
 		respBytes []byte
 		errCode   APIErrorCode
@@ -530,7 +520,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 	if clientToken == "" {
 		// Not a status request
-		nh := newHealSequence(bucket, objPrefix, getClientAddress(),
+		nh := newHealSequence(bucket, objPrefix, handlers.GetSourceIP(r),
 			numDisks, hs, forceStart)
 
 		respCh := make(chan healResp)
