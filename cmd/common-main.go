@@ -158,4 +158,7 @@ func handleCommonEnvVars() {
 			globalIsStorageClass = true
 		}
 	}
+
+	// Get WORM environment variable.
+	globalWORMEnabled = strings.EqualFold(os.Getenv("MINIO_WORM"), "on")
 }

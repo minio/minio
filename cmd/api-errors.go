@@ -911,6 +911,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case ObjectNotFound:
 		apiErr = ErrNoSuchKey
+	case ObjectAlreadyExists:
+		apiErr = ErrMethodNotAllowed
 	case ObjectNameInvalid:
 		apiErr = ErrInvalidObjectName
 	case InvalidUploadID:

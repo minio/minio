@@ -300,6 +300,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		// Not required to check whether given objects exist or not, because
+		// DeleteMultipleObject is always successful irrespective of object existence.
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
 	var wg = &sync.WaitGroup{} // Allocate a new wait group.
 	var dErrs = make([]error, len(deleteObjects.Objects))
 
