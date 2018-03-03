@@ -152,7 +152,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
 
-			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, startOffset, length, objInfo)
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, startOffset, length, objInfo, false)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -382,19 +382,23 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var writer io.WriteCloser = pipeWriter
 	var reader io.Reader = pipeReader
+
+	srcInfo.Reader, err = hash.NewReader(reader, srcInfo.Size, "", "")
+	if err != nil {
+		pipeWriter.CloseWithError(err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Save the original size for later use when we want to copy
+	// encrypted file into an unencrypted one.
+	size := srcInfo.Size
+
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		var oldKey, newKey []byte
 		sseCopyC := IsSSECopyCustomerRequest(r.Header)
 		sseC := IsSSECustomerRequest(r.Header)
-		if sseCopyC {
-			oldKey, err = ParseSSECopyCustomerRequest(r)
-			if err != nil {
-				pipeWriter.CloseWithError(err)
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
-			}
-		}
 		if sseC {
 			newKey, err = ParseSSECustomerRequest(r)
 			if err != nil {
@@ -406,7 +410,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// AWS S3 implementation requires us to only rotate keys
 		// when/ both keys are provided and destination is same
 		// otherwise we proceed to encrypt/decrypt.
-		if len(oldKey) > 0 && len(newKey) > 0 && cpSrcDstSame {
+		if sseCopyC && sseC && cpSrcDstSame {
+			// Get the old key which needs to be rotated.
+			oldKey, err = ParseSSECopyCustomerRequest(r)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
@@ -418,10 +429,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		} else {
 			if sseCopyC {
 				// Source is encrypted make sure to save the encrypted size.
-				if srcInfo.IsEncrypted() {
-					srcInfo.Size = srcInfo.EncryptedSize()
-				}
-				writer, err = newDecryptWriter(pipeWriter, oldKey, 0, srcInfo.UserDefined)
+				writer = ioutil.LimitedWriter(writer, 0, srcInfo.Size)
+				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcInfo)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -431,11 +440,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
 				srcInfo.metadataOnly = false
+				if sseC {
+					size = srcInfo.Size
+				}
 			}
 			if sseC {
 				reader, err = newEncryptReader(pipeReader, newKey, encMetadata)
 				if err != nil {
-					pipeReader.CloseWithError(err)
+					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
 				}
@@ -443,6 +455,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
 				srcInfo.metadataOnly = false
+				if !sseCopyC {
+					size = srcInfo.EncryptedSize()
+				}
+			}
+			srcInfo.Reader, err = hash.NewReader(reader, size, "", "") // do not try to verify encrypted content
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
 			}
 		}
 	}
@@ -450,7 +471,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(r.Header, srcInfo.UserDefined)
 	if err != nil {
-		pipeReader.CloseWithError(err)
+		pipeWriter.CloseWithError(err)
 		errorIf(err, "found invalid http request header")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -469,20 +490,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// desination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
 	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly {
-		pipeReader.CloseWithError(fmt.Errorf("invalid copy dest"))
+		pipeWriter.CloseWithError(fmt.Errorf("invalid copy dest"))
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(w, ErrInvalidCopyDest, r.URL)
 		return
 	}
-
-	hashReader, err := hash.NewReader(reader, srcInfo.Size, "", "") // do not try to verify encrypted content
-	if err != nil {
-		pipeReader.CloseWithError(err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-	srcInfo.Reader = hashReader
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
@@ -876,6 +889,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	var writer io.WriteCloser = pipeWriter
 	var reader io.Reader = pipeReader
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "")
+	if err != nil {
+		pipeWriter.CloseWithError(err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 	if objectAPI.IsEncryptionSupported() {
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(dstBucket, dstObject, uploadID, 0, 1)
@@ -883,6 +902,18 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
+		}
+		sseCopyC := IsSSECopyCustomerRequest(r.Header)
+		if sseCopyC {
+			// Response writer should be limited early on for decryption upto required length,
+			// additionally also skipping mod(offset)64KiB boundaries.
+			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+			writer, startOffset, length, err = DecryptBlocksRequest(pipeWriter, r, startOffset, length, srcInfo, true)
+			if err != nil {
+				pipeWriter.CloseWithError(err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
 		}
 		if li.IsEncrypted() {
 			if !IsSSECustomerRequest(r.Header) {
@@ -906,19 +937,20 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 
-			reader, err = sio.EncryptReader(reader, sio.Config{Key: objectEncryptionKey})
+			reader, err = sio.EncryptReader(pipeReader, sio.Config{Key: objectEncryptionKey})
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
-		}
-		if IsSSECopyCustomerRequest(r.Header) {
-			// Response writer should be limited early on for decryption upto required length,
-			// additionally also skipping mod(offset)64KiB boundaries.
-			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
 
-			writer, startOffset, length, err = DecryptBlocksRequest(pipeWriter, r, startOffset, length, srcInfo)
+			size := length
+			if !sseCopyC {
+				info := ObjectInfo{Size: length}
+				size = info.EncryptedSize()
+			}
+
+			srcInfo.Reader, err = hash.NewReader(reader, size, "", "")
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -926,14 +958,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			}
 		}
 	}
-
-	hashReader, err := hash.NewReader(reader, length, "", "") // do not try to verify encrypted content
-	if err != nil {
-		pipeWriter.CloseWithError(err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-	srcInfo.Reader = hashReader
 	srcInfo.Writer = writer
 
 	// Copy source object to destination, if source and destination
