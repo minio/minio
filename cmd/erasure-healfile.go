@@ -70,66 +70,69 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 	}
 	writeErrors := make([]error, len(s.disks))
 
+	// Read part file data on each disk
+	chunksize := ceilFrac(blocksize, int64(s.dataBlocks))
+	numBlocks := ceilFrac(size, blocksize)
+
+	readLen := chunksize * (numBlocks - 1)
+
+	lastChunkSize := chunksize
+	hasSmallerLastBlock := size%blocksize != 0
+	if hasSmallerLastBlock {
+		lastBlockLen := size % blocksize
+		lastChunkSize = ceilFrac(lastBlockLen, int64(s.dataBlocks))
+	}
+	readLen += lastChunkSize
+	var buffers [][]byte
+	buffers, _, err = s.readConcurrent(volume, path, 0, readLen, verifiers)
+	if err != nil {
+		return f, err
+	}
+
 	// Scan part files on disk, block-by-block reconstruct it and
 	// write to stale disks.
-	chunksize := getChunkSize(blocksize, s.dataBlocks)
 	blocks := make([][]byte, len(s.disks))
-	for i := range blocks {
-		blocks[i] = make([]byte, chunksize)
+
+	if numBlocks > 1 {
+		// Allocate once for all the equal length blocks. The
+		// last block may have a different length - allocation
+		// for this happens inside the for loop below.
+		for i := range blocks {
+			if len(buffers[i]) == 0 {
+				blocks[i] = make([]byte, chunksize)
+			}
+		}
 	}
-	var chunkOffset, blockOffset int64
 
-	// The for loop below is entered when size == 0 and
-	// blockOffset == 0 to allow for reconstructing empty files.
-	for ; blockOffset == 0 || blockOffset < size; blockOffset += blocksize {
-		// last iteration may have less than blocksize data
-		// left, so chunksize needs to be recomputed.
-		if size < blockOffset+blocksize {
-			chunksize = getChunkSize(size-blockOffset, s.dataBlocks)
+	var buffOffset int64
+	for blockNumber := int64(0); blockNumber < numBlocks; blockNumber++ {
+		if blockNumber == numBlocks-1 && lastChunkSize != chunksize {
 			for i := range blocks {
-				blocks[i] = blocks[i][:chunksize]
-			}
-		}
-		// read a chunk from each disk, until we have
-		// `s.dataBlocks` number of chunks set to non-nil in
-		// `blocks`
-		numReads := 0
-		for i, disk := range s.disks {
-			// skip reading from unavailable or stale disks
-			if disk == nil || staleDisks[i] != nil {
-				blocks[i] = blocks[i][:0] // mark shard as missing
-				continue
-			}
-			_, err = disk.ReadFile(volume, path, chunkOffset, blocks[i], verifiers[i])
-			if err != nil {
-				// LOG FIXME: add a conditional log
-				// for read failures, once per-disk
-				// per-function-invocation.
-				blocks[i] = blocks[i][:0] // mark shard as missing
-				continue
-			}
-			numReads++
-			if numReads == s.dataBlocks {
-				// we have enough data to reconstruct
-				// mark all other blocks as missing
-				for j := i + 1; j < len(blocks); j++ {
-					blocks[j] = blocks[j][:0] // mark shard as missing
+				if len(buffers[i]) == 0 {
+					blocks[i] = make([]byte, lastChunkSize)
 				}
-				break
 			}
 		}
 
-		// advance the chunk offset to prepare for next loop
-		// iteration
-		chunkOffset += chunksize
-
-		// reconstruct data - this computes all data and
-		// parity shards - but we skip this step if we are
-		// reconstructing an empty file.
-		if chunksize > 0 {
-			if err = s.ErasureDecodeDataAndParityBlocks(blocks); err != nil {
-				return f, err
+		for i := range blocks {
+			if len(buffers[i]) == 0 {
+				blocks[i] = blocks[i][0:0]
 			}
+		}
+
+		csize := chunksize
+		if blockNumber == numBlocks-1 {
+			csize = lastChunkSize
+		}
+		for i := range blocks {
+			if len(buffers[i]) != 0 {
+				blocks[i] = buffers[i][buffOffset : buffOffset+csize]
+			}
+		}
+		buffOffset += csize
+
+		if err = s.ErasureDecodeDataAndParityBlocks(blocks); err != nil {
+			return f, err
 		}
 
 		// write computed shards as chunks on file in each

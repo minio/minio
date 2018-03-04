@@ -98,11 +98,3 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 	// Success.
 	return totalWritten, nil
 }
-
-// chunkSize is roughly BlockSize/DataBlocks.
-// chunkSize is calculated such that chunkSize*DataBlocks accommodates BlockSize bytes.
-// So chunkSize*DataBlocks can be slightly larger than BlockSize if BlockSize is not divisible by
-// DataBlocks. The extra space will have 0-padding.
-func getChunkSize(blockSize int64, dataBlocks int) int64 {
-	return (blockSize + int64(dataBlocks) - 1) / int64(dataBlocks)
-}
