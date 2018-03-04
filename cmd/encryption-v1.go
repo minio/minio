@@ -144,15 +144,15 @@ const (
 // hash function.
 const SSESealAlgorithmDareSha256 = "DARE-SHA256"
 
-// IsSSECustomerRequest returns true if the given HTTP header
+// hasSSECustomerHeader returns true if the given HTTP header
 // contains server-side-encryption with customer provided key fields.
-func IsSSECustomerRequest(header http.Header) bool {
+func hasSSECustomerHeader(header http.Header) bool {
 	return header.Get(SSECustomerAlgorithm) != "" || header.Get(SSECustomerKey) != "" || header.Get(SSECustomerKeyMD5) != ""
 }
 
-// IsSSECopyCustomerRequest returns true if the given HTTP header
+// hasSSECopyCustomerHeader returns true if the given HTTP header
 // contains copy source server-side-encryption with customer provided key fields.
-func IsSSECopyCustomerRequest(header http.Header) bool {
+func hasSSECopyCustomerHeader(header http.Header) bool {
 	return header.Get(SSECopyCustomerAlgorithm) != "" || header.Get(SSECopyCustomerKey) != "" || header.Get(SSECopyCustomerKeyMD5) != ""
 }
 
@@ -783,10 +783,10 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 	if info.IsDir {
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && IsSSECopyCustomerRequest(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && hasSSECopyCustomerHeader(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !IsSSECopyCustomerRequest(headers) {
+		if !hasSSECopyCustomerHeader(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}
@@ -810,10 +810,10 @@ func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCo
 	if info.IsDir {
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && IsSSECustomerRequest(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && hasSSECustomerHeader(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !IsSSECustomerRequest(headers) {
+		if !hasSSECustomerHeader(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}

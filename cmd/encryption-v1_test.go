@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-var isSSECopyCustomerRequestTests = []struct {
+var hasSSECopyCustomerHeaderTests = []struct {
 	headers    map[string]string
 	sseRequest bool
 }{
@@ -36,18 +36,18 @@ var isSSECopyCustomerRequestTests = []struct {
 }
 
 func TestIsSSECopyCustomerRequest(t *testing.T) {
-	for i, test := range isSSECopyCustomerRequestTests {
+	for i, test := range hasSSECopyCustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if IsSSECopyCustomerRequest(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected IsSSECopyCustomerRequest to return %v", i, test.sseRequest)
+		if hasSSECopyCustomerHeader(headers) != test.sseRequest {
+			t.Errorf("Test %d: Expected hasSSECopyCustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
 }
 
-var isSSECustomerRequestTests = []struct {
+var hasSSECustomerHeaderTests = []struct {
 	headers    map[string]string
 	sseRequest bool
 }{
@@ -60,14 +60,14 @@ var isSSECustomerRequestTests = []struct {
 	{headers: map[string]string{SSECustomerAlgorithm: "", SSECustomerKey: "", SSECustomerKeyMD5: ""}, sseRequest: false},                               // 6
 }
 
-func TestIsSSECustomerRequest(t *testing.T) {
-	for i, test := range isSSECustomerRequestTests {
+func TesthasSSECustomerHeader(t *testing.T) {
+	for i, test := range hasSSECustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if IsSSECustomerRequest(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected IsSSECustomerRequest to return %v", i, test.sseRequest)
+		if hasSSECustomerHeader(headers) != test.sseRequest {
+			t.Errorf("Test %d: Expected hasSSECustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
 }
