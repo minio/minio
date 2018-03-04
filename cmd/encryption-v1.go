@@ -201,6 +201,12 @@ func ParseSSECopyCustomerRequest(r *http.Request) (key []byte, err error) {
 // ParseSSECustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
 func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
+	return ParseSSECustomerHeader(r.Header)
+}
+
+// ParseSSECustomerHeader parses the SSE-C header fields and returns
+// the client provided key on success.
+func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
 		// we cannot use r.TLS == nil here because Go's http implementation reflects on
 		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
@@ -208,7 +214,6 @@ func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
 		// will always fail -> r.TLS is always nil even for TLS requests.
 		return nil, errInsecureSSERequest
 	}
-	header := r.Header
 	if algorithm := header.Get(SSECustomerAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
 		return nil, errInvalidSSEAlgorithm
 	}
