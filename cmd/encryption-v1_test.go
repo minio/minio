@@ -158,15 +158,13 @@ func TestParseSSECustomerRequest(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		request := &http.Request{}
-		request.Header = headers
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECustomerRequest(request)
+		_, err := ParseSSECustomerHeaders(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(SSECustomerKey)
+		key := headers.Get(SSECustomerKey)
 		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
 			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
 		}
@@ -260,15 +258,13 @@ func TestParseSSECopyCustomerRequest(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		request := &http.Request{}
-		request.Header = headers
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECopyCustomerRequest(request)
+		_, err := ParseSSECopyCustomerHeaders(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(SSECopyCustomerKey)
+		key := headers.Get(SSECopyCustomerKey)
 		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
 			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
 		}

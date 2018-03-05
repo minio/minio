@@ -49,7 +49,7 @@ var (
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 )
 
-const (
+const ( // part of AWS S3 specification
 	// SSECustomerAlgorithm is the AWS SSE-C algorithm HTTP header key.
 	SSECustomerAlgorithm = "X-Amz-Server-Side-Encryption-Customer-Algorithm"
 	// SSECustomerKey is the AWS SSE-C encryption key HTTP header key.
@@ -65,23 +65,13 @@ const (
 	SSECopyCustomerKeyMD5 = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5"
 )
 
-const (
+const ( // part of AWS S3 specification
 	// SSECustomerKeySize is the size of valid client provided encryption keys in bytes.
 	// Currently AWS supports only AES256. So the SSE-C key size is fixed to 32 bytes.
 	SSECustomerKeySize = 32
 
-	// SSEIVSize is the size of the IV data
-	SSEIVSize = 32 // 32 bytes
-
 	// SSECustomerAlgorithmAES256 the only valid S3 SSE-C encryption algorithm identifier.
 	SSECustomerAlgorithmAES256 = "AES256"
-
-	// SSE dare package block size.
-	sseDAREPackageBlockSize = 64 * 1024 // 64KiB bytes
-
-	// SSE dare package meta padding bytes.
-	sseDAREPackageMetaSize = 32 // 32 bytes
-
 )
 
 // SSE-C key derivation, key verification and key update:
@@ -125,6 +115,23 @@ const (
 //			r'      := H(Rm)			 # save as object metadata [ServerSideEncryptionIV]
 //			KeK'    := H(key' || r')	 # new key encryption key
 // 			K'      := AE(KeK', k)       # save as object metadata [ServerSideEncryptionSealedKey]
+//
+//
+// For SSE-C multipart each part is encrypted using a separate part-key derived from the
+// object-encryption-key and the part-number:
+// KDF: key-derivation-function [32 = |KDF(K, x)|]
+//
+// Part-key derivation:
+//	 Input:
+// 		k       := 32 bytes              # object encrypted key (see above)
+// 		i       := integer               # part ID (1<= i <= 10000)
+//
+//	 Part-Key derivation:
+//	 	bin_ID := little_endian_encode(i) # 4 byte little endian representation of i
+//      kp     := KDF(k, bin_ID)
+//
+//	 Output:
+//	 	kp
 
 const (
 	// ServerSideEncryptionIV is a 32 byte randomly generated IV used to derive an
@@ -141,9 +148,20 @@ const (
 	ServerSideEncryptionSealedKey = ReservedMetadataPrefix + "Server-Side-Encryption-Sealed-Key"
 )
 
-// SSESealAlgorithmDareSha256 specifies DARE as authenticated en/decryption scheme and SHA256 as cryptographic
-// hash function.
-const SSESealAlgorithmDareSha256 = "DARE-SHA256"
+const (
+	// SSEIVSize is the size of the randomly chosen IV used to derive the key-encryption-key.
+	SSEIVSize = 32
+
+	// DAREPayloadSize is the max. size of the package payload for a DARE 2.0 package.
+	DAREPayloadSize = 1 << 16
+
+	// DAREOverhead is the overhead (header + tag) added by encrypting one payload using DARE 2.0.
+	DAREOverhead = 32
+
+	// SSESealAlgorithmDareSha256 specifies DARE as authenticated en/decryption scheme and SHA256 as
+	// cryptographic hash function.
+	SSESealAlgorithmDareSha256 = "DARE-SHA256"
+)
 
 // hasSSECustomerHeader returns true if the given HTTP header
 // contains server-side-encryption with customer provided key fields.
@@ -157,9 +175,20 @@ func hasSSECopyCustomerHeader(header http.Header) bool {
 	return header.Get(SSECopyCustomerAlgorithm) != "" || header.Get(SSECopyCustomerKey) != "" || header.Get(SSECopyCustomerKeyMD5) != ""
 }
 
-// ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
-// It returns the client provided key on success.
-func ParseSSECopyCustomerRequest(r *http.Request) (key []byte, err error) {
+// parseSSECustomerHeaders parses the SSE-C header fields of the provided headers depending
+// on the three provided S3 sse headers (either regular request or copy request).
+// It erases the client key form the HTTP headers.
+//
+// It also returns an error if (valid) SSE-C headers are provided but the server does not run
+// in TLS mode.
+func parseSSECustomerHeaders(header http.Header, sseHeaders [3]string) (key []byte, err error) {
+	var (
+		sseAlgorithm = sseHeaders[0]
+		sseKey       = sseHeaders[1]
+		sseKeyMD5    = sseHeaders[2]
+	)
+	defer func() { header.Del(sseKey) }() // Remove SSE-C key from header
+
 	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
 		// we cannot use r.TLS == nil here because Go's http implementation reflects on
 		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
@@ -167,29 +196,22 @@ func ParseSSECopyCustomerRequest(r *http.Request) (key []byte, err error) {
 		// will always fail -> r.TLS is always nil even for TLS requests.
 		return nil, errInsecureSSERequest
 	}
-	header := r.Header
-	if algorithm := header.Get(SSECopyCustomerAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
+	if algorithm := header.Get(sseAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
 		return nil, errInvalidSSEAlgorithm
 	}
-	if header.Get(SSECopyCustomerKey) == "" {
+	if header.Get(sseKey) == "" {
 		return nil, errMissingSSEKey
 	}
-	if header.Get(SSECopyCustomerKeyMD5) == "" {
+	if header.Get(sseKeyMD5) == "" {
 		return nil, errMissingSSEKeyMD5
 	}
 
-	key, err = base64.StdEncoding.DecodeString(header.Get(SSECopyCustomerKey))
-	if err != nil {
+	key, err = base64.StdEncoding.DecodeString(header.Get(sseKey))
+	if err != nil || len(key) != SSECustomerKeySize {
 		return nil, errInvalidSSEKey
 	}
 
-	if len(key) != SSECustomerKeySize {
-		return nil, errInvalidSSEKey
-	}
-	// Make sure we purged the keys from http headers by now.
-	header.Del(SSECopyCustomerKey)
-
-	keyMD5, err := base64.StdEncoding.DecodeString(header.Get(SSECopyCustomerKeyMD5))
+	keyMD5, err := base64.StdEncoding.DecodeString(header.Get(sseKeyMD5))
 	if err != nil {
 		return nil, errSSEKeyMD5Mismatch
 	}
@@ -199,51 +221,22 @@ func ParseSSECopyCustomerRequest(r *http.Request) (key []byte, err error) {
 	return key, nil
 }
 
-// ParseSSECustomerRequest parses the SSE-C header fields of the provided request.
-// It returns the client provided key on success.
-func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
-	return ParseSSECustomerHeader(r.Header)
+// ParseSSECopyCustomerHeaders parses the SSE-C header fields and returns
+// the client provided key on success. It erases the client key form the
+// HTTP headers.
+func ParseSSECopyCustomerHeaders(header http.Header) (key []byte, err error) {
+	return parseSSECustomerHeaders(header, [...]string{
+		SSECopyCustomerAlgorithm, SSECopyCustomerKey, SSECopyCustomerKeyMD5,
+	})
 }
 
-// ParseSSECustomerHeader parses the SSE-C header fields and returns
-// the client provided key on success.
-func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
-	if algorithm := header.Get(SSECustomerAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
-		return nil, errInvalidSSEAlgorithm
-	}
-	if header.Get(SSECustomerKey) == "" {
-		return nil, errMissingSSEKey
-	}
-	if header.Get(SSECustomerKeyMD5) == "" {
-		return nil, errMissingSSEKeyMD5
-	}
-
-	key, err = base64.StdEncoding.DecodeString(header.Get(SSECustomerKey))
-	if err != nil {
-		return nil, errInvalidSSEKey
-	}
-
-	if len(key) != SSECustomerKeySize {
-		return nil, errInvalidSSEKey
-	}
-	// Make sure we purged the keys from http headers by now.
-	header.Del(SSECustomerKey)
-
-	keyMD5, err := base64.StdEncoding.DecodeString(header.Get(SSECustomerKeyMD5))
-	if err != nil {
-		return nil, errSSEKeyMD5Mismatch
-	}
-	if md5Sum := md5.Sum(key); !bytes.Equal(md5Sum[:], keyMD5) {
-		return nil, errSSEKeyMD5Mismatch
-	}
-	return key, nil
+// ParseSSECustomerHeaders parses the SSE-C header fields and returns
+// the client provided key on success. It erases the client key form the
+// HTTP headers.
+func ParseSSECustomerHeaders(header http.Header) (key []byte, err error) {
+	return parseSSECustomerHeaders(header, [...]string{
+		SSECustomerAlgorithm, SSECustomerKey, SSECustomerKeyMD5,
+	})
 }
 
 // This function rotates old to new key.
@@ -365,7 +358,7 @@ func newEncryptReader(content io.Reader, key []byte, metadata map[string]string)
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
 func EncryptRequest(content io.Reader, r *http.Request, metadata map[string]string) (io.Reader, error) {
-	key, err := ParseSSECustomerRequest(r)
+	key, err := ParseSSECustomerHeaders(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +368,7 @@ func EncryptRequest(content io.Reader, r *http.Request, metadata map[string]stri
 // DecryptCopyRequest decrypts the object with the client provided key. It also removes
 // the client-side-encryption metadata from the object and sets the correct headers.
 func DecryptCopyRequest(client io.Writer, r *http.Request, metadata map[string]string) (io.WriteCloser, error) {
-	key, err := ParseSSECopyCustomerRequest(r)
+	key, err := ParseSSECopyCustomerHeaders(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +434,7 @@ func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte,
 // DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
 // the client-side-encryption metadata from the object and sets the correct headers.
 func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	key, err := ParseSSECustomerRequest(r)
+	key, err := ParseSSECustomerHeaders(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -487,10 +480,10 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	var err error
 	if w.copySource {
 		w.req.Header.Set(SSECopyCustomerKey, w.customerKeyHeader)
-		key, err = ParseSSECopyCustomerRequest(w.req)
+		key, err = ParseSSECopyCustomerHeaders(w.req.Header)
 	} else {
 		w.req.Header.Set(SSECustomerKey, w.customerKeyHeader)
-		key, err = ParseSSECustomerRequest(w.req)
+		key, err = ParseSSECustomerHeaders(w.req.Header)
 	}
 	if err != nil {
 		return err
@@ -643,8 +636,8 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 		partStartOffset -= int64(decryptedSize)
 	}
 
-	startSeqNum := partStartOffset / sseDAREPackageBlockSize
-	partEncRelOffset := int64(startSeqNum) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	startSeqNum := partStartOffset / DAREPayloadSize
+	partEncRelOffset := int64(startSeqNum) * (DAREPayloadSize + DAREOverhead)
 
 	w := &DecryptBlocksWriter{
 		writer:            client,
@@ -682,9 +675,9 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 
 // getEncryptedStartOffset - fetch sequence number, encrypted start offset and encrypted length.
 func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset int64, encLength int64) {
-	onePkgSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	onePkgSize := int64(DAREPayloadSize + DAREOverhead)
 
-	seqNumber = uint32(offset / sseDAREPackageBlockSize)
+	seqNumber = uint32(offset / DAREPayloadSize)
 	encOffset = int64(seqNumber) * onePkgSize
 	// The math to compute the encrypted length is always
 	// originalLength i.e (offset+length-1) to be divided under
@@ -692,10 +685,10 @@ func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset 
 	// block. This is then multiplied by final package size which
 	// is basically 64KiB + 32. Finally negate the encrypted offset
 	// to get the final encrypted length on disk.
-	encLength = ((offset+length)/sseDAREPackageBlockSize)*onePkgSize - encOffset
+	encLength = ((offset+length)/DAREPayloadSize)*onePkgSize - encOffset
 
 	// Check for the remainder, to figure if we need one extract package to read from.
-	if (offset+length)%sseDAREPackageBlockSize > 0 {
+	if (offset+length)%DAREPayloadSize > 0 {
 		encLength += onePkgSize
 	}
 
