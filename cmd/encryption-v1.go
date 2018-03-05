@@ -144,15 +144,15 @@ const (
 // hash function.
 const SSESealAlgorithmDareSha256 = "DARE-SHA256"
 
-// IsSSECustomerRequest returns true if the given HTTP header
+// hasSSECustomerHeader returns true if the given HTTP header
 // contains server-side-encryption with customer provided key fields.
-func IsSSECustomerRequest(header http.Header) bool {
+func hasSSECustomerHeader(header http.Header) bool {
 	return header.Get(SSECustomerAlgorithm) != "" || header.Get(SSECustomerKey) != "" || header.Get(SSECustomerKeyMD5) != ""
 }
 
-// IsSSECopyCustomerRequest returns true if the given HTTP header
+// hasSSECopyCustomerHeader returns true if the given HTTP header
 // contains copy source server-side-encryption with customer provided key fields.
-func IsSSECopyCustomerRequest(header http.Header) bool {
+func hasSSECopyCustomerHeader(header http.Header) bool {
 	return header.Get(SSECopyCustomerAlgorithm) != "" || header.Get(SSECopyCustomerKey) != "" || header.Get(SSECopyCustomerKeyMD5) != ""
 }
 
@@ -201,6 +201,12 @@ func ParseSSECopyCustomerRequest(r *http.Request) (key []byte, err error) {
 // ParseSSECustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
 func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
+	return ParseSSECustomerHeader(r.Header)
+}
+
+// ParseSSECustomerHeader parses the SSE-C header fields and returns
+// the client provided key on success.
+func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
 		// we cannot use r.TLS == nil here because Go's http implementation reflects on
 		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
@@ -208,7 +214,6 @@ func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
 		// will always fail -> r.TLS is always nil even for TLS requests.
 		return nil, errInsecureSSERequest
 	}
-	header := r.Header
 	if algorithm := header.Get(SSECustomerAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
 		return nil, errInvalidSSEAlgorithm
 	}
@@ -778,10 +783,10 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 	if info.IsDir {
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && IsSSECopyCustomerRequest(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && hasSSECopyCustomerHeader(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !IsSSECopyCustomerRequest(headers) {
+		if !hasSSECopyCustomerHeader(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}
@@ -805,10 +810,10 @@ func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCo
 	if info.IsDir {
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && IsSSECustomerRequest(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && hasSSECustomerHeader(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !IsSSECustomerRequest(headers) {
+		if !hasSSECustomerHeader(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}
