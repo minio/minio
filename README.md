@@ -48,6 +48,7 @@ chmod 755 minio
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
 ```sh
+wget https://dl.minio.io/server/minio/release/linux-amd64/minio
 chmod +x minio
 ./minio server /data
 ```
