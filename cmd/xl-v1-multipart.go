@@ -773,7 +773,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, d
 			continue
 		}
 		partsMetadata[i].Parts = xlMeta.Parts
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, file.Algorithm, file.Checksums[i]})
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+			Name:      partSuffix,
+			Algorithm: file.Algorithm,
+			Hashes:    file.ChecksumsBlocks[i],
+		})
 	}
 
 	// Write all the checksum metadata.

@@ -29,9 +29,10 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // ErasureFileInfo contains information about an erasure file operation (create, read, heal).
 type ErasureFileInfo struct {
-	Size      int64
-	Algorithm BitrotAlgorithm
-	Checksums [][]byte
+	Size            int64
+	Algorithm       BitrotAlgorithm
+	ChecksumsBlocks [][][]byte
+	Checksums       [][]byte
 }
 
 // ErasureStorage represents an array of disks.

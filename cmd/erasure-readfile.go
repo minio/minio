@@ -80,6 +80,41 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 	return
 }
 
+// ReadFileV2 reads as much data as requested from the file under the
+// given volume and path and writes the data to the provided writer.
+// The algorithm and the keys/checksums are used to verify the
+// integrity of the given file. ReadFile will read data from the given
+// offset up to the given length. If parts of the file are corrupted
+// ReadFileV2 tries to reconstruct the data.
+func (s ErasureStorage) ReadFileV2(writer io.Writer, volume, path string, offset,
+	length, totalLength int64, checksumBlocks [][][]byte, algorithm BitrotAlgorithm,
+	blocksize int64) (f ErasureFileInfo, err error) {
+
+	if offset < 0 || length < 0 {
+		return f, errors.Trace(errUnexpected)
+	}
+	if offset+length > totalLength {
+		return f, errors.Trace(errUnexpected)
+	}
+	if !algorithm.Available() {
+		return f, errors.Trace(errBitrotHashAlgoInvalid)
+	}
+
+	f.ChecksumsBlocks = make([][][]byte, len(s.disks))
+	verifiers := make([][]*BitrotVerifier, len(s.disks))
+	for i, disk := range s.disks {
+		if disk == OfflineDisk {
+			continue
+		}
+		verifiers[i] = make([]*BitrotVerifier, len(checksumBlocks[i]))
+		for j := range checksumBlocks[i] {
+			verifiers[i][j] = NewBitrotVerifier(algorithm, checksumBlocks[i][j])
+		}
+	}
+
+	chunksize := ceilFrac(blocksize, int64(s.dataBlocks))
+}
+
 // ReadFile reads as much data as requested from the file under the
 // given volume and path and writes the data to the provided writer.
 // The algorithm and the keys/checksums are used to verify the

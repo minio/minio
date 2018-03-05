@@ -30,11 +30,7 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 	if !algorithm.Available() {
 		return f, errors.Trace(errBitrotHashAlgoInvalid)
 	}
-	f.Checksums = make([][]byte, len(s.disks))
-	hashers := make([]hash.Hash, len(s.disks))
-	for i := range hashers {
-		hashers[i] = algorithm.New()
-	}
+	f.ChecksumsBlocks = make([][][]byte, len(s.disks))
 	errChans, errs := make([]chan error, len(s.disks)), make([]error, len(s.disks))
 	for i := range errChans {
 		errChans[i] = make(chan error, 1) // create buffered channel to let finished go-routines die early
@@ -58,26 +54,36 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 			return f, errors.Trace(err)
 		}
 
+		hashers := make([]hash.Hash, len(blocks))
+		for i := range hashers {
+			hashers[i] = algorithm.New()
+		}
+
 		for i := range errChans { // span workers
 			go erasureAppendFile(s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
 		}
+
 		for i := range errChans { // what until all workers are finished
 			errs[i] = <-errChans[i]
 		}
+
 		if err = reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, writeQuorum); err != nil {
 			return f, err
 		}
+
 		s.disks = evalDisks(s.disks, errs)
+
+		for i, disk := range s.disks {
+			if disk == OfflineDisk {
+				continue
+			}
+			f.ChecksumsBlocks[i] = append(f.ChecksumsBlocks[i], hashers[i].Sum(nil))
+		}
+
 		f.Size += int64(n)
 	}
 
 	f.Algorithm = algorithm
-	for i, disk := range s.disks {
-		if disk == OfflineDisk {
-			continue
-		}
-		f.Checksums[i] = hashers[i].Sum(nil)
-	}
 	return f, nil
 }
 
