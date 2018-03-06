@@ -489,7 +489,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
-	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly {
+	// if encryption is enabled we do not need explicit "REPLACE" metadata to
+	// be enabled as well - this is to allow for key-rotation.
+	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly && !srcInfo.IsEncrypted() {
 		pipeWriter.CloseWithError(fmt.Errorf("invalid copy dest"))
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
