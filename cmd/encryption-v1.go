@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -239,105 +240,177 @@ func ParseSSECustomerHeaders(header http.Header) (key []byte, err error) {
 	})
 }
 
-// This function rotates old to new key.
-func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
-	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
+// ObjectEncryptionKey is a 256 bit key used to either en/decrypt a single-part object
+// or derive an unique key per object part for multi-part objects.
+type ObjectEncryptionKey [32]byte
 
-	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 { // currently DARE-SHA256 is the only option
-		return errObjectTampered
+// DeriveObjectEncryptionKey derives an unique object-encryption-key from the client-provided
+// key. It returns a error if the client-provided key is not 256 bits long.
+func DeriveObjectEncryptionKey(clientKey []byte) (key ObjectEncryptionKey, err error) {
+	if len(clientKey) != SSECustomerKeySize {
+		return key, errInvalidSSEKey
 	}
+	var random [32]byte
+	if _, err = io.ReadFull(rand.Reader, random[:]); err != nil {
+		return key, fmt.Errorf("Failed to read random value from PRNG: %v", err)
+	}
+	sha := sha256.New()
+	sha.Write(clientKey)
+	sha.Write(random[:])
+	sha.Sum(key[:0]) // Sum appends the hash (32 bytes) to the provided slice
+	return
+}
+
+// DerivePartKey derives an unique key from an objecct-encryption-key and the provided part ID.
+func (k ObjectEncryptionKey) DerivePartKey(partID int) (key [32]byte) {
+	var binPartID [4]byte
+	binary.LittleEndian.PutUint32(binPartID[:], uint32(partID))
+
+	mac := hmac.New(sha256.New, k[:])
+	mac.Write(binPartID[:])
+	mac.Sum(key[:0]) // Sum appends the hash (32 bytes) to the provided slice
+	return
+}
+
+// KeyEncryptionKey is a 256 bit key and a 256 bit IV used to seal/open an
+// object-encryption-key. The key-encryption-key is the key which is changed
+// during an S3 key rotatation request.
+type KeyEncryptionKey struct {
+	key, iv [32]byte
+}
+
+func deriveKeyEncryptionKey(clientKey, iv []byte) (key KeyEncryptionKey, err error) {
+	if len(clientKey) != SSECustomerKeySize {
+		return key, errInvalidSSEKey
+	}
+	if len(iv) != SSEIVSize {
+		return key, errors.New("invalid IV: IV must be 256 bits long")
+	}
+	copy(key.iv[:], iv)
+	sha := sha256.New()
+	sha.Write(clientKey)
+	sha.Write(key.iv[:])
+	sha.Sum(key.key[:0]) // Sum appends the hash (32 bytes) to the provided slice
+	return
+}
+
+// DeriveKeyEncryptionKey derives an unique key-encryption-key from the client-provided
+// key. It returns an error if the client-provided key is not 256 bits long.
+func DeriveKeyEncryptionKey(clientKey []byte) (KeyEncryptionKey, error) {
+	if len(clientKey) != SSECustomerKeySize {
+		return KeyEncryptionKey{}, errInvalidSSEKey
+	}
+	var random [32]byte
+	if _, err := io.ReadFull(rand.Reader, random[:]); err != nil {
+		return KeyEncryptionKey{}, fmt.Errorf("Failed to read random value from PRNG: %v", err)
+	}
+	iv := sha256.Sum256(random[:])
+	return deriveKeyEncryptionKey(clientKey, iv[:])
+}
+
+// UnmarshalObjectEncryptionKey parses and verifies the provided metdata. It returns the decrypted
+// object-encrypted-key using the client-provided key on success.
+func UnmarshalObjectEncryptionKey(clientKey []byte, metadata map[string]string) (key ObjectEncryptionKey, err error) {
+	if len(clientKey) != SSECustomerKeySize {
+		return key, errInvalidSSEKey
+	}
+	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 {
+		return key, errObjectTampered // currently DARE-SHA256 is the only option
+	}
+
 	iv, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
-	if err != nil || len(iv) != SSEIVSize {
-		return errObjectTampered
+	if err != nil {
+		return key, errObjectTampered
 	}
+	kek, err := deriveKeyEncryptionKey(clientKey, iv)
+	if err != nil {
+		return key, errObjectTampered
+	}
+
 	sealedKey, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionSealedKey])
-	if err != nil || len(sealedKey) != 64 {
-		return errObjectTampered
+	if err != nil {
+		return key, errObjectTampered
 	}
+	return kek.OpenKey(sealedKey)
+}
 
-	sha := sha256.New() // derive key encryption key
-	sha.Write(oldKey)
-	sha.Write(iv)
-	keyEncryptionKey := sha.Sum(nil)
+// Marshal writes the IV and the object-encryption-key to the provided metadata map.
+// Marshal always seals the provided object-encryption-key before storing it.
+func (k KeyEncryptionKey) Marshal(key ObjectEncryptionKey, metadata map[string]string) {
+	delete(metadata, SSECustomerKey)
+	delete(metadata, SSECopyCustomerKey)
+	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(k.iv[:])
+	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
+	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(k.SealKey(key))
+}
 
-	objectEncryptionKey := bytes.NewBuffer(nil) // decrypt object encryption key
-	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
-		Key: keyEncryptionKey,
-	})
-	if n != 32 || err != nil { // Either the provided key does not match or the object was tampered.
-		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
-			return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
+// SealKey encryts and returns the provided object-encryption-key.
+func (k KeyEncryptionKey) SealKey(key ObjectEncryptionKey) []byte {
+	sealedKey := bytes.NewBuffer(nil)
+	n, err := sio.Encrypt(sealedKey, bytes.NewReader(key[:]), sio.Config{Key: k.key[:]})
+	if n != 64 || err != nil {
+		// fail hard - otherwise we may not detect that we store only partial object key.
+		panic("failed to seal object encryption key") // Indicates that there's a bug in the sio package.
+	}
+	return sealedKey.Bytes()
+}
+
+// OpenKey tries to decryt the provided sealed key. It returns the object-encryption-key
+// on success.
+func (k KeyEncryptionKey) OpenKey(sealedKey []byte) (key ObjectEncryptionKey, err error) {
+	if len(sealedKey) != 32+DAREOverhead {
+		return key, errObjectTampered
+	}
+	openedKey := bytes.NewBuffer(nil)
+	n, err := sio.Decrypt(openedKey, bytes.NewReader(sealedKey), sio.Config{Key: k.key[:]})
+	if n != 32 || err != nil {
+		// Either the provided key does not match or the object was tampered.
+		// To provide strict AWS S3 compatibility we return: access denied.
+		return key, errSSEKeyMismatch
+	}
+	copy(key[:], openedKey.Bytes())
+	return
+}
+
+// RotateKeys rotates the key-encryption-key. It extracts the object-encrypted-key
+// from the provided metadata using the old key and stores the sealed object-encryption-key
+// using the new key.
+//
+// RotateKeys only verifies whether the provided old key is correct if the old and the new key
+// are equal.
+func RotateKeys(oldKey, newKey []byte, metadata map[string]string) error {
+	if len(oldKey) != SSECustomerKeySize || len(newKey) != SSECustomerKeySize {
+		return errInvalidSSEKey
+	}
+	objectKey, err := UnmarshalObjectEncryptionKey(oldKey, metadata) // always check that client sends correct key - even if both keys are equal
+	if err != nil {
+		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 { // we do not rotate keys if the client keys are equal
+			return errInvalidSSEParameters // return special error if old key is invalid and old == new (AWS S3 behavior)
 		}
-		return errSSEKeyMismatch // To provide strict AWS S3 compatibility we return: access denied.
-	}
-	if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
-		return nil // we don't need to rotate keys if newKey == oldKey
-	}
-
-	nonce := make([]byte, 32) // generate random values for key derivation
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		return err
 	}
-
-	niv := sha256.Sum256(nonce[:]) // derive key encryption key
-	sha = sha256.New()
-	sha.Write(newKey)
-	sha.Write(niv[:])
-	keyEncryptionKey = sha.Sum(nil)
-
-	sealedKeyW := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
-	n, err = sio.Encrypt(sealedKeyW, bytes.NewReader(objectEncryptionKey.Bytes()), sio.Config{
-		Key: keyEncryptionKey,
-	})
-	if n != 64 || err != nil {
-		return errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
+	if subtle.ConstantTimeCompare(oldKey, newKey) == 1 { // we do not rotate keys if the client keys are equal
+		return nil
 	}
-
-	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(niv[:])
-	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
-	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKeyW.Bytes())
+	kek, err := DeriveKeyEncryptionKey(newKey)
+	if err != nil {
+		return err
+	}
+	kek.Marshal(objectKey, metadata)
 	return nil
 }
 
 func newEncryptMetadata(key []byte, metadata map[string]string) ([]byte, error) {
-	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
-
-	// security notice:
-	//  - If the first 32 bytes of the random value are ever repeated under the same client-provided
-	//    key the encrypted object will not be tamper-proof. [ P(coll) ~= 1 / 2^(256 / 2)]
-	//  - If the last 32 bytes of the random value are ever repeated under the same client-provided
-	//    key an adversary may be able to extract the object encryption key. This depends on the
-	//    authenticated en/decryption scheme. The DARE format will generate an 8 byte nonce which must
-	//    be repeated in addition to reveal the object encryption key.
-	//    [ P(coll) ~= 1 / 2^((256 + 64) / 2) ]
-	nonce := make([]byte, 32+SSEIVSize) // generate random values for key derivation
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	kek, err := DeriveKeyEncryptionKey(key)
+	if err != nil {
 		return nil, err
 	}
-	sha := sha256.New() // derive object encryption key
-	sha.Write(key)
-	sha.Write(nonce[:32])
-	objectEncryptionKey := sha.Sum(nil)
-
-	iv := sha256.Sum256(nonce[32:]) // derive key encryption key
-	sha = sha256.New()
-	sha.Write(key)
-	sha.Write(iv[:])
-	keyEncryptionKey := sha.Sum(nil)
-
-	sealedKey := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
-	n, err := sio.Encrypt(sealedKey, bytes.NewReader(objectEncryptionKey), sio.Config{
-		Key: keyEncryptionKey,
-	})
-	if n != 64 || err != nil {
-		return nil, errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
+	objectKey, err := DeriveObjectEncryptionKey(key)
+	if err != nil {
+		return nil, err
 	}
-
-	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
-	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
-	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
-
-	return objectEncryptionKey, nil
+	kek.Marshal(objectKey, metadata)
+	return objectKey[:], nil
 }
 
 func newEncryptReader(content io.Reader, key []byte, metadata map[string]string) (io.Reader, error) {
@@ -350,7 +423,6 @@ func newEncryptReader(content io.Reader, key []byte, metadata map[string]string)
 	if err != nil {
 		return nil, errInvalidSSEKey
 	}
-
 	return reader, nil
 }
 
@@ -377,33 +449,14 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, metadata map[string]s
 }
 
 func decryptObjectInfo(key []byte, metadata map[string]string) ([]byte, error) {
-	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 { // currently DARE-SHA256 is the only option
-		return nil, errObjectTampered
+	objectKey, err := UnmarshalObjectEncryptionKey(key, metadata)
+	if err != nil {
+		return nil, err
 	}
-	iv, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionIV])
-	if err != nil || len(iv) != SSEIVSize {
-		return nil, errObjectTampered
-	}
-	sealedKey, err := base64.StdEncoding.DecodeString(metadata[ServerSideEncryptionSealedKey])
-	if err != nil || len(sealedKey) != 64 {
-		return nil, errObjectTampered
-	}
-
-	sha := sha256.New() // derive key encryption key
-	sha.Write(key)
-	sha.Write(iv)
-	keyEncryptionKey := sha.Sum(nil)
-
-	objectEncryptionKey := bytes.NewBuffer(nil) // decrypt object encryption key
-	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
-		Key: keyEncryptionKey,
-	})
-	if n != 32 || err != nil {
-		// Either the provided key does not match or the object was tampered.
-		// To provide strict AWS S3 compatibility we return: access denied.
-		return nil, errSSEKeyMismatch
-	}
-	return objectEncryptionKey.Bytes(), nil
+	delete(metadata, ServerSideEncryptionIV)
+	delete(metadata, ServerSideEncryptionSealAlgorithm)
+	delete(metadata, ServerSideEncryptionSealedKey)
+	return objectKey[:], err
 }
 
 func newDecryptWriter(client io.Writer, key []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
@@ -489,29 +542,16 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 		return err
 	}
 
-	objectEncryptionKey, err := decryptObjectInfo(key, m)
+	objectEncryptionKey, err := UnmarshalObjectEncryptionKey(key, m)
 	if err != nil {
 		return err
 	}
-
-	var partIDbin [4]byte
-	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
-
-	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
-	mac.Write(partIDbin[:])
-	partEncryptionKey := mac.Sum(nil)
-
-	// make sure we do not save the key by accident
-	if w.copySource {
-		delete(m, SSECopyCustomerKey)
-	} else {
-		delete(m, SSECustomerKey)
-	}
+	partEncryptionKey := objectEncryptionKey.DerivePartKey(partID)
 
 	// make sure to provide a NopCloser such that a Close
 	// on sio.decryptWriter doesn't close the underlying writer's
 	// close which perhaps can close the stream prematurely.
-	decrypter, err := newDecryptWriterWithObjectKey(ioutil.NopCloser(w.writer), partEncryptionKey, w.startSeqNum, m)
+	decrypter, err := newDecryptWriterWithObjectKey(ioutil.NopCloser(w.writer), partEncryptionKey[:], w.startSeqNum, m)
 	if err != nil {
 		return err
 	}
@@ -695,7 +735,7 @@ func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset 
 	return seqNumber, encOffset, encLength
 }
 
-// IsEncryptedMultipart - is the encrypted content multiparted?
+// IsEncryptedMultipart returns true if the object is encrypted and was upload using multi-part.
 func (o *ObjectInfo) IsEncryptedMultipart() bool {
 	_, ok := o.UserDefined[ReservedMetadataPrefix+"Encrypted-Multipart"]
 	return ok
@@ -730,7 +770,7 @@ func (li *ListPartsInfo) IsEncrypted() bool {
 }
 
 // DecryptedSize returns the size of the object after decryption in bytes.
-// It returns an error if the object is not encrypted or marked as encrypted
+// It returns an error if the object is marked as encrypted
 // but has an invalid size.
 // DecryptedSize panics if the referred object is not encrypted.
 func (o *ObjectInfo) DecryptedSize() (int64, error) {
@@ -763,23 +803,7 @@ func (o *ObjectInfo) EncryptedSize() int64 {
 //
 // DecryptCopyObjectInfo also returns whether the object is encrypted or not.
 func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
-	// Directories are never encrypted.
-	if info.IsDir {
-		return ErrNone, false
-	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && ContainsSSECopyCustomerHeader(headers) {
-		apiErr = ErrInvalidEncryptionParameters
-	} else if encrypted {
-		if !ContainsSSECopyCustomerHeader(headers) {
-			apiErr = ErrSSEEncryptedObject
-			return
-		}
-		var err error
-		if info.Size, err = info.DecryptedSize(); err != nil {
-			apiErr = toAPIErrorCode(err)
-		}
-	}
-	return
+	return decryptObjectInfoSize(info, headers, ContainsSSECopyCustomerHeader)
 }
 
 // DecryptObjectInfo tries to decrypt the provided object if it is encrypted.
@@ -790,14 +814,17 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
 func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
-	// Directories are never encrypted.
-	if info.IsDir {
+	return decryptObjectInfoSize(info, headers, ContainsSSECustomerHeader)
+}
+
+func decryptObjectInfoSize(info *ObjectInfo, headers http.Header, containsSSE func(http.Header) bool) (apiErr APIErrorCode, encrypted bool) {
+	if info.IsDir { // Directories are never encrypted.
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && ContainsSSECustomerHeader(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && containsSSE(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !ContainsSSECustomerHeader(headers) {
+		if !containsSSE(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}

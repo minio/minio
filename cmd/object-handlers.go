@@ -178,7 +178,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	httpWriter := ioutil.WriteOnClose(writer)
 
 	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+	if api.CacheAPI() != nil && !ContainsSSECustomerHeader(r.Header) {
 		getObject = api.CacheAPI().GetObject
 	}
 
@@ -451,7 +451,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
-			if err = rotateKey(oldKey, newKey, encMetadata); err != nil {
+			if err = RotateKeys(oldKey, newKey, encMetadata); err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -727,7 +727,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+	if api.CacheAPI() != nil && !ContainsSSECustomerHeader(r.Header) {
 		putObject = api.CacheAPI().PutObject
 	}
 	// Create the object..
