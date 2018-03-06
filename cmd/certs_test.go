@@ -219,27 +219,16 @@ func TestGetRootCAs(t *testing.T) {
 		t.Fatalf("Unable create test file. %v", err)
 	}
 
-	nonexistentErr := fmt.Errorf("open nonexistent-dir: no such file or directory")
-	if runtime.GOOS == "windows" {
-		// Below concatenation is done to get rid of goline error
-		// "error strings should not be capitalized or end with punctuation or a newline"
-		nonexistentErr = fmt.Errorf("open nonexistent-dir:" + " The system cannot find the file specified.")
-	}
-
-	err1 := fmt.Errorf("read %s: is a directory", filepath.Join(dir1, "empty-dir"))
-	if runtime.GOOS == "windows" {
-		// Below concatenation is done to get rid of goline error
-		// "error strings should not be capitalized or end with punctuation or a newline"
-		err1 = fmt.Errorf("read %s:"+" The handle is invalid.", filepath.Join(dir1, "empty-dir"))
-	}
-
 	testCases := []struct {
 		certCAsDir  string
 		expectedErr error
 	}{
-		{"nonexistent-dir", nonexistentErr},
-		{dir1, err1},
+		{"nonexistent-dir", errFileNotFound},
+		// Ignores directories.
+		{dir1, nil},
+		// Ignore empty directory.
 		{emptydir, nil},
+		// Loads the cert properly.
 		{dir2, nil},
 	}
 
