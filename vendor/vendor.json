@@ -521,6 +521,12 @@
 			"revisionTime": "2016-05-18T16:56:57+10:00"
 		},
 		{
+			"checksumSHA1": "kjrbJnuRRZxcPUzJrPEc38iACH4=",
+			"path": "github.com/radovskyb/watcher",
+			"revision": "6145e1439b9de93806925353403f91d2abbad8a5",
+			"revisionTime": "2017-08-10T06:39:29Z"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
 			"revisionTime": "2016-06-18T04:49:35+05:30"

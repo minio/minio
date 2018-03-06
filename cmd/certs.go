@@ -24,6 +24,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/radovskyb/watcher"
 )
 
 // TLSPrivateKeyPassword is the environment variable which contains the password used
@@ -126,7 +130,68 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
+type keypairReloader struct {
+        certMu   sync.RWMutex
+        cert     *tls.Certificate
+        certPath string
+        keyPath  string
+}
+
+func NewKeypairReloader(certPath, keyPath string) (*keypairReloader, error) {
+        result := &keypairReloader{
+                certPath: certPath,
+                keyPath:  keyPath,
+        }
+        cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+        if err != nil {
+                return nil, err
+        }
+	w := watcher.New()
+	w.SetMaxEvents(1)
+	go func() {
+	for {
+		select {
+		case event := <-w.Event:
+			fmt.Println(event)
+			result.maybeReload()
+		case err := <-w.Error:
+			fmt.Println(err)
+		case <-w.Closed:
+			return
+		}
+	}
+	}()
+	if err := w.Add(certPath); err != nil {
+		return nil, err
+	}
+	if err := w.Add(keyPath); err != nil {
+		return nil, err
+	}
+	go w.Start(time.Millisecond * 1000)
+        result.cert = &cert
+        return result, nil
+}
+
+func (kpr *keypairReloader) maybeReload() error {
+	newCert, err := tls.LoadX509KeyPair(kpr.certPath, kpr.keyPath)
+	if err != nil {
+		return err
+	}
+	kpr.certMu.Lock()
+        defer kpr.certMu.Unlock()
+        kpr.cert = &newCert
+        return nil
+}
+
+func (kpr *keypairReloader) GetCertificateFunc() func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+        return func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+                kpr.certMu.RLock()
+                defer kpr.certMu.RUnlock()
+                return kpr.cert, nil
+        }
+}
+
+func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, reloader *keypairReloader, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, nil, false, nil
 	}
@@ -135,17 +200,14 @@ func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsC
 		return nil, nil, nil, false, err
 	}
 
-	var cert tls.Certificate
-	if cert, err = loadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
+	if reloader, err = NewKeypairReloader(getPublicCertFile(), getPrivateKeyFile()); err != nil {
 		return nil, nil, nil, false, err
 	}
-
-	tlsCert = &cert
 
 	if rootCAs, err = getRootCAs(getCADir()); err != nil {
 		return nil, nil, nil, false, err
 	}
 
 	secureConn = true
-	return x509Certs, rootCAs, tlsCert, secureConn, nil
+	return x509Certs, rootCAs, reloader, secureConn, nil
 }

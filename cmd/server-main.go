@@ -184,7 +184,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	globalPublicCerts, globalRootCAs, globalTLSCertificateReloader, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL certificate file")
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
@@ -229,7 +229,7 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificateReloader.GetCertificateFunc())
 	globalHTTPServer.ReadTimeout = globalConnReadTimeout
 	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes

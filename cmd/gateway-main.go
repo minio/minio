@@ -154,7 +154,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	globalPublicCerts, globalRootCAs, globalTLSCertificateReloader, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL certificate file")
 
 	// Set system resources to maximum.
@@ -201,7 +201,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Add new handlers here.
 	}
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificateReloader.GetCertificateFunc())
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {

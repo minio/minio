@@ -124,6 +124,7 @@ var (
 	globalIsSSL bool
 
 	globalTLSCertificate *tls.Certificate
+	globalTLSCertificateReloader *keypairReloader
 
 	globalHTTPServer        *miniohttp.Server
 	globalHTTPServerErrorCh = make(chan error)
