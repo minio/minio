@@ -154,6 +154,18 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedErrCode:     ErrInvalidService,
 		},
 		// Test Case - 7.
+		// Test case with invalid region.
+		{
+			inputCredentialStr: generateCredentialStr(
+				"Z7IXGOO6BZ0REAN1Q26I",
+				UTCNow().Format(yyyymmdd),
+				"us-west-2",
+				"s3",
+				"aws4_request"),
+			expectedCredentials: credentialHeader{},
+			expectedErrCode:     ErrAuthorizationHeaderMalformed,
+		},
+		// Test Case - 8.
 		// Test case with invalid request version.
 		// "aws4_request" is the valid request version.
 		{
@@ -166,7 +178,7 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedCredentials: credentialHeader{},
 			expectedErrCode:     ErrInvalidRequestVersion,
 		},
-		// Test Case - 8.
+		// Test Case - 9.
 		// Test case with right inputs. Expected to return a valid CredentialHeader.
 		// "aws4_request" is the valid request version.
 		{
@@ -188,7 +200,7 @@ func TestParseCredentialHeader(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		actualCredential, actualErrCode := parseCredentialHeader(testCase.inputCredentialStr)
+		actualCredential, actualErrCode := parseCredentialHeader(testCase.inputCredentialStr, "us-west-1")
 		// validating the credential fields.
 		if testCase.expectedErrCode != actualErrCode {
 			t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, errorCodeResponse[testCase.expectedErrCode].Code, errorCodeResponse[actualErrCode].Code)
@@ -399,7 +411,6 @@ func TestParseSignV4(t *testing.T) {
 					// a valid signature is of form "Signature="
 					"Signature=abcd",
 				}, ","),
-
 			expectedAuthField: signValues{
 				Credential: generateCredentials(
 					t,
@@ -416,7 +427,7 @@ func TestParseSignV4(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		parsedAuthField, actualErrCode := parseSignV4(testCase.inputV4AuthStr)
+		parsedAuthField, actualErrCode := parseSignV4(testCase.inputV4AuthStr, "")
 
 		if testCase.expectedErrCode != actualErrCode {
 			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
@@ -783,7 +794,7 @@ func TestParsePreSignV4(t *testing.T) {
 			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
 		}
 		// call the function under test.
-		parsedPreSign, actualErrCode := parsePreSignV4(inputQuery)
+		parsedPreSign, actualErrCode := parsePreSignV4(inputQuery, "")
 		if testCase.expectedErrCode != actualErrCode {
 			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
 		}

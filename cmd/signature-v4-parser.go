@@ -47,7 +47,7 @@ func (c credentialHeader) getScope() string {
 }
 
 // parse credentialHeader string into its structured form.
-func parseCredentialHeader(credElement string) (ch credentialHeader, aec APIErrorCode) {
+func parseCredentialHeader(credElement string, region string) (ch credentialHeader, aec APIErrorCode) {
 	creds := strings.Split(strings.TrimSpace(credElement), "=")
 	if len(creds) != 2 {
 		return ch, ErrMissingFields
@@ -71,7 +71,22 @@ func parseCredentialHeader(credElement string) (ch credentialHeader, aec APIErro
 	if e != nil {
 		return ch, ErrMalformedCredentialDate
 	}
+
 	cred.scope.region = credElements[2]
+	// Verify if region is valid.
+	sRegion := cred.scope.region
+	// Region is set to be empty, we use whatever was sent by the
+	// request and proceed further. This is a work-around to address
+	// an important problem for ListBuckets() getting signed with
+	// different regions.
+	if region == "" {
+		region = sRegion
+	}
+	// Should validate region, only if region is set.
+	if !isValidRegion(sRegion, region) {
+		return ch, ErrAuthorizationHeaderMalformed
+
+	}
 	if credElements[3] != "s3" {
 		return ch, ErrInvalidService
 	}
@@ -150,7 +165,7 @@ func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 }
 
 // Parses all the presigned signature values into separate elements.
-func parsePreSignV4(query url.Values) (psv preSignValues, aec APIErrorCode) {
+func parsePreSignV4(query url.Values, region string) (psv preSignValues, aec APIErrorCode) {
 	var err APIErrorCode
 	// verify whether the required query params exist.
 	err = doesV4PresignParamsExist(query)
@@ -167,7 +182,7 @@ func parsePreSignV4(query url.Values) (psv preSignValues, aec APIErrorCode) {
 	preSignV4Values := preSignValues{}
 
 	// Save credential.
-	preSignV4Values.Credential, err = parseCredentialHeader("Credential=" + query.Get("X-Amz-Credential"))
+	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get("X-Amz-Credential"), region)
 	if err != ErrNone {
 		return psv, err
 	}
@@ -193,6 +208,7 @@ func parsePreSignV4(query url.Values) (psv preSignValues, aec APIErrorCode) {
 	if preSignV4Values.Expires.Seconds() > 604800 {
 		return psv, ErrMaximumExpires
 	}
+
 	// Save signed headers.
 	preSignV4Values.SignedHeaders, err = parseSignedHeader("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
 	if err != ErrNone {
@@ -214,7 +230,7 @@ func parsePreSignV4(query url.Values) (psv preSignValues, aec APIErrorCode) {
 //    Authorization: algorithm Credential=accessKeyID/credScope, \
 //            SignedHeaders=signedHeaders, Signature=signature
 //
-func parseSignV4(v4Auth string) (sv signValues, aec APIErrorCode) {
+func parseSignV4(v4Auth string, region string) (sv signValues, aec APIErrorCode) {
 	// Replace all spaced strings, some clients can send spaced
 	// parameters and some won't. So we pro-actively remove any spaces
 	// to make parsing easier.
@@ -240,7 +256,7 @@ func parseSignV4(v4Auth string) (sv signValues, aec APIErrorCode) {
 
 	var err APIErrorCode
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredentialHeader(authFields[0])
+	signV4Values.Credential, err = parseCredentialHeader(authFields[0], region)
 	if err != ErrNone {
 		return sv, err
 	}
