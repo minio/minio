@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 )
 
 // TLSPrivateKeyPassword is the environment variable which contains the password used
@@ -64,14 +63,18 @@ func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	// Get all CA file names.
 	var caFiles []string
-	fis, err := ioutil.ReadDir(certsCAsDir)
+	fis, err := readDir(certsCAsDir)
 	if err != nil {
 		return nil, err
 	}
 	for _, fi := range fis {
-		caFiles = append(caFiles, filepath.Join(certsCAsDir, fi.Name()))
+		// Skip all directories.
+		if hasSuffix(fi, slashSeparator) {
+			continue
+		}
+		// We are only interested in regular files here.
+		caFiles = append(caFiles, pathJoin(certsCAsDir, fi))
 	}
-
 	if len(caFiles) == 0 {
 		return nil, nil
 	}
