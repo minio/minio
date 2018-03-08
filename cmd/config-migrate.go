@@ -26,7 +26,7 @@ import (
 )
 
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
-var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully.\n"
+var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully."
 
 // Migrates all config versions from "1" to "18".
 func migrateConfig() error {
@@ -185,7 +185,7 @@ func purgeV1() error {
 	}
 
 	os.RemoveAll(configFile)
-	log.Println("Removed unsupported config version ‘1’.")
+	LogInfoMessage("Removed unsupported config version ‘1’.")
 	return nil
 }
 
@@ -243,7 +243,7 @@ func migrateV2ToV3() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv2.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv2.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv2.Version, srvConfig.Version)
 	return nil
 }
 
@@ -281,7 +281,7 @@ func migrateV3ToV4() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv3.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv3.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv3.Version, srvConfig.Version)
 	return nil
 }
 
@@ -322,7 +322,7 @@ func migrateV4ToV5() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv4.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv4.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv4.Version, srvConfig.Version)
 	return nil
 }
 
@@ -390,7 +390,7 @@ func migrateV5ToV6() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv5.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv5.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv5.Version, srvConfig.Version)
 	return nil
 }
 
@@ -446,7 +446,7 @@ func migrateV6ToV7() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv6.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv6.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv6.Version, srvConfig.Version)
 	return nil
 }
 
@@ -509,7 +509,7 @@ func migrateV7ToV8() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv7.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv7.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv7.Version, srvConfig.Version)
 	return nil
 }
 
@@ -579,7 +579,7 @@ func migrateV8ToV9() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv8.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv8.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv8.Version, srvConfig.Version)
 	return nil
 }
 
@@ -647,7 +647,7 @@ func migrateV9ToV10() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv9.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv9.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv9.Version, srvConfig.Version)
 	return nil
 }
 
@@ -718,7 +718,7 @@ func migrateV10ToV11() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv10.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv10.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv10.Version, srvConfig.Version)
 	return nil
 }
 
@@ -807,7 +807,7 @@ func migrateV11ToV12() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv11.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv11.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv11.Version, srvConfig.Version)
 	return nil
 }
 
@@ -887,7 +887,7 @@ func migrateV12ToV13() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv12.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv12.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv12.Version, srvConfig.Version)
 	return nil
 }
 
@@ -972,7 +972,7 @@ func migrateV13ToV14() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv13.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv13.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv13.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1061,7 +1061,7 @@ func migrateV14ToV15() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv14.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv14.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv14.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1151,7 +1151,7 @@ func migrateV15ToV16() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv15.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv15.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1272,7 +1272,7 @@ func migrateV16ToV17() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv16.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv16.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv16.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1376,7 +1376,7 @@ func migrateV17ToV18() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv17.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv17.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv17.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1482,7 +1482,7 @@ func migrateV18ToV19() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv18.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv18.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv18.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1590,7 +1590,7 @@ func migrateV19ToV20() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv19.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv19.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv19.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1697,7 +1697,7 @@ func migrateV20ToV21() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv20.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv20.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv20.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1804,6 +1804,6 @@ func migrateV21ToV22() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv21.Version, srvConfig.Version, err)
 	}
 
-	log.Printf(configMigrateMSGTemplate, configFile, cv21.Version, srvConfig.Version)
+	LogInfoMessage(configMigrateMSGTemplate, configFile, cv21.Version, srvConfig.Version)
 	return nil
 }

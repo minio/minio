@@ -21,7 +21,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -113,7 +112,7 @@ func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerS
 
 			if shouldInitXLDisks(sErrs) {
 				if !firstDisk {
-					console.Println("Waiting for the first server to format the disks.")
+					LogInfoMessage("Waiting for the first server to format the disks.")
 					continue
 				}
 				return initFormatXL(endpoints, setCount, disksPerSet)
@@ -137,7 +136,7 @@ func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerS
 				}
 				return format, nil
 			}
-			console.Printf("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
+			LogInfoMessage("Waiting for a minimum of %d disks to come online (elapsed %s)", len(endpoints)/2, getElapsedTime())
 		case <-globalOSSignalCh:
 			return nil, fmt.Errorf("Initializing data volumes gracefully stopped")
 		}

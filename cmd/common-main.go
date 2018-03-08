@@ -32,9 +32,9 @@ func checkUpdate(mode string) {
 	// Its OK to ignore any errors during doUpdate() here.
 	if updateMsg, _, currentReleaseTime, latestReleaseTime, err := getUpdateInfo(2*time.Second, mode); err == nil {
 		if globalInplaceUpdateDisabled {
-			log.Println(updateMsg)
+			LogInfoMessage(updateMsg)
 		} else {
-			log.Println(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
+			LogInfoMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
 }
@@ -46,7 +46,7 @@ func initConfig() {
 		fatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
 	} else {
 		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-		log.Println("Created minio configuration file successfully at " + getConfigDir())
+		LogInfoMessage("Created minio configuration file successfully at " + getConfigDir())
 	}
 }
 
