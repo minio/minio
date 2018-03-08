@@ -412,7 +412,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
-	err := objectAPI.MakeBucketWithLocation(bucket, "")
+	err := objectAPI.MakeBucketWithLocation(bucket, location)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -564,6 +564,29 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		errorIf(err, "Unable to initialize hashReader.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+
+	if objectAPI.IsEncryptionSupported() {
+		if hasSSECustomerHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
+			var reader io.Reader
+			var key []byte
+			key, err = ParseSSECustomerHeader(formValues)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			reader, err = newEncryptReader(hashReader, key, metadata)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			info := ObjectInfo{Size: fileSize}
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
 	}
 
 	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
