@@ -123,17 +123,9 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 	switch reqAuthType {
 	case authTypePresignedV2, authTypeSignedV2:
 		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-		}
-		return s3Error
+		return isReqAuthenticatedV2(r)
 	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, region)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-		}
-		return s3Error
+		return isReqAuthenticated(r, region)
 	}
 
 	if reqAuthType == authTypeAnonymous && policyAction != "" {
