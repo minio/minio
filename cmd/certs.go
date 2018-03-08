@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -134,36 +133,42 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-type keypairReloader struct {
-        certMu   sync.RWMutex
-        cert     *tls.Certificate
-        certPath string
-        keyPath  string
+// KeypairReloader holds a path to an x509 key pair (private key ,
+// certificate), the loaded tls.Certificate object and a sync.RWMutex lock for
+// the cert. facilitates reloading the certificate
+type KeypairReloader struct {
+	certMu   sync.RWMutex
+	cert     *tls.Certificate
+	certPath string
+	keyPath  string
 }
 
-func NewKeypairReloader(certPath, keyPath string) (*keypairReloader, error) {
-        result := &keypairReloader{
-                certPath: certPath,
-                keyPath:  keyPath,
-        }
-        cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-        if err != nil {
-                return nil, err
-        }
+// NewKeypairReloader loads a tls.Certificate from the given x509 key pair
+// (private key , certificate) and watches the files for changes. when changed,
+// reloads the certificate under a sync.RWMutex lock
+func NewKeypairReloader(certPath, keyPath string) (*KeypairReloader, error) {
+	result := &KeypairReloader{
+		certPath: certPath,
+		keyPath:  keyPath,
+	}
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return nil, err
+	}
 	w := watcher.New()
 	w.SetMaxEvents(1)
 	go func() {
-	for {
-		select {
-		case event := <-w.Event:
-			fmt.Println(event)
-			result.maybeReload()
-		case err := <-w.Error:
-			fmt.Println(err)
-		case <-w.Closed:
-			return
+		for {
+			select {
+			case event := <-w.Event:
+				fmt.Println(event)
+				result.maybeReload()
+			case err := <-w.Error:
+				fmt.Println(err)
+			case <-w.Closed:
+				return
+			}
 		}
-	}
 	}()
 	if err := w.Add(certPath); err != nil {
 		return nil, err
@@ -172,30 +177,30 @@ func NewKeypairReloader(certPath, keyPath string) (*keypairReloader, error) {
 		return nil, err
 	}
 	go w.Start(time.Millisecond * 1000)
-        result.cert = &cert
-        return result, nil
+	result.cert = &cert
+	return result, nil
 }
 
-func (kpr *keypairReloader) maybeReload() error {
+func (kpr *KeypairReloader) maybeReload() error {
 	newCert, err := tls.LoadX509KeyPair(kpr.certPath, kpr.keyPath)
 	if err != nil {
 		return err
 	}
 	kpr.certMu.Lock()
-        defer kpr.certMu.Unlock()
-        kpr.cert = &newCert
-        return nil
+	defer kpr.certMu.Unlock()
+	kpr.cert = &newCert
+	return nil
 }
 
-func (kpr *keypairReloader) GetCertificateFunc() func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-        return func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-                kpr.certMu.RLock()
-                defer kpr.certMu.RUnlock()
-                return kpr.cert, nil
-        }
+func (kpr *KeypairReloader) getCertificateFunc() func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		kpr.certMu.RLock()
+		defer kpr.certMu.RUnlock()
+		return kpr.cert, nil
+	}
 }
 
-func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, reloader *keypairReloader, secureConn bool, err error) {
+func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, reloader *KeypairReloader, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, nil, false, nil
 	}

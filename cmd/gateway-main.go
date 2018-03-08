@@ -201,7 +201,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Add new handlers here.
 	}
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificateReloader.GetCertificateFunc())
+	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificateReloader.getCertificateFunc())
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
