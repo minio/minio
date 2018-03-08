@@ -211,14 +211,12 @@ def on_message(client, userdata, msg):
     print(msg.payload)
 
 client = mqtt.Client()
-#client.connect("localhost",1883,60)
 
 client.on_connect = on_connect
 client.on_message = on_message
 
 client.connect("localhost",1883,60)
 client.loop_forever()
-
 ```
 
 Execute this example python program to watch for MQTT events on the console.
