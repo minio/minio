@@ -197,32 +197,25 @@ arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.j
 The python program below waits on mqtt topic ``/minio`` and prints event notifications on the console. We use [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to do this.
 
 ```py
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function
 import paho.mqtt.client as mqtt
 
-# The callback for when the client receives a CONNACK response from the server.
+# This is the Subscriber
+
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code", rc)
+  print("Connected with result code "+str(rc))
+  client.subscribe("minio")
 
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe("/minio")
-
-# The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     print(msg.payload)
 
 client = mqtt.Client()
+
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect("localhost:1883", 1883, 60)
-
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
+client.connect("localhost",1883,60)
 client.loop_forever()
 ```
 
