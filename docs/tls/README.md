@@ -37,7 +37,7 @@ go run generate_cert.go -ca --host "10.10.0.3"
 
 1. **ECDSA:**  
 ```sh
-openssl ecparam -genkey -name prime256v1 -out private.key
+openssl ecparam -genkey -name prime256v1 | openssl ec -out private.key
 ```
 or protect the private key additionally with a password:  
 ```sh
