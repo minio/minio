@@ -114,6 +114,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		// Update `xl.json` content on each disks.
 		for index := range metaArr {
 			metaArr[index].Meta = srcInfo.UserDefined
+			metaArr[index].Meta["etag"] = srcInfo.ETag
 		}
 
 		var onlineDisks []StorageAPI
