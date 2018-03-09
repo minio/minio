@@ -483,9 +483,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.UserDefined[k] = v
 	}
 
-	// Make sure to remove saved etag if any, CopyObject calculates a new one.
-	delete(srcInfo.UserDefined, "etag")
-
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
