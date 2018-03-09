@@ -127,7 +127,6 @@ spec:
           value: "minio123"
         ports:
         - containerPort: 9000
-          hostPort: 9000
         # Mount the volume into the pod
         volumeMounts:
         - name: data # must match the volume name, above
@@ -287,7 +286,6 @@ spec:
         - http://minio-3.minio.default.svc.cluster.local/data
         ports:
         - containerPort: 9000
-          hostPort: 9000
         # These volume mounts are persistent. Each pod in the PetSet
         # gets a volume mounted based on this field.
         volumeMounts:
@@ -470,7 +468,6 @@ spec:
           value: "/etc/credentials/application_default_credentials.json"
         ports:
         - containerPort: 9000
-          hostPort: 9000
         # Mount the volume into the pod
         volumeMounts:
         - name: gcs-credentials

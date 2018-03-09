@@ -37,7 +37,6 @@ spec:
           value: "/etc/credentials/application_default_credentials.json"
         ports:
         - containerPort: 9000
-          hostPort: 9000
         # Mount the volume into the pod
         volumeMounts:
         - name: gcs-credentials
