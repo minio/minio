@@ -70,9 +70,6 @@ func calculateSeedSignature(r *http.Request) (signature string, region string, d
 	// Access credentials.
 	cred := globalServerConfig.GetCredential()
 
-	// Configured region.
-	confRegion := globalServerConfig.GetRegion()
-
 	// Copy request.
 	req := *r
 
@@ -80,7 +77,7 @@ func calculateSeedSignature(r *http.Request) (signature string, region string, d
 	v4Auth := req.Header.Get("Authorization")
 
 	// Parse signature version '4' header.
-	signV4Values, errCode := parseSignV4(v4Auth)
+	signV4Values, errCode := parseSignV4(v4Auth, globalServerConfig.GetRegion())
 	if errCode != ErrNone {
 		return "", "", time.Time{}, errCode
 	}
@@ -105,11 +102,6 @@ func calculateSeedSignature(r *http.Request) (signature string, region string, d
 
 	// Verify if region is valid.
 	region = signV4Values.Credential.scope.region
-	// Should validate region, only if region is set. Some operations
-	// do not need region validated for example GetBucketLocation.
-	if !isValidRegion(region, confRegion) {
-		return "", "", time.Time{}, ErrInvalidRegion
-	}
 
 	// Extract date, if not present throw error.
 	var dateStr string
