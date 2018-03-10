@@ -18,7 +18,6 @@ package cmd
 
 import (
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/errors"
 )
 
 const (
@@ -41,7 +40,7 @@ func registerS3PeerRPCRouter(mux *router.Router) error {
 	s3PeerRPCServer := newRPCServer()
 	err := s3PeerRPCServer.RegisterName("S3", s3PeerHandlers)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	s3PeerRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()

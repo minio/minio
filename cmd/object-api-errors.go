@@ -386,7 +386,6 @@ func (e UnsupportedMetadata) Error() string {
 
 // isErrIncompleteBody - Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case IncompleteBody:
 		return true
@@ -396,7 +395,6 @@ func isErrIncompleteBody(err error) bool {
 
 // isErrBucketPolicyNotFound - Check if error type is BucketPolicyNotFound.
 func isErrBucketPolicyNotFound(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case PolicyNotFound:
 		return true
@@ -406,7 +404,6 @@ func isErrBucketPolicyNotFound(err error) bool {
 
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case ObjectNotFound:
 		return true

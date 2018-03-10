@@ -223,7 +223,7 @@ func hasAnyErrors(errs []error) bool {
 func countErrs(errs []error, err error) int {
 	var i = 0
 	for _, err1 := range errs {
-		if errors.Cause(err1) == err {
+		if err1 == err {
 			i++
 		}
 	}
@@ -499,7 +499,7 @@ func saveFormatXLAll(endpoints EndpointList, formats []*formatXLV2) error {
 
 	writeQuorum := len(endpoints)/2 + 1
 	err = reduceWriteQuorumErrs(errs, nil, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Purge all successfully created `format.json`
 		// when we do not have enough quorum.
 		undoSaveFormatXLAll(storageDisks)

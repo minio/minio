@@ -37,7 +37,6 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/sha256-simd"
 )
@@ -206,7 +205,7 @@ func (s MethodNotSupported) Error() string {
 func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", "http://"+addr+call, nil)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Sia-Agent")
 	if apiPassword != "" {
@@ -214,7 +213,7 @@ func apiGet(addr, call, apiPassword string) (*http.Response, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
@@ -243,7 +242,7 @@ func apiPost(addr, call, vals, apiPassword string) (*http.Response, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -445,11 +444,11 @@ func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, 
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > size || startOffset+length > size {
-		return errors.Trace(minio.InvalidRange{
+		return minio.InvalidRange{
 			OffsetBegin:  startOffset,
 			OffsetEnd:    length,
 			ResourceSize: size,
-		})
+		}
 	}
 
 	// Allocate a staging buffer.
@@ -476,10 +475,10 @@ func (s *siaObjects) findSiaObject(bucket, object string) (siaObjectInfo, error)
 		}
 	}
 
-	return siaObjectInfo{}, errors.Trace(minio.ObjectNotFound{
+	return siaObjectInfo{}, minio.ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
-	})
+	}
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo

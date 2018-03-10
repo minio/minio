@@ -25,7 +25,6 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/errors"
 )
 
 const adminPath = "/admin"
@@ -220,7 +219,7 @@ func registerAdminRPCRouter(mux *router.Router) error {
 	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)

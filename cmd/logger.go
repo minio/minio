@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/errors"
 )
 
 var log = NewLogger()
@@ -157,7 +156,6 @@ func logIf(level Level, err error, msg string,
 	data ...interface{}) {
 
 	isErrIgnored := func(err error) (ok bool) {
-		err = errors.Cause(err)
 		switch err.(type) {
 		case BucketNotFound, BucketNotEmpty, BucketExists:
 			ok = true

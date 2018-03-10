@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/errors"
 )
 
 var printEndpointError = func() func(Endpoint, error) {
@@ -106,7 +105,7 @@ func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerS
 			}
 
 			for i, sErr := range sErrs {
-				if _, ok := formatCriticalErrors[errors.Cause(sErr)]; ok {
+				if _, ok := formatCriticalErrors[sErr]; ok {
 					return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
 				}
 			}

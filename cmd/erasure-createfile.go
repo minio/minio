@@ -19,8 +19,6 @@ package cmd
 import (
 	"hash"
 	"io"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
@@ -28,7 +26,7 @@ import (
 // be used to protect the erasure encoded file.
 func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, algorithm BitrotAlgorithm, writeQuorum int) (f ErasureFileInfo, err error) {
 	if !algorithm.Available() {
-		return f, errors.Trace(errBitrotHashAlgoInvalid)
+		return f, errBitrotHashAlgoInvalid
 	}
 	f.Checksums = make([][]byte, len(s.disks))
 	hashers := make([]hash.Hash, len(s.disks))
@@ -55,7 +53,7 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 				return f, err
 			}
 		} else {
-			return f, errors.Trace(err)
+			return f, err
 		}
 
 		for i := range errChans { // span workers
@@ -85,7 +83,7 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 // the hash of the written data. It sends the write error (or nil) over the error channel.
 func erasureAppendFile(disk StorageAPI, volume, path string, hash hash.Hash, buf []byte, errChan chan<- error) {
 	if disk == OfflineDisk {
-		errChan <- errors.Trace(errDiskNotFound)
+		errChan <- errDiskNotFound
 		return
 	}
 	err := disk.AppendFile(volume, path, buf)

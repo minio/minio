@@ -29,9 +29,9 @@ import (
 )
 
 func ossErrResponse(code string) error {
-	return errors.Trace(oss.ServiceError{
+	return oss.ServiceError{
 		Code: code,
-	})
+	}
 }
 
 func TestOSSToObjectError(t *testing.T) {
@@ -117,7 +117,7 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"x-amz-meta-invalid_meta": "value",
 	}
 	_, err = appendS3MetaToOSSOptions(nil, headers)
-	if err = errors.Cause(err); err != nil {
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}

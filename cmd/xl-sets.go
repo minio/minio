@@ -614,7 +614,7 @@ func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...
 				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
-				return nil, errors.Trace(err)
+				return nil, err
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -732,7 +732,7 @@ func (s *xlSets) ListObjects(bucket, prefix, marker, delimiter string, maxKeys i
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
 				// ignore quorum error as it might be an entry from an outdated disk.
-				switch errors.Cause(err) {
+				switch err {
 				case errFileNotFound, errXLReadQuorum:
 					continue
 				}
@@ -1265,7 +1265,7 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 			objInfo, err = s.getHashedSet(entry).getObjectInfo(bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if errors.Cause(err) == errFileNotFound {
+				if err == errFileNotFound {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)

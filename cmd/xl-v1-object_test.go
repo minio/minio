@@ -27,7 +27,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/errors"
 )
 
 func TestRepeatPutObjectPart(t *testing.T) {
@@ -97,7 +96,6 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 	for i, test := range testCases {
 		actualErr := xl.DeleteObject(test.bucket, test.object)
-		actualErr = errors.Cause(actualErr)
 		if test.expectedErr != nil && actualErr != test.expectedErr {
 			t.Errorf("Test %d: Expected to fail with %s, but failed with %s", i+1, test.expectedErr, actualErr)
 		}
@@ -153,7 +151,6 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl.storageDisks[7] = nil
 	xl.storageDisks[8] = nil
 	err = obj.DeleteObject(bucket, object)
-	err = errors.Cause(err)
 	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
 	if err != toObjectErr(errXLReadQuorum, bucket, object) {
 		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLReadQuorum, bucket, object), err)
@@ -204,7 +201,6 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		// Fetch object from store.
 		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard, "")
-		err = errors.Cause(err)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
@@ -255,7 +251,6 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		}
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
-		err = errors.Cause(err)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}

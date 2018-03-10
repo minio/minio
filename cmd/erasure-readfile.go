@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"io"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 type errIdx struct {
@@ -39,7 +37,7 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 		stageBuffers[i] = make([]byte, length)
 		disk := s.disks[i]
 		if disk == OfflineDisk {
-			errChan <- errIdx{i, errors.Trace(errDiskNotFound)}
+			errChan <- errIdx{i, errDiskNotFound}
 			return
 		}
 		_, rerr := disk.ReadFile(volume, path, offset, stageBuffers[i], verifiers[i])
@@ -75,7 +73,7 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 	}
 	if successCount != s.dataBlocks {
 		// Not enough disks returns data.
-		err = errors.Trace(errXLReadQuorum)
+		err = errXLReadQuorum
 	}
 	return
 }
@@ -91,13 +89,13 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 	blocksize int64) (f ErasureFileInfo, err error) {
 
 	if offset < 0 || length < 0 {
-		return f, errors.Trace(errUnexpected)
+		return f, errUnexpected
 	}
 	if offset+length > totalLength {
-		return f, errors.Trace(errUnexpected)
+		return f, errUnexpected
 	}
 	if !algorithm.Available() {
-		return f, errors.Trace(errBitrotHashAlgoInvalid)
+		return f, errBitrotHashAlgoInvalid
 	}
 
 	f.Checksums = make([][]byte, len(s.disks))
@@ -194,7 +192,7 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 
 		if needsReconstruction {
 			if err = s.ErasureDecodeDataBlocks(blocks); err != nil {
-				return f, errors.Trace(err)
+				return f, err
 			}
 		}
 

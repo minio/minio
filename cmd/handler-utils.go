@@ -24,7 +24,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/minio/minio/pkg/errors"
 	httptracer "github.com/minio/minio/pkg/handlers"
 )
 
@@ -113,7 +112,7 @@ var userMetadataKeyPrefixes = []string{
 // extractMetadataFromHeader extracts metadata from HTTP header.
 func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	if header == nil {
-		return nil, errors.Trace(errInvalidArgument)
+		return nil, errInvalidArgument
 	}
 	metadata := make(map[string]string)
 
@@ -132,7 +131,7 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	// Go through all other headers for any additional headers that needs to be saved.
 	for key := range header {
 		if key != http.CanonicalHeaderKey(key) {
-			return nil, errors.Trace(errInvalidArgument)
+			return nil, errInvalidArgument
 		}
 		for _, prefix := range userMetadataKeyPrefixes {
 			if strings.HasPrefix(key, prefix) {
@@ -190,7 +189,7 @@ func validateFormFieldSize(formValues http.Header) error {
 	for k := range formValues {
 		// Check if value's field exceeds S3 limit
 		if int64(len(formValues.Get(k))) > maxFormFieldSize {
-			return errors.Trace(errSizeUnexpected)
+			return errSizeUnexpected
 		}
 	}
 
@@ -219,7 +218,7 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 		canonicalFormName := http.CanonicalHeaderKey(k)
 		if canonicalFormName == "File" {
 			if len(v) == 0 {
-				return nil, "", 0, nil, errors.Trace(errInvalidArgument)
+				return nil, "", 0, nil, errInvalidArgument
 			}
 			// Fetch fileHeader which has the uploaded file information
 			fileHeader := v[0]
@@ -228,17 +227,17 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 			// Open the uploaded part
 			filePart, err = fileHeader.Open()
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				return nil, "", 0, nil, err
 			}
 			// Compute file size
 			fileSize, err = filePart.(io.Seeker).Seek(0, 2)
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				return nil, "", 0, nil, err
 			}
 			// Reset Seek to the beginning
 			_, err = filePart.(io.Seeker).Seek(0, 0)
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				return nil, "", 0, nil, err
 			}
 			// File found and ready for reading
 			break

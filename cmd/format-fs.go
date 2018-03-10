@@ -23,7 +23,6 @@ import (
 	"path"
 	"time"
 
-	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -156,14 +155,14 @@ func createFormatFS(fsFormatPath string) error {
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	// Close the locked file upon return.
 	defer lk.Close()
 
 	fi, err := lk.Stat()
 	if err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	if fi.Size() != 0 {
 		// format.json already got created because of another minio process's createFormatFS()
@@ -191,7 +190,7 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			var fi os.FileInfo
 			fi, err = rlk.Stat()
 			if err != nil {
-				return nil, errors2.Trace(err)
+				return nil, err
 			}
 			isEmpty = fi.Size() == 0
 		}
@@ -209,19 +208,19 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 				continue
 			}
 			if err != nil {
-				return nil, errors2.Trace(err)
+				return nil, err
 			}
 			// After successfully creating format.json try to hold a read-lock on
 			// the file.
 			continue
 		}
 		if err != nil {
-			return nil, errors2.Trace(err)
+			return nil, err
 		}
 
 		formatBackend, err := formatMetaGetFormatBackendFS(rlk)
 		if err != nil {
-			return nil, errors2.Trace(err)
+			return nil, err
 		}
 		if formatBackend != formatBackendFS {
 			return nil, fmt.Errorf(`%s file: expected format-type: %s, found: %s`, formatConfigFile, formatBackendFS, formatBackend)

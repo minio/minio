@@ -41,7 +41,7 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
-				return nil, false, errors.Trace(err)
+				return nil, false, err
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -113,7 +113,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
 				// ignore quorum error as it might be an entry from an outdated disk.
-				switch errors.Cause(err) {
+				switch err {
 				case errFileNotFound, errXLReadQuorum:
 					continue
 				}

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -30,105 +29,105 @@ type GatewayUnsupported struct{}
 
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
-	return lmi, errors.Trace(NotImplemented{})
+	return lmi, NotImplemented{}
 }
 
 // NewMultipartUpload upload object in multiple parts
 func (a GatewayUnsupported) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
-	return "", errors.Trace(NotImplemented{})
+	return "", NotImplemented{}
 }
 
 // CopyObjectPart copy part of object to uploadID for another object
 func (a GatewayUnsupported) CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID string, partID int, startOffset, length int64, srcInfo ObjectInfo) (pi PartInfo, err error) {
-	return pi, errors.Trace(NotImplemented{})
+	return pi, NotImplemented{}
 }
 
 // PutObjectPart puts a part of object in bucket
 func (a GatewayUnsupported) PutObjectPart(bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, err error) {
-	return pi, errors.Trace(NotImplemented{})
+	return pi, NotImplemented{}
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (a GatewayUnsupported) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, err error) {
-	return lpi, errors.Trace(NotImplemented{})
+	return lpi, NotImplemented{}
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (a GatewayUnsupported) AbortMultipartUpload(bucket string, object string, uploadID string) error {
-	return errors.Trace(NotImplemented{})
+	return NotImplemented{}
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (a GatewayUnsupported) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, err error) {
-	return oi, errors.Trace(NotImplemented{})
+	return oi, NotImplemented{}
 }
 
 // SetBucketPolicy sets policy on bucket
 func (a GatewayUnsupported) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	return errors.Trace(NotImplemented{})
+	return NotImplemented{}
 }
 
 // GetBucketPolicy will get policy on bucket
 func (a GatewayUnsupported) GetBucketPolicy(bucket string) (bal policy.BucketAccessPolicy, err error) {
-	return bal, errors.Trace(NotImplemented{})
+	return bal, NotImplemented{}
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (a GatewayUnsupported) DeleteBucketPolicy(bucket string) error {
-	return errors.Trace(NotImplemented{})
+	return NotImplemented{}
 }
 
 // HealFormat - Not implemented stub
 func (a GatewayUnsupported) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
-	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // HealBucket - Not implemented stub
 func (a GatewayUnsupported) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error) {
-	return nil, errors.Trace(NotImplemented{})
+	return nil, NotImplemented{}
 }
 
 // ListBucketsHeal - Not implemented stub
 func (a GatewayUnsupported) ListBucketsHeal() (buckets []BucketInfo, err error) {
-	return nil, errors.Trace(NotImplemented{})
+	return nil, NotImplemented{}
 }
 
 // HealObject - Not implemented stub
 func (a GatewayUnsupported) HealObject(bucket, object string, dryRun bool) (h madmin.HealResultItem, e error) {
-	return h, errors.Trace(NotImplemented{})
+	return h, NotImplemented{}
 }
 
 // ListObjectsV2 - Not implemented stub
 func (a GatewayUnsupported) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	return result, errors.Trace(NotImplemented{})
+	return result, NotImplemented{}
 }
 
 // ListObjectsHeal - Not implemented stub
 func (a GatewayUnsupported) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	return loi, errors.Trace(NotImplemented{})
+	return loi, NotImplemented{}
 }
 
 // CopyObject copies a blob from source container to destination container.
 func (a GatewayUnsupported) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
-	return objInfo, errors.Trace(NotImplemented{})
+	return objInfo, NotImplemented{}
 }
 
 // Locking operations
 
 // ListLocks lists namespace locks held in object layer
 func (a GatewayUnsupported) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	return []VolumeLockInfo{}, errors.Trace(NotImplemented{})
+	return []VolumeLockInfo{}, NotImplemented{}
 }
 
 // ClearLocks clears namespace locks held in object layer
 func (a GatewayUnsupported) ClearLocks([]VolumeLockInfo) error {
-	return errors.Trace(NotImplemented{})
+	return NotImplemented{}
 }
 
 // RefreshBucketPolicy refreshes cache policy with what's on disk.
 func (a GatewayUnsupported) RefreshBucketPolicy(bucket string) error {
-	return errors.Trace(NotImplemented{})
+	return NotImplemented{}
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

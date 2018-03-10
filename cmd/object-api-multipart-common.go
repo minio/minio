@@ -24,7 +24,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -98,18 +97,18 @@ func (u *uploadsV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var uploadIDBytes []byte
 	fi, err := lk.Stat()
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 	uploadIDBytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 	if len(uploadIDBytes) == 0 {
-		return 0, errors.Trace(io.EOF)
+		return 0, io.EOF
 	}
 	// Decode `uploads.json`.
 	if err = json.Unmarshal(uploadIDBytes, u); err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 	return int64(len(uploadIDBytes)), nil
 }
@@ -120,12 +119,12 @@ func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV
 	// Reads entire `uploads.json`.
 	buf, err := disk.ReadAll(minioMetaMultipartBucket, uploadJSONPath)
 	if err != nil {
-		return uploadsV1{}, errors.Trace(err)
+		return uploadsV1{}, err
 	}
 
 	// Decode `uploads.json`.
 	if err = json.Unmarshal(buf, &uploadIDs); err != nil {
-		return uploadsV1{}, errors.Trace(err)
+		return uploadsV1{}, err
 	}
 
 	// Success.
@@ -144,20 +143,20 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 	// Serialize to prepare to write to disk.
 	uplBytes, wErr := json.Marshal(&u)
 	if wErr != nil {
-		return errors.Trace(wErr)
+		return wErr
 	}
 
 	// Write `uploads.json` to disk. First to tmp location and then rename.
 	if wErr = disk.AppendFile(minioMetaTmpBucket, tmpPath, uplBytes); wErr != nil {
-		return errors.Trace(wErr)
+		return wErr
 	}
 	wErr = disk.RenameFile(minioMetaTmpBucket, tmpPath, minioMetaMultipartBucket, uploadsPath)
 	if wErr != nil {
 		if dErr := disk.DeleteFile(minioMetaTmpBucket, tmpPath); dErr != nil {
 			// we return the most recent error.
-			return errors.Trace(dErr)
+			return dErr
 		}
-		return errors.Trace(wErr)
+		return wErr
 	}
 	return nil
 }
@@ -168,7 +167,7 @@ func (xl xlObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 	// Read `uploads.json`.
 	uploadsJSON, err := readUploadsJSON(bucketName, objectName, disk)
 	if err != nil {
-		switch errors.Cause(err) {
+		switch err {
 		case errFileNotFound, errFileAccessDenied:
 			return nil, true, nil
 		}
