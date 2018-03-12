@@ -30,7 +30,7 @@ Above command deploys Minio on the Kubernetes cluster in the default configurati
 | Parameter                  | Description                         | Default                                                 |
 |----------------------------|-------------------------------------|---------------------------------------------------------|
 | `image`                    | Minio image name                    | `minio/minio`                                           |
-| `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2018-02-09T22-40-05Z`|
+| `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2018-03-12T21-25-28Z`|
 | `imagePullPolicy`          | Image pull policy                   | `Always`                                                |
 | `mode`                     | Minio server mode (`standalone`, `shared` or `distributed`)| `standalone`                     |
 | `numberOfNodes`            | Number of nodes (applicable only for Minio distributed mode). Should be 4 <= x <= 16 | `4`    |
