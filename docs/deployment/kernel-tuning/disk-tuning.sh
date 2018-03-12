@@ -14,6 +14,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+# This script changes protected files, and must be run as root
+
 for i in $(ls -d /sys/block/*/queue/iosched 2>/dev/null); do
     iosched_dir=$(echo $i | awk '/iosched/ {print $1}')
     [ -z $iosched_dir ] && {
