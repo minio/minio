@@ -193,6 +193,18 @@ func guessIsBrowserReq(req *http.Request) bool {
 	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla")
 }
 
+// guessIsHealthCheckReq - returns true if incoming request looks
+// like healthcheck request
+func guessIsHealthCheckReq(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	aType := getRequestAuthType(req)
+	return req.Method == http.MethodGet && aType == authTypeAnonymous &&
+		(req.URL.Path == healthCheckPathPrefix+healthCheckLivenessPath ||
+			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
+}
+
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
 func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
@@ -263,7 +275,7 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case guessIsRPCReq(r), guessIsBrowserReq(r), isAdminReq(r):
+	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), isAdminReq(r):
 		// Allow access to reserved buckets
 	default:
 		// For all other requests reject access to reserved
