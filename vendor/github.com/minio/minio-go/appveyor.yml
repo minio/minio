@@ -17,11 +17,10 @@ install:
   - go version
   - go env
   - go get -u github.com/golang/lint/golint
-  - go get -u github.com/go-ini/ini
-  - go get -u github.com/mitchellh/go-homedir
   - go get -u github.com/remyoudompheng/go-misc/deadcode
   - go get -u github.com/gordonklaus/ineffassign
-  - go get -u github.com/dustin/go-humanize
+  - go get -u golang.org/x/crypto/argon2
+  - go get -t ./...
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:

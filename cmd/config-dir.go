@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	homedir "github.com/minio/go-homedir"
+	homedir "github.com/mitchellh/go-homedir"
 )
 
 const (

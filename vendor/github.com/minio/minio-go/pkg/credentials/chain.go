@@ -1,6 +1,6 @@
 /*
  * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * (C) 2017 Minio, Inc.
+ * Copyright 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 
 package credentials
 
-import "fmt"
-
 // A Chain will search for a provider which returns credentials
 // and cache that provider until Retrieve is called again.
 //
@@ -27,11 +25,11 @@ import "fmt"
 // Providers in the list.
 //
 // If none of the Providers retrieve valid credentials Value, ChainProvider's
-// Retrieve() will return the error, collecting all errors from all providers.
+// Retrieve() will return the no credentials value.
 //
 // If a Provider is found which returns valid credentials Value ChainProvider
 // will cache that Provider for all calls to IsExpired(), until Retrieve is
-// called again.
+// called again after IsExpired() is true.
 //
 //     creds := credentials.NewChainCredentials(
 //         []credentials.Provider{
@@ -58,28 +56,30 @@ func NewChainCredentials(providers []Provider) *Credentials {
 	})
 }
 
-// Retrieve returns the credentials value or error if no provider returned
-// without error.
+// Retrieve returns the credentials value, returns no credentials(anonymous)
+// if no credentials provider returned any value.
 //
-// If a provider is found it will be cached and any calls to IsExpired()
-// will return the expired state of the cached provider.
+// If a provider is found with credentials, it will be cached and any calls
+// to IsExpired() will return the expired state of the cached provider.
 func (c *Chain) Retrieve() (Value, error) {
-	var errs []error
 	for _, p := range c.Providers {
-		creds, err := p.Retrieve()
-		if err != nil {
-			errs = append(errs, err)
+		creds, _ := p.Retrieve()
+		// Always prioritize non-anonymous providers, if any.
+		if creds.AccessKeyID == "" && creds.SecretAccessKey == "" {
 			continue
-		} // Success.
+		}
 		c.curr = p
 		return creds, nil
 	}
-	c.curr = nil
-	return Value{}, fmt.Errorf("No valid providers found %v", errs)
+	// At this point we have exhausted all the providers and
+	// are left without any credentials return anonymous.
+	return Value{
+		SignerType: SignatureAnonymous,
+	}, nil
 }
 
 // IsExpired will returned the expired state of the currently cached provider
-// if there is one.  If there is no current provider, true will be returned.
+// if there is one. If there is no current provider, true will be returned.
 func (c *Chain) IsExpired() bool {
 	if c.curr != nil {
 		return c.curr.IsExpired()

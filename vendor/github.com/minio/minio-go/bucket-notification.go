@@ -19,7 +19,8 @@ package minio
 
 import (
 	"encoding/xml"
-	"reflect"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // NotificationEventType is a S3 notification event associated to the bucket notification configuration
@@ -96,7 +97,7 @@ type NotificationConfig struct {
 
 // NewNotificationConfig creates one notification config and sets the given ARN
 func NewNotificationConfig(arn Arn) NotificationConfig {
-	return NotificationConfig{Arn: arn}
+	return NotificationConfig{Arn: arn, Filter: &Filter{}}
 }
 
 // AddEvents adds one event to the current notification config
@@ -163,39 +164,79 @@ type BucketNotification struct {
 }
 
 // AddTopic adds a given topic config to the general bucket notification config
-func (b *BucketNotification) AddTopic(topicConfig NotificationConfig) {
+func (b *BucketNotification) AddTopic(topicConfig NotificationConfig) bool {
 	newTopicConfig := TopicConfig{NotificationConfig: topicConfig, Topic: topicConfig.Arn.String()}
 	for _, n := range b.TopicConfigs {
-		if reflect.DeepEqual(n, newTopicConfig) {
-			// Avoid adding duplicated entry
-			return
+		// If new config matches existing one
+		if n.Topic == newTopicConfig.Arn.String() && newTopicConfig.Filter == n.Filter {
+
+			existingConfig := set.NewStringSet()
+			for _, v := range n.Events {
+				existingConfig.Add(string(v))
+			}
+
+			newConfig := set.NewStringSet()
+			for _, v := range topicConfig.Events {
+				newConfig.Add(string(v))
+			}
+
+			if !newConfig.Intersection(existingConfig).IsEmpty() {
+				return false
+			}
 		}
 	}
 	b.TopicConfigs = append(b.TopicConfigs, newTopicConfig)
+	return true
 }
 
 // AddQueue adds a given queue config to the general bucket notification config
-func (b *BucketNotification) AddQueue(queueConfig NotificationConfig) {
+func (b *BucketNotification) AddQueue(queueConfig NotificationConfig) bool {
 	newQueueConfig := QueueConfig{NotificationConfig: queueConfig, Queue: queueConfig.Arn.String()}
 	for _, n := range b.QueueConfigs {
-		if reflect.DeepEqual(n, newQueueConfig) {
-			// Avoid adding duplicated entry
-			return
+		if n.Queue == newQueueConfig.Arn.String() && newQueueConfig.Filter == n.Filter {
+
+			existingConfig := set.NewStringSet()
+			for _, v := range n.Events {
+				existingConfig.Add(string(v))
+			}
+
+			newConfig := set.NewStringSet()
+			for _, v := range queueConfig.Events {
+				newConfig.Add(string(v))
+			}
+
+			if !newConfig.Intersection(existingConfig).IsEmpty() {
+				return false
+			}
 		}
 	}
 	b.QueueConfigs = append(b.QueueConfigs, newQueueConfig)
+	return true
 }
 
 // AddLambda adds a given lambda config to the general bucket notification config
-func (b *BucketNotification) AddLambda(lambdaConfig NotificationConfig) {
+func (b *BucketNotification) AddLambda(lambdaConfig NotificationConfig) bool {
 	newLambdaConfig := LambdaConfig{NotificationConfig: lambdaConfig, Lambda: lambdaConfig.Arn.String()}
 	for _, n := range b.LambdaConfigs {
-		if reflect.DeepEqual(n, newLambdaConfig) {
-			// Avoid adding duplicated entry
-			return
+		if n.Lambda == newLambdaConfig.Arn.String() && newLambdaConfig.Filter == n.Filter {
+
+			existingConfig := set.NewStringSet()
+			for _, v := range n.Events {
+				existingConfig.Add(string(v))
+			}
+
+			newConfig := set.NewStringSet()
+			for _, v := range lambdaConfig.Events {
+				newConfig.Add(string(v))
+			}
+
+			if !newConfig.Intersection(existingConfig).IsEmpty() {
+				return false
+			}
 		}
 	}
 	b.LambdaConfigs = append(b.LambdaConfigs, newLambdaConfig)
+	return true
 }
 
 // RemoveTopicByArn removes all topic configurations that match the exact specified ARN

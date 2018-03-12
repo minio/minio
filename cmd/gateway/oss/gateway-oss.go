@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -919,7 +919,7 @@ func (l *ossObjects) CompleteMultipartUpload(bucket, object, uploadID string, up
 // oss.ACLPublicRead: readonly in minio terminology
 // oss.ACLPrivate: none in minio terminology
 func (l *ossObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	bucketPolicies := policy.GetPolicies(policyInfo.Statements, bucket)
+	bucketPolicies := policy.GetPolicies(policyInfo.Statements, bucket, "")
 	if len(bucketPolicies) != 1 {
 		return errors.Trace(minio.NotImplemented{})
 	}

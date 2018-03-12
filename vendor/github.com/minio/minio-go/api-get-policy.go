@@ -65,7 +65,7 @@ func (c Client) ListBucketPolicies(bucketName, objectPrefix string) (bucketPolic
 		}
 		return map[string]policy.BucketPolicy{}, err
 	}
-	return policy.GetPolicies(policyInfo.Statements, bucketName), nil
+	return policy.GetPolicies(policyInfo.Statements, bucketName, objectPrefix), nil
 }
 
 // Default empty bucket access policy.

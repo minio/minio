@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,18 +81,56 @@ func IsVirtualHostSupported(endpointURL url.URL, bucketName string) bool {
 	return IsAmazonEndpoint(endpointURL) || IsGoogleEndpoint(endpointURL)
 }
 
-// AmazonS3Host - regular expression used to determine if an arg is s3 host.
-var AmazonS3Host = regexp.MustCompile("^s3[.-]?(.*?)\\.amazonaws\\.com$")
+// Refer for region styles - https://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
+
+// amazonS3HostHyphen - regular expression used to determine if an arg is s3 host in hyphenated style.
+var amazonS3HostHyphen = regexp.MustCompile(`^s3-(.*?)\.amazonaws\.com$`)
+
+// amazonS3HostDualStack - regular expression used to determine if an arg is s3 host dualstack.
+var amazonS3HostDualStack = regexp.MustCompile(`^s3\.dualstack\.(.*?)\.amazonaws\.com$`)
+
+// amazonS3HostDot - regular expression used to determine if an arg is s3 host in . style.
+var amazonS3HostDot = regexp.MustCompile(`^s3\.(.*?)\.amazonaws\.com$`)
+
+// amazonS3ChinaHost - regular expression used to determine if the arg is s3 china host.
+var amazonS3ChinaHost = regexp.MustCompile(`^s3\.(cn.*?)\.amazonaws\.com\.cn$`)
+
+// GetRegionFromURL - returns a region from url host.
+func GetRegionFromURL(endpointURL url.URL) string {
+	if endpointURL == sentinelURL {
+		return ""
+	}
+	if endpointURL.Host == "s3-external-1.amazonaws.com" {
+		return ""
+	}
+	if IsAmazonGovCloudEndpoint(endpointURL) {
+		return "us-gov-west-1"
+	}
+	parts := amazonS3HostDualStack.FindStringSubmatch(endpointURL.Host)
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	parts = amazonS3HostHyphen.FindStringSubmatch(endpointURL.Host)
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	parts = amazonS3ChinaHost.FindStringSubmatch(endpointURL.Host)
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	parts = amazonS3HostDot.FindStringSubmatch(endpointURL.Host)
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	return ""
+}
 
 // IsAmazonEndpoint - Match if it is exactly Amazon S3 endpoint.
 func IsAmazonEndpoint(endpointURL url.URL) bool {
-	if IsAmazonChinaEndpoint(endpointURL) {
+	if endpointURL.Host == "s3-external-1.amazonaws.com" || endpointURL.Host == "s3.amazonaws.com" {
 		return true
 	}
-	if IsAmazonGovCloudEndpoint(endpointURL) {
-		return true
-	}
-	return AmazonS3Host.MatchString(endpointURL.Host)
+	return GetRegionFromURL(endpointURL) != ""
 }
 
 // IsAmazonGovCloudEndpoint - Match if it is exactly Amazon S3 GovCloud endpoint.
@@ -109,19 +148,6 @@ func IsAmazonFIPSGovCloudEndpoint(endpointURL url.URL) bool {
 		return false
 	}
 	return endpointURL.Host == "s3-fips-us-gov-west-1.amazonaws.com"
-}
-
-// IsAmazonChinaEndpoint - Match if it is exactly Amazon S3 China endpoint.
-// Customers who wish to use the new Beijing Region are required
-// to sign up for a separate set of account credentials unique to
-// the China (Beijing) Region. Customers with existing AWS credentials
-// will not be able to access resources in the new Region, and vice versa.
-// For more info https://aws.amazon.com/about-aws/whats-new/2013/12/18/announcing-the-aws-china-beijing-region/
-func IsAmazonChinaEndpoint(endpointURL url.URL) bool {
-	if endpointURL == sentinelURL {
-		return false
-	}
-	return endpointURL.Host == "s3.cn-north-1.amazonaws.com.cn"
 }
 
 // IsGoogleEndpoint - Match if it is exactly Google cloud storage endpoint.

@@ -1029,7 +1029,7 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 // Sign given request using Signature V2.
 func signRequestV2(req *http.Request, accessKey, secretKey string) error {
-	req = s3signer.SignV2(*req, accessKey, secretKey)
+	req = s3signer.SignV2(*req, accessKey, secretKey, false)
 	return nil
 }
 

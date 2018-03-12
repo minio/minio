@@ -59,12 +59,5 @@ const (
 	iso8601DateFormat = "20060102T150405Z"
 )
 
-// Encryption headers stored along with the object.
-const (
-	amzHeaderIV      = "X-Amz-Meta-X-Amz-Iv"
-	amzHeaderKey     = "X-Amz-Meta-X-Amz-Key"
-	amzHeaderMatDesc = "X-Amz-Meta-X-Amz-Matdesc"
-)
-
 // Storage class header constant.
 const amzStorageClass = "X-Amz-Storage-Class"

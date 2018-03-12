@@ -29,11 +29,5 @@ func (c Client) PutObjectWithContext(ctx context.Context, bucketName, objectName
 	if err != nil {
 		return 0, err
 	}
-	if opts.EncryptMaterials != nil {
-		if err = opts.EncryptMaterials.SetupEncryptMode(reader); err != nil {
-			return 0, err
-		}
-		return c.putObjectMultipartStreamNoLength(ctx, bucketName, objectName, opts.EncryptMaterials, opts)
-	}
 	return c.putObjectCommon(ctx, bucketName, objectName, reader, objectSize, opts)
 }
