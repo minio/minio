@@ -34,7 +34,6 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -148,7 +147,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 		}
 		signer, err = authentication.NewSSHAgentSigner(input)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 	} else {
 		var keyBytes []byte
@@ -185,7 +184,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 		signer, err = authentication.NewPrivateKeySigner(input)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 	}
 
@@ -342,7 +341,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
-		return result, errors.Trace(err)
+		return result, err
 	}
 
 	for _, obj := range objs.Entries {
@@ -352,7 +351,7 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
 			objs, err = t.client.Dir().List(ctx, input)
 			if err != nil {
-				return result, errors.Trace(err)
+				return result, err
 			}
 			break
 		}
@@ -419,7 +418,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
-		return result, errors.Trace(err)
+		return result, err
 	}
 
 	for _, obj := range objs.Entries {
@@ -427,7 +426,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
 			objs, err = t.client.Dir().List(ctx, input)
 			if err != nil {
-				return result, errors.Trace(err)
+				return result, err
 			}
 			break
 		}
@@ -470,7 +469,7 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		return errors.Trace(fmt.Errorf("Unexpected error"))
+		return fmt.Errorf("Unexpected error")
 	}
 
 	ctx := context.Background()
@@ -549,11 +548,11 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 		ObjectReader: dummySeeker{data},
 		ForceInsert:  true,
 	}); err != nil {
-		return objInfo, errors.Trace(err)
+		return objInfo, err
 	}
 	if err = data.Verify(); err != nil {
 		t.DeleteObject(bucket, object)
-		return objInfo, errors.Trace(err)
+		return objInfo, err
 	}
 
 	return t.GetObjectInfo(bucket, object)
@@ -569,7 +568,7 @@ func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject 
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
 		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
 	}); err != nil {
-		return objInfo, errors.Trace(err)
+		return objInfo, err
 	}
 
 	return t.GetObjectInfo(destBucket, destObject)
@@ -580,11 +579,7 @@ func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject 
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
 func (t *tritonObjects) DeleteObject(bucket, object string) error {
 	ctx := context.Background()
-	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
+	return t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
-	}); err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
+	})
 }

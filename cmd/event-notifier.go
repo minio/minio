@@ -372,7 +372,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errors.Trace(errNoSuchNotifications)
+			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
 		// Returns error for other errors.
@@ -381,7 +381,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 
 	// if `notifications.xml` is empty we should return NoSuchNotifications.
 	if buffer.Len() == 0 {
-		return nil, errors.Trace(errNoSuchNotifications)
+		return nil, errNoSuchNotifications
 	}
 
 	// Unmarshal notification bytes.
@@ -389,7 +389,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	notificationCfg := &notificationConfig{}
 	// Unmarshal notification bytes only if we read data.
 	if err = xml.Unmarshal(notificationConfigBytes, notificationCfg); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	// Return success.
@@ -416,7 +416,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket listeners are found on the bucket
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errors.Trace(errNoSuchNotifications)
+			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
 		// Returns error for other errors.
@@ -425,14 +425,14 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// if `listener.json` is empty we should return NoSuchNotifications.
 	if buffer.Len() == 0 {
-		return nil, errors.Trace(errNoSuchNotifications)
+		return nil, errNoSuchNotifications
 	}
 
 	var lCfg []listenerConfig
 	lConfigBytes := buffer.Bytes()
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
 		errorIf(err, "Unable to unmarshal listener config from JSON.")
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	// Return success.

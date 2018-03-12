@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests caclculating disk count.
@@ -92,12 +91,12 @@ func TestReduceErrs(t *testing.T) {
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
 		gotErr := reduceReadQuorumErrs(testCase.errs, testCase.ignoredErrs, 5)
-		if errors.Cause(gotErr) != testCase.err {
+		if gotErr != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
 		gotNewErr := reduceWriteQuorumErrs(testCase.errs, testCase.ignoredErrs, 6)
-		if errors.Cause(gotNewErr) != errXLWriteQuorum {
-			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
+		if gotNewErr != errXLWriteQuorum {
+			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotNewErr)
 		}
 	}
 }
@@ -385,10 +384,10 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	for i, testCaseFailure := range testCasesFailure {
 		_, err := calculatePartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
 		if err == nil {
-			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
+			t.Errorf("Test %d: Expected to fail but passed. %s", i+1, err)
 		}
-		if err != nil && errors.Cause(err) != testCaseFailure.err {
-			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, errors.Cause(err))
+		if err != nil && err != testCaseFailure.err {
+			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, err)
 		}
 	}
 }

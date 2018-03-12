@@ -24,7 +24,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/errors"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -179,7 +178,7 @@ func getCompleteMultipartMD5(parts []CompletePart) (string, error) {
 	for _, part := range parts {
 		md5Bytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
-			return "", errors.Trace(err)
+			return "", err
 		}
 		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 	}

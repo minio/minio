@@ -21,7 +21,6 @@ import (
 	"io"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // getDataBlockLen - get length of data blocks from encoded blocks.
@@ -39,17 +38,17 @@ func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
 	// Offset and out size cannot be negative.
 	if offset < 0 || length < 0 {
-		return 0, errors.Trace(errUnexpected)
+		return 0, errUnexpected
 	}
 
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
-		return 0, errors.Trace(reedsolomon.ErrTooFewShards)
+		return 0, reedsolomon.ErrTooFewShards
 	}
 
 	// Do we have enough data?
 	if int64(getDataBlockLen(enBlocks, dataBlocks)) < length {
-		return 0, errors.Trace(reedsolomon.ErrShortData)
+		return 0, reedsolomon.ErrShortData
 	}
 
 	// Counter to decrement total left to write.
@@ -77,7 +76,7 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
 			if err != nil {
-				return 0, errors.Trace(err)
+				return 0, err
 			}
 			totalWritten += n
 			break
@@ -85,7 +84,7 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
-			return 0, errors.Trace(err)
+			return 0, err
 		}
 
 		// Decrement output size.

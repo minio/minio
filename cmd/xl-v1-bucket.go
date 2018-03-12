@@ -37,7 +37,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return errors.Trace(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 
 	// Initialize sync waitgroup.
@@ -49,7 +49,7 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			dErrs[index] = errors.Trace(errDiskNotFound)
+			dErrs[index] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)
@@ -58,7 +58,7 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 			defer wg.Done()
 			err := disk.MakeVol(bucket)
 			if err != nil {
-				dErrs[index] = errors.Trace(err)
+				dErrs[index] = err
 			}
 		}(index, disk)
 	}
@@ -68,7 +68,7 @@ func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 
 	writeQuorum := len(xl.getDisks())/2 + 1
 	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(xl.getDisks(), bucket)
 	}
@@ -124,15 +124,14 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 			bucketErrs = append(bucketErrs, errDiskNotFound)
 			continue
 		}
-		volInfo, serr := disk.StatVol(bucketName)
-		if serr == nil {
+		volInfo, err := disk.StatVol(bucketName)
+		if err == nil {
 			bucketInfo = BucketInfo{
 				Name:    volInfo.Name,
 				Created: volInfo.Created,
 			}
 			return bucketInfo, nil
 		}
-		err = errors.Trace(serr)
 		// For any reason disk went offline continue and pick the next one.
 		if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			bucketErrs = append(bucketErrs, err)
@@ -198,7 +197,6 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			}
 			return bucketsInfo, nil
 		}
-		err = errors.Trace(err)
 		// Ignore any disks not found.
 		if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
@@ -240,7 +238,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Remove a volume entry on all underlying storage disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			dErrs[index] = errors.Trace(errDiskNotFound)
+			dErrs[index] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)
@@ -251,14 +249,14 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 			err := disk.DeleteVol(bucket)
 
 			if err != nil {
-				dErrs[index] = errors.Trace(err)
+				dErrs[index] = err
 				return
 			}
 			// Cleanup all the previously incomplete multiparts.
 			err = cleanupDir(disk, minioMetaMultipartBucket, bucket)
 
 			if err != nil {
-				if errors.Cause(err) == errVolumeNotFound {
+				if err == errVolumeNotFound {
 					return
 				}
 				dErrs[index] = err
@@ -271,7 +269,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 
 	writeQuorum := len(xl.getDisks())/2 + 1
 	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
 	}
 	if err != nil {

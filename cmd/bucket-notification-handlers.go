@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/errors"
 )
 
 const (
@@ -70,13 +69,13 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	// Attempt to successfully load notification config.
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
-	if err != nil && errors.Cause(err) != errNoSuchNotifications {
+	if err != nil && err != errNoSuchNotifications {
 		errorIf(err, "Unable to read notification configuration.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	// For no notifications we write a dummy XML.
-	if errors.Cause(err) == errNoSuchNotifications {
+	if err == errNoSuchNotifications {
 		// Complies with the s3 behavior in this regard.
 		nConfig = &notificationConfig{}
 	}

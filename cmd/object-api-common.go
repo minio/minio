@@ -128,7 +128,7 @@ func houseKeeping(storageDisks []StorageAPI) error {
 			// Cleanup all temp entries upon start.
 			err := cleanupDir(disk, minioMetaTmpBucket, "")
 			if err != nil {
-				if !errors.IsErrIgnored(errors.Cause(err), errDiskNotFound, errVolumeNotFound, errFileNotFound) {
+				if !errors.IsErrIgnored(err, errDiskNotFound, errVolumeNotFound, errFileNotFound) {
 					errs[index] = err
 				}
 			}
@@ -166,7 +166,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	delFunc = func(entryPath string) error {
 		if !hasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
-			return errors.Trace(storage.DeleteFile(volume, entryPath))
+			return storage.DeleteFile(volume, entryPath)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
@@ -175,12 +175,12 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		if err == errFileNotFound {
 			return nil
 		} else if err != nil { // For any other errors fail.
-			return errors.Trace(err)
+			return err
 		} // else on success..
 
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
-			return errors.Trace(storage.DeleteFile(volume, path.Clean(entryPath)))
+			return storage.DeleteFile(volume, path.Clean(entryPath))
 		}
 
 		// Recurse and delete all other entries.

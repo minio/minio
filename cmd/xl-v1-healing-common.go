@@ -19,8 +19,6 @@ package cmd
 import (
 	"path/filepath"
 	"time"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -183,7 +181,7 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 				break
 			case hErr != nil:
 				// abort on unhandled errors
-				return nil, nil, errors.Trace(hErr)
+				return nil, nil, hErr
 			}
 		}
 

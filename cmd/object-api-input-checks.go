@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"github.com/minio/minio/pkg/errors"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -35,14 +34,14 @@ func checkDelObjArgs(bucket, object string) error {
 func checkBucketAndObjectNames(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return errors.Trace(BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if len(object) == 0 {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if !IsValidObjectPrefix(object) {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	return nil
 }
@@ -55,27 +54,27 @@ func checkListObjsArgs(bucket, prefix, marker, delimiter string, obj ObjectLayer
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
 	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	// Validates object prefix validity after bucket exists.
 	if !IsValidObjectPrefix(prefix) {
-		return errors.Trace(ObjectNameInvalid{
+		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: prefix,
-		})
+		}
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return errors.Trace(UnsupportedDelimiter{
+		return UnsupportedDelimiter{
 			Delimiter: delimiter,
-		})
+		}
 	}
 	// Verify if marker has prefix.
 	if marker != "" && !hasPrefix(marker, prefix) {
-		return errors.Trace(InvalidMarkerPrefixCombination{
+		return InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
-		})
+		}
 	}
 	return nil
 }
@@ -87,19 +86,19 @@ func checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter
 	}
 	if uploadIDMarker != "" {
 		if hasSuffix(keyMarker, slashSeparator) {
-			return errors.Trace(InvalidUploadIDKeyCombination{
+			return InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
-			})
+			}
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		if id.IsZero() {
-			return errors.Trace(MalformedUploadID{
+			return MalformedUploadID{
 				UploadID: uploadIDMarker,
-			})
+			}
 		}
 	}
 	return nil
@@ -138,14 +137,14 @@ func checkObjectArgs(bucket, object string, obj ObjectLayer) error {
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
 	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
-		return errors.Trace(ObjectNameInvalid{
+		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		})
+		}
 	}
 	return nil
 }
@@ -158,17 +157,17 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) erro
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
 	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if len(object) == 0 ||
 		hasPrefix(object, slashSeparator) ||
 		(hasSuffix(object, slashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
-		return errors.Trace(ObjectNameInvalid{
+		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		})
+		}
 	}
 	return nil
 }
@@ -177,7 +176,7 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) erro
 func checkBucketExist(bucket string, obj ObjectLayer) error {
 	_, err := obj.GetBucketInfo(bucket)
 	if err != nil {
-		return errors.Cause(err)
+		return err
 	}
 	return nil
 }

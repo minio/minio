@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -220,7 +219,7 @@ func (fs *FSObjects) ClearLocks([]VolumeLockInfo) error {
 func (fs *FSObjects) getBucketDir(bucket string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", errors.Trace(BucketNameInvalid{Bucket: bucket})
+		return "", BucketNameInvalid{Bucket: bucket}
 	}
 
 	bucketDir := pathJoin(fs.fsPath, bucket)
@@ -282,12 +281,12 @@ func (fs *FSObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.
 func (fs *FSObjects) ListBuckets() ([]BucketInfo, error) {
 	if err := checkPathLength(fs.fsPath); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	var bucketInfos []BucketInfo
 	entries, err := readDir((fs.fsPath))
 	if err != nil {
-		return nil, toObjectErr(errors.Trace(errDiskNotFound))
+		return nil, toObjectErr(errDiskNotFound)
 	}
 
 	for _, entry := range entries {
@@ -391,7 +390,7 @@ func (fs *FSObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject strin
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fsMetaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			return oi, toObjectErr(errors.Trace(err), srcBucket, srcObject)
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -468,18 +467,18 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 
 	// Offset cannot be negative.
 	if offset < 0 {
-		return toObjectErr(errors.Trace(errUnexpected), bucket, object)
+		return toObjectErr(errUnexpected, bucket, object)
 	}
 
 	// Writer cannot be nil.
 	if writer == nil {
-		return toObjectErr(errors.Trace(errUnexpected), bucket, object)
+		return toObjectErr(errUnexpected, bucket, object)
 	}
 
 	// If its a directory request, we return an empty body.
 	if hasSuffix(object, slashSeparator) {
 		_, err = writer.Write([]byte(""))
-		return toObjectErr(errors.Trace(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
@@ -487,7 +486,7 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 		if lock {
 			_, err = fs.rwPool.Open(fsMetaPath)
 			if err != nil && err != errFileNotFound {
-				return toObjectErr(errors.Trace(err), bucket, object)
+				return toObjectErr(err, bucket, object)
 			}
 			defer fs.rwPool.Close(fsMetaPath)
 		}
@@ -496,10 +495,10 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 	if etag != "" {
 		objEtag, perr := fs.getObjectETag(bucket, object)
 		if perr != nil {
-			return toObjectErr(errors.Trace(perr), bucket, object)
+			return toObjectErr(perr, bucket, object)
 		}
 		if objEtag != etag {
-			return toObjectErr(errors.Trace(InvalidETag{}), bucket, object)
+			return toObjectErr(InvalidETag{}, bucket, object)
 		}
 	}
 
@@ -523,7 +522,7 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if offset > size || offset+length > size {
-		return errors.Trace(InvalidRange{offset, length, size})
+		return InvalidRange{offset, length, size}
 	}
 
 	// Allocate a staging buffer.
@@ -531,14 +530,14 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 
 	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
 
-	return toObjectErr(errors.Trace(err), bucket, object)
+	return toObjectErr(err, bucket, object)
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *FSObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
 	fi, err := fsStatDir(pathJoin(fs.fsPath, bucket, object))
-	if err != nil && errors.Cause(err) != errFileAccessDenied {
+	if err != nil && err != errFileAccessDenied {
 		return oi, toObjectErr(err, bucket, object)
 	}
 	if fi != nil {
@@ -562,7 +561,7 @@ func (fs *FSObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e erro
 			// `fs.json` can be empty due to previously failed
 			// PutObject() transaction, if we arrive at such
 			// a situation we just ignore and continue.
-			if errors.Cause(rerr) != io.EOF {
+			if rerr != io.EOF {
 				return oi, toObjectErr(rerr, bucket, object)
 			}
 		}
@@ -570,7 +569,7 @@ func (fs *FSObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e erro
 
 	// Ignore if `fs.json` is not available, this is true for pre-existing data.
 	if err != nil && err != errFileNotFound {
-		return oi, toObjectErr(errors.Trace(err), bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 
 	// Stat the file to get file size.
@@ -661,7 +660,7 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
+			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 		}
 		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -679,12 +678,12 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(errors.Trace(errFileAccessDenied), bucket, object)
+		return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 	}
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < 0 {
-		return ObjectInfo{}, errors.Trace(errInvalidArgument)
+		return ObjectInfo{}, errInvalidArgument
 	}
 
 	var wlk *lock.LockedFile
@@ -693,7 +692,7 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fsMetaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(errors.Trace(err), bucket, object)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -731,7 +730,7 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
 		fsRemoveFile(fsTmpObjPath)
-		return ObjectInfo{}, errors.Trace(IncompleteBody{})
+		return ObjectInfo{}, IncompleteBody{}
 	}
 
 	// Delete the temporary object in the case of a
@@ -789,7 +788,7 @@ func (fs *FSObjects) DeleteObject(bucket, object string) error {
 			defer rwlk.Close()
 		}
 		if lerr != nil && lerr != errFileNotFound {
-			return toObjectErr(errors.Trace(lerr), bucket, object)
+			return toObjectErr(lerr, bucket, object)
 		}
 	}
 
@@ -801,7 +800,7 @@ func (fs *FSObjects) DeleteObject(bucket, object string) error {
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
 		err := fsDeleteFile(minioMetaBucketDir, fsMetaPath)
-		if err != nil && errors.Cause(err) != errFileNotFound {
+		if err != nil && err != errFileNotFound {
 			return toObjectErr(err, bucket, object)
 		}
 	}
@@ -836,7 +835,7 @@ func (fs *FSObjects) getObjectETag(bucket, entry string) (string, error) {
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	// Ignore if `fs.json` is not available, this is true for pre-existing data.
 	if err != nil && err != errFileNotFound {
-		return "", toObjectErr(errors.Trace(err), bucket, entry)
+		return "", toObjectErr(err, bucket, entry)
 	}
 
 	// If file is not found, we don't need to proceed forward.
@@ -850,7 +849,7 @@ func (fs *FSObjects) getObjectETag(bucket, entry string) (string, error) {
 	// Fetch the size of the underlying file.
 	fi, err := rlk.LockedFile.Stat()
 	if err != nil {
-		return "", toObjectErr(errors.Trace(err), bucket, entry)
+		return "", toObjectErr(err, bucket, entry)
 	}
 
 	// `fs.json` can be empty due to previously failed
@@ -864,12 +863,12 @@ func (fs *FSObjects) getObjectETag(bucket, entry string) (string, error) {
 	// make sure the underlying offsets don't move.
 	fsMetaBuf, err := ioutil.ReadAll(io.NewSectionReader(rlk.LockedFile, 0, fi.Size()))
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 
 	// Check if FS metadata is valid, if not return error.
 	if !isFSMetaValid(parseFSVersion(fsMetaBuf), parseFSFormat(fsMetaBuf)) {
-		return "", toObjectErr(errors.Trace(errCorruptedFormat), bucket, entry)
+		return "", toObjectErr(errCorruptedFormat, bucket, entry)
 	}
 
 	return extractETag(parseFSMetaMap(fsMetaBuf)), nil
@@ -957,7 +956,7 @@ func (fs *FSObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			// File not found is a valid case.
-			if errors.Cause(walkResult.err) == errFileNotFound {
+			if walkResult.err == errFileNotFound {
 				return loi, nil
 			}
 			return loi, toObjectErr(walkResult.err, bucket, prefix)
@@ -998,29 +997,29 @@ func (fs *FSObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKe
 
 // HealFormat - no-op for fs, Valid only for XL.
 func (fs *FSObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
-	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // HealObject - no-op for fs. Valid only for XL.
 func (fs *FSObjects) HealObject(bucket, object string, dryRun bool) (
 	res madmin.HealResultItem, err error) {
-	return res, errors.Trace(NotImplemented{})
+	return res, NotImplemented{}
 }
 
 // HealBucket - no-op for fs, Valid only for XL.
 func (fs *FSObjects) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem,
 	error) {
-	return nil, errors.Trace(NotImplemented{})
+	return nil, NotImplemented{}
 }
 
 // ListObjectsHeal - list all objects to be healed. Valid only for XL
 func (fs *FSObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	return loi, errors.Trace(NotImplemented{})
+	return loi, NotImplemented{}
 }
 
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL
 func (fs *FSObjects) ListBucketsHeal() ([]BucketInfo, error) {
-	return []BucketInfo{}, errors.Trace(NotImplemented{})
+	return []BucketInfo{}, NotImplemented{}
 }
 
 // SetBucketPolicy sets policy on bucket

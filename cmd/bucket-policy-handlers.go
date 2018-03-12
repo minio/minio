@@ -28,7 +28,6 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -274,7 +273,6 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	if err = objAPI.SetBucketPolicy(bucket, policyInfo); err != nil {
-		err = errors.Cause(err)
 		switch err.(type) {
 		case NotImplemented:
 			// Return error for invalid bucket name.

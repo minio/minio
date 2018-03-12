@@ -36,7 +36,6 @@ import (
 // maximal values would occur quorum or more number of times.
 func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) {
 	errorCounts := make(map[error]int)
-	errs = errors2.Causes(errs)
 	for _, err := range errs {
 		if errors2.IsErrIgnored(err, ignoredErrs...) {
 			continue
@@ -65,20 +64,12 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 // quorum number that can be read or write quorum depending on usage.
 // Additionally a special error is provided to be returned in case
 // quorum is not satisfied.
-func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) (maxErr error) {
-	var maxCount int
-	maxCount, maxErr = reduceErrs(errs, ignoredErrs)
-	switch {
-	case maxErr == nil && maxCount >= quorum:
-		// Success in quorum.
-	case maxErr != nil && maxCount >= quorum:
-		// Errors in quorum.
-		maxErr = errors2.Trace(maxErr, errs...)
-	default:
-		// No quorum satisfied.
-		maxErr = errors2.Trace(quorumErr, errs...)
+func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) error {
+	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
+	if maxCount >= quorum {
+		return maxErr
 	}
-	return
+	return quorumErr
 }
 
 // reduceReadQuorumErrs behaves like reduceErrs but only for returning
@@ -177,11 +168,11 @@ func parseXLErasureInfo(xlMetaBuf []byte) (ErasureInfo, error) {
 	for i, v := range checkSumsResult {
 		algorithm := BitrotAlgorithmFromString(v.Get("algorithm").String())
 		if !algorithm.Available() {
-			return erasure, errors2.Trace(errBitrotHashAlgoInvalid)
+			return erasure, errBitrotHashAlgoInvalid
 		}
 		hash, err := hex.DecodeString(v.Get("hash").String())
 		if err != nil {
-			return erasure, errors2.Trace(err)
+			return erasure, err
 		}
 		checkSums[i] = ChecksumInfo{Name: v.Get("name").String(), Algorithm: algorithm, Hash: hash}
 	}
@@ -248,7 +239,7 @@ func readXLMetaParts(disk StorageAPI, bucket string, object string) ([]objectPar
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return nil, nil, errors2.Trace(err)
+		return nil, nil, err
 	}
 
 	// obtain xlMetaV1{}.Partsusing `github.com/tidwall/gjson`.
@@ -263,7 +254,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return si, nil, errors2.Trace(err)
+		return si, nil, err
 	}
 
 	// obtain version.
@@ -275,7 +266,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// Validate if the xl.json we read is sane, return corrupted format.
 	if !isXLMetaFormatValid(xlVersion, xlFormat) {
 		// For version mismatchs and unrecognized format, return corrupted format.
-		return si, nil, errors2.Trace(errCorruptedFormat)
+		return si, nil, errCorruptedFormat
 	}
 
 	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
@@ -284,7 +275,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo,
 	// obtain xlMetaV1{}.Stat using `github.com/tidwall/gjson`.
 	xlStat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
-		return si, nil, errors2.Trace(err)
+		return si, nil, err
 	}
 
 	// Return structured `xl.json`.
@@ -296,12 +287,12 @@ func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1,
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return xlMetaV1{}, errors2.Trace(err)
+		return xlMetaV1{}, err
 	}
 	// obtain xlMetaV1{} using `github.com/tidwall/gjson`.
 	xlMeta, err = xlMetaV1UnmarshalJSON(xlMetaBuf)
 	if err != nil {
-		return xlMetaV1{}, errors2.Trace(err)
+		return xlMetaV1{}, err
 	}
 	// Return structured `xl.json`.
 	return xlMeta, nil
@@ -408,13 +399,13 @@ var (
 // returns error if totalSize is -1, partSize is 0, partIndex is 0.
 func calculatePartSizeFromIdx(totalSize int64, partSize int64, partIndex int) (currPartSize int64, err error) {
 	if totalSize < 0 {
-		return 0, errors2.Trace(errInvalidArgument)
+		return 0, errInvalidArgument
 	}
 	if partSize == 0 {
-		return 0, errors2.Trace(errPartSizeZero)
+		return 0, errPartSizeZero
 	}
 	if partIndex < 1 {
-		return 0, errors2.Trace(errPartSizeIndex)
+		return 0, errPartSizeIndex
 	}
 	if totalSize > 0 {
 		// Compute the total count of parts

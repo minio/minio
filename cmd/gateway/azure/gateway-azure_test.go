@@ -24,7 +24,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Test canonical metadata.
@@ -66,7 +65,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"invalid--meta": "value",
 	}
 	_, _, err = s3MetaToAzureProperties(headers)
-	if err = errors.Cause(err); err != nil {
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
@@ -137,53 +136,46 @@ func TestAzureToObjectError(t *testing.T) {
 			nil, nil, "", "",
 		},
 		{
-			errors.Trace(fmt.Errorf("Non azure error")),
+			fmt.Errorf("Non azure error"),
 			fmt.Errorf("Non azure error"), "", "",
 		},
 		{
 			storage.AzureStorageServiceError{
 				Code: "ContainerAlreadyExists",
-			}, storage.AzureStorageServiceError{
-				Code: "ContainerAlreadyExists",
-			}, "bucket", "",
+			}, minio.BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
-				Code: "ContainerAlreadyExists",
-			}), minio.BucketExists{Bucket: "bucket"}, "bucket", "",
-		},
-		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
-			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "RequestBodyTooLarge",
-			}), minio.PartTooBig{}, "", "",
+			}, minio.PartTooBig{}, "", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "InvalidMetadata",
-			}), minio.UnsupportedMetadata{}, "", "",
+			}, minio.UnsupportedMetadata{}, "", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), minio.ObjectNotFound{
+			}, minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			}, "bucket", "object",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
+			}, minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusBadRequest,
-			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 	}
 	for i, testCase := range testCases {

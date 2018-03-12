@@ -22,8 +22,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests cleanup multipart uploads for filesystem backend.
@@ -59,7 +57,6 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(bucketName, objectName, uploadID); err != nil {
-		err = errors.Cause(err)
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
@@ -84,7 +81,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Test with disk removed.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}); err != nil {
-		if !isSameType(errors.Cause(err), BucketNotFound{}) {
+		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}
@@ -122,7 +119,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum))
-	if !isSameType(errors.Cause(err), BucketNotFound{}) {
+	if !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error ", err)
 	}
 }
@@ -153,7 +150,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	parts := []CompletePart{{PartNumber: 1, ETag: md5Hex}}
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); err != nil {
-		if !isSameType(errors.Cause(err), BucketNotFound{}) {
+		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}
@@ -248,7 +245,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if _, err := fs.ListMultipartUploads(bucketName, objectName, "", "", "", 1000); err != nil {
-		if !isSameType(errors.Cause(err), BucketNotFound{}) {
+		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
 	}

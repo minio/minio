@@ -18,10 +18,10 @@ package cmd
 
 import (
 	"crypto/subtle"
+	"fmt"
 	"hash"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // OfflineDisk represents an unavailable disk.
@@ -48,7 +48,7 @@ func NewErasureStorage(disks []StorageAPI, dataBlocks, parityBlocks int, blockSi
 	shardsize := (int(blockSize) + dataBlocks - 1) / dataBlocks
 	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
 	if err != nil {
-		return s, errors.Tracef("failed to create erasure coding: %v", err)
+		return s, fmt.Errorf("failed to create erasure coding: %v", err)
 	}
 	s = ErasureStorage{
 		disks:        make([]StorageAPI, len(disks)),
@@ -65,10 +65,10 @@ func NewErasureStorage(disks []StorageAPI, dataBlocks, parityBlocks int, blockSi
 func (s *ErasureStorage) ErasureEncode(data []byte) ([][]byte, error) {
 	encoded, err := s.erasure.Split(data)
 	if err != nil {
-		return nil, errors.Tracef("failed to split data: %v", err)
+		return nil, fmt.Errorf("failed to split data: %v", err)
 	}
 	if err = s.erasure.Encode(encoded); err != nil {
-		return nil, errors.Tracef("failed to encode data: %v", err)
+		return nil, fmt.Errorf("failed to encode data: %v", err)
 	}
 	return encoded, nil
 }
@@ -78,7 +78,7 @@ func (s *ErasureStorage) ErasureEncode(data []byte) ([][]byte, error) {
 // It returns an error if the decoding failed.
 func (s *ErasureStorage) ErasureDecodeDataBlocks(data [][]byte) error {
 	if err := s.erasure.ReconstructData(data); err != nil {
-		return errors.Tracef("failed to reconstruct data: %v", err)
+		return fmt.Errorf("failed to reconstruct data: %v", err)
 	}
 	return nil
 }
@@ -87,7 +87,7 @@ func (s *ErasureStorage) ErasureDecodeDataBlocks(data [][]byte) error {
 // It returns an error if the decoding failed.
 func (s *ErasureStorage) ErasureDecodeDataAndParityBlocks(data [][]byte) error {
 	if err := s.erasure.Reconstruct(data); err != nil {
-		return errors.Tracef("failed to reconstruct data: %v", err)
+		return fmt.Errorf("failed to reconstruct data: %v", err)
 	}
 	return nil
 }

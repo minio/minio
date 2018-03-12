@@ -26,7 +26,7 @@ import (
 )
 
 func (xl xlObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
-	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
@@ -73,7 +73,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			dErrs[index] = errors.Trace(errDiskNotFound)
+			dErrs[index] = errDiskNotFound
 			beforeState[index] = madmin.DriveStateOffline
 			afterState[index] = madmin.DriveStateOffline
 			continue
@@ -84,13 +84,13 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			if _, err := disk.StatVol(bucket); err != nil {
-				if errors.Cause(err) == errDiskNotFound {
+				if err == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
 					afterState[index] = madmin.DriveStateOffline
 					dErrs[index] = err
 					return
 				}
-				if errors.Cause(err) != errVolumeNotFound {
+				if err != errVolumeNotFound {
 					beforeState[index] = madmin.DriveStateCorrupt
 					afterState[index] = madmin.DriveStateCorrupt
 					dErrs[index] = err
@@ -154,7 +154,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 	}
 
 	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(reducedErr) == errXLWriteQuorum {
+	if reducedErr == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
@@ -292,11 +292,11 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			result.ObjectSize = partsMetadata[i].Stat.Size
 			result.ParityBlocks = partsMetadata[i].Erasure.ParityBlocks
 			result.DataBlocks = partsMetadata[i].Erasure.DataBlocks
-		case errors.Cause(errs[i]) == errDiskNotFound:
+		case errs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
-		case errors.Cause(errs[i]) == errFileNotFound, errors.Cause(errs[i]) == errVolumeNotFound:
+		case errs[i] == errFileNotFound, errs[i] == errVolumeNotFound:
 			fallthrough
-		case errors.Cause(dataErrs[i]) == errFileNotFound, errors.Cause(dataErrs[i]) == errVolumeNotFound:
+		case dataErrs[i] == errFileNotFound, dataErrs[i] == errVolumeNotFound:
 			driveState = madmin.DriveStateMissing
 		default:
 			// all remaining cases imply corrupt data/metadata
@@ -472,7 +472,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 		aErr = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket,
 			retainSlash(object))
 		if aErr != nil {
-			return result, toObjectErr(errors.Trace(aErr), bucket, object)
+			return result, toObjectErr(aErr, bucket, object)
 		}
 
 		realDiskIdx := unshuffleIndex(diskIndex, latestMeta.Erasure.Distribution)

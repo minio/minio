@@ -35,7 +35,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	sha256 "github.com/minio/sha256-simd"
 
@@ -168,7 +167,7 @@ func s3MetaToAzureProperties(s3Metadata map[string]string) (storage.BlobMetadata
 	storage.BlobProperties, error) {
 	for k := range s3Metadata {
 		if strings.Contains(k, "--") {
-			return storage.BlobMetadata{}, storage.BlobProperties{}, errors.Trace(minio.UnsupportedMetadata{})
+			return storage.BlobMetadata{}, storage.BlobProperties{}, minio.UnsupportedMetadata{}
 		}
 	}
 
@@ -282,16 +281,6 @@ func azureToObjectError(err error, params ...string) error {
 	if err == nil {
 		return nil
 	}
-
-	e, ok := err.(*errors.Error)
-	if !ok {
-		// Code should be fixed if this function is called without doing errors.Trace()
-		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
-		return err
-	}
-
-	err = e.Cause
 	bucket := ""
 	object := ""
 	if len(params) >= 1 {
@@ -305,7 +294,7 @@ func azureToObjectError(err error, params ...string) error {
 	if !ok {
 		// We don't interpret non Azure errors. As azure errors will
 		// have StatusCode to help to convert to object errors.
-		return e
+		return err
 	}
 
 	switch azureErr.Code {
@@ -332,8 +321,7 @@ func azureToObjectError(err error, params ...string) error {
 			err = minio.BucketNameInvalid{Bucket: bucket}
 		}
 	}
-	e.Cause = err
-	return e
+	return err
 }
 
 // mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
@@ -354,15 +342,15 @@ func mustGetAzureUploadID() string {
 // checkAzureUploadID - returns error in case of given string is upload ID.
 func checkAzureUploadID(uploadID string) (err error) {
 	if len(uploadID) != 16 {
-		return errors.Trace(minio.MalformedUploadID{
+		return minio.MalformedUploadID{
 			UploadID: uploadID,
-		})
+		}
 	}
 
 	if _, err = hex.DecodeString(uploadID); err != nil {
-		return errors.Trace(minio.MalformedUploadID{
+		return minio.MalformedUploadID{
 			UploadID: uploadID,
-		})
+		}
 	}
 
 	return nil
@@ -419,7 +407,7 @@ func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 	err := container.Create(&storage.CreateContainerOptions{
 		Access: storage.ContainerAccessTypePrivate,
 	})
-	return azureToObjectError(errors.Trace(err), bucket)
+	return azureToObjectError(err, bucket)
 }
 
 // GetBucketInfo - Get bucket metadata..
@@ -429,7 +417,7 @@ func (a *azureObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e erro
 	// in azure documentation, so we will simply use the same function here.
 	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
 	if !minio.IsValidBucketName(bucket) {
-		return bi, errors.Trace(minio.BucketNameInvalid{Bucket: bucket})
+		return bi, minio.BucketNameInvalid{Bucket: bucket}
 	}
 
 	// Azure does not have an equivalent call, hence use
@@ -438,7 +426,7 @@ func (a *azureObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e erro
 		Prefix: bucket,
 	})
 	if err != nil {
-		return bi, azureToObjectError(errors.Trace(err), bucket)
+		return bi, azureToObjectError(err, bucket)
 	}
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
@@ -451,19 +439,19 @@ func (a *azureObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e erro
 			} // else continue
 		}
 	}
-	return bi, errors.Trace(minio.BucketNotFound{Bucket: bucket})
+	return bi, minio.BucketNotFound{Bucket: bucket}
 }
 
 // ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
 func (a *azureObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{})
 	if err != nil {
-		return nil, azureToObjectError(errors.Trace(err))
+		return nil, azureToObjectError(err)
 	}
 	for _, container := range resp.Containers {
 		t, e := time.Parse(time.RFC1123, container.Properties.LastModified)
 		if e != nil {
-			return nil, errors.Trace(e)
+			return nil, e
 		}
 		buckets = append(buckets, minio.BucketInfo{
 			Name:    container.Name,
@@ -476,7 +464,7 @@ func (a *azureObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 // DeleteBucket - delete a container on azure, uses Azure equivalent DeleteContainer.
 func (a *azureObjects) DeleteBucket(bucket string) error {
 	container := a.client.GetContainerReference(bucket)
-	return azureToObjectError(errors.Trace(container.Delete(nil)), bucket)
+	return azureToObjectError(container.Delete(nil), bucket)
 }
 
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
@@ -493,7 +481,7 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 			MaxResults: uint(maxKeys),
 		})
 		if err != nil {
-			return result, azureToObjectError(errors.Trace(err), bucket, prefix)
+			return result, azureToObjectError(err, bucket, prefix)
 		}
 
 		for _, object := range resp.Blobs {
@@ -561,7 +549,7 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken, delimite
 func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// startOffset cannot be negative.
 	if startOffset < 0 {
-		return azureToObjectError(errors.Trace(minio.InvalidRange{}), bucket, object)
+		return azureToObjectError(minio.InvalidRange{}, bucket, object)
 	}
 
 	blobRange := &storage.BlobRange{Start: uint64(startOffset)}
@@ -580,11 +568,11 @@ func (a *azureObjects) GetObject(bucket, object string, startOffset int64, lengt
 		})
 	}
 	if err != nil {
-		return azureToObjectError(errors.Trace(err), bucket, object)
+		return azureToObjectError(err, bucket, object)
 	}
 	_, err = io.Copy(writer, rc)
 	rc.Close()
-	return errors.Trace(err)
+	return err
 }
 
 // GetObjectInfo - reads blob metadata properties and replies back minio.ObjectInfo,
@@ -593,7 +581,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo minio.Objec
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	err = blob.GetProperties(nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 
 	return minio.ObjectInfo{
@@ -618,7 +606,7 @@ func (a *azureObjects) PutObject(bucket, object string, data *hash.Reader, metad
 	}
 	err = blob.CreateBlockBlobFromReader(data, nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 	return a.GetObjectInfo(bucket, object)
 }
@@ -635,12 +623,12 @@ func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject s
 	destBlob.Metadata = azureMeta
 	err = destBlob.Copy(srcBlobURL, nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), srcBucket, srcObject)
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
 	destBlob.Properties = props
 	err = destBlob.SetProperties(nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), srcBucket, srcObject)
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
 	return a.GetObjectInfo(destBucket, destObject)
 }
@@ -651,7 +639,7 @@ func (a *azureObjects) DeleteObject(bucket, object string) error {
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	err := blob.Delete(nil)
 	if err != nil {
-		return azureToObjectError(errors.Trace(err), bucket, object)
+		return azureToObjectError(err, bucket, object)
 	}
 	return nil
 }
@@ -675,15 +663,15 @@ func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID stri
 	blob := a.client.GetContainerReference(bucketName).GetBlobReference(
 		getAzureMetadataObjectName(objectName, uploadID))
 	err = blob.GetMetadata(nil)
-	err = azureToObjectError(errors.Trace(err), bucketName, objectName)
+	err = azureToObjectError(err, bucketName, objectName)
 	oerr := minio.ObjectNotFound{
 		Bucket: bucketName,
 		Object: objectName,
 	}
-	if errors.Cause(err) == oerr {
-		err = errors.Trace(minio.InvalidUploadID{
+	if err == oerr {
+		err = minio.InvalidUploadID{
 			UploadID: uploadID,
-		})
+		}
 	}
 	return err
 }
@@ -692,19 +680,19 @@ func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID stri
 func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
 	uploadID = mustGetAzureUploadID()
 	if err = a.checkUploadIDExists(bucket, object, uploadID); err == nil {
-		return "", errors.Trace(fmt.Errorf("Upload ID name collision"))
+		return "", fmt.Errorf("Upload ID name collision")
 	}
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 
 	var jsonData []byte
 	if jsonData, err = json.Marshal(azureMultipartMetadata{Name: object, Metadata: metadata}); err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
 	err = blob.CreateBlockBlobFromReader(bytes.NewBuffer(jsonData), nil)
 	if err != nil {
-		return "", azureToObjectError(errors.Trace(err), bucket, metadataObject)
+		return "", azureToObjectError(err, bucket, metadataObject)
 	}
 
 	return uploadID, nil
@@ -740,7 +728,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 		err = blob.PutBlockWithLength(id, uint64(subPartSize), io.LimitReader(data, subPartSize), nil)
 		if err != nil {
-			return info, azureToObjectError(errors.Trace(err), bucket, object)
+			return info, azureToObjectError(err, bucket, object)
 		}
 		subPartNumber++
 	}
@@ -771,7 +759,7 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 		return result, nil
 	}
 	if err != nil {
-		return result, azureToObjectError(errors.Trace(err), bucket, object)
+		return result, azureToObjectError(err, bucket, object)
 	}
 	// Build a sorted list of parts and return the requested entries.
 	partsMap := make(map[int]minio.PartInfo)
@@ -780,7 +768,7 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 		var parsedUploadID string
 		var md5Hex string
 		if partNumber, _, parsedUploadID, md5Hex, err = azureParseBlockID(block.Name); err != nil {
-			return result, azureToObjectError(errors.Trace(fmt.Errorf("Unexpected error")), bucket, object)
+			return result, azureToObjectError(fmt.Errorf("Unexpected error"), bucket, object)
 		}
 		if parsedUploadID != uploadID {
 			continue
@@ -797,7 +785,7 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 		if part.ETag != md5Hex {
 			// If two parts of same partNumber were uploaded with different contents
 			// return error as we won't be able to decide which the latest part is.
-			return result, azureToObjectError(errors.Trace(fmt.Errorf("Unexpected error")), bucket, object)
+			return result, azureToObjectError(fmt.Errorf("Unexpected error"), bucket, object)
 		}
 		part.Size += block.Size
 		partsMap[partNumber] = part
@@ -863,12 +851,12 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	var metadataReader io.Reader
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(metadataObject)
 	if metadataReader, err = blob.Get(nil); err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, metadataObject)
+		return objInfo, azureToObjectError(err, bucket, metadataObject)
 	}
 
 	var metadata azureMultipartMetadata
 	if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, metadataObject)
+		return objInfo, azureToObjectError(err, bucket, metadataObject)
 	}
 
 	defer func() {
@@ -884,7 +872,7 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	resp, err := objBlob.GetBlockList(storage.BlockListTypeUncommitted, nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 
 	getBlocks := func(partNumber int, etag string) (blocks []storage.Block, size int64, err error) {
@@ -920,7 +908,7 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 		var size int64
 		blocks, size, err = getBlocks(part.PartNumber, part.ETag)
 		if err != nil {
-			return objInfo, errors.Trace(err)
+			return objInfo, err
 		}
 
 		allBlocks = append(allBlocks, blocks...)
@@ -930,17 +918,17 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	// Error out if parts except last part sizing < 5MiB.
 	for i, size := range partSizes[:len(partSizes)-1] {
 		if size < azureS3MinPartSize {
-			return objInfo, errors.Trace(minio.PartTooSmall{
+			return objInfo, minio.PartTooSmall{
 				PartNumber: uploadedParts[i].PartNumber,
 				PartSize:   size,
 				PartETag:   uploadedParts[i].ETag,
-			})
+			}
 		}
 	}
 
 	err = objBlob.PutBlockList(allBlocks, nil)
 	if err != nil {
-		return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 	if len(metadata.Metadata) > 0 {
 		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(metadata.Metadata)
@@ -949,11 +937,11 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 		}
 		err = objBlob.SetProperties(nil)
 		if err != nil {
-			return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+			return objInfo, azureToObjectError(err, bucket, object)
 		}
 		err = objBlob.SetMetadata(nil)
 		if err != nil {
-			return objInfo, azureToObjectError(errors.Trace(err), bucket, object)
+			return objInfo, azureToObjectError(err, bucket, object)
 		}
 	}
 	return a.GetObjectInfo(bucket, object)
@@ -976,13 +964,13 @@ func (a *azureObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAc
 	}
 	prefix := bucket + "/*" // For all objects inside the bucket.
 	if len(policies) != 1 {
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 	if policies[0].Prefix != prefix {
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 	if policies[0].Policy != policy.BucketPolicyReadOnly {
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 	perm := storage.ContainerPermissions{
 		AccessType:     storage.ContainerAccessTypeContainer,
@@ -990,7 +978,7 @@ func (a *azureObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAc
 	}
 	container := a.client.GetContainerReference(bucket)
 	err := container.SetPermissions(perm, nil)
-	return azureToObjectError(errors.Trace(err), bucket)
+	return azureToObjectError(err, bucket)
 }
 
 // GetBucketPolicy - Get the container ACL and convert it to canonical []bucketAccessPolicy
@@ -999,15 +987,15 @@ func (a *azureObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy
 	container := a.client.GetContainerReference(bucket)
 	perm, err := container.GetPermissions(nil)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, azureToObjectError(errors.Trace(err), bucket)
+		return policy.BucketAccessPolicy{}, azureToObjectError(err, bucket)
 	}
 	switch perm.AccessType {
 	case storage.ContainerAccessTypePrivate:
-		return policy.BucketAccessPolicy{}, errors.Trace(minio.PolicyNotFound{Bucket: bucket})
+		return policy.BucketAccessPolicy{}, minio.PolicyNotFound{Bucket: bucket}
 	case storage.ContainerAccessTypeContainer:
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	default:
-		return policy.BucketAccessPolicy{}, azureToObjectError(errors.Trace(minio.NotImplemented{}))
+		return policy.BucketAccessPolicy{}, azureToObjectError(minio.NotImplemented{})
 	}
 	return policyInfo, nil
 }
@@ -1020,5 +1008,5 @@ func (a *azureObjects) DeleteBucketPolicy(bucket string) error {
 	}
 	container := a.client.GetContainerReference(bucket)
 	err := container.SetPermissions(perm, nil)
-	return azureToObjectError(errors.Trace(err))
+	return azureToObjectError(err)
 }

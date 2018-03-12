@@ -19,8 +19,6 @@ package cmd
 import (
 	"sort"
 	"strings"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tree walk result carries results of tree walking.
@@ -143,7 +141,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 	if err != nil {
 		select {
 		case <-endWalkCh:
-			return errors.Trace(errWalkAbort)
+			return errWalkAbort
 		case resultCh <- treeWalkResult{err: err}:
 			return err
 		}
@@ -205,7 +203,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
-			return errors.Trace(errWalkAbort)
+			return errWalkAbort
 		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}

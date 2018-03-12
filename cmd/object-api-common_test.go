@@ -19,8 +19,6 @@ package cmd
 import (
 	"sync"
 	"testing"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 func TestHouseKeeping(t *testing.T) {
@@ -92,7 +90,7 @@ func TestHouseKeeping(t *testing.T) {
 		{nilDiskStorage, nil},
 	}
 	for i, test := range testCases {
-		actualErr := errors.Cause(houseKeeping(test.store))
+		actualErr := houseKeeping(test.store)
 		if actualErr != test.expectedErr {
 			t.Errorf("Test %d - actual error is %#v, expected error was %#v",
 				i+1, actualErr, test.expectedErr)

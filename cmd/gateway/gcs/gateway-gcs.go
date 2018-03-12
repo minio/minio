@@ -35,7 +35,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 
 	"google.golang.org/api/googleapi"
@@ -221,16 +220,6 @@ func gcsToObjectError(err error, params ...string) error {
 		return nil
 	}
 
-	e, ok := err.(*errors.Error)
-	if !ok {
-		// Code should be fixed if this function is called without doing errors.Trace()
-		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
-		return err
-	}
-
-	err = e.Cause
-
 	bucket := ""
 	object := ""
 	uploadID := ""
@@ -250,8 +239,7 @@ func gcsToObjectError(err error, params ...string) error {
 		err = minio.BucketNotFound{
 			Bucket: bucket,
 		}
-		e.Cause = err
-		return e
+		return err
 	case "storage: object doesn't exist":
 		if uploadID != "" {
 			err = minio.InvalidUploadID{
@@ -263,21 +251,16 @@ func gcsToObjectError(err error, params ...string) error {
 				Object: object,
 			}
 		}
-		e.Cause = err
-		return e
+		return err
 	}
 
 	googleAPIErr, ok := err.(*googleapi.Error)
 	if !ok {
-		// We don't interpret non Minio errors. As minio errors will
-		// have StatusCode to help to convert to object errors.
-		e.Cause = err
-		return e
+		return err
 	}
 
 	if len(googleAPIErr.Errors) == 0 {
-		e.Cause = err
-		return e
+		return err
 	}
 
 	reason := googleAPIErr.Errors[0].Reason
@@ -321,8 +304,7 @@ func gcsToObjectError(err error, params ...string) error {
 		err = fmt.Errorf("Unsupported error reason: %s", reason)
 	}
 
-	e.Cause = err
-	return e
+	return err
 }
 
 // gcsProjectIDRegex defines a valid gcs project id format
@@ -423,14 +405,14 @@ func (l *gcsGateway) MakeBucketWithLocation(bucket, location string) error {
 		Location: location,
 	})
 
-	return gcsToObjectError(errors.Trace(err), bucket)
+	return gcsToObjectError(err, bucket)
 }
 
 // GetBucketInfo - Get bucket metadata..
 func (l *gcsGateway) GetBucketInfo(bucket string) (minio.BucketInfo, error) {
 	attrs, err := l.client.Bucket(bucket).Attrs(l.ctx)
 	if err != nil {
-		return minio.BucketInfo{}, gcsToObjectError(errors.Trace(err), bucket)
+		return minio.BucketInfo{}, gcsToObjectError(err, bucket)
 	}
 
 	return minio.BucketInfo{
@@ -451,7 +433,7 @@ func (l *gcsGateway) ListBuckets() (buckets []minio.BucketInfo, err error) {
 		}
 
 		if ierr != nil {
-			return buckets, gcsToObjectError(errors.Trace(ierr))
+			return buckets, gcsToObjectError(ierr)
 		}
 
 		buckets = append(buckets, minio.BucketInfo{
@@ -479,7 +461,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 			break
 		}
 		if err != nil {
-			return gcsToObjectError(errors.Trace(err))
+			return gcsToObjectError(err)
 		}
 		if objAttrs.Prefix == minio.GatewayMinioSysTmp {
 			gcsMinioPathFound = true
@@ -489,7 +471,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 		break
 	}
 	if nonGCSMinioPathFound {
-		return gcsToObjectError(errors.Trace(minio.BucketNotEmpty{}))
+		return gcsToObjectError(minio.BucketNotEmpty{})
 	}
 	if gcsMinioPathFound {
 		// Remove minio.sys.tmp before deleting the bucket.
@@ -500,16 +482,16 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 				break
 			}
 			if err != nil {
-				return gcsToObjectError(errors.Trace(err))
+				return gcsToObjectError(err)
 			}
 			err = l.client.Bucket(bucket).Object(objAttrs.Name).Delete(l.ctx)
 			if err != nil {
-				return gcsToObjectError(errors.Trace(err))
+				return gcsToObjectError(err)
 			}
 		}
 	}
 	err := l.client.Bucket(bucket).Delete(l.ctx)
-	return gcsToObjectError(errors.Trace(err), bucket)
+	return gcsToObjectError(err, bucket)
 }
 
 func toGCSPageToken(name string) string {
@@ -591,7 +573,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			break
 		}
 		if err != nil {
-			return minio.ListObjectsInfo{}, gcsToObjectError(errors.Trace(err), bucket, prefix)
+			return minio.ListObjectsInfo{}, gcsToObjectError(err, bucket, prefix)
 		}
 
 		nextMarker = toGCSPageToken(attrs.Name)
@@ -673,7 +655,7 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken, delimiter 
 		}
 
 		if err != nil {
-			return minio.ListObjectsV2Info{}, gcsToObjectError(errors.Trace(err), bucket, prefix)
+			return minio.ListObjectsV2Info{}, gcsToObjectError(err, bucket, prefix)
 		}
 
 		if attrs.Prefix == minio.GatewayMinioSysTmp {
@@ -717,18 +699,18 @@ func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, len
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket)
+		return gcsToObjectError(err, bucket)
 	}
 
 	object := l.client.Bucket(bucket).Object(key)
 	r, err := object.NewRangeReader(l.ctx, startOffset, length)
 	if err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket, key)
+		return gcsToObjectError(err, bucket, key)
 	}
 	defer r.Close()
 
 	if _, err := io.Copy(writer, r); err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket, key)
+		return gcsToObjectError(err, bucket, key)
 	}
 
 	return nil
@@ -755,12 +737,12 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (minio.ObjectIn
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
 	attrs, err := l.client.Bucket(bucket).Object(object).Attrs(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, object)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, object)
 	}
 
 	return fromGCSAttrsToObjectInfo(attrs), nil
@@ -771,7 +753,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
 	object := l.client.Bucket(bucket).Object(key)
@@ -785,7 +767,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
 		w.CloseWithError(err)
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 
 	// Close the object writer upon success.
@@ -793,7 +775,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, data *hash.Reader, met
 
 	attrs, err := object.Attrs(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 
 	return fromGCSAttrsToObjectInfo(attrs), nil
@@ -811,7 +793,7 @@ func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket s
 
 	attrs, err := copier.Run(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), destBucket, destObject)
+		return minio.ObjectInfo{}, gcsToObjectError(err, destBucket, destObject)
 	}
 
 	return fromGCSAttrsToObjectInfo(attrs), nil
@@ -821,7 +803,7 @@ func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket s
 func (l *gcsGateway) DeleteObject(bucket string, object string) error {
 	err := l.client.Bucket(bucket).Object(object).Delete(l.ctx)
 	if err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket, object)
+		return gcsToObjectError(err, bucket, object)
 	}
 
 	return nil
@@ -847,7 +829,7 @@ func (l *gcsGateway) NewMultipartUpload(bucket string, key string, metadata map[
 		bucket,
 		key,
 	}); err != nil {
-		return "", gcsToObjectError(errors.Trace(err), bucket, key)
+		return "", gcsToObjectError(err, bucket, key)
 	}
 	return uploadID, nil
 }
@@ -867,7 +849,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 // an object layer compatible error upon any error.
 func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID string) error {
 	_, err := l.client.Bucket(bucket).Object(gcsMultipartMetaName(uploadID)).Attrs(l.ctx)
-	return gcsToObjectError(errors.Trace(err), bucket, key, uploadID)
+	return gcsToObjectError(err, bucket, key, uploadID)
 }
 
 // PutObjectPart puts a part of object in bucket
@@ -888,7 +870,7 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	if _, err := io.Copy(w, data); err != nil {
 		// Make sure to close object writer upon error.
 		w.Close()
-		return minio.PartInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.PartInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	// Make sure to close the object writer upon success.
 	w.Close()
@@ -919,7 +901,7 @@ func (l *gcsGateway) cleanupMultipartUpload(bucket, key, uploadID string) error 
 			break
 		}
 		if err != nil {
-			return gcsToObjectError(errors.Trace(err), bucket, key)
+			return gcsToObjectError(err, bucket, key)
 		}
 
 		object := l.client.Bucket(bucket).Object(attrs.Name)
@@ -952,23 +934,23 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	partZeroAttrs, err := object.Attrs(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key, uploadID)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key, uploadID)
 	}
 
 	r, err := object.NewReader(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	defer r.Close()
 
 	// Check version compatibility of the meta file before compose()
 	multipartMeta := gcsMultipartMetaV1{}
 	if err = json.NewDecoder(r).Decode(&multipartMeta); err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 
 	if multipartMeta.Version != gcsMinioMultipartMetaCurrentVersion {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(errGCSFormat), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(errGCSFormat, bucket, key)
 	}
 
 	// Validate if the gcs.json stores valid entries for the bucket and key.
@@ -985,7 +967,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 			uploadedPart.PartNumber, uploadedPart.ETag)))
 		partAttr, pErr := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, uploadedPart.PartNumber, uploadedPart.ETag)).Attrs(l.ctx)
 		if pErr != nil {
-			return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(pErr), bucket, key, uploadID)
+			return minio.ObjectInfo{}, gcsToObjectError(pErr, bucket, key, uploadID)
 		}
 		partSizes[i] = partAttr.Size
 	}
@@ -993,11 +975,11 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	// Error out if parts except last part sizing < 5MiB.
 	for i, size := range partSizes[:len(partSizes)-1] {
 		if size < 5*humanize.MiByte {
-			return minio.ObjectInfo{}, errors.Trace(minio.PartTooSmall{
+			return minio.ObjectInfo{}, minio.PartTooSmall{
 				PartNumber: uploadedParts[i].PartNumber,
 				PartSize:   size,
 				PartETag:   uploadedParts[i].ETag,
-			})
+			}
 		}
 	}
 
@@ -1024,7 +1006,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 			composer.Metadata = partZeroAttrs.Metadata
 
 			if _, err = composer.Run(l.ctx); err != nil {
-				return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+				return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 			}
 		}
 
@@ -1037,10 +1019,10 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	composer.Metadata = partZeroAttrs.Metadata
 	attrs, err := composer.Run(l.ctx)
 	if err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	if err = l.cleanupMultipartUpload(bucket, key, uploadID); err != nil {
-		return minio.ObjectInfo{}, gcsToObjectError(errors.Trace(err), bucket, key)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	return fromGCSAttrsToObjectInfo(attrs), nil
 }
@@ -1059,16 +1041,16 @@ func (l *gcsGateway) SetBucketPolicy(bucket string, policyInfo policy.BucketAcce
 	prefix := bucket + "/*" // For all objects inside the bucket.
 
 	if len(policies) != 1 {
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 	if policies[0].Prefix != prefix {
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 
 	acl := l.client.Bucket(bucket).ACL()
 	if policies[0].Policy == policy.BucketPolicyNone {
 		if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
-			return gcsToObjectError(errors.Trace(err), bucket)
+			return gcsToObjectError(err, bucket)
 		}
 		return nil
 	}
@@ -1080,11 +1062,11 @@ func (l *gcsGateway) SetBucketPolicy(bucket string, policyInfo policy.BucketAcce
 	case policy.BucketPolicyWriteOnly:
 		role = storage.RoleWriter
 	default:
-		return errors.Trace(minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 
 	if err := acl.Set(l.ctx, storage.AllUsers, role); err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket)
+		return gcsToObjectError(err, bucket)
 	}
 
 	return nil
@@ -1094,7 +1076,7 @@ func (l *gcsGateway) SetBucketPolicy(bucket string, policyInfo policy.BucketAcce
 func (l *gcsGateway) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, gcsToObjectError(errors.Trace(err), bucket)
+		return policy.BucketAccessPolicy{}, gcsToObjectError(err, bucket)
 	}
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	for _, r := range rules {
@@ -1110,7 +1092,7 @@ func (l *gcsGateway) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, 
 	}
 	// Return NoSuchBucketPolicy error, when policy is not set
 	if len(policyInfo.Statements) == 0 {
-		return policy.BucketAccessPolicy{}, gcsToObjectError(errors.Trace(minio.PolicyNotFound{}), bucket)
+		return policy.BucketAccessPolicy{}, gcsToObjectError(minio.PolicyNotFound{}, bucket)
 	}
 	return policyInfo, nil
 }
@@ -1119,7 +1101,7 @@ func (l *gcsGateway) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, 
 func (l *gcsGateway) DeleteBucketPolicy(bucket string) error {
 	// This only removes the storage.AllUsers policies
 	if err := l.client.Bucket(bucket).ACL().Delete(l.ctx, storage.AllUsers); err != nil {
-		return gcsToObjectError(errors.Trace(err), bucket)
+		return gcsToObjectError(err, bucket)
 	}
 
 	return nil

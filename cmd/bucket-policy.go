@@ -84,7 +84,7 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
 	if err != nil {
-		return nil, errors.Cause(err)
+		return nil, err
 	}
 
 	policies := make(map[string]policy.BucketAccessPolicy)
@@ -96,7 +96,7 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 			// other unexpected errors during net.Dial.
 			if !errors.IsErrIgnored(pErr, errDiskNotFound) {
 				if !isErrBucketPolicyNotFound(pErr) {
-					return nil, errors.Cause(pErr)
+					return nil, pErr
 				}
 			}
 			// Continue to load other bucket policies if possible.
@@ -124,7 +124,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 			return nil, PolicyNotFound{Bucket: bucket}
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
-		return nil, errors.Cause(err)
+		return nil, err
 	}
 
 	return &buffer, nil
@@ -154,7 +154,6 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	err := objAPI.DeleteObject(minioMetaBucket, policyPath)
 	if err != nil {
-		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -174,12 +173,12 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
-		return errors.Cause(err)
+		return err
 	}
 
 	if _, err = objAPI.PutObject(minioMetaBucket, policyPath, hashReader, nil); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
-		return errors.Cause(err)
+		return err
 	}
 	return nil
 }
