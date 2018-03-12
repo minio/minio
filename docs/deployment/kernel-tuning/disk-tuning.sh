@@ -42,7 +42,7 @@ for i in $(ls -d /sys/block/*/queue/iosched 2>/dev/null); do
     ## This is the maximum number of kilobytes
     ## supported in a single data transfer at
     ## block layer.
-    [ -f $path/max_hw_sectors_kb ] && {
-        echo "1024" > $path/max_hw_sectors_kb
+    [ -f $path/max_sectors_kb ] && {
+        echo "1024" > $path/max_sectors_kb || true
     }
 done
