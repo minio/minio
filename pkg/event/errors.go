@@ -24,27 +24,27 @@ import (
 // IsEventError - checks whether given error is event error or not.
 func IsEventError(err error) bool {
 	switch err.(type) {
-	case ErrInvalidFilterName:
+	case ErrInvalidFilterName, *ErrInvalidFilterName:
 		return true
-	case ErrFilterNamePrefix:
+	case ErrFilterNamePrefix, *ErrFilterNamePrefix:
 		return true
-	case ErrFilterNameSuffix:
+	case ErrFilterNameSuffix, *ErrFilterNameSuffix:
 		return true
-	case ErrInvalidFilterValue:
+	case ErrInvalidFilterValue, *ErrInvalidFilterValue:
 		return true
-	case ErrDuplicateEventName:
+	case ErrDuplicateEventName, *ErrDuplicateEventName:
 		return true
-	case ErrUnsupportedConfiguration:
+	case ErrUnsupportedConfiguration, *ErrUnsupportedConfiguration:
 		return true
-	case ErrDuplicateQueueConfiguration:
+	case ErrDuplicateQueueConfiguration, *ErrDuplicateQueueConfiguration:
 		return true
-	case ErrUnknownRegion:
+	case ErrUnknownRegion, *ErrUnknownRegion:
 		return true
-	case ErrARNNotFound:
+	case ErrARNNotFound, *ErrARNNotFound:
 		return true
-	case ErrInvalidARN:
+	case ErrInvalidARN, *ErrInvalidARN:
 		return true
-	case ErrInvalidEventName:
+	case ErrInvalidEventName, *ErrInvalidEventName:
 		return true
 	}
 

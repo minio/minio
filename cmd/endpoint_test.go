@@ -334,16 +334,19 @@ func TestCreateEndpoints(t *testing.T) {
 // is considered a remote service from localhost:9000 perspective.
 func TestGetLocalPeer(t *testing.T) {
 	tempGlobalMinioAddr := globalMinioAddr
+	tempGlobalMinioPort := globalMinioPort
 	defer func() {
 		globalMinioAddr = tempGlobalMinioAddr
+		globalMinioPort = tempGlobalMinioPort
 	}()
 	globalMinioAddr = ":9000"
+	globalMinioPort = "9000"
 
 	testCases := []struct {
 		endpointArgs   []string
 		expectedResult string
 	}{
-		{[]string{"/d1", "/d2", "d3", "d4"}, ":9000"},
+		{[]string{"/d1", "/d2", "d3", "d4"}, "127.0.0.1:9000"},
 		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"},
 			"localhost:9000"},
 		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"},
