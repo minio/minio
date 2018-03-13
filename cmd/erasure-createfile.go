@@ -61,7 +61,7 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 		for i := range errChans { // span workers
 			go erasureAppendFile(s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
 		}
-		for i := range errChans { // what until all workers are finished
+		for i := range errChans { // wait until all workers are finished
 			errs[i] = <-errChans[i]
 		}
 		if err = reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, writeQuorum); err != nil {
