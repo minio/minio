@@ -1,4 +1,10 @@
+# Large Bucket Support Design Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+
+This document explains the design approach, advanced use cases and limitations of the large bucket feature. If you're looking to get started with large bucket support, we suggest you 
+go through the [getting started document](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md) first.
+
 ## Command-line
+
 ```
 NAME:
   minio server - Start object storage server.
@@ -14,29 +20,18 @@ DIR:
   directories in a distributed setup are encoded as HTTP(s) URIs.
 ```
 
-## Limitations
-- Minimum of 4 disks are needed for distributed erasure coded configuration.
-- Maximum of 32 distinct nodes are supported in distributed configuration.
-
 ## Common usage
-Single disk filesystem export
-```
-minio server dir1
-```
-
-Standalone erasure coded configuration with 4 disks.
-```
-minio server dir1 dir2 dir3 dir4
-```
 
 Standalone erasure coded configuration with 4 sets with 16 disks each.
+
 ```
 minio server dir{1...64}
 ```
 
 Distributed erasure coded configuration with 64 sets with 16 disks each.
+
 ```
-minio server http://host{1...16}/export{1...64} - good
+minio server http://host{1...16}/export{1...64}
 ```
 
 ## Other usages
@@ -69,6 +64,9 @@ minio server http://rack1-host{1...8}.example.net/export{1...16} http://rack2-ho
 ```
 
 ### Expected expansion for double ellipses
+
+Minio server internally expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process
+
 ```
 minio server http://host{1...4}/export{1...8}
 ```
@@ -110,12 +108,14 @@ Expected expansion
 ```
 
 ## Backend `format.json` changes
-New `format.json` has new fields
+
+`format.json` has new fields
 
 - `disk` is changed to `this`
 - `jbod` is changed to `sets` , along with this change sets is also a two dimensional list representing total sets and disks per set.
 
 A sample `format.json` looks like below
+
 ```json
 {
   "version": "1",
@@ -158,6 +158,7 @@ type format struct {
 ```
 
 ### Current format
+
 ```go
 type formatXLV1 struct{
      format
@@ -170,6 +171,7 @@ type formatXLV1 struct{
 ```
 
 ### New format
+
 ```go
 type formatXLV2 struct {
         Version string `json:"version"`
@@ -182,3 +184,8 @@ type formatXLV2 struct {
         } `json:"xl"`
 }
 ```
+
+## Limits
+
+- Minimum of 4 disks are needed for erasure coded configuration.
+- Maximum of 32 distinct nodes are supported in distributed configuration.
