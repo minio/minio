@@ -34,7 +34,7 @@ healthcheck_main () {
         exit 0
     else
         # Get the http response code
-        http_response=$(curl -s -k -o /dev/null -I -w "%{http_code}" ${scheme}${address}${resource})
+        http_response=$(curl -s -k -o /dev/null -w "%{http_code}" ${scheme}${address}${resource})
 
         # Get the http response body
         http_response_body=$(curl -k -s ${scheme}${address}${resource})
@@ -45,7 +45,7 @@ healthcheck_main () {
         if [ "$http_response" = "403" ] && \
         [ "$http_response_body" = "SSL required" ]; then
             scheme="https://"
-            http_response=$(curl -s -k -o /dev/null -I -w "%{http_code}" ${scheme}${address}${resource})
+            http_response=$(curl -s -k -o /dev/null -w "%{http_code}" ${scheme}${address}${resource})
         fi
 
         # If http_repsonse is 200 - server is up.
