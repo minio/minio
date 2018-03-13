@@ -26,7 +26,7 @@ EXPOSE 9000
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
-VOLUME ["/export"]
+VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s \
     CMD /usr/bin/healthcheck.sh
