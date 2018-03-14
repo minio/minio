@@ -57,6 +57,7 @@ func isValidLocation(location string) bool {
 var supportedHeaders = []string{
 	"content-type",
 	"cache-control",
+	"content-language",
 	"content-encoding",
 	"content-disposition",
 	amzStorageClass,
