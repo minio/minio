@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"sort"
 	"time"
 
@@ -56,7 +57,7 @@ type xlObjects struct {
 var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
 // Shutdown function for object storage interface.
-func (xl xlObjects) Shutdown() error {
+func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	for _, disk := range xl.getDisks() {
 		// This closes storage rpc client connections if any.
@@ -72,7 +73,7 @@ func (xl xlObjects) Shutdown() error {
 // Locking operations
 
 // List namespace locks held in object layer
-func (xl xlObjects) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+func (xl xlObjects) ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	xl.nsMutex.lockMapMutex.Lock()
 	defer xl.nsMutex.lockMapMutex.Unlock()
 	// Fetch current time once instead of fetching system time for every lock.
@@ -118,7 +119,7 @@ func (xl xlObjects) ListLocks(bucket, prefix string, duration time.Duration) ([]
 }
 
 // Clear namespace locks held in object layer
-func (xl xlObjects) ClearLocks(volLocks []VolumeLockInfo) error {
+func (xl xlObjects) ClearLocks(ctx context.Context, volLocks []VolumeLockInfo) error {
 	// Remove lock matching bucket/prefix held longer than duration.
 	for _, volLock := range volLocks {
 		xl.nsMutex.ForceUnlock(volLock.Bucket, volLock.Object)
@@ -215,6 +216,6 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo() StorageInfo {
+func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return getStorageInfo(xl.getDisks())
 }

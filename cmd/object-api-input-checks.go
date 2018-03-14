@@ -175,7 +175,7 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) erro
 
 // Checks whether bucket exists and returns appropriate error if not.
 func checkBucketExist(bucket string, obj ObjectLayer) error {
-	_, err := obj.GetBucketInfo(bucket)
+	_, err := obj.GetBucketInfo(nil, bucket)
 	if err != nil {
 		return errors.Cause(err)
 	}

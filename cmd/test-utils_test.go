@@ -1766,7 +1766,7 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(bucketName, "")
+	err := obj.MakeBucketWithLocation(nil, bucketName, "")
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
@@ -1872,7 +1872,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		Version:    "1.0",
 		Statements: []policy.Statement{policyFunc(bucketName, "")},
 	}
-	obj.SetBucketPolicy(bucketName, bp)
+	obj.SetBucketPolicy(nil, bucketName, bp)
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 

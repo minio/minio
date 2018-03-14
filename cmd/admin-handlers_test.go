@@ -204,7 +204,7 @@ func (atb *adminXLTestBed) TearDown() {
 func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
-	err := atb.objLayer.MakeBucketWithLocation(bucketName, "")
+	err := atb.objLayer.MakeBucketWithLocation(nil, bucketName, "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName,
 			err)
@@ -215,7 +215,7 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 		objName := "myobject"
 		for i := 0; i < 10; i++ {
 			objectName := fmt.Sprintf("%s-%d", objName, i)
-			_, err = atb.objLayer.PutObject(bucketName, objectName,
+			_, err = atb.objLayer.PutObject(nil, bucketName, objectName,
 				mustGetHashReader(t, bytes.NewReader([]byte("hello")),
 					int64(len("hello")), "", ""), nil)
 			if err != nil {
@@ -228,13 +228,13 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 	// create a multipart upload (incomplete)
 	{
 		objName := "mpObject"
-		uploadID, err := atb.objLayer.NewMultipartUpload(bucketName,
+		uploadID, err := atb.objLayer.NewMultipartUpload(nil, bucketName,
 			objName, nil)
 		if err != nil {
 			t.Fatalf("mp new error: %v", err)
 		}
 
-		_, err = atb.objLayer.PutObjectPart(bucketName, objName,
+		_, err = atb.objLayer.PutObjectPart(nil, bucketName, objName,
 			uploadID, 3, mustGetHashReader(t, bytes.NewReader(
 				[]byte("hello")), int64(len("hello")), "", ""))
 		if err != nil {
@@ -248,11 +248,11 @@ func (atb *adminXLTestBed) CleanupHealTestData(t *testing.T) {
 	bucketName := "mybucket"
 	objName := "myobject"
 	for i := 0; i < 10; i++ {
-		atb.objLayer.DeleteObject(bucketName,
+		atb.objLayer.DeleteObject(nil, bucketName,
 			fmt.Sprintf("%s-%d", objName, i))
 	}
 
-	atb.objLayer.DeleteBucket(bucketName)
+	atb.objLayer.DeleteBucket(nil, bucketName)
 }
 
 // initTestObjLayer - Helper function to initialize an XL-based object

@@ -46,7 +46,7 @@ func handleSignals() {
 		errorIf(err, "Unable to shutdown http server")
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
-			oerr = objAPI.Shutdown()
+			oerr = objAPI.Shutdown(nil)
 			errorIf(oerr, "Unable to shutdown object layer")
 		}
 
@@ -59,7 +59,7 @@ func handleSignals() {
 			errorIf(err, "http server exited abnormally")
 			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
-				oerr = objAPI.Shutdown()
+				oerr = objAPI.Shutdown(nil)
 				errorIf(oerr, "Unable to shutdown object layer")
 			}
 

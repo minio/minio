@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -120,7 +121,7 @@ func (fs *FSObjects) backgroundAppend(bucket, object, uploadID string) {
 
 // ListMultipartUploads - lists all the uploadIDs for the specified object.
 // We do not support prefix based listing.
-func (fs *FSObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
+func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
 	if err := checkListMultipartArgs(bucket, object, keyMarker, uploadIDMarker, delimiter, fs); err != nil {
 		return result, toObjectErr(errors.Trace(err))
 	}
@@ -202,7 +203,7 @@ func (fs *FSObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMar
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (fs *FSObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
+func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string) (string, error) {
 	if err := checkNewMultipartArgs(bucket, object, fs); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
@@ -238,7 +239,7 @@ func (fs *FSObjects) NewMultipartUpload(bucket, object string, meta map[string]s
 // CopyObjectPart - similar to PutObjectPart but reads data from an existing
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
-func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
+func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
 
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
@@ -247,7 +248,7 @@ func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, 
 
 	// Initialize pipe.
 	go func() {
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := fs.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 				return
@@ -261,7 +262,7 @@ func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, 
 		}
 	}()
 
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, srcInfo.Reader)
+	partInfo, err := fs.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -273,7 +274,7 @@ func (fs *FSObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, 
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs *FSObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return pi, toObjectErr(errors.Trace(err), bucket)
 	}
@@ -354,7 +355,7 @@ func (fs *FSObjects) PutObjectPart(bucket, object, uploadID string, partID int, 
 // Implements S3 compatible ListObjectParts API. The resulting
 // ListPartsInfo structure is unmarshalled directly into XML and
 // replied back to the client.
-func (fs *FSObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
+func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
 	if err := checkListPartsArgs(bucket, object, fs); err != nil {
 		return result, toObjectErr(errors.Trace(err))
 	}
@@ -465,7 +466,7 @@ func (fs *FSObjects) ListObjectParts(bucket, object, uploadID string, partNumber
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (fs *FSObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
+func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
 	if err := checkCompleteMultipartArgs(bucket, object, fs); err != nil {
 		return oi, toObjectErr(err)
 	}
@@ -650,7 +651,7 @@ func (fs *FSObjects) CompleteMultipartUpload(bucket string, object string, uploa
 // that this is an atomic idempotent operation. Subsequent calls have
 // no affect and further requests to the same uploadID would not be
 // honored.
-func (fs *FSObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
+func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
 	if err := checkAbortMultipartArgs(bucket, object, fs); err != nil {
 		return err
 	}

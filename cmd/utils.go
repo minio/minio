@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -34,6 +35,8 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/pkg/profile"
 )
 
@@ -313,4 +316,17 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 		ceil++
 	}
 	return
+}
+
+func newContext(r *http.Request, api string) context.Context {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+	prefix := vars["prefix"]
+
+	if prefix != "" {
+		object = prefix
+	}
+
+	return logger.ContextSet(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
 }

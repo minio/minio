@@ -41,6 +41,7 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 // as per http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 // It returns empty configuration if its not set.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "GetBucketNotification")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -60,7 +61,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
 
-	_, err := objAPI.GetBucketInfo(bucketName)
+	_, err := objAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -93,6 +94,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // PutBucketNotificationHandler - This HTTP handler stores given notification configuration as per
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "PutBucketNotification")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -112,7 +114,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
 
-	_, err := objectAPI.GetBucketInfo(bucketName)
+	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -161,6 +163,8 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 // ListenBucketNotificationHandler - This HTTP handler sends events to the connected HTTP client.
 // Client should send prefix/suffix object name to match and events to watch as query parameters.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "ListenBucketNotification")
+
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -220,7 +224,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		eventNames = append(eventNames, eventName)
 	}
 
-	if _, err := objAPI.GetBucketInfo(bucketName); err != nil {
+	if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
 		errorIf(err, "Unable to get bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

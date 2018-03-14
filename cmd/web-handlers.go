@@ -106,7 +106,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	reply.StorageInfo = objectAPI.StorageInfo()
+	reply.StorageInfo = objectAPI.StorageInfo(nil)
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -131,7 +131,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errInvalidBucketName)
 	}
 
-	if err := objectAPI.MakeBucketWithLocation(args.BucketName, globalServerConfig.GetRegion()); err != nil {
+	if err := objectAPI.MakeBucketWithLocation(nil, args.BucketName, globalServerConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 
@@ -154,7 +154,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(errAuthentication)
 	}
 
-	err := objectAPI.DeleteBucket(args.BucketName)
+	err := objectAPI.DeleteBucket(nil, args.BucketName)
 	if err != nil {
 		return toJSONError(err, args.BucketName)
 	}
@@ -187,7 +187,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	buckets, err := objectAPI.ListBuckets()
+	buckets, err := objectAPI.ListBuckets(nil)
 	if err != nil {
 		return toJSONError(err)
 	}
@@ -256,7 +256,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	default:
 		return errAuthentication
 	}
-	lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
+	lo, err := objectAPI.ListObjects(nil, args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -313,7 +313,7 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
-			if err = deleteObject(objectAPI, args.BucketName, objectName, r); err != nil {
+			if err = deleteObject(nil, objectAPI, args.BucketName, objectName, r); err != nil {
 				break next
 			}
 			continue
@@ -323,13 +323,13 @@ next:
 		marker := ""
 		for {
 			var lo ListObjectsInfo
-			lo, err = objectAPI.ListObjects(args.BucketName, objectName, marker, "", 1000)
+			lo, err = objectAPI.ListObjects(nil, args.BucketName, objectName, marker, "", 1000)
 			if err != nil {
 				break next
 			}
 			marker = lo.NextMarker
 			for _, obj := range lo.Objects {
-				err = deleteObject(objectAPI, args.BucketName, obj.Name, r)
+				err = deleteObject(nil, objectAPI, args.BucketName, obj.Name, r)
 				if err != nil {
 					break next
 				}
@@ -562,7 +562,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	objInfo, err := objectAPI.PutObject(bucket, object, hashReader, metadata)
+	objInfo, err := objectAPI.PutObject(nil, bucket, object, hashReader, metadata)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -598,7 +598,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err := objectAPI.GetObject(bucket, object, 0, -1, w, ""); err != nil {
+	if err := objectAPI.GetObject(nil, bucket, object, 0, -1, w, ""); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -647,7 +647,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := objectAPI.GetObjectInfo(args.BucketName, objectName)
+			info, err := objectAPI.GetObjectInfo(nil, args.BucketName, objectName)
 			if err != nil {
 				return err
 			}
@@ -662,7 +662,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer, "")
+			return objectAPI.GetObject(nil, args.BucketName, objectName, 0, info.Size, writer, "")
 		}
 
 		if !hasSuffix(object, slashSeparator) {
@@ -678,7 +678,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		// date to the response writer.
 		marker := ""
 		for {
-			lo, err := objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			lo, err := objectAPI.ListObjects(nil, args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
 			if err != nil {
 				return
 			}
@@ -719,7 +719,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
-	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(nil, args.BucketName)
 	if err != nil {
 		_, ok := errors.Cause(err).(BucketPolicyNotFound)
 		if !ok {
@@ -760,7 +760,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(nil, args.BucketName)
 	if err != nil {
 		_, ok := errors.Cause(err).(PolicyNotFound)
 		if !ok {
@@ -804,7 +804,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	var policyInfo, err = objectAPI.GetBucketPolicy(args.BucketName)
+	var policyInfo, err = objectAPI.GetBucketPolicy(nil, args.BucketName)
 	if err != nil {
 		if _, ok := errors.Cause(err).(PolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
@@ -815,14 +815,14 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 
 	if len(policyInfo.Statements) == 0 {
-		if err = objectAPI.DeleteBucketPolicy(args.BucketName); err != nil {
+		if err = objectAPI.DeleteBucketPolicy(nil, args.BucketName); err != nil {
 			return toJSONError(err, args.BucketName)
 		}
 		return nil
 	}
 
 	// Parse validate and save bucket policy.
-	if err := objectAPI.SetBucketPolicy(args.BucketName, policyInfo); err != nil {
+	if err := objectAPI.SetBucketPolicy(nil, args.BucketName, policyInfo); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 

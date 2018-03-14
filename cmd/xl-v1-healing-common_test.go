@@ -198,15 +198,15 @@ func TestListOnlineDisks(t *testing.T) {
 		// Prepare bucket/object backend for the tests below.
 
 		// Cleanup from previous test.
-		obj.DeleteObject(bucket, object)
-		obj.DeleteBucket(bucket)
+		obj.DeleteObject(nil, bucket, object)
+		obj.DeleteBucket(nil, bucket)
 
-		err = obj.MakeBucketWithLocation("bucket", "")
+		err = obj.MakeBucketWithLocation(nil, "bucket", "")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
 
-		_, err = obj.PutObject(bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+		_, err = obj.PutObject(nil, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("Failed to putObject %v", err)
 		}
@@ -298,12 +298,12 @@ func TestDisksWithAllParts(t *testing.T) {
 	xl := obj.(*xlObjects)
 	xlDisks := xl.storageDisks
 
-	err = obj.MakeBucketWithLocation("bucket", "")
+	err = obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+	_, err = obj.PutObject(nil, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}

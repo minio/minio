@@ -66,6 +66,6 @@ type OpsLockState struct {
 
 // listLocksInfo - Fetches locks held on bucket, matching prefix held for longer than duration.
 func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockInfo {
-	locksInfo, _ := newObjectLayerFn().ListLocks(bucket, prefix, duration)
+	locksInfo, _ := newObjectLayerFn().ListLocks(nil, bucket, prefix, duration)
 	return locksInfo
 }

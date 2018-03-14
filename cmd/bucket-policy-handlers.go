@@ -220,6 +220,8 @@ func bucketPolicyConditionMatch(conditions policy.ConditionKeyMap, statement pol
 // This implementation of the PUT operation uses the policy
 // subresource to add to or replace a policy on a bucket
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "PutBucketPolicy")
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -235,7 +237,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	bucket := vars["bucket"]
 
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -273,7 +275,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err = objAPI.SetBucketPolicy(bucket, policyInfo); err != nil {
+	if err = objAPI.SetBucketPolicy(ctx, bucket, policyInfo); err != nil {
 		err = errors.Cause(err)
 		switch err.(type) {
 		case NotImplemented:
@@ -298,6 +300,8 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "DeleteBucketPolicy")
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -313,7 +317,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	bucket := vars["bucket"]
 
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -321,7 +325,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Delete bucket access policy, by passing an empty policy
 	// struct.
-	if err := objAPI.DeleteBucketPolicy(bucket); err != nil {
+	if err := objAPI.DeleteBucketPolicy(ctx, bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -339,6 +343,8 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "GetBucketPolicy")
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -354,14 +360,14 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	bucket := vars["bucket"]
 
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Read bucket access policy.
-	policy, err := objAPI.GetBucketPolicy(bucket)
+	policy, err := objAPI.GetBucketPolicy(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
