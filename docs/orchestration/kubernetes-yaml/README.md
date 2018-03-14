@@ -135,6 +135,24 @@ spec:
           value: "minio123"
         ports:
         - containerPort: 9000
+        # Readiness probe detects situations when Minio server instance
+        # is not ready to accept traffic. Kubernetes doesn't forward
+        # traffic to the pod till readiness checks fail.
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 120
+          periodSeconds: 20
+        # Liveness probe detects situations where Minio server instance
+        # is not working properly and needs restart. Kubernetes automatically
+        # restarts the pods if liveness checks fail.
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 120
+          periodSeconds: 20
 ```
 
 Create the Deployment
@@ -298,6 +316,15 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
+        # Liveness probe detects situations where Minio server instance
+        # is not working properly and needs restart. Kubernetes automatically
+        # restarts the pods if liveness checks fail.
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 120
+          periodSeconds: 20
   # These are converted to volume claims by the controller
   # and mounted at the paths mentioned above.
   volumeClaimTemplates:
