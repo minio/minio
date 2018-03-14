@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -690,7 +690,7 @@ func (l *b2Objects) CompleteMultipartUpload(bucket string, object string, upload
 func (l *b2Objects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	var policies []minio.BucketAccessPolicy
 
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
+	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket, "") {
 		policies = append(policies, minio.BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,

@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2017 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +33,6 @@ import (
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html#example-signature-calculations-streaming
 const (
 	streamingSignAlgorithm = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
-	streamingEncoding      = "aws-chunked"
 	streamingPayloadHdr    = "AWS4-HMAC-SHA256-PAYLOAD"
 	emptySHA256            = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	payloadChunkSize       = 64 * 1024
@@ -99,9 +99,8 @@ func prepareStreamingRequest(req *http.Request, sessionToken string, dataLen int
 	if sessionToken != "" {
 		req.Header.Set("X-Amz-Security-Token", sessionToken)
 	}
-	req.Header.Add("Content-Encoding", streamingEncoding)
-	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601DateFormat))
 
+	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601DateFormat))
 	// Set content length with streaming signature for each chunk included.
 	req.ContentLength = getStreamLength(dataLen, int64(payloadChunkSize))
 	req.Header.Set("x-amz-decoded-content-length", strconv.FormatInt(dataLen, 10))

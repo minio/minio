@@ -28,9 +28,8 @@ import (
 // GetObjectOptions are used to specify additional headers or options
 // during GET requests.
 type GetObjectOptions struct {
-	headers map[string]string
-
-	Materials encrypt.Materials
+	headers              map[string]string
+	ServerSideEncryption encrypt.ServerSide
 }
 
 // StatObjectOptions are used to specify additional headers or options
@@ -44,6 +43,9 @@ func (o GetObjectOptions) Header() http.Header {
 	headers := make(http.Header, len(o.headers))
 	for k, v := range o.headers {
 		headers.Set(k, v)
+	}
+	if o.ServerSideEncryption != nil {
+		o.ServerSideEncryption.Marshal(headers)
 	}
 	return headers
 }

@@ -767,7 +767,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		}
 	}
 	reply.UIVersion = browser.UIVersion
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
+	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName, "") {
 		reply.Policies = append(reply.Policies, BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,

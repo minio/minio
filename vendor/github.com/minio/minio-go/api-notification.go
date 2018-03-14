@@ -150,7 +150,7 @@ func (c Client) ListenBucketNotification(bucketName, prefix, suffix string, even
 		}
 
 		// Check ARN partition to verify if listening bucket is supported
-		if s3utils.IsAmazonEndpoint(c.endpointURL) || s3utils.IsGoogleEndpoint(c.endpointURL) {
+		if s3utils.IsAmazonEndpoint(*c.endpointURL) || s3utils.IsGoogleEndpoint(*c.endpointURL) {
 			notificationInfoCh <- NotificationInfo{
 				Err: ErrAPINotSupported("Listening for bucket notification is specific only to `minio` server endpoints"),
 			}
@@ -205,13 +205,11 @@ func (c Client) ListenBucketNotification(bucketName, prefix, suffix string, even
 				if err = json.Unmarshal(bio.Bytes(), &notificationInfo); err != nil {
 					continue
 				}
-				// Send notifications on channel only if there are events received.
-				if len(notificationInfo.Records) > 0 {
-					select {
-					case notificationInfoCh <- notificationInfo:
-					case <-doneCh:
-						return
-					}
+				// Send notificationInfo
+				select {
+				case notificationInfoCh <- notificationInfo:
+				case <-doneCh:
+					return
 				}
 			}
 			// Look for any underlying errors.

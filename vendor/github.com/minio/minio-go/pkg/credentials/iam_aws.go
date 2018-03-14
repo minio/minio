@@ -1,6 +1,6 @@
 /*
  * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * (C) 2017 Minio, Inc.
+ * Copyright 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,18 +46,6 @@ type IAM struct {
 	endpoint string
 }
 
-// redirectHeaders copies all headers when following a redirect URL.
-// This won't be needed anymore from go 1.8 (https://github.com/golang/go/issues/4800)
-func redirectHeaders(req *http.Request, via []*http.Request) error {
-	if len(via) == 0 {
-		return nil
-	}
-	for key, val := range via[0].Header {
-		req.Header[key] = val
-	}
-	return nil
-}
-
 // IAM Roles for Amazon EC2
 // http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
 const (
@@ -74,8 +62,7 @@ func NewIAM(endpoint string) *Credentials {
 	}
 	p := &IAM{
 		Client: &http.Client{
-			Transport:     http.DefaultTransport,
-			CheckRedirect: redirectHeaders,
+			Transport: http.DefaultTransport,
 		},
 		endpoint: endpoint,
 	}

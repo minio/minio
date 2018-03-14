@@ -156,10 +156,6 @@ The full API Reference is available here.
 * [`RemoveObjects`](https://docs.minio.io/docs/golang-client-api-reference#RemoveObjects)
 * [`RemoveIncompleteUpload`](https://docs.minio.io/docs/golang-client-api-reference#RemoveIncompleteUpload)
 
-### API Reference: Encrypted Object Operations
-* [`GetEncryptedObject`](https://docs.minio.io/docs/golang-client-api-reference#GetEncryptedObject)
-* [`PutEncryptedObject`](https://docs.minio.io/docs/golang-client-api-reference#PutEncryptedObject)
-
 ### API Reference : Presigned Operations
 * [`PresignedGetObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedGetObject)
 * [`PresignedPutObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedPutObject)

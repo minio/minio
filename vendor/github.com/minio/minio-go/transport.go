@@ -2,7 +2,7 @@
 
 /*
  * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * Copyright 2017 Minio, Inc.
+ * Copyright 2017-2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,10 @@ import (
 	"time"
 )
 
-// This default transport is similar to http.DefaultTransport
-// but with additional DisableCompression:
-var defaultMinioTransport http.RoundTripper = &http.Transport{
+// DefaultTransport - this default transport is similar to
+// http.DefaultTransport but with additional param  DisableCompression
+// is set to true to avoid decompressing content with 'gzip' encoding.
+var DefaultTransport http.RoundTripper = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
 		Timeout:   30 * time.Second,
@@ -35,6 +36,7 @@ var defaultMinioTransport http.RoundTripper = &http.Transport{
 		DualStack: true,
 	}).DialContext,
 	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   100,
 	IdleConnTimeout:       90 * time.Second,
 	TLSHandshakeTimeout:   10 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,

@@ -386,11 +386,6 @@
 			"revisionTime": "2018-01-23T12:12:34Z"
 		},
 		{
-			"path": "github.com/minio/go-homedir",
-			"revision": "0b1069c753c94b3633cc06a1995252dbcc27c7a6",
-			"revisionTime": "2016-02-15T17:25:11+05:30"
-		},
-		{
 			"checksumSHA1": "w7ykRf31om2J6832Py4Kz/PEnSI=",
 			"path": "github.com/minio/highwayhash",
 			"revision": "1ea1b5fce73b1d7abbd822a194b51f3736b1f23b",
@@ -408,46 +403,46 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "wPmY8+2/EZHIgrrqCVk21Z4+TCc=",
+			"checksumSHA1": "XSYD1N4v3EtbiwJQpIO71ZaucP0=",
 			"path": "github.com/minio/minio-go",
-			"revision": "93f1e8b8551b56c54dcb6b0fbb459546f54d9774",
-			"revisionTime": "2017-12-24T05:09:42Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "5juljGXPkBWENR2Os7dlnPQER48=",
+			"checksumSHA1": "Qsj+6JPmJ8R5rFNQSHqRb8xAwOw=",
 			"path": "github.com/minio/minio-go/pkg/credentials",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "pggIpSePizRBQ7ybhB0CuaSQydw=",
+			"checksumSHA1": "p21oRW905lv0UBfpAm5Vs6EBmB8=",
 			"path": "github.com/minio/minio-go/pkg/encrypt",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "3tl2ehmod/EzXE9o9WJ5HM2AQPE=",
+			"checksumSHA1": "Df4SG4ratsLn8yE9SkHcZiKhKRU=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "ENjhnv4qjgfc3/v6nJhLNR4COOQ=",
+			"checksumSHA1": "bbWjcrOQsV57qK+BSsrNAsI+Q/o=",
 			"path": "github.com/minio/minio-go/pkg/s3signer",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "jWv8ONT9vgsX6MAMfCWHsyJtmHU=",
+			"checksumSHA1": "xrJThFwwkVrJdwd5iYFHqfx4wRY=",
 			"path": "github.com/minio/minio-go/pkg/s3utils",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
-			"checksumSHA1": "maUy+dbN6VfTTnfErrAW2lLit1w=",
+			"checksumSHA1": "Wt8ej+rZXTdNBR9Xyw1eGo3Iq5o=",
 			"path": "github.com/minio/minio-go/pkg/set",
-			"revision": "84539d76271caeffb7a1d5f058bd83c6449f8145",
-			"revisionTime": "2017-09-01T08:51:27Z"
+			"revision": "bfac4536aea242ea4d05fb552d2a85f397a85369",
+			"revisionTime": "2018-03-12T23:14:54Z"
 		},
 		{
 			"checksumSHA1": "cYuXpiVBMypgkEr0Wqd79jPPyBg=",
@@ -460,6 +455,12 @@
 			"path": "github.com/minio/sio",
 			"revision": "83dd737d26dbcf4847f48ecec77c2c13f739eb25",
 			"revisionTime": "2018-03-01T21:58:29Z"
+		},
+		{
+			"checksumSHA1": "V/quM7+em2ByJbWBLOsEwnY3j/Q=",
+			"path": "github.com/mitchellh/go-homedir",
+			"revision": "b8bc1bf767474819792c23f32d8286a45736f1c6",
+			"revisionTime": "2016-12-03T19:45:07Z"
 		},
 		{
 			"checksumSHA1": "zvQr4zOz1/g/Fui6co0sctxrJ28=",
@@ -571,6 +572,18 @@
 			"path": "go.uber.org/atomic",
 			"revision": "3b8db5e93c4c02efbc313e17b2e796b0914a01fb",
 			"revisionTime": "2016-12-15T19:56:52Z"
+		},
+		{
+			"checksumSHA1": "ZD+2qFL2iuIXgLd3Q3xUadEhlr4=",
+			"path": "golang.org/x/crypto/argon2",
+			"revision": "91a49db82a88618983a78a06c1cbd4e00ab749ab",
+			"revisionTime": "2018-02-28T15:18:34Z"
+		},
+		{
+			"checksumSHA1": "ppPg0bIlBAVJy0Pn13BfBnkp9V4=",
+			"path": "golang.org/x/crypto/blake2b",
+			"revision": "182114d582623c1caa54f73de9c7224e23a48487",
+			"revisionTime": "2018-03-12T18:51:34Z"
 		},
 		{
 			"checksumSHA1": "CvMkf3KUUGUVHibg6G/zI7XtVbM=",

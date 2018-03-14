@@ -115,7 +115,7 @@ func (c Client) statObject(ctx context.Context, bucketName, objectName string, o
 		return ObjectInfo{}, err
 	}
 	if resp != nil {
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			return ObjectInfo{}, httpRespToErrorResponse(resp, bucketName, objectName)
 		}
 	}
