@@ -311,6 +311,26 @@ func mustNewPresignedRequest(method string, urlStr string, contentLength int64, 
 	return req
 }
 
+func mustNewSignedShortMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
+	req := mustNewRequest(method, urlStr, contentLength, body, t)
+	req.Header.Set("Content-Md5", "invalid-digest")
+	cred := globalServerConfig.GetCredential()
+	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
+		t.Fatalf("Unable to initialized new signed http request %s", err)
+	}
+	return req
+}
+
+func mustNewSignedEmptyMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
+	req := mustNewRequest(method, urlStr, contentLength, body, t)
+	req.Header.Set("Content-Md5", "")
+	cred := globalServerConfig.GetCredential()
+	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
+		t.Fatalf("Unable to initialized new signed http request %s", err)
+	}
+	return req
+}
+
 func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	req.Header.Set("Content-Md5", "YWFhYWFhYWFhYWFhYWFhCg==")
@@ -345,6 +365,10 @@ func TestIsReqAuthenticated(t *testing.T) {
 		{nil, ErrInternalError},
 		// When request is unsigned, access denied is returned.
 		{mustNewRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrAccessDenied},
+		// Empty Content-Md5 header.
+		{mustNewSignedEmptyMD5Request("PUT", "http://127.0.0.1:9000/", 5, bytes.NewReader([]byte("hello")), t), ErrInvalidDigest},
+		// Short Content-Md5 header.
+		{mustNewSignedShortMD5Request("PUT", "http://127.0.0.1:9000/", 5, bytes.NewReader([]byte("hello")), t), ErrInvalidDigest},
 		// When request is properly signed, but has bad Content-MD5 header.
 		{mustNewSignedBadMD5Request("PUT", "http://127.0.0.1:9000/", 5, bytes.NewReader([]byte("hello")), t), ErrBadDigest},
 		// When request is properly signed, error is none.
