@@ -18,6 +18,8 @@ package sia
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -39,7 +41,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/sha256-simd"
 )
 
 const (
@@ -298,17 +299,17 @@ func get(addr, call, apiPassword string) error {
 
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
-func (s *siaObjects) Shutdown() error {
+func (s *siaObjects) Shutdown(ctx context.Context) error {
 	return nil
 }
 
 // StorageInfo is not relevant to Sia backend.
-func (s *siaObjects) StorageInfo() (si minio.StorageInfo) {
+func (s *siaObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
 	return si
 }
 
 // MakeBucket creates a new container on Sia backend.
-func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
+func (s *siaObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(srcFile)
 
@@ -326,7 +327,7 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo gets bucket metadata.
-func (s *siaObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, err error) {
+func (s *siaObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
 	sha256sum := sha256.Sum256([]byte(bucket))
 	var siaObj = path.Join(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
 
@@ -340,7 +341,7 @@ func (s *siaObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, err erro
 }
 
 // ListBuckets will detect and return existing buckets on Sia.
-func (s *siaObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
+func (s *siaObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	sObjs, serr := s.listRenterFiles("")
 	if serr != nil {
 		return buckets, serr
@@ -370,14 +371,14 @@ func (s *siaObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 }
 
 // DeleteBucket deletes a bucket on Sia.
-func (s *siaObjects) DeleteBucket(bucket string) error {
+func (s *siaObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	sha256sum := sha256.Sum256([]byte(bucket))
 	var siaObj = path.Join(s.RootDir, bucket, hex.EncodeToString(sha256sum[:]))
 
 	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)
 }
 
-func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
+func (s *siaObjects) ListObjects(ctx context.Context, bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	siaObjs, siaErr := s.listRenterFiles(bucket)
 	if siaErr != nil {
 		return loi, siaErr
@@ -410,7 +411,7 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	return loi, nil
 }
 
-func (s *siaObjects) GetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(dstFile)
 
@@ -483,7 +484,7 @@ func (s *siaObjects) findSiaObject(bucket, object string) (siaObjectInfo, error)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(bucket string, object string) (minio.ObjectInfo, error) {
+func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object string) (minio.ObjectInfo, error) {
 	so, err := s.findSiaObject(bucket, object)
 	if err != nil {
 		return minio.ObjectInfo{}, err
@@ -500,7 +501,7 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (minio.ObjectIn
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	writer, err := os.Create(srcFile)
 	if err != nil {
@@ -529,7 +530,7 @@ func (s *siaObjects) PutObject(bucket string, object string, data *hash.Reader, 
 }
 
 // DeleteObject deletes a blob in bucket
-func (s *siaObjects) DeleteObject(bucket string, object string) error {
+func (s *siaObjects) DeleteObject(ctx context.Context, bucket string, object string) error {
 	// Tell Sia daemon to delete the object
 	var siaObj = path.Join(s.RootDir, bucket, object)
 	return post(s.Address, "/renter/delete/"+siaObj, "", s.password)

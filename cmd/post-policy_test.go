@@ -138,7 +138,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucketWithLocation(bucketName, "")
+	err = obj.MakeBucketWithLocation(nil, bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -229,7 +229,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		}
 		// When the operation is successful, check if sending metadata is successful too
 		if rec.Code == http.StatusNoContent {
-			objInfo, err := obj.GetObjectInfo(bucketName, testCase.objectName+"/upload.txt")
+			objInfo, err := obj.GetObjectInfo(nil, bucketName, testCase.objectName+"/upload.txt")
 			if err != nil {
 				t.Error("Unexpected error: ", err)
 			}
@@ -448,7 +448,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
-	err = obj.MakeBucketWithLocation(bucketName, "")
+	err = obj.MakeBucketWithLocation(nil, bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -482,7 +482,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	}
 
 	// Get the uploaded object info
-	info, err := obj.GetObjectInfo(bucketName, targetObj)
+	info, err := obj.GetObjectInfo(nil, bucketName, targetObj)
 	if err != nil {
 		t.Error("Unexpected error: ", err)
 	}

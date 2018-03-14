@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sync"
@@ -25,14 +26,14 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func (xl xlObjects) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
+func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
 }
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
-func (xl xlObjects) HealBucket(bucket string, dryRun bool) (
+func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) (
 	results []madmin.HealResultItem, err error) {
 
 	if err = checkBucketExist(bucket, xl); err != nil {
@@ -167,7 +168,7 @@ func healBucketMetadata(xl xlObjects, bucket string, dryRun bool) (
 	results []madmin.HealResultItem, err error) {
 
 	healBucketMetaFn := func(metaPath string) error {
-		result, healErr := xl.HealObject(minioMetaBucket, metaPath, dryRun)
+		result, healErr := xl.HealObject(nil, minioMetaBucket, metaPath, dryRun)
 		// If object is not found, no result to add.
 		if isErrObjectNotFound(healErr) {
 			return nil
@@ -496,7 +497,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 // FIXME: If an object object was deleted and one disk was down,
 // and later the disk comes back up again, heal on the object
 // should delete it.
-func (xl xlObjects) HealObject(bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
+func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
 
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks

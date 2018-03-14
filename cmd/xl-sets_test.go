@@ -123,7 +123,7 @@ func TestStorageInfoSets(t *testing.T) {
 	}
 
 	// Get storage info first attempt.
-	disks16Info := objLayer.StorageInfo()
+	disks16Info := objLayer.StorageInfo(nil)
 
 	// This test assumes homogeneity between all disks,
 	// i.e if we loose one disk the effective storage

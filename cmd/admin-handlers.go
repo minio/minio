@@ -348,6 +348,7 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "ClearLocks")
 
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
@@ -379,7 +380,8 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
-	newObjectLayerFn().ClearLocks(volLocks)
+
+	newObjectLayerFn().ClearLocks(ctx, volLocks)
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
@@ -447,6 +449,8 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 // sequence. However, if the force-start flag is provided, the server
 // aborts the running heal sequence and starts a new one.
 func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "Heal")
+
 	// Get object layer instance.
 	objLayer := newObjectLayerFn()
 	if objLayer == nil {
@@ -515,7 +519,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find number of disks in the setup
-	info := objLayer.StorageInfo()
+	info := objLayer.StorageInfo(ctx)
 	numDisks := info.Backend.OfflineDisks + info.Backend.OnlineDisks
 
 	if clientToken == "" {

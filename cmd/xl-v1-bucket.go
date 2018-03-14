@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"sync"
@@ -34,7 +35,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
+func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return errors.Trace(BucketNameInvalid{Bucket: bucket})
@@ -150,7 +151,7 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
-func (xl xlObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
 	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
 	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
 		return bi, e
@@ -209,7 +210,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 }
 
 // ListBuckets - lists all the buckets, sorted by its name.
-func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
+func (xl xlObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	bucketInfos, err := xl.listBuckets()
 	if err != nil {
 		return nil, toObjectErr(err)
@@ -220,7 +221,7 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 }
 
 // DeleteBucket - deletes a bucket.
-func (xl xlObjects) DeleteBucket(bucket string) error {
+func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
@@ -282,12 +283,12 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 }
 
 // SetBucketPolicy sets policy on bucket
-func (xl xlObjects) SetBucketPolicy(bucket string, policy policy.BucketAccessPolicy) error {
+func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
 	return persistAndNotifyBucketPolicyChange(bucket, false, policy, xl)
 }
 
 // GetBucketPolicy will get policy on bucket
-func (xl xlObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
 	// fetch bucket policy from cache.
 	bpolicy := xl.bucketPolicies.GetBucketPolicy(bucket)
 	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
@@ -297,12 +298,12 @@ func (xl xlObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, e
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
-func (xl xlObjects) DeleteBucketPolicy(bucket string) error {
+func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, xl)
 }
 
 // RefreshBucketPolicy refreshes policy cache from disk
-func (xl xlObjects) RefreshBucketPolicy(bucket string) error {
+func (xl xlObjects) RefreshBucketPolicy(ctx context.Context, bucket string) error {
 	policy, err := ReadBucketPolicy(bucket, xl)
 
 	if err != nil {

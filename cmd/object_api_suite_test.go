@@ -77,7 +77,7 @@ func (s *ObjectLayerAPISuite) TestMakeBucket(t *testing.T) {
 
 // Tests validate bucket creation.
 func testMakeBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket-unknown", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket-unknown", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -90,11 +90,11 @@ func (s *ObjectLayerAPISuite) TestMultipartObjectCreation(t *testing.T) {
 
 // Tests validate creation of part files during Multipart operation.
 func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
+	uploadID, err := obj.NewMultipartUpload(nil, "bucket", "key", nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -105,7 +105,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 		expectedETaghex := getMD5Hash(data)
 
 		var calcPartInfo PartInfo
-		calcPartInfo, err = obj.PutObjectPart("bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBuffer(data), int64(len(data)), expectedETaghex, ""))
+		calcPartInfo, err = obj.PutObjectPart(nil, "bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBuffer(data), int64(len(data)), expectedETaghex, ""))
 		if err != nil {
 			t.Errorf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -117,7 +117,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 			ETag:       calcPartInfo.ETag,
 		})
 	}
-	objInfo, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
+	objInfo, err := obj.CompleteMultipartUpload(nil, "bucket", "key", uploadID, completedParts.Parts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -133,11 +133,11 @@ func (s *ObjectLayerAPISuite) TestMultipartObjectAbort(t *testing.T) {
 
 // Tests validate abortion of Multipart operation.
 func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	uploadID, err := obj.NewMultipartUpload("bucket", "key", nil)
+	uploadID, err := obj.NewMultipartUpload(nil, "bucket", "key", nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -155,7 +155,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 
 		metadata["md5"] = expectedETaghex
 		var calcPartInfo PartInfo
-		calcPartInfo, err = obj.PutObjectPart("bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), expectedETaghex, ""))
+		calcPartInfo, err = obj.PutObjectPart(nil, "bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), expectedETaghex, ""))
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -164,7 +164,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 		}
 		parts[i] = expectedETaghex
 	}
-	err = obj.AbortMultipartUpload("bucket", "key", uploadID)
+	err = obj.AbortMultipartUpload(nil, "bucket", "key", uploadID)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -178,7 +178,7 @@ func (s *ObjectLayerAPISuite) TestMultipleObjectCreation(t *testing.T) {
 // Tests validate object creation.
 func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	objects := make(map[string][]byte)
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -196,7 +196,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 		metadata := make(map[string]string)
 		metadata["etag"] = expectedETaghex
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject("bucket", key, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), metadata["etag"], ""), metadata)
+		objInfo, err = obj.PutObject(nil, "bucket", key, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), metadata["etag"], ""), metadata)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -207,7 +207,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		err = obj.GetObject("bucket", key, 0, int64(len(value)), &byteBuffer, "")
+		err = obj.GetObject(nil, "bucket", key, 0, int64(len(value)), &byteBuffer, "")
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -215,7 +215,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 			t.Errorf("%s: Mismatch of GetObject data with the expected one.", instanceType)
 		}
 
-		objInfo, err := obj.GetObjectInfo("bucket", key)
+		objInfo, err := obj.GetObjectInfo(nil, "bucket", key)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -233,8 +233,8 @@ func (s *ObjectLayerAPISuite) TestPaging(t *testing.T) {
 
 // Tests validate creation of objects and the order of listing using various filters for ListObjects operation.
 func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	obj.MakeBucketWithLocation("bucket", "")
-	result, err := obj.ListObjects("bucket", "", "", "", 0)
+	obj.MakeBucketWithLocation(nil, "bucket", "")
+	result, err := obj.ListObjects(nil, "bucket", "", "", "", 0)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -249,12 +249,12 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check before paging occurs.
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject("bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
 
-		result, err = obj.ListObjects("bucket", "", "", "", 5)
+		result, err = obj.ListObjects(nil, "bucket", "", "", "", 5)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -269,11 +269,11 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check after paging occurs pages work.
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject("bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		result, err = obj.ListObjects("bucket", "obj", "", "", 5)
+		result, err = obj.ListObjects(nil, "bucket", "obj", "", "", 5)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -286,15 +286,15 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	// check paging with prefix at end returns less objects.
 	{
-		_, err = obj.PutObject("bucket", "newPrefix", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", "newPrefix", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		_, err = obj.PutObject("bucket", "newPrefix2", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", "newPrefix2", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		result, err = obj.ListObjects("bucket", "new", "", "", 5)
+		result, err = obj.ListObjects(nil, "bucket", "new", "", "", 5)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -305,7 +305,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check ordering of pages.
 	{
-		result, err = obj.ListObjects("bucket", "", "", "", 1000)
+		result, err = obj.ListObjects(nil, "bucket", "", "", "", 1000)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -328,15 +328,15 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check delimited results with delimiter and prefix.
 	{
-		_, err = obj.PutObject("bucket", "this/is/delimited", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", "this/is/delimited", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		_, err = obj.PutObject("bucket", "this/is/also/a/delimited/file", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+		_, err = obj.PutObject(nil, "bucket", "this/is/also/a/delimited/file", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		result, err = obj.ListObjects("bucket", "this/is/", "", "/", 10)
+		result, err = obj.ListObjects(nil, "bucket", "this/is/", "", "/", 10)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -350,7 +350,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check delimited results with delimiter without prefix.
 	{
-		result, err = obj.ListObjects("bucket", "", "", "/", 1000)
+		result, err = obj.ListObjects(nil, "bucket", "", "", "/", 1000)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -378,7 +378,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check results with Marker.
 	{
 
-		result, err = obj.ListObjects("bucket", "", "newPrefix", "", 3)
+		result, err = obj.ListObjects(nil, "bucket", "", "newPrefix", "", 3)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -394,7 +394,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	// check ordering of results with prefix.
 	{
-		result, err = obj.ListObjects("bucket", "obj", "", "", 1000)
+		result, err = obj.ListObjects(nil, "bucket", "obj", "", "", 1000)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -416,7 +416,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	// check ordering of results with prefix and no paging.
 	{
-		result, err = obj.ListObjects("bucket", "new", "", "", 5)
+		result, err = obj.ListObjects(nil, "bucket", "new", "", "", 5)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -436,27 +436,27 @@ func (s *ObjectLayerAPISuite) TestObjectOverwriteWorks(t *testing.T) {
 
 // Tests validate overwriting of an existing object.
 func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	uploadContent := "The list of parts was not in ascending order. The parts list must be specified in order by part number."
 	length := int64(len(uploadContent))
-	_, err = obj.PutObject("bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	uploadContent = "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
 	length = int64(len(uploadContent))
-	_, err = obj.PutObject("bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer, "")
+	err = obj.GetObject(nil, "bucket", "object", 0, length, &bytesBuffer, "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -472,7 +472,7 @@ func (s *ObjectLayerAPISuite) TestNonExistantBucketOperations(t *testing.T) {
 
 // Tests validate that bucket operation on non-existent bucket fails.
 func testNonExistantBucketOperations(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	_, err := obj.PutObject("bucket1", "object", mustGetHashReader(t, bytes.NewBufferString("one"), int64(len("one")), "", ""), nil)
+	_, err := obj.PutObject(nil, "bucket1", "object", mustGetHashReader(t, bytes.NewBufferString("one"), int64(len("one")), "", ""), nil)
 	if err == nil {
 		t.Fatal("Expected error but found nil")
 	}
@@ -488,11 +488,11 @@ func (s *ObjectLayerAPISuite) TestBucketRecreateFails(t *testing.T) {
 
 // Tests validate that recreation of the bucket fails.
 func testBucketRecreateFails(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("string", "")
+	err := obj.MakeBucketWithLocation(nil, "string", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.MakeBucketWithLocation("string", "")
+	err = obj.MakeBucketWithLocation(nil, "string", "")
 	if err == nil {
 		t.Fatalf("%s: Expected error but found nil.", instanceType)
 	}
@@ -513,17 +513,17 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	length := int64(len(content))
 	readerEOF := newTestReaderEOF(content)
 	readerNoEOF := newTestReaderNoEOF(content)
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	var bytesBuffer1 bytes.Buffer
-	_, err = obj.PutObject("bucket", "object", mustGetHashReader(t, readerEOF, length, "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "object", mustGetHashReader(t, readerEOF, length, "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer1, "")
+	err = obj.GetObject(nil, "bucket", "object", 0, length, &bytesBuffer1, "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -532,11 +532,11 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	var bytesBuffer2 bytes.Buffer
-	_, err = obj.PutObject("bucket", "object", mustGetHashReader(t, readerNoEOF, length, "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "object", mustGetHashReader(t, readerNoEOF, length, "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer2, "")
+	err = obj.GetObject(nil, "bucket", "object", 0, length, &bytesBuffer2, "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -552,7 +552,7 @@ func (s *ObjectLayerAPISuite) TestPutObjectInSubdir(t *testing.T) {
 
 // Tests validate PutObject with subdirectory prefix.
 func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -560,13 +560,13 @@ func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandle
 	uploadContent := `The specified multipart upload does not exist. The upload ID might be invalid, or the multipart
  upload might have been aborted or completed.`
 	length := int64(len(uploadContent))
-	_, err = obj.PutObject("bucket", "dir1/dir2/object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "dir1/dir2/object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject("bucket", "dir1/dir2/object", 0, length, &bytesBuffer, "")
+	err = obj.GetObject(nil, "bucket", "dir1/dir2/object", 0, length, &bytesBuffer, "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -584,7 +584,7 @@ func (s *ObjectLayerAPISuite) TestListBuckets(t *testing.T) {
 // Tests validate ListBuckets.
 func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// test empty list.
-	buckets, err := obj.ListBuckets()
+	buckets, err := obj.ListBuckets(nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -593,12 +593,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add one and test exists.
-	err = obj.MakeBucketWithLocation("bucket1", "")
+	err = obj.MakeBucketWithLocation(nil, "bucket1", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets()
+	buckets, err = obj.ListBuckets(nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -607,12 +607,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add two and test exists.
-	err = obj.MakeBucketWithLocation("bucket2", "")
+	err = obj.MakeBucketWithLocation(nil, "bucket2", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets()
+	buckets, err = obj.ListBuckets(nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -621,12 +621,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add three and test exists + prefix.
-	err = obj.MakeBucketWithLocation("bucket22", "")
+	err = obj.MakeBucketWithLocation(nil, "bucket22", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets()
+	buckets, err = obj.ListBuckets(nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -645,15 +645,15 @@ func testListBucketsOrder(obj ObjectLayer, instanceType string, t TestErrHandler
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time.
 	// add one and test exists.
-	err := obj.MakeBucketWithLocation("bucket1", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket1", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.MakeBucketWithLocation("bucket2", "")
+	err = obj.MakeBucketWithLocation(nil, "bucket2", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	buckets, err := obj.ListBuckets()
+	buckets, err := obj.ListBuckets(nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -676,7 +676,7 @@ func (s *ObjectLayerAPISuite) TestListObjectsTestsForNonExistantBucket(t *testin
 
 // Tests validate that ListObjects operation on a non-existent bucket fails as expected.
 func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	result, err := obj.ListObjects("bucket", "", "", "", 1000)
+	result, err := obj.ListObjects(nil, "bucket", "", "", "", 1000)
 	if err == nil {
 		t.Fatalf("%s: Expected error but found nil.", instanceType)
 	}
@@ -698,12 +698,12 @@ func (s *ObjectLayerAPISuite) TestNonExistantObjectInBucket(t *testing.T) {
 
 // Tests validate that GetObject fails on a non-existent bucket as expected.
 func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	_, err = obj.GetObjectInfo("bucket", "dir1")
+	_, err = obj.GetObjectInfo(nil, "bucket", "dir1")
 	if err == nil {
 		t.Fatalf("%s: Expected error but found nil", instanceType)
 	}
@@ -726,13 +726,13 @@ func (s *ObjectLayerAPISuite) TestGetDirectoryReturnsObjectNotFound(t *testing.T
 // Tests validate that GetObject on an existing directory fails as expected.
 func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bucketName := "bucket"
-	err := obj.MakeBucketWithLocation(bucketName, "")
+	err := obj.MakeBucketWithLocation(nil, bucketName, "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 	content := "One or more of the specified parts could not be found. The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."
 	length := int64(len(content))
-	_, err = obj.PutObject(bucketName, "dir1/dir3/object", mustGetHashReader(t, bytes.NewBufferString(content), length, "", ""), nil)
+	_, err = obj.PutObject(nil, bucketName, "dir1/dir3/object", mustGetHashReader(t, bytes.NewBufferString(content), length, "", ""), nil)
 
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
@@ -753,7 +753,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	for i, testCase := range testCases {
-		_, expectedErr := obj.GetObjectInfo(bucketName, testCase.dir)
+		_, expectedErr := obj.GetObjectInfo(nil, bucketName, testCase.dir)
 		if expectedErr != nil {
 			expectedErr = errors.Cause(expectedErr)
 			if expectedErr.Error() != testCase.err.Error() {
@@ -770,17 +770,17 @@ func (s *ObjectLayerAPISuite) TestContentType(t *testing.T) {
 
 // Test content-type.
 func testContentType(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation("bucket", "")
+	err := obj.MakeBucketWithLocation(nil, "bucket", "")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 	uploadContent := "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
 	// Test empty.
-	_, err = obj.PutObject("bucket", "minio.png", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
+	_, err = obj.PutObject(nil, "bucket", "minio.png", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	objInfo, err := obj.GetObjectInfo("bucket", "minio.png")
+	objInfo, err := obj.GetObjectInfo(nil, "bucket", "minio.png")
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}

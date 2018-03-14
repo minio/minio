@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -28,50 +29,50 @@ import (
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Storage operations.
-	Shutdown() error
-	StorageInfo() StorageInfo
+	Shutdown(context.Context) error
+	StorageInfo(context.Context) StorageInfo
 
 	// Bucket operations.
-	MakeBucketWithLocation(bucket string, location string) error
-	GetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
-	ListBuckets() (buckets []BucketInfo, err error)
-	DeleteBucket(bucket string) error
-	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
-	ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
+	MakeBucketWithLocation(ctx context.Context, bucket string, location string) error
+	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
+	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
+	DeleteBucket(ctx context.Context, bucket string) error
+	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
+	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 
 	// Object operations.
-	GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
-	GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
-	PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
-	CopyObject(srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error)
-	DeleteObject(bucket, object string) error
+	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
+	GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
+	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
+	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error)
+	DeleteObject(ctx context.Context, bucket, object string) error
 
 	// Multipart operations.
-	ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
-	NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error)
-	CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
+	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
+	NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error)
+	CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
 		startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error)
-	PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
-	ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
-	AbortMultipartUpload(bucket, object, uploadID string) error
-	CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
+	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
+	ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
+	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error
+	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Healing operations.
-	HealFormat(dryRun bool) (madmin.HealResultItem, error)
-	HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error)
-	HealObject(bucket, object string, dryRun bool) (madmin.HealResultItem, error)
-	ListBucketsHeal() (buckets []BucketInfo, err error)
-	ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
+	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
+	HealBucket(ctx context.Context, bucket string, dryRun bool) ([]madmin.HealResultItem, error)
+	HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error)
+	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
+	ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
 
 	// Locking operations
-	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-	ClearLocks([]VolumeLockInfo) error
+	ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
+	ClearLocks(context.Context, []VolumeLockInfo) error
 
 	// Policy operations
-	SetBucketPolicy(string, policy.BucketAccessPolicy) error
-	GetBucketPolicy(string) (policy.BucketAccessPolicy, error)
-	RefreshBucketPolicy(string) error
-	DeleteBucketPolicy(string) error
+	SetBucketPolicy(context.Context, string, policy.BucketAccessPolicy) error
+	GetBucketPolicy(context.Context, string) (policy.BucketAccessPolicy, error)
+	RefreshBucketPolicy(context.Context, string) error
+	DeleteBucketPolicy(context.Context, string) error
 
 	// Supported operations check
 	IsNotificationSupported() bool

@@ -83,7 +83,7 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(dryRun)
+	_, err := objectAPI.HealFormat(nil, dryRun)
 	return err
 }
 
@@ -137,7 +137,7 @@ func (lc localAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 	if objLayer == nil {
 		return sid, errServerNotInitialized
 	}
-	storage := objLayer.StorageInfo()
+	storage := objLayer.StorageInfo(nil)
 
 	return ServerInfoData{
 		StorageInfo: storage,

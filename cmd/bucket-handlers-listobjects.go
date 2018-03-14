@@ -53,6 +53,8 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 // NOTE: It is recommended that this API to be used for application development.
 // Minio continues to support ListObjectsV1 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "ListObjectsV2")
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -88,7 +90,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
-	listObjectsV2Info, err := objectAPI.ListObjectsV2(bucket, prefix, marker, delimiter, maxKeys, fetchOwner, startAfter)
+	listObjectsV2Info, err := objectAPI.ListObjectsV2(ctx, bucket, prefix, marker, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -118,6 +120,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 // criteria to return a subset of the objects in a bucket.
 //
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, "ListObjectsV1")
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -149,7 +153,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshalled into S3 compatible XML header.
-	listObjectsInfo, err := objectAPI.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	listObjectsInfo, err := objectAPI.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
