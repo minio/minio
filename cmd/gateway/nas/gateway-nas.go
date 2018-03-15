@@ -17,6 +17,8 @@
 package nas
 
 import (
+	"context"
+
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
@@ -71,8 +73,8 @@ EXAMPLES:
 func nasGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
-	if host == "" {
-		cli.ShowCommandHelpAndExit(ctx, "nas", 1)
+	if host == "help" {
+		cli.ShowCommandHelpAndExit(ctx, nasBackend, 1)
 	}
 	// Validate gateway arguments.
 	minio.StartGateway(ctx, &NAS{host})
@@ -114,6 +116,6 @@ func (l *nasObjects) IsNotificationSupported() bool {
 }
 
 // GetBucketPolicy will get policy on bucket
-func (l *nasObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+func (l *nasObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
 	return minio.ReadBucketPolicy(bucket, l)
 }

@@ -34,9 +34,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
+
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/pkg/profile"
 )
 
@@ -318,6 +319,7 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	return
 }
 
+// Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, api string) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

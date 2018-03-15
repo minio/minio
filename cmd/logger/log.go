@@ -19,7 +19,9 @@ package logger
 import "context"
 
 // Key used for ContextSet/Get
-const contextKey = "reqInfo"
+type contextKeyType string
+
+const contextLogKey = contextKeyType("miniolog")
 
 // KeyVal - appended to ReqInfo.Tags
 type KeyVal struct {
@@ -48,12 +50,12 @@ func (r *ReqInfo) AppendTags(key string, val string) {
 
 // ContextSet sets ReqInfo in the context.
 func ContextSet(ctx context.Context, req *ReqInfo) context.Context {
-	return context.WithValue(ctx, contextKey, req)
+	return context.WithValue(ctx, contextLogKey, req)
 }
 
 // ContextGet returns ReqInfo if set.
 func ContextGet(ctx context.Context) *ReqInfo {
-	r, ok := ctx.Value(contextKey).(*ReqInfo)
+	r, ok := ctx.Value(contextLogKey).(*ReqInfo)
 	if ok {
 		return r
 	}
