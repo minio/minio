@@ -491,27 +491,27 @@ func mainUpdate(ctx *cli.Context) {
 	minioMode := ""
 	updateMsg, sha256Hex, _, latestReleaseTime, err := getUpdateInfo(10*time.Second, minioMode)
 	if err != nil {
-		log.Println(err)
+		LogInfoMessage(err.Error())
 		os.Exit(-1)
 	}
 
 	// Nothing to update running the latest release.
 	if updateMsg == "" {
-		log.Println(greenColorSprintf("You are already running the most recent version of ‘minio’."))
+		LogInfoMessage(greenColorSprintf("You are already running the most recent version of ‘minio’."))
 		os.Exit(0)
 	}
 
-	log.Println(updateMsg)
+	LogInfoMessage(updateMsg)
 	// if the in-place update is disabled then we shouldn't ask the
 	// user to update the binaries.
 	if strings.Contains(updateMsg, minioReleaseURL) && !globalInplaceUpdateDisabled {
 		var successMsg string
 		successMsg, err = doUpdate(sha256Hex, latestReleaseTime, shouldUpdate(quiet, sha256Hex, latestReleaseTime))
 		if err != nil {
-			log.Println(err)
+			LogInfoMessage(err.Error())
 			os.Exit(-1)
 		}
-		log.Println(successMsg)
+		LogInfoMessage(successMsg)
 		os.Exit(1)
 	}
 }

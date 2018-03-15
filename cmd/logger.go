@@ -37,13 +37,16 @@ type Level int8
 
 // Enumerated level types
 const (
-	Error Level = iota + 1
+	Info Level = iota + 1
+	Error
 	Fatal
 )
 
 func (level Level) String() string {
 	var lvlStr string
 	switch level {
+	case Info:
+		lvlStr = "INFO"
 	case Error:
 		lvlStr = "ERROR"
 	case Fatal:
@@ -56,8 +59,25 @@ type logEntry struct {
 	Level   string   `json:"level"`
 	Message string   `json:"message"`
 	Time    string   `json:"time"`
-	Cause   string   `json:"cause"`
-	Trace   []string `json:"trace"`
+	Cause   string   `json:"cause,omitempty"`
+	Trace   []string `json:"trace,omitempty"`
+}
+
+// Console interface describes the methods that needs to be implemented to satisfy the interface requirements.
+type Console interface {
+	json(cause, msg string, args ...interface{})
+	quiet(cause, msg string, args ...interface{})
+	pretty(cause, msg string, args ...interface{})
+}
+
+func consoleLog(console Console, cause, msg string, args ...interface{}) {
+	if log.json {
+		console.json(cause, msg, args...)
+	} else if log.quiet {
+		console.quiet(cause, msg, args...)
+	} else {
+		console.pretty(cause, msg, args...)
+	}
 }
 
 // Logger - for console messages
@@ -80,20 +100,6 @@ func (log *Logger) EnableQuiet() {
 func (log *Logger) EnableJSON() {
 	log.json = true
 	log.quiet = true
-}
-
-// Println - wrapper to console.Println() with quiet flag.
-func (log *Logger) Println(args ...interface{}) {
-	if !log.quiet {
-		console.Println(args...)
-	}
-}
-
-// Printf - wrapper to console.Printf() with quiet flag.
-func (log *Logger) Printf(format string, args ...interface{}) {
-	if !log.quiet {
-		console.Printf(format, args...)
-	}
 }
 
 func init() {
@@ -219,5 +225,89 @@ func errorIf(err error, msg string, data ...interface{}) {
 }
 
 func fatalIf(err error, msg string, data ...interface{}) {
-	logIf(Fatal, err, msg, data...)
+	if err != nil {
+		consoleLog(fatalMessage, err.Error(), msg, data...)
+	}
+}
+
+var fatalMessage fatalMsg
+
+type fatalMsg struct {
+}
+
+func (f fatalMsg) json(cause, msg string, args ...interface{}) {
+
+	logJSON, err := json.Marshal(&logEntry{
+		Level:   Fatal.String(),
+		Message: fmt.Sprintf(msg, args...),
+		Time:    UTCNow().Format(time.RFC3339Nano),
+		Cause:   cause,
+	})
+	if err != nil {
+		panic("json marshal of logEntry failed: " + err.Error())
+	}
+	fmt.Println(string(logJSON))
+	os.Exit(1)
+
+}
+
+func (f fatalMsg) quiet(cause, msg string, args ...interface{}) {
+	f.pretty(cause, msg, args...)
+}
+
+func (f fatalMsg) pretty(cause, msg string, args ...interface{}) {
+	errMsg := fmt.Sprintf(msg, args...)
+	fmt.Println(colorRed(colorBold(errMsg)) + colorYellow(colorBold(" ("+cause+")")))
+	os.Exit(1)
+}
+
+var infoMessage infoMsg
+
+type infoMsg struct {
+}
+
+func (i infoMsg) json(cause, msg string, args ...interface{}) {
+
+	logJSON, err := json.Marshal(&logEntry{
+		Level:   Fatal.String(),
+		Message: fmt.Sprintf(msg, args...),
+		Time:    UTCNow().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		panic("json marshal of logEntry failed: " + err.Error())
+	}
+	fmt.Println(string(logJSON))
+}
+
+func (i infoMsg) quiet(cause, msg string, args ...interface{}) {
+	i.pretty(cause, msg, args...)
+}
+
+func (i infoMsg) pretty(cause, msg string, args ...interface{}) {
+	console.Printf(msg, args...)
+}
+
+// LogInfoMessage :
+func LogInfoMessage(msg string, data ...interface{}) {
+	consoleLog(infoMessage, "", msg+"\n", data...)
+}
+
+var startupMessage startUpMsg
+
+type startUpMsg struct {
+}
+
+func (s startUpMsg) json(cause, msg string, args ...interface{}) {
+}
+
+func (s startUpMsg) quiet(cause, msg string, args ...interface{}) {
+}
+
+func (s startUpMsg) pretty(cause, msg string, args ...interface{}) {
+	console.Printf(msg, args...)
+}
+
+// LogStartupMessage :
+func LogStartupMessage(msg string, data ...interface{}) {
+	consoleLog(startupMessage, "", msg+"\n", data...)
 }

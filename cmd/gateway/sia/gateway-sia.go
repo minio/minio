@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -150,9 +149,9 @@ func (g *Sia) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	colorBlue := color.New(color.FgBlue).SprintfFunc()
 	colorBold := color.New(color.Bold).SprintFunc()
 
-	log.Println(colorBlue("\nSia Gateway Configuration:"))
-	log.Println(colorBlue("  Sia Daemon API Address:") + colorBold(fmt.Sprintf(" %s\n", sia.Address)))
-	log.Println(colorBlue("  Sia Temp Directory:") + colorBold(fmt.Sprintf(" %s\n", sia.TempDir)))
+	minio.LogStartupMessage(colorBlue("\nSia Gateway Configuration:"))
+	minio.LogStartupMessage(colorBlue("  Sia Daemon API Address:") + colorBold(fmt.Sprintf(" %s\n", sia.Address)))
+	minio.LogStartupMessage(colorBlue("  Sia Temp Directory:") + colorBold(fmt.Sprintf(" %s\n", sia.TempDir)))
 	return sia, nil
 }
 
