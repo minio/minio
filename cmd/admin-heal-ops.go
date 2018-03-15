@@ -321,7 +321,7 @@ type healSequence struct {
 func newHealSequence(bucket, objPrefix, clientAddr string,
 	numDisks int, hs madmin.HealOpts, forceStart bool) *healSequence {
 
-	ctx := logger.ContextSet(context.Background(), &logger.ReqInfo{clientAddr, "", "", "Heal", bucket, objPrefix, nil})
+	ctx := logger.SetContext(context.Background(), &logger.ReqInfo{clientAddr, "", "", "Heal", bucket, objPrefix, nil})
 
 	return &healSequence{
 		bucket:        bucket,

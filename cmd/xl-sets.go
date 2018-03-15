@@ -368,7 +368,7 @@ func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		if errs[index] == nil {
 			g.Go(func() error {
-				return sets[index].DeleteBucket(nil, bucket)
+				return sets[index].DeleteBucket(context.Background(), bucket)
 			}, index)
 		}
 	}
@@ -509,7 +509,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		if errs[index] == nil {
 			g.Go(func() error {
-				return sets[index].MakeBucketWithLocation(nil, bucket, "")
+				return sets[index].MakeBucketWithLocation(context.Background(), bucket, "")
 			}, index)
 		}
 	}

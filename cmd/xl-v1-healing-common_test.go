@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -198,15 +199,15 @@ func TestListOnlineDisks(t *testing.T) {
 		// Prepare bucket/object backend for the tests below.
 
 		// Cleanup from previous test.
-		obj.DeleteObject(nil, bucket, object)
-		obj.DeleteBucket(nil, bucket)
+		obj.DeleteObject(context.Background(), bucket, object)
+		obj.DeleteBucket(context.Background(), bucket)
 
-		err = obj.MakeBucketWithLocation(nil, "bucket", "")
+		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
 
-		_, err = obj.PutObject(nil, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+		_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
 		if err != nil {
 			t.Fatalf("Failed to putObject %v", err)
 		}
@@ -298,12 +299,12 @@ func TestDisksWithAllParts(t *testing.T) {
 	xl := obj.(*xlObjects)
 	xlDisks := xl.storageDisks
 
-	err = obj.MakeBucketWithLocation(nil, "bucket", "")
+	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(nil, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}

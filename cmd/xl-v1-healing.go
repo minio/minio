@@ -168,7 +168,7 @@ func healBucketMetadata(xl xlObjects, bucket string, dryRun bool) (
 	results []madmin.HealResultItem, err error) {
 
 	healBucketMetaFn := func(metaPath string) error {
-		result, healErr := xl.HealObject(nil, minioMetaBucket, metaPath, dryRun)
+		result, healErr := xl.HealObject(context.Background(), minioMetaBucket, metaPath, dryRun)
 		// If object is not found, no result to add.
 		if isErrObjectNotFound(healErr) {
 			return nil

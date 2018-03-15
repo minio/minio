@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -44,7 +45,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		"empty-bucket",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(nil, bucket, "")
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -68,7 +69,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
-		_, err = obj.PutObject(nil, testBuckets[0], object.name, mustGetHashReader(t, bytes.NewBufferString(object.content),
+		_, err = obj.PutObject(context.Background(), testBuckets[0], object.name, mustGetHashReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), object.meta)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
@@ -524,7 +525,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := obj.ListObjects(nil, testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, int(testCase.maxKeys))
+		result, err := obj.ListObjects(context.Background(), testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, int(testCase.maxKeys))
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
@@ -565,7 +566,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		}
 		// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
 		if result.IsTruncated {
-			_, err = obj.ListObjects(nil, testCase.bucketName, testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
+			_, err = obj.ListObjects(context.Background(), testCase.bucketName, testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -603,7 +604,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -611,7 +612,7 @@ func BenchmarkListObjects(b *testing.B) {
 	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(nil, bucket, key, mustGetHashReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), nil)
+		_, err = obj.PutObject(context.Background(), bucket, key, mustGetHashReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -621,7 +622,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	// List the buckets over and over and over.
 	for i := 0; i < b.N; i++ {
-		_, err = obj.ListObjects(nil, bucket, "", "obj9000", "", -1)
+		_, err = obj.ListObjects(context.Background(), bucket, "", "obj9000", "", -1)
 		if err != nil {
 			b.Fatal(err)
 		}

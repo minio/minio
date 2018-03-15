@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"net/url"
@@ -50,7 +51,7 @@ func printStartupMessage(apiEndPoints []string) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(nil))
+		printStorageInfo(objAPI.StorageInfo(context.Background()))
 	}
 
 	// Prints credential, region and browser access.

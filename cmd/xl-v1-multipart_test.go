@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -50,8 +51,8 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucketWithLocation(nil, bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(nil, bucketName, objectName, nil)
+	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, nil)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
@@ -66,52 +67,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	globalServiceDoneCh <- struct{}{}
 
 	// Check if upload id was already purged.
-	if err = obj.AbortMultipartUpload(nil, bucketName, objectName, uploadID); err != nil {
-		err = errors.Cause(err)
-		if _, ok := err.(InvalidUploadID); !ok {
-			t.Fatal("Unexpected err: ", err)
-		}
-	}
-}
-
-// Tests cleanup of stale upload ids.
-func TestXLCleanupMultipartUpload(t *testing.T) {
-	// Initialize configuration
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-	defer os.RemoveAll(root)
-
-	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL16()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Defer cleanup of backend directories
-	defer removeRoots(fsDirs)
-
-	xl := obj.(*xlObjects)
-
-	// Close the go-routine, we are going to
-	// manually start it and test in this test case.
-	globalServiceDoneCh <- struct{}{}
-
-	bucketName := "bucket"
-	objectName := "object"
-
-	obj.MakeBucketWithLocation(nil, bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(nil, bucketName, objectName, nil)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	if err = cleanupStaleMultipartUpload(bucketName, 0, obj, xl.listMultipartUploadsCleanup); err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	// Check if upload id was already purged.
-	if err = obj.AbortMultipartUpload(nil, bucketName, objectName, uploadID); err != nil {
+	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
 		err = errors.Cause(err)
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)

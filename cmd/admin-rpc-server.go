@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -89,7 +90,7 @@ func (s *adminCmd) ReInitFormat(args *ReInitFormatArgs, reply *AuthRPCReply) err
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
-	_, err := newObjectLayerFn().HealFormat(nil, args.DryRun)
+	_, err := newObjectLayerFn().HealFormat(context.Background(), args.DryRun)
 	return err
 }
 
@@ -118,7 +119,7 @@ func (s *adminCmd) ServerInfoData(args *AuthRPCArgs, reply *ServerInfoDataReply)
 	if objLayer == nil {
 		return errServerNotInitialized
 	}
-	storageInfo := objLayer.StorageInfo(nil)
+	storageInfo := objLayer.StorageInfo(context.Background())
 
 	reply.ServerInfoData = ServerInfoData{
 		Properties: ServerProperties{

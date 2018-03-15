@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"path"
 	"sync"
 
@@ -144,7 +145,7 @@ func removeNotificationConfig(objAPI ObjectLayer, bucket string) error {
 
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 
-	return objAPI.DeleteObject(minioMetaBucket, ncPath)
+	return objAPI.DeleteObject(context.Background(), minioMetaBucket, ncPath)
 }
 
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
@@ -152,5 +153,5 @@ func removeListenerConfig(objAPI ObjectLayer, bucket string) error {
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 
-	return objAPI.DeleteObject(minioMetaBucket, lcPath)
+	return objAPI.DeleteObject(context.Background(), minioMetaBucket, lcPath)
 }

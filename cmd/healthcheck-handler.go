@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -51,7 +52,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// List buckets is unsuccessful, means server is having issues, send 503 service unavailable
-	if _, err := objLayer.ListBuckets(nil); err != nil {
+	if _, err := objLayer.ListBuckets(context.Background()); err != nil {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}

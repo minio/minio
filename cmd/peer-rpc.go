@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path"
 
@@ -58,7 +59,7 @@ func (receiver *PeerRPCReceiver) UpdateBucketPolicy(args *UpdateBucketPolicyArgs
 		// If the object layer is just coming up then it will load the policy from the disk.
 		return nil
 	}
-	return objectAPI.RefreshBucketPolicy(args.BucketName)
+	return objectAPI.RefreshBucketPolicy(context.Background(), args.BucketName)
 }
 
 // PutBucketNotificationArgs - put bucket notification RPC arguments.

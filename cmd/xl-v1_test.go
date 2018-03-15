@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"testing"
@@ -37,7 +38,7 @@ func TestStorageInfo(t *testing.T) {
 	}
 
 	// Get storage info first attempt.
-	disks16Info := objLayer.StorageInfo(nil)
+	disks16Info := objLayer.StorageInfo(context.Background())
 
 	// This test assumes homogenity between all disks,
 	// i.e if we loose one disk the effective storage

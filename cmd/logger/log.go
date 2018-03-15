@@ -18,7 +18,7 @@ package logger
 
 import "context"
 
-// Key used for ContextSet/Get
+// Key used for Get/SetContext
 type contextKeyType string
 
 const contextLogKey = contextKeyType("miniolog")
@@ -37,7 +37,7 @@ type ReqInfo struct {
 	API        string   // API name - GetObject PutObject NewMultipartUpload etc.
 	BucketName string   // Bucket name
 	ObjectName string   // Object name
-	Tags       []KeyVal // Any additional info not accomodated by above fields
+	Tags       []KeyVal // Any additional info not accommodated by above fields
 }
 
 // AppendTags - appends key/val to ReqInfo.Tags
@@ -48,13 +48,13 @@ func (r *ReqInfo) AppendTags(key string, val string) {
 	r.Tags = append(r.Tags, KeyVal{key, val})
 }
 
-// ContextSet sets ReqInfo in the context.
-func ContextSet(ctx context.Context, req *ReqInfo) context.Context {
+// SetContext sets ReqInfo in the context.
+func SetContext(ctx context.Context, req *ReqInfo) context.Context {
 	return context.WithValue(ctx, contextLogKey, req)
 }
 
-// ContextGet returns ReqInfo if set.
-func ContextGet(ctx context.Context) *ReqInfo {
+// GetContext returns ReqInfo if set.
+func GetContext(ctx context.Context) *ReqInfo {
 	r, ok := ctx.Value(contextLogKey).(*ReqInfo)
 	if ok {
 		return r

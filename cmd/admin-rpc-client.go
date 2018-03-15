@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -83,7 +84,7 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(nil, dryRun)
+	_, err := objectAPI.HealFormat(context.Background(), dryRun)
 	return err
 }
 
@@ -137,7 +138,7 @@ func (lc localAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 	if objLayer == nil {
 		return sid, errServerNotInitialized
 	}
-	storage := objLayer.StorageInfo(nil)
+	storage := objLayer.StorageInfo(context.Background())
 
 	return ServerInfoData{
 		StorageInfo: storage,
