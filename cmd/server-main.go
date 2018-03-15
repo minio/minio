@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,8 +223,9 @@ func serverMain(ctx *cli.Context) {
 	handler, err = configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
-	// Initialize S3 Peers inter-node communication only in distributed setup.
-	initGlobalS3Peers(globalEndpoints)
+	// Initialize notification system.
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
+	fatalIf(err, "Unable to initialize notification system.")
 
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)

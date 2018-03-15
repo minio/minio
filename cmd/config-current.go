@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
 )
@@ -129,7 +131,7 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
 		return "NATS Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.ElasticSearch, t.Notify.ElasticSearch):
+	case !reflect.DeepEqual(s.Notify.Elasticsearch, t.Notify.Elasticsearch):
 		return "ElasticSearch Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.Redis, t.Notify.Redis):
 		return "Redis Notification configuration differs"
@@ -166,24 +168,24 @@ func newServerConfig() *serverConfig {
 	}
 
 	// Make sure to initialize notification configs.
-	srvCfg.Notify.AMQP = make(map[string]amqpNotify)
-	srvCfg.Notify.AMQP["1"] = amqpNotify{}
-	srvCfg.Notify.MQTT = make(map[string]mqttNotify)
-	srvCfg.Notify.MQTT["1"] = mqttNotify{}
-	srvCfg.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-	srvCfg.Notify.ElasticSearch["1"] = elasticSearchNotify{}
-	srvCfg.Notify.Redis = make(map[string]redisNotify)
-	srvCfg.Notify.Redis["1"] = redisNotify{}
-	srvCfg.Notify.NATS = make(map[string]natsNotify)
-	srvCfg.Notify.NATS["1"] = natsNotify{}
-	srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-	srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
-	srvCfg.Notify.MySQL = make(map[string]mySQLNotify)
-	srvCfg.Notify.MySQL["1"] = mySQLNotify{}
-	srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
-	srvCfg.Notify.Kafka["1"] = kafkaNotify{}
-	srvCfg.Notify.Webhook = make(map[string]webhookNotify)
-	srvCfg.Notify.Webhook["1"] = webhookNotify{}
+	srvCfg.Notify.AMQP = make(map[string]target.AMQPArgs)
+	srvCfg.Notify.AMQP["1"] = target.AMQPArgs{}
+	srvCfg.Notify.MQTT = make(map[string]target.MQTTArgs)
+	srvCfg.Notify.MQTT["1"] = target.MQTTArgs{}
+	srvCfg.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+	srvCfg.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
+	srvCfg.Notify.Redis = make(map[string]target.RedisArgs)
+	srvCfg.Notify.Redis["1"] = target.RedisArgs{}
+	srvCfg.Notify.NATS = make(map[string]target.NATSArgs)
+	srvCfg.Notify.NATS["1"] = target.NATSArgs{}
+	srvCfg.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+	srvCfg.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
+	srvCfg.Notify.MySQL = make(map[string]target.MySQLArgs)
+	srvCfg.Notify.MySQL["1"] = target.MySQLArgs{}
+	srvCfg.Notify.Kafka = make(map[string]target.KafkaArgs)
+	srvCfg.Notify.Kafka["1"] = target.KafkaArgs{}
+	srvCfg.Notify.Webhook = make(map[string]target.WebhookArgs)
+	srvCfg.Notify.Webhook["1"] = target.WebhookArgs{}
 
 	return srvCfg
 }
@@ -310,11 +312,6 @@ func getValidConfig() (*serverConfig, error) {
 		return nil, errors.New("invalid credential in config file " + configFile)
 	}
 
-	// Validate notify field
-	if err = srvCfg.Notify.Validate(); err != nil {
-		return nil, err
-	}
-
 	return srvCfg, nil
 }
 
@@ -368,4 +365,120 @@ func loadConfig() error {
 	globalServerConfigMu.Unlock()
 
 	return nil
+}
+
+// getNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
+// A new notification target is added like below
+// * Add a new target in pkg/event/target package.
+// * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
+// * Handle the configuration in this function to create/add into TargetList.
+func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
+	targetList := event.NewTargetList()
+
+	for id, args := range config.Notify.AMQP {
+		if args.Enable {
+			newTarget, err := target.NewAMQPTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.Elasticsearch {
+		if args.Enable {
+			newTarget, err := target.NewElasticsearchTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.Kafka {
+		if args.Enable {
+			newTarget, err := target.NewKafkaTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.MQTT {
+		if args.Enable {
+			newTarget, err := target.NewMQTTTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.MySQL {
+		if args.Enable {
+			newTarget, err := target.NewMySQLTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.NATS {
+		if args.Enable {
+			newTarget, err := target.NewNATSTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.PostgreSQL {
+		if args.Enable {
+			newTarget, err := target.NewPostgreSQLTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.Redis {
+		if args.Enable {
+			newTarget, err := target.NewRedisTarget(id, args)
+			if err != nil {
+				return nil, err
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for id, args := range config.Notify.Webhook {
+		if args.Enable {
+			newTarget := target.NewWebhookTarget(id, args)
+			if err := targetList.Add(newTarget); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return targetList, nil
 }

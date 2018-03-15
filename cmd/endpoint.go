@@ -462,9 +462,13 @@ func GetLocalPeer(endpoints EndpointList) (localPeer string) {
 		}
 	}
 	if peerSet.IsEmpty() {
-		// If local peer is empty can happen in FS or Erasure coded mode.
-		// then set the value to globalMinioAddr instead.
-		return globalMinioAddr
+		// Local peer can be empty in FS or Erasure coded mode.
+		// If so, return globalMinioHost + globalMinioPort value.
+		if globalMinioHost != "" {
+			return globalMinioHost + ":" + globalMinioPort
+		}
+
+		return "127.0.0.1:" + globalMinioPort
 	}
 	return peerSet.ToSlice()[0]
 }

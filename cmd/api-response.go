@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	timeFormatAMZ     = "2006-01-02T15:04:05Z"     // Reply date format
 	timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
 	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse.
 	maxUploadsList    = 1000                       // Limit number of uploads in a listUploadsResponse.

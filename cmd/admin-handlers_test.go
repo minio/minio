@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,6 +175,11 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 
 	// Init global heal state
 	initAllHealState(globalIsXL)
+
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if err != nil {
+		return nil, err
+	}
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := router.NewRouter()

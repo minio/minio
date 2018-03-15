@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,11 +71,7 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 
 // Sends SetAuthPeer RPCs to all peers in the Minio cluster
 func updateCredsOnPeers(creds auth.Credentials) map[string]error {
-	// Get list of peer addresses (from globalS3Peers)
-	peers := []string{}
-	for _, p := range globalS3Peers {
-		peers = append(peers, p.addr)
-	}
+	peers := GetRemotePeers(globalEndpoints)
 
 	// Array of errors for each peer
 	errs := make([]error, len(peers))

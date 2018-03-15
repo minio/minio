@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import (
 const (
 	// Static prefix to be used while constructing bucket ARN.
 	// refer to S3 docs for more info.
-	bucketARNPrefix = "arn:" + eventSource + ":::"
+	bucketARNPrefix = "arn:aws:s3:::"
 
 	// Bucket policy config name.
 	bucketPolicyConfig = "policy.json"
@@ -202,7 +202,5 @@ func persistAndNotifyBucketPolicyChange(bucket string, isRemove bool, bktPolicy 
 		}
 	}
 
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket)
 	return nil
 }

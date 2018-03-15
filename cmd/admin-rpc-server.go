@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,18 +120,13 @@ func (s *adminCmd) ServerInfoData(args *AuthRPCArgs, reply *ServerInfoDataReply)
 	}
 	storageInfo := objLayer.StorageInfo()
 
-	var arns []string
-	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
-		arns = append(arns, queueArn)
-	}
-
 	reply.ServerInfoData = ServerInfoData{
 		Properties: ServerProperties{
 			Uptime:   UTCNow().Sub(globalBootTime),
 			Version:  Version,
 			CommitID: CommitID,
 			Region:   globalServerConfig.GetRegion(),
-			SQSARN:   arns,
+			SQSARN:   globalNotificationSys.GetARNList(),
 		},
 		StorageInfo: storageInfo,
 		ConnStats:   globalConnStats.toServerConnStats(),
