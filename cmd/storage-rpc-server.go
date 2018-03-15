@@ -17,13 +17,14 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"path"
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
@@ -224,7 +225,8 @@ func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error
 	// Initialize storage rpc servers for every disk that is hosted on this node.
 	storageRPCs, err := newStorageRPCServer(endpoints)
 	if err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 
 	// Create a unique route for each disk exported from this node.
@@ -232,7 +234,8 @@ func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error
 		storageRPCServer := newRPCServer()
 		err = storageRPCServer.RegisterName("Storage", stServer)
 		if err != nil {
-			return errors.Trace(err)
+			logger.LogIf(context.Background(), err)
+			return err
 		}
 		// Add minio storage routes.
 		storageRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()

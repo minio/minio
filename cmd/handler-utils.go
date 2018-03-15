@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"mime/multipart"
 	"net"
@@ -24,7 +25,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	httptracer "github.com/minio/minio/pkg/handlers"
 )
 
@@ -36,7 +37,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
 	if err != nil && err != io.EOF {
-		errorIf(err, "Unable to xml decode location constraint")
+		logger.LogIf(context.Background(), err)
 		// Treat all other failures as XML parsing errors.
 		return "", ErrMalformedXML
 	} // else for both err as nil or io.EOF
@@ -113,9 +114,10 @@ var userMetadataKeyPrefixes = []string{
 }
 
 // extractMetadataFromHeader extracts metadata from HTTP header.
-func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
+func extractMetadataFromHeader(ctx context.Context, header http.Header) (map[string]string, error) {
 	if header == nil {
-		return nil, errors.Trace(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return nil, errInvalidArgument
 	}
 	metadata := make(map[string]string)
 
@@ -134,7 +136,8 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	// Go through all other headers for any additional headers that needs to be saved.
 	for key := range header {
 		if key != http.CanonicalHeaderKey(key) {
-			return nil, errors.Trace(errInvalidArgument)
+			logger.LogIf(ctx, errInvalidArgument)
+			return nil, errInvalidArgument
 		}
 		for _, prefix := range userMetadataKeyPrefixes {
 			if strings.HasPrefix(key, prefix) {
@@ -187,12 +190,13 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 }
 
 // Validate form field size for s3 specification requirement.
-func validateFormFieldSize(formValues http.Header) error {
+func validateFormFieldSize(ctx context.Context, formValues http.Header) error {
 	// Iterate over form values
 	for k := range formValues {
 		// Check if value's field exceeds S3 limit
 		if int64(len(formValues.Get(k))) > maxFormFieldSize {
-			return errors.Trace(errSizeUnexpected)
+			logger.LogIf(ctx, errSizeUnexpected)
+			return errSizeUnexpected
 		}
 	}
 
@@ -201,7 +205,7 @@ func validateFormFieldSize(formValues http.Header) error {
 }
 
 // Extract form fields and file data from a HTTP POST Policy
-func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues http.Header, err error) {
+func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues http.Header, err error) {
 	/// HTML Form values
 	fileName = ""
 
@@ -212,7 +216,7 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 	}
 
 	// Validate form values.
-	if err = validateFormFieldSize(formValues); err != nil {
+	if err = validateFormFieldSize(ctx, formValues); err != nil {
 		return nil, "", 0, nil, err
 	}
 
@@ -221,7 +225,8 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 		canonicalFormName := http.CanonicalHeaderKey(k)
 		if canonicalFormName == "File" {
 			if len(v) == 0 {
-				return nil, "", 0, nil, errors.Trace(errInvalidArgument)
+				logger.LogIf(ctx, errInvalidArgument)
+				return nil, "", 0, nil, errInvalidArgument
 			}
 			// Fetch fileHeader which has the uploaded file information
 			fileHeader := v[0]
@@ -230,17 +235,20 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 			// Open the uploaded part
 			filePart, err = fileHeader.Open()
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, "", 0, nil, err
 			}
 			// Compute file size
 			fileSize, err = filePart.(io.Seeker).Seek(0, 2)
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, "", 0, nil, err
 			}
 			// Reset Seek to the beginning
 			_, err = filePart.(io.Seeker).Seek(0, 0)
 			if err != nil {
-				return nil, "", 0, nil, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, "", 0, nil, err
 			}
 			// File found and ready for reading
 			break
@@ -276,7 +284,10 @@ func getResource(path string, host string, domain string) (string, error) {
 		// In bucket.mydomain.com:9000, strip out :9000
 		var err error
 		if host, _, err = net.SplitHostPort(host); err != nil {
-			errorIf(err, "Unable to split %s", host)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
+			reqInfo.AppendTags("path", path)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 			return "", err
 		}
 	}

@@ -17,10 +17,11 @@
 package cmd
 
 import (
+	"context"
 	"path/filepath"
 	"time"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -150,7 +151,7 @@ func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
 //
 // - non-nil error if any of the disks failed unexpectedly (i.e. error
 //   other than file not found and not a checksum error).
-func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
+func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
 	object string) ([]StorageAPI, []error, error) {
 
 	availableDisks := make([]StorageAPI, len(onlineDisks))
@@ -182,8 +183,9 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 				dataErrs[i] = hErr
 				break
 			case hErr != nil:
+				logger.LogIf(ctx, hErr)
 				// abort on unhandled errors
-				return nil, nil, errors.Trace(hErr)
+				return nil, nil, hErr
 			}
 		}
 

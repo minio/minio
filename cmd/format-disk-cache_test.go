@@ -17,18 +17,20 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"testing"
 )
 
 // TestDiskCacheFormat - tests initFormatCache, formatMetaGetFormatBackendCache, formatCacheGetVersion.
 func TestDiskCacheFormat(t *testing.T) {
+	ctx := context.Background()
 	fsDirs, err := getRandomDisks(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = initFormatCache(fsDirs)
+	_, err = initFormatCache(ctx, fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,7 @@ func TestDiskCacheFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = loadAndValidateCacheFormat(fsDirs); err == nil {
+	if _, err = loadAndValidateCacheFormat(context.Background(), fsDirs); err == nil {
 		t.Fatal("expected to fail")
 	}
 
@@ -69,7 +71,7 @@ func TestDiskCacheFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = loadAndValidateCacheFormat(fsDirs); err == nil {
+	if _, err = loadAndValidateCacheFormat(context.Background(), fsDirs); err == nil {
 		t.Fatal("expected to fail")
 	}
 }
@@ -307,7 +309,7 @@ func TestFormatCache(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		err := validateCacheFormats(testCase.formatConfigs)
+		err := validateCacheFormats(context.Background(), testCase.formatConfigs)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass but failed with %s", i+1, err)
 		}

@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
@@ -384,7 +385,9 @@ func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginR
 	if err != nil {
 		// Make sure to log errors related to browser login,
 		// for security and auditing reasons.
-		errorIf(err, "Unable to login request from %s", r.RemoteAddr)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", r.RemoteAddr)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return toJSONError(err)
 	}
 
@@ -463,7 +466,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	reply.PeerErrMsgs = make(map[string]string)
 	for svr, errVal := range errsMap {
 		tErr := fmt.Errorf("Unable to change credentials on %s: %v", svr, errVal)
-		errorIf(tErr, "Credentials change could not be propagated successfully!")
+		logger.LogIf(context.Background(), tErr)
 		reply.PeerErrMsgs[svr] = errVal.Error()
 	}
 
@@ -571,7 +574,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract incoming metadata if any.
-	metadata, err := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(context.Background(), r.Header)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -1095,7 +1098,7 @@ func toWebAPIError(err error) APIError {
 	}
 
 	// Log unexpected and unhandled errors.
-	errorIf(err, errUnexpected.Error())
+	logger.LogIf(context.Background(), err)
 	return APIError{
 		Code:           "InternalError",
 		HTTPStatusCode: http.StatusInternalServerError,

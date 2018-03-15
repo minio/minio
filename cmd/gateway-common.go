@@ -19,7 +19,6 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 
 	minio "github.com/minio/minio-go"
@@ -31,12 +30,6 @@ var (
 
 	// MustGetUUID function alias.
 	MustGetUUID = mustGetUUID
-
-	// ErrorIf provides errorIf function alias.
-	ErrorIf = errorIf
-
-	// FatalIf provides fatalIf function alias.
-	FatalIf = fatalIf
 )
 
 // AnonErrToObjectErr - converts standard http codes into meaningful object layer errors.
@@ -262,16 +255,6 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		return nil
 	}
 
-	e, ok := err.(*errors.Error)
-	if !ok {
-		// Code should be fixed if this function is called without doing traceError()
-		// Else handling different situations in this function makes this function complicated.
-		errorIf(err, "Expected type *Error")
-		return err
-	}
-
-	err = e.Cause
-
 	bucket := ""
 	object := ""
 	if len(params) >= 1 {
@@ -282,15 +265,14 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	if isNetworkOrHostDown(err) {
-		e.Cause = BackendDown{}
-		return e
+		return BackendDown{}
 	}
 
 	minioErr, ok := err.(minio.ErrorResponse)
 	if !ok {
 		// We don't interpret non Minio errors. As minio errors will
 		// have StatusCode to help to convert to object errors.
-		return e
+		return err
 	}
 
 	switch minioErr.Code {
@@ -325,6 +307,5 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = PartTooSmall{}
 	}
 
-	e.Cause = err
-	return e
+	return err
 }

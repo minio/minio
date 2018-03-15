@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jwtreq "github.com/dgrijalva/jwt-go/request"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -97,11 +99,11 @@ func isAuthTokenValid(tokenString string) bool {
 	var claims jwtgo.StandardClaims
 	jwtToken, err := jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
 	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
+		logger.LogIf(context.Background(), err)
 		return false
 	}
 	if err = claims.Valid(); err != nil {
-		errorIf(err, "Invalid claims in JWT token string")
+		logger.LogIf(context.Background(), err)
 		return false
 	}
 	return jwtToken.Valid && claims.Subject == globalServerConfig.GetCredential().AccessKey

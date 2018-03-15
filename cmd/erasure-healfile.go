@@ -17,11 +17,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"hash"
 	"strings"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // HealFile tries to reconstruct an erasure-coded file spread over all
@@ -45,12 +46,13 @@ import (
 //
 // It returns bitrot checksums for the non-nil staleDisks on which
 // healing succeeded.
-func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, blocksize int64,
+func (s ErasureStorage) HealFile(ctx context.Context, staleDisks []StorageAPI, volume, path string, blocksize int64,
 	dstVol, dstPath string, size int64, alg BitrotAlgorithm, checksums [][]byte) (
 	f ErasureFileInfo, err error) {
 
 	if !alg.Available() {
-		return f, errors.Trace(errBitrotHashAlgoInvalid)
+		logger.LogIf(ctx, errBitrotHashAlgoInvalid)
+		return f, errBitrotHashAlgoInvalid
 	}
 
 	// Initialization
@@ -84,7 +86,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 	}
 	readLen += lastChunkSize
 	var buffers [][]byte
-	buffers, _, err = s.readConcurrent(volume, path, 0, readLen, verifiers)
+	buffers, _, err = s.readConcurrent(ctx, volume, path, 0, readLen, verifiers)
 	if err != nil {
 		return f, err
 	}
@@ -131,7 +133,7 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 		}
 		buffOffset += csize
 
-		if err = s.ErasureDecodeDataAndParityBlocks(blocks); err != nil {
+		if err = s.ErasureDecodeDataAndParityBlocks(ctx, blocks); err != nil {
 			return f, err
 		}
 
@@ -155,7 +157,9 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, b
 		// If all disks had write errors we quit.
 		if !writeSucceeded {
 			// build error from all write errors
-			return f, errors.Trace(joinWriteErrors(writeErrors))
+			err := joinWriteErrors(writeErrors)
+			logger.LogIf(ctx, err)
+			return f, err
 		}
 	}
 

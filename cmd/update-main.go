@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"crypto"
 	"encoding/hex"
 	"fmt"
@@ -32,6 +33,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/inconshreveable/go-update"
 	"github.com/minio/cli"
+	"github.com/minio/minio/cmd/logger"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 	"github.com/segmentio/go-prompt"
 )
@@ -154,7 +156,7 @@ func IsDocker() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	errorIf(err, "Error in docker check.")
+	logger.LogIf(context.Background(), err)
 
 	return err == nil
 }
@@ -184,7 +186,7 @@ func IsBOSH() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	errorIf(err, "Error in BOSH check.")
+	logger.LogIf(context.Background(), err)
 
 	return err == nil
 }
@@ -199,7 +201,9 @@ func getHelmVersion(helmInfoFilePath string) string {
 		// Log errors and return "" as Minio can be deployed
 		// without Helm charts as well.
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to read %s", helmInfoFilePath)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("helmInfoFilePath", helmInfoFilePath)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 		}
 		return ""
 	}
@@ -491,33 +495,33 @@ func mainUpdate(ctx *cli.Context) {
 
 	quiet := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 	if quiet {
-		log.EnableQuiet()
+		logger.EnableQuiet()
 	}
 
 	minioMode := ""
 	updateMsg, sha256Hex, _, latestReleaseTime, err := getUpdateInfo(10*time.Second, minioMode)
 	if err != nil {
-		log.Println(err)
+		logger.Println(err)
 		os.Exit(-1)
 	}
 
 	// Nothing to update running the latest release.
 	if updateMsg == "" {
-		log.Println(greenColorSprintf("You are already running the most recent version of ‘minio’."))
+		logger.Println(greenColorSprintf("You are already running the most recent version of ‘minio’."))
 		os.Exit(0)
 	}
 
-	log.Println(updateMsg)
+	logger.Println(updateMsg)
 	// if the in-place update is disabled then we shouldn't ask the
 	// user to update the binaries.
 	if strings.Contains(updateMsg, minioReleaseURL) && !globalInplaceUpdateDisabled {
 		var successMsg string
 		successMsg, err = doUpdate(sha256Hex, latestReleaseTime, shouldUpdate(quiet, sha256Hex, latestReleaseTime))
 		if err != nil {
-			log.Println(err)
+			logger.Println(err)
 			os.Exit(-1)
 		}
-		log.Println(successMsg)
+		logger.Println(successMsg)
 		os.Exit(1)
 	}
 }

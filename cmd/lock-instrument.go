@@ -17,10 +17,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 type statusType string
@@ -112,29 +113,34 @@ func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
 // Change the state of the lock from Blocked to Running.
 func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockSource, opsID string, readLock bool) error {
 	// This function is called outside nsLockMap.mutex.Lock(), so must be held explicitly.
+	ctx := context.Background()
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
 
 	// Check whether the lock info entry for <volume, path> pair already exists.
 	_, ok := n.debugLockMap[param]
 	if !ok {
-		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
+		logger.LogIf(ctx, LockInfoVolPathMissing{param.volume, param.path})
+		return LockInfoVolPathMissing{param.volume, param.path}
 	}
 
 	// Check whether lock info entry for the given `opsID` exists.
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
-		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		logger.LogIf(ctx, LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return LockInfoOpsIDNotFound{param.volume, param.path, opsID}
 	}
 
 	// Check whether lockSource is same.
 	if lockInfo.lockSource != lockSource {
-		return errors.Trace(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		logger.LogIf(ctx, LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		return LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource}
 	}
 
 	// Status of the lock should be set to "Blocked".
 	if lockInfo.status != blockedStatus {
-		return errors.Trace(LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		logger.LogIf(ctx, LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		return LockInfoStateNotBlocked{param.volume, param.path, opsID}
 	}
 	// Change lock status to running and update the time.
 	n.debugLockMap[param].lockInfo[opsID] = newDebugLockInfo(lockSource, runningStatus, readLock)
@@ -182,24 +188,29 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string,
 // Change the state of the lock from Blocked to none.
 func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string, readLock bool) error {
 	_, ok := n.debugLockMap[param]
+	ctx := context.Background()
 	if !ok {
-		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
+		logger.LogIf(ctx, LockInfoVolPathMissing{param.volume, param.path})
+		return LockInfoVolPathMissing{param.volume, param.path}
 	}
 
 	// Check whether lock info entry for the given `opsID` exists.
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
-		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		logger.LogIf(ctx, LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return LockInfoOpsIDNotFound{param.volume, param.path, opsID}
 	}
 
 	// Check whether lockSource is same.
 	if lockInfo.lockSource != lockSource {
-		return errors.Trace(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		logger.LogIf(ctx, LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
+		return LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource}
 	}
 
 	// Status of the lock should be set to "Blocked".
 	if lockInfo.status != blockedStatus {
-		return errors.Trace(LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		logger.LogIf(ctx, LockInfoStateNotBlocked{param.volume, param.path, opsID})
+		return LockInfoStateNotBlocked{param.volume, param.path, opsID}
 	}
 
 	// Update global lock stats.
@@ -214,7 +225,8 @@ func (n *nsLockMap) statusBlockedToNone(param nsParam, lockSource, opsID string,
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	// delete the lock info for the given operation.
 	if _, found := n.debugLockMap[param]; !found {
-		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
+		logger.LogIf(context.Background(), LockInfoVolPathMissing{param.volume, param.path})
+		return LockInfoVolPathMissing{param.volume, param.path}
 	}
 
 	// The following stats update is relevant only in case of a
@@ -235,17 +247,20 @@ func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 // Called when the nsLk ref count for the given (volume, path) is
 // not 0.
 func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error {
+	ctx := context.Background()
 	// delete the lock info for the given operation.
 	infoMap, found := n.debugLockMap[param]
 	if !found {
-		return errors.Trace(LockInfoVolPathMissing{param.volume, param.path})
+		logger.LogIf(ctx, LockInfoVolPathMissing{param.volume, param.path})
+		return LockInfoVolPathMissing{param.volume, param.path}
 	}
 	// The operation finished holding the lock on the resource, remove
 	// the entry for the given operation with the operation ID.
 	opsIDLock, foundInfo := infoMap.lockInfo[opsID]
 	if !foundInfo {
 		// Unlock request with invalid operation ID not accepted.
-		return errors.Trace(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		logger.LogIf(ctx, LockInfoOpsIDNotFound{param.volume, param.path, opsID})
+		return LockInfoOpsIDNotFound{param.volume, param.path, opsID}
 	}
 	// Update global and (volume, path) lock status.
 	granted := opsIDLock.status == runningStatus

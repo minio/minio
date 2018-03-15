@@ -193,7 +193,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts1, errs1 := readAllXLMetadata(xlDisks, bucket, object1)
+	parts1, errs1 := readAllXLMetadata(context.Background(), xlDisks, bucket, object1)
 
 	// Object for test case 2 - No StorageClass defined, MetaData in PutObject requesting RRS Class
 	object2 := "object2"
@@ -204,7 +204,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts2, errs2 := readAllXLMetadata(xlDisks, bucket, object2)
+	parts2, errs2 := readAllXLMetadata(context.Background(), xlDisks, bucket, object2)
 
 	// Object for test case 3 - No StorageClass defined, MetaData in PutObject requesting Standard Storage Class
 	object3 := "object3"
@@ -215,7 +215,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts3, errs3 := readAllXLMetadata(xlDisks, bucket, object3)
+	parts3, errs3 := readAllXLMetadata(context.Background(), xlDisks, bucket, object3)
 
 	// Object for test case 4 - Standard StorageClass defined as Parity 6, MetaData in PutObject requesting Standard Storage Class
 	object4 := "object4"
@@ -231,7 +231,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts4, errs4 := readAllXLMetadata(xlDisks, bucket, object4)
+	parts4, errs4 := readAllXLMetadata(context.Background(), xlDisks, bucket, object4)
 
 	// Object for test case 5 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting RRS Class
 	// Reset global storage class flags
@@ -249,7 +249,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts5, errs5 := readAllXLMetadata(xlDisks, bucket, object5)
+	parts5, errs5 := readAllXLMetadata(context.Background(), xlDisks, bucket, object5)
 
 	// Object for test case 6 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting Standard Storage Class
 	// Reset global storage class flags
@@ -267,7 +267,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts6, errs6 := readAllXLMetadata(xlDisks, bucket, object6)
+	parts6, errs6 := readAllXLMetadata(context.Background(), xlDisks, bucket, object6)
 
 	// Object for test case 7 - Standard StorageClass defined as Parity 5, MetaData in PutObject requesting RRS Class
 	// Reset global storage class flags
@@ -285,7 +285,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts7, errs7 := readAllXLMetadata(xlDisks, bucket, object7)
+	parts7, errs7 := readAllXLMetadata(context.Background(), xlDisks, bucket, object7)
 
 	tests := []struct {
 		parts               []xlMetaV1

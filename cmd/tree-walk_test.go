@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -131,7 +132,7 @@ func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc) {
 	// Start the tree walk go-routine.
 	prefix := "d/"
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(volume, prefix, "", true, listDir, isLeaf, endWalkCh)
+	twResultCh := startTreeWalk(context.Background(), volume, prefix, "", true, listDir, isLeaf, endWalkCh)
 
 	// Check if all entries received on the channel match the prefix.
 	for res := range twResultCh {
@@ -146,7 +147,7 @@ func testTreeWalkMarker(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc) {
 	// Start the tree walk go-routine.
 	prefix := ""
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(volume, prefix, "d/g", true, listDir, isLeaf, endWalkCh)
+	twResultCh := startTreeWalk(context.Background(), volume, prefix, "d/g", true, listDir, isLeaf, endWalkCh)
 
 	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
@@ -186,7 +187,7 @@ func TestTreeWalk(t *testing.T) {
 	isLeaf := func(volume, prefix string) bool {
 		return !hasSuffix(prefix, slashSeparator)
 	}
-	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
+	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk)
 	// Simple test for prefix based walk.
 	testTreeWalkPrefix(t, listDir, isLeaf)
 	// Simple test when marker is set.
@@ -221,7 +222,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	isLeaf := func(volume, prefix string) bool {
 		return !hasSuffix(prefix, slashSeparator)
 	}
-	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
+	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
 	pool := newTreeWalkPool(2 * time.Second)
@@ -230,7 +231,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	prefix := ""
 	marker := ""
 	recursive := true
-	resultCh := startTreeWalk(volume, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+	resultCh := startTreeWalk(context.Background(), volume, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 
 	params := listParams{
 		bucket:    volume,
@@ -294,7 +295,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// create listDir function.
-	listDir := listDirFactory(func(volume, prefix string) bool {
+	listDir := listDirFactory(context.Background(), func(volume, prefix string) bool {
 		return !hasSuffix(prefix, slashSeparator)
 	}, xlTreeWalkIgnoredErrs, disk1, disk2)
 
@@ -373,7 +374,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -447,7 +448,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		}},
 	}
 	for i, testCase := range testCases {
-		for entry := range startTreeWalk(volume,
+		for entry := range startTreeWalk(context.Background(), volume,
 			testCase.prefix, testCase.marker, testCase.recursive,
 			listDir, isLeaf, endWalkCh) {
 			if _, found := testCase.expected[entry.entry]; !found {
@@ -479,7 +480,7 @@ func TestSortedness(t *testing.T) {
 		return !hasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -519,7 +520,7 @@ func TestSortedness(t *testing.T) {
 	}
 	for i, test := range testCases {
 		var actualEntries []string
-		for entry := range startTreeWalk(volume,
+		for entry := range startTreeWalk(context.Background(), volume,
 			test.prefix, test.marker, test.recursive,
 			listDir, isLeaf, endWalkCh) {
 			actualEntries = append(actualEntries, entry.entry)
@@ -553,7 +554,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		return !hasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -594,7 +595,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 	for i, test := range testCases {
 		var entry treeWalkResult
-		for entry = range startTreeWalk(volume, test.prefix, test.marker, test.recursive, listDir, isLeaf, endWalkCh) {
+		for entry = range startTreeWalk(context.Background(), volume, test.prefix, test.marker, test.recursive, listDir, isLeaf, endWalkCh) {
 		}
 		if entry.entry != test.expectedEntry {
 			t.Errorf("Test %d: Expected entry %s, but received %s with the EOF marker", i, test.expectedEntry, entry.entry)

@@ -76,7 +76,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		}
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	removeDiskN(disks, 7)
 
 	// Removing disk shouldn't affect reading object info.
-	_, _, err = obj.(*xlObjects).readXLMetaStat(bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		os.RemoveAll(path.Join(disk, bucketName))
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
 	if errors2.Cause(err) != errVolumeNotFound {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 
 	uploadIDPath := obj.(*xlObjects).getUploadIDDir(bucketNames[0], objectNames[0], uploadIDs[0])
 
-	_, _, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	removeDiskN(disks, 7)
 
 	// Removing disk shouldn't affect reading object parts info.
-	_, _, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, obj.(*xlObjects).getMultipartSHADir(bucketNames[0], objectNames[0])))
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if errors2.Cause(err) != errFileNotFound {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestObjectToPartOffset(t *testing.T) {
 
 	// Test them.
 	for _, testCase := range testCases {
-		index, offset, err := xlMeta.ObjectToPartOffset(testCase.offset)
+		index, offset, err := xlMeta.ObjectToPartOffset(context.Background(), testCase.offset)
 		err = errors2.Cause(err)
 		if err != testCase.expectedErr {
 			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
@@ -355,7 +355,7 @@ func TestPickValidXLMeta(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		xlMeta, err := pickValidXLMeta(test.metaArr, test.modTime)
+		xlMeta, err := pickValidXLMeta(context.Background(), test.metaArr, test.modTime)
 		if test.expectedErr != nil {
 			if errors2.Cause(err).Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",

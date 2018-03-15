@@ -16,9 +16,13 @@
 
 package logger
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
-// Key used for Get/SetContext
+// Key used for Get/SetReqInfo
 type contextKeyType string
 
 const contextLogKey = contextKeyType("miniolog")
@@ -37,27 +41,59 @@ type ReqInfo struct {
 	API        string   // API name - GetObject PutObject NewMultipartUpload etc.
 	BucketName string   // Bucket name
 	ObjectName string   // Object name
-	Tags       []KeyVal // Any additional info not accommodated by above fields
+	tags       []KeyVal // Any additional info not accommodated by above fields
+	sync.RWMutex
 }
 
-// AppendTags - appends key/val to ReqInfo.Tags
-func (r *ReqInfo) AppendTags(key string, val string) {
+// NewReqInfo :
+func NewReqInfo(remoteHost, userAgent, requestID, api, bucket, object string) *ReqInfo {
+	req := ReqInfo{}
+	req.RemoteHost = remoteHost
+	req.UserAgent = userAgent
+	req.API = api
+	req.RequestID = requestID
+	req.BucketName = bucket
+	req.ObjectName = object
+	return &req
+}
+
+// AppendTags - appends key/val to ReqInfo.tags
+func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	if r == nil {
-		return
+		return nil
 	}
-	r.Tags = append(r.Tags, KeyVal{key, val})
+	r.Lock()
+	defer r.Unlock()
+	r.tags = append(r.tags, KeyVal{key, val})
+	return r
 }
 
-// SetContext sets ReqInfo in the context.
-func SetContext(ctx context.Context, req *ReqInfo) context.Context {
+// GetTags - returns the user defined tags
+func (r *ReqInfo) GetTags() []KeyVal {
+	if r == nil {
+		return nil
+	}
+	r.RLock()
+	defer r.RUnlock()
+	return append([]KeyVal(nil), r.tags...)
+}
+
+// SetReqInfo sets ReqInfo in the context.
+func SetReqInfo(ctx context.Context, req *ReqInfo) context.Context {
+	if ctx == nil {
+		LogIf(context.Background(), fmt.Errorf("context is nil"))
+		return nil
+	}
 	return context.WithValue(ctx, contextLogKey, req)
 }
 
-// GetContext returns ReqInfo if set.
-func GetContext(ctx context.Context) *ReqInfo {
-	r, ok := ctx.Value(contextLogKey).(*ReqInfo)
-	if ok {
-		return r
+// GetReqInfo returns ReqInfo if set.
+func GetReqInfo(ctx context.Context) *ReqInfo {
+	if ctx != nil {
+		r, ok := ctx.Value(contextLogKey).(*ReqInfo)
+		if ok {
+			return r
+		}
 	}
 	return nil
 }

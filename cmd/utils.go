@@ -44,7 +44,9 @@ import (
 // Close Http tracing file.
 func stopHTTPTrace() {
 	if globalHTTPTraceFile != nil {
-		errorIf(globalHTTPTraceFile.Close(), "Unable to close httpTraceFile %s", globalHTTPTraceFile.Name())
+		reqInfo := (&logger.ReqInfo{}).AppendTags("traceFile", globalHTTPTraceFile.Name())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, globalHTTPTraceFile.Close())
 		globalHTTPTraceFile = nil
 	}
 }
@@ -331,8 +333,8 @@ func newContext(r *http.Request, api string) context.Context {
 	if prefix != "" {
 		object = prefix
 	}
-
-	return logger.SetContext(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
+	reqInfo := &logger.ReqInfo{RemoteHost: r.RemoteAddr, UserAgent: r.Header.Get("user-agent"), API: api, BucketName: bucket, ObjectName: object}
+	return logger.SetReqInfo(context.Background(), reqInfo)
 }
 
 // isNetworkOrHostDown - if there was a network error or if the host is down.

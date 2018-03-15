@@ -70,7 +70,7 @@ func TestReadFSMetadata(t *testing.T) {
 
 	// Regular fs metadata reading, no errors expected
 	fsMeta := fsMetaV1{}
-	if _, err = fsMeta.ReadFrom(rlk.LockedFile); err != nil {
+	if _, err = fsMeta.ReadFrom(context.Background(), rlk.LockedFile); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 }
@@ -105,7 +105,7 @@ func TestWriteFSMetadata(t *testing.T) {
 
 	// FS metadata reading, no errors expected (healthy disk)
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom(rlk.LockedFile)
+	_, err = fsMeta.ReadFrom(context.Background(), rlk.LockedFile)
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}

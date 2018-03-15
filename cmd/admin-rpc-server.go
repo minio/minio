@@ -26,7 +26,7 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const adminPath = "/admin"
@@ -176,7 +176,9 @@ type WriteConfigReply struct {
 func writeTmpConfigCommon(tmpFileName string, configBytes []byte) error {
 	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
 	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
-	errorIf(err, fmt.Sprintf("Failed to write to temporary config file %s", tmpConfigFile))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	logger.LogIf(ctx, err)
 	return err
 }
 
@@ -209,7 +211,10 @@ func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigRep
 	tmpConfigFile := filepath.Join(getConfigDir(), cArgs.FileName)
 
 	err := os.Rename(tmpConfigFile, configFile)
-	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
+	reqInfo.AppendTags("configFile", configFile)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	logger.LogIf(ctx, err)
 	return err
 }
 
@@ -220,7 +225,8 @@ func registerAdminRPCRouter(mux *router.Router) error {
 	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)

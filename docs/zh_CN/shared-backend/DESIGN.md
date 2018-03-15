@@ -88,7 +88,7 @@ GetObject()持有`fs.json`的一个读锁。
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err != nil {
-		return toObjectErr(errors.Trace(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 	defer rlk.Close()
 

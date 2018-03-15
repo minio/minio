@@ -21,6 +21,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/errors"
@@ -140,7 +141,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		}
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
+			logger.LogIf(context.Background(), err)
 			if errors.IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue

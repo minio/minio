@@ -302,7 +302,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	disk := xl.storageDisks[0]
-	xlMetaPreHeal, err := readXLMeta(disk, bucket, object)
+	xlMetaPreHeal, err := readXLMeta(context.Background(), disk, bucket, object)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xlMetaPostHeal, err := readXLMeta(disk, bucket, object)
+	xlMetaPostHeal, err := readXLMeta(context.Background(), disk, bucket, object)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +333,7 @@ func TestHealing(t *testing.T) {
 	// gone down when an object was replaced by a new object.
 	xlMetaOutDated := xlMetaPreHeal
 	xlMetaOutDated.Stat.ModTime = time.Now()
-	err = writeXLMetadata(disk, bucket, object, xlMetaOutDated)
+	err = writeXLMetadata(context.Background(), disk, bucket, object, xlMetaOutDated)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xlMetaPostHeal, err = readXLMeta(disk, bucket, object)
+	xlMetaPostHeal, err = readXLMeta(context.Background(), disk, bucket, object)
 	if err != nil {
 		t.Fatal(err)
 	}

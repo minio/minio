@@ -17,10 +17,11 @@
 package cmd
 
 import (
+	"context"
 	"sort"
 	"strings"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Tree walk result carries results of tree walking.
@@ -124,7 +125,7 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 }
 
 // treeWalk walks directory tree recursively pushing treeWalkResult into the channel as and when it encounters files.
-func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
+func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -143,7 +144,8 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 	if err != nil {
 		select {
 		case <-endWalkCh:
-			return errors.Trace(errWalkAbort)
+			logger.LogIf(ctx, errWalkAbort)
+			return errWalkAbort
 		case resultCh <- treeWalkResult{err: err}:
 			return err
 		}
@@ -196,7 +198,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
-			if tErr := doTreeWalk(bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
+			if tErr := doTreeWalk(ctx, bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
 				return tErr
 			}
 			continue
@@ -205,7 +207,8 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
-			return errors.Trace(errWalkAbort)
+			logger.LogIf(ctx, errWalkAbort)
+			return errWalkAbort
 		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}
@@ -215,7 +218,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, endWalkCh chan struct{}) chan treeWalkResult {
+func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -237,7 +240,7 @@ func startTreeWalk(bucket, prefix, marker string, recursive bool, listDir listDi
 	marker = strings.TrimPrefix(marker, prefixDir)
 	go func() {
 		isEnd := true // Indication to start walking the tree with end as true.
-		doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, isLeaf, resultCh, endWalkCh, isEnd)
+		doTreeWalk(ctx, bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, isLeaf, resultCh, endWalkCh, isEnd)
 		close(resultCh)
 	}()
 	return resultCh

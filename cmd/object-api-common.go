@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
@@ -83,15 +83,15 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	}
 }
 
-func deleteBucketMetadata(bucket string, objAPI ObjectLayer) {
+func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer) {
 	// Delete bucket access policy, if present - ignore any errors.
-	_ = removeBucketPolicy(bucket, objAPI)
+	removeBucketPolicy(ctx, bucket, objAPI)
 
 	// Delete notification config, if present - ignore any errors.
-	_ = removeNotificationConfig(objAPI, bucket)
+	removeNotificationConfig(ctx, objAPI, bucket)
 
 	// Delete listener config, if present - ignore any errors.
-	_ = removeListenerConfig(objAPI, bucket)
+	removeListenerConfig(ctx, objAPI, bucket)
 }
 
 // Depending on the disk type network or local, initialize storage API.
@@ -104,13 +104,15 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 }
 
 // Cleanup a directory recursively.
-func cleanupDir(storage StorageAPI, volume, dirPath string) error {
+func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string) error {
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
 		if !hasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
-			return errors.Trace(storage.DeleteFile(volume, entryPath))
+			err := storage.DeleteFile(volume, entryPath)
+			logger.LogIf(ctx, err)
+			return err
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
@@ -119,12 +121,15 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		if err == errFileNotFound {
 			return nil
 		} else if err != nil { // For any other errors fail.
-			return errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return err
 		} // else on success..
 
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
-			return errors.Trace(storage.DeleteFile(volume, path.Clean(entryPath)))
+			err = storage.DeleteFile(volume, path.Clean(entryPath))
+			logger.LogIf(ctx, err)
+			return err
 		}
 
 		// Recurse and delete all other entries.
@@ -140,21 +145,19 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 }
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
-func removeNotificationConfig(objAPI ObjectLayer, bucket string) error {
+func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-
-	return objAPI.DeleteObject(context.Background(), minioMetaBucket, ncPath)
+	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
 }
 
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
-func removeListenerConfig(objAPI ObjectLayer, bucket string) error {
+func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-
-	return objAPI.DeleteObject(context.Background(), minioMetaBucket, lcPath)
+	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }

@@ -84,7 +84,7 @@ GetObject() holds a read lock on `fs.json`.
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err != nil {
-		return toObjectErr(errors.Trace(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 	defer rlk.Close()
 

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -520,7 +521,7 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 }
 
 // saveFormatXLAll - populates `format.json` on disks in its order.
-func saveFormatXLAll(storageDisks []StorageAPI, formats []*formatXLV3) error {
+func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatXLV3) error {
 	var errs = make([]error, len(storageDisks))
 
 	var wg = &sync.WaitGroup{}
@@ -542,7 +543,7 @@ func saveFormatXLAll(storageDisks []StorageAPI, formats []*formatXLV3) error {
 	wg.Wait()
 
 	writeQuorum := len(storageDisks)/2 + 1
-	return reduceWriteQuorumErrs(errs, nil, writeQuorum)
+	return reduceWriteQuorumErrs(ctx, errs, nil, writeQuorum)
 }
 
 // relinquishes the underlying connection for all storage disks.
@@ -614,7 +615,7 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints EndpointList, formats []
 }
 
 // initFormatXL - save XL format configuration on all disks.
-func initFormatXL(storageDisks []StorageAPI, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	format = newFormatXLV3(setCount, disksPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
 
@@ -632,7 +633,7 @@ func initFormatXL(storageDisks []StorageAPI, setCount, disksPerSet int) (format 
 	}
 
 	// Save formats `format.json` across all disks.
-	if err = saveFormatXLAll(storageDisks, formats); err != nil {
+	if err = saveFormatXLAll(ctx, storageDisks, formats); err != nil {
 		return nil, err
 	}
 
