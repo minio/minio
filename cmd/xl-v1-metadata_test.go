@@ -157,7 +157,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 		}
 	}
 
-	uploadIDPath := path.Join(bucketNames[0], objectNames[0], uploadIDs[0])
+	uploadIDPath := obj.(*xlObjects).getUploadIDDir(bucketNames[0], objectNames[0], uploadIDs[0])
 
 	_, _, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
@@ -175,7 +175,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 
 	for _, disk := range disks {
 		os.RemoveAll(path.Join(disk, bucketNames[0]))
-		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, bucketNames[0]))
+		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, obj.(*xlObjects).getMultipartSHADir(bucketNames[0], objectNames[0])))
 	}
 
 	_, _, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)

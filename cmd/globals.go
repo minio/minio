@@ -71,6 +71,11 @@ const (
 	// Default Read/Write timeouts for each connection.
 	globalConnReadTimeout  = 15 * time.Minute // Timeout after 15 minutes of no data sent by the client.
 	globalConnWriteTimeout = 15 * time.Minute // Timeout after 15 minutes if no data received by the client.
+
+	// Expiry duration after which the multipart uploads are deemed stale.
+	globalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	// Cleanup interval when the stale multipart cleanup is initiated.
+	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 )
 
 var (
@@ -166,9 +171,6 @@ var (
 	globalRRStorageClass storageClass
 	// Set to store standard storage class
 	globalStandardStorageClass storageClass
-
-	// Current RPC version
-	globalRPCAPIVersion = semVersion{2, 0, 0}
 
 	// Add new variable global values here.
 )

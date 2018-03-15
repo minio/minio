@@ -29,9 +29,6 @@ import (
 const (
 	// XL metadata file carries per object metadata.
 	xlMetaJSONFile = "xl.json"
-
-	// Uploads metadata file carries per multipart object metadata.
-	uploadsJSONFile = "uploads.json"
 )
 
 // xlObjects - Implements XL object layer.

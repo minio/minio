@@ -44,7 +44,7 @@ type xlSets struct {
 	formatMu sync.RWMutex
 
 	// Reference format.
-	format *formatXLV2
+	format *formatXLV3
 
 	// xlDisks mutex to lock xlDisks.
 	xlDisksMu sync.RWMutex
@@ -92,7 +92,7 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
-func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV2, error) {
+func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV3, error) {
 	disk, err := newStorageAPI(endpoint)
 	if err != nil {
 		return nil, nil, err
@@ -110,8 +110,8 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV2, error) {
 
 // findDiskIndex - returns the i,j'th position of the input `format` against the reference
 // format, after successful validation.
-func findDiskIndex(refFormat, format *formatXLV2) (int, int, error) {
-	if err := formatXLV2Check(refFormat, format); err != nil {
+func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
+	if err := formatXLV3Check(refFormat, format); err != nil {
 		return 0, 0, err
 	}
 
@@ -180,7 +180,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(endpoints EndpointList, format *formatXLV2, setCount int, drivesPerSet int) (ObjectLayer, error) {
+func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesPerSet int) (ObjectLayer, error) {
 
 	// Initialize the XL sets instance.
 	s := &xlSets{
@@ -205,6 +205,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV2, setCount int, drivesP
 			nsMutex:  mutex,
 			bp:       bpool.NewBytePoolCap(setCount*drivesPerSet, blockSizeV1, blockSizeV1*2),
 		}
+		go s.sets[i].cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
 
 	for _, endpoint := range endpoints {
@@ -872,7 +873,7 @@ else
 fi
 */
 
-func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV2, sErrs []error) (beforeDrives []madmin.DriveInfo) {
+func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
 	// Existing formats are available (i.e. ok), so save it in
 	// result, also populate disks to be healed.
 	for i, format := range formats {
@@ -1009,7 +1010,7 @@ func (s *xlSets) HealFormat(dryRun bool) (madmin.HealResultItem, error) {
 	}
 
 	if !dryRun {
-		var tmpNewFormats = make([]*formatXLV2, s.setCount*s.drivesPerSet)
+		var tmpNewFormats = make([]*formatXLV3, s.setCount*s.drivesPerSet)
 		for i := range newFormatSets {
 			for j := range newFormatSets[i] {
 				if newFormatSets[i][j] == nil {

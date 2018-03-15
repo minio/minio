@@ -49,12 +49,6 @@ func init() {
 	globalObjLayerMutex = &sync.RWMutex{}
 }
 
-// Check if the disk is remote.
-func isRemoteDisk(disk StorageAPI) bool {
-	_, ok := disk.(*networkStorage)
-	return ok
-}
-
 // Checks if the object is a directory, this logic uses
 // if size == 0 and object ends with slashSeparator then
 // returns true.
@@ -94,52 +88,6 @@ func deleteBucketMetadata(bucket string, objAPI ObjectLayer) {
 
 	// Delete listener config, if present - ignore any errors.
 	_ = removeListenerConfig(objAPI, bucket)
-}
-
-// House keeping code for FS/XL and distributed Minio setup.
-func houseKeeping(storageDisks []StorageAPI) error {
-	var wg = &sync.WaitGroup{}
-
-	// Initialize errs to collect errors inside go-routine.
-	var errs = make([]error, len(storageDisks))
-
-	// Initialize all disks in parallel.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		// Skip remote disks.
-		if isRemoteDisk(disk) {
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			// Indicate this wait group is done.
-			defer wg.Done()
-
-			// Cleanup all temp entries upon start.
-			err := cleanupDir(disk, minioMetaTmpBucket, "")
-			if err != nil {
-				if !errors.IsErrIgnored(errors.Cause(err), errDiskNotFound, errVolumeNotFound, errFileNotFound) {
-					errs[index] = err
-				}
-			}
-		}(index, disk)
-	}
-
-	// Wait for all cleanup to finish.
-	wg.Wait()
-
-	// Return upon first error.
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		return toObjectErr(err, minioMetaTmpBucket, "*")
-	}
-
-	// Return success here.
-	return nil
 }
 
 // Depending on the disk type network or local, initialize storage API.

@@ -45,6 +45,7 @@ var printEndpointError = func() func(Endpoint, error) {
 	}
 }()
 
+// Migrates backend format of local disks.
 func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
 	for _, endpoint := range endpoints {
 		if !endpoint.IsLocal {
@@ -64,13 +65,40 @@ func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
 	return nil
 }
 
+// Cleans up tmp directory of local disks.
+func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
+	for _, endpoint := range endpoints {
+		if !endpoint.IsLocal {
+			continue
+		}
+		formatPath := pathJoin(endpoint.Path, minioMetaBucket, formatConfigFile)
+		if _, err := os.Stat(formatPath); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if err := os.RemoveAll(pathJoin(endpoint.Path, minioMetaTmpBucket)); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), 0777); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV2, err error) {
+func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
 		return nil, errInvalidArgument
 	}
 
 	if err = formatXLMigrateLocalEndpoints(endpoints); err != nil {
+		return nil, err
+	}
+
+	if err = formatXLCleanupTmpLocalEndpoints(endpoints); err != nil {
 		return nil, err
 	}
 
@@ -125,7 +153,7 @@ func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerS
 					if formatConfigs[i] == nil {
 						continue
 					}
-					if err = formatXLV2Check(format, formatConfigs[i]); err != nil {
+					if err = formatXLV3Check(format, formatConfigs[i]); err != nil {
 						return nil, fmt.Errorf("%s format error: %s", endpoints[i], err)
 					}
 				}

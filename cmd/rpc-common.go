@@ -27,6 +27,12 @@ import (
 // 3 seconds is chosen arbitrarily.
 const rpcSkewTimeAllowed = 3 * time.Second
 
+// RPC V1 - Initial version
+// RPC V2 - format.json XL version changed to 2
+// RPC V3 - format.json XL version changed to 3
+// Current RPC version
+var globalRPCAPIVersion = semVersion{3, 0, 0}
+
 func isRequestTimeAllowed(requestTime time.Time) bool {
 	// Check whether request time is within acceptable skew time.
 	utcNow := UTCNow()
