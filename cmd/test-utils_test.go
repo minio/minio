@@ -1746,18 +1746,6 @@ func removeDiskN(disks []string, n int) {
 	}
 }
 
-// Initializes storage disks with 'N' errored disks, N disks return 'err' for each disk access.
-func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *testing.T) []StorageAPI {
-	if offline > len(storageDisks) {
-		t.Fatal("Requested more offline disks than supplied storageDisks slice", offline, len(storageDisks))
-	}
-
-	for i := 0; i < offline; i++ {
-		storageDisks[i] = &naughtyDisk{disk: storageDisks[i], defaultErr: err}
-	}
-	return storageDisks
-}
-
 // creates a bucket for the tests and returns the bucket name.
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.

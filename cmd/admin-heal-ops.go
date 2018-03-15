@@ -586,20 +586,13 @@ func (h *healSequence) healBucket(bucket string) error {
 		return errServerNotInitialized
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
-		return err
-	}
-
 	results, err := objectAPI.HealBucket(h.ctx, bucket, h.settings.DryRun)
 	// push any available results before checking for error
 	for _, result := range results {
 		if perr := h.pushHealResultItem(result); perr != nil {
-			bucketLock.Unlock()
 			return perr
 		}
 	}
-	bucketLock.Unlock()
 	// handle heal-bucket error
 	if err != nil {
 		return err

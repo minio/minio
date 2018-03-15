@@ -90,7 +90,11 @@ func (s *adminCmd) ReInitFormat(args *ReInitFormatArgs, reply *AuthRPCReply) err
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
-	_, err := newObjectLayerFn().HealFormat(context.Background(), args.DryRun)
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+	_, err := objectAPI.HealFormat(context.Background(), args.DryRun)
 	return err
 }
 
