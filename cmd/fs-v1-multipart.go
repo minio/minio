@@ -36,12 +36,12 @@ import (
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
 func (fs *FSObjects) getUploadIDDir(bucket, object, uploadID string) string {
-	return pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(pathJoin(bucket, object))), uploadID)
+	return pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(bucket)), uploadID)
 }
 
 // Returns EXPORT/.minio.sys/multipart/SHA256
 func (fs *FSObjects) getMultipartSHADir(bucket, object string) string {
-	return pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(pathJoin(bucket, object))))
+	return pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(bucket)))
 }
 
 // Returns partNumber.etag
@@ -125,7 +125,8 @@ func (fs *FSObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMar
 		return result, toObjectErr(errors.Trace(err))
 	}
 
-	if _, err := fs.statBucketDir(bucket); err != nil {
+	_, err := fs.statBucketDir(bucket)
+	if err != nil {
 		return result, toObjectErr(errors.Trace(err), bucket)
 	}
 
@@ -147,52 +148,36 @@ func (fs *FSObjects) ListMultipartUploads(bucket, object, keyMarker, uploadIDMar
 
 	// S3 spec says uploaIDs should be sorted based on initiated time. ModTime of fs.json
 	// is the creation time of the uploadID, hence we will use that.
-	var uploads []MultipartInfo
-	for _, uploadID := range uploadIDs {
+	uploads := make([]MultipartInfo, len(uploadIDs))
+	for i, uploadID := range uploadIDs {
 		metaFilePath := pathJoin(fs.getMultipartSHADir(bucket, object), uploadID, fsMetaJSONFile)
 		fi, err := fsStatFile(metaFilePath)
 		if err != nil {
 			return result, toObjectErr(err, bucket, object)
 		}
-		uploads = append(uploads, MultipartInfo{
+		uploads[i] = MultipartInfo{
 			Object:    object,
 			UploadID:  strings.TrimSuffix(uploadID, slashSeparator),
 			Initiated: fi.ModTime(),
-		})
+		}
 	}
+
 	sort.Slice(uploads, func(i int, j int) bool {
 		return uploads[i].Initiated.Before(uploads[j].Initiated)
 	})
 
-	uploadIndex := 0
-	if uploadIDMarker != "" {
-		for uploadIndex < len(uploads) {
-			if uploads[uploadIndex].UploadID != uploadIDMarker {
-				uploadIndex++
-				continue
-			}
-			if uploads[uploadIndex].UploadID == uploadIDMarker {
-				uploadIndex++
-				break
-			}
-			uploadIndex++
+	list := make([]MultipartInfo, 0, len(uploadIDs))
+	for _, part := range uploads {
+		if part.UploadID == uploadIDMarker {
+			list = append(list, part)
 		}
 	}
-	for uploadIndex < len(uploads) {
-		result.Uploads = append(result.Uploads, uploads[uploadIndex])
-		result.NextUploadIDMarker = uploads[uploadIndex].UploadID
-		uploadIndex++
-		if len(result.Uploads) == maxUploads {
-			break
-		}
+	if len(list) > maxUploads {
+		result.NextUploadIDMarker = list[maxUploads+1].UploadID
+		list = list[:maxUploads]
+		result.IsTruncated = true
 	}
-
-	result.IsTruncated = uploadIndex < len(uploads)
-
-	if !result.IsTruncated {
-		result.NextKeyMarker = ""
-		result.NextUploadIDMarker = ""
-	}
+	result.Uploads = list
 
 	return result, nil
 }
