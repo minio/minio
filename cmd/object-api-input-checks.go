@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/minio/minio/pkg/errors"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
@@ -175,7 +177,7 @@ func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) erro
 
 // Checks whether bucket exists and returns appropriate error if not.
 func checkBucketExist(bucket string, obj ObjectLayer) error {
-	_, err := obj.GetBucketInfo(nil, bucket)
+	_, err := obj.GetBucketInfo(context.Background(), bucket)
 	if err != nil {
 		return errors.Cause(err)
 	}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -39,7 +40,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bucketName := getRandomBucketName()
 	objectName := "test-object"
 	// create bucket.
-	err := obj.MakeBucketWithLocation(nil, bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -68,7 +69,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(nil, input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -144,7 +145,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	for i, testCase := range testCases {
-		err = obj.GetObject(nil, testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
+		err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
@@ -183,7 +184,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 	// Setup for the tests.
 	bucketName := getRandomBucketName()
 	// create bucket.
-	err := obj.MakeBucketWithLocation(nil, bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -209,7 +210,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(nil, input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -254,7 +255,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 			}
 		}
 
-		err = obj.GetObject(nil, testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
+		err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
@@ -293,7 +294,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	bucketName := getRandomBucketName()
 	objectName := "test-object"
 	// create bucket.
-	err := obj.MakeBucketWithLocation(nil, bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -322,7 +323,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(nil, input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -407,7 +408,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	}
 
 	for i, testCase := range testCases {
-		err = obj.GetObject(nil, testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
+		err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer, "")
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}

@@ -469,7 +469,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 // Implements S3 compatible ListObjectParts API. The resulting
 // ListPartsInfo structure is marshalled directly into XML and
 // replied back to the client.
-func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
+func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
 	if err := checkListPartsArgs(bucket, object, xl); err != nil {
 		return result, err
 	}
@@ -544,40 +544,6 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		result.NextPartNumberMarker = nextPartNumberMarker
 	}
 	return result, nil
-}
-
-// ListObjectParts - lists all previously uploaded parts for a given
-// object and uploadID.  Takes additional input of part-number-marker
-// to indicate where the listing should begin from.
-//
-// Implements S3 compatible ListObjectParts API. The resulting
-// ListPartsInfo structure is unmarshalled directly into XML and
-// replied back to the client.
-func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi ListPartsInfo, e error) {
-	if err := checkListPartsArgs(bucket, object, xl); err != nil {
-		return lpi, err
-	}
-	// Hold the lock so that two parallel complete-multipart-uploads
-	// do not leave a stale uploads.json behind.
-	objectMPartPathLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
-		return lpi, errors.Trace(err)
-	}
-	defer objectMPartPathLock.RUnlock()
-	// Hold lock so that there is no competing
-	// abort-multipart-upload or complete-multipart-upload.
-	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
-		pathJoin(bucket, object, uploadID))
-	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
-		return lpi, err
-	}
-	defer uploadIDLock.Unlock()
-
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return lpi, errors.Trace(InvalidUploadID{UploadID: uploadID})
-	}
-	result, err := xl.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
-	return result, err
 }
 
 // CompleteMultipartUpload - completes an ongoing multipart

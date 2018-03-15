@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -246,7 +247,7 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets()
+	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
 		return err
 	}
@@ -467,14 +468,14 @@ func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
 		return err
 	}
 
-	_, err = objAPI.PutObject(minioMetaBucket, configFile, hashReader, nil)
+	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil)
 	return err
 }
 
 func readConfig(objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	err := objAPI.GetObject(minioMetaBucket, configFile, 0, -1, &buffer, "")
+	err := objAPI.GetObject(context.Background(), minioMetaBucket, configFile, 0, -1, &buffer, "")
 	if err != nil {
 		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {

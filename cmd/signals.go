@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 )
 
@@ -46,7 +47,7 @@ func handleSignals() {
 		errorIf(err, "Unable to shutdown http server")
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
-			oerr = objAPI.Shutdown(nil)
+			oerr = objAPI.Shutdown(context.Background())
 			errorIf(oerr, "Unable to shutdown object layer")
 		}
 
@@ -59,7 +60,7 @@ func handleSignals() {
 			errorIf(err, "http server exited abnormally")
 			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
-				oerr = objAPI.Shutdown(nil)
+				oerr = objAPI.Shutdown(context.Background())
 				errorIf(oerr, "Unable to shutdown object layer")
 			}
 

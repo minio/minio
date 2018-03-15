@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"io"
@@ -58,7 +59,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	}
 
 	// Fetch bucket policy, if policy is not set return access denied.
-	p, err := objAPI.GetBucketPolicy(nil, bucket)
+	p, err := objAPI.GetBucketPolicy(context.Background(), bucket)
 	if err != nil {
 		return ErrAccessDenied
 	}
@@ -91,7 +92,7 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 
 // Check if the action is allowed on the bucket/prefix.
 func isBucketActionAllowed(action, bucket, prefix string, objectAPI ObjectLayer) bool {
-	bp, err := objectAPI.GetBucketPolicy(nil, bucket)
+	bp, err := objectAPI.GetBucketPolicy(context.Background(), bucket)
 	if err != nil {
 		return false
 	}

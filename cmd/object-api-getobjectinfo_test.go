@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
@@ -29,11 +30,11 @@ func TestGetObjectInfo(t *testing.T) {
 // Testing GetObjectInfo().
 func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// This bucket is used for testing getObjectInfo operations.
-	err := obj.MakeBucketWithLocation(nil, "test-getobjectinfo", "")
+	err := obj.MakeBucketWithLocation(context.Background(), "test-getobjectinfo", "")
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
-	_, err = obj.PutObject(nil, "test-getobjectinfo", "Asia/asiapics.jpg", mustGetHashReader(t, bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/asiapics.jpg", mustGetHashReader(t, bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -71,7 +72,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {
-		result, err := obj.GetObjectInfo(nil, testCase.bucketName, testCase.objectName)
+		result, err := obj.GetObjectInfo(context.Background(), testCase.bucketName, testCase.objectName)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}

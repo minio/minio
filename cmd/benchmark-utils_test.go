@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -40,7 +41,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// insert the object.
-		objInfo, err := obj.PutObject(nil, bucket, "object"+strconv.Itoa(i),
+		objInfo, err := obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
 			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
 		if err != nil {
 			b.Fatal(err)
@@ -82,7 +83,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	object := getRandomObjectName()
 
 	// create bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for NewMultipartUpload.
 	metadata := make(map[string]string)
-	uploadID, err = obj.NewMultipartUpload(nil, bucket, object, metadata)
+	uploadID, err = obj.NewMultipartUpload(context.Background(), bucket, object, metadata)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			}
 			md5hex = getMD5Hash([]byte(textPartData))
 			var partInfo PartInfo
-			partInfo, err = obj.PutObjectPart(nil, bucket, object, uploadID, j,
+			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, j,
 				mustGetHashReader(b, bytes.NewBuffer(textPartData), int64(len(textPartData)), md5hex, sha256hex))
 			if err != nil {
 				b.Fatal(err)
@@ -204,7 +205,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -223,7 +224,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	for i := 0; i < 10; i++ {
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(nil, bucket, "object"+strconv.Itoa(i),
+		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
 			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
 		if err != nil {
 			b.Fatal(err)
@@ -239,7 +240,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var buffer = new(bytes.Buffer)
-		err = obj.GetObject(nil, bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer, "")
+		err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer, "")
 		if err != nil {
 			b.Error(err)
 		}
@@ -316,7 +317,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -339,7 +340,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		i := 0
 		for pb.Next() {
 			// insert the object.
-			objInfo, err := obj.PutObject(nil, bucket, "object"+strconv.Itoa(i),
+			objInfo, err := obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
 				mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
 			if err != nil {
 				b.Fatal(err)
@@ -367,7 +368,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucketWithLocation(nil, bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -385,7 +386,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	for i := 0; i < 10; i++ {
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(nil, bucket, "object"+strconv.Itoa(i),
+		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
 			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
 		if err != nil {
 			b.Fatal(err)
@@ -402,7 +403,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			err = obj.GetObject(nil, bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard, "")
+			err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard, "")
 			if err != nil {
 				b.Error(err)
 			}

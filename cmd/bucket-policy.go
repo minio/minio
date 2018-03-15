@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"reflect"
@@ -82,7 +83,7 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 	}
 
 	// List buckets to proceed loading all notification configuration.
-	buckets, err := objAPI.ListBuckets(nil)
+	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
 		return nil, errors.Cause(err)
 	}
@@ -118,7 +119,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(nil, minioMetaBucket, policyPath, 0, -1, &buffer, "")
+	err = objAPI.GetObject(context.Background(), minioMetaBucket, policyPath, 0, -1, &buffer, "")
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, PolicyNotFound{Bucket: bucket}
@@ -152,7 +153,7 @@ func ReadBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPol
 // if no policies are found.
 func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
-	err := objAPI.DeleteObject(nil, minioMetaBucket, policyPath)
+	err := objAPI.DeleteObject(context.Background(), minioMetaBucket, policyPath)
 	if err != nil {
 		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
@@ -177,7 +178,7 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 		return errors.Cause(err)
 	}
 
-	if _, err = objAPI.PutObject(nil, minioMetaBucket, policyPath, hashReader, nil); err != nil {
+	if _, err = objAPI.PutObject(context.Background(), minioMetaBucket, policyPath, hashReader, nil); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errors.Cause(err)
 	}

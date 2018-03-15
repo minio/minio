@@ -330,5 +330,5 @@ func newContext(r *http.Request, api string) context.Context {
 		object = prefix
 	}
 
-	return logger.ContextSet(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
+	return logger.SetContext(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
 }

@@ -16,7 +16,10 @@
 
 package cmd
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // SystemLockState - Structure to fill the lock state of entire object storage.
 // That is the total locks held, total calls blocked on locks and state of all the locks for the entire system.
@@ -66,6 +69,6 @@ type OpsLockState struct {
 
 // listLocksInfo - Fetches locks held on bucket, matching prefix held for longer than duration.
 func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockInfo {
-	locksInfo, _ := newObjectLayerFn().ListLocks(nil, bucket, prefix, duration)
+	locksInfo, _ := newObjectLayerFn().ListLocks(context.Background(), bucket, prefix, duration)
 	return locksInfo
 }
