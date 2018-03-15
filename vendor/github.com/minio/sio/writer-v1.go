@@ -192,7 +192,7 @@ func flush(w io.Writer, p []byte) error {
 	if err != nil {
 		return err
 	}
-	if n != len(p) { // not neccasary if the w follows the io.Writer doc *precisly*
+	if n != len(p) { // not neccasary if the w follows the io.Writer doc *precisely*
 		return io.ErrShortWrite
 	}
 	return nil

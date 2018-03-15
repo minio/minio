@@ -623,9 +623,9 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 	var partStartOffset = startOffset
 	// Skip parts until final offset maps to a particular part offset.
 	for i, part := range objInfo.Parts {
-		decryptedSize, err := decryptedSize(part.Size)
+		decryptedSize, err := sio.DecryptedSize(uint64(part.Size))
 		if err != nil {
-			return nil, -1, -1, err
+			return nil, -1, -1, errObjectTampered
 		}
 
 		partStartIndex = i
@@ -633,12 +633,12 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, startOffset, length
 		// Offset is smaller than size we have reached the
 		// proper part offset, break out we start from
 		// this part index.
-		if partStartOffset < decryptedSize {
+		if partStartOffset < int64(decryptedSize) {
 			break
 		}
 
 		// Continue to look for next part.
-		partStartOffset -= decryptedSize
+		partStartOffset -= int64(decryptedSize)
 	}
 
 	startSeqNum := partStartOffset / sseDAREPackageBlockSize
@@ -734,20 +734,6 @@ func (li *ListPartsInfo) IsEncrypted() bool {
 	return false
 }
 
-func decryptedSize(encryptedSize int64) (int64, error) {
-	if encryptedSize == 0 {
-		return encryptedSize, nil
-	}
-	size := (encryptedSize / (sseDAREPackageBlockSize + sseDAREPackageMetaSize)) * sseDAREPackageBlockSize
-	if mod := encryptedSize % (sseDAREPackageBlockSize + sseDAREPackageMetaSize); mod > 0 {
-		if mod < sseDAREPackageMetaSize+1 {
-			return -1, errObjectTampered // object is not 0 size but smaller than the smallest valid encrypted object
-		}
-		size += mod - sseDAREPackageMetaSize
-	}
-	return size, nil
-}
-
 // DecryptedSize returns the size of the object after decryption in bytes.
 // It returns an error if the object is not encrypted or marked as encrypted
 // but has an invalid size.
@@ -756,19 +742,22 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !o.IsEncrypted() {
 		panic("cannot compute decrypted size of an object which is not encrypted")
 	}
-
-	return decryptedSize(o.Size)
+	size, err := sio.DecryptedSize(uint64(o.Size))
+	if err != nil {
+		err = errObjectTampered // assign correct error type
+	}
+	return int64(size), err
 }
 
 // EncryptedSize returns the size of the object after encryption.
 // An encrypted object is always larger than a plain object
 // except for zero size objects.
 func (o *ObjectInfo) EncryptedSize() int64 {
-	size := (o.Size / sseDAREPackageBlockSize) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
-	if mod := o.Size % (sseDAREPackageBlockSize); mod > 0 {
-		size += mod + sseDAREPackageMetaSize
+	size, err := sio.EncryptedSize(uint64(o.Size))
+	if err != nil {
+		panic(err) // Since AWS S3 allows parts to be 5GB at most this cannot happen - sio max. size is 256 TB
 	}
-	return size
+	return int64(size)
 }
 
 // DecryptCopyObjectInfo tries to decrypt the provided object if it is encrypted.

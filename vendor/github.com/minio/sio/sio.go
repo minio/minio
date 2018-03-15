@@ -48,6 +48,9 @@ const (
 	maxPayloadSize = 1 << 16
 	tagSize        = 16
 	maxPackageSize = headerSize + maxPayloadSize + tagSize
+
+	maxDecryptedSize = 1 << 48
+	maxEncryptedSize = maxDecryptedSize + ((headerSize + tagSize) * 1 << 32)
 )
 
 var newAesGcm = func(key []byte) (cipher.AEAD, error) {
@@ -68,6 +71,7 @@ var (
 	errUnsupportedCipher  = errors.New("sio: unsupported cipher suite")
 	errInvalidPayloadSize = errors.New("sio: invalid payload size")
 	errTagMismatch        = errors.New("sio: authentication failed")
+	errUnexpectedSize     = errors.New("sio: size is too large for DARE")
 
 	// Version 1.0 specific
 	errPackageOutOfOrder = errors.New("sio: sequence number mismatch")
@@ -113,6 +117,41 @@ type Config struct {
 	// This field is specific for version 1.0 and is
 	// deprecated.
 	PayloadSize int
+}
+
+// EncryptedSize computes the size of an encrypted data stream
+// from the plaintext size. It is the inverse of DecryptedSize().
+//
+// EncryptedSize returns an error if the provided size is to large.
+func EncryptedSize(size uint64) (uint64, error) {
+	if size > maxDecryptedSize {
+		return 0, errUnexpectedSize
+	}
+
+	encSize := (size / maxPayloadSize) * maxPackageSize
+	if mod := size % maxPayloadSize; mod > 0 {
+		encSize += mod + (headerSize + tagSize)
+	}
+	return encSize, nil
+}
+
+// DecryptedSize computes the size of a decrypted data stream
+// from the encrypted stream size. It is the inverse of EncryptedSize().
+//
+// DecryptedSize returns an error if the provided size is to large
+// or if the provided size is an invalid encrypted stream size.
+func DecryptedSize(size uint64) (uint64, error) {
+	if size > maxEncryptedSize {
+		return 0, errUnexpectedSize
+	}
+	decSize := (size / maxPackageSize) * maxPayloadSize
+	if mod := size % maxPackageSize; mod > 0 {
+		if mod <= headerSize+tagSize {
+			return 0, errors.New("sio: size is not valid") // last package is not valid
+		}
+		decSize += mod - (headerSize + tagSize)
+	}
+	return decSize, nil
 }
 
 // Encrypt reads from src until it encounters an io.EOF and encrypts all received

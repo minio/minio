@@ -80,7 +80,7 @@ func (w *encWriterV20) Write(p []byte) (n int, err error) {
 }
 
 func (w *encWriterV20) Close() error {
-	if w.offset > 0 { // true if at least one Write call happend
+	if w.offset > 0 { // true if at least one Write call happened
 		w.SealFinal(w.buffer, w.buffer[headerSize:headerSize+w.offset])
 		if err := flush(w.dst, w.buffer[:headerSize+w.offset+tagSize]); err != nil { // write to underlying io.Writer
 			return err
