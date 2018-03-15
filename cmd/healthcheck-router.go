@@ -37,7 +37,9 @@ func registerHealthCheckRouter(mux *router.Router) {
 
 	// Liveness handler
 	healthRouter.Methods(http.MethodGet).Path(healthCheckLivenessPath).HandlerFunc(LivenessCheckHandler)
+	healthRouter.Methods(http.MethodHead).Path(healthCheckLivenessPath).HandlerFunc(LivenessCheckHandler)
 
 	// Readiness handler
 	healthRouter.Methods(http.MethodGet).Path(healthCheckReadinessPath).HandlerFunc(ReadinessCheckHandler)
+	healthRouter.Methods(http.MethodHead).Path(healthCheckReadinessPath).HandlerFunc(ReadinessCheckHandler)
 }
