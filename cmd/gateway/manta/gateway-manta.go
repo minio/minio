@@ -220,12 +220,12 @@ type tritonObjects struct {
 
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
-func (t *tritonObjects) Shutdown() error {
+func (t *tritonObjects) Shutdown(ctx context.Context) error {
 	return nil
 }
 
 // StorageInfo - Not relevant to Triton backend.
-func (t *tritonObjects) StorageInfo() (si minio.StorageInfo) {
+func (t *tritonObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
 	return si
 }
 
@@ -236,8 +236,7 @@ func (t *tritonObjects) StorageInfo() (si minio.StorageInfo) {
 // MakeBucketWithLocation - Create a new directory within manta.
 //
 // https://apidocs.joyent.com/manta/api.html#PutDirectory
-func (t *tritonObjects) MakeBucketWithLocation(bucket, location string) error {
-	ctx := context.Background()
+func (t *tritonObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	err := t.client.Dir().Put(ctx, &storage.PutDirectoryInput{
 		DirectoryName: path.Join(mantaRoot, bucket),
 	})
@@ -250,9 +249,8 @@ func (t *tritonObjects) MakeBucketWithLocation(bucket, location string) error {
 // GetBucketInfo - Get directory metadata..
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e error) {
+func (t *tritonObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
 	var info minio.BucketInfo
-	ctx := context.Background()
 	resp, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket),
 	})
@@ -270,8 +268,7 @@ func (t *tritonObjects) GetBucketInfo(bucket string) (bi minio.BucketInfo, e err
 // ListDirectories.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
-	ctx := context.Background()
+func (t *tritonObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	dirs, err := t.client.Dir().List(ctx, &storage.ListDirectoryInput{
 		DirectoryName: path.Join(mantaRoot),
 	})
@@ -295,8 +292,7 @@ func (t *tritonObjects) ListBuckets() (buckets []minio.BucketInfo, err error) {
 // DeleteDirectory.
 //
 // https://apidocs.joyent.com/manta/api.html#DeleteDirectory
-func (t *tritonObjects) DeleteBucket(bucket string) error {
-	ctx := context.Background()
+func (t *tritonObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	return t.client.Dir().Delete(ctx, &storage.DeleteDirectoryInput{
 		DirectoryName: path.Join(mantaRoot, bucket),
 	})
@@ -310,13 +306,12 @@ func (t *tritonObjects) DeleteBucket(bucket string) error {
 // and marker, uses Manta equivalent ListDirectory.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
+func (t *tritonObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	var (
 		dirName string
 		objs    *storage.ListDirectoryOutput
 		input   *storage.ListDirectoryInput
 
-		ctx      = context.Background()
 		pathBase = path.Base(prefix)
 	)
 
@@ -393,13 +388,12 @@ func (t *tritonObjects) ListObjects(bucket, prefix, marker, delimiter string, ma
 // and continuationToken, uses Manta equivalent ListDirectory.
 //
 // https://apidocs.joyent.com/manta/api.html#ListDirectory
-func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
+func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result minio.ListObjectsV2Info, err error) {
 	var (
 		dirName string
 		objs    *storage.ListDirectoryOutput
 		input   *storage.ListDirectoryInput
 
-		ctx      = context.Background()
 		pathBase = path.Base(prefix)
 	)
 
@@ -467,13 +461,12 @@ func (t *tritonObjects) ListObjectsV2(bucket, prefix, continuationToken, delimit
 // indicates the total length of the object.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (t *tritonObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
 		return errors.Trace(fmt.Errorf("Unexpected error"))
 	}
 
-	ctx := context.Background()
 	output, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
@@ -499,8 +492,7 @@ func (t *tritonObjects) GetObject(bucket, object string, startOffset int64, leng
 // uses Triton equivalent GetBlobProperties.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObjectInfo(bucket, object string) (objInfo minio.ObjectInfo, err error) {
-	ctx := context.Background()
+func (t *tritonObjects) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	info, err := t.client.Objects().GetInfo(ctx, &storage.GetInfoInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
@@ -538,8 +530,7 @@ func (d dummySeeker) Seek(offset int64, whence int) (int64, error) {
 // CreateBlockBlobFromReader.
 //
 // https://apidocs.joyent.com/manta/api.html#PutObject
-func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
-	ctx := context.Background()
+func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
 		ContentLength: uint64(data.Size()),
 		ObjectPath:    path.Join(mantaRoot, bucket, object),
@@ -552,19 +543,18 @@ func (t *tritonObjects) PutObject(bucket, object string, data *hash.Reader, meta
 		return objInfo, errors.Trace(err)
 	}
 	if err = data.Verify(); err != nil {
-		t.DeleteObject(bucket, object)
+		t.DeleteObject(ctx, bucket, object)
 		return objInfo, errors.Trace(err)
 	}
 
-	return t.GetObjectInfo(bucket, object)
+	return t.GetObjectInfo(ctx, bucket, object)
 }
 
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Manta Snaplinks API.
 //
 // https://apidocs.joyent.com/manta/api.html#PutSnapLink
-func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
-	ctx := context.Background()
+func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
 		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
@@ -572,14 +562,13 @@ func (t *tritonObjects) CopyObject(srcBucket, srcObject, destBucket, destObject 
 		return objInfo, errors.Trace(err)
 	}
 
-	return t.GetObjectInfo(destBucket, destObject)
+	return t.GetObjectInfo(ctx, destBucket, destObject)
 }
 
 // DeleteObject - Delete a blob in Manta, uses Triton equivalent DeleteBlob API.
 //
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
-func (t *tritonObjects) DeleteObject(bucket, object string) error {
-	ctx := context.Background()
+func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string) error {
 	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
