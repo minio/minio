@@ -367,6 +367,11 @@ func loadConfig() error {
 	return nil
 }
 
+// getNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
+// A new notification target is added like below
+// * Add a new target in pkg/event/target package.
+// * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
+// * Handle the configuration in this function to create/add into TargetList.
 func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 	targetList := event.NewTargetList()
 

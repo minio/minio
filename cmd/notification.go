@@ -206,7 +206,7 @@ func (sys *NotificationSys) initListeners(objAPI ObjectLayer, bucketName string)
 			return err
 		}
 		if found {
-			// As this function is called at startup, skip HTTP listerner to this host.
+			// As this function is called at startup, skip HTTP listener to this host.
 			continue
 		}
 
@@ -262,7 +262,7 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 			sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 		}
 
-		if err := sys.initListeners(objAPI, bucket.Name); err != nil {
+		if err = sys.initListeners(objAPI, bucket.Name); err != nil {
 			errorIf(err, "Unable to initialize HTTP listener for bucket %v", bucket.Name)
 			return err
 		}
@@ -424,7 +424,7 @@ func (args eventArgs) ToEvent() event.Event {
 			Bucket: event.Bucket{
 				Name:          args.BucketName,
 				OwnerIdentity: event.Identity{creds.AccessKey},
-				ARN:           "arn:aws:s3:::" + args.BucketName,
+				ARN:           bucketARNPrefix + args.BucketName,
 			},
 			Object: event.Object{
 				Key:       url.QueryEscape(args.Object.Name),
