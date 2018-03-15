@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type webhookNotify struct {
@@ -170,7 +170,11 @@ func newWebhookNotify(accountID string) (*logrus.Logger, error) {
 
 // Fire is called when an event should be sent to the message broker.
 func (n httpConn) Fire(entry *logrus.Entry) error {
-	body, err := entry.Reader()
+	serialized, err := entry.Logger.Formatter.Format(entry)
+	if err != nil {
+		return err
+	}
+	body := bytes.NewBuffer(serialized)
 	if err != nil {
 		return err
 	}
