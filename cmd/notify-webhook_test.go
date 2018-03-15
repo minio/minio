@@ -26,7 +26,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // Custom post handler to handle POST requests.

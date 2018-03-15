@@ -17,10 +17,11 @@
 package cmd
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
@@ -115,7 +116,11 @@ func (kC kafkaConn) Close() {
 
 // Fire - to implement logrus.Hook interface
 func (kC kafkaConn) Fire(entry *logrus.Entry) error {
-	body, err := entry.Reader()
+	serialized, err := entry.Logger.Formatter.Format(entry)
+	if err != nil {
+		return err
+	}
+	body := bytes.NewBuffer(serialized)
 	if err != nil {
 		return err
 	}

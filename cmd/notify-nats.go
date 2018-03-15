@@ -17,12 +17,13 @@
 package cmd
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats"
+	"github.com/sirupsen/logrus"
 )
 
 // natsNotifyStreaming contains specific options related to connection
@@ -163,7 +164,11 @@ func newNATSNotify(accountID string) (*logrus.Logger, error) {
 
 // Fire is called when an event should be sent to the message broker
 func (n natsIOConn) Fire(entry *logrus.Entry) error {
-	body, err := entry.Reader()
+	serialized, err := entry.Logger.Formatter.Format(entry)
+	if err != nil {
+		return err
+	}
+	body := bytes.NewBuffer(serialized)
 	if err != nil {
 		return err
 	}

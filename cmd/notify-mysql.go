@@ -60,8 +60,8 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/go-sql-driver/mysql"
+	"github.com/sirupsen/logrus"
 )
 
 const (
