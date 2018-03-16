@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"io/ioutil"
 	"net/http"
@@ -167,9 +169,11 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {
 		return ErrInternalError
 	}
+
 	if errCode := reqSignatureV4Verify(r, region); errCode != ErrNone {
 		return errCode
 	}
+
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to read request body for signature verification")
@@ -180,8 +184,15 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 
 	// Verify Content-Md5, if payload is set.
-	if r.Header.Get("Content-Md5") != "" {
-		if r.Header.Get("Content-Md5") != getMD5HashBase64(payload) {
+	if clntMD5B64, ok := r.Header["Content-Md5"]; ok {
+		if clntMD5B64[0] == "" {
+			return ErrInvalidDigest
+		}
+		md5Sum, err := base64.StdEncoding.Strict().DecodeString(clntMD5B64[0])
+		if err != nil {
+			return ErrInvalidDigest
+		}
+		if !bytes.Equal(md5Sum, getMD5Sum(payload)) {
 			return ErrBadDigest
 		}
 	}
@@ -192,12 +203,21 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 
 	// Verify that X-Amz-Content-Sha256 Header == sha256(payload)
 	// If X-Amz-Content-Sha256 header is not sent then we don't calculate/verify sha256(payload)
-	sum := r.Header.Get("X-Amz-Content-Sha256")
+	sumHex, ok := r.Header["X-Amz-Content-Sha256"]
 	if isRequestPresignedSignatureV4(r) {
-		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
+		sumHex, ok = r.URL.Query()["X-Amz-Content-Sha256"]
 	}
-	if sum != "" && sum != getSHA256Hash(payload) {
-		return ErrContentSHA256Mismatch
+	if ok {
+		if sumHex[0] == "" {
+			return ErrContentSHA256Mismatch
+		}
+		sum, err := hex.DecodeString(sumHex[0])
+		if err != nil {
+			return ErrContentSHA256Mismatch
+		}
+		if !bytes.Equal(sum, getSHA256Sum(payload)) {
+			return ErrContentSHA256Mismatch
+		}
 	}
 	return ErrNone
 }

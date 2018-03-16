@@ -572,7 +572,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get Content-Md5 sent by client and verify if valid
-	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
+	md5Bytes, err := checkValidMD5(r.Header)
 	if err != nil {
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
 		return
@@ -582,11 +582,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
 	if rAuthType == authTypeStreamingSigned {
-		sizeStr := r.Header.Get("x-amz-decoded-content-length")
-		size, err = strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
+		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+			if sizeStr[0] == "" {
+				writeErrorResponse(w, ErrMissingContentLength, r.URL)
+				return
+			}
+			size, err = strconv.ParseInt(sizeStr[0], 10, 64)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
 		}
 	}
 	if size == -1 {
@@ -1013,7 +1018,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	// get Content-Md5 sent by client and verify if valid
-	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
+	md5Bytes, err := checkValidMD5(r.Header)
 	if err != nil {
 		writeErrorResponse(w, ErrInvalidDigest, r.URL)
 		return
@@ -1025,11 +1030,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	rAuthType := getRequestAuthType(r)
 	// For auth type streaming signature, we need to gather a different content length.
 	if rAuthType == authTypeStreamingSigned {
-		sizeStr := r.Header.Get("x-amz-decoded-content-length")
-		size, err = strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
+		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+			if sizeStr[0] == "" {
+				writeErrorResponse(w, ErrMissingContentLength, r.URL)
+				return
+			}
+			size, err = strconv.ParseInt(sizeStr[0], 10, 64)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
 		}
 	}
 	if size == -1 {

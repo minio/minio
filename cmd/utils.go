@@ -102,8 +102,15 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 }
 
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
-func checkValidMD5(md5 string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(strings.TrimSpace(md5))
+func checkValidMD5(h http.Header) ([]byte, error) {
+	md5B64, ok := h["Content-Md5"]
+	if ok {
+		if md5B64[0] == "" {
+			return nil, fmt.Errorf("Content-Md5 header set to empty value")
+		}
+		return base64.StdEncoding.DecodeString(md5B64[0])
+	}
+	return []byte{}, nil
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
