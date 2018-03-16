@@ -1043,6 +1043,12 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
 func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (results []madmin.HealResultItem, err error) {
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
+		return nil, err
+	}
+	defer bucketLock.Unlock()
+
 	// Initialize heal result info
 	res := madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
