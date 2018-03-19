@@ -219,14 +219,13 @@ func (conf *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return err
 	}
 
-	if len(parsedConfig.QueueList) == 0 {
-		return errors.New("missing queue configuration(s)")
-	}
-
-	for i, q1 := range parsedConfig.QueueList[:len(parsedConfig.QueueList)-1] {
-		for _, q2 := range parsedConfig.QueueList[i+1:] {
-			if reflect.DeepEqual(q1, q2) {
-				return &ErrDuplicateQueueConfiguration{q1}
+	// Empty queue list means user wants to delete the notification configuration.
+	if len(parsedConfig.QueueList) > 0 {
+		for i, q1 := range parsedConfig.QueueList[:len(parsedConfig.QueueList)-1] {
+			for _, q2 := range parsedConfig.QueueList[i+1:] {
+				if reflect.DeepEqual(q1, q2) {
+					return &ErrDuplicateQueueConfiguration{q1}
+				}
 			}
 		}
 	}
@@ -276,10 +275,6 @@ func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Conf
 	var config Config
 	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
 		return nil, err
-	}
-
-	if len(config.QueueList) == 0 {
-		return nil, errors.New("missing queue configuration(s)")
 	}
 
 	if err := config.Validate(region, targetList); err != nil {
