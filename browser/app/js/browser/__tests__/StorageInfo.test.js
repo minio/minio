@@ -21,20 +21,14 @@ import { StorageInfo } from "../StorageInfo"
 describe("StorageInfo", () => {
   it("should render without crashing", () => {
     shallow(
-      <StorageInfo
-        storageInfo={{ total: 100, free: 60 }}
-        fetchStorageInfo={jest.fn()}
-      />
+      <StorageInfo storageInfo={ { total: 100, free: 60 } } fetchStorageInfo={ jest.fn() } />
     )
   })
 
   it("should fetchStorageInfo before component is mounted", () => {
     const fetchStorageInfo = jest.fn()
     shallow(
-      <StorageInfo
-        storageInfo={{ total: 100, free: 60 }}
-        fetchStorageInfo={fetchStorageInfo}
-      />
+      <StorageInfo storageInfo={ { total: 100, free: 60 } } fetchStorageInfo={ fetchStorageInfo } />
     )
     expect(fetchStorageInfo).toHaveBeenCalled()
   })

@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import React from "react"
-import { connect } from "react-redux"
-import { Scrollbars } from "react-custom-scrollbars"
-import * as actionsBuckets from "./actions"
-import { getVisibleBuckets } from "./selectors"
-import BucketContainer from "./BucketContainer"
-import web from "../web"
-import history from "../history"
-import { pathSlice } from "../utils"
+import React from 'react'
+import { connect } from 'react-redux'
+import { Scrollbars } from 'react-custom-scrollbars'
+import * as actionsBuckets from './actions'
+import { getVisibleBuckets } from './selectors'
+import BucketContainer from './BucketContainer'
+import web from '../web'
+import history from '../history'
+import { pathSlice } from '../utils'
 
 export class BucketList extends React.Component {
   componentWillMount() {
@@ -35,23 +35,17 @@ export class BucketList extends React.Component {
         setBucketList([bucket])
         selectBucket(bucket, prefix)
       } else {
-        history.replace("/login")
+        history.replace('/login')
       }
     }
   }
   render() {
     const { visibleBuckets } = this.props
     return (
-      <div className="fesl-inner">
-        <Scrollbars
-          renderTrackVertical={props => <div className="scrollbar-vertical" />}
-        >
-          <ul>
-            {visibleBuckets.map(bucket => (
-              <BucketContainer key={bucket} bucket={bucket} />
-            ))}
-          </ul>
-        </Scrollbars>
+      <div className="buckets__list">
+        {visibleBuckets.map(bucket => (
+          <BucketContainer key={bucket} bucket={bucket} />
+        ))}
       </div>
     )
   }
@@ -59,7 +53,7 @@ export class BucketList extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    visibleBuckets: getVisibleBuckets(state)
+    visibleBuckets: getVisibleBuckets(state),
   }
 }
 
@@ -67,7 +61,7 @@ const mapDispatchToProps = dispatch => {
   return {
     fetchBuckets: () => dispatch(actionsBuckets.fetchBuckets()),
     setBucketList: buckets => dispatch(actionsBuckets.setList(buckets)),
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
+    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket)),
   }
 }
 

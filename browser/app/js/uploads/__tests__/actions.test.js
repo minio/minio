@@ -85,7 +85,9 @@ describe("Uploads actions", () => {
 
     it("creates alerts/SET action when currentBucket is not present", () => {
       const store = mockStore({
-        buckets: { currentBucket: "" }
+        buckets: {
+          currentBucket: ""
+        }
       })
       const expectedActions = [
         {
@@ -97,7 +99,9 @@ describe("Uploads actions", () => {
           }
         }
       ]
-      const file = new Blob(["file content"], { type: "text/plain" })
+      const file = new Blob(["file content"], {
+        type: "text/plain"
+      })
       store.dispatch(uploadsActions.uploadFile(file))
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
@@ -105,8 +109,12 @@ describe("Uploads actions", () => {
 
     it("creates uploads/ADD action before uploading the file", () => {
       const store = mockStore({
-        buckets: { currentBucket: "test1" },
-        objects: { currentPrefix: "pre1/" }
+        buckets: {
+          currentBucket: "test1"
+        },
+        objects: {
+          currentPrefix: "pre1/"
+        }
       })
       const expectedActions = [
         {
@@ -134,8 +142,12 @@ describe("Uploads actions", () => {
       })
       window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
       const store = mockStore({
-        buckets: { currentBucket: "test1" },
-        objects: { currentPrefix: "pre1/" }
+        buckets: {
+          currentBucket: "test1"
+        },
+        objects: {
+          currentPrefix: "pre1/"
+        }
       })
       store.dispatch(uploadsActions.uploadFile(file))
       expect(open).toHaveBeenCalledWith(

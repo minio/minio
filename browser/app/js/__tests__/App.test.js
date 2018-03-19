@@ -19,8 +19,12 @@ import { shallow, mount } from "enzyme"
 import { MemoryRouter } from "react-router-dom"
 import App from "../App"
 
-jest.mock("../browser/Login", () => () => <div>Login</div>)
-jest.mock("../browser/Browser", () => () => <div>Browser</div>)
+jest.mock("../browser/Login", () => () => <div>
+                                            Login
+                                          </div>)
+jest.mock("../browser/Browser", () => () => <div>
+                                              Browser
+                                            </div>)
 
 describe("App", () => {
   it("should render without crashing", () => {
@@ -29,7 +33,7 @@ describe("App", () => {
 
   it("should render Login component for '/login' route", () => {
     const wrapper = mount(
-      <MemoryRouter initialEntries={["/login"]}>
+      <MemoryRouter initialEntries={ ["/login"] }>
         <App />
       </MemoryRouter>
     )
@@ -38,7 +42,7 @@ describe("App", () => {
 
   it("should render Browser component for '/' route", () => {
     const wrapper = mount(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={ ["/"] }>
         <App />
       </MemoryRouter>
     )
@@ -47,7 +51,7 @@ describe("App", () => {
 
   it("should render Browser component for '/bucket' route", () => {
     const wrapper = mount(
-      <MemoryRouter initialEntries={["/bucket"]}>
+      <MemoryRouter initialEntries={ ["/bucket"] }>
         <App />
       </MemoryRouter>
     )
@@ -56,7 +60,7 @@ describe("App", () => {
 
   it("should render Browser component for '/bucket/a/b/c' route", () => {
     const wrapper = mount(
-      <MemoryRouter initialEntries={["/bucket/a/b/c"]}>
+      <MemoryRouter initialEntries={ ["/bucket/a/b/c"] }>
         <App />
       </MemoryRouter>
     )

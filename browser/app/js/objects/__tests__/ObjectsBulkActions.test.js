@@ -20,21 +20,18 @@ import { ObjectsBulkActions } from "../ObjectsBulkActions"
 
 describe("ObjectsBulkActions", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsBulkActions checkedObjectsCount={0} />)
+    shallow(<ObjectsBulkActions checkedObjectsCount={ 0 } />)
   })
 
   it("should show actions when checkObjectsCount is more than 0", () => {
-    const wrapper = shallow(<ObjectsBulkActions checkedObjectsCount={1} />)
+    const wrapper = shallow(<ObjectsBulkActions checkedObjectsCount={ 1 } />)
     expect(wrapper.hasClass("list-actions-toggled")).toBeTruthy()
   })
 
   it("should call downloadChecked when download button is clicked", () => {
     const downloadChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions
-        checkedObjectsCount={1}
-        downloadChecked={downloadChecked}
-      />
+      <ObjectsBulkActions checkedObjectsCount={ 1 } downloadChecked={ downloadChecked } />
     )
     wrapper.find("#download-checked").simulate("click")
     expect(downloadChecked).toHaveBeenCalled()
@@ -43,14 +40,14 @@ describe("ObjectsBulkActions", () => {
   it("should call clearChecked when close button is clicked", () => {
     const clearChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions checkedObjectsCount={1} clearChecked={clearChecked} />
+      <ObjectsBulkActions checkedObjectsCount={ 1 } clearChecked={ clearChecked } />
     )
     wrapper.find("#close-bulk-actions").simulate("click")
     expect(clearChecked).toHaveBeenCalled()
   })
 
   it("shoud show DeleteObjectConfirmModal when delete-checked button is clicked", () => {
-    const wrapper = shallow(<ObjectsBulkActions checkedObjectsCount={1} />)
+    const wrapper = shallow(<ObjectsBulkActions checkedObjectsCount={ 1 } />)
     wrapper.find("#delete-checked").simulate("click")
     wrapper.update()
     expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(1)
@@ -59,10 +56,7 @@ describe("ObjectsBulkActions", () => {
   it("shoud call deleteChecked when Delete is clicked on confirmation modal", () => {
     const deleteChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions
-        checkedObjectsCount={1}
-        deleteChecked={deleteChecked}
-      />
+      <ObjectsBulkActions checkedObjectsCount={ 1 } deleteChecked={ deleteChecked } />
     )
     wrapper.find("#delete-checked").simulate("click")
     wrapper.update()

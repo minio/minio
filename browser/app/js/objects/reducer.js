@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import * as actionsObjects from "./actions"
+import * as actionsObjects from './actions'
 
 const removeObject = (list, objectToRemove, lookup) => {
   const idx = list.findIndex(object => lookup(object) === objectToRemove)
@@ -27,20 +27,20 @@ const removeObject = (list, objectToRemove, lookup) => {
 export default (
   state = {
     list: [],
-    sortBy: "",
+    sortBy: '',
     sortOrder: false,
-    currentPrefix: "",
-    marker: "",
+    currentPrefix: '',
+    marker: '',
     isTruncated: false,
     prefixWritable: false,
     shareObject: {
       show: false,
-      object: "",
-      url: ""
+      object: '',
+      url: '',
     },
-    checkedList: []
+    checkedList: [],
   },
-  action
+  action,
 ) => {
   switch (action.type) {
     case actionsObjects.SET_LIST:
@@ -48,41 +48,41 @@ export default (
         ...state,
         list: action.objects,
         marker: action.marker,
-        isTruncated: action.isTruncated
+        isTruncated: action.isTruncated,
       }
     case actionsObjects.APPEND_LIST:
       return {
         ...state,
         list: [...state.list, ...action.objects],
         marker: action.marker,
-        isTruncated: action.isTruncated
+        isTruncated: action.isTruncated,
       }
     case actionsObjects.REMOVE:
       return {
         ...state,
-        list: removeObject(state.list, action.object, object => object.name)
+        list: removeObject(state.list, action.object, object => object.name),
       }
     case actionsObjects.SET_SORT_BY:
       return {
         ...state,
-        sortBy: action.sortBy
+        sortBy: action.sortBy,
       }
     case actionsObjects.SET_SORT_ORDER:
       return {
         ...state,
-        sortOrder: action.sortOrder
+        sortOrder: action.sortOrder,
       }
     case actionsObjects.SET_CURRENT_PREFIX:
       return {
         ...state,
         currentPrefix: action.prefix,
-        marker: "",
-        isTruncated: false
+        marker: '',
+        isTruncated: false,
       }
     case actionsObjects.SET_PREFIX_WRITABLE:
       return {
         ...state,
-        prefixWritable: action.prefixWritable
+        prefixWritable: action.prefixWritable,
       }
     case actionsObjects.SET_SHARE_OBJECT:
       return {
@@ -90,13 +90,13 @@ export default (
         shareObject: {
           show: action.show,
           object: action.object,
-          url: action.url
-        }
+          url: action.url,
+        },
       }
     case actionsObjects.CHECKED_LIST_ADD:
       return {
         ...state,
-        checkedList: [...state.checkedList, action.object]
+        checkedList: [...state.checkedList, action.object],
       }
     case actionsObjects.CHECKED_LIST_REMOVE:
       return {
@@ -104,13 +104,13 @@ export default (
         checkedList: removeObject(
           state.checkedList,
           action.object,
-          object => object
-        )
+          object => object,
+        ),
       }
     case actionsObjects.CHECKED_LIST_RESET:
       return {
         ...state,
-        checkedList: []
+        checkedList: [],
       }
     default:
       return state

@@ -39,24 +39,28 @@ describe("BucketDropdown", () => {
   it("should call showBucketPolicy when Edit Policy link is clicked", () => {
     const showBucketPolicy = jest.fn()
     const wrapper = shallow(
-      <BucketDropdown showBucketPolicy={showBucketPolicy} />
+      <BucketDropdown showBucketPolicy={ showBucketPolicy } />
     )
     wrapper
       .find("li a")
       .at(0)
-      .simulate("click", { stopPropagation: jest.fn() })
+      .simulate("click", {
+        stopPropagation: jest.fn()
+      })
     expect(showBucketPolicy).toHaveBeenCalled()
   })
 
   it("should call deleteBucket when Delete link is clicked", () => {
     const deleteBucket = jest.fn()
     const wrapper = shallow(
-      <BucketDropdown bucket={"test"} deleteBucket={deleteBucket} />
+      <BucketDropdown bucket={ "test" } deleteBucket={ deleteBucket } />
     )
     wrapper
       .find("li a")
       .at(1)
-      .simulate("click", { stopPropagation: jest.fn() })
+      .simulate("click", {
+        stopPropagation: jest.fn()
+      })
     expect(deleteBucket).toHaveBeenCalledWith("test")
   })
 })

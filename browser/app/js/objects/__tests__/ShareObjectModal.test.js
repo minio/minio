@@ -17,11 +17,7 @@
 import React from "react"
 import { shallow, mount } from "enzyme"
 import { ShareObjectModal } from "../ShareObjectModal"
-import {
-  SHARE_OBJECT_EXPIRY_DAYS,
-  SHARE_OBJECT_EXPIRY_HOURS,
-  SHARE_OBJECT_EXPIRY_MINUTES
-} from "../../constants"
+import { SHARE_OBJECT_EXPIRY_DAYS, SHARE_OBJECT_EXPIRY_HOURS, SHARE_OBJECT_EXPIRY_MINUTES } from "../../constants"
 
 jest.mock("../../web", () => ({
   LoggedIn: jest.fn(() => {
@@ -32,21 +28,14 @@ jest.mock("../../web", () => ({
 describe("ShareObjectModal", () => {
   it("should render without crashing", () => {
     shallow(
-      <ShareObjectModal
-        object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-      />
+      <ShareObjectModal object={ { name: "obj1" } } shareObjectDetails={ { show: true, object: "obj1", url: "test" } } />
     )
   })
 
   it("shoud call hideShareObject when Cancel is clicked", () => {
     const hideShareObject = jest.fn()
     const wrapper = shallow(
-      <ShareObjectModal
-        object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-        hideShareObject={hideShareObject}
-      />
+      <ShareObjectModal object={ { name: "obj1" } } shareObjectDetails={ { show: true, object: "obj1", url: "test" } } hideShareObject={ hideShareObject } />
     )
     wrapper
       .find("button")
@@ -57,10 +46,7 @@ describe("ShareObjectModal", () => {
 
   it("should show the shareable link", () => {
     const wrapper = shallow(
-      <ShareObjectModal
-        object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-      />
+      <ShareObjectModal object={ { name: "obj1" } } shareObjectDetails={ { show: true, object: "obj1", url: "test" } } />
     )
     expect(
       wrapper
@@ -74,12 +60,10 @@ describe("ShareObjectModal", () => {
     const hideShareObject = jest.fn()
     const showCopyAlert = jest.fn()
     const wrapper = shallow(
-      <ShareObjectModal
-        object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
-        hideShareObject={hideShareObject}
-        showCopyAlert={showCopyAlert}
-      />
+      <ShareObjectModal object={ { name: "obj1" } }
+        shareObjectDetails={ { show: true, object: "obj1", url: "test" } }
+        hideShareObject={ hideShareObject }
+        showCopyAlert={ showCopyAlert } />
     )
     wrapper.find("CopyToClipboard").prop("onCopy")()
     expect(showCopyAlert).toHaveBeenCalledWith("Link copied to clipboard!")
@@ -88,8 +72,14 @@ describe("ShareObjectModal", () => {
 
   describe("Update expiry values", () => {
     const props = {
-      object: { name: "obj1" },
-      shareObjectDetails: { show: true, object: "obj1", url: "test" }
+      object: {
+        name: "obj1"
+      },
+      shareObjectDetails: {
+        show: true,
+        object: "obj1",
+        url: "test"
+      }
     }
     it("should have default expiry values", () => {
       const wrapper = shallow(<ShareObjectModal {...props} />)
@@ -103,7 +93,7 @@ describe("ShareObjectModal", () => {
     it("should not allow any increments when days is already max", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={ shareObject } />
       )
       wrapper.setState({
         expiry: {
@@ -124,7 +114,7 @@ describe("ShareObjectModal", () => {
     it("should not allow expiry values less than minimum value", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={ shareObject } />
       )
       wrapper.setState({
         expiry: {
@@ -143,7 +133,7 @@ describe("ShareObjectModal", () => {
     it("should not allow expiry values more than maximum value", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={ shareObject } />
       )
       wrapper.setState({
         expiry: {
@@ -162,7 +152,7 @@ describe("ShareObjectModal", () => {
     it("should set hours and minutes to 0 when days reaches max", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={ shareObject } />
       )
       wrapper.setState({
         expiry: {
@@ -183,7 +173,7 @@ describe("ShareObjectModal", () => {
     it("should set days to MAX when all of them becomes 0", () => {
       const shareObject = jest.fn()
       const wrapper = shallow(
-        <ShareObjectModal {...props} shareObject={shareObject} />
+        <ShareObjectModal {...props} shareObject={ shareObject } />
       )
       wrapper.setState({
         expiry: {

@@ -1,0 +1,21 @@
+@media(min-width: @screen-md-min) {
+    .storage {
+        color: @text-muted-color;
+        padding: 1.25rem @sidebar-padding 1.6rem;
+        margin: auto 0 0;
+        border-top: 1px solid @muted-border;
+    }
+
+    .storage__progress {
+        background-color: darken(@muted-bg, 3%);
+        overflow: hidden;
+        height: 0.3rem;
+        margin-top: 0.3rem;
+
+        & > span {
+            height: 0.3rem;
+            background-color: @blue;
+            display: block;
+        }
+    }
+}

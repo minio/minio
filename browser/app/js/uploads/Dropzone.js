@@ -23,7 +23,7 @@ import * as actions from "./actions"
 // landing zone of sorts that automatically receives the files.
 export class Dropzone extends React.Component {
   onDrop(files) {
-    const { uploadFile } = this.props
+    const {uploadFile} = this.props
     // FIXME: Currently you can upload multiple files, but only one abort
     // modal will be shown, and progress updates will only occur for one
     // file at a time. See #171.
@@ -33,33 +33,15 @@ export class Dropzone extends React.Component {
   }
 
   render() {
-    // Overwrite the default styling from react-dropzone; otherwise it
-    // won't handle child elements correctly.
-    const style = {
-      height: "100%",
-      borderWidth: "0",
-      borderStyle: "dashed",
-      borderColor: "#fff"
-    }
-    const activeStyle = {
-      borderWidth: "2px",
-      borderColor: "#777"
-    }
-    const rejectStyle = {
-      backgroundColor: "#ffdddd"
-    }
-
     // disableClick means that it won't trigger a file upload box when
     // the user clicks on a file.
     return (
-      <ReactDropzone
-        style={style}
-        activeStyle={activeStyle}
-        rejectStyle={rejectStyle}
-        disableClick={true}
-        onDrop={this.onDrop.bind(this)}
-      >
-        {this.props.children}
+      <ReactDropzone className="objects"
+        activeClassName="objects--active"
+        rejectClassName="objects--reject"
+        disableClick={ true }
+        onDrop={ this.onDrop.bind(this) }>
+        { this.props.children }
       </ReactDropzone>
     )
   }

@@ -29,7 +29,11 @@ describe("alert reducer", () => {
     expect(
       reducer(undefined, {
         type: actionsAlert.SET,
-        alert: { id: 1, type: "danger", message: "Test message" }
+        alert: {
+          id: 1,
+          type: "danger",
+          message: "Test message"
+        }
       })
     ).toEqual({
       show: true,
@@ -42,7 +46,11 @@ describe("alert reducer", () => {
   it("should clear alert if id not passed", () => {
     expect(
       reducer(
-        { show: true, type: "danger", message: "Test message" },
+        {
+          show: true,
+          type: "danger",
+          message: "Test message"
+        },
         {
           type: actionsAlert.CLEAR
         }
@@ -56,10 +64,17 @@ describe("alert reducer", () => {
   it("should clear alert if id is matching", () => {
     expect(
       reducer(
-        { show: true, id: 1, type: "danger", message: "Test message" },
+        {
+          show: true,
+          id: 1,
+          type: "danger",
+          message: "Test message"
+        },
         {
           type: actionsAlert.CLEAR,
-          alert: { id: 1 }
+          alert: {
+            id: 1
+          }
         }
       )
     ).toEqual({
@@ -71,10 +86,17 @@ describe("alert reducer", () => {
   it("should not clear alert if id is not matching", () => {
     expect(
       reducer(
-        { show: true, id: 1, type: "danger", message: "Test message" },
+        {
+          show: true,
+          id: 1,
+          type: "danger",
+          message: "Test message"
+        },
         {
           type: actionsAlert.CLEAR,
-          alert: { id: 2 }
+          alert: {
+            id: 2
+          }
         }
       )
     ).toEqual({

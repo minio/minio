@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-import React from "react"
-import { connect } from "react-redux"
-import { Dropdown, OverlayTrigger, Tooltip } from "react-bootstrap"
-import web from "../web"
-import * as actionsBuckets from "../buckets/actions"
-import * as uploadsActions from "../uploads/actions"
-import { getPrefixWritable } from "../objects/selectors"
+import React from 'react'
+import { connect } from 'react-redux'
+import { Dropdown, OverlayTrigger, Tooltip } from 'react-bootstrap'
+import web from '../web'
+import * as actionsBuckets from '../buckets/actions'
+import * as uploadsActions from '../uploads/actions'
+import { getPrefixWritable } from '../objects/selectors'
 
 export const MainActions = ({
   prefixWritable,
   uploadFile,
-  showMakeBucketModal
+  showMakeBucketModal,
 }) => {
-  const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
+  const uploadTooltip = <Tooltip id="tooltip-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
-    <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
+    <Tooltip id="tooltip-create-bucket">Create bucket</Tooltip>
   )
   const onFileUpload = e => {
     e.preventDefault()
@@ -41,24 +41,28 @@ export const MainActions = ({
 
   if (loggedIn || prefixWritable) {
     return (
-      <Dropdown dropup className="feb-actions" id="fe-action-toggle">
-        <Dropdown.Toggle noCaret className="feba-toggle">
-          <span>
-            <i className="fa fa-plus" />
-          </span>
+      <Dropdown
+        dropup
+        pullRight
+        className="create"
+        id="main-actions"
+        componentClass="div"
+      >
+        <Dropdown.Toggle noCaret className="create__toggle" useAnchor={true}>
+          <i className="zmdi zmdi-plus" />
+          <i className="zmdi zmdi-close" />
         </Dropdown.Toggle>
         <Dropdown.Menu>
           <OverlayTrigger placement="left" overlay={uploadTooltip}>
-            <a href="#" className="feba-btn feba-upload">
+            <a href="#" className="create__btn create__btn--upload">
               <input
                 type="file"
                 onChange={onFileUpload}
-                style={{ display: "none" }}
+                style={{ display: 'none' }}
                 id="file-input"
               />
               <label htmlFor="file-input">
-                {" "}
-                <i className="fa fa-cloud-upload" />{" "}
+                <i className="zmdi zmdi-upload" />
               </label>
             </a>
           </OverlayTrigger>
@@ -67,14 +71,12 @@ export const MainActions = ({
               <a
                 href="#"
                 id="show-make-bucket"
-                className="feba-btn feba-bucket"
+                className="create__btn create__btn--bucket"
                 onClick={e => {
                   e.preventDefault()
                   showMakeBucketModal()
                 }}
-              >
-                <i className="fa fa-hdd-o" />
-              </a>
+              />
             </OverlayTrigger>
           )}
         </Dropdown.Menu>
@@ -87,14 +89,14 @@ export const MainActions = ({
 
 const mapStateToProps = state => {
   return {
-    prefixWritable: getPrefixWritable(state)
+    prefixWritable: getPrefixWritable(state),
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     uploadFile: file => dispatch(uploadsActions.uploadFile(file)),
-    showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal())
+    showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal()),
   }
 }
 

@@ -1,6 +1,4 @@
-/*--------------------------
-    User Select
-----------------------------*/
+// User select
 .user-select(@value) {
     -webkit-user-select: @value;
     -moz-user-select: @value;
@@ -9,9 +7,30 @@
 }
 
 
-/*----------------------------------------
-    CSS Animations based on animate.css
------------------------------------------*/
+// Font icons
+.font-icon(@icon) {
+    font-family: @font-family-icon;
+    content: @icon;
+}
+
+
+// Appearance
+.appearance(@value) {
+    -webkit-appearance: @value;
+    -moz-appearance: @value;
+    appearance: @value;
+}
+
+
+// Scale and rotate
+.scale-rotate(@scale, @rotate) {
+    -webkit-transform: scale(@scale) rotate(@rotate);
+    -ms-transform: scale(@scale) rotate(@rotate);
+    transform: scale(@scale) rotate(@rotate);
+}
+
+
+// CSS Animations
 .animated(@name, @duration) {
     -webkit-animation-name: @name;
     animation-name: @name;
@@ -21,32 +40,10 @@
     animation-fill-mode: both;
 }
 
-/*-------------------------------------------------
-    For loop mixin for generate custom classes
---------------------------------------------------*/
-.for(@i, @n) {.-each(@i)}
-.for(@n)     when (isnumber(@n)) {.for(1, @n)}
-.for(@i, @n) when not (@i = @n)  {
-    .for((@i + (@n - @i) / abs(@n - @i)), @n);
-}
 
-.for(@array)   when (default()) {.for-impl_(length(@array))}
-.for-impl_(@i) when (@i > 1)    {.for-impl_((@i - 1))}
-.for-impl_(@i) when (@i > 0)    {.-each(extract(@array, @i))}
-
-/*----------------------------------------
-    List Loader
------------------------------------------*/
-.list-loader(@width, @height, @borderColor, @borderColorBottom) {
-    content: '';
-    width: @width;
-    height: @height;
-    border-radius: 50%;
-    .animated(zoomIn, 500ms);
-    border: 2px solid @borderColor;
-    border-bottom-color: @borderColorBottom;
-    position: absolute;
-    z-index: 1;
-    -webkit-animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
-    animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
+// Scale3D
+.scale3d(@x, @y, @z) {
+    -webkit-transform: scale3d(@x, @y, @z);
+    -ms-transform: scale3d(@x, @y, @z);
+    transform: scale3d(@x, @y, @z);
 }

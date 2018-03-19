@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import React from "react"
-import classNames from "classnames"
-import { connect } from "react-redux"
-import ConfirmModal from "../browser/ConfirmModal"
-import * as uploadsActions from "./actions"
+import React from 'react'
+import classNames from 'classnames'
+import { connect } from 'react-redux'
+import ConfirmModal from '../browser/ConfirmModal'
+import * as uploadsActions from './actions'
 
 export class AbortConfirmModal extends React.Component {
   abortUploads() {
@@ -30,15 +30,15 @@ export class AbortConfirmModal extends React.Component {
   render() {
     const { hideAbort } = this.props
     let baseClass = classNames({
-      "abort-upload": true
+      'abort-upload': true,
     })
     let okIcon = classNames({
       fa: true,
-      "fa-times": true
+      'fa-times': true,
     })
     let cancelIcon = classNames({
       fa: true,
-      "fa-cloud-upload": true
+      'fa-cloud-upload': true,
     })
 
     return (
@@ -61,14 +61,14 @@ export class AbortConfirmModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    uploads: state.uploads.files
+    uploads: state.uploads.files,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     abort: slug => dispatch(uploadsActions.abortUpload(slug)),
-    hideAbort: () => dispatch(uploadsActions.hideAbortModal())
+    hideAbort: () => dispatch(uploadsActions.hideAbortModal()),
   }
 }
 

@@ -1,0 +1,37 @@
+.policy__row {
+    display: flex;
+    padding: 0.4rem 2.25rem;
+
+    &:not(.policy__row--add) {
+        align-items: center;
+    }
+
+    &:first-child {
+        margin-bottom: 1rem;
+    }
+
+    &:last-child {
+        margin-bottom: 1.5rem;
+    }
+
+    & > .form-group {
+        flex: 1 1 auto;
+        margin: 0 1.5rem 0 0 !important;
+    }
+
+    & > .btn {
+        width: 4.5rem;
+    }
+
+    &:nth-child(even) {
+        background-color: @muted-bg;
+    }
+}
+
+.policy__row--add {
+    align-items: flex-end;
+}
+
+.policy__access {
+    width: 5rem;
+}

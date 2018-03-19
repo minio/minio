@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-import web from "../web"
-import history from "../history"
-import * as alertActions from "../alert/actions"
-import * as objectsActions from "../objects/actions"
-import { pathSlice } from "../utils"
+import web from '../web'
+import history from '../history'
+import * as alertActions from '../alert/actions'
+import * as objectsActions from '../objects/actions'
+import { pathSlice } from '../utils'
 
-export const SET_LIST = "buckets/SET_LIST"
-export const ADD = "buckets/ADD"
-export const REMOVE = "buckets/REMOVE"
-export const SET_FILTER = "buckets/SET_FILTER"
-export const SET_CURRENT_BUCKET = "buckets/SET_CURRENT_BUCKET"
-export const SHOW_MAKE_BUCKET_MODAL = "buckets/SHOW_MAKE_BUCKET_MODAL"
-export const SHOW_BUCKET_POLICY = "buckets/SHOW_BUCKET_POLICY"
-export const SET_POLICIES = "buckets/SET_POLICIES"
+export const SET_LIST = 'buckets/SET_LIST'
+export const ADD = 'buckets/ADD'
+export const REMOVE = 'buckets/REMOVE'
+export const SET_FILTER = 'buckets/SET_FILTER'
+export const SET_CURRENT_BUCKET = 'buckets/SET_CURRENT_BUCKET'
+export const SHOW_MAKE_BUCKET_MODAL = 'buckets/SHOW_MAKE_BUCKET_MODAL'
+export const SHOW_BUCKET_POLICY = 'buckets/SHOW_BUCKET_POLICY'
+export const SET_POLICIES = 'buckets/SET_POLICIES'
 
 export const fetchBuckets = () => {
   return function(dispatch) {
@@ -42,8 +42,8 @@ export const fetchBuckets = () => {
           dispatch(selectBucket(buckets[0]))
         }
       } else {
-        dispatch(selectBucket(""))
-        history.replace("/")
+        dispatch(selectBucket(''))
+        history.replace('/')
       }
     })
   }
@@ -52,28 +52,28 @@ export const fetchBuckets = () => {
 export const setList = buckets => {
   return {
     type: SET_LIST,
-    buckets
+    buckets,
   }
 }
 
 export const setFilter = filter => {
   return {
     type: SET_FILTER,
-    filter
+    filter,
   }
 }
 
 export const selectBucket = (bucket, prefix) => {
   return function(dispatch) {
     dispatch(setCurrentBucket(bucket))
-    dispatch(objectsActions.selectPrefix(prefix || ""))
+    dispatch(objectsActions.selectPrefix(prefix || ''))
   }
 }
 
 export const setCurrentBucket = bucket => {
   return {
     type: SET_CURRENT_BUCKET,
-    bucket
+    bucket,
   }
 }
 
@@ -81,7 +81,7 @@ export const makeBucket = bucket => {
   return function(dispatch) {
     return web
       .MakeBucket({
-        bucketName: bucket
+        bucketName: bucket,
       })
       .then(() => {
         dispatch(addBucket(bucket))
@@ -90,10 +90,10 @@ export const makeBucket = bucket => {
       .catch(err =>
         dispatch(
           alertActions.set({
-            type: "danger",
-            message: err.message
-          })
-        )
+            type: 'danger',
+            message: err.message,
+          }),
+        ),
       )
   }
 }
@@ -102,24 +102,24 @@ export const deleteBucket = bucket => {
   return function(dispatch) {
     return web
       .DeleteBucket({
-        bucketName: bucket
+        bucketName: bucket,
       })
       .then(() => {
         dispatch(
           alertActions.set({
-            type: "info",
-            message: "Bucket '" + bucket + "' has been deleted."
-          })
+            type: 'info',
+            message: "Bucket '" + bucket + "' has been deleted.",
+          }),
         )
         dispatch(removeBucket(bucket))
         dispatch(fetchBuckets())
       })
-      .catch(err => { 
+      .catch(err => {
         dispatch(
           alertActions.set({
-            type: "danger",
-            message: err.message
-          })
+            type: 'danger',
+            message: err.message,
+          }),
         )
       })
   }
@@ -127,43 +127,41 @@ export const deleteBucket = bucket => {
 
 export const addBucket = bucket => ({
   type: ADD,
-  bucket
+  bucket,
 })
 
 export const removeBucket = bucket => ({
   type: REMOVE,
-  bucket
+  bucket,
 })
 
 export const showMakeBucketModal = () => ({
   type: SHOW_MAKE_BUCKET_MODAL,
-  show: true
+  show: true,
 })
 
 export const hideMakeBucketModal = () => ({
   type: SHOW_MAKE_BUCKET_MODAL,
-  show: false
+  show: false,
 })
 
 export const fetchPolicies = bucket => {
   return function(dispatch) {
     return web
       .ListAllBucketPolicies({
-        bucketName: bucket
+        bucketName: bucket,
       })
       .then(res => {
         let policies = res.policies
-        if(policies)
-          dispatch(setPolicies(policies))
-        else
-          dispatch(setPolicies([]))
+        if (policies) dispatch(setPolicies(policies))
+        else dispatch(setPolicies([]))
       })
       .catch(err => {
         dispatch(
           alertActions.set({
-            type: "danger",
-            message: err.message
-          })
+            type: 'danger',
+            message: err.message,
+          }),
         )
       })
   }
@@ -171,15 +169,15 @@ export const fetchPolicies = bucket => {
 
 export const setPolicies = policies => ({
   type: SET_POLICIES,
-  policies
+  policies,
 })
 
 export const showBucketPolicy = () => ({
   type: SHOW_BUCKET_POLICY,
-  show: true
+  show: true,
 })
 
 export const hideBucketPolicy = () => ({
   type: SHOW_BUCKET_POLICY,
-  show: false
+  show: false,
 })

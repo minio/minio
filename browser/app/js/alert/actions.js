@@ -14,33 +14,35 @@
  * limitations under the License.
  */
 
-export const SET = "alert/SET"
-export const CLEAR = "alert/CLEAR"
+export const SET = 'alert/SET'
+export const CLEAR = 'alert/CLEAR'
 
 export let alertId = 0
 
 export const set = alert => {
   const id = alertId++
   return (dispatch, getState) => {
-    if (alert.type !== "danger") {
+    if (alert.type !== 'danger') {
       setTimeout(() => {
         dispatch({
           type: CLEAR,
           alert: {
-            id
-          }
+            id,
+          },
         })
       }, 5000)
     }
     dispatch({
       type: SET,
       alert: Object.assign({}, alert, {
-        id
-      })
+        id,
+      }),
     })
   }
 }
 
 export const clear = () => {
-  return { type: CLEAR }
+  return {
+    type: CLEAR,
+  }
 }
