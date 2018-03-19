@@ -53,21 +53,6 @@ chmod +x minio
 ./minio server /data
 ```
 
-### 快照版
-你可以下载最新版 `minio` [快照](https://snapcraft.io), 并且帮助我们一起验证master分支上[所有支持的Linux发行版](https://snapcraft.io/docs/core/install) 的一些最新修改:
-
-```sh
-sudo snap install minio --edge
-```
-
-每次有最新的 `minio` 被推送到服务器,你都会自动更新下来.
-
-你需要允许minio snap来观察其安装:
-
-```sh
-sudo snap connect minio:mount-observe
-```
-
 ## 微软Windows系统
 ### 下载二进制文件
 | 操作系统| CPU架构 | 地址|

@@ -53,18 +53,6 @@ chmod +x minio
 ./minio server /data
 ```
 
-### Snap
-Install minio using [Snap](https://snapcraft.io)
-```sh
-sudo snap install minio --edge
-```
-
-Start minio using `snap run` command
-```sh
-sudo snap connect minio:mount-observe
-sudo snap run minio server /data
-```
-
 ## Microsoft Windows
 ### Binary Download
 | Platform| Architecture | URL|
