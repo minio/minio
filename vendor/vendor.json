@@ -446,10 +446,10 @@
 			"revisionTime": "2017-08-28T17:39:33Z"
 		},
 		{
-			"checksumSHA1": "pvBHvHfubwxgvXNz35PDMbBWY9s=",
+			"checksumSHA1": "LLNO4saSnirHPhxJQ6nk2E0VMKs=",
 			"path": "github.com/minio/sio",
-			"revision": "83dd737d26dbcf4847f48ecec77c2c13f739eb25",
-			"revisionTime": "2018-03-01T21:58:29Z"
+			"revision": "b421622190be1ffb4569c7303ed1b7bef201a7c3",
+			"revisionTime": "2018-03-15T10:40:56Z"
 		},
 		{
 			"checksumSHA1": "V/quM7+em2ByJbWBLOsEwnY3j/Q=",
