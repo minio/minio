@@ -232,6 +232,7 @@ func formatXLMigrateV1ToV2(export string) error {
 	formatV2.Format = formatBackendXL
 	formatV2.XL.Version = formatXLVersionV2
 	formatV2.XL.DistributionAlgo = formatXLVersionV2DistributionAlgo
+	formatV2.XL.This = formatV1.XL.Disk
 	formatV2.XL.Sets = make([][]string, 1)
 	formatV2.XL.Sets[0] = make([]string, len(formatV1.XL.JBOD))
 	copy(formatV2.XL.Sets[0], formatV1.XL.JBOD)
@@ -600,6 +601,55 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 		storageDisks[index] = storage
 	}
 	return storageDisks, nil
+}
+
+// formatXLV3ThisEmpty - find out if '.This' field is empty
+// in any of the input `formats`, if yes return true.
+func formatXLV3ThisEmpty(formats []*formatXLV3) bool {
+	for _, format := range formats {
+		if format == nil {
+			continue
+		}
+		// NOTE: This code is specifically needed when migrating version
+		// V1 to V2 to V3, in a scenario such as this we only need to handle
+		// single sets since we never used to support multiple sets in releases
+		// with V1 format version.
+		if len(format.XL.Sets) > 1 {
+			continue
+		}
+		if format.XL.This == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// fixFormatXLV3 - fix format XL configuration on all disks.
+func fixFormatXLV3(endpoints EndpointList, formats []*formatXLV3) error {
+	storageDisks, err := initStorageDisks(endpoints)
+	if err != nil {
+		return err
+	}
+
+	for i, format := range formats {
+		if format == nil || !endpoints[i].IsLocal {
+			continue
+		}
+		// NOTE: This code is specifically needed when migrating version
+		// V1 to V2 to V3, in a scenario such as this we only need to handle
+		// single sets since we never used to support multiple sets in releases
+		// with V1 format version.
+		if len(format.XL.Sets) > 1 {
+			continue
+		}
+		if format.XL.This == "" {
+			formats[i].XL.This = format.XL.Sets[0][i]
+			if err = saveFormatXL(storageDisks[i], formats[i]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // initFormatXL - save XL format configuration on all disks.
