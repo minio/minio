@@ -494,6 +494,9 @@ func TestConfigUnmarshalXML(t *testing.T) {
   </TopicConfiguration>
 </NotificationConfiguration>
 `)
+
+	dataCase5 := []byte(`<NotificationConfiguration></NotificationConfiguration>`)
+
 	testCases := []struct {
 		data      []byte
 		expectErr bool
@@ -502,6 +505,8 @@ func TestConfigUnmarshalXML(t *testing.T) {
 		{dataCase2, false},
 		{dataCase3, false},
 		{dataCase4, true},
+		// make sure we don't fail when queue is empty.
+		{dataCase5, false},
 	}
 
 	for i, testCase := range testCases {
