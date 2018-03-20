@@ -63,6 +63,11 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  CACHE:
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days
+
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
@@ -73,6 +78,14 @@ EXAMPLES:
   1. Start minio gateway server for B2 backend.
       $ export MINIO_ACCESS_KEY=accountID
       $ export MINIO_SECRET_KEY=applicationKey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for B2 backend with edge caching enabled.
+      $ export MINIO_ACCESS_KEY=accountID
+      $ export MINIO_SECRET_KEY=applicationKey
+      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+      $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}}
 `
 	minio.RegisterGatewayCommand(cli.Command{

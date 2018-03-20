@@ -281,6 +281,11 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
+	if isNetworkOrHostDown(err) {
+		e.Cause = BackendDown{}
+		return e
+	}
+
 	minioErr, ok := err.(minio.ErrorResponse)
 	if !ok {
 		// We don't interpret non Minio errors. As minio errors will

@@ -74,6 +74,11 @@ ENVIRONMENT VARIABLES:
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
 
+  CACHE:
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days
+
 EXAMPLES:
   1. Start minio gateway server for Manta Object Storage backend.
       $ export MINIO_ACCESS_KEY=manta_account_name
@@ -89,6 +94,14 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=manta_account_name
       $ export MINIO_SECRET_KEY=manta_key_id
       $ export MANTA_KEY_MATERIAL=~/.ssh/custom_rsa
+      $ {{.HelpName}}
+
+  4. Start minio gateway server for Manta Object Storage backend with edge caching enabled.
+      $ export MINIO_ACCESS_KEY=manta_account_name
+      $ export MINIO_SECRET_KEY=manta_key_id
+      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+      $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}}
 `
 

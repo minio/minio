@@ -61,6 +61,7 @@ var supportedHeaders = []string{
 	"content-encoding",
 	"content-disposition",
 	amzStorageClass,
+	"expires",
 	// Add more supported headers here.
 }
 

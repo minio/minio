@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -24,7 +25,11 @@ import (
 // Prints the formatted startup message.
 func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
-
+	// If cache layer is enabled, print cache capacity.
+	cacheObjectAPI := newCacheObjectsFn()
+	if cacheObjectAPI != nil {
+		printCacheStorageInfo(cacheObjectAPI.StorageInfo(context.Background()))
+	}
 	// Prints credential.
 	printGatewayCommonMsg(strippedAPIEndpoints)
 

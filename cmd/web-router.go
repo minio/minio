@@ -32,6 +32,7 @@ import (
 // webAPI container for Web API.
 type webAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
+	CacheAPI  func() CacheObjectLayer
 }
 
 // indexHandler - Handler to serve index.html
@@ -63,6 +64,7 @@ func registerWebRouter(mux *router.Router) error {
 	// Initialize Web.
 	web := &webAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		CacheAPI:  newCacheObjectsFn,
 	}
 
 	// Initialize a new json2 codec.

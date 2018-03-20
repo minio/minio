@@ -70,6 +70,11 @@ ENVIRONMENT VARIABLES:
 
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+	
+  CACHE:
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days
 
 EXAMPLES:
   1. Start minio gateway server for Aliyun OSS backend.
@@ -81,6 +86,14 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
       $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
       $ {{.HelpName}} https://oss.example.com
+
+  3. Start minio gateway server for Aliyun OSS backend with edge caching enabled.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+      $ export MINIO_CACHE_EXPIRY=40
+      $ {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
