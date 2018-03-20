@@ -99,6 +99,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
+	if IsSSECustomerRequest(r.Header) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 
 	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object)
 	if err != nil {
@@ -226,6 +230,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
+	if IsSSECustomerRequest(r.Header) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 
 	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object)
 	if err != nil {
@@ -328,6 +336,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if (IsSSECustomerRequest(r.Header) || IsSSECopyCustomerRequest(r.Header)) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -570,6 +582,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+	if IsSSECustomerRequest(r.Header) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header)
@@ -752,6 +768,10 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
+	if IsSSECustomerRequest(r.Header) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 
 	// Validate storage class metadata if present
 	if _, ok := r.Header[amzStorageClassCanonical]; ok {
@@ -825,6 +845,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if (IsSSECustomerRequest(r.Header) || IsSSECopyCustomerRequest(r.Header)) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -1008,6 +1032,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+	if IsSSECustomerRequest(r.Header) && !objectAPI.IsEncryptionSupported() { // SSE-C request but backend does not support encryption
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
