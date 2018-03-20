@@ -17,11 +17,9 @@ release
 *.syso
 coverage.txt
 .vscode/
-.snap
 *.tar.bz2
 parts/
 prime/
-snap/.snapcraft/
 stage/
 .sia_temp/
 buildcoveragecoverage.txt
