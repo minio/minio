@@ -20,7 +20,7 @@ Erasure code protects data from multiple drives failure, unlike RAID or replicat
 
 Bit Rot, also known as data rot or silent data corruption is a data loss issue faced by disk drives today. Data on the drive may silently get corrupted without signalling an error has occurred, making bit rot more dangerous than a permanent hard drive failure.
 
-Minio's erasure coded backend uses high speed [BLAKE2](https://blog.minio.io/accelerating-blake2b-by-4x-using-simd-in-go-assembly-33ef16c8a56b#.jrp1fdwer) hash based checksums to protect against Bit Rot.
+Minio's erasure coded backend uses high speed [HighwayHash](https://blog.minio.io/highwayhash-fast-hashing-at-over-10-gb-s-per-core-in-golang-fee938b5218a) checksums to protect against Bit Rot.
 
 ## Get Started with Minio in Erasure Code
 

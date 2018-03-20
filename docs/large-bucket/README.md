@@ -1,29 +1,24 @@
 # Large Bucket Support Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio erasure code limits the number of disks in a deployment to 16. This allows enough storage space for a single deployment to hold a tenant's data. However, there are use cases which 
-may need larger number of disks/storage space upfront. Keeping this in consideration, we added large bucket support.
+Erasure code in Minio is limited to 16 disks. This on its own allows storage space to hold a tenant's data. However, to cater to cases which may need larger number of disks or high storage space requirements, large bucket support was introduced.
 
-The feature is called large bucket as it allows a single bucket to expand over multiple erasure code deployment sets, without any special configuration. 
-
-With large bucket support, you can use more than 16 disks upfront while deploying the Minio server. Internally Minio creates multiple smaller erasure coded sets, and these sets 
-are further combined into a single namespace. This document gives a brief introduction on how to get started with large bucket deployments. To explore further on advanced uses and
-limitations, refer to the [design document](https://github.com/minio/minio/blob/master/docs/large-bucket/DESIGN.md).
+We call it large-bucket as it allows a single Minio bucket to expand over multiple erasure code deployment sets. Without any special configuration it helps you create peta-scale storage systems. With large bucket support, you can use more than 16 disks upfront while deploying the Minio server. Internally Minio creates multiple smaller erasure coded sets, and these sets are further combined into a single namespace. This document gives a brief introduction on how to get started with large bucket deployments. To explore further on advanced uses and limitations, refer to the [design document](https://github.com/minio/minio/blob/master/docs/large-bucket/DESIGN.md).
 
 ## Get started
-If you're aware of distributed Minio setup, the installation and running remains the same. Only new addition to the syntax is a `...` convention to abbreviate the directory arguments. Remote directories in a distributed setup are encoded as HTTP(s) URIs which can be similarly abbreviated as well.
+If you're aware of distributed Minio setup, the installation and configuration remains the same. Only new addition to the input syntax is `...` convention to abbreviate the drive arguments. Remote drives in a distributed setup are encoded as HTTP(s) URIs which can be similarly abbreviated as well.
 
 ### 1. Prerequisites
 Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
 
-### 2. Run Minio on many disks
-To run Minio large bucket instances, you need to start multiple Minio servers pointing to the same disks. We'll see examples on how to do this in the following sections.
+### 2. Run Minio on many drives
+We'll see examples on how to do this in the following sections.
 
 *Note*
 
 - All the nodes running distributed Minio need to have same access key and secret key. To achieve this, we export access key and secret key as environment variables on all the nodes before executing Minio server command.
 - The drive paths below are for demonstration purposes only, you need to replace these with the actual drive paths/folders.
 
-#### Minio large bucket on Ubuntu 16.04 LTS server (standalone)
+#### Minio large bucket on multiple drives (standalone)
 You'll need the path to the disks e.g. `/export1, /export2 .... /export24`. Then run the following commands on all the nodes you'd like to launch Minio.
 
 ```sh
@@ -32,7 +27,7 @@ export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server /export{1...24}
 ```
 
-#### Minio large bucket on Ubuntu 16.04 LTS servers (distributed)
+#### Minio large bucket on multiple servers (distributed)
 You'll need the path to the disks e.g. `http://host1/export1, http://host2/export2 .... http://host4/export16`. Then run the following commands on all the nodes you'd like to launch Minio.
 
 ```sh
