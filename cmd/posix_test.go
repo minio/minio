@@ -1284,7 +1284,7 @@ func TestPosixAppendFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err = posixStorage.AppendFile("success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
-			t.Errorf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Errorf("Case: %s, expected: %s, got: %s", testCase.fileName, testCase.expectedErr, err)
 		}
 	}
 
@@ -1375,7 +1375,7 @@ func TestPosixPrepareFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if err = posixStorage.PrepareFile("success-vol", testCase.fileName, 16); err != testCase.expectedErr {
-			t.Errorf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+			t.Errorf("Case: %s, expected: %s, got: %s", testCase.fileName, testCase.expectedErr, err)
 		}
 	}
 
