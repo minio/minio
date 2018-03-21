@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import { getCurrentBucket } from '../buckets/selectors'
-import * as actionsObjects from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import { getCurrentBucket } from "../buckets/selectors"
+import * as actionsObjects from "./actions"
 
 export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   const onPrefixClick = (e, prefix) => {
@@ -25,12 +25,12 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
     selectPrefix(prefix)
   }
   let dirPath = []
-  let path = ''
+  let path = ""
   if (currentPrefix) {
-    path = currentPrefix.split('/').map((dir, i) => {
+    path = currentPrefix.split("/").map((dir, i) => {
       if (dir) {
         dirPath.push(dir)
-        let dirPath_ = dirPath.join('/') + '/'
+        let dirPath_ = dirPath.join("/") + "/"
         return (
           <a key={i} href="" onClick={e => onPrefixClick(e, dirPath_)}>
             {dir}
@@ -41,8 +41,8 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   }
 
   return (
-    <nav className="path">
-      <a onClick={e => onPrefixClick(e, '')} href="">
+    <nav className="path hidden-xs">
+      <a onClick={e => onPrefixClick(e, "")} href="">
         {currentBucket}
       </a>
       {path}

@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from '../constants'
-
-import React from 'react'
-import { connect } from 'react-redux'
-import classnames from 'classnames'
-import * as actionsBuckets from './actions'
-import * as actionsAlert from '../alert/actions'
-import web from '../web'
+import React from "react"
+import { connect } from "react-redux"
+import * as actionsBuckets from "./actions"
+import * as actionsAlert from "../alert/actions"
+import web from "../web"
 
 export class Policy extends React.Component {
   removePolicy(e) {
@@ -31,25 +28,25 @@ export class Policy extends React.Component {
       .SetBucketPolicy({
         bucketName: currentBucket,
         prefix: prefix,
-        policy: 'none',
+        policy: "none",
       })
       .then(() => {
         fetchPolicies(currentBucket)
       })
-      .catch(e => showAlert('danger', e.message))
+      .catch(e => showAlert("danger", e.message))
   }
 
   render() {
     const { policy, prefix } = this.props
     let newPrefix = prefix
 
-    if (newPrefix === '') newPrefix = '*'
+    if (newPrefix === "") newPrefix = "*"
     let policyUpdated =
-      policy == 'readonly'
-        ? 'Read Only'
-        : policy == 'writeonly'
-          ? 'Write Only'
-          : policy == 'readwrite' ? 'Read and Write' : ''
+      policy == "readonly"
+        ? "Read Only"
+        : policy == "writeonly"
+          ? "Write Only"
+          : policy == "readwrite" ? "Read and Write" : ""
 
     return (
       <div className="policy__row">

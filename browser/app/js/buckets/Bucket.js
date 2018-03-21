@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import BucketDropdown from './BucketDropdown'
+import React from "react"
+import classNames from "classnames"
+import BucketDropdown from "./BucketDropdown"
 
 export const Bucket = ({ bucket, isActive, selectBucket }) => {
   return (
     <div
       className={classNames({
         buckets__item: true,
-        'buckets__item--active': isActive,
+        "buckets__item--active": isActive,
       })}
       onClick={e => {
         e.preventDefault()

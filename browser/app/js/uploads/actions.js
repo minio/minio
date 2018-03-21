@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-import Moment from 'moment'
-import storage from 'local-storage-fallback'
-import * as alertActions from '../alert/actions'
-import * as objectsActions from '../objects/actions'
-import { getCurrentBucket } from '../buckets/selectors'
-import { getCurrentPrefix } from '../objects/selectors'
-import { minioBrowserPrefix } from '../constants'
+import Moment from "moment"
+import storage from "local-storage-fallback"
+import * as alertActions from "../alert/actions"
+import * as objectsActions from "../objects/actions"
+import { getCurrentBucket } from "../buckets/selectors"
+import { getCurrentPrefix } from "../objects/selectors"
+import { minioBrowserPrefix } from "../constants"
 
-export const ADD = 'uploads/ADD'
-export const UPDATE_PROGRESS = 'uploads/UPDATE_PROGRESS'
-export const STOP = 'uploads/STOP'
-export const SHOW_ABORT_MODAL = 'uploads/SHOW_ABORT_MODAL'
+export const ADD = "uploads/ADD"
+export const UPDATE_PROGRESS = "uploads/UPDATE_PROGRESS"
+export const STOP = "uploads/STOP"
+export const SHOW_ABORT_MODAL = "uploads/SHOW_ABORT_MODAL"
 
 export const add = (slug, size, name) => ({
   type: ADD,
@@ -82,8 +82,8 @@ export const uploadFile = file => {
     if (!currentBucket) {
       dispatch(
         alertActions.set({
-          type: 'danger',
-          message: 'Please choose a bucket before trying to upload files.',
+          type: "danger",
+          message: "Please choose a bucket before trying to upload files.",
         }),
       )
       return
@@ -96,20 +96,20 @@ export const uploadFile = file => {
     const slug = `${currentBucket}-${currentPrefix}-${file.name}`
 
     let xhr = new XMLHttpRequest()
-    xhr.open('PUT', uploadUrl, true)
+    xhr.open("PUT", uploadUrl, true)
     xhr.withCredentials = false
-    const token = storage.getItem('token')
+    const token = storage.getItem("token")
     if (token) {
       xhr.setRequestHeader(
-        'Authorization',
-        'Bearer ' + storage.getItem('token'),
+        "Authorization",
+        "Bearer " + storage.getItem("token"),
       )
     }
     xhr.setRequestHeader(
-      'x-amz-date',
+      "x-amz-date",
       Moment()
         .utc()
-        .format('YYYYMMDDTHHmmss') + 'Z',
+        .format("YYYYMMDDTHHmmss") + "Z",
     )
 
     dispatch(addUpload(xhr, slug, file.size, file.name))
@@ -120,8 +120,8 @@ export const uploadFile = file => {
         dispatch(stop(slug))
         dispatch(
           alertActions.set({
-            type: 'danger',
-            message: 'Unauthorized request.',
+            type: "danger",
+            message: "Unauthorized request.",
           }),
         )
       }
@@ -130,7 +130,7 @@ export const uploadFile = file => {
         dispatch(stop(slug))
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: xhr.responseText,
           }),
         )
@@ -140,7 +140,7 @@ export const uploadFile = file => {
         dispatch(stop(slug))
         dispatch(
           alertActions.set({
-            type: 'success',
+            type: "success",
             message: "File '" + file.name + "' uploaded successfully.",
           }),
         )
@@ -148,17 +148,17 @@ export const uploadFile = file => {
       }
     }
 
-    xhr.upload.addEventListener('error', event => {
+    xhr.upload.addEventListener("error", event => {
       dispatch(stop(slug))
       dispatch(
         alertActions.set({
-          type: 'danger',
+          type: "danger",
           message: "Error occurred uploading '" + file.name + "'.",
         }),
       )
     })
 
-    xhr.upload.addEventListener('progress', event => {
+    xhr.upload.addEventListener("progress", event => {
       if (event.lengthComputable) {
         let loaded = event.loaded
         let total = event.total

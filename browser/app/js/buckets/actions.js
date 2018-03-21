@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-import web from '../web'
-import history from '../history'
-import * as alertActions from '../alert/actions'
-import * as objectsActions from '../objects/actions'
-import { pathSlice } from '../utils'
+import web from "../web"
+import history from "../history"
+import * as alertActions from "../alert/actions"
+import * as objectsActions from "../objects/actions"
+import { pathSlice } from "../utils"
 
-export const SET_LIST = 'buckets/SET_LIST'
-export const ADD = 'buckets/ADD'
-export const REMOVE = 'buckets/REMOVE'
-export const SET_FILTER = 'buckets/SET_FILTER'
-export const SET_CURRENT_BUCKET = 'buckets/SET_CURRENT_BUCKET'
-export const SHOW_MAKE_BUCKET_MODAL = 'buckets/SHOW_MAKE_BUCKET_MODAL'
-export const SHOW_BUCKET_POLICY = 'buckets/SHOW_BUCKET_POLICY'
-export const SET_POLICIES = 'buckets/SET_POLICIES'
+export const SET_LIST = "buckets/SET_LIST"
+export const ADD = "buckets/ADD"
+export const REMOVE = "buckets/REMOVE"
+export const SET_FILTER = "buckets/SET_FILTER"
+export const SET_CURRENT_BUCKET = "buckets/SET_CURRENT_BUCKET"
+export const SHOW_MAKE_BUCKET_MODAL = "buckets/SHOW_MAKE_BUCKET_MODAL"
+export const SHOW_BUCKET_POLICY = "buckets/SHOW_BUCKET_POLICY"
+export const SET_POLICIES = "buckets/SET_POLICIES"
 
 export const fetchBuckets = () => {
   return function(dispatch) {
@@ -42,8 +42,8 @@ export const fetchBuckets = () => {
           dispatch(selectBucket(buckets[0]))
         }
       } else {
-        dispatch(selectBucket(''))
-        history.replace('/')
+        dispatch(selectBucket(""))
+        history.replace("/")
       }
     })
   }
@@ -66,7 +66,7 @@ export const setFilter = filter => {
 export const selectBucket = (bucket, prefix) => {
   return function(dispatch) {
     dispatch(setCurrentBucket(bucket))
-    dispatch(objectsActions.selectPrefix(prefix || ''))
+    dispatch(objectsActions.selectPrefix(prefix || ""))
   }
 }
 
@@ -90,7 +90,7 @@ export const makeBucket = bucket => {
       .catch(err =>
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: err.message,
           }),
         ),
@@ -107,7 +107,7 @@ export const deleteBucket = bucket => {
       .then(() => {
         dispatch(
           alertActions.set({
-            type: 'info',
+            type: "info",
             message: "Bucket '" + bucket + "' has been deleted.",
           }),
         )
@@ -117,7 +117,7 @@ export const deleteBucket = bucket => {
       .catch(err => {
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: err.message,
           }),
         )
@@ -159,7 +159,7 @@ export const fetchPolicies = bucket => {
       .catch(err => {
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: err.message,
           }),
         )

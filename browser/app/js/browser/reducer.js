@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import * as actionsCommon from './actions'
+import * as actionsCommon from "./actions"
 
 export default (
   state = {

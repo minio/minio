@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { Route, Switch, Redirect } from 'react-router-dom'
-import Browser from './browser/Browser'
-import Login from './browser/Login'
-import web from './web'
+import React from "react"
+import { Route, Switch, Redirect } from "react-router-dom"
+import Browser from "./browser/Browser"
+import Login from "./browser/Login"
+import web from "./web"
 
 export const App = () => {
   return (
     <Switch>
-      <Route path={'/login'} component={Login} />
-      <Route path={'/:bucket?/*'} component={Browser} />
+      <Route path={"/login"} component={Login} />
+      <Route path={"/:bucket?/*"} component={Browser} />
     </Switch>
   )
 }

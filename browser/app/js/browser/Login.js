@@ -14,39 +14,39 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import logo from '../../img/logo.svg'
-import Alert from '../alert/Alert'
-import * as actionsAlert from '../alert/actions'
-import web from '../web'
-import { Redirect } from 'react-router-dom'
+import React from "react"
+import { connect } from "react-redux"
+import logo from "../../img/logo.svg"
+import Alert from "../alert/Alert"
+import * as actionsAlert from "../alert/actions"
+import web from "../web"
+import { Redirect } from "react-router-dom"
 
 export class Login extends React.Component {
   handleSubmit(event) {
     event.preventDefault()
     const { showAlert, history } = this.props
-    let message = ''
-    if (!document.getElementById('accessKey').value) {
-      message = 'Access Key cannot be empty'
+    let message = ""
+    if (!document.getElementById("accessKey").value) {
+      message = "Access Key cannot be empty"
     }
-    if (!document.getElementById('secretKey').value) {
-      message = 'Secret Key cannot be empty'
+    if (!document.getElementById("secretKey").value) {
+      message = "Secret Key cannot be empty"
     }
     if (message) {
-      showAlert('danger', message)
+      showAlert("danger", message)
       return
     }
     web
       .Login({
-        username: document.getElementById('accessKey').value,
-        password: document.getElementById('secretKey').value,
+        username: document.getElementById("accessKey").value,
+        password: document.getElementById("secretKey").value,
       })
       .then(res => {
-        history.push('/')
+        history.push("/")
       })
       .catch(e => {
-        showAlert('danger', e.message)
+        showAlert("danger", e.message)
       })
   }
 
@@ -54,21 +54,21 @@ export class Login extends React.Component {
     const { clearAlert } = this.props
     // Clear out any stale message in the alert of previous page
     clearAlert()
-    document.body.classList.add('is-guest')
+    document.body.classList.add("is-guest")
   }
 
   componentWillUnmount() {
-    document.body.classList.remove('is-guest')
+    document.body.classList.remove("is-guest")
   }
 
   render() {
     const { clearAlert, alert } = this.props
     if (web.LoggedIn()) {
-      return <Redirect to={'/'} />
+      return <Redirect to={"/"} />
     }
     let alertBox = <Alert {...alert} onDismiss={clearAlert} />
     // Make sure you don't show a fading out alert box on the initial web-page load.
-    if (!alert.message) alertBox = ''
+    if (!alert.message) alertBox = ""
     return (
       <div className="login">
         {alertBox}

@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import ObjectItem from './ObjectItem'
-import * as actionsObjects from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import ObjectItem from "./ObjectItem"
+import * as actionsObjects from "./actions"
 
 export const PrefixContainer = ({ object, currentPrefix, selectPrefix }) => {
   const props = {

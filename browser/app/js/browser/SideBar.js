@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import { connect } from 'react-redux'
-import logo from '../../img/logo.svg'
-import BucketSearch from '../buckets/BucketSearch'
-import BucketList from '../buckets/BucketList'
-import StorageInfo from './StorageInfo'
-import Host from './Host'
-import * as actionsCommon from './actions'
-import web from '../web'
+import React from "react"
+import classNames from "classnames"
+import { connect } from "react-redux"
+import logo from "../../img/logo.svg"
+import BucketSearch from "../buckets/BucketSearch"
+import BucketList from "../buckets/BucketList"
+import StorageInfo from "./StorageInfo"
+import Host from "./Host"
+import * as actionsCommon from "./actions"
+import web from "../web"
 
 export const SideBar = ({ sidebarOpen }) => {
   return (
     <aside
       className={classNames({
         sidebar: true,
-        'sidebar--toggled': sidebarOpen,
+        "sidebar--toggled": sidebarOpen,
       })}
     >
       <div className="sidebar__inner">

@@ -26,7 +26,7 @@ describe("MakeBucketModal", () => {
   it("should call hideMakeBucketModal when close button is clicked", () => {
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal hideMakeBucketModal={ hideMakeBucketModal } />
+      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} />,
     )
     wrapper.find("button").simulate("click")
     expect(hideMakeBucketModal).toHaveBeenCalled()
@@ -35,12 +35,12 @@ describe("MakeBucketModal", () => {
   it("bucketName should be cleared before hiding the modal", () => {
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal hideMakeBucketModal={ hideMakeBucketModal } />
+      <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} />,
     )
     wrapper.find("input").simulate("change", {
       target: {
-        value: "test"
-      }
+        value: "test",
+      },
     })
     expect(wrapper.state("bucketName")).toBe("test")
     wrapper.find("button").simulate("click")
@@ -51,15 +51,18 @@ describe("MakeBucketModal", () => {
     const makeBucket = jest.fn()
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal makeBucket={ makeBucket } hideMakeBucketModal={ hideMakeBucketModal } />
+      <MakeBucketModal
+        makeBucket={makeBucket}
+        hideMakeBucketModal={hideMakeBucketModal}
+      />,
     )
     wrapper.find("input").simulate("change", {
       target: {
-        value: "test"
-      }
+        value: "test",
+      },
     })
     wrapper.find("form").simulate("submit", {
-      preventDefault: jest.fn()
+      preventDefault: jest.fn(),
     })
     expect(makeBucket).toHaveBeenCalledWith("test")
   })
@@ -68,15 +71,18 @@ describe("MakeBucketModal", () => {
     const makeBucket = jest.fn()
     const hideMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MakeBucketModal makeBucket={ makeBucket } hideMakeBucketModal={ hideMakeBucketModal } />
+      <MakeBucketModal
+        makeBucket={makeBucket}
+        hideMakeBucketModal={hideMakeBucketModal}
+      />,
     )
     wrapper.find("input").simulate("change", {
       target: {
-        value: "test"
-      }
+        value: "test",
+      },
     })
     wrapper.find("form").simulate("submit", {
-      preventDefault: jest.fn()
+      preventDefault: jest.fn(),
     })
     expect(hideMakeBucketModal).toHaveBeenCalled()
     expect(wrapper.state("bucketName")).toBe("")

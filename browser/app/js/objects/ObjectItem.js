@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import { connect } from 'react-redux'
-import { getDataType } from '../mime'
-import * as actions from './actions'
-import { getCheckedList } from './selectors'
+import React from "react"
+import classNames from "classnames"
+import { connect } from "react-redux"
+import { getDataType } from "../mime"
+import * as actions from "./actions"
+import { getCheckedList } from "./selectors"
 
 export const ObjectItem = ({
   name,
@@ -35,7 +35,7 @@ export const ObjectItem = ({
     <div
       className={classNames({
         objects__row: true,
-        'objects__row--directory': getDataType(name, contentType) == 'folder',
+        "objects__row--directory": getDataType(name, contentType) == "folder",
       })}
     >
       <div

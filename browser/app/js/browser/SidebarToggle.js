@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import * as actionsCommon from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import * as actionsCommon from "./actions"
 
 export const SidebarToggle = ({ sidebarOpen, toggleSidebar }) => (
   <button

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { Modal } from 'react-bootstrap'
-import logo from '../../img/logo.svg'
+import React from "react"
+import { Modal } from "react-bootstrap"
+import logo from "../../img/logo.svg"
 
 export const AboutModal = ({ serverInfo, hideAbout }) => {
   const { version, memory, platform, runtime } = serverInfo

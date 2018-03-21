@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import * as uploadsActions from './actions'
+import * as uploadsActions from "./actions"
 
 const add = (files, action) => ({
   ...files,

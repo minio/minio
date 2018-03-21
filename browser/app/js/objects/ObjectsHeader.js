@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import { connect } from 'react-redux'
-import * as actionsObjects from './actions'
+import React from "react"
+import classNames from "classnames"
+import { connect } from "react-redux"
+import * as actionsObjects from "./actions"
 
 export const ObjectsHeader = ({
   sortNameOrder,
@@ -29,7 +29,7 @@ export const ObjectsHeader = ({
     <div
       className="objects__column objects__column--name"
       id="sort-by-name"
-      onClick={() => sortObjects('name')}
+      onClick={() => sortObjects("name")}
       data-sort="name"
     >
       Name
@@ -37,15 +37,15 @@ export const ObjectsHeader = ({
         className={classNames({
           objects__sort: true,
           zmdi: true,
-          'zmdi-sort-desc': sortNameOrder,
-          'zmdi-sort-asc': !sortNameOrder,
+          "zmdi-sort-desc": sortNameOrder,
+          "zmdi-sort-asc": !sortNameOrder,
         })}
       />
     </div>
     <div
       className="objects__column objects__column--size"
       id="sort-by-size"
-      onClick={() => sortObjects('size')}
+      onClick={() => sortObjects("size")}
       data-sort="size"
     >
       Size
@@ -53,15 +53,15 @@ export const ObjectsHeader = ({
         className={classNames({
           objects__sort: true,
           zmdi: true,
-          'zmdi-sort-amount-desc': sortSizeOrder,
-          'zmdi-sort-amount-asc': !sortSizeOrder,
+          "zmdi-sort-amount-desc": sortSizeOrder,
+          "zmdi-sort-amount-asc": !sortSizeOrder,
         })}
       />
     </div>
     <div
       className="objects__column objects__column--date"
       id="sort-by-last-modified"
-      onClick={() => sortObjects('last-modified')}
+      onClick={() => sortObjects("last-modified")}
       data-sort="last-modified"
     >
       Last Modified
@@ -69,8 +69,8 @@ export const ObjectsHeader = ({
         className={classNames({
           objects__sort: true,
           zmdi: true,
-          'zmdi-sort-amount-desc': sortLastModifiedOrder,
-          'zmdi-sort-amount-asc': !sortLastModifiedOrder,
+          "zmdi-sort-amount-desc": sortLastModifiedOrder,
+          "zmdi-sort-amount-asc": !sortLastModifiedOrder,
         })}
       />
     </div>
@@ -79,10 +79,10 @@ export const ObjectsHeader = ({
 
 const mapStateToProps = state => {
   return {
-    sortNameOrder: state.objects.sortBy == 'name' && state.objects.sortOrder,
-    sortSizeOrder: state.objects.sortBy == 'size' && state.objects.sortOrder,
+    sortNameOrder: state.objects.sortBy == "name" && state.objects.sortOrder,
+    sortSizeOrder: state.objects.sortBy == "size" && state.objects.sortOrder,
     sortLastModifiedOrder:
-      state.objects.sortBy == 'last-modified' && state.objects.sortOrder,
+      state.objects.sortBy == "last-modified" && state.objects.sortOrder,
   }
 }
 

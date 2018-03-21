@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { createSelector } from 'reselect'
+import { createSelector } from "reselect"
 
 const bucketsSelector = state => state.buckets.list
 const bucketsFilterSelector = state => state.buckets.filter

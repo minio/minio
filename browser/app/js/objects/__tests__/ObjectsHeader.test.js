@@ -21,56 +21,56 @@ import { ObjectsHeader } from "../ObjectsHeader"
 describe("ObjectsHeader", () => {
   it("should render without crashing", () => {
     const sortObjects = jest.fn()
-    shallow(<ObjectsHeader sortObjects={ sortObjects } />)
+    shallow(<ObjectsHeader sortObjects={sortObjects} />)
   })
 
   it("should render columns with asc classes by default", () => {
     const sortObjects = jest.fn()
-    const wrapper = shallow(<ObjectsHeader sortObjects={ sortObjects } />)
+    const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-asc")
+      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-asc"),
     ).toBeTruthy()
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc")
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc"),
     ).toBeTruthy()
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc")
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc"),
     ).toBeTruthy()
   })
 
   it("should render name column with desc class when objects are sorted by name", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={ sortObjects } sortNameOrder={ true } />
+      <ObjectsHeader sortObjects={sortObjects} sortNameOrder={true} />,
     )
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-desc")
+      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-desc"),
     ).toBeTruthy()
   })
 
   it("should render size column with desc class when objects are sorted by size", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={ sortObjects } sortSizeOrder={ true } />
+      <ObjectsHeader sortObjects={sortObjects} sortSizeOrder={true} />,
     )
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc")
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc"),
     ).toBeTruthy()
   })
 
   it("should render last modified column with desc class when objects are sorted by last modified", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={ sortObjects } sortLastModifiedOrder={ true } />
+      <ObjectsHeader sortObjects={sortObjects} sortLastModifiedOrder={true} />,
     )
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc")
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc"),
     ).toBeTruthy()
   })
 
   it("should call sortObjects when a column is clicked", () => {
     const sortObjects = jest.fn()
-    const wrapper = shallow(<ObjectsHeader sortObjects={ sortObjects } />)
+    const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
     wrapper.find("#sort-by-name").simulate("click")
     expect(sortObjects).toHaveBeenCalledWith("name")
     wrapper.find("#sort-by-size").simulate("click")

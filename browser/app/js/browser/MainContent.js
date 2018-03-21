@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import Header from './Header'
-import SidebarBackdrop from './SidebarBackdrop'
-import ObjectsSection from '../objects/ObjectsSection'
-import MainActions from './MainActions'
-import BucketPolicyModal from '../buckets/BucketPolicyModal'
-import MakeBucketModal from '../buckets/MakeBucketModal'
-import UploadModal from '../uploads/UploadModal'
-import Dropzone from '../uploads/Dropzone'
+import React from "react"
+import Header from "./Header"
+import SidebarBackdrop from "./SidebarBackdrop"
+import ObjectsSection from "../objects/ObjectsSection"
+import MainActions from "./MainActions"
+import BucketPolicyModal from "../buckets/BucketPolicyModal"
+import MakeBucketModal from "../buckets/MakeBucketModal"
+import UploadModal from "../uploads/UploadModal"
+import Dropzone from "../uploads/Dropzone"
 
 export const MainContent = ({ sidebarOpen }) => (
   <section className="content">

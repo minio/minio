@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import { Modal, ModalHeader } from 'react-bootstrap'
-import * as actionsBuckets from './actions'
-import PolicyInput from './PolicyInput'
-import Policy from './Policy'
+import React from "react"
+import { connect } from "react-redux"
+import { Modal, ModalHeader } from "react-bootstrap"
+import * as actionsBuckets from "./actions"
+import PolicyInput from "./PolicyInput"
+import Policy from "./Policy"
 
 export const BucketPolicyModal = ({
   showBucketPolicy,

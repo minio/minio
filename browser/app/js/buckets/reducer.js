@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import * as actionsBuckets from './actions'
+import * as actionsBuckets from "./actions"
 
 const removeBucket = (list, action) => {
   const idx = list.findIndex(bucket => bucket === action.bucket)
@@ -27,8 +27,8 @@ const removeBucket = (list, action) => {
 export default (
   state = {
     list: [],
-    filter: '',
-    currentBucket: '',
+    filter: "",
+    currentBucket: "",
     showMakeBucketModal: false,
     policies: [],
     showBucketPolicy: false,

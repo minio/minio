@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import { Modal, ModalBody } from 'react-bootstrap'
-import * as actionsBuckets from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import { Modal, ModalBody } from "react-bootstrap"
+import * as actionsBuckets from "./actions"
 
 export class MakeBucketModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      bucketName: '',
+      bucketName: "",
     }
   }
   onSubmit(e) {
@@ -37,7 +37,7 @@ export class MakeBucketModal extends React.Component {
   }
   hideModal() {
     this.setState({
-      bucketName: '',
+      bucketName: "",
     })
     this.props.hideMakeBucketModal()
   }

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import classNames from 'classnames'
-import { connect } from 'react-redux'
-import * as actionsBuckets from './actions'
-import { getCurrentBucket } from './selectors'
-import { Dropdown } from 'react-bootstrap'
-import { MenuItem } from 'react-bootstrap'
+import React from "react"
+import classNames from "classnames"
+import { connect } from "react-redux"
+import * as actionsBuckets from "./actions"
+import { getCurrentBucket } from "./selectors"
+import { Dropdown } from "react-bootstrap"
+import { MenuItem } from "react-bootstrap"
 
 export class BucketDropdown extends React.Component {
   constructor(props) {
@@ -62,7 +62,7 @@ export class BucketDropdown extends React.Component {
               showBucketPolicy()
             }}
           >
-            {' '}
+            {" "}
             Edit Policy
           </MenuItem>
           <MenuItem
@@ -71,7 +71,7 @@ export class BucketDropdown extends React.Component {
               deleteBucket(bucket)
             }}
           >
-            {' '}
+            {" "}
             Delete Bucket
           </MenuItem>
         </Dropdown.Menu>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import * as actionsObjects from './actions'
+import * as actionsObjects from "./actions"
 
 const removeObject = (list, objectToRemove, lookup) => {
   const idx = list.findIndex(object => lookup(object) === objectToRemove)
@@ -27,16 +27,16 @@ const removeObject = (list, objectToRemove, lookup) => {
 export default (
   state = {
     list: [],
-    sortBy: '',
+    sortBy: "",
     sortOrder: false,
-    currentPrefix: '',
-    marker: '',
+    currentPrefix: "",
+    marker: "",
     isTruncated: false,
     prefixWritable: false,
     shareObject: {
       show: false,
-      object: '',
-      url: '',
+      object: "",
+      url: "",
     },
     checkedList: [],
   },
@@ -76,7 +76,7 @@ export default (
       return {
         ...state,
         currentPrefix: action.prefix,
-        marker: '',
+        marker: "",
         isTruncated: false,
       }
     case actionsObjects.SET_PREFIX_WRITABLE:

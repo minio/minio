@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import Path from '../objects/Path'
-import ObjectsBulkActions from '../objects/ObjectsBulkActions'
+import React from "react"
+import Path from "../objects/Path"
+import ObjectsBulkActions from "../objects/ObjectsBulkActions"
 
 export const Header = () => {
   return (

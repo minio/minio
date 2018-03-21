@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import * as actions from './actions'
-import { getCheckedList } from './selectors'
-import DeleteObjectConfirmModal from './DeleteObjectConfirmModal'
-import BrowserDropdown from '../browser/BrowserDropdown'
-import SidebarToggle from '../browser/SidebarToggle'
-import { minioBrowserPrefix } from '../constants'
-import ShareObjectModal from './ShareObjectModal'
-import web from '../web'
-import * as objectsActions from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import * as actions from "./actions"
+import { getCheckedList } from "./selectors"
+import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import BrowserDropdown from "../browser/BrowserDropdown"
+import SidebarToggle from "../browser/SidebarToggle"
+import { minioBrowserPrefix } from "../constants"
+import ShareObjectModal from "./ShareObjectModal"
+import web from "../web"
+import * as objectsActions from "./actions"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
   SHARE_OBJECT_EXPIRY_MINUTES,
-} from '../constants'
+} from "../constants"
 
 export class ObjectsBulkActions extends React.Component {
   constructor(props) {
@@ -91,7 +91,7 @@ export class ObjectsBulkActions extends React.Component {
             disabled={checkedObjectsCount != 1}
           />
         ) : (
-          ''
+          ""
         )}
         <button
           className="toolbar__item zmdi zmdi-download"
@@ -105,7 +105,7 @@ export class ObjectsBulkActions extends React.Component {
           ) : (
             <a
               className="toolbar__item toolbar__item--alt btn btn--danger"
-              href={minioBrowserPrefix + '/login'}
+              href={minioBrowserPrefix + "/login"}
             >
               Login
             </a>

@@ -22,7 +22,7 @@ jest.mock("../../web", () => ({
   LoggedIn: jest
     .fn(() => true)
     .mockReturnValueOnce(true)
-    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(false),
 }))
 describe("Header", () => {
   it("should render without crashing", () => {

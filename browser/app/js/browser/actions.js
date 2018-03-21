@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import web from '../web'
+import web from "../web"
 
-export const TOGGLE_SIDEBAR = 'common/TOGGLE_SIDEBAR'
-export const CLOSE_SIDEBAR = 'common/CLOSE_SIDEBAR'
-export const SET_STORAGE_INFO = 'common/SET_STORAGE_INFO'
-export const SET_SERVER_INFO = 'common/SET_SERVER_INFO'
+export const TOGGLE_SIDEBAR = "common/TOGGLE_SIDEBAR"
+export const CLOSE_SIDEBAR = "common/CLOSE_SIDEBAR"
+export const SET_STORAGE_INFO = "common/SET_STORAGE_INFO"
+export const SET_SERVER_INFO = "common/SET_SERVER_INFO"
 
 export const toggleSidebar = () => ({
   type: TOGGLE_SIDEBAR,

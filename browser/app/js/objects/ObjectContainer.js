@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import humanize from 'humanize'
-import Moment from 'moment'
-import ObjectItem from './ObjectItem'
-import * as actionsObjects from './actions'
-import { getCheckedList } from './selectors'
+import React from "react"
+import { connect } from "react-redux"
+import humanize from "humanize"
+import Moment from "moment"
+import ObjectItem from "./ObjectItem"
+import * as actionsObjects from "./actions"
+import { getCheckedList } from "./selectors"
 
 export const ObjectContainer = ({ object, downloadObject }) => {
   let props = {
     name: object.name,
     contentType: object.contentType,
     size: humanize.filesize(object.size),
-    lastModified: Moment(object.lastModified).format('lll'),
+    lastModified: Moment(object.lastModified).format("lll"),
   }
   return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
 }

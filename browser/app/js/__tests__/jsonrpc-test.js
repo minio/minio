@@ -21,7 +21,7 @@ describe("jsonrpc", () => {
     try {
       let jsonRPC = new JSONrpc({
         endpoint: "htt://localhost:9000",
-        namespace: "Test"
+        namespace: "Test",
       })
     } catch (e) {
       done()
@@ -30,7 +30,7 @@ describe("jsonrpc", () => {
   it("should succeed with valid endpoint", () => {
     let jsonRPC = new JSONrpc({
       endpoint: "http://localhost:9000/webrpc",
-      namespace: "Test"
+      namespace: "Test",
     })
     expect(jsonRPC.version).toEqual("2.0")
     expect(jsonRPC.host).toEqual("localhost")

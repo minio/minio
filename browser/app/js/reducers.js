@@ -26,7 +26,7 @@ const rootReducer = combineReducers({
   alert,
   buckets,
   objects,
-  uploads
+  uploads,
 })
 
 export default rootReducer

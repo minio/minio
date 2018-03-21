@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import ObjectsHeader from './ObjectsHeader'
-import ObjectsListContainer from './ObjectsListContainer'
+import React from "react"
+import ObjectsHeader from "./ObjectsHeader"
+import ObjectsListContainer from "./ObjectsListContainer"
 
 const Aux = props => props.children
 

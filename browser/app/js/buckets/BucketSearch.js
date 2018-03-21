@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import * as actionsBuckets from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import * as actionsBuckets from "./actions"
 
 export const BucketSearch = ({ onChange }) => (
   <div className="buckets__search">

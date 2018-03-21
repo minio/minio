@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import AlertComponent from 'react-bootstrap/lib/Alert'
+import React from "react"
+import AlertComponent from "react-bootstrap/lib/Alert"
 
 const Alert = ({ show, type, message, onDismiss }) => (
   <AlertComponent
-    className={'alert animated ' + (show ? 'fadeInDown' : 'fadeOutUp')}
+    className={"alert animated " + (show ? "fadeInDown" : "fadeOutUp")}
     bsStyle={type}
     closeLabel=""
   >

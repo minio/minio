@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import ConfirmModal from '../browser/ConfirmModal'
+import React from "react"
+import ConfirmModal from "../browser/ConfirmModal"
 
 export const DeleteObjectConfirmModal = ({
   deleteObject,

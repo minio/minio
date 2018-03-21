@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import * as actionsAlert from './actions'
+import * as actionsAlert from "./actions"
 
 const initialState = {
   show: false,
-  type: 'danger',
+  type: "danger",
 }
 export default (state = initialState, action) => {
   switch (action.type) {

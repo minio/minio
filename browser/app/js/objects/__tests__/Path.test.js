@@ -20,50 +20,54 @@ import { Path } from "../Path"
 
 describe("Path", () => {
   it("should render without crashing", () => {
-    shallow(<Path currentBucket={ "test1" } currentPrefix={ "test2" } />)
+    shallow(<Path currentBucket={"test1"} currentPrefix={"test2"} />)
   })
 
   it("should render only bucket if there is no prefix", () => {
-    const wrapper = shallow(<Path currentBucket={ "test1" } currentPrefix={ "" } />)
+    const wrapper = shallow(<Path currentBucket={"test1"} currentPrefix={""} />)
     expect(wrapper.find("span").length).toBe(1)
     expect(wrapper.text()).toBe("test1")
   })
 
   it("should render bucket and prefix", () => {
     const wrapper = shallow(
-      <Path currentBucket={ "test1" } currentPrefix={ "a/b/" } />
+      <Path currentBucket={"test1"} currentPrefix={"a/b/"} />,
     )
     expect(wrapper.find("span").length).toBe(3)
     expect(
       wrapper
         .find("span")
         .at(0)
-        .text()
+        .text(),
     ).toBe("test1")
     expect(
       wrapper
         .find("span")
         .at(1)
-        .text()
+        .text(),
     ).toBe("a")
     expect(
       wrapper
         .find("span")
         .at(2)
-        .text()
+        .text(),
     ).toBe("b")
   })
 
   it("should call selectPrefix when a prefix part is clicked", () => {
     const selectPrefix = jest.fn()
     const wrapper = shallow(
-      <Path currentBucket={ "test1" } currentPrefix={ "a/b/" } selectPrefix={ selectPrefix } />
+      <Path
+        currentBucket={"test1"}
+        currentPrefix={"a/b/"}
+        selectPrefix={selectPrefix}
+      />,
     )
     wrapper
       .find("a")
       .at(2)
       .simulate("click", {
-        preventDefault: jest.fn()
+        preventDefault: jest.fn(),
       })
     expect(selectPrefix).toHaveBeenCalledWith("a/b/")
   })

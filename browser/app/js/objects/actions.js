@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-import web from '../web'
-import history from '../history'
+import web from "../web"
+import history from "../history"
 import {
   sortObjectsByName,
   sortObjectsBySize,
   sortObjectsByDate,
-} from '../utils'
-import { getCurrentBucket } from '../buckets/selectors'
-import { getCurrentPrefix, getCheckedList } from './selectors'
-import * as alertActions from '../alert/actions'
-import { minioBrowserPrefix } from '../constants'
+} from "../utils"
+import { getCurrentBucket } from "../buckets/selectors"
+import { getCurrentPrefix, getCheckedList } from "./selectors"
+import * as alertActions from "../alert/actions"
+import { minioBrowserPrefix } from "../constants"
 
-export const SET_LIST = 'objects/SET_LIST'
-export const APPEND_LIST = 'objects/APPEND_LIST'
-export const REMOVE = 'objects/REMOVE'
-export const SET_SORT_BY = 'objects/SET_SORT_BY'
-export const SET_SORT_ORDER = 'objects/SET_SORT_ORDER'
-export const SET_CURRENT_PREFIX = 'objects/SET_CURRENT_PREFIX'
-export const SET_PREFIX_WRITABLE = 'objects/SET_PREFIX_WRITABLE'
-export const SET_SHARE_OBJECT = 'objects/SET_SHARE_OBJECT'
-export const CHECKED_LIST_ADD = 'objects/CHECKED_LIST_ADD'
-export const CHECKED_LIST_REMOVE = 'objects/CHECKED_LIST_REMOVE'
-export const CHECKED_LIST_RESET = 'objects/CHECKED_LIST_RESET'
+export const SET_LIST = "objects/SET_LIST"
+export const APPEND_LIST = "objects/APPEND_LIST"
+export const REMOVE = "objects/REMOVE"
+export const SET_SORT_BY = "objects/SET_SORT_BY"
+export const SET_SORT_ORDER = "objects/SET_SORT_ORDER"
+export const SET_CURRENT_PREFIX = "objects/SET_CURRENT_PREFIX"
+export const SET_PREFIX_WRITABLE = "objects/SET_PREFIX_WRITABLE"
+export const SET_SHARE_OBJECT = "objects/SET_SHARE_OBJECT"
+export const CHECKED_LIST_ADD = "objects/CHECKED_LIST_ADD"
+export const CHECKED_LIST_REMOVE = "objects/CHECKED_LIST_REMOVE"
+export const CHECKED_LIST_RESET = "objects/CHECKED_LIST_RESET"
 
 export const setList = (objects, marker, isTruncated) => ({
   type: SET_LIST,
@@ -63,7 +63,7 @@ export const fetchObjects = append => {
         .ListObjects({
           bucketName: currentBucket,
           prefix: currentPrefix,
-          marker: append ? marker : '',
+          marker: append ? marker : "",
         })
         .then(res => {
           let objects = []
@@ -71,7 +71,7 @@ export const fetchObjects = append => {
             objects = res.objects.map(object => {
               return {
                 ...object,
-                name: object.name.replace(currentPrefix, ''),
+                name: object.name.replace(currentPrefix, ""),
               }
             })
           }
@@ -79,7 +79,7 @@ export const fetchObjects = append => {
             dispatch(appendList(objects, res.nextmarker, res.istruncated))
           } else {
             dispatch(setList(objects, res.nextmarker, res.istruncated))
-            dispatch(setSortBy(''))
+            dispatch(setSortBy(""))
             dispatch(setSortOrder(false))
           }
           dispatch(setPrefixWritable(res.writable))
@@ -87,11 +87,11 @@ export const fetchObjects = append => {
         .catch(err => {
           dispatch(
             alertActions.set({
-              type: 'danger',
+              type: "danger",
               message: err.message,
             }),
           )
-          history.push('/login')
+          history.push("/login")
         })
     }
   }
@@ -105,13 +105,13 @@ export const sortObjects = sortBy => {
     dispatch(setSortOrder(sortOrder))
     let list
     switch (sortBy) {
-      case 'name':
+      case "name":
         list = sortObjectsByName(objects.list, sortOrder)
         break
-      case 'size':
+      case "size":
         list = sortObjectsBySize(objects.list, sortOrder)
         break
-      case 'last-modified':
+      case "last-modified":
         list = sortObjectsByDate(objects.list, sortOrder)
         break
       default:
@@ -170,7 +170,7 @@ export const deleteObject = object => {
       .catch(e => {
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: e.message,
           }),
         )
@@ -210,7 +210,7 @@ export const shareObject = (object, days, hours, minutes) => {
         dispatch(showShareObject(object, obj.url))
         dispatch(
           alertActions.set({
-            type: 'success',
+            type: "success",
             message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`,
           }),
         )
@@ -218,7 +218,7 @@ export const shareObject = (object, days, hours, minutes) => {
       .catch(err => {
         dispatch(
           alertActions.set({
-            type: 'danger',
+            type: "danger",
             message: err.message,
           }),
         )
@@ -236,8 +236,8 @@ export const showShareObject = (object, url) => ({
 export const hideShareObject = (object, url) => ({
   type: SET_SHARE_OBJECT,
   show: false,
-  object: '',
-  url: '',
+  object: "",
+  url: "",
 })
 
 export const downloadObject = object => {
@@ -260,7 +260,7 @@ export const downloadObject = object => {
         .catch(err => {
           dispatch(
             alertActions.set({
-              type: 'danger',
+              type: "danger",
               message: err.message,
             }),
           )
@@ -311,7 +311,7 @@ export const downloadCheckedObjects = () => {
         .catch(err =>
           dispatch(
             alertActions.set({
-              type: 'danger',
+              type: "danger",
               message: err.message,
             }),
           ),
@@ -321,25 +321,25 @@ export const downloadCheckedObjects = () => {
 }
 
 const downloadZip = (url, req, dispatch) => {
-  var anchor = document.createElement('a')
+  var anchor = document.createElement("a")
   document.body.appendChild(anchor)
 
   var xhr = new XMLHttpRequest()
-  xhr.open('POST', url, true)
-  xhr.responseType = 'blob'
+  xhr.open("POST", url, true)
+  xhr.responseType = "blob"
 
   xhr.onload = function(e) {
     if (this.status == 200) {
       dispatch(resetCheckedList())
       var blob = new Blob([this.response], {
-        type: 'octet/stream',
+        type: "octet/stream",
       })
       var blobUrl = window.URL.createObjectURL(blob)
-      var separator = req.prefix.length > 1 ? '-' : ''
+      var separator = req.prefix.length > 1 ? "-" : ""
 
       anchor.href = blobUrl
       anchor.download =
-        req.bucketName + separator + req.prefix.slice(0, -1) + '.zip'
+        req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
 
       anchor.click()
       window.URL.revokeObjectURL(blobUrl)

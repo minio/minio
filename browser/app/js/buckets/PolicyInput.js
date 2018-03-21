@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from '../constants'
+import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../constants"
 
-import React from 'react'
-import { connect } from 'react-redux'
-import classnames from 'classnames'
-import * as actionsBuckets from './actions'
-import * as actionsAlert from '../alert/actions'
-import web from '../web'
+import React from "react"
+import { connect } from "react-redux"
+import classnames from "classnames"
+import * as actionsBuckets from "./actions"
+import * as actionsAlert from "../alert/actions"
+import web from "../web"
 
 export class PolicyInput extends React.Component {
   componentDidMount() {
@@ -38,14 +38,14 @@ export class PolicyInput extends React.Component {
     e.preventDefault()
     const { currentBucket, fetchPolicies, showAlert } = this.props
 
-    if (this.prefix.value === '*') this.prefix.value = ''
+    if (this.prefix.value === "*") this.prefix.value = ""
 
     let policyAlreadyExists = this.props.policies.some(
       elem =>
         this.prefix.value === elem.prefix && this.policy.value === elem.policy,
     )
     if (policyAlreadyExists) {
-      showAlert('danger', 'Policy for this prefix already exists.')
+      showAlert("danger", "Policy for this prefix already exists.")
       return
     }
 
@@ -57,9 +57,9 @@ export class PolicyInput extends React.Component {
       })
       .then(() => {
         fetchPolicies(currentBucket)
-        this.prefix.value = ''
+        this.prefix.value = ""
       })
-      .catch(e => showAlert('danger', e.message))
+      .catch(e => showAlert("danger", e.message))
   }
 
   render() {

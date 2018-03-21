@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import { Dropdown } from 'react-bootstrap'
-import * as browserActions from './actions'
-import web from '../web'
-import history from '../history'
-import AboutModal from './AboutModal'
-import ChangePasswordModal from './ChangePasswordModal'
+import React from "react"
+import { connect } from "react-redux"
+import { Dropdown } from "react-bootstrap"
+import * as browserActions from "./actions"
+import web from "../web"
+import history from "../history"
+import AboutModal from "./AboutModal"
+import ChangePasswordModal from "./ChangePasswordModal"
 
 export class BrowserDropdown extends React.Component {
   constructor(props) {
@@ -76,7 +76,7 @@ export class BrowserDropdown extends React.Component {
   logout(e) {
     e.preventDefault()
     web.Logout()
-    history.replace('/login')
+    history.replace("/login")
   }
   render() {
     const { serverInfo } = this.props

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { Modal, ModalBody } from 'react-bootstrap'
+import React from "react"
+import { Modal, ModalBody } from "react-bootstrap"
 
 let ConfirmModal = ({
   baseClass,
@@ -33,7 +33,7 @@ let ConfirmModal = ({
       bsSize="small"
       animation={false}
       show={show}
-      className={'dialog ' + (baseClass || '')}
+      className={"dialog " + (baseClass || "")}
     >
       <Modal.Body>
         <div className="dialog__icon">

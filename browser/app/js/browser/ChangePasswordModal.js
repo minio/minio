@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import web from '../web'
-import * as alertActions from '../alert/actions'
+import React from "react"
+import { connect } from "react-redux"
+import web from "../web"
+import * as alertActions from "../alert/actions"
 
 import {
   Tooltip,
@@ -25,14 +25,14 @@ import {
   ModalBody,
   ModalHeader,
   OverlayTrigger,
-} from 'react-bootstrap'
+} from "react-bootstrap"
 
 export class ChangePasswordModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      accessKey: '',
-      secretKey: '',
+      accessKey: "",
+      secretKey: "",
       keysReadOnly: false,
     }
   }
@@ -43,8 +43,8 @@ export class ChangePasswordModal extends React.Component {
     // Check environment variables first.
     if (serverInfo.info.isEnvCreds) {
       this.setState({
-        accessKey: 'xxxxxxxxx',
-        secretKey: 'xxxxxxxxx',
+        accessKey: "xxxxxxxxx",
+        secretKey: "xxxxxxxxx",
         keysReadOnly: true,
       })
     } else {
@@ -88,13 +88,13 @@ export class ChangePasswordModal extends React.Component {
       })
       .then(data => {
         showAlert({
-          type: 'success',
-          message: 'Changed credentials',
+          type: "success",
+          message: "Changed credentials",
         })
       })
       .catch(err => {
         showAlert({
-          type: 'danger',
+          type: "danger",
           message: err.message,
         })
       })
@@ -134,7 +134,7 @@ export class ChangePasswordModal extends React.Component {
           <div className="form-group">
             <label className="form-group__label">Secret key</label>
             <input
-              type={this.state.secretKeyVisible ? 'text' : 'password'}
+              type={this.state.secretKeyVisible ? "text" : "password"}
               value={this.state.secretKey}
               onChange={this.accessKeyChange.bind(this)}
               id="secretKey"
@@ -151,8 +151,8 @@ export class ChangePasswordModal extends React.Component {
                 !this.state.secretKeyVisible,
               )}
               className={
-                'form-group__addon zmdi ' +
-                (this.state.secretKeyVisible ? 'zmdi-eye-off' : 'zmdi-eye')
+                "form-group__addon zmdi " +
+                (this.state.secretKeyVisible ? "zmdi-eye-off" : "zmdi-eye")
               }
             />
           </div>
@@ -161,7 +161,7 @@ export class ChangePasswordModal extends React.Component {
           <button
             id="generate-keys"
             className={
-              'btn btn--link ' + (this.state.keysReadOnly ? 'hidden' : '')
+              "btn btn--link " + (this.state.keysReadOnly ? "hidden" : "")
             }
             onClick={this.generateAuth.bind(this)}
           >
@@ -170,7 +170,7 @@ export class ChangePasswordModal extends React.Component {
           <button
             id="update-keys"
             className={
-              'btn btn--link ' + (this.state.keysReadOnly ? 'hidden' : '')
+              "btn btn--link " + (this.state.keysReadOnly ? "hidden" : "")
             }
             onClick={this.setAuth.bind(this)}
           >

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import InfiniteScroll from 'react-infinite-scroller'
-import * as actionsObjects from './actions'
-import ObjectsList from './ObjectsList'
+import React from "react"
+import { connect } from "react-redux"
+import InfiniteScroll from "react-infinite-scroller"
+import * as actionsObjects from "./actions"
+import ObjectsList from "./ObjectsList"
 
 const Aux = props => props.children
 
@@ -40,7 +40,7 @@ export class ObjectsListContainer extends React.Component {
         </InfiniteScroll>
         <div
           className="text-center"
-          style={{ display: isTruncated && currentBucket ? 'block' : 'none' }}
+          style={{ display: isTruncated && currentBucket ? "block" : "none" }}
         >
           <span>Loading...</span>
         </div>

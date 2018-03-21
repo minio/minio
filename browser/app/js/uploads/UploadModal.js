@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import humanize from 'humanize'
-import classNames from 'classnames'
-import { connect } from 'react-redux'
+import React from "react"
+import humanize from "humanize"
+import classNames from "classnames"
+import { connect } from "react-redux"
 
-import { ProgressBar } from 'react-bootstrap'
-import AbortConfirmModal from './AbortConfirmModal'
-import * as uploadsActions from './actions'
+import { ProgressBar } from "react-bootstrap"
+import AbortConfirmModal from "./AbortConfirmModal"
+import * as uploadsActions from "./actions"
 
 export class UploadModal extends React.Component {
   render() {
@@ -50,11 +50,11 @@ export class UploadModal extends React.Component {
     // If more than one: "Uploading files (5)..."
     // If only one: "Uploading myfile.txt..."
     let text =
-      'Uploading ' +
+      "Uploading " +
       (numberUploading == 1
         ? `'${uploads[Object.keys(uploads)[0]].name}'`
         : `files (${numberUploading})`) +
-      '...'
+      "..."
 
     return (
       <div className="alert alert-info alert--upload animated fadeInUp ">

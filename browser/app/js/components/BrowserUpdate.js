@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import connect from 'react-redux/lib/components/connect'
+import React from "react"
+import connect from "react-redux/lib/components/connect"
 
-import Tooltip from 'react-bootstrap/lib/Tooltip'
-import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
+import Tooltip from "react-bootstrap/lib/Tooltip"
+import OverlayTrigger from "react-bootstrap/lib/OverlayTrigger"
 
 let BrowserUpdate = ({ latestUiVersion }) => {
   // Don't show an update if we're already updated!
@@ -35,8 +35,8 @@ let BrowserUpdate = ({ latestUiVersion }) => {
             </Tooltip>
           }
         >
-          {' '}
-          <i className="fa fa-refresh" />{' '}
+          {" "}
+          <i className="fa fa-refresh" />{" "}
         </OverlayTrigger>
       </a>
     </li>

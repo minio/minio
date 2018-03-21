@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import humanize from 'humanize'
-import * as actionsCommon from './actions'
+import React from "react"
+import { connect } from "react-redux"
+import humanize from "humanize"
+import * as actionsCommon from "./actions"
 
 export class StorageInfo extends React.Component {
   componentWillMount() {
@@ -27,7 +27,7 @@ export class StorageInfo extends React.Component {
   render() {
     const { total, free } = this.props.storageInfo
     const used = total - free
-    const usedPercent = used / total * 100 + '%'
+    const usedPercent = used / total * 100 + "%"
 
     return (
       <div className="storage hidden-sm hidden-xs">

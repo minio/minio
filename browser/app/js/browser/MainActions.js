@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import { connect } from 'react-redux'
-import { Dropdown, OverlayTrigger, Tooltip } from 'react-bootstrap'
-import web from '../web'
-import * as actionsBuckets from '../buckets/actions'
-import * as uploadsActions from '../uploads/actions'
-import { getPrefixWritable } from '../objects/selectors'
+import React from "react"
+import { connect } from "react-redux"
+import { Dropdown, OverlayTrigger, Tooltip } from "react-bootstrap"
+import web from "../web"
+import * as actionsBuckets from "../buckets/actions"
+import * as uploadsActions from "../uploads/actions"
+import { getPrefixWritable } from "../objects/selectors"
 
 export const MainActions = ({
   prefixWritable,
@@ -58,7 +58,7 @@ export const MainActions = ({
               <input
                 type="file"
                 onChange={onFileUpload}
-                style={{ display: 'none' }}
+                style={{ display: "none" }}
                 id="file-input"
               />
               <label htmlFor="file-input">
