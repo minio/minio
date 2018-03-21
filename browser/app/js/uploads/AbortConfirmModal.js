@@ -30,15 +30,15 @@ export class AbortConfirmModal extends React.Component {
   render() {
     const { hideAbort } = this.props
     let baseClass = classNames({
-      "abort-upload": true
+      "abort-upload": true,
     })
     let okIcon = classNames({
       fa: true,
-      "fa-times": true
+      "fa-times": true,
     })
     let cancelIcon = classNames({
       fa: true,
-      "fa-cloud-upload": true
+      "fa-cloud-upload": true,
     })
 
     return (
@@ -61,14 +61,14 @@ export class AbortConfirmModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    uploads: state.uploads.files
+    uploads: state.uploads.files,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     abort: slug => dispatch(uploadsActions.abortUpload(slug)),
-    hideAbort: () => dispatch(uploadsActions.hideAbortModal())
+    hideAbort: () => dispatch(uploadsActions.hideAbortModal()),
   }
 }
 

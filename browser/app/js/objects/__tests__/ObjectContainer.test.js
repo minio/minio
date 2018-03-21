@@ -31,19 +31,25 @@ describe("ObjectContainer", () => {
 
   it("should pass actions to ObjectItem", () => {
     const wrapper = shallow(
-      <ObjectContainer object={{ name: "test1.jpg" }} checkedObjectsCount={0} />
+      <ObjectContainer
+        object={{ name: "test1.jpg" }}
+        checkedObjectsCount={0}
+      />,
     )
     expect(wrapper.find("Connect(ObjectItem)").prop("actionButtons")).not.toBe(
-      undefined
+      undefined,
     )
   })
 
   it("should pass empty actions to ObjectItem when checkedObjectCount is more than 0", () => {
     const wrapper = shallow(
-      <ObjectContainer object={{ name: "test1.jpg" }} checkedObjectsCount={1} />
+      <ObjectContainer
+        object={{ name: "test1.jpg" }}
+        checkedObjectsCount={1}
+      />,
     )
     expect(wrapper.find("Connect(ObjectItem)").prop("actionButtons")).toBe(
-      undefined
+      undefined,
     )
   })
 })

@@ -23,7 +23,7 @@ jest.mock("../../web", () => ({
   LoggedIn: jest
     .fn(() => false)
     .mockReturnValueOnce(true)
-    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(true),
 }))
 
 describe("BucketList", () => {
@@ -35,7 +35,7 @@ describe("BucketList", () => {
   it("should call fetchBuckets before component is mounted", () => {
     const fetchBuckets = jest.fn()
     const wrapper = shallow(
-      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />
+      <BucketList visibleBuckets={[]} fetchBuckets={fetchBuckets} />,
     )
     expect(fetchBuckets).toHaveBeenCalled()
   })
@@ -49,7 +49,7 @@ describe("BucketList", () => {
         visibleBuckets={[]}
         setBucketList={setBucketList}
         selectBucket={selectBucket}
-      />
+      />,
     )
     expect(setBucketList).toHaveBeenCalledWith(["bk1"])
     expect(selectBucket).toHaveBeenCalledWith("bk1", "pre1")

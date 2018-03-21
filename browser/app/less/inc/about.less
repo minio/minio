@@ -1,0 +1,42 @@
+.about {
+
+}
+
+.about__logo {
+    background-color: @muted-bg;
+    width: 8rem;
+    display: flex;
+    justify-content: center;
+    border-radius: @border-radius-large 0 0 @border-radius-large;
+
+    & > img {
+        width: 5rem;
+    }
+}
+
+.about__content {
+    display: flex;
+}
+
+.about__info {
+    padding: 3rem 2rem;
+}
+
+.about__item {
+    & > strong {
+        font-weight: normal;
+        display: block;
+        color: @headings-color;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        font-size: @font-size-small;
+    }
+
+    & > small {
+        color: @text-muted-color;
+    }
+
+    & + .about__item {
+        margin-top: 1rem;
+    }
+}

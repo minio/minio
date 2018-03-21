@@ -23,7 +23,7 @@ jest.mock("../../web", () => ({
     .fn(() => true)
     .mockReturnValueOnce(true)
     .mockReturnValueOnce(false)
-    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(false),
 }))
 
 describe("MainActions", () => {
@@ -52,21 +52,25 @@ describe("MainActions", () => {
   it("should call showMakeBucketModal when create bucket icon is clicked", () => {
     const showMakeBucketModal = jest.fn()
     const wrapper = shallow(
-      <MainActions showMakeBucketModal={showMakeBucketModal} />
+      <MainActions showMakeBucketModal={showMakeBucketModal} />,
     )
-    wrapper
-      .find("#show-make-bucket")
-      .simulate("click", { preventDefault: jest.fn() })
+    wrapper.find("#show-make-bucket").simulate("click", {
+      preventDefault: jest.fn(),
+    })
     expect(showMakeBucketModal).toHaveBeenCalled()
   })
 
   it("should call uploadFile when a file is selected for upload", () => {
     const uploadFile = jest.fn()
     const wrapper = shallow(<MainActions uploadFile={uploadFile} />)
-    const file = new Blob(["file content"], { type: "text/plain" })
+    const file = new Blob(["file content"], {
+      type: "text/plain",
+    })
     wrapper.find("#file-input").simulate("change", {
       preventDefault: jest.fn(),
-      target: { files: [file] }
+      target: {
+        files: [file],
+      },
     })
     expect(uploadFile).toHaveBeenCalledWith(file)
   })

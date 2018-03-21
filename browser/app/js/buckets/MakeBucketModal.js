@@ -23,7 +23,7 @@ export class MakeBucketModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      bucketName: ""
+      bucketName: "",
     }
   }
   onSubmit(e) {
@@ -37,7 +37,7 @@ export class MakeBucketModal extends React.Component {
   }
   hideModal() {
     this.setState({
-      bucketName: ""
+      bucketName: "",
     })
     this.props.hideMakeBucketModal()
   }
@@ -45,30 +45,32 @@ export class MakeBucketModal extends React.Component {
     const { showMakeBucketModal } = this.props
     return (
       <Modal
-        className="modal-create-bucket"
+        className="create-bucket"
         bsSize="small"
         animation={false}
         show={showMakeBucketModal}
         onHide={this.hideModal.bind(this)}
       >
-        <button className="close close-alt" onClick={this.hideModal.bind(this)}>
-          <span>×</span>
-        </button>
-        <ModalBody>
+        <i className="close" onClick={this.hideModal.bind(this)} />
+        <Modal.Body>
           <form onSubmit={this.onSubmit.bind(this)}>
-            <div className="input-group">
+            <div className="form-group form-group--centered">
               <input
-                className="ig-text"
+                className="form-group__field"
                 type="text"
                 placeholder="Bucket Name"
                 value={this.state.bucketName}
-                onChange={e => this.setState({ bucketName: e.target.value })}
+                onChange={e =>
+                  this.setState({
+                    bucketName: e.target.value,
+                  })
+                }
                 autoFocus
               />
-              <i className="ig-helpers" />
+              <i className="form-group__helper" />
             </div>
           </form>
-        </ModalBody>
+        </Modal.Body>
       </Modal>
     )
   }
@@ -76,14 +78,14 @@ export class MakeBucketModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    showMakeBucketModal: state.buckets.showMakeBucketModal
+    showMakeBucketModal: state.buckets.showMakeBucketModal,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     makeBucket: bucket => dispatch(actionsBuckets.makeBucket(bucket)),
-    hideMakeBucketModal: () => dispatch(actionsBuckets.hideMakeBucketModal())
+    hideMakeBucketModal: () => dispatch(actionsBuckets.hideMakeBucketModal()),
   }
 }
 

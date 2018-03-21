@@ -16,26 +16,13 @@
 
 import React from "react"
 import Path from "../objects/Path"
-import StorageInfo from "./StorageInfo"
-import BrowserDropdown from "./BrowserDropdown"
-import web from "../web"
-import { minioBrowserPrefix } from "../constants"
+import ObjectsBulkActions from "../objects/ObjectsBulkActions"
 
 export const Header = () => {
-  const loggedIn = web.LoggedIn()
   return (
-    <header className="fe-header">
+    <header className="header">
+      <ObjectsBulkActions />
       <Path />
-      {loggedIn && <StorageInfo />}
-      <ul className="feh-actions">
-        {loggedIn ? (
-          <BrowserDropdown />
-        ) : (
-          <a className="btn btn-danger" href={minioBrowserPrefix + "/login"}>
-            Login
-          </a>
-        )}
-      </ul>
     </header>
   )
 }

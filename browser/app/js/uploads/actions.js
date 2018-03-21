@@ -31,28 +31,28 @@ export const add = (slug, size, name) => ({
   type: ADD,
   slug,
   size,
-  name
+  name,
 })
 
 export const updateProgress = (slug, loaded) => ({
   type: UPDATE_PROGRESS,
   slug,
-  loaded
+  loaded,
 })
 
 export const stop = slug => ({
   type: STOP,
-  slug
+  slug,
 })
 
 export const showAbortModal = () => ({
   type: SHOW_ABORT_MODAL,
-  show: true
+  show: true,
 })
 
 export const hideAbortModal = () => ({
   type: SHOW_ABORT_MODAL,
-  show: false
+  show: false,
 })
 
 let requests = {}
@@ -83,8 +83,8 @@ export const uploadFile = file => {
       dispatch(
         alertActions.set({
           type: "danger",
-          message: "Please choose a bucket before trying to upload files."
-        })
+          message: "Please choose a bucket before trying to upload files.",
+        }),
       )
       return
     }
@@ -102,14 +102,14 @@ export const uploadFile = file => {
     if (token) {
       xhr.setRequestHeader(
         "Authorization",
-        "Bearer " + storage.getItem("token")
+        "Bearer " + storage.getItem("token"),
       )
     }
     xhr.setRequestHeader(
       "x-amz-date",
       Moment()
         .utc()
-        .format("YYYYMMDDTHHmmss") + "Z"
+        .format("YYYYMMDDTHHmmss") + "Z",
     )
 
     dispatch(addUpload(xhr, slug, file.size, file.name))
@@ -121,8 +121,8 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "danger",
-            message: "Unauthorized request."
-          })
+            message: "Unauthorized request.",
+          }),
         )
       }
       if (xhr.status == 500) {
@@ -131,8 +131,8 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "danger",
-            message: xhr.responseText
-          })
+            message: xhr.responseText,
+          }),
         )
       }
       if (xhr.status == 200) {
@@ -141,8 +141,8 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "success",
-            message: "File '" + file.name + "' uploaded successfully."
-          })
+            message: "File '" + file.name + "' uploaded successfully.",
+          }),
         )
         dispatch(objectsActions.selectPrefix(currentPrefix))
       }
@@ -153,8 +153,8 @@ export const uploadFile = file => {
       dispatch(
         alertActions.set({
           type: "danger",
-          message: "Error occurred uploading '" + file.name + "'."
-        })
+          message: "Error occurred uploading '" + file.name + "'.",
+        }),
       )
     })
 

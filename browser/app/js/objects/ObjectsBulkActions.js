@@ -16,16 +16,26 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import classNames from "classnames"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import BrowserDropdown from "../browser/BrowserDropdown"
+import SidebarToggle from "../browser/SidebarToggle"
+import { minioBrowserPrefix } from "../constants"
+import ShareObjectModal from "./ShareObjectModal"
+import web from "../web"
+import * as objectsActions from "./actions"
+import {
+  SHARE_OBJECT_EXPIRY_DAYS,
+  SHARE_OBJECT_EXPIRY_HOURS,
+  SHARE_OBJECT_EXPIRY_MINUTES,
+} from "../constants"
 
 export class ObjectsBulkActions extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showDeleteConfirmation: false
+      showDeleteConfirmation: false,
     }
   }
   deleteChecked() {
@@ -35,44 +45,72 @@ export class ObjectsBulkActions extends React.Component {
   }
   hideDeleteConfirmModal() {
     this.setState({
-      showDeleteConfirmation: false
+      showDeleteConfirmation: false,
     })
   }
+  shareObject(e) {
+    e.preventDefault()
+    const { checkedObjects, shareObject } = this.props
+    if (checkedObjects.length != 1) {
+      return
+    }
+    const object = checkedObjects[0]
+    shareObject(
+      object,
+      SHARE_OBJECT_EXPIRY_DAYS,
+      SHARE_OBJECT_EXPIRY_HOURS,
+      SHARE_OBJECT_EXPIRY_MINUTES,
+    )
+  }
+
   render() {
-    const { checkedObjectsCount, downloadChecked, clearChecked } = this.props
+    const {
+      checkedObjectsCount,
+      downloadChecked,
+      object,
+      showShareObjectModal,
+    } = this.props
+    const loggedIn = web.LoggedIn()
+
     return (
-      <div
-        className={
-          "list-actions" +
-          classNames({
-            " list-actions-toggled": checkedObjectsCount > 0
-          })
-        }
-      >
-        <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjectsCount} Objects
-          selected
-        </span>
-        <span className="la-actions pull-right">
-          <button id="download-checked" onClick={downloadChecked}>
-            {" "}
-            Download all as zip{" "}
-          </button>
-        </span>
-        <span className="la-actions pull-right">
-          <button
-            id="delete-checked"
-            onClick={() => this.setState({ showDeleteConfirmation: true })}
-          >
-            {" "}
-            Delete selected{" "}
-          </button>
-        </span>
-        <i
-          className="la-close fa fa-times"
-          id="close-bulk-actions"
-          onClick={clearChecked}
+      <div className="toolbar">
+        <SidebarToggle />
+        <button
+          className="toolbar__item zmdi zmdi-delete"
+          onClick={() =>
+            this.setState({
+              showDeleteConfirmation: true,
+            })
+          }
+          disabled={!checkedObjectsCount}
         />
+        {loggedIn ? (
+          <button
+            className="toolbar__item zmdi zmdi-share"
+            onClick={this.shareObject.bind(this)}
+            disabled={checkedObjectsCount != 1}
+          />
+        ) : (
+          ""
+        )}
+        <button
+          className="toolbar__item zmdi zmdi-download"
+          onClick={downloadChecked}
+          disabled={!checkedObjectsCount}
+        />
+        {showShareObjectModal && <ShareObjectModal object={object} />}
+        <div className="toolbar__end">
+          {loggedIn ? (
+            <BrowserDropdown />
+          ) : (
+            <a
+              className="toolbar__item toolbar__item--alt btn btn--danger"
+              href={minioBrowserPrefix + "/login"}
+            >
+              Login
+            </a>
+          )}
+        </div>
         {this.state.showDeleteConfirmation && (
           <DeleteObjectConfirmModal
             deleteObject={this.deleteChecked.bind(this)}
@@ -86,7 +124,9 @@ export class ObjectsBulkActions extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    checkedObjectsCount: getCheckedList(state).length
+    checkedObjects: getCheckedList(state),
+    checkedObjectsCount: getCheckedList(state).length,
+    showShareObjectModal: state.objects.shareObject.show,
   }
 }
 
@@ -94,7 +134,10 @@ const mapDispatchToProps = dispatch => {
   return {
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
     clearChecked: () => dispatch(actions.resetCheckedList()),
-    deleteChecked: () => dispatch(actions.deleteCheckedObjects())
+    deleteChecked: () => dispatch(actions.deleteCheckedObjects()),
+    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar()),
+    shareObject: (object, days, hours, minutes) =>
+      dispatch(objectsActions.shareObject(object, days, hours, minutes)),
   }
 }
 

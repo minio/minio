@@ -21,8 +21,8 @@ describe("getVisibleBuckets", () => {
   beforeEach(() => {
     state = {
       buckets: {
-        list: ["test1", "test11", "test2"]
-      }
+        list: ["test1", "test11", "test2"],
+      },
     }
   })
 

@@ -26,11 +26,11 @@ describe("Bucket", () => {
   it("should toggleSidebar when trigger is clicked", () => {
     const toggleSidebar = jest.fn()
     const wrapper = shallow(
-      <MobileHeader sidebarOpen={false} toggleSidebar={toggleSidebar} />
+      <MobileHeader sidebarOpen={false} toggleSidebar={toggleSidebar} />,
     )
-    wrapper
-      .find("#sidebar-toggle")
-      .simulate("click", { stopPropagation: jest.fn() })
+    wrapper.find("#sidebar-toggle").simulate("click", {
+      stopPropagation: jest.fn(),
+    })
     expect(toggleSidebar).toHaveBeenCalled()
   })
 })

@@ -14,22 +14,30 @@
  * limitations under the License.
  */
 
-import React from 'react'
-import connect from 'react-redux/lib/components/connect'
+import React from "react"
+import connect from "react-redux/lib/components/connect"
 
-import Tooltip from 'react-bootstrap/lib/Tooltip'
-import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
+import Tooltip from "react-bootstrap/lib/Tooltip"
+import OverlayTrigger from "react-bootstrap/lib/OverlayTrigger"
 
-let BrowserUpdate = ({latestUiVersion}) => {
+let BrowserUpdate = ({ latestUiVersion }) => {
   // Don't show an update if we're already updated!
-  if (latestUiVersion === currentUiVersion) return ( <noscript></noscript> )
+  if (latestUiVersion === currentUiVersion) return <noscript />
 
   return (
     <li className="hidden-xs hidden-sm">
       <a href="">
-        <OverlayTrigger placement="left" overlay={ <Tooltip id="tt-version-update">
-                                                     New update available. Click to refresh.
-                                                   </Tooltip> }> <i className="fa fa-refresh"></i> </OverlayTrigger>
+        <OverlayTrigger
+          placement="left"
+          overlay={
+            <Tooltip id="tt-version-update">
+              New update available. Click to refresh.
+            </Tooltip>
+          }
+        >
+          {" "}
+          <i className="fa fa-refresh" />{" "}
+        </OverlayTrigger>
       </a>
     </li>
   )
@@ -37,6 +45,6 @@ let BrowserUpdate = ({latestUiVersion}) => {
 
 export default connect(state => {
   return {
-    latestUiVersion: state.latestUiVersion
+    latestUiVersion: state.latestUiVersion,
   }
 })(BrowserUpdate)

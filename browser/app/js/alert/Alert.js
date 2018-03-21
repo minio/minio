@@ -21,9 +21,10 @@ const Alert = ({ show, type, message, onDismiss }) => (
   <AlertComponent
     className={"alert animated " + (show ? "fadeInDown" : "fadeOutUp")}
     bsStyle={type}
-    onDismiss={onDismiss}
+    closeLabel=""
   >
-    <div className="text-center">{message}</div>
+    <i className="close close--alt" onClick={onDismiss} />
+    {message}
   </AlertComponent>
 )
 

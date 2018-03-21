@@ -1,0 +1,81 @@
+.set-expire {
+    border: 2px solid @input-border-color;
+    margin: 2rem 0 0;
+    position: relative;
+    display: flex;
+
+    &:before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+    }
+}
+
+.set-expire__item {
+    padding: 0.85rem 0.2rem 0.25rem;
+    position: relative;
+    flex: 1 1 auto;
+    text-align: center;
+    .user-select(none);
+
+    &:not(:last-child) {
+        border-right: 2px solid @input-border-color;
+    }
+}
+
+.set-expire__title {
+    font-size: @font-size-extra-small;
+    text-transform: uppercase;
+    font-weight: @font-weight-bold;
+    color: @text-muted-color;
+}
+
+.set-expire__value {
+    display: inline-block;
+    overflow: hidden;
+    position: relative;
+    left: -9px;
+
+    input {
+        .user-select(none);
+        font-size: 1.35rem;
+        text-align: center;
+        position: relative;
+        right: -15px;
+        border: 0;
+        padding: 0;
+        height: 1.75rem;
+        width: 100%;
+    }
+}
+
+.set-expire__handle {
+    position: absolute;
+    width: 1.5rem;
+    height: 1.5rem;
+    left: 0;
+    right: 0;
+    margin: auto;
+    opacity: 0.5;
+    cursor: pointer;
+    font-size: 1.65rem;
+    .transition(opacity);
+    .transition-duration(300ms);
+
+    &:hover {
+        opacity: 1;
+        cursor: pointer;
+    }
+
+    &.zmdi-chevron-up {
+        top: -1.8rem;
+    }
+
+    &.zmdi-chevron-down {
+        bottom: -1.8rem;
+    }
+}

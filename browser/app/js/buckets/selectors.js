@@ -22,7 +22,7 @@ const bucketsFilterSelector = state => state.buckets.filter
 export const getVisibleBuckets = createSelector(
   bucketsSelector,
   bucketsFilterSelector,
-  (buckets, filter) => buckets.filter(bucket => bucket.indexOf(filter) > -1)
+  (buckets, filter) => buckets.filter(bucket => bucket.indexOf(filter) > -1),
 )
 
 export const getCurrentBucket = state => state.buckets.currentBucket

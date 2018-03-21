@@ -26,9 +26,11 @@ describe("Bucket", () => {
   it("should call selectBucket when clicked", () => {
     const selectBucket = jest.fn()
     const wrapper = shallow(
-      <Bucket bucket={"test"} selectBucket={selectBucket} />
+      <Bucket bucket={"test"} selectBucket={selectBucket} />,
     )
-    wrapper.find("li").simulate("click", { preventDefault: jest.fn() })
+    wrapper.find("li").simulate("click", {
+      preventDefault: jest.fn(),
+    })
     expect(selectBucket).toHaveBeenCalledWith("test")
   })
 

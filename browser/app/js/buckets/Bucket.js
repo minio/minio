@@ -20,25 +20,19 @@ import BucketDropdown from "./BucketDropdown"
 
 export const Bucket = ({ bucket, isActive, selectBucket }) => {
   return (
-    <li
+    <div
       className={classNames({
-        active: isActive
+        buckets__item: true,
+        "buckets__item--active": isActive,
       })}
       onClick={e => {
         e.preventDefault()
         selectBucket(bucket)
       }}
     >
-      <a
-        href=""
-        className={classNames({
-          "fesli-loading": false
-        })}
-      >
-        {bucket}
-      </a>
-      <BucketDropdown bucket={bucket}/>
-    </li>
+      <a href="">{bucket}</a>
+      <BucketDropdown bucket={bucket} />
+    </div>
   )
 }
 

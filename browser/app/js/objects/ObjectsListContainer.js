@@ -15,22 +15,25 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
 import InfiniteScroll from "react-infinite-scroller"
 import * as actionsObjects from "./actions"
 import ObjectsList from "./ObjectsList"
 
+const Aux = props => props.children
+
 export class ObjectsListContainer extends React.Component {
   render() {
     const { objects, isTruncated, currentBucket, loadObjects } = this.props
     return (
-      <div className="feb-container">
+      <Aux>
         <InfiniteScroll
           pageStart={0}
           loadMore={() => loadObjects(true)}
           hasMore={isTruncated}
-          useWindow={true}
+          useWindow={false}
+          element="div"
+          className="objects__lists"
           initialLoad={false}
         >
           <ObjectsList objects={objects} />
@@ -41,7 +44,7 @@ export class ObjectsListContainer extends React.Component {
         >
           <span>Loading...</span>
         </div>
-      </div>
+      </Aux>
     )
   }
 }
@@ -51,16 +54,16 @@ const mapStateToProps = state => {
     currentBucket: state.buckets.currentBucket,
     currentPrefix: state.objects.currentPrefix,
     objects: state.objects.list,
-    isTruncated: state.objects.isTruncated
+    isTruncated: state.objects.isTruncated,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    loadObjects: append => dispatch(actionsObjects.fetchObjects(append))
+    loadObjects: append => dispatch(actionsObjects.fetchObjects(append)),
   }
 }
 
 export default connect(mapStateToProps, mapDispatchToProps)(
-  ObjectsListContainer
+  ObjectsListContainer,
 )

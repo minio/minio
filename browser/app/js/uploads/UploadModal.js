@@ -57,18 +57,15 @@ export class UploadModal extends React.Component {
       "..."
 
     return (
-      <div className="alert alert-info progress animated fadeInUp ">
+      <div className="alert alert-info alert--upload animated fadeInUp ">
         <button type="button" className="close" onClick={showAbortModal}>
           <span>×</span>
         </button>
-        <div className="text-center">
-          <small>{text}</small>
-        </div>
+        <div>{text}</div>
         <ProgressBar now={percent} />
-        <div className="text-center">
-          <small>
-            {humanize.filesize(totalLoaded)} ({percent.toFixed(2)} %)
-          </small>
+        <div>
+          {humanize.filesize(totalLoaded)} (
+          {percent.toFixed(2)} %)
         </div>
       </div>
     )
@@ -78,13 +75,13 @@ export class UploadModal extends React.Component {
 const mapStateToProps = state => {
   return {
     uploads: state.uploads.files,
-    showAbort: state.uploads.showAbortModal
+    showAbort: state.uploads.showAbortModal,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    showAbortModal: () => dispatch(uploadsActions.showAbortModal())
+    showAbortModal: () => dispatch(uploadsActions.showAbortModal()),
   }
 }
 

@@ -31,20 +31,20 @@ export default (
     currentBucket: "",
     showMakeBucketModal: false,
     policies: [],
-    showBucketPolicy: false
+    showBucketPolicy: false,
   },
-  action
+  action,
 ) => {
   switch (action.type) {
     case actionsBuckets.SET_LIST:
       return {
         ...state,
-        list: action.buckets
+        list: action.buckets,
       }
     case actionsBuckets.ADD:
       return {
         ...state,
-        list: [action.bucket, ...state.list]
+        list: [action.bucket, ...state.list],
       }
     case actionsBuckets.REMOVE:
       return {
@@ -54,27 +54,27 @@ export default (
     case actionsBuckets.SET_FILTER:
       return {
         ...state,
-        filter: action.filter
+        filter: action.filter,
       }
     case actionsBuckets.SET_CURRENT_BUCKET:
       return {
         ...state,
-        currentBucket: action.bucket
+        currentBucket: action.bucket,
       }
     case actionsBuckets.SHOW_MAKE_BUCKET_MODAL:
       return {
         ...state,
-        showMakeBucketModal: action.show
+        showMakeBucketModal: action.show,
       }
     case actionsBuckets.SET_POLICIES:
       return {
         ...state,
-        policies: action.policies
+        policies: action.policies,
       }
     case actionsBuckets.SHOW_BUCKET_POLICY:
       return {
         ...state,
-        showBucketPolicy: action.show
+        showBucketPolicy: action.show,
       }
     default:
       return state

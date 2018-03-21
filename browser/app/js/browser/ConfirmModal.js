@@ -26,30 +26,30 @@ let ConfirmModal = ({
   cancelText,
   okHandler,
   cancelHandler,
-  show
+  show,
 }) => {
   return (
     <Modal
       bsSize="small"
       animation={false}
       show={show}
-      className={"modal-confirm " + (baseClass || "")}
+      className={"dialog " + (baseClass || "")}
     >
-      <ModalBody>
-        <div className="mc-icon">
+      <Modal.Body>
+        <div className="dialog__icon">
           <i className={icon} />
         </div>
-        <div className="mc-text">{text}</div>
-        <div className="mc-sub">{sub}</div>
-      </ModalBody>
-      <div className="modal-footer">
-        <button className="btn btn-danger" onClick={okHandler}>
-          {okText}
-        </button>
-        <button className="btn btn-link" onClick={cancelHandler}>
-          {cancelText}
-        </button>
-      </div>
+        <div className="dialog__text">{text}</div>
+        <div className="dialog__sub">{sub}</div>
+        <div className="dialog__actions">
+          <button className="btn btn--link" onClick={okHandler}>
+            {okText}
+          </button>
+          <button className="btn btn--link" onClick={cancelHandler}>
+            {cancelText}
+          </button>
+        </div>
+      </Modal.Body>
     </Modal>
   )
 }

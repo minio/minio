@@ -19,24 +19,25 @@ import classNames from "classnames"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import { getCurrentBucket } from "./selectors"
-import Dropdown from "react-bootstrap/lib/Dropdown"
+import { Dropdown } from "react-bootstrap"
+import { MenuItem } from "react-bootstrap"
 
 export class BucketDropdown extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showBucketDropdown: false
+      showBucketDropdown: false,
     }
   }
 
   toggleDropdown() {
     if (this.state.showBucketDropdown) {
       this.setState({
-        showBucketDropdown: false
+        showBucketDropdown: false,
       })
     } else {
       this.setState({
-        showBucketDropdown: true
+        showBucketDropdown: true,
       })
     }
   }
@@ -44,38 +45,35 @@ export class BucketDropdown extends React.Component {
   render() {
     const { bucket, showBucketPolicy, deleteBucket, currentBucket } = this.props
     return (
-      <Dropdown 
-        open = {this.state.showBucketDropdown}
-        onToggle = {this.toggleDropdown.bind(this)}
-        className="bucket-dropdown" 
+      <Dropdown
+        pullRight
+        open={this.state.showBucketDropdown}
+        onToggle={this.toggleDropdown.bind(this)}
+        className="buckets__item__actions"
         id="bucket-dropdown"
       >
-        <Dropdown.Toggle noCaret>
+        <Dropdown.Toggle noCaret className="dropdown-toggle--icon">
           <i className="zmdi zmdi-more-vert" />
         </Dropdown.Toggle>
-        <Dropdown.Menu className="dropdown-menu-right">
-          <li>
-            <a 
-              onClick={e => {
-                e.stopPropagation()
-                this.toggleDropdown()
-                showBucketPolicy()
-              }}
-            >
-              Edit policy
-            </a>
-          </li>
-          <li>
-            <a 
-              onClick={e => {
-                e.stopPropagation()
-                this.toggleDropdown()
-                deleteBucket(bucket)
-              }}
-            >
-              Delete
-            </a>
-          </li>
+        <Dropdown.Menu>
+          <MenuItem
+            onClick={e => {
+              e.stopPropagation()
+              showBucketPolicy()
+            }}
+          >
+            {" "}
+            Edit Policy
+          </MenuItem>
+          <MenuItem
+            onClick={e => {
+              e.stopPropagation()
+              deleteBucket(bucket)
+            }}
+          >
+            {" "}
+            Delete Bucket
+          </MenuItem>
         </Dropdown.Menu>
       </Dropdown>
     )
@@ -85,7 +83,7 @@ export class BucketDropdown extends React.Component {
 const mapDispatchToProps = dispatch => {
   return {
     deleteBucket: bucket => dispatch(actionsBuckets.deleteBucket(bucket)),
-    showBucketPolicy: () => dispatch(actionsBuckets.showBucketPolicy())
+    showBucketPolicy: () => dispatch(actionsBuckets.showBucketPolicy()),
   }
 }
 

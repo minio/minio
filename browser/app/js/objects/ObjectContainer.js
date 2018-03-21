@@ -19,37 +19,23 @@ import { connect } from "react-redux"
 import humanize from "humanize"
 import Moment from "moment"
 import ObjectItem from "./ObjectItem"
-import ObjectActions from "./ObjectActions"
 import * as actionsObjects from "./actions"
 import { getCheckedList } from "./selectors"
 
-export const ObjectContainer = ({
-  object,
-  checkedObjectsCount,
-  downloadObject
-}) => {
+export const ObjectContainer = ({ object, downloadObject }) => {
   let props = {
     name: object.name,
     contentType: object.contentType,
     size: humanize.filesize(object.size),
-    lastModified: Moment(object.lastModified).format("lll")
-  }
-  if (checkedObjectsCount == 0) {
-    props.actionButtons = <ObjectActions object={object} />
+    lastModified: Moment(object.lastModified).format("lll"),
   }
   return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
 }
 
-const mapStateToProps = state => {
-  return {
-    checkedObjectsCount: getCheckedList(state).length
-  }
-}
-
 const mapDispatchToProps = dispatch => {
   return {
-    downloadObject: object => dispatch(actionsObjects.downloadObject(object))
+    downloadObject: object => dispatch(actionsObjects.downloadObject(object)),
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectContainer)
+export default connect(undefined, mapDispatchToProps)(ObjectContainer)

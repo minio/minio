@@ -24,9 +24,8 @@ import {
   Modal,
   ModalBody,
   ModalHeader,
-  OverlayTrigger
+  OverlayTrigger,
 } from "react-bootstrap"
-import InputGroup from "./InputGroup"
 
 export class ChangePasswordModal extends React.Component {
   constructor(props) {
@@ -34,7 +33,7 @@ export class ChangePasswordModal extends React.Component {
     this.state = {
       accessKey: "",
       secretKey: "",
-      keysReadOnly: false
+      keysReadOnly: false,
     }
   }
   // When its shown, it loads the access key and secret key.
@@ -46,13 +45,13 @@ export class ChangePasswordModal extends React.Component {
       this.setState({
         accessKey: "xxxxxxxxx",
         secretKey: "xxxxxxxxx",
-        keysReadOnly: true
+        keysReadOnly: true,
       })
     } else {
       web.GetAuth().then(data => {
         this.setState({
           accessKey: data.accessKey,
-          secretKey: data.secretKey
+          secretKey: data.secretKey,
         })
       })
     }
@@ -61,19 +60,19 @@ export class ChangePasswordModal extends React.Component {
   // Handle field changes from inside the modal.
   accessKeyChange(e) {
     this.setState({
-      accessKey: e.target.value
+      accessKey: e.target.value,
     })
   }
 
   secretKeyChange(e) {
     this.setState({
-      secretKey: e.target.value
+      secretKey: e.target.value,
     })
   }
 
   secretKeyVisible(secretKeyVisible) {
     this.setState({
-      secretKeyVisible
+      secretKeyVisible,
     })
   }
 
@@ -85,18 +84,18 @@ export class ChangePasswordModal extends React.Component {
     web
       .SetAuth({
         accessKey,
-        secretKey
+        secretKey,
       })
       .then(data => {
         showAlert({
           type: "success",
-          message: "Changed credentials"
+          message: "Changed credentials",
         })
       })
       .catch(err => {
         showAlert({
           type: "danger",
-          message: err.message
+          message: err.message,
         })
       })
   }
@@ -106,7 +105,7 @@ export class ChangePasswordModal extends React.Component {
       this.setState({
         accessKey: data.accessKey,
         secretKey: data.secretKey,
-        secretKeyVisible: true
+        secretKeyVisible: true,
       })
     })
   }
@@ -114,51 +113,55 @@ export class ChangePasswordModal extends React.Component {
   render() {
     const { hideChangePassword } = this.props
     return (
-      <Modal bsSize="sm" animation={false} show={true}>
-        <ModalHeader>Change Password</ModalHeader>
-        <ModalBody className="m-t-20">
-          <InputGroup
-            value={this.state.accessKey}
-            onChange={this.accessKeyChange.bind(this)}
-            id="accessKey"
-            label="Access Key"
-            name="accesskey"
-            type="text"
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={this.state.keysReadOnly}
-          />
-          <i
-            onClick={this.secretKeyVisible.bind(
-              this,
-              !this.state.secretKeyVisible
-            )}
-            className={
-              "toggle-password fa fa-eye " +
-              (this.state.secretKeyVisible ? "toggled" : "")
-            }
-          />
-          <InputGroup
-            value={this.state.secretKey}
-            onChange={this.secretKeyChange.bind(this)}
-            id="secretKey"
-            label="Secret Key"
-            name="accesskey"
-            type={this.state.secretKeyVisible ? "text" : "password"}
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={this.state.keysReadOnly}
-          />
-        </ModalBody>
+      <Modal bsSize="sm" animation={false} show={true} className="settings">
+        <Modal.Header>Change Password</Modal.Header>
+        <Modal.Body className="m-t-20">
+          <div className="form-group">
+            <label className="form-group__label">Access key</label>
+            <input
+              type="text"
+              value={this.state.accessKey}
+              onChange={this.accessKeyChange.bind(this)}
+              id="accessKey"
+              className="form-group__field"
+              name="accesskey"
+              required="required"
+              autoComplete="false"
+              readonly={this.state.keysReadOnly}
+            />
+            <i className="form-group__helper" />
+          </div>
+          <div className="form-group">
+            <label className="form-group__label">Secret key</label>
+            <input
+              type={this.state.secretKeyVisible ? "text" : "password"}
+              value={this.state.secretKey}
+              onChange={this.accessKeyChange.bind(this)}
+              id="secretKey"
+              className="form-group__field"
+              name="secretKey"
+              required="required"
+              autoComplete="false"
+              readonly={this.state.keysReadOnly}
+            />
+            <i className="form-group__helper" />
+            <i
+              onClick={this.secretKeyVisible.bind(
+                this,
+                !this.state.secretKeyVisible,
+              )}
+              className={
+                "form-group__addon zmdi " +
+                (this.state.secretKeyVisible ? "zmdi-eye-off" : "zmdi-eye")
+              }
+            />
+          </div>
+        </Modal.Body>
         <div className="modal-footer">
           <button
             id="generate-keys"
             className={
-              "btn btn-primary " + (this.state.keysReadOnly ? "hidden" : "")
+              "btn btn--link " + (this.state.keysReadOnly ? "hidden" : "")
             }
             onClick={this.generateAuth.bind(this)}
           >
@@ -167,7 +170,7 @@ export class ChangePasswordModal extends React.Component {
           <button
             id="update-keys"
             className={
-              "btn btn-success " + (this.state.keysReadOnly ? "hidden" : "")
+              "btn btn--link " + (this.state.keysReadOnly ? "hidden" : "")
             }
             onClick={this.setAuth.bind(this)}
           >
@@ -175,7 +178,7 @@ export class ChangePasswordModal extends React.Component {
           </button>
           <button
             id="cancel-change-password"
-            className="btn btn-link"
+            className="btn btn--link"
             onClick={hideChangePassword}
           >
             Cancel
@@ -188,13 +191,13 @@ export class ChangePasswordModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    serverInfo: state.browser.serverInfo
+    serverInfo: state.browser.serverInfo,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    showAlert: alert => dispatch(alertActions.set(alert))
+    showAlert: alert => dispatch(alertActions.set(alert)),
   }
 }
 

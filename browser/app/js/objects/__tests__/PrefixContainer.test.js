@@ -36,7 +36,7 @@ describe("PrefixContainer", () => {
         object={{ name: "abc/" }}
         currentPrefix={"xyz/"}
         selectPrefix={selectPrefix}
-      />
+      />,
     )
     wrapper.find("Connect(ObjectItem)").prop("onClick")()
     expect(selectPrefix).toHaveBeenCalledWith("xyz/abc/")

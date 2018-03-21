@@ -15,9 +15,8 @@
  */
 
 import React from "react"
+import classNames from "classnames"
 import { connect } from "react-redux"
-import humanize from "humanize"
-import Moment from "moment"
 import { getDataType } from "../mime"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
@@ -30,13 +29,20 @@ export const ObjectItem = ({
   checked,
   checkObject,
   uncheckObject,
-  actionButtons,
-  onClick
+  onClick,
 }) => {
   return (
-    <div className={"fesl-row"} data-type={getDataType(name, contentType)}>
-      <div className="fesl-item fesl-item-icon">
-        <div className="fi-select">
+    <div
+      className={classNames({
+        objects__row: true,
+        "objects__row--directory": getDataType(name, contentType) == "folder",
+      })}
+    >
+      <div
+        className="objects__column objects__column--select"
+        data-object-type={getDataType(name, contentType)}
+      >
+        <div className="objects__select">
           <input
             type="checkbox"
             name={name}
@@ -45,11 +51,10 @@ export const ObjectItem = ({
               checked ? uncheckObject(name) : checkObject(name)
             }}
           />
-          <i className="fis-icon" />
-          <i className="fis-helper" />
+          <i />
         </div>
       </div>
-      <div className="fesl-item fesl-item-name">
+      <div className="objects__column objects__column--name">
         <a
           href="#"
           onClick={e => {
@@ -60,23 +65,24 @@ export const ObjectItem = ({
           {name}
         </a>
       </div>
-      <div className="fesl-item fesl-item-size">{size}</div>
-      <div className="fesl-item fesl-item-modified">{lastModified}</div>
-      <div className="fesl-item fesl-item-actions">{actionButtons}</div>
+      <div className="objects__column objects__column--size">{size}</div>
+      <div className="objects__column objects__column--date">
+        {lastModified}
+      </div>
     </div>
   )
 }
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    checked: getCheckedList(state).indexOf(ownProps.name) >= 0
+    checked: getCheckedList(state).indexOf(ownProps.name) >= 0,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     checkObject: name => dispatch(actions.checkObject(name)),
-    uncheckObject: name => dispatch(actions.uncheckObject(name))
+    uncheckObject: name => dispatch(actions.uncheckObject(name)),
   }
 }
 

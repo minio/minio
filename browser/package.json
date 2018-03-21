@@ -13,8 +13,7 @@
     "setupTestFrameworkScriptFile": "./app/js/jest/setup.js",
     "testURL": "https://localhost:8080",
     "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$":
-        "<rootDir>/app/js/jest/__mocks__/fileMock.js",
+      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/app/js/jest/__mocks__/fileMock.js",
       "\\.(css|scss)$": "identity-obj-proxy"
     }
   },
@@ -59,10 +58,9 @@
     "webpack-dev-server": "^2.11.1"
   },
   "dependencies": {
-    "bootstrap": "^3.3.6",
+    "bootstrap": "3.3.7",
     "classnames": "^2.2.3",
     "expect": "^1.20.2",
-    "font-awesome": "^4.7.0",
     "history": "^4.7.2",
     "humanize": "0.0.9",
     "identity-obj-proxy": "^3.0.0",
@@ -74,7 +72,7 @@
     "moment": "^2.15.1",
     "react": "^16.2.0",
     "react-addons-test-utils": "^0.14.8",
-    "react-bootstrap": "^0.32.0",
+    "react-bootstrap": "^0.32.1",
     "react-copy-to-clipboard": "^5.0.1",
     "react-custom-scrollbars": "^4.2.1",
     "react-dom": "^16.2.0",

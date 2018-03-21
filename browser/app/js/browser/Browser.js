@@ -15,24 +15,21 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
 import SideBar from "./SideBar"
 import MainContent from "./MainContent"
 import AlertContainer from "../alert/AlertContainer"
 
+const Aux = props => props.children
+
 class Browser extends React.Component {
   render() {
     return (
-      <div
-        className={classNames({
-          "file-explorer": true
-        })}
-      >
+      <Aux>
         <SideBar />
         <MainContent />
         <AlertContainer />
-      </div>
+      </Aux>
     )
   }
 }

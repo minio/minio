@@ -1,20 +1,18 @@
 .alert {
-    border: 0;
     position: fixed;
-    max-width: 500px;
-    margin: 0;
-    box-shadow: 0 4px 5px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     color: @white;
     width: 100%;
-    right: 20px;
-    border-radius: 3px;
-    padding: 17px 50px 17px 17px;
-    z-index: 10010;
+    padding: 1.5rem 3rem 1.5rem 2rem;
+    z-index: 1000000;
     .animation-duration(800ms);
     .animation-fill-mode(both);
+    font-size: @font-size-small;
 
-    &:not(.progress) {
-        top: 20px;
+    &:not(.alert--upload) {
+        top: 1.5rem;
+        max-width: 500px;
+        border-radius: @border-radius-base;
 
         @media(min-width: (@screen-sm-min)) {
             left: 50%;
@@ -22,35 +20,17 @@
         }
     }
 
-    &.progress {
-        bottom: 20px;
-        right: 20px;
-    }
-
-    &.alert-danger {
-        background: @red;
-    }
-
-    &.alert-success {
-        background: @green;
-    }
-
-    &.alert-info {
-        background: @blue;
-    }
-
     @media(max-width: (@screen-xs-max)) {
-        left: 20px;
-        width: ~"calc(100% - 40px)";
+        left: 1.5rem;
+        width: ~"calc(100% - 3rem)";
         max-width: 100%;
     }
 
     .progress {
-        margin: 10px 10px 8px 0;
-        height: 5px;
+        margin: 0.75rem 0;
+        height: 0.25rem;
         box-shadow: none;
-        border-radius: 1px;
-        background-color: @blue;
+        background-color: rgba(255,255,255,0.2);
         border-radius: 2px;
         overflow: hidden;
     }
@@ -62,7 +42,27 @@
     }
 
     .close {
-        position: absolute;
-        top: 15px;
+        top: 1.3rem;
+        right: 1.5rem;
     }
+}
+
+.alert-danger {
+    background: @red;
+}
+
+.alert-success {
+    background: @green;
+}
+
+.alert-info {
+    background: @blue;
+}
+
+.alert--upload {
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.15);
 }
