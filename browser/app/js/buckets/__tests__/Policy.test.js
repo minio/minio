@@ -23,13 +23,13 @@ import web from "../../web"
 jest.mock("../../web", () => ({
   SetBucketPolicy: jest.fn(() => {
     return Promise.resolve()
-  }),
+  })
 }))
 
 describe("Policy", () => {
   it("should render without crashing", () => {
     shallow(
-      <Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />,
+      <Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />
     )
   })
 
@@ -41,16 +41,16 @@ describe("Policy", () => {
         prefix={"foo"}
         policy={READ_ONLY}
         fetchPolicies={fetchPolicies}
-      />,
+      />
     )
     wrapper.find("button").simulate("click", {
-      preventDefault: jest.fn(),
+      preventDefault: jest.fn()
     })
 
     expect(web.SetBucketPolicy).toHaveBeenCalledWith({
       bucketName: "bucket",
       prefix: "foo",
-      policy: "none",
+      policy: "none"
     })
 
     setImmediate(() => {
@@ -60,13 +60,13 @@ describe("Policy", () => {
 
   it("should change the empty string to '*' while displaying prefixes", () => {
     const wrapper = shallow(
-      <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} />,
+      <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} />
     )
     expect(
       wrapper
-        .find(".pmbl-item")
+        .find("input")
         .at(0)
-        .text(),
+        .prop("value")
     ).toEqual("*")
   })
 })

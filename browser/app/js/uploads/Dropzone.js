@@ -51,7 +51,7 @@ export class Dropzone extends React.Component {
 
 const mapDispatchToProps = dispatch => {
   return {
-    uploadFile: file => dispatch(actions.uploadFile(file)),
+    uploadFile: file => dispatch(actions.uploadFile(file))
   }
 }
 

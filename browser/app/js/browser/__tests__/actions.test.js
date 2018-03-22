@@ -23,8 +23,8 @@ jest.mock("../../web", () => ({
     return Promise.resolve({
       storageInfo: {
         Total: 100,
-        Free: 60,
-      },
+        Free: 60
+      }
     })
   }),
   ServerInfo: jest.fn(() => {
@@ -33,9 +33,9 @@ jest.mock("../../web", () => ({
       MinioMemory: "test",
       MinioPlatform: "test",
       MinioRuntime: "test",
-      MinioGlobalInfo: "test",
+      MinioGlobalInfo: "test"
     })
-  }),
+  })
 }))
 
 const middlewares = [thunk]
@@ -49,9 +49,9 @@ describe("Common actions", () => {
         type: "common/SET_STORAGE_INFO",
         storageInfo: {
           total: 100,
-          free: 60,
-        },
-      },
+          free: 60
+        }
+      }
     ]
     return store.dispatch(actionsCommon.fetchStorageInfo()).then(() => {
       const actions = store.getActions()
@@ -69,9 +69,9 @@ describe("Common actions", () => {
           memory: "test",
           platform: "test",
           runtime: "test",
-          info: "test",
-        },
-      },
+          info: "test"
+        }
+      }
     ]
     return store.dispatch(actionsCommon.fetchServerInfo()).then(() => {
       const actions = store.getActions()

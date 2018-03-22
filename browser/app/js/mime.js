@@ -59,7 +59,7 @@ const isCode = (name, contentType) => {
     "scm",
     "lisp",
     "asp",
-    "aspx",
+    "aspx"
   ]
   const ext = name.split(".").reverse()[0]
   for (var i in codeExt) {
@@ -121,7 +121,7 @@ export const getDataType = (name, contentType) => {
     ["zip", isZip],
     ["excel", isExcel],
     ["doc", isDoc],
-    ["presentation", isPresentation],
+    ["presentation", isPresentation]
   ]
   for (var i in check) {
     if (check[i][1](name, contentType)) return check[i][0]

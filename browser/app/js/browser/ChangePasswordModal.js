@@ -24,7 +24,7 @@ import {
   Modal,
   ModalBody,
   ModalHeader,
-  OverlayTrigger,
+  OverlayTrigger
 } from "react-bootstrap"
 
 export class ChangePasswordModal extends React.Component {
@@ -33,7 +33,7 @@ export class ChangePasswordModal extends React.Component {
     this.state = {
       accessKey: "",
       secretKey: "",
-      keysReadOnly: false,
+      keysReadOnly: false
     }
   }
   // When its shown, it loads the access key and secret key.
@@ -45,13 +45,13 @@ export class ChangePasswordModal extends React.Component {
       this.setState({
         accessKey: "xxxxxxxxx",
         secretKey: "xxxxxxxxx",
-        keysReadOnly: true,
+        keysReadOnly: true
       })
     } else {
       web.GetAuth().then(data => {
         this.setState({
           accessKey: data.accessKey,
-          secretKey: data.secretKey,
+          secretKey: data.secretKey
         })
       })
     }
@@ -60,19 +60,19 @@ export class ChangePasswordModal extends React.Component {
   // Handle field changes from inside the modal.
   accessKeyChange(e) {
     this.setState({
-      accessKey: e.target.value,
+      accessKey: e.target.value
     })
   }
 
   secretKeyChange(e) {
     this.setState({
-      secretKey: e.target.value,
+      secretKey: e.target.value
     })
   }
 
   secretKeyVisible(secretKeyVisible) {
     this.setState({
-      secretKeyVisible,
+      secretKeyVisible
     })
   }
 
@@ -84,18 +84,18 @@ export class ChangePasswordModal extends React.Component {
     web
       .SetAuth({
         accessKey,
-        secretKey,
+        secretKey
       })
       .then(data => {
         showAlert({
           type: "success",
-          message: "Changed credentials",
+          message: "Changed credentials"
         })
       })
       .catch(err => {
         showAlert({
           type: "danger",
-          message: err.message,
+          message: err.message
         })
       })
   }
@@ -105,7 +105,7 @@ export class ChangePasswordModal extends React.Component {
       this.setState({
         accessKey: data.accessKey,
         secretKey: data.secretKey,
-        secretKeyVisible: true,
+        secretKeyVisible: true
       })
     })
   }
@@ -136,7 +136,7 @@ export class ChangePasswordModal extends React.Component {
             <input
               type={this.state.secretKeyVisible ? "text" : "password"}
               value={this.state.secretKey}
-              onChange={this.accessKeyChange.bind(this)}
+              onChange={this.secretKeyChange.bind(this)}
               id="secretKey"
               className="form-group__field"
               name="secretKey"
@@ -148,7 +148,7 @@ export class ChangePasswordModal extends React.Component {
             <i
               onClick={this.secretKeyVisible.bind(
                 this,
-                !this.state.secretKeyVisible,
+                !this.state.secretKeyVisible
               )}
               className={
                 "form-group__addon zmdi " +
@@ -191,13 +191,13 @@ export class ChangePasswordModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    serverInfo: state.browser.serverInfo,
+    serverInfo: state.browser.serverInfo
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    showAlert: alert => dispatch(alertActions.set(alert)),
+    showAlert: alert => dispatch(alertActions.set(alert))
   }
 }
 

@@ -32,15 +32,15 @@ describe("Alert actions", () => {
         alert: {
           id: 0,
           message: "Test alert",
-          type: "danger",
-        },
-      },
+          type: "danger"
+        }
+      }
     ]
     store.dispatch(
       actionsAlert.set({
         message: "Test alert",
-        type: "danger",
-      }),
+        type: "danger"
+      })
     )
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
@@ -53,20 +53,20 @@ describe("Alert actions", () => {
         type: "alert/SET",
         alert: {
           id: 1,
-          message: "Test alert",
-        },
+          message: "Test alert"
+        }
       },
       {
         type: "alert/CLEAR",
         alert: {
-          id: 1,
-        },
-      },
+          id: 1
+        }
+      }
     ]
     store.dispatch(
       actionsAlert.set({
-        message: "Test alert",
-      }),
+        message: "Test alert"
+      })
     )
     jest.runAllTimers()
     const actions = store.getActions()
@@ -77,8 +77,8 @@ describe("Alert actions", () => {
     const store = mockStore()
     const expectedActions = [
       {
-        type: "alert/CLEAR",
-      },
+        type: "alert/CLEAR"
+      }
     ]
     store.dispatch(actionsAlert.clear())
     const actions = store.getActions()

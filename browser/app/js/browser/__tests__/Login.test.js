@@ -23,10 +23,10 @@ jest.mock("../../web", () => ({
   Login: jest.fn(() => {
     return Promise.resolve({
       token: "test",
-      uiVersion: "2018-02-01T01:17:47Z",
+      uiVersion: "2018-02-01T01:17:47Z"
     })
   }),
-  LoggedIn: jest.fn(),
+  LoggedIn: jest.fn()
 }))
 
 describe("Login", () => {
@@ -41,7 +41,7 @@ describe("Login", () => {
         alert={{ show: false, type: "danger" }}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
-      />,
+      />
     )
   })
 
@@ -54,8 +54,8 @@ describe("Login", () => {
         clearAlert={clearAlertMock}
       />,
       {
-        attachTo: document.body,
-      },
+        attachTo: document.body
+      }
     )
     expect(document.body.classList.contains("is-guest")).toBeTruthy()
   })
@@ -69,14 +69,14 @@ describe("Login", () => {
         clearAlert={clearAlertMock}
       />,
       {
-        attachTo: document.body,
-      },
+        attachTo: document.body
+      }
     )
     // case where both keys are empty - displays the second warning
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith(
       "danger",
-      "Secret Key cannot be empty",
+      "Secret Key cannot be empty"
     )
 
     // case where access key is empty
@@ -84,7 +84,7 @@ describe("Login", () => {
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith(
       "danger",
-      "Access Key cannot be empty",
+      "Access Key cannot be empty"
     )
 
     // case where secret key is empty
@@ -92,7 +92,7 @@ describe("Login", () => {
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith(
       "danger",
-      "Secret Key cannot be empty",
+      "Secret Key cannot be empty"
     )
   })
 
@@ -105,15 +105,15 @@ describe("Login", () => {
         clearAlert={clearAlertMock}
       />,
       {
-        attachTo: document.body,
-      },
+        attachTo: document.body
+      }
     )
     document.getElementById("accessKey").value = "accessKey"
     document.getElementById("secretKey").value = "secretKey"
     wrapper.find("form").simulate("submit")
     expect(web.Login).toHaveBeenCalledWith({
       username: "accessKey",
-      password: "secretKey",
+      password: "secretKey"
     })
   })
 })

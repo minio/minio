@@ -16,20 +16,20 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { MobileHeader } from "../MobileHeader"
+import { SidebarToggle } from "../SidebarToggle"
 
-describe("Bucket", () => {
+describe("SidebarToggle", () => {
   it("should render without crashing", () => {
-    shallow(<MobileHeader sidebarOpen={false} />)
+    shallow(<SidebarToggle sidebarOpen={false} />)
   })
 
   it("should toggleSidebar when trigger is clicked", () => {
     const toggleSidebar = jest.fn()
     const wrapper = shallow(
-      <MobileHeader sidebarOpen={false} toggleSidebar={toggleSidebar} />,
+      <SidebarToggle sidebarOpen={false} toggleSidebar={toggleSidebar} />
     )
-    wrapper.find("#sidebar-toggle").simulate("click", {
-      stopPropagation: jest.fn(),
+    wrapper.find("button").simulate("click", {
+      stopPropagation: jest.fn()
     })
     expect(toggleSidebar).toHaveBeenCalled()
   })

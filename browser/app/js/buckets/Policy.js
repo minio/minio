@@ -28,7 +28,7 @@ export class Policy extends React.Component {
       .SetBucketPolicy({
         bucketName: currentBucket,
         prefix: prefix,
-        policy: "none",
+        policy: "none"
       })
       .then(() => {
         fetchPolicies(currentBucket)
@@ -79,7 +79,7 @@ export class Policy extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    currentBucket: state.buckets.currentBucket,
+    currentBucket: state.buckets.currentBucket
   }
 }
 
@@ -90,9 +90,9 @@ const mapDispatchToProps = dispatch => {
       dispatch(
         actionsAlert.set({
           type: type,
-          message: message,
-        }),
-      ),
+          message: message
+        })
+      )
   }
 }
 

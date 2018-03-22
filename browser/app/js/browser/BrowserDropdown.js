@@ -28,29 +28,29 @@ export class BrowserDropdown extends React.Component {
     super(props)
     this.state = {
       showAboutModal: false,
-      showChangePasswordModal: false,
+      showChangePasswordModal: false
     }
   }
   showAbout(e) {
     e.preventDefault()
     this.setState({
-      showAboutModal: true,
+      showAboutModal: true
     })
   }
   hideAbout() {
     this.setState({
-      showAboutModal: false,
+      showAboutModal: false
     })
   }
   showChangePassword(e) {
     e.preventDefault()
     this.setState({
-      showChangePasswordModal: true,
+      showChangePasswordModal: true
     })
   }
   hideChangePassword() {
     this.setState({
-      showChangePasswordModal: false,
+      showChangePasswordModal: false
     })
   }
   componentDidMount() {
@@ -142,13 +142,13 @@ export class BrowserDropdown extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    serverInfo: state.browser.serverInfo,
+    serverInfo: state.browser.serverInfo
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    fetchServerInfo: () => dispatch(browserActions.fetchServerInfo()),
+    fetchServerInfo: () => dispatch(browserActions.fetchServerInfo())
   }
 }
 

@@ -26,18 +26,18 @@ export class BucketDropdown extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showBucketDropdown: false,
+      showBucketDropdown: false
     }
   }
 
   toggleDropdown() {
     if (this.state.showBucketDropdown) {
       this.setState({
-        showBucketDropdown: false,
+        showBucketDropdown: false
       })
     } else {
       this.setState({
-        showBucketDropdown: true,
+        showBucketDropdown: true
       })
     }
   }
@@ -83,7 +83,7 @@ export class BucketDropdown extends React.Component {
 const mapDispatchToProps = dispatch => {
   return {
     deleteBucket: bucket => dispatch(actionsBuckets.deleteBucket(bucket)),
-    showBucketPolicy: () => dispatch(actionsBuckets.showBucketPolicy()),
+    showBucketPolicy: () => dispatch(actionsBuckets.showBucketPolicy())
   }
 }
 

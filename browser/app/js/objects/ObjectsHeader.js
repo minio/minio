@@ -23,7 +23,7 @@ export const ObjectsHeader = ({
   sortNameOrder,
   sortSizeOrder,
   sortLastModifiedOrder,
-  sortObjects,
+  sortObjects
 }) => (
   <div className="objects__row objects__header hidden-xs">
     <div
@@ -38,7 +38,7 @@ export const ObjectsHeader = ({
           objects__sort: true,
           zmdi: true,
           "zmdi-sort-desc": sortNameOrder,
-          "zmdi-sort-asc": !sortNameOrder,
+          "zmdi-sort-asc": !sortNameOrder
         })}
       />
     </div>
@@ -54,7 +54,7 @@ export const ObjectsHeader = ({
           objects__sort: true,
           zmdi: true,
           "zmdi-sort-amount-desc": sortSizeOrder,
-          "zmdi-sort-amount-asc": !sortSizeOrder,
+          "zmdi-sort-amount-asc": !sortSizeOrder
         })}
       />
     </div>
@@ -70,7 +70,7 @@ export const ObjectsHeader = ({
           objects__sort: true,
           zmdi: true,
           "zmdi-sort-amount-desc": sortLastModifiedOrder,
-          "zmdi-sort-amount-asc": !sortLastModifiedOrder,
+          "zmdi-sort-amount-asc": !sortLastModifiedOrder
         })}
       />
     </div>
@@ -82,13 +82,13 @@ const mapStateToProps = state => {
     sortNameOrder: state.objects.sortBy == "name" && state.objects.sortOrder,
     sortSizeOrder: state.objects.sortBy == "size" && state.objects.sortOrder,
     sortLastModifiedOrder:
-      state.objects.sortBy == "last-modified" && state.objects.sortOrder,
+      state.objects.sortBy == "last-modified" && state.objects.sortOrder
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    sortObjects: sortBy => dispatch(actionsObjects.sortObjects(sortBy)),
+    sortObjects: sortBy => dispatch(actionsObjects.sortObjects(sortBy))
   }
 }
 

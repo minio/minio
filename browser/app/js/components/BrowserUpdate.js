@@ -45,6 +45,6 @@ let BrowserUpdate = ({ latestUiVersion }) => {
 
 export default connect(state => {
   return {
-    latestUiVersion: state.latestUiVersion,
+    latestUiVersion: state.latestUiVersion
   }
 })(BrowserUpdate)

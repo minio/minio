@@ -26,7 +26,7 @@ describe("DeleteObjectConfirmModal", () => {
   it("should call deleteObject when Delete is clicked", () => {
     const deleteObject = jest.fn()
     const wrapper = shallow(
-      <DeleteObjectConfirmModal deleteObject={deleteObject} />,
+      <DeleteObjectConfirmModal deleteObject={deleteObject} />
     )
     wrapper.find("ConfirmModal").prop("okHandler")()
     expect(deleteObject).toHaveBeenCalled()
@@ -37,7 +37,7 @@ describe("DeleteObjectConfirmModal", () => {
     const wrapper = shallow(
       <DeleteObjectConfirmModal
         hideDeleteConfirmModal={hideDeleteConfirmModal}
-      />,
+      />
     )
     wrapper.find("ConfirmModal").prop("cancelHandler")()
     expect(hideDeleteConfirmModal).toHaveBeenCalled()

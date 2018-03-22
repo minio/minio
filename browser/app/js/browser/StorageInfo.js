@@ -44,13 +44,13 @@ export class StorageInfo extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    storageInfo: state.browser.storageInfo,
+    storageInfo: state.browser.storageInfo
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    fetchStorageInfo: () => dispatch(actionsCommon.fetchStorageInfo()),
+    fetchStorageInfo: () => dispatch(actionsCommon.fetchStorageInfo())
   }
 }
 

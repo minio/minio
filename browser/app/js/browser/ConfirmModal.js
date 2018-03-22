@@ -26,7 +26,7 @@ let ConfirmModal = ({
   cancelText,
   okHandler,
   cancelHandler,
-  show,
+  show
 }) => {
   return (
     <Modal

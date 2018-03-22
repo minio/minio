@@ -28,14 +28,14 @@ import * as objectsActions from "./actions"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
-  SHARE_OBJECT_EXPIRY_MINUTES,
+  SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
-export class ObjectsBulkActions extends React.Component {
+export class Toolbar extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showDeleteConfirmation: false,
+      showDeleteConfirmation: false
     }
   }
   deleteChecked() {
@@ -45,7 +45,7 @@ export class ObjectsBulkActions extends React.Component {
   }
   hideDeleteConfirmModal() {
     this.setState({
-      showDeleteConfirmation: false,
+      showDeleteConfirmation: false
     })
   }
   shareObject(e) {
@@ -59,7 +59,7 @@ export class ObjectsBulkActions extends React.Component {
       object,
       SHARE_OBJECT_EXPIRY_DAYS,
       SHARE_OBJECT_EXPIRY_HOURS,
-      SHARE_OBJECT_EXPIRY_MINUTES,
+      SHARE_OBJECT_EXPIRY_MINUTES
     )
   }
 
@@ -68,7 +68,7 @@ export class ObjectsBulkActions extends React.Component {
       checkedObjectsCount,
       downloadChecked,
       object,
-      showShareObjectModal,
+      showShareObjectModal
     } = this.props
     const loggedIn = web.LoggedIn()
 
@@ -79,7 +79,7 @@ export class ObjectsBulkActions extends React.Component {
           className="toolbar__item zmdi zmdi-delete"
           onClick={() =>
             this.setState({
-              showDeleteConfirmation: true,
+              showDeleteConfirmation: true
             })
           }
           disabled={!checkedObjectsCount}
@@ -126,7 +126,7 @@ const mapStateToProps = state => {
   return {
     checkedObjects: getCheckedList(state),
     checkedObjectsCount: getCheckedList(state).length,
-    showShareObjectModal: state.objects.shareObject.show,
+    showShareObjectModal: state.objects.shareObject.show
   }
 }
 
@@ -137,8 +137,8 @@ const mapDispatchToProps = dispatch => {
     deleteChecked: () => dispatch(actions.deleteCheckedObjects()),
     toggleSidebar: () => dispatch(actionsCommon.toggleSidebar()),
     shareObject: (object, days, hours, minutes) =>
-      dispatch(objectsActions.shareObject(object, days, hours, minutes)),
+      dispatch(objectsActions.shareObject(object, days, hours, minutes))
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectsBulkActions)
+export default connect(mapStateToProps, mapDispatchToProps)(Toolbar)

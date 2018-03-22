@@ -53,13 +53,13 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
 const mapStateToProps = state => {
   return {
     currentBucket: getCurrentBucket(state),
-    currentPrefix: state.objects.currentPrefix,
+    currentPrefix: state.objects.currentPrefix
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix)),
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
   }
 }
 

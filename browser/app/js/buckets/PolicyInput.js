@@ -42,7 +42,7 @@ export class PolicyInput extends React.Component {
 
     let policyAlreadyExists = this.props.policies.some(
       elem =>
-        this.prefix.value === elem.prefix && this.policy.value === elem.policy,
+        this.prefix.value === elem.prefix && this.policy.value === elem.policy
     )
     if (policyAlreadyExists) {
       showAlert("danger", "Policy for this prefix already exists.")
@@ -53,7 +53,7 @@ export class PolicyInput extends React.Component {
       .SetBucketPolicy({
         bucketName: currentBucket,
         prefix: this.prefix.value,
-        policy: this.policy.value,
+        policy: this.policy.value
       })
       .then(() => {
         fetchPolicies(currentBucket)
@@ -99,7 +99,7 @@ export class PolicyInput extends React.Component {
 const mapStateToProps = state => {
   return {
     currentBucket: state.buckets.currentBucket,
-    policies: state.buckets.policies,
+    policies: state.buckets.policies
   }
 }
 
@@ -111,9 +111,9 @@ const mapDispatchToProps = dispatch => {
       dispatch(
         actionsAlert.set({
           type: type,
-          message: message,
-        }),
-      ),
+          message: message
+        })
+      )
   }
 }
 

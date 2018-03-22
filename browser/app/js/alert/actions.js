@@ -27,22 +27,22 @@ export const set = alert => {
         dispatch({
           type: CLEAR,
           alert: {
-            id,
-          },
+            id
+          }
         })
       }, 5000)
     }
     dispatch({
       type: SET,
       alert: Object.assign({}, alert, {
-        id,
-      }),
+        id
+      })
     })
   }
 }
 
 export const clear = () => {
   return {
-    type: CLEAR,
+    type: CLEAR
   }
 }

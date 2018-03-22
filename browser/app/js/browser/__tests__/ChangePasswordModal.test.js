@@ -22,13 +22,13 @@ jest.mock("../../web", () => ({
   GetAuth: jest.fn(() => {
     return Promise.resolve({
       accessKey: "test1",
-      secretKey: "test2",
+      secretKey: "test2"
     })
   }),
   GenerateAuth: jest.fn(() => {
     return Promise.resolve({
       accessKey: "gen1",
-      secretKey: "gen2",
+      secretKey: "gen2"
     })
   }),
   SetAuth: jest.fn(({ accessKey, secretKey }) => {
@@ -36,10 +36,10 @@ jest.mock("../../web", () => ({
       return Promise.resolve({})
     } else {
       return Promise.reject({
-        message: "Error",
+        message: "Error"
       })
     }
-  }),
+  })
 }))
 
 describe("ChangePasswordModal", () => {
@@ -49,8 +49,8 @@ describe("ChangePasswordModal", () => {
     platform: "test",
     runtime: "test",
     info: {
-      isEnvCreds: false,
-    },
+      isEnvCreds: false
+    }
   }
 
   it("should render without crashing", () => {
@@ -69,8 +69,8 @@ describe("ChangePasswordModal", () => {
     const newServerInfo = {
       ...serverInfo,
       info: {
-        isEnvCreds: true,
-      },
+        isEnvCreds: true
+      }
     }
     const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
     expect(wrapper.state("accessKey")).toBe("xxxxxxxxx")
@@ -93,23 +93,23 @@ describe("ChangePasswordModal", () => {
   it("should update accessKey and secretKey when Update button is clicked", () => {
     const showAlert = jest.fn()
     const wrapper = shallow(
-      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />,
+      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />
     )
     wrapper.find("#accessKey").simulate("change", {
       target: {
-        value: "test3",
-      },
+        value: "test3"
+      }
     })
     wrapper.find("#secretKey").simulate("change", {
       target: {
-        value: "test4",
-      },
+        value: "test4"
+      }
     })
     wrapper.find("#update-keys").simulate("click")
     setImmediate(() => {
       expect(showAlert).toHaveBeenCalledWith({
         type: "success",
-        message: "Changed credentials",
+        message: "Changed credentials"
       })
     })
   })
@@ -120,7 +120,7 @@ describe("ChangePasswordModal", () => {
       <ChangePasswordModal
         serverInfo={serverInfo}
         hideChangePassword={hideChangePassword}
-      />,
+      />
     )
     wrapper.find("#cancel-change-password").simulate("click")
     expect(hideChangePassword).toHaveBeenCalled()

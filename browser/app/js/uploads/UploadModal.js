@@ -75,13 +75,13 @@ export class UploadModal extends React.Component {
 const mapStateToProps = state => {
   return {
     uploads: state.uploads.files,
-    showAbort: state.uploads.showAbortModal,
+    showAbort: state.uploads.showAbortModal
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    showAbortModal: () => dispatch(uploadsActions.showAbortModal()),
+    showAbortModal: () => dispatch(uploadsActions.showAbortModal())
   }
 }
 

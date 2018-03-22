@@ -23,7 +23,7 @@ describe("AboutModal", () => {
     version: "test",
     memory: "test",
     platform: "test",
-    runtime: "test",
+    runtime: "test"
   }
 
   it("should render without crashing", () => {
@@ -33,9 +33,9 @@ describe("AboutModal", () => {
   it("should call hideAbout when close button is clicked", () => {
     const hideAbout = jest.fn()
     const wrapper = shallow(
-      <AboutModal serverInfo={serverInfo} hideAbout={hideAbout} />,
+      <AboutModal serverInfo={serverInfo} hideAbout={hideAbout} />
     )
-    wrapper.find("button").simulate("click")
+    wrapper.find("i").simulate("click")
     expect(hideAbout).toHaveBeenCalled()
   })
 })

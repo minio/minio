@@ -40,7 +40,7 @@ export class Login extends React.Component {
     web
       .Login({
         username: document.getElementById("accessKey").value,
-        password: document.getElementById("secretKey").value,
+        password: document.getElementById("secretKey").value
       })
       .then(res => {
         history.push("/")
@@ -114,10 +114,10 @@ const mapDispatchToProps = dispatch => {
       dispatch(
         actionsAlert.set({
           type: type,
-          message: message,
-        }),
+          message: message
+        })
       ),
-    clearAlert: () => dispatch(actionsAlert.clear()),
+    clearAlert: () => dispatch(actionsAlert.clear())
   }
 }
 

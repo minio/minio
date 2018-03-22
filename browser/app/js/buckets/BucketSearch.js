@@ -37,7 +37,7 @@ const mapDispatchToProps = dispatch => {
   return {
     onChange: filter => {
       dispatch(actionsBuckets.setFilter(filter))
-    },
+    }
   }
 }
 

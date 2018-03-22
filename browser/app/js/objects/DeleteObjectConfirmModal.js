@@ -19,7 +19,7 @@ import ConfirmModal from "../browser/ConfirmModal"
 
 export const DeleteObjectConfirmModal = ({
   deleteObject,
-  hideDeleteConfirmModal,
+  hideDeleteConfirmModal
 }) => (
   <ConfirmModal
     show={true}
