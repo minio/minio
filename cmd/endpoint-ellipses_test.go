@@ -65,6 +65,25 @@ func TestCreateServerEndpoints(t *testing.T) {
 	}
 }
 
+func TestGetDivisibleSize(t *testing.T) {
+	testCases := []struct {
+		totalSizes []uint64
+		result     uint64
+	}{{[]uint64{24, 32, 16}, 8},
+		{[]uint64{32, 8, 4}, 4},
+		{[]uint64{8, 8, 8}, 8},
+		{[]uint64{24}, 24},
+	}
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			gotGCD := getDivisibleSize(testCase.totalSizes)
+			if testCase.result != gotGCD {
+				t.Errorf("Expected %v, got %v", testCase.result, gotGCD)
+			}
+		})
+	}
+}
+
 // Test tests calculating set indexes.
 func TestGetSetIndexes(t *testing.T) {
 	testCases := []struct {
@@ -80,7 +99,25 @@ func TestGetSetIndexes(t *testing.T) {
 			nil,
 			false,
 		},
+		{
+			[]string{"data{1...3}"},
+			[]uint64{3},
+			nil,
+			false,
+		},
+		{
+			[]string{"data/controller1/export{1...2}, data/controller2/export{1...4}, data/controller3/export{1...8}"},
+			[]uint64{2, 4, 8},
+			nil,
+			false,
+		},
 		// Valid inputs.
+		{
+			[]string{"data/controller1/export{1...4}, data/controller2/export{1...8}, data/controller3/export{1...12}"},
+			[]uint64{4, 8, 12},
+			[][]uint64{{4}, {4, 4}, {4, 4, 4}},
+			true,
+		},
 		{
 			[]string{"data{1...64}"},
 			[]uint64{64},
@@ -103,6 +140,12 @@ func TestGetSetIndexes(t *testing.T) {
 			[]string{"data{1...4}"},
 			[]uint64{4},
 			[][]uint64{{4}},
+			true,
+		},
+		{
+			[]string{"data/controller1/export{1...10}, data/controller2/export{1...10}, data/controller3/export{1...10}"},
+			[]uint64{10, 10, 10},
+			[][]uint64{{10}, {10}, {10}},
 			true,
 		},
 	}
