@@ -679,6 +679,10 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		return result, err
 	}
 
+	if hasPrefix(prefix, slashSeparator) {
+		return result, nil
+	}
+
 	var objInfos []ObjectInfo
 	var eof bool
 	var nextMarker string
