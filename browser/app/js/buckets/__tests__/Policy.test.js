@@ -64,9 +64,9 @@ describe("Policy", () => {
     )
     expect(
       wrapper
-        .find(".pmbl-item")
+        .find("input")
         .at(0)
-        .text()
+        .prop("value")
     ).toEqual("*")
   })
 })

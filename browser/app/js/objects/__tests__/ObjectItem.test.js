@@ -25,7 +25,9 @@ describe("ObjectItem", () => {
 
   it("should render with content type", () => {
     const wrapper = shallow(<ObjectItem name={"test.jpg"} contentType={""} />)
-    expect(wrapper.prop("data-type")).toBe("image")
+    expect(
+      wrapper.find(".objects__column--select").prop("data-object-type")
+    ).toBe("image")
   })
 
   it("should call onClick when the object isclicked", () => {

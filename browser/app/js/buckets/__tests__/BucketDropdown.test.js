@@ -38,7 +38,7 @@ describe("BucketDropdown", () => {
       <BucketDropdown showBucketPolicy={showBucketPolicy} />
     )
     wrapper
-      .find("li a")
+      .find("MenuItem")
       .at(0)
       .simulate("click", {
         stopPropagation: jest.fn()
@@ -52,7 +52,7 @@ describe("BucketDropdown", () => {
       <BucketDropdown bucket={"test"} deleteBucket={deleteBucket} />
     )
     wrapper
-      .find("li a")
+      .find("MenuItem")
       .at(1)
       .simulate("click", {
         stopPropagation: jest.fn()

@@ -35,7 +35,7 @@ describe("AboutModal", () => {
     const wrapper = shallow(
       <AboutModal serverInfo={serverInfo} hideAbout={hideAbout} />
     )
-    wrapper.find("button").simulate("click")
+    wrapper.find("i").simulate("click")
     expect(hideAbout).toHaveBeenCalled()
   })
 })

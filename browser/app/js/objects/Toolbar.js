@@ -31,7 +31,7 @@ import {
   SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
-export class ObjectsBulkActions extends React.Component {
+export class Toolbar extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
@@ -141,4 +141,4 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectsBulkActions)
+export default connect(mapStateToProps, mapDispatchToProps)(Toolbar)

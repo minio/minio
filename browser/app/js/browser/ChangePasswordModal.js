@@ -136,7 +136,7 @@ export class ChangePasswordModal extends React.Component {
             <input
               type={this.state.secretKeyVisible ? "text" : "password"}
               value={this.state.secretKey}
-              onChange={this.accessKeyChange.bind(this)}
+              onChange={this.secretKeyChange.bind(this)}
               id="secretKey"
               className="form-group__field"
               name="secretKey"

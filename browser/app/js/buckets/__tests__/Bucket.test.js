@@ -28,7 +28,7 @@ describe("Bucket", () => {
     const wrapper = shallow(
       <Bucket bucket={"test"} selectBucket={selectBucket} />
     )
-    wrapper.find("li").simulate("click", {
+    wrapper.find("div").simulate("click", {
       preventDefault: jest.fn()
     })
     expect(selectBucket).toHaveBeenCalledWith("test")
@@ -36,6 +36,6 @@ describe("Bucket", () => {
 
   it("should highlight the selected bucket", () => {
     const wrapper = shallow(<Bucket bucket={"test"} isActive={true} />)
-    expect(wrapper.find("li").hasClass("active")).toBeTruthy()
+    expect(wrapper.find("div").hasClass("buckets__item--active")).toBeTruthy()
   })
 })

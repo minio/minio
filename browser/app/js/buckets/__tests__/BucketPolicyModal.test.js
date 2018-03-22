@@ -29,7 +29,7 @@ describe("BucketPolicyModal", () => {
     const wrapper = shallow(
       <BucketPolicyModal hideBucketPolicy={hideBucketPolicy} policies={[]} />
     )
-    wrapper.find("button").simulate("click")
+    wrapper.find("i.close").simulate("click")
     expect(hideBucketPolicy).toHaveBeenCalled()
   })
 

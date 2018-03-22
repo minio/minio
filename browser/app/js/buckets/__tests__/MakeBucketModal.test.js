@@ -28,7 +28,7 @@ describe("MakeBucketModal", () => {
     const wrapper = shallow(
       <MakeBucketModal hideMakeBucketModal={hideMakeBucketModal} />
     )
-    wrapper.find("button").simulate("click")
+    wrapper.find("i.close").simulate("click")
     expect(hideMakeBucketModal).toHaveBeenCalled()
   })
 
@@ -43,7 +43,7 @@ describe("MakeBucketModal", () => {
       }
     })
     expect(wrapper.state("bucketName")).toBe("test")
-    wrapper.find("button").simulate("click")
+    wrapper.find("i.close").simulate("click")
     expect(wrapper.state("bucketName")).toBe("")
   })
 
