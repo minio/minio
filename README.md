@@ -80,6 +80,41 @@ Source installation is only intended for developers and advanced users. If you d
 go get -u github.com/minio/minio
 ```
 
+## Allow port access for Firewalls
+
+By default Minio uses the port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port.
+
+### iptables
+
+For hosts with iptables enabled (RHEL, CentOS, etc), you can use `iptables` command to enable all traffic coming to specific ports. Use below command to allow
+access to port 9000
+
+```sh
+iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
+service iptables restart
+```
+
+Below command enables all incoming traffic to ports ranging from 9000 to 9010.
+
+```sh
+iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
+service iptables restart
+```
+
+### ufw in Debian
+
+For hosts with ufw enabled (Debian based distros), you can use `ufw` command to allow traffic to specific ports. Use below command to allow access to port 9000
+
+```sh
+ufw allow 9000
+```
+
+Below command enables all incoming traffic to ports ranging from 9000 to 9010.
+
+```sh
+ufw allow 9000:9010/tcp
+```
+
 ## Test using Minio Browser
 Minio Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 ensure your server has started successfully.
 
