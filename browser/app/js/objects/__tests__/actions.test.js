@@ -438,6 +438,11 @@ describe("Objects actions", () => {
       Object.defineProperty(window, "location", {
         set(url) {
           setLocation(url)
+        },
+        get() {
+          return {
+            origin: "http://localhost:8080"
+          }
         }
       })
       const store = mockStore({
@@ -460,6 +465,11 @@ describe("Objects actions", () => {
       Object.defineProperty(window, "location", {
         set(url) {
           setLocation(url)
+        },
+        get() {
+          return {
+            origin: "http://localhost:8080"
+          }
         }
       })
       const store = mockStore({
