@@ -1312,7 +1312,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Get object location.
-	location := getLocation(r)
+	location := getObjectLocation(r, globalDomainName, bucket, object)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
 	encodedSuccessResponse := encodeResponse(response)
