@@ -62,10 +62,7 @@ export class BucketList extends React.Component {
     const { filteredBuckets } = this.props
     const visibleBuckets = filteredBuckets.slice(0, this.state.page * 100)
     return (
-      <div
-        className="buckets__list"
-        style={{ height: "calc(100vh - 246px)", overflow: "auto" }}
-      >
+      <div className="buckets__list">
         <InfiniteScroll
           pageStart={0}
           loadMore={this.loadNextPage.bind(this)}
@@ -73,6 +70,7 @@ export class BucketList extends React.Component {
           useWindow={false}
           element="div"
           initialLoad={false}
+          className="buckets__scroll"
         >
           {visibleBuckets.map(bucket => (
             <BucketContainer key={bucket} bucket={bucket} />
