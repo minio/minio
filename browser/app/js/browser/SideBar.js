@@ -30,7 +30,7 @@ export const SideBar = ({ sidebarOpen }) => {
     <aside
       className={classNames({
         sidebar: true,
-        "sidebar--toggled": sidebarOpen,
+        "sidebar--toggled": sidebarOpen
       })}
     >
       <div className="sidebar__inner">
@@ -53,13 +53,13 @@ export const SideBar = ({ sidebarOpen }) => {
 
 const mapStateToProps = state => {
   return {
-    sidebarOpen: state.browser.sidebarOpen,
+    sidebarOpen: state.browser.sidebarOpen
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar()),
+    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar())
   }
 }
 

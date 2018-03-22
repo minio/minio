@@ -21,7 +21,7 @@ describe("alert reducer", () => {
   it("should return the initial state", () => {
     expect(reducer(undefined, {})).toEqual({
       show: false,
-      type: "danger",
+      type: "danger"
     })
   })
 
@@ -32,14 +32,14 @@ describe("alert reducer", () => {
         alert: {
           id: 1,
           type: "danger",
-          message: "Test message",
-        },
-      }),
+          message: "Test message"
+        }
+      })
     ).toEqual({
       show: true,
       id: 1,
       type: "danger",
-      message: "Test message",
+      message: "Test message"
     })
   })
 
@@ -49,15 +49,15 @@ describe("alert reducer", () => {
         {
           show: true,
           type: "danger",
-          message: "Test message",
+          message: "Test message"
         },
         {
-          type: actionsAlert.CLEAR,
-        },
-      ),
+          type: actionsAlert.CLEAR
+        }
+      )
     ).toEqual({
       show: false,
-      type: "danger",
+      type: "danger"
     })
   })
 
@@ -68,18 +68,18 @@ describe("alert reducer", () => {
           show: true,
           id: 1,
           type: "danger",
-          message: "Test message",
+          message: "Test message"
         },
         {
           type: actionsAlert.CLEAR,
           alert: {
-            id: 1,
-          },
-        },
-      ),
+            id: 1
+          }
+        }
+      )
     ).toEqual({
       show: false,
-      type: "danger",
+      type: "danger"
     })
   })
 
@@ -90,20 +90,20 @@ describe("alert reducer", () => {
           show: true,
           id: 1,
           type: "danger",
-          message: "Test message",
+          message: "Test message"
         },
         {
           type: actionsAlert.CLEAR,
           alert: {
-            id: 2,
-          },
-        },
-      ),
+            id: 2
+          }
+        }
+      )
     ).toEqual({
       show: true,
       id: 1,
       type: "danger",
-      message: "Test message",
+      message: "Test message"
     })
   })
 })

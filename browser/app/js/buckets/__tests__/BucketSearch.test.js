@@ -28,8 +28,8 @@ describe("BucketSearch", () => {
     const wrapper = shallow(<BucketSearch onChange={onChange} />)
     wrapper.find("input").simulate("change", {
       target: {
-        value: "test",
-      },
+        value: "test"
+      }
     })
     expect(onChange).toHaveBeenCalledWith("test")
   })

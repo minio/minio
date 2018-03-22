@@ -23,7 +23,7 @@ export class MakeBucketModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      bucketName: "",
+      bucketName: ""
     }
   }
   onSubmit(e) {
@@ -37,7 +37,7 @@ export class MakeBucketModal extends React.Component {
   }
   hideModal() {
     this.setState({
-      bucketName: "",
+      bucketName: ""
     })
     this.props.hideMakeBucketModal()
   }
@@ -62,7 +62,7 @@ export class MakeBucketModal extends React.Component {
                 value={this.state.bucketName}
                 onChange={e =>
                   this.setState({
-                    bucketName: e.target.value,
+                    bucketName: e.target.value
                   })
                 }
                 autoFocus
@@ -78,14 +78,14 @@ export class MakeBucketModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    showMakeBucketModal: state.buckets.showMakeBucketModal,
+    showMakeBucketModal: state.buckets.showMakeBucketModal
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     makeBucket: bucket => dispatch(actionsBuckets.makeBucket(bucket)),
-    hideMakeBucketModal: () => dispatch(actionsBuckets.hideMakeBucketModal()),
+    hideMakeBucketModal: () => dispatch(actionsBuckets.hideMakeBucketModal())
   }
 }
 

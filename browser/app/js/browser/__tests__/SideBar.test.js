@@ -19,7 +19,7 @@ import { shallow } from "enzyme"
 import { SideBar } from "../SideBar"
 
 jest.mock("../../web", () => ({
-  LoggedIn: jest.fn(() => false).mockReturnValueOnce(true),
+  LoggedIn: jest.fn(() => false).mockReturnValueOnce(true)
 }))
 
 describe("SideBar", () => {
@@ -36,7 +36,7 @@ describe("SideBar", () => {
     const clickOutside = jest.fn()
     const wrapper = shallow(<SideBar clickOutside={clickOutside} />)
     wrapper.simulate("clickOut", {
-      preventDefault: jest.fn(),
+      preventDefault: jest.fn()
     })
     expect(clickOutside).toHaveBeenCalled()
   })

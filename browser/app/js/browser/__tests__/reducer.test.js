@@ -23,9 +23,9 @@ describe("common reducer", () => {
       sidebarOpen: false,
       storageInfo: {
         total: 0,
-        free: 0,
+        free: 0
       },
-      serverInfo: {},
+      serverInfo: {}
     })
   })
 
@@ -33,14 +33,14 @@ describe("common reducer", () => {
     expect(
       reducer(
         {
-          sidebarOpen: false,
+          sidebarOpen: false
         },
         {
-          type: actionsCommon.TOGGLE_SIDEBAR,
-        },
-      ),
+          type: actionsCommon.TOGGLE_SIDEBAR
+        }
+      )
     ).toEqual({
-      sidebarOpen: true,
+      sidebarOpen: true
     })
   })
 
@@ -48,14 +48,14 @@ describe("common reducer", () => {
     expect(
       reducer(
         {
-          sidebarOpen: true,
+          sidebarOpen: true
         },
         {
-          type: actionsCommon.CLOSE_SIDEBAR,
-        },
-      ),
+          type: actionsCommon.CLOSE_SIDEBAR
+        }
+      )
     ).toEqual({
-      sidebarOpen: false,
+      sidebarOpen: false
     })
   })
 
@@ -67,15 +67,15 @@ describe("common reducer", () => {
           type: actionsCommon.SET_STORAGE_INFO,
           storageInfo: {
             total: 100,
-            free: 40,
-          },
-        },
-      ),
+            free: 40
+          }
+        }
+      )
     ).toEqual({
       storageInfo: {
         total: 100,
-        free: 40,
-      },
+        free: 40
+      }
     })
   })
 
@@ -88,15 +88,15 @@ describe("common reducer", () => {
           memory: "test",
           platform: "test",
           runtime: "test",
-          info: "test",
-        },
-      }).serverInfo,
+          info: "test"
+        }
+      }).serverInfo
     ).toEqual({
       version: "test",
       memory: "test",
       platform: "test",
       runtime: "test",
-      info: "test",
+      info: "test"
     })
   })
 })

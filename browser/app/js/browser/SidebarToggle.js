@@ -30,13 +30,13 @@ export const SidebarToggle = ({ sidebarOpen, toggleSidebar }) => (
 
 const mapStateToProps = state => {
   return {
-    sidebarOpen: state.browser.sidebarOpen,
+    sidebarOpen: state.browser.sidebarOpen
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar()),
+    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar())
   }
 }
 

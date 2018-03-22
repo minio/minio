@@ -24,7 +24,7 @@ import * as alertActions from "../alert/actions"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
-  SHARE_OBJECT_EXPIRY_MINUTES,
+  SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
 export class ShareObjectModal extends React.Component {
@@ -34,22 +34,22 @@ export class ShareObjectModal extends React.Component {
       expiry: {
         days: SHARE_OBJECT_EXPIRY_DAYS,
         hours: SHARE_OBJECT_EXPIRY_HOURS,
-        minutes: SHARE_OBJECT_EXPIRY_MINUTES,
-      },
+        minutes: SHARE_OBJECT_EXPIRY_MINUTES
+      }
     }
     this.expiryRange = {
       days: {
         min: 0,
-        max: 7,
+        max: 7
       },
       hours: {
         min: 0,
-        max: 23,
+        max: 23
       },
       minutes: {
         min: 0,
-        max: 59,
-      },
+        max: 59
+      }
     }
   }
 
@@ -75,7 +75,7 @@ export class ShareObjectModal extends React.Component {
     }
 
     this.setState({
-      expiry,
+      expiry
     })
 
     const { shareObjectDetails: { object }, shareObject } = this.props
@@ -207,7 +207,7 @@ export class ShareObjectModal extends React.Component {
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    shareObjectDetails: state.objects.shareObject,
+    shareObjectDetails: state.objects.shareObject
   }
 }
 
@@ -220,9 +220,9 @@ const mapDispatchToProps = dispatch => {
       dispatch(
         alertActions.set({
           type: "success",
-          message: message,
-        }),
-      ),
+          message: message
+        })
+      )
   }
 }
 

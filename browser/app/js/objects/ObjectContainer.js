@@ -27,14 +27,14 @@ export const ObjectContainer = ({ object, downloadObject }) => {
     name: object.name,
     contentType: object.contentType,
     size: humanize.filesize(object.size),
-    lastModified: Moment(object.lastModified).format("lll"),
+    lastModified: Moment(object.lastModified).format("lll")
   }
   return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    downloadObject: object => dispatch(actionsObjects.downloadObject(object)),
+    downloadObject: object => dispatch(actionsObjects.downloadObject(object))
   }
 }
 

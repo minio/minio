@@ -24,7 +24,7 @@ describe("StorageInfo", () => {
       <StorageInfo
         storageInfo={{ total: 100, free: 60 }}
         fetchStorageInfo={jest.fn()}
-      />,
+      />
     )
   })
 
@@ -34,7 +34,7 @@ describe("StorageInfo", () => {
       <StorageInfo
         storageInfo={{ total: 100, free: 60 }}
         fetchStorageInfo={fetchStorageInfo}
-      />,
+      />
     )
     expect(fetchStorageInfo).toHaveBeenCalled()
   })

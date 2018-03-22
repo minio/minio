@@ -34,7 +34,7 @@ describe("ObjectsBulkActions", () => {
       <ObjectsBulkActions
         checkedObjectsCount={1}
         downloadChecked={downloadChecked}
-      />,
+      />
     )
     wrapper.find("#download-checked").simulate("click")
     expect(downloadChecked).toHaveBeenCalled()
@@ -43,10 +43,7 @@ describe("ObjectsBulkActions", () => {
   it("should call clearChecked when close button is clicked", () => {
     const clearChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions
-        checkedObjectsCount={1}
-        clearChecked={clearChecked}
-      />,
+      <ObjectsBulkActions checkedObjectsCount={1} clearChecked={clearChecked} />
     )
     wrapper.find("#close-bulk-actions").simulate("click")
     expect(clearChecked).toHaveBeenCalled()
@@ -65,7 +62,7 @@ describe("ObjectsBulkActions", () => {
       <ObjectsBulkActions
         checkedObjectsCount={1}
         deleteChecked={deleteChecked}
-      />,
+      />
     )
     wrapper.find("#delete-checked").simulate("click")
     wrapper.update()

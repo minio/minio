@@ -63,7 +63,7 @@ export default class JSONrpc {
       id: options.id,
       jsonrpc: this.version,
       params: options.params ? options.params : {},
-      method: this.namespace ? this.namespace + "." + method : method,
+      method: this.namespace ? this.namespace + "." + method : method
     }
     let requestParams = {
       host: this.host,
@@ -76,8 +76,8 @@ export default class JSONrpc {
         "x-amz-date":
           Moment()
             .utc()
-            .format("YYYYMMDDTHHmmss") + "Z",
-      },
+            .format("YYYYMMDDTHHmmss") + "Z"
+      }
     }
 
     if (token) {

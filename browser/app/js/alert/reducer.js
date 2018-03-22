@@ -18,7 +18,7 @@ import * as actionsAlert from "./actions"
 
 const initialState = {
   show: false,
-  type: "danger",
+  type: "danger"
 }
 export default (state = initialState, action) => {
   switch (action.type) {
@@ -27,7 +27,7 @@ export default (state = initialState, action) => {
         show: true,
         id: action.alert.id,
         type: action.alert.type,
-        message: action.alert.message,
+        message: action.alert.message
       }
     case actionsAlert.CLEAR:
       if (action.alert && action.alert.id != state.id) {

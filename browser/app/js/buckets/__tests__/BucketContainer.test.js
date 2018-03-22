@@ -26,8 +26,8 @@ describe("BucketContainer", () => {
   beforeEach(() => {
     store = mockStore({
       buckets: {
-        currentBucket: "Test",
-      },
+        currentBucket: "Test"
+      }
     })
     store.dispatch = jest.fn()
   })
@@ -41,8 +41,8 @@ describe("BucketContainer", () => {
     expect(wrapper.props()).toEqual(
       expect.objectContaining({
         isActive: expect.any(Boolean),
-        selectBucket: expect.any(Function),
-      }),
+        selectBucket: expect.any(Function)
+      })
     )
   })
 

@@ -22,11 +22,11 @@ export const SET_STORAGE_INFO = "common/SET_STORAGE_INFO"
 export const SET_SERVER_INFO = "common/SET_SERVER_INFO"
 
 export const toggleSidebar = () => ({
-  type: TOGGLE_SIDEBAR,
+  type: TOGGLE_SIDEBAR
 })
 
 export const closeSidebar = () => ({
-  type: CLOSE_SIDEBAR,
+  type: CLOSE_SIDEBAR
 })
 
 export const fetchStorageInfo = () => {
@@ -34,7 +34,7 @@ export const fetchStorageInfo = () => {
     return web.StorageInfo().then(res => {
       const storageInfo = {
         total: res.storageInfo.Total,
-        free: res.storageInfo.Free,
+        free: res.storageInfo.Free
       }
       dispatch(setStorageInfo(storageInfo))
     })
@@ -43,7 +43,7 @@ export const fetchStorageInfo = () => {
 
 export const setStorageInfo = storageInfo => ({
   type: SET_STORAGE_INFO,
-  storageInfo,
+  storageInfo
 })
 
 export const fetchServerInfo = () => {
@@ -54,7 +54,7 @@ export const fetchServerInfo = () => {
         memory: res.MinioMemory,
         platform: res.MinioPlatform,
         runtime: res.MinioRuntime,
-        info: res.MinioGlobalInfo,
+        info: res.MinioGlobalInfo
       }
       dispatch(setServerInfo(serverInfo))
     })
@@ -63,5 +63,5 @@ export const fetchServerInfo = () => {
 
 export const setServerInfo = serverInfo => ({
   type: SET_SERVER_INFO,
-  serverInfo,
+  serverInfo
 })

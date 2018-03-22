@@ -22,7 +22,7 @@ describe("uploads reducer", () => {
     const initialState = reducer(undefined, {})
     expect(initialState).toEqual({
       files: {},
-      showAbortModal: false,
+      showAbortModal: false
     })
   })
 
@@ -31,14 +31,14 @@ describe("uploads reducer", () => {
       type: actions.ADD,
       slug: "a-b-c",
       size: 100,
-      name: "test",
+      name: "test"
     })
     expect(newState.files).toEqual({
       "a-b-c": {
         loaded: 0,
         size: 100,
-        name: "test",
-      },
+        name: "test"
+      }
     })
   })
 
@@ -49,22 +49,22 @@ describe("uploads reducer", () => {
           "a-b-c": {
             loaded: 0,
             size: 100,
-            name: "test",
-          },
-        },
+            name: "test"
+          }
+        }
       },
       {
         type: actions.UPDATE_PROGRESS,
         slug: "a-b-c",
-        loaded: 50,
-      },
+        loaded: 50
+      }
     )
     expect(newState.files).toEqual({
       "a-b-c": {
         loaded: 50,
         size: 100,
-        name: "test",
-      },
+        name: "test"
+      }
     })
   })
 
@@ -75,38 +75,38 @@ describe("uploads reducer", () => {
           "a-b-c": {
             loaded: 70,
             size: 100,
-            name: "test1",
+            name: "test1"
           },
           "x-y-z": {
             loaded: 50,
             size: 100,
-            name: "test2",
-          },
-        },
+            name: "test2"
+          }
+        }
       },
       {
         type: actions.STOP,
-        slug: "a-b-c",
-      },
+        slug: "a-b-c"
+      }
     )
     expect(newState.files).toEqual({
       "x-y-z": {
         loaded: 50,
         size: 100,
-        name: "test2",
-      },
+        name: "test2"
+      }
     })
   })
 
   it("should handle SHOW_ABORT_MODAL", () => {
     const newState = reducer(
       {
-        showAbortModal: false,
+        showAbortModal: false
       },
       {
         type: actions.SHOW_ABORT_MODAL,
-        show: true,
-      },
+        show: true
+      }
     )
     expect(newState.showAbortModal).toBeTruthy()
   })

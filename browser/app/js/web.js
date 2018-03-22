@@ -24,16 +24,16 @@ class Web {
     const namespace = "Web"
     this.JSONrpc = new JSONrpc({
       endpoint,
-      namespace,
+      namespace
     })
   }
   makeCall(method, options) {
     return this.JSONrpc.call(
       method,
       {
-        params: options,
+        params: options
       },
-      storage.getItem("token"),
+      storage.getItem("token")
     )
       .catch(err => {
         if (err.status === 401) {
@@ -132,7 +132,7 @@ class Web {
 const web = new Web(
   `${window.location.protocol}//${
     window.location.host
-  }${minioBrowserPrefix}/webrpc`,
+  }${minioBrowserPrefix}/webrpc`
 )
 
 export default web

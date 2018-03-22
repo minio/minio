@@ -25,7 +25,7 @@ export const BucketPolicyModal = ({
   showBucketPolicy,
   currentBucket,
   hideBucketPolicy,
-  policies,
+  policies
 }) => {
   return (
     <Modal
@@ -53,13 +53,13 @@ const mapStateToProps = state => {
   return {
     currentBucket: state.buckets.currentBucket,
     showBucketPolicy: state.buckets.showBucketPolicy,
-    policies: state.buckets.policies,
+    policies: state.buckets.policies
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    hideBucketPolicy: () => dispatch(actionsBuckets.hideBucketPolicy()),
+    hideBucketPolicy: () => dispatch(actionsBuckets.hideBucketPolicy())
   }
 }
 

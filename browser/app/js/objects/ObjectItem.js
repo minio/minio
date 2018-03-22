@@ -29,13 +29,13 @@ export const ObjectItem = ({
   checked,
   checkObject,
   uncheckObject,
-  onClick,
+  onClick
 }) => {
   return (
     <div
       className={classNames({
         objects__row: true,
-        "objects__row--directory": getDataType(name, contentType) == "folder",
+        "objects__row--directory": getDataType(name, contentType) == "folder"
       })}
     >
       <div
@@ -75,14 +75,14 @@ export const ObjectItem = ({
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    checked: getCheckedList(state).indexOf(ownProps.name) >= 0,
+    checked: getCheckedList(state).indexOf(ownProps.name) >= 0
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     checkObject: name => dispatch(actions.checkObject(name)),
-    uncheckObject: name => dispatch(actions.uncheckObject(name)),
+    uncheckObject: name => dispatch(actions.uncheckObject(name))
   }
 }
 

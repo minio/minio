@@ -54,16 +54,16 @@ const mapStateToProps = state => {
     currentBucket: state.buckets.currentBucket,
     currentPrefix: state.objects.currentPrefix,
     objects: state.objects.list,
-    isTruncated: state.objects.isTruncated,
+    isTruncated: state.objects.isTruncated
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    loadObjects: append => dispatch(actionsObjects.fetchObjects(append)),
+    loadObjects: append => dispatch(actionsObjects.fetchObjects(append))
   }
 }
 
 export default connect(mapStateToProps, mapDispatchToProps)(
-  ObjectsListContainer,
+  ObjectsListContainer
 )

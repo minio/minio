@@ -25,7 +25,7 @@ import { getPrefixWritable } from "../objects/selectors"
 export const MainActions = ({
   prefixWritable,
   uploadFile,
-  showMakeBucketModal,
+  showMakeBucketModal
 }) => {
   const uploadTooltip = <Tooltip id="tooltip-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
@@ -89,14 +89,14 @@ export const MainActions = ({
 
 const mapStateToProps = state => {
   return {
-    prefixWritable: getPrefixWritable(state),
+    prefixWritable: getPrefixWritable(state)
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     uploadFile: file => dispatch(uploadsActions.uploadFile(file)),
-    showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal()),
+    showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal())
   }
 }
 
