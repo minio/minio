@@ -7,7 +7,7 @@ Following network parameter settings can help ensure optimal Minio server perfor
 - *`tcp_fin_timeout`* : A socket left in memory takes approximately 1.5Kb of memory. It makes sense to close the unused sockets preemptively to ensure no memory leakage. This way, even if a peer doesn't close the socket due to some reason, the system itself closes it after a timeout. `tcp_fin_timeout` variable defines this timeout and tells kernel how long to keep sockets in the state FIN-WAIT-2. We recommend setting it to 30. You can set it as shown below
 
 ```sh
-`sysctl -w net.ipv4.tcp_fin_timeout=30`
+sysctl -w net.ipv4.tcp_fin_timeout=30
 ```
 
 - *`tcp_keepalive_probes`* : This variable defines the number of unacknowledged probes to be sent before considering a connection dead. You can set it as shown below
