@@ -3,13 +3,15 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     color: @white;
     width: 100%;
-    padding: 1.5rem 3rem 1.5rem 2rem;
+    padding: 1.5rem 4rem 1.5rem 2rem;
     z-index: 1000000;
     .animation-duration(800ms);
     .animation-fill-mode(both);
     font-size: @font-size-small;
+    word-wrap: break-word;
 
     &:not(.alert--upload) {
+        text-align: center;
         top: 1.5rem;
         max-width: 500px;
         border-radius: @border-radius-base;
@@ -22,7 +24,7 @@
 
     @media(max-width: (@screen-xs-max)) {
         left: 1.5rem;
-        width: ~"calc(100% - 3rem)";
+        width: ~"calc(100% - 4rem)";
         max-width: 100%;
     }
 
