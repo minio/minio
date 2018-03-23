@@ -430,7 +430,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Make sure to add Location information here only for bucket
-	w.Header().Set("Location", getLocation(r))
+	w.Header().Set("Location", path.Clean(r.URL.Path)) // Clean any trailing slashes.
 
 	writeSuccessResponseHeadersOnly(w)
 }

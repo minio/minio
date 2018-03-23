@@ -268,11 +268,6 @@ type PostResponse struct {
 	Location string
 }
 
-// getLocation get URL location.
-func getLocation(r *http.Request) string {
-	return path.Clean(r.URL.Path) // Clean any trailing slashes.
-}
-
 // returns "https" if the tls boolean is true, "http" otherwise.
 func getURLScheme(tls bool) string {
 	if tls {
@@ -283,6 +278,10 @@ func getURLScheme(tls bool) string {
 
 // getObjectLocation gets the fully qualified URL of an object.
 func getObjectLocation(r *http.Request, domain, bucket, object string) string {
+	// unit tests do not have host set.
+	if r.Host == "" {
+		return path.Clean(r.URL.Path)
+	}
 	proto := handlers.GetSourceScheme(r)
 	if proto == "" {
 		proto = getURLScheme(globalIsSSL)
