@@ -25,7 +25,7 @@ script:
 - make test GOFLAGS="-timeout 15m -race -v"
 - make coverage
 - node --version
-- cd browser && yarn && yarn test && cd ..
+- cd browser && yarn && yarn eslint && yarn test && cd ..
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)
