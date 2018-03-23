@@ -1669,7 +1669,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 
 	// create listObjectsV1 request with valid parameters
-	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000"),
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}
@@ -1680,10 +1680,42 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 
 	getContent, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
+	c.Assert(strings.Contains(string(getContent), "<Prefix></Prefix>"), true)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), true)
 
+	// create listObjectsV1 request with prefix "/"
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000", "/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, nil)
+	c.Assert(strings.Contains(string(getContent), "<Prefix>/</Prefix>"), true)
+	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), false)
+
+	// create listObjectsV1 request with prefix "/bar"
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000", "/bar"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, nil)
+	c.Assert(strings.Contains(string(getContent), "<Prefix>/bar</Prefix>"), true)
+	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), false)
+	c.Assert(strings.Contains(string(getContent), "<Key>/bar</Key>"), false)
+
 	// create listObjectsV2 request with valid parameters
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", ""),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}
@@ -1698,7 +1730,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	c.Assert(strings.Contains(string(getContent), "<Owner><ID></ID><DisplayName></DisplayName></Owner>"), true)
 
 	// create listObjectsV2 request with valid parameters and fetch-owner activated
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "true"),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "true", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}
@@ -1710,10 +1742,40 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	getContent, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
 
+	c.Assert(strings.Contains(string(getContent), "<Prefix></Prefix>"), true)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), true)
 	c.Assert(strings.Contains(string(getContent), fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>",
 		globalMinioDefaultOwnerID)), true)
 
+	// create listObjectsV2 request with prefix "/"
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "", "/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, nil)
+	c.Assert(strings.Contains(string(getContent), "<KeyCount>0</KeyCount>"), true)
+	c.Assert(strings.Contains(string(getContent), "<Prefix>/</Prefix>"), true)
+
+	// create listObjectsV2 request with prefix "/bar"
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "", "/bar"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, nil)
+	c.Assert(strings.Contains(string(getContent), "<KeyCount>0</KeyCount>"), true)
+	c.Assert(strings.Contains(string(getContent), "<Prefix>/bar</Prefix>"), true)
 }
 
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
@@ -1733,7 +1795,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 
 	// create listObjectsV1 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "-2"),
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "-2", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}
@@ -1744,7 +1806,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 
 	// create listObjectsV2 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2", ""),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2", "", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}

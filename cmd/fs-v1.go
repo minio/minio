@@ -913,12 +913,10 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return loi, nil
 	}
 
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter'
-	// along // with the prefix. On a flat namespace with 'prefix'
+	// On a flat namespace with 'prefix'
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
+	if hasPrefix(prefix, slashSeparator) {
 		return loi, nil
 	}
 
