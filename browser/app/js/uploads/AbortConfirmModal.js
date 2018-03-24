@@ -46,7 +46,7 @@ export class AbortConfirmModal extends React.Component {
         show={true}
         baseClass={baseClass}
         text="Abort uploads in progress?"
-        icon="fa fa-info-circle mci-amber"
+        icon="zmdi zmdi-info-outline"
         sub="This cannot be undone!"
         okText="Abort"
         okIcon={okIcon}

@@ -36,7 +36,7 @@ let BrowserUpdate = ({ latestUiVersion }) => {
           }
         >
           {" "}
-          <i className="fa fa-refresh" />{" "}
+          <i className="zmdi zmdi-refresh" />{" "}
         </OverlayTrigger>
       </a>
     </li>

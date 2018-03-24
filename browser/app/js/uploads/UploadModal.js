@@ -57,7 +57,7 @@ export class UploadModal extends React.Component {
       "..."
 
     return (
-      <div className="alert alert-info alert--upload animated fadeInUp ">
+      <div className="alert alert-info alert--upload">
         <button
           type="button"
           className="close close--alt"
