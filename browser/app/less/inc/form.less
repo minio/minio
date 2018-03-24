@@ -1,102 +1,99 @@
 // Form Group
 .form-group {
-    position: relative;
+  position: relative;
 
-    &:not(:only-child):not(:last-child) {
-        margin-bottom: 1.25rem;
-    }
+  &:not(:only-child):not(:last-child) {
+    margin-bottom: 1.25rem;
+  }
 
-    & > label {
-        font-size: @font-size-extra-small;
-        font-weight: @font-weight-bold;
-        text-transform: uppercase;
-    }
+  & > label {
+    font-size: @font-size-extra-small;
+    font-weight: @font-weight-bold;
+    text-transform: uppercase;
+  }
 }
 
 .form-group--centered {
-    .form-group__field {
-        text-align: center;
-    }
+  .form-group__field {
+    text-align: center;
+  }
 }
-
 
 // Field
 .form-group__field {
-    border: 0;
-    border-bottom: 1px solid @input-border-color;
-    color: @input-color;
-    width: 100%;
-    font-size: @font-size-small;
-    background-color: @input-bg;
-    padding: 0 1px;
-    height: @input-height;
-    outline: 0;
-    box-shadow: none;
-    .placeholder(@text-muted-color);
+  border: 0;
+  border-bottom: 1px solid @input-border-color;
+  color: @input-color;
+  width: 100%;
+  font-size: @font-size-small;
+  background-color: @input-bg;
+  padding: 0 1px;
+  height: @input-height;
+  outline: 0;
+  box-shadow: none;
+  .placeholder(@text-muted-color);
 
-    &:focus {
-        & ~ .form-group__helper {
-            width: 100%;
-        }
+  &:focus {
+    & ~ .form-group__helper {
+      width: 100%;
     }
+  }
 }
 
 .form-group__field--static {
-    border: 0;
+  border: 0;
 }
-
 
 // Helper (blue bar)
 .form-group__helper {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 2px;
-    width: 0;
-    background-color: @blue;
-    z-index: 1;
-    .transition(width);
-    .transition-duration(300ms);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background-color: @blue;
+  z-index: 1;
+  .transition(width);
+  .transition-duration(300ms);
 }
-
 
 // Form group with icons and addons
 .form-group--icon {
-    .form-group__field {
-        padding-left: 2.4rem;
-    }
+  .form-group__field {
+    padding-left: 2.4rem;
+  }
 }
 
 .form-group__icon {
-    font-size: 1.15rem;
-    color: @headings-color;
-    position: absolute;
-    bottom: 0.6rem;
-    left: 0.2rem;
+  font-size: 1.15rem;
+  color: @headings-color;
+  position: absolute;
+  bottom: 0.6rem;
+  left: 0.2rem;
 }
 
 .form-group__addon {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    height: @input-height;
-    border: 1px solid @input-border-color;
-    width: 2.5rem;
-    text-align: center;
-    line-height: 2.5rem;
-    background-color: @white;
-    font-size: 1.25rem;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  height: @input-height;
+  border: 1px solid @input-border-color;
+  width: 2.5rem;
+  text-align: center;
+  line-height: 2.5rem;
+  background-color: @white;
+  font-size: 1.25rem;
 
-    &.active {
-        color: @green;
-    }
+  &.active {
+    color: @green;
+  }
 }
-
 
 // Select
 select {
-    background-color: transparent;
-    .appearance(none);
-    border-radius: 0;
-    background: url(../../img/icons/select-caret.svg) no-repeat bottom 5px right 1px;
+  background-color: transparent;
+  .appearance(none);
+  border-radius: 0;
+  background: url(../../img/icons/select-caret.svg) no-repeat bottom 5px right
+    1px;
 }

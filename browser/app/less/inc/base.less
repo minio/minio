@@ -1,46 +1,51 @@
 * {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    box-sizing: border-box;
-    -webkit-box-sizing: border-box;
-    -moz-box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
 
-    &:focus,
-    &:active {
-        outline: 0;
-    }
+  &:focus,
+  &:active {
+    outline: 0;
+  }
 }
 
 html {
-    font-size: @font-size-base;
-    min-height: 100%;
+  font-size: @font-size-base;
+  min-height: 100%;
 }
 
 body {
-    background-color: @body-bg;
-    font-weight: @font-weight-normal;
-    font-family: @font-family-sans-serif;
-    line-height: @line-height-base;
-    color: @text-color;
+  background-color: @body-bg;
+  font-weight: @font-weight-normal;
+  font-family: @font-family-sans-serif;
+  line-height: @line-height-base;
+  color: @text-color;
 }
 
-h1, h2, h3, h4, h5, h6 {
-    font-family: @headings-font-family;
-    color: @headings-color;
-    font-weight: @font-weight-bold;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: @headings-font-family;
+  color: @headings-color;
+  font-weight: @font-weight-bold;
 }
 
 a {
-    color: @link-color;
-    text-decoration: @link-hover-decoration;
+  color: @link-color;
+  text-decoration: @link-hover-decoration;
 
-    &:hover {
-        color: darken(@link-color, 10%);
-    }
+  &:hover {
+    color: darken(@link-color, 10%);
+  }
 }
 
 button {
-    border: 0;
-    background-color: transparent;
-    padding: 0;
+  border: 0;
+  background-color: transparent;
+  padding: 0;
 }

@@ -1,64 +1,64 @@
 // Base
 .header {
-    z-index: @header-z-index;
+  z-index: @header-z-index;
 }
 
 // Toolbar
 .toolbar {
-    background-color: @toolbar-bg;
-    height: @toolbar-height;
-    display: flex;
-    align-items: center;
+  background-color: @toolbar-bg;
+  height: @toolbar-height;
+  display: flex;
+  align-items: center;
 
-    @media(min-width: @screen-sm-min) {
-        padding: 0 1.25rem 0;
-    }
+  @media (min-width: @screen-sm-min) {
+    padding: 0 1.25rem 0;
+  }
 
-    @media(max-width: @screen-xs-max) {
-        padding: 0 0.7rem;
-    }
+  @media (max-width: @screen-xs-max) {
+    padding: 0 0.7rem;
+  }
 }
 
 .toolbar__item {
-    &:not(.toolbar__item--alt) {
-        color: @text-color;
-        font-size: 1.25rem;
-        width: 2.6rem;
-        height: 2.6rem;
-        border-radius: 50%;
-        text-align: center;
-        vertical-align: middle;
-        display: inline-block;
-        margin: -0.1rem 0 0 0.5rem;
+  &:not(.toolbar__item--alt) {
+    color: @text-color;
+    font-size: 1.25rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    text-align: center;
+    vertical-align: middle;
+    display: inline-block;
+    margin: -0.1rem 0 0 0.5rem;
 
-        &:not(:disabled) {
-            cursor: pointer;
-            .transition(all);
-            .transition-duration(300ms);
+    &:not(:disabled) {
+      cursor: pointer;
+      .transition(all);
+      .transition-duration(300ms);
 
-            &:hover {
-                background-color: fade(@white, 50%);
-                color: darken(@text-color, 10%);
-            }
-        }
-
-        &:disabled {
-            opacity: 0.3;
-        }
-
-        &:first-child {
-            margin-left: 0;
-        }
+      &:hover {
+        background-color: fade(@white, 50%);
+        color: darken(@text-color, 10%);
+      }
     }
+
+    &:disabled {
+      opacity: 0.3;
+    }
+
+    &:first-child {
+      margin-left: 0;
+    }
+  }
 }
 
 .toolbar__item--alt {
-    align-self: center;
-    margin-left: 0.75rem;
+  align-self: center;
+  margin-left: 0.75rem;
 }
 
 .toolbar__end {
-    margin: 0 -0.5rem 0 auto;
-    display: flex;
-    align-content: center;
+  margin: 0 -0.5rem 0 auto;
+  display: flex;
+  align-content: center;
 }

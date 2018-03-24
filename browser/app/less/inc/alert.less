@@ -1,68 +1,68 @@
 .alert {
-    position: fixed;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    color: @white;
-    width: 100%;
-    padding: 1.5rem 4rem 1.5rem 2rem;
-    z-index: @alert-z-index;
-    font-size: @font-size-small;
-    word-wrap: break-word;
+  position: fixed;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  color: @white;
+  width: 100%;
+  padding: 1.5rem 4rem 1.5rem 2rem;
+  z-index: @alert-z-index;
+  font-size: @font-size-small;
+  word-wrap: break-word;
 
-    &:not(.alert--upload) {
-        text-align: center;
-        top: 1.5rem;
-        max-width: 500px;
-        border-radius: @border-radius-base;
+  &:not(.alert--upload) {
+    text-align: center;
+    top: 1.5rem;
+    max-width: 500px;
+    border-radius: @border-radius-base;
 
-        @media(min-width: (@screen-sm-min)) {
-            left: 50%;
-            margin-left: -250px;
-        }
+    @media (min-width: (@screen-sm-min)) {
+      left: 50%;
+      margin-left: -250px;
     }
+  }
 
-    @media(max-width: (@screen-xs-max)) {
-        left: 1.5rem;
-        width: ~"calc(100% - 4rem)";
-        max-width: 100%;
-    }
+  @media (max-width: (@screen-xs-max)) {
+    left: 1.5rem;
+    width: ~"calc(100% - 4rem)";
+    max-width: 100%;
+  }
 
-    .progress {
-        margin: 0.75rem 0;
-        height: 0.25rem;
-        box-shadow: none;
-        background-color: rgba(255,255,255,0.2);
-        border-radius: 2px;
-        overflow: hidden;
-    }
+  .progress {
+    margin: 0.75rem 0;
+    height: 0.25rem;
+    box-shadow: none;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
 
-    .progress-bar {
-        box-shadow: none;
-        background-color: @white;
-        height: 100%;
-    }
+  .progress-bar {
+    box-shadow: none;
+    background-color: @white;
+    height: 100%;
+  }
 
-    .close {
-        top: 1.3rem;
-        right: 1.5rem;
-    }
+  .close {
+    top: 1.3rem;
+    right: 1.5rem;
+  }
 }
 
 .alert-danger {
-    background: @red;
+  background: @red;
 }
 
 .alert-success {
-    background: @green;
+  background: @green;
 }
 
 .alert-info {
-    background: @blue;
+  background: @blue;
 }
 
 .alert--upload {
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    max-width: 100%;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.15);
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.15);
 }

@@ -1,42 +1,41 @@
 .about {
-
 }
 
 .about__logo {
-    background-color: @muted-bg;
-    width: 8rem;
-    display: flex;
-    justify-content: center;
-    border-radius: @border-radius-large 0 0 @border-radius-large;
+  background-color: @muted-bg;
+  width: 8rem;
+  display: flex;
+  justify-content: center;
+  border-radius: @border-radius-large 0 0 @border-radius-large;
 
-    & > img {
-        width: 5rem;
-    }
+  & > img {
+    width: 5rem;
+  }
 }
 
 .about__content {
-    display: flex;
+  display: flex;
 }
 
 .about__info {
-    padding: 3rem 2rem;
+  padding: 3rem 2rem;
 }
 
 .about__item {
-    & > strong {
-        font-weight: normal;
-        display: block;
-        color: @headings-color;
-        margin-bottom: 0.25rem;
-        text-transform: uppercase;
-        font-size: @font-size-small;
-    }
+  & > strong {
+    font-weight: normal;
+    display: block;
+    color: @headings-color;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    font-size: @font-size-small;
+  }
 
-    & > small {
-        color: @text-muted-color;
-    }
+  & > small {
+    color: @text-muted-color;
+  }
 
-    & + .about__item {
-        margin-top: 1rem;
-    }
+  & + .about__item {
+    margin-top: 1rem;
+  }
 }

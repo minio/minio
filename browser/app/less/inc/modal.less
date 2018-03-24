@@ -1,65 +1,64 @@
 // Base
 .modal {
-    .close {
-        top: 1.5rem;
-        right: 1.5rem;
-    }
+  .close {
+    top: 1.5rem;
+    right: 1.5rem;
+  }
 }
 
 .modal-dialog {
-    .animated(zoomIn, 200ms);
+  .animated(zoomIn, 200ms);
 }
 
 .modal-header {
-    color: @headings-color;
+  color: @headings-color;
 
-    & > small {
-        display: block;
-        margin-top: 0.25rem;
-        color: @text-muted-color;
-        font-size: @font-size-small;
-    }
+  & > small {
+    display: block;
+    margin-top: 0.25rem;
+    color: @text-muted-color;
+    font-size: @font-size-small;
+  }
 }
 
 .modal-content {
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.04);
 }
 
 .modal-footer {
-    text-align: left;
-    padding-top: 1rem;
+  text-align: left;
+  padding-top: 1rem;
 
-    .btn--link {
-        &:first-child {
-            margin-left: -0.5rem;
-        }
+  .btn--link {
+    &:first-child {
+      margin-left: -0.5rem;
     }
+  }
 }
-
 
 // Dialog
 .dialog {
-    text-align: center;
+  text-align: center;
 }
 
 .dialog__icon {
-    color: @red;
-    font-size: 3rem;
-    line-height: 100%;
-    margin-bottom: 0.5rem;
-    .animated('fadeInDown', 500ms);
+  color: @red;
+  font-size: 3rem;
+  line-height: 100%;
+  margin-bottom: 0.5rem;
+  .animated("fadeInDown", 500ms);
 }
 
-.dialog__text{
-    color: @headings-color;
+.dialog__text {
+  color: @headings-color;
 }
 
 .dialog__sub {
-    margin-top: 0.25rem;
-    font-size: @font-size-small;
-    color: @text-muted-color;
+  margin-top: 0.25rem;
+  font-size: @font-size-small;
+  color: @text-muted-color;
 }
 
 .dialog__actions {
-    margin-top: 2rem;
+  margin-top: 2rem;
 }

@@ -1,86 +1,86 @@
 .login {
-    height: 100vh;
-    padding: 1.5rem;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  height: 100vh;
+  padding: 1.5rem;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .login__inner {
-    max-width: 400px;
-    width: 90%;
-    flex-shrink: 0;
+  max-width: 400px;
+  width: 90%;
+  flex-shrink: 0;
 }
 
 .login__header {
-    margin-bottom: 1rem;
+  margin-bottom: 1rem;
 }
 
 .login__form {
-    background-color: @white;
-    padding: 2rem;
+  background-color: @white;
+  padding: 2rem;
 
-    .form-group__field {
-        text-align: center;
-    }
+  .form-group__field {
+    text-align: center;
+  }
 }
 
 .login__logo {
-    width: 2rem;
+  width: 2rem;
 }
 
 .login__host {
-    color: @text-muted-color;
-    margin-top: -0.5rem;
-    font-size: @font-size-small;
+  color: @text-muted-color;
+  margin-top: -0.5rem;
+  font-size: @font-size-small;
 }
 
 .login__btn {
-    margin-top: 0.5rem;
-    width: 2.6rem;
-    height: 2.6rem;
-    line-height: 100%;
-    border-radius: 50%;
-    background-color: transparent;
-    border: 1px solid darken(@input-border-color, 5%);
+  margin-top: 0.5rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  line-height: 100%;
+  border-radius: 50%;
+  background-color: transparent;
+  border: 1px solid darken(@input-border-color, 5%);
+  .transition(all);
+  .transition-duration(500ms);
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    border-color: darken(@input-border-color, 15%);
+
+    &:before {
+      left: 2.6rem;
+      .opacity(0);
+    }
+
+    &:after {
+      .opacity(1);
+      left: 0;
+    }
+  }
+
+  &:before,
+  &:after {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    content: "\f301";
+    font-family: @font-family-icon;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
     .transition(all);
-    .transition-duration(500ms);
-    position: relative;
-    overflow: hidden;
+    .transition-duration(300ms);
+  }
 
-    &:hover {
-        border-color: darken(@input-border-color, 15%);
-
-        &:before {
-            left: 2.6rem;
-            .opacity(0);
-        }
-
-        &:after {
-            .opacity(1);
-            left: 0;
-        }
-    }
-
-    &:before,
-    &:after {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        content: '\f301';
-        font-family: @font-family-icon;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        .transition(all);
-        .transition-duration(300ms);
-    }
-
-    &:after {
-        left: -2.6rem;
-        .opacity(0);
-    }
+  &:after {
+    left: -2.6rem;
+    .opacity(0);
+  }
 }
