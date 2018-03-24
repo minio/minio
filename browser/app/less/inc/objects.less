@@ -86,6 +86,9 @@
         flex-flow: row nowrap;
         align-items: center;
         flex-shrink: 0;
+        background-color: transparent;
+        .transition(background-color);
+        .transition-duration(300ms);
     }
 
     @media(max-width: @screen-xs-max) {
@@ -104,7 +107,7 @@
     }
 
     &:hover {
-        &:not(.objects__header) {
+        &:not(.objects__header):not(.objects__row--checked) {
             @media (min-width: @screen-sm-min) {
                 background-color: @object-row-hover-bg;
             }
@@ -123,6 +126,10 @@
             }
         }
     }
+}
+
+.objects__row--checked {
+    background-color: @object-row-checked-bg;
 }
 
 .objects__column {

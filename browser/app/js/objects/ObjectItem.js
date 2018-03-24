@@ -34,7 +34,8 @@ export const ObjectItem = ({
   return (
     <div
       className={classNames({
-        objects__row: true,
+        "objects__row": true,
+        "objects__row--checked": checked,
         "objects__row--directory": getDataType(name, contentType) == "folder"
       })}
     >
