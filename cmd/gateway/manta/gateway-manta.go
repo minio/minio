@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,9 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+
 EXAMPLES:
   1. Start minio gateway server for Manta Object Storage backend.
       $ export MINIO_ACCESS_KEY=manta_account_name
@@ -87,7 +90,6 @@ EXAMPLES:
       $ export MINIO_SECRET_KEY=manta_key_id
       $ export MANTA_KEY_MATERIAL=~/.ssh/custom_rsa
       $ {{.HelpName}}
-
 `
 
 	minio.RegisterGatewayCommand(cli.Command{

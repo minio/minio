@@ -66,12 +66,14 @@ ENVIRONMENT VARIABLES:
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+
 EXAMPLES:
   1. Start minio gateway server for B2 backend.
       $ export MINIO_ACCESS_KEY=accountID
       $ export MINIO_SECRET_KEY=applicationKey
       $ {{.HelpName}}
-
 `
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               b2Backend,

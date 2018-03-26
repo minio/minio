@@ -55,7 +55,6 @@ DIR:
   filesystem separated by space. You may also use a '...' convention
   to abbreviate the directory arguments. Remote directories in a
   distributed setup are encoded as HTTP(s) URIs.
-
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -69,10 +68,13 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   REGION:
-     MINIO_REGION: To set custom region. By default it is "us-east-1".
+     MINIO_REGION: To set custom region. By default all regions are accepted.
 
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
@@ -80,6 +82,10 @@ EXAMPLES:
 
   2. Start minio server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
+
+  3. Start minio server and enable virtual-host-style requests.
+      $ export MINIO_DOMAIN=mydomain.com
+      $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
   3. Start minio server on a 12 disks server.
       $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
