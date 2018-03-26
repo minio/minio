@@ -24,14 +24,7 @@ jest.mock("../../web", () => ({
   LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
   ListObjects: jest.fn(() => {
     return Promise.resolve({
-      objects: [
-        {
-          name: "test1"
-        },
-        {
-          name: "test2"
-        }
-      ],
+      objects: [{ name: "test1" }, { name: "test2" }],
       istruncated: false,
       nextmarker: "test2",
       writable: false
@@ -39,38 +32,26 @@ jest.mock("../../web", () => ({
   }),
   RemoveObject: jest.fn(({ bucketName, objects }) => {
     if (!bucketName) {
-      return Promise.reject({
-        message: "Invalid bucket"
-      })
+      return Promise.reject({ message: "Invalid bucket" })
     }
     return Promise.resolve({})
   }),
   PresignedGet: jest.fn(({ bucket, object }) => {
     if (!bucket) {
-      return Promise.reject({
-        message: "Invalid bucket"
-      })
+      return Promise.reject({ message: "Invalid bucket" })
     }
-    return Promise.resolve({
-      url: "https://test.com/bk1/pre1/b.txt"
-    })
+    return Promise.resolve({ url: "https://test.com/bk1/pre1/b.txt" })
   }),
   CreateURLToken: jest
     .fn()
     .mockImplementationOnce(() => {
-      return Promise.resolve({
-        token: "test"
-      })
+      return Promise.resolve({ token: "test" })
     })
     .mockImplementationOnce(() => {
-      return Promise.reject({
-        message: "Error in creating token"
-      })
+      return Promise.reject({ message: "Error in creating token" })
     })
     .mockImplementationOnce(() => {
-      return Promise.resolve({
-        token: "test"
-      })
+      return Promise.resolve({ token: "test" })
     })
 }))
 
@@ -83,28 +64,14 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/SET_LIST",
-        objects: [
-          {
-            name: "test1"
-          },
-          {
-            name: "test2"
-          }
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         isTruncated: false,
         marker: "test2"
       }
     ]
     store.dispatch(
       actionsObjects.setList(
-        [
-          {
-            name: "test1"
-          },
-          {
-            name: "test2"
-          }
-        ],
+        [{ name: "test1" }, { name: "test2" }],
         "test2",
         false
       )
@@ -141,24 +108,13 @@ describe("Objects actions", () => {
 
   it("creates objects/SET_LIST after fetching the objects", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1"
-      },
-      objects: {
-        currentPrefix: ""
-      }
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
       {
         type: "objects/SET_LIST",
-        objects: [
-          {
-            name: "test1"
-          },
-          {
-            name: "test2"
-          }
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
         isTruncated: false
       },
@@ -183,24 +139,13 @@ describe("Objects actions", () => {
 
   it("creates objects/APPEND_LIST after fetching more objects", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1"
-      },
-      objects: {
-        currentPrefix: ""
-      }
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
       {
         type: "objects/APPEND_LIST",
-        objects: [
-          {
-            name: "test1"
-          },
-          {
-            name: "test2"
-          }
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
         isTruncated: false
       },
@@ -248,21 +193,12 @@ describe("Objects actions", () => {
 
   it("should update browser url and creates objects/SET_CURRENT_PREFIX and objects/CHECKED_LIST_RESET actions when selectPrefix is called", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "test"
-      },
-      objects: {
-        currentPrefix: ""
-      }
+      buckets: { currentBucket: "test" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
-      {
-        type: "objects/SET_CURRENT_PREFIX",
-        prefix: "abc/"
-      },
-      {
-        type: "objects/CHECKED_LIST_RESET"
-      }
+      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
     const actions = store.getActions()
@@ -273,10 +209,7 @@ describe("Objects actions", () => {
   it("create objects/SET_PREFIX_WRITABLE action", () => {
     const store = mockStore()
     const expectedActions = [
-      {
-        type: "objects/SET_PREFIX_WRITABLE",
-        prefixWritable: true
-      }
+      { type: "objects/SET_PREFIX_WRITABLE", prefixWritable: true }
     ]
     store.dispatch(actionsObjects.setPrefixWritable(true))
     const actions = store.getActions()
@@ -285,12 +218,7 @@ describe("Objects actions", () => {
 
   it("creates objects/REMOVE action", () => {
     const store = mockStore()
-    const expectedActions = [
-      {
-        type: "objects/REMOVE",
-        object: "obj1"
-      }
-    ]
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
     store.dispatch(actionsObjects.removeObject("obj1"))
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
@@ -298,19 +226,10 @@ describe("Objects actions", () => {
 
   it("creates objects/REMOVE action when object is deleted", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "test"
-      },
-      objects: {
-        currentPrefix: "pre1/"
-      }
+      buckets: { currentBucket: "test" },
+      objects: { currentPrefix: "pre1/" }
     })
-    const expectedActions = [
-      {
-        type: "objects/REMOVE",
-        object: "obj1"
-      }
-    ]
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
     store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
@@ -319,21 +238,13 @@ describe("Objects actions", () => {
 
   it("creates alert/SET action when invalid bucket is provided", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: ""
-      },
-      objects: {
-        currentPrefix: "pre1/"
-      }
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
         type: "alert/SET",
-        alert: {
-          type: "danger",
-          message: "Invalid bucket",
-          id: 0
-        }
+        alert: { type: "danger", message: "Invalid bucket", id: 0 }
       }
     ]
     return store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
@@ -374,12 +285,8 @@ describe("Objects actions", () => {
 
   it("creates objects/SET_SHARE_OBJECT when object is shared", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1"
-      },
-      objects: {
-        currentPrefix: "pre1/"
-      }
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
@@ -407,12 +314,8 @@ describe("Objects actions", () => {
 
   it("creates alert/SET when shareObject is failed", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: ""
-      },
-      objects: {
-        currentPrefix: "pre1/"
-      }
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
@@ -446,12 +349,8 @@ describe("Objects actions", () => {
         }
       })
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1"
-        },
-        objects: {
-          currentPrefix: "pre1/"
-        }
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       store.dispatch(actionsObjects.downloadObject("obj1"))
       const url = `${
@@ -473,12 +372,8 @@ describe("Objects actions", () => {
         }
       })
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1"
-        },
-        objects: {
-          currentPrefix: "pre1/"
-        }
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
         const url = `${
@@ -492,12 +387,8 @@ describe("Objects actions", () => {
 
     it("create alert/SET action when CreateUrlToken fails", () => {
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1"
-        },
-        objects: {
-          currentPrefix: "pre1/"
-        }
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       const expectedActions = [
         {
@@ -564,13 +455,8 @@ describe("Objects actions", () => {
     window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
 
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1"
-      },
-      objects: {
-        currentPrefix: "pre1/",
-        checkedList: ["obj1"]
-      }
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/", checkedList: ["obj1"] }
     })
     return store.dispatch(actionsObjects.downloadCheckedObjects()).then(() => {
       const requestUrl = `${

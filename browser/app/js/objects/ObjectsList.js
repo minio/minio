@@ -18,8 +18,6 @@ import React from "react"
 import ObjectContainer from "./ObjectContainer"
 import PrefixContainer from "./PrefixContainer"
 
-const Aux = props => props.children
-
 export const ObjectsList = ({ objects }) => {
   const list = objects.map(object => {
     if (object.name.endsWith("/")) {
@@ -28,7 +26,7 @@ export const ObjectsList = ({ objects }) => {
       return <ObjectContainer object={object} key={object.name} />
     }
   })
-  return <Aux>{list}</Aux>
+  return <div>{list}</div>
 }
 
 export default ObjectsList

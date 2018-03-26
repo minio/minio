@@ -7,14 +7,14 @@
     "dev": "NODE_ENV=dev webpack-dev-server --devtool cheap-module-eval-source-map --progress --colors --hot --content-base dev",
     "build": "NODE_ENV=dev node build.js",
     "release": "NODE_ENV=production MINIO_UI_BUILD=RELEASE node build.js",
-    "format": "prettier --write 'app/**/*.js'",
-    "eslint": "eslint 'app/**/*.js'"
+    "format": "esformatter -i 'app/**/*.js'"
   },
   "jest": {
     "setupTestFrameworkScriptFile": "./app/js/jest/setup.js",
     "testURL": "https://localhost:8080",
     "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/app/js/jest/__mocks__/fileMock.js",
+      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$":
+        "<rootDir>/app/js/jest/__mocks__/fileMock.js",
       "\\.(css|scss)$": "identity-obj-proxy"
     }
   },
@@ -32,7 +32,6 @@
     "async": "^1.5.2",
     "babel-cli": "^6.14.0",
     "babel-core": "^6.14.0",
-    "babel-eslint": "^8.2.2",
     "babel-jest": "^22.1.0",
     "babel-loader": "^7.1.2",
     "babel-plugin-syntax-object-rest-spread": "^6.13.0",
@@ -45,24 +44,25 @@
     "css-loader": "^0.23.1",
     "enzyme": "^3.3.0",
     "enzyme-adapter-react-16": "^1.1.1",
-    "eslint": "^4.19.1",
-    "eslint-plugin-prettier": "^2.6.0",
+    "esformatter": "^0.10.0",
+    "esformatter-jsx": "^7.4.1",
+    "esformatter-jsx-ignore": "^1.0.6",
     "html-webpack-plugin": "^2.30.1",
     "jest": "^22.1.4",
     "jest-enzyme": "^4.0.2",
     "json-loader": "^0.5.4",
     "less": "^2.7.1",
     "less-loader": "^2.2.3",
-    "prettier": "^1.11.1",
     "purifycss-webpack-plugin": "^2.0.3",
     "style-loader": "^0.13.1",
     "url-loader": "^0.5.7",
     "webpack-dev-server": "^2.11.1"
   },
   "dependencies": {
-    "bootstrap": "3.3.7",
+    "bootstrap": "^3.3.6",
     "classnames": "^2.2.3",
     "expect": "^1.20.2",
+    "font-awesome": "^4.7.0",
     "history": "^4.7.2",
     "humanize": "0.0.9",
     "identity-obj-proxy": "^3.0.0",
@@ -74,7 +74,7 @@
     "moment": "^2.15.1",
     "react": "^16.2.0",
     "react-addons-test-utils": "^0.14.8",
-    "react-bootstrap": "^0.32.1",
+    "react-bootstrap": "^0.32.0",
     "react-copy-to-clipboard": "^5.0.1",
     "react-custom-scrollbars": "^4.2.1",
     "react-dom": "^16.2.0",

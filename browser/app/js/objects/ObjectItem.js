@@ -15,8 +15,9 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
+import humanize from "humanize"
+import Moment from "moment"
 import { getDataType } from "../mime"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
@@ -29,20 +30,13 @@ export const ObjectItem = ({
   checked,
   checkObject,
   uncheckObject,
+  actionButtons,
   onClick
 }) => {
   return (
-    <div
-      className={classNames({
-        objects__row: true,
-        "objects__row--directory": getDataType(name, contentType) == "folder"
-      })}
-    >
-      <div
-        className="objects__column objects__column--select"
-        data-object-type={getDataType(name, contentType)}
-      >
-        <div className="objects__select">
+    <div className={"fesl-row"} data-type={getDataType(name, contentType)}>
+      <div className="fesl-item fesl-item-icon">
+        <div className="fi-select">
           <input
             type="checkbox"
             name={name}
@@ -51,10 +45,11 @@ export const ObjectItem = ({
               checked ? uncheckObject(name) : checkObject(name)
             }}
           />
-          <i />
+          <i className="fis-icon" />
+          <i className="fis-helper" />
         </div>
       </div>
-      <div className="objects__column objects__column--name">
+      <div className="fesl-item fesl-item-name">
         <a
           href="#"
           onClick={e => {
@@ -65,10 +60,9 @@ export const ObjectItem = ({
           {name}
         </a>
       </div>
-      <div className="objects__column objects__column--size">{size}</div>
-      <div className="objects__column objects__column--date">
-        {lastModified}
-      </div>
+      <div className="fesl-item fesl-item-size">{size}</div>
+      <div className="fesl-item fesl-item-modified">{lastModified}</div>
+      <div className="fesl-item fesl-item-actions">{actionButtons}</div>
     </div>
   )
 }

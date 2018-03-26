@@ -18,4 +18,3 @@ release
 coverage.txt
 node_modules
 production
-yarn-error.log

@@ -16,6 +16,11 @@
 
 import React from "react"
 
-export const Host = () => <small>{window.location.host}</small>
+export const Host = () => (
+  <div className="fes-host">
+    <i className="fa fa-globe" />
+    <a href="/">{window.location.host}</a>
+  </div>
+)
 
 export default Host

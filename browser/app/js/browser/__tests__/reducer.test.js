@@ -32,9 +32,7 @@ describe("common reducer", () => {
   it("should handle TOGGLE_SIDEBAR", () => {
     expect(
       reducer(
-        {
-          sidebarOpen: false
-        },
+        { sidebarOpen: false },
         {
           type: actionsCommon.TOGGLE_SIDEBAR
         }
@@ -47,9 +45,7 @@ describe("common reducer", () => {
   it("should handle CLOSE_SIDEBAR", () => {
     expect(
       reducer(
-        {
-          sidebarOpen: true
-        },
+        { sidebarOpen: true },
         {
           type: actionsCommon.CLOSE_SIDEBAR
         }
@@ -65,17 +61,11 @@ describe("common reducer", () => {
         {},
         {
           type: actionsCommon.SET_STORAGE_INFO,
-          storageInfo: {
-            total: 100,
-            free: 40
-          }
+          storageInfo: { total: 100, free: 40 }
         }
       )
     ).toEqual({
-      storageInfo: {
-        total: 100,
-        free: 40
-      }
+      storageInfo: { total: 100, free: 40 }
     })
   })
 

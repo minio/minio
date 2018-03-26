@@ -42,7 +42,5 @@ export const set = alert => {
 }
 
 export const clear = () => {
-  return {
-    type: CLEAR
-  }
+  return { type: CLEAR }
 }

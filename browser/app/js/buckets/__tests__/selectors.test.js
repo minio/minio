@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { getFilteredBuckets, getCurrentBucket } from "../selectors"
+import { getVisibleBuckets, getCurrentBucket } from "../selectors"
 
-describe("getFilteredBuckets", () => {
+describe("getVisibleBuckets", () => {
   let state
   beforeEach(() => {
     state = {
@@ -28,11 +28,11 @@ describe("getFilteredBuckets", () => {
 
   it("should return all buckets if no filter specified", () => {
     state.buckets.filter = ""
-    expect(getFilteredBuckets(state)).toEqual(["test1", "test11", "test2"])
+    expect(getVisibleBuckets(state)).toEqual(["test1", "test11", "test2"])
   })
 
   it("should return all matching buckets if filter is specified", () => {
     state.buckets.filter = "test1"
-    expect(getFilteredBuckets(state)).toEqual(["test1", "test11"])
+    expect(getVisibleBuckets(state)).toEqual(["test1", "test11"])
   })
 })

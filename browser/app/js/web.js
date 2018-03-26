@@ -14,35 +14,32 @@
  * limitations under the License.
  */
 
-import JSONrpc from "./jsonrpc"
-import { minioBrowserPrefix } from "./constants.js"
-import Moment from "moment"
-import storage from "local-storage-fallback"
+import JSONrpc from './jsonrpc'
+import { minioBrowserPrefix } from './constants.js'
+import Moment from 'moment'
+import storage from 'local-storage-fallback'
 
 class Web {
   constructor(endpoint) {
-    const namespace = "Web"
+    const namespace = 'Web'
     this.JSONrpc = new JSONrpc({
       endpoint,
       namespace
     })
   }
   makeCall(method, options) {
-    return this.JSONrpc.call(
-      method,
-      {
-        params: options
-      },
-      storage.getItem("token")
-    )
+    return this.JSONrpc.call(method, {
+      params: options
+    }, storage.getItem('token'))
       .catch(err => {
         if (err.status === 401) {
-          storage.removeItem("token")
+          storage.removeItem('token')
           location.reload()
-          throw new Error("Please re-login.")
+          throw new Error('Please re-login.')
         }
-        if (err.status) throw new Error(`Server returned error [${err.status}]`)
-        throw new Error("Minio server is unreachable")
+        if (err.status)
+          throw new Error(`Server returned error [${err.status}]`)
+        throw new Error('Minio server is unreachable')
       })
       .then(res => {
         let json = JSON.parse(res.text)
@@ -54,85 +51,81 @@ class Web {
         if (!Moment(result.uiVersion).isValid()) {
           throw new Error("Invalid UI version in the JSON-RPC response")
         }
-        if (
-          result.uiVersion !== currentUiVersion &&
-          currentUiVersion !== "MINIO_UI_VERSION"
-        ) {
-          storage.setItem("newlyUpdated", true)
+        if (result.uiVersion !== currentUiVersion
+          && currentUiVersion !== 'MINIO_UI_VERSION') {
+          storage.setItem('newlyUpdated', true)
           location.reload()
         }
         return result
       })
   }
   LoggedIn() {
-    return !!storage.getItem("token")
+    return !!storage.getItem('token')
   }
   Login(args) {
-    return this.makeCall("Login", args).then(res => {
-      storage.setItem("token", `${res.token}`)
-      return res
-    })
+    return this.makeCall('Login', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
   }
   Logout() {
-    storage.removeItem("token")
+    storage.removeItem('token')
   }
   ServerInfo() {
-    return this.makeCall("ServerInfo")
+    return this.makeCall('ServerInfo')
   }
   StorageInfo() {
-    return this.makeCall("StorageInfo")
+    return this.makeCall('StorageInfo')
   }
   ListBuckets() {
-    return this.makeCall("ListBuckets")
+    return this.makeCall('ListBuckets')
   }
   MakeBucket(args) {
-    return this.makeCall("MakeBucket", args)
+    return this.makeCall('MakeBucket', args)
   }
   DeleteBucket(args) {
-    return this.makeCall("DeleteBucket", args)
+    return this.makeCall('DeleteBucket', args)
   }
   ListObjects(args) {
-    return this.makeCall("ListObjects", args)
+    return this.makeCall('ListObjects', args)
   }
   PresignedGet(args) {
-    return this.makeCall("PresignedGet", args)
+    return this.makeCall('PresignedGet', args)
   }
   PutObjectURL(args) {
-    return this.makeCall("PutObjectURL", args)
+    return this.makeCall('PutObjectURL', args)
   }
   RemoveObject(args) {
-    return this.makeCall("RemoveObject", args)
+    return this.makeCall('RemoveObject', args)
   }
   GetAuth() {
-    return this.makeCall("GetAuth")
+    return this.makeCall('GetAuth')
   }
   GenerateAuth() {
-    return this.makeCall("GenerateAuth")
+    return this.makeCall('GenerateAuth')
   }
   SetAuth(args) {
-    return this.makeCall("SetAuth", args).then(res => {
-      storage.setItem("token", `${res.token}`)
-      return res
-    })
+    return this.makeCall('SetAuth', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
   }
   CreateURLToken() {
-    return this.makeCall("CreateURLToken")
+    return this.makeCall('CreateURLToken')
   }
   GetBucketPolicy(args) {
-    return this.makeCall("GetBucketPolicy", args)
+    return this.makeCall('GetBucketPolicy', args)
   }
   SetBucketPolicy(args) {
-    return this.makeCall("SetBucketPolicy", args)
+    return this.makeCall('SetBucketPolicy', args)
   }
   ListAllBucketPolicies(args) {
-    return this.makeCall("ListAllBucketPolicies", args)
+    return this.makeCall('ListAllBucketPolicies', args)
   }
 }
 
-const web = new Web(
-  `${window.location.protocol}//${
-    window.location.host
-  }${minioBrowserPrefix}/webrpc`
-)
+const web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`);
 
-export default web
+export default web;

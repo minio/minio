@@ -34,24 +34,14 @@ describe("uploads reducer", () => {
       name: "test"
     })
     expect(newState.files).toEqual({
-      "a-b-c": {
-        loaded: 0,
-        size: 100,
-        name: "test"
-      }
+      "a-b-c": { loaded: 0, size: 100, name: "test" }
     })
   })
 
   it("should handle UPDATE_PROGRESS", () => {
     const newState = reducer(
       {
-        files: {
-          "a-b-c": {
-            loaded: 0,
-            size: 100,
-            name: "test"
-          }
-        }
+        files: { "a-b-c": { loaded: 0, size: 100, name: "test" } }
       },
       {
         type: actions.UPDATE_PROGRESS,
@@ -60,11 +50,7 @@ describe("uploads reducer", () => {
       }
     )
     expect(newState.files).toEqual({
-      "a-b-c": {
-        loaded: 50,
-        size: 100,
-        name: "test"
-      }
+      "a-b-c": { loaded: 50, size: 100, name: "test" }
     })
   })
 
@@ -72,16 +58,8 @@ describe("uploads reducer", () => {
     const newState = reducer(
       {
         files: {
-          "a-b-c": {
-            loaded: 70,
-            size: 100,
-            name: "test1"
-          },
-          "x-y-z": {
-            loaded: 50,
-            size: 100,
-            name: "test2"
-          }
+          "a-b-c": { loaded: 70, size: 100, name: "test1" },
+          "x-y-z": { loaded: 50, size: 100, name: "test2" }
         }
       },
       {
@@ -90,11 +68,7 @@ describe("uploads reducer", () => {
       }
     )
     expect(newState.files).toEqual({
-      "x-y-z": {
-        loaded: 50,
-        size: 100,
-        name: "test2"
-      }
+      "x-y-z": { loaded: 50, size: 100, name: "test2" }
     })
   })
 

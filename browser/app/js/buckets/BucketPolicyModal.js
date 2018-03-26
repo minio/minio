@@ -21,29 +21,24 @@ import * as actionsBuckets from "./actions"
 import PolicyInput from "./PolicyInput"
 import Policy from "./Policy"
 
-export const BucketPolicyModal = ({
-  showBucketPolicy,
-  currentBucket,
-  hideBucketPolicy,
-  policies
-}) => {
+export const BucketPolicyModal = ({ showBucketPolicy, currentBucket, hideBucketPolicy, policies }) => {
   return (
-    <Modal
-      className="policy"
-      animation={false}
-      show={showBucketPolicy}
-      onHide={hideBucketPolicy}
+    <Modal className="modal-policy"
+            animation={ false }
+            show={ showBucketPolicy }
+            onHide={ hideBucketPolicy }
     >
-      <Modal.Header>
-        Bucket Policy
-        <small>Bucket Name: {currentBucket}</small>
-        <i className="close" onClick={hideBucketPolicy} />
-      </Modal.Header>
-      <div className="policy__content">
+      <ModalHeader>
+        Bucket Policy (
+        { currentBucket })
+        <button className="close close-alt" onClick={ hideBucketPolicy }>
+          <span>×</span>
+        </button>
+      </ModalHeader>
+      <div className="pm-body">
         <PolicyInput />
-        {policies.map((policy, i) => (
-          <Policy key={i} prefix={policy.prefix} policy={policy.policy} />
-        ))}
+        { policies.map((policy, i) => <Policy key={ i } prefix={ policy.prefix } policy={ policy.policy } />
+          ) }
       </div>
     </Modal>
   )

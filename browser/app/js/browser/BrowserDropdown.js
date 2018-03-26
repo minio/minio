@@ -81,61 +81,62 @@ export class BrowserDropdown extends React.Component {
   render() {
     const { serverInfo } = this.props
     return (
-      <Dropdown pullRight id="toolbar-menu">
-        <Dropdown.Toggle
-          noCaret
-          className="toolbar__item zmdi zmdi-more-vert"
-        />
-        <Dropdown.Menu>
-          <li>
-            <a target="_blank" href="https://github.com/minio/minio">
-              Github <i className="zmdi zmdi-github" />
-            </a>
-          </li>
-          <li>
-            <a href="" onClick={this.fullScreen}>
-              Fullscreen <i className="zmdi zmdi-fullscreen" />
-            </a>
-          </li>
-          <li>
-            <a target="_blank" href="https://docs.minio.io/">
-              Documentation <i className="zmdi zmdi-assignment" />
-            </a>
-          </li>
-          <li>
-            <a target="_blank" href="https://slack.minio.io">
-              Ask for help <i className="zmdi zmdi-help" />
-            </a>
-          </li>
-          <li>
-            <a href="" id="show-about" onClick={this.showAbout.bind(this)}>
-              About <i className="zmdi zmdi-info" />
-            </a>
-            {this.state.showAboutModal && (
-              <AboutModal
-                serverInfo={serverInfo}
-                hideAbout={this.hideAbout.bind(this)}
-              />
-            )}
-          </li>
-          <li>
-            <a href="" onClick={this.showChangePassword.bind(this)}>
-              Change Password <i className="zmdi zmdi-settings" />
-            </a>
-            {this.state.showChangePasswordModal && (
-              <ChangePasswordModal
-                serverInfo={serverInfo}
-                hideChangePassword={this.hideChangePassword.bind(this)}
-              />
-            )}
-          </li>
-          <li>
-            <a href="" id="logout" onClick={this.logout}>
-              Sign Out <i className="zmdi zmdi-sign-in" />
-            </a>
-          </li>
-        </Dropdown.Menu>
-      </Dropdown>
+      <li>
+        <Dropdown pullRight id="top-right-menu">
+          <Dropdown.Toggle noCaret>
+            <i className="fa fa-reorder" />
+          </Dropdown.Toggle>
+          <Dropdown.Menu className="dropdown-menu-right">
+            <li>
+              <a target="_blank" href="https://github.com/minio/minio">
+                Github <i className="fa fa-github" />
+              </a>
+            </li>
+            <li>
+              <a href="" onClick={this.fullScreen}>
+                Fullscreen <i className="fa fa-expand" />
+              </a>
+            </li>
+            <li>
+              <a target="_blank" href="https://docs.minio.io/">
+                Documentation <i className="fa fa-book" />
+              </a>
+            </li>
+            <li>
+              <a target="_blank" href="https://slack.minio.io">
+                Ask for help <i className="fa fa-question-circle" />
+              </a>
+            </li>
+            <li>
+              <a href="" id="show-about" onClick={this.showAbout.bind(this)}>
+                About <i className="fa fa-info-circle" />
+              </a>
+              {this.state.showAboutModal && (
+                <AboutModal
+                  serverInfo={serverInfo}
+                  hideAbout={this.hideAbout.bind(this)}
+                />
+              )}
+            </li>
+            <li>
+              <a href="" onClick={this.showChangePassword.bind(this)}>
+                Change Password <i className="fa fa-cog" />
+              </a>
+              {this.state.showChangePasswordModal && (
+                <ChangePasswordModal
+                  serverInfo={serverInfo}
+                  hideChangePassword={this.hideChangePassword.bind(this)}
+                />
+              )}
+            </li>
+            <li>
+              <a href="" id="logout" onClick={this.logout}>
+                Sign Out <i className="fa fa-sign-out" />
+              </a>
+            </li>
+          </Dropdown.Menu>
+        </Dropdown>
+      </li>
     )
   }
 }

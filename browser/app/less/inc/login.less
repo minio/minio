@@ -1,86 +1,104 @@
 .login {
     height: 100vh;
-    padding: 1.5rem;
+    min-height: 500px;
+    background: @dark-gray;
+
     text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    &:before {
+        height: ~"calc(100% - 110px)";
+        width: 1px;
+        content: "";
+    }
 }
 
-.login__inner {
-    max-width: 400px;
-    width: 90%;
-    flex-shrink: 0;
+.l-wrap,
+.login:before {
+    display: inline-block;
+    vertical-align: middle;
 }
 
-.login__header {
-    margin-bottom: 1rem;
+.l-wrap {
+    width: 80%;
+    max-width: 500px;
+    margin-top: -50px;
+    &.toggled {
+        display: inline-block;
+    }
+
+    .input-group:not(:last-child) {
+        margin-bottom: 40px;
+    }
 }
 
-.login__form {
-    background-color: @white;
-    padding: 2rem;
+.l-footer {
+    height: 110px;
+    padding: 0 50px;
+}
 
-    .form-group__field {
+.lf-logo {
+    float: right;
+    img {
+        width: 40px;
+    }
+}
+
+.lf-server {
+    float: left;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 20px;
+    font-weight: 400;
+    padding-top: 40px;
+}
+
+@media (max-width: @screen-sm-min) {
+    .lf-logo,
+    .lf-server {
+        float: none;
+        display: block;
         text-align: center;
-    }
-}
-
-.login__logo {
-    width: 2rem;
-}
-
-.login__host {
-    color: @text-muted-color;
-    margin-top: -0.5rem;
-    font-size: @font-size-small;
-}
-
-.login__btn {
-    margin-top: 0.5rem;
-    width: 2.6rem;
-    height: 2.6rem;
-    line-height: 100%;
-    border-radius: 50%;
-    background-color: transparent;
-    border: 1px solid darken(@input-border-color, 5%);
-    .transition(all);
-    .transition-duration(500ms);
-    position: relative;
-    overflow: hidden;
-
-    &:hover {
-        border-color: darken(@input-border-color, 15%);
-
-        &:before {
-            left: 2.6rem;
-            .opacity(0);
-        }
-
-        &:after {
-            .opacity(1);
-            left: 0;
-        }
-    }
-
-    &:before,
-    &:after {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        content: '\f301';
-        font-family: @font-family-icon;
-        position: absolute;
-        left: 0;
-        top: 0;
         width: 100%;
-        height: 100%;
-        .transition(all);
-        .transition-duration(300ms);
     }
 
-    &:after {
-        left: -2.6rem;
-        .opacity(0);
+    .lf-logo {
+        margin-bottom: 5px;
     }
+
+    .lf-server {
+        font-size: 15px;
+    }
+}
+
+.lw-btn {
+    width: 50px;
+    height: 50px;
+    border: 1px solid @white;
+    display: inline-block;
+    border-radius: 50%;
+    font-size: 22px;
+    color: @white;
+    .transition(all);
+    .transition-duration(300ms);
+    opacity: 0.3;
+    background-color: transparent;
+    line-height: 45px;
+    padding: 0;
+    &:hover {
+        color: @white;
+        opacity: 0.8;
+        border-color: @white;
+    }
+
+    i {
+        display: block;
+        width: 100%;
+        padding-left: 3px;
+    }
+}
+
+/*------------------------------
+    Chrome autofill fix
+-------------------------------*/
+input:-webkit-autofill {
+     -webkit-box-shadow:0 0 0 50px @dark-gray inset !important;
+     -webkit-text-fill-color: @white !important;
 }

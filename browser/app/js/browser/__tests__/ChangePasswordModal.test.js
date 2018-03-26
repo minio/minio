@@ -20,24 +20,16 @@ import { ChangePasswordModal } from "../ChangePasswordModal"
 
 jest.mock("../../web", () => ({
   GetAuth: jest.fn(() => {
-    return Promise.resolve({
-      accessKey: "test1",
-      secretKey: "test2"
-    })
+    return Promise.resolve({ accessKey: "test1", secretKey: "test2" })
   }),
   GenerateAuth: jest.fn(() => {
-    return Promise.resolve({
-      accessKey: "gen1",
-      secretKey: "gen2"
-    })
+    return Promise.resolve({ accessKey: "gen1", secretKey: "gen2" })
   }),
   SetAuth: jest.fn(({ accessKey, secretKey }) => {
     if (accessKey == "test3" && secretKey == "test4") {
       return Promise.resolve({})
     } else {
-      return Promise.reject({
-        message: "Error"
-      })
+      return Promise.reject({ message: "Error" })
     }
   })
 }))
@@ -48,9 +40,7 @@ describe("ChangePasswordModal", () => {
     memory: "test",
     platform: "test",
     runtime: "test",
-    info: {
-      isEnvCreds: false
-    }
+    info: { isEnvCreds: false }
   }
 
   it("should render without crashing", () => {
@@ -66,12 +56,7 @@ describe("ChangePasswordModal", () => {
   })
 
   it("should show readonly keys when isEnvCreds is true", () => {
-    const newServerInfo = {
-      ...serverInfo,
-      info: {
-        isEnvCreds: true
-      }
-    }
+    const newServerInfo = { ...serverInfo, info: { isEnvCreds: true } }
     const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
     expect(wrapper.state("accessKey")).toBe("xxxxxxxxx")
     expect(wrapper.state("secretKey")).toBe("xxxxxxxxx")
@@ -95,16 +80,12 @@ describe("ChangePasswordModal", () => {
     const wrapper = shallow(
       <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />
     )
-    wrapper.find("#accessKey").simulate("change", {
-      target: {
-        value: "test3"
-      }
-    })
-    wrapper.find("#secretKey").simulate("change", {
-      target: {
-        value: "test4"
-      }
-    })
+    wrapper
+      .find("#accessKey")
+      .simulate("change", { target: { value: "test3" } })
+    wrapper
+      .find("#secretKey")
+      .simulate("change", { target: { value: "test4" } })
     wrapper.find("#update-keys").simulate("click")
     setImmediate(() => {
       expect(showAlert).toHaveBeenCalledWith({

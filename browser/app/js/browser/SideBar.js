@@ -16,38 +16,37 @@
 
 import React from "react"
 import classNames from "classnames"
+import ClickOutHandler from "react-onclickout"
 import { connect } from "react-redux"
+
 import logo from "../../img/logo.svg"
+import Dropdown from "react-bootstrap/lib/Dropdown"
 import BucketSearch from "../buckets/BucketSearch"
 import BucketList from "../buckets/BucketList"
-import StorageInfo from "./StorageInfo"
 import Host from "./Host"
 import * as actionsCommon from "./actions"
 import web from "../web"
 
-export const SideBar = ({ sidebarOpen }) => {
+export const SideBar = ({ sidebarOpen, clickOutside }) => {
   return (
-    <aside
-      className={classNames({
-        sidebar: true,
-        "sidebar--toggled": sidebarOpen
-      })}
-    >
-      <div className="sidebar__inner">
-        <div className="logo">
-          <img className="logo__img" src={logo} alt="" />
-          <div className="logo__title">
-            <h2>Minio Browser</h2>
-            <Host />
-          </div>
+    <ClickOutHandler onClickOut={clickOutside}>
+      <div
+        className={classNames({
+          "fe-sidebar": true,
+          toggled: sidebarOpen
+        })}
+      >
+        <div className="fes-header clearfix hidden-sm hidden-xs">
+          <img src={logo} alt="" />
+          <h2>Minio Browser</h2>
         </div>
-        <div className="buckets">
+        <div className="fes-list">
           {web.LoggedIn() && <BucketSearch />}
           <BucketList />
         </div>
-        <StorageInfo />
+        <Host />
       </div>
-    </aside>
+    </ClickOutHandler>
   )
 }
 
@@ -59,7 +58,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar())
+    clickOutside: () => dispatch(actionsCommon.closeSidebar())
   }
 }
 

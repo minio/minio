@@ -28,9 +28,7 @@ describe("Alert", () => {
     const wrapper = mount(
       <Alert show={true} type="danger" message="test" onDismiss={onDismiss} />
     )
-    wrapper.find("i").simulate("click", {
-      preventDefault: jest.fn()
-    })
+    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
     expect(onDismiss).toHaveBeenCalled()
   })
 })

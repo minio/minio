@@ -60,40 +60,35 @@ export const fetchObjects = append => {
     } = getState()
     if (currentBucket) {
       return web
-        .ListObjects({
-          bucketName: currentBucket,
-          prefix: currentPrefix,
-          marker: append ? marker : ""
-        })
-        .then(res => {
-          let objects = []
-          if (res.objects) {
-            objects = res.objects.map(object => {
-              return {
-                ...object,
-                name: object.name.replace(currentPrefix, "")
-              }
-            })
-          }
-          if (append) {
-            dispatch(appendList(objects, res.nextmarker, res.istruncated))
-          } else {
-            dispatch(setList(objects, res.nextmarker, res.istruncated))
-            dispatch(setSortBy(""))
-            dispatch(setSortOrder(false))
-          }
-          dispatch(setPrefixWritable(res.writable))
-        })
-        .catch(err => {
-          dispatch(
-            alertActions.set({
-              type: "danger",
-              message: err.message
-            })
-          )
-          history.push("/login")
-        })
-    }
+      .ListObjects({
+        bucketName: currentBucket,
+        prefix: currentPrefix,
+        marker: append ? marker : ""
+      })
+      .then(res => {
+        let objects = []
+        if (res.objects) {
+          objects = res.objects.map(object => {
+            return {
+              ...object,
+              name: object.name.replace(currentPrefix, "")
+            }
+          })
+        }
+        if (append) {
+          dispatch(appendList(objects, res.nextmarker, res.istruncated))
+        } else {
+          dispatch(setList(objects, res.nextmarker, res.istruncated))
+          dispatch(setSortBy(""))
+          dispatch(setSortOrder(false))
+        }
+        dispatch(setPrefixWritable(res.writable))
+      })
+      .catch(err => {
+        dispatch(alertActions.set({ type: "danger", message: err.message }))
+        history.push("/login")
+      })
+    } 
   }
 }
 

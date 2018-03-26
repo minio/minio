@@ -29,9 +29,7 @@ jest.mock("../../web", () => ({
 describe("PolicyInput", () => {
   it("should render without crashing", () => {
     const fetchPolicies = jest.fn()
-    shallow(
-      <PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies} />
-    )
+    shallow(<PolicyInput currentBucket={"bucket"} fetchPolicies={fetchPolicies}/>)
   })
 
   it("should call fetchPolicies after the component has mounted", () => {
@@ -47,21 +45,11 @@ describe("PolicyInput", () => {
   it("should call web.setBucketPolicy and fetchPolicies on submit", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <PolicyInput
-        currentBucket={"bucket"}
-        policies={[]}
-        fetchPolicies={fetchPolicies}
-      />
+      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies}/>
     )
-    wrapper.instance().prefix = {
-      value: "baz"
-    }
-    wrapper.instance().policy = {
-      value: READ_ONLY
-    }
-    wrapper.find("button").simulate("click", {
-      preventDefault: jest.fn()
-    })
+    wrapper.instance().prefix = { value: "baz" }
+    wrapper.instance().policy = { value: READ_ONLY }
+    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
 
     expect(web.SetBucketPolicy).toHaveBeenCalledWith({
       bucketName: "bucket",
@@ -77,25 +65,13 @@ describe("PolicyInput", () => {
   it("should change the prefix '*' to an empty string", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <PolicyInput
-        currentBucket={"bucket"}
-        policies={[]}
-        fetchPolicies={fetchPolicies}
-      />
+      <PolicyInput currentBucket={"bucket"} policies={[]} fetchPolicies={fetchPolicies}/>
     )
-    wrapper.instance().prefix = {
-      value: "*"
-    }
-    wrapper.instance().policy = {
-      value: READ_ONLY
-    }
+    wrapper.instance().prefix = { value: "*" }
+    wrapper.instance().policy = { value: READ_ONLY }
 
-    wrapper.find("button").simulate("click", {
-      preventDefault: jest.fn()
-    })
+    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
 
-    expect(wrapper.instance().prefix).toEqual({
-      value: ""
-    })
+    expect(wrapper.instance().prefix).toEqual({ value: "" })
   })
 })

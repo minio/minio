@@ -40,9 +40,7 @@ describe("buckets reducer", () => {
 
   it("should handle ADD", () => {
     const newState = reducer(
-      {
-        list: ["test1", "test2"]
-      },
+      { list: ["test1", "test2"] },
       {
         type: actions.ADD,
         bucket: "test3"
@@ -53,9 +51,7 @@ describe("buckets reducer", () => {
 
   it("should handle REMOVE", () => {
     const newState = reducer(
-      {
-        list: ["test1", "test2"]
-      },
+      { list: ["test1", "test2"] },
       {
         type: actions.REMOVE,
         bucket: "test2"
@@ -95,7 +91,7 @@ describe("buckets reducer", () => {
     })
     expect(newState.showBucketPolicy).toBeTruthy()
   })
-
+  
   it("should handle SHOW_MAKE_BUCKET_MODAL", () => {
     const newState = reducer(undefined, {
       type: actions.SHOW_MAKE_BUCKET_MODAL,

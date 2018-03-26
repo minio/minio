@@ -92,10 +92,10 @@ var exports = {
     new CopyWebpackPlugin([
       {from: 'app/css/loader.css'},
       {from: 'app/img/favicon.ico'},
+      {from: 'app/img/browsers/chrome.png'},
+      {from: 'app/img/browsers/firefox.png'},
+      {from: 'app/img/browsers/safari.png'},
       {from: 'app/img/logo.svg'},
-      {from: 'app/img/icons/bucket.svg'},
-      {from: 'app/img/icons/select-caret.svg'},
-      {from: 'app/img/icons/bucket-new.svg'},
       {from: 'app/index.html'}
     ]),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),

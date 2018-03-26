@@ -25,7 +25,7 @@ describe("Path", () => {
 
   it("should render only bucket if there is no prefix", () => {
     const wrapper = shallow(<Path currentBucket={"test1"} currentPrefix={""} />)
-    expect(wrapper.find("a").length).toBe(1)
+    expect(wrapper.find("span").length).toBe(1)
     expect(wrapper.text()).toBe("test1")
   })
 
@@ -33,22 +33,22 @@ describe("Path", () => {
     const wrapper = shallow(
       <Path currentBucket={"test1"} currentPrefix={"a/b/"} />
     )
-    expect(wrapper.find("a").length).toBe(3)
+    expect(wrapper.find("span").length).toBe(3)
     expect(
       wrapper
-        .find("a")
+        .find("span")
         .at(0)
         .text()
     ).toBe("test1")
     expect(
       wrapper
-        .find("a")
+        .find("span")
         .at(1)
         .text()
     ).toBe("a")
     expect(
       wrapper
-        .find("a")
+        .find("span")
         .at(2)
         .text()
     ).toBe("b")
@@ -66,9 +66,7 @@ describe("Path", () => {
     wrapper
       .find("a")
       .at(2)
-      .simulate("click", {
-        preventDefault: jest.fn()
-      })
+      .simulate("click", { preventDefault: jest.fn() })
     expect(selectPrefix).toHaveBeenCalledWith("a/b/")
   })
 })

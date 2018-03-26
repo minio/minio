@@ -27,9 +27,9 @@ export const MainActions = ({
   uploadFile,
   showMakeBucketModal
 }) => {
-  const uploadTooltip = <Tooltip id="tooltip-upload-file">Upload file</Tooltip>
+  const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
-    <Tooltip id="tooltip-create-bucket">Create bucket</Tooltip>
+    <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
   )
   const onFileUpload = e => {
     e.preventDefault()
@@ -41,20 +41,15 @@ export const MainActions = ({
 
   if (loggedIn || prefixWritable) {
     return (
-      <Dropdown
-        dropup
-        pullRight
-        className="create"
-        id="main-actions"
-        componentClass="div"
-      >
-        <Dropdown.Toggle noCaret className="create__toggle" useAnchor={true}>
-          <i className="zmdi zmdi-plus" />
-          <i className="zmdi zmdi-close" />
+      <Dropdown dropup className="feb-actions" id="fe-action-toggle">
+        <Dropdown.Toggle noCaret className="feba-toggle">
+          <span>
+            <i className="fa fa-plus" />
+          </span>
         </Dropdown.Toggle>
         <Dropdown.Menu>
           <OverlayTrigger placement="left" overlay={uploadTooltip}>
-            <a href="#" className="create__btn create__btn--upload">
+            <a href="#" className="feba-btn feba-upload">
               <input
                 type="file"
                 onChange={onFileUpload}
@@ -62,7 +57,8 @@ export const MainActions = ({
                 id="file-input"
               />
               <label htmlFor="file-input">
-                <i className="zmdi zmdi-upload" />
+                {" "}
+                <i className="fa fa-cloud-upload" />{" "}
               </label>
             </a>
           </OverlayTrigger>
@@ -71,12 +67,14 @@ export const MainActions = ({
               <a
                 href="#"
                 id="show-make-bucket"
-                className="create__btn create__btn--bucket"
+                className="feba-btn feba-bucket"
                 onClick={e => {
                   e.preventDefault()
                   showMakeBucketModal()
                 }}
-              />
+              >
+                <i className="fa fa-hdd-o" />
+              </a>
             </OverlayTrigger>
           )}
         </Dropdown.Menu>
