@@ -29,10 +29,10 @@ describe("AbortConfirmModal", () => {
       <AbortConfirmModal
         uploads={{
           "a-b/-test1": { size: 100, loaded: 50, name: "test1" },
-          "a-b/-test2": { size: 100, loaded: 50, name: "test2" },
+          "a-b/-test2": { size: 100, loaded: 50, name: "test2" }
         }}
         abort={abort}
-      />,
+      />
     )
     wrapper.instance().abortUploads()
     expect(abort.mock.calls.length).toBe(2)

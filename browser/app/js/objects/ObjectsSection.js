@@ -18,13 +18,11 @@ import React from "react"
 import ObjectsHeader from "./ObjectsHeader"
 import ObjectsListContainer from "./ObjectsListContainer"
 
-const Aux = props => props.children
-
 export const ObjectsSection = () => (
-  <Aux>
+  <div>
     <ObjectsHeader />
     <ObjectsListContainer />
-  </Aux>
+  </div>
 )
 
 export default ObjectsSection

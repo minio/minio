@@ -28,13 +28,13 @@ export const AlertContainer = ({ alert, clearAlert }) => {
 
 const mapStateToProps = state => {
   return {
-    alert: state.alert,
+    alert: state.alert
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    clearAlert: () => dispatch(alertActions.clear()),
+    clearAlert: () => dispatch(alertActions.clear())
   }
 }
 

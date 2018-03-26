@@ -1,49 +1,61 @@
-.page-loader {
+.page-load {
     position: fixed;
     width: 100%;
     height: 100%;
     top: 0;
     left: 0;
-    background: #fff;
+    background: #32393F;
     z-index: 100;
     transition: opacity 200ms;
     -webkit-transition: opacity 200ms;
 }
 
-.page-loader:before,
-.page-loader:after {
-    content: '';
-    width: 80px;
-    height: 80px;
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    margin: auto;
-    border-radius: 50%;
-}
-
-.page-loader:before {
-    background: url(/minio/logo.svg) no-repeat center;
-    background-size: 30px;
-}
-
-.page-loader:after {
-    -webkit-animation: spin 1000ms infinite linear;
-    animation: spin 1000ms infinite linear;
-    border: 2px solid #f3f3f3;
-    border-left-color: #4a5558;
-}
-
-.page-loader--0 {
+.pl-0{
     opacity: 0;
 }
 
-.page-loader--1 {
+.pl-1 {
     display: none;
 }
 
+.pl-inner {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    left: 50%;
+    margin-left: -50px;
+    top: 50%;
+    margin-top: -50px;
+    text-align: center;
+    -webkit-animation: fade-in 500ms;
+    animation: fade-in 500ms;
+    -webkit-animation-fill-mode: both;
+    animation-fill-mode: both;
+    animation-delay: 350ms;
+    -webkit-animation-delay: 350ms;
+    -webkit-backface-visibility: visible;
+    backface-visibility: visible;
+}
+
+.pl-inner:before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    display: block;
+    -webkit-animation: spin 1000ms infinite linear;
+    animation: spin 1000ms infinite linear;
+    border: 1px solid rgba(255, 255, 255, 0.2);;
+    border-left-color: #fff;
+    border-radius: 50%;
+}
+
+.pl-inner > img {
+    width: 30px;
+    margin-top: 21px;
+}
 
 @-webkit-keyframes fade-in {
     0% {

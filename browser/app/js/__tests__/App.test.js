@@ -31,7 +31,7 @@ describe("App", () => {
     const wrapper = mount(
       <MemoryRouter initialEntries={["/login"]}>
         <App />
-      </MemoryRouter>,
+      </MemoryRouter>
     )
     expect(wrapper.text()).toBe("Login")
   })
@@ -40,7 +40,7 @@ describe("App", () => {
     const wrapper = mount(
       <MemoryRouter initialEntries={["/"]}>
         <App />
-      </MemoryRouter>,
+      </MemoryRouter>
     )
     expect(wrapper.text()).toBe("Browser")
   })
@@ -49,7 +49,7 @@ describe("App", () => {
     const wrapper = mount(
       <MemoryRouter initialEntries={["/bucket"]}>
         <App />
-      </MemoryRouter>,
+      </MemoryRouter>
     )
     expect(wrapper.text()).toBe("Browser")
   })
@@ -58,7 +58,7 @@ describe("App", () => {
     const wrapper = mount(
       <MemoryRouter initialEntries={["/bucket/a/b/c"]}>
         <App />
-      </MemoryRouter>,
+      </MemoryRouter>
     )
     expect(wrapper.text()).toBe("Browser")
   })

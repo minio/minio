@@ -1,9 +1,6 @@
 * {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    box-sizing: border-box;
-    -webkit-box-sizing: border-box;
-    -moz-box-sizing: border-box;
 
     &:focus,
     &:active {
@@ -12,35 +9,23 @@
 }
 
 html {
-    font-size: @font-size-base;
+    font-size: 10px;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+
+html,
+body {
     min-height: 100%;
 }
 
-body {
-    background-color: @body-bg;
-    font-weight: @font-weight-normal;
-    font-family: @font-family-sans-serif;
-    line-height: @line-height-base;
-    color: @text-color;
-}
-
-h1, h2, h3, h4, h5, h6 {
-    font-family: @headings-font-family;
-    color: @headings-color;
-    font-weight: @font-weight-bold;
-}
-
 a {
-    color: @link-color;
-    text-decoration: @link-hover-decoration;
+    .transition(color);
+    .transition-duration(300ms);
 
-    &:hover {
-        color: darken(@link-color, 10%);
-    }
 }
 
 button {
     border: 0;
-    background-color: transparent;
-    padding: 0;
 }
+
+

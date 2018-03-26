@@ -21,29 +21,40 @@ import logo from "../../img/logo.svg"
 export const AboutModal = ({ serverInfo, hideAbout }) => {
   const { version, memory, platform, runtime } = serverInfo
   return (
-    <Modal className="about" animation={false} show={true} onHide={hideAbout}>
-      <i className="close" onClick={hideAbout} />
-      <div className="about__content">
-        <div className="about__logo hidden-xs">
-          <img src={logo} alt="" />
+    <Modal
+      className="modal-about modal-dark"
+      animation={false}
+      show={true}
+      onHide={hideAbout}
+    >
+      <button className="close" onClick={hideAbout}>
+        <span>×</span>
+      </button>
+      <div className="ma-inner">
+        <div className="mai-item hidden-xs">
+          <a href="https://minio.io" target="_blank">
+            <img className="maii-logo" src={logo} alt="" />
+          </a>
         </div>
-        <div className="about__info">
-          <div className="about__item">
-            <strong>Version</strong>
-            <small>{version}</small>
-          </div>
-          <div className="about__item">
-            <strong>Memory</strong>
-            <small>{memory}</small>
-          </div>
-          <div className="about__item">
-            <strong>Platform</strong>
-            <small>{platform}</small>
-          </div>
-          <div className="about__item">
-            <strong>Runtime</strong>
-            <small>{runtime}</small>
-          </div>
+        <div className="mai-item">
+          <ul className="maii-list">
+            <li>
+              <div>Version</div>
+              <small>{version}</small>
+            </li>
+            <li>
+              <div>Memory</div>
+              <small>{memory}</small>
+            </li>
+            <li>
+              <div>Platform</div>
+              <small>{platform}</small>
+            </li>
+            <li>
+              <div>Runtime</div>
+              <small>{runtime}</small>
+            </li>
+          </ul>
         </div>
       </div>
     </Modal>

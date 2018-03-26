@@ -37,7 +37,7 @@ describe("UploadModal", () => {
     const wrapper = shallow(
       <UploadModal
         uploads={{ "a-b/-test": { size: 100, loaded: 50, name: "test" } }}
-      />,
+      />
     )
     expect(wrapper.find("ProgressBar").length).toBe(1)
   })
@@ -48,7 +48,7 @@ describe("UploadModal", () => {
       <UploadModal
         uploads={{ "a-b/-test": { size: 100, loaded: 50, name: "test" } }}
         showAbortModal={showAbortModal}
-      />,
+      />
     )
     wrapper.find("button").simulate("click")
     expect(showAbortModal).toHaveBeenCalled()

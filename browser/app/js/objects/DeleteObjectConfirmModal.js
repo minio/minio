@@ -19,11 +19,11 @@ import ConfirmModal from "../browser/ConfirmModal"
 
 export const DeleteObjectConfirmModal = ({
   deleteObject,
-  hideDeleteConfirmModal,
+  hideDeleteConfirmModal
 }) => (
   <ConfirmModal
     show={true}
-    icon="zmdi zmdi-alert-octagon"
+    icon="fa fa-exclamation-triangle mci-red"
     text="Are you sure you want to delete?"
     sub="This cannot be undone!"
     okText="Delete"

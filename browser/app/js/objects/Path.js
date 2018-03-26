@@ -32,34 +32,38 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
         dirPath.push(dir)
         let dirPath_ = dirPath.join("/") + "/"
         return (
-          <a key={i} href="" onClick={e => onPrefixClick(e, dirPath_)}>
-            {dir}
-          </a>
+          <span key={i}>
+            <a href="" onClick={e => onPrefixClick(e, dirPath_)}>
+              {dir}
+            </a>
+          </span>
         )
       }
     })
   }
 
   return (
-    <nav className="path hidden-xs">
-      <a onClick={e => onPrefixClick(e, "")} href="">
-        {currentBucket}
-      </a>
+    <h2>
+      <span className="main">
+        <a onClick={e => onPrefixClick(e, "")} href="">
+          {currentBucket}
+        </a>
+      </span>
       {path}
-    </nav>
+    </h2>
   )
 }
 
 const mapStateToProps = state => {
   return {
     currentBucket: getCurrentBucket(state),
-    currentPrefix: state.objects.currentPrefix,
+    currentPrefix: state.objects.currentPrefix
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix)),
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
   }
 }
 

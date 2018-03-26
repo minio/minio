@@ -24,54 +24,35 @@ jest.mock("../../web", () => ({
   LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
   ListObjects: jest.fn(() => {
     return Promise.resolve({
-      objects: [
-        {
-          name: "test1",
-        },
-        {
-          name: "test2",
-        },
-      ],
+      objects: [{ name: "test1" }, { name: "test2" }],
       istruncated: false,
       nextmarker: "test2",
-      writable: false,
+      writable: false
     })
   }),
   RemoveObject: jest.fn(({ bucketName, objects }) => {
     if (!bucketName) {
-      return Promise.reject({
-        message: "Invalid bucket",
-      })
+      return Promise.reject({ message: "Invalid bucket" })
     }
     return Promise.resolve({})
   }),
   PresignedGet: jest.fn(({ bucket, object }) => {
     if (!bucket) {
-      return Promise.reject({
-        message: "Invalid bucket",
-      })
+      return Promise.reject({ message: "Invalid bucket" })
     }
-    return Promise.resolve({
-      url: "https://test.com/bk1/pre1/b.txt",
-    })
+    return Promise.resolve({ url: "https://test.com/bk1/pre1/b.txt" })
   }),
   CreateURLToken: jest
     .fn()
     .mockImplementationOnce(() => {
-      return Promise.resolve({
-        token: "test",
-      })
+      return Promise.resolve({ token: "test" })
     })
     .mockImplementationOnce(() => {
-      return Promise.reject({
-        message: "Error in creating token",
-      })
+      return Promise.reject({ message: "Error in creating token" })
     })
     .mockImplementationOnce(() => {
-      return Promise.resolve({
-        token: "test",
-      })
-    }),
+      return Promise.resolve({ token: "test" })
+    })
 }))
 
 const middlewares = [thunk]
@@ -83,31 +64,17 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/SET_LIST",
-        objects: [
-          {
-            name: "test1",
-          },
-          {
-            name: "test2",
-          },
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         isTruncated: false,
-        marker: "test2",
-      },
+        marker: "test2"
+      }
     ]
     store.dispatch(
       actionsObjects.setList(
-        [
-          {
-            name: "test1",
-          },
-          {
-            name: "test2",
-          },
-        ],
+        [{ name: "test1" }, { name: "test2" }],
         "test2",
-        false,
-      ),
+        false
+      )
     )
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
@@ -118,8 +85,8 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/SET_SORT_BY",
-        sortBy: "name",
-      },
+        sortBy: "name"
+      }
     ]
     store.dispatch(actionsObjects.setSortBy("name"))
     const actions = store.getActions()
@@ -131,8 +98,8 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/SET_SORT_ORDER",
-        sortOrder: true,
-      },
+        sortOrder: true
+      }
     ]
     store.dispatch(actionsObjects.setSortOrder(true))
     const actions = store.getActions()
@@ -141,39 +108,28 @@ describe("Objects actions", () => {
 
   it("creates objects/SET_LIST after fetching the objects", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1",
-      },
-      objects: {
-        currentPrefix: "",
-      },
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
       {
         type: "objects/SET_LIST",
-        objects: [
-          {
-            name: "test1",
-          },
-          {
-            name: "test2",
-          },
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
-        isTruncated: false,
+        isTruncated: false
       },
       {
         type: "objects/SET_SORT_BY",
-        sortBy: "",
+        sortBy: ""
       },
       {
         type: "objects/SET_SORT_ORDER",
-        sortOrder: false,
+        sortOrder: false
       },
       {
         type: "objects/SET_PREFIX_WRITABLE",
-        prefixWritable: false,
-      },
+        prefixWritable: false
+      }
     ]
     return store.dispatch(actionsObjects.fetchObjects()).then(() => {
       const actions = store.getActions()
@@ -183,31 +139,20 @@ describe("Objects actions", () => {
 
   it("creates objects/APPEND_LIST after fetching more objects", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1",
-      },
-      objects: {
-        currentPrefix: "",
-      },
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
       {
         type: "objects/APPEND_LIST",
-        objects: [
-          {
-            name: "test1",
-          },
-          {
-            name: "test2",
-          },
-        ],
+        objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
-        isTruncated: false,
+        isTruncated: false
       },
       {
         type: "objects/SET_PREFIX_WRITABLE",
-        prefixWritable: false,
-      },
+        prefixWritable: false
+      }
     ]
     return store.dispatch(actionsObjects.fetchObjects(true)).then(() => {
       const actions = store.getActions()
@@ -222,24 +167,24 @@ describe("Objects actions", () => {
         sortBy: "",
         sortOrder: false,
         isTruncated: false,
-        marker: "",
-      },
+        marker: ""
+      }
     })
     const expectedActions = [
       {
         type: "objects/SET_SORT_BY",
-        sortBy: "name",
+        sortBy: "name"
       },
       {
         type: "objects/SET_SORT_ORDER",
-        sortOrder: true,
+        sortOrder: true
       },
       {
         type: "objects/SET_LIST",
         objects: [],
         isTruncated: false,
-        marker: "",
-      },
+        marker: ""
+      }
     ]
     store.dispatch(actionsObjects.sortObjects("name"))
     const actions = store.getActions()
@@ -248,21 +193,12 @@ describe("Objects actions", () => {
 
   it("should update browser url and creates objects/SET_CURRENT_PREFIX and objects/CHECKED_LIST_RESET actions when selectPrefix is called", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "test",
-      },
-      objects: {
-        currentPrefix: "",
-      },
+      buckets: { currentBucket: "test" },
+      objects: { currentPrefix: "" }
     })
     const expectedActions = [
-      {
-        type: "objects/SET_CURRENT_PREFIX",
-        prefix: "abc/",
-      },
-      {
-        type: "objects/CHECKED_LIST_RESET",
-      },
+      { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
     const actions = store.getActions()
@@ -273,10 +209,7 @@ describe("Objects actions", () => {
   it("create objects/SET_PREFIX_WRITABLE action", () => {
     const store = mockStore()
     const expectedActions = [
-      {
-        type: "objects/SET_PREFIX_WRITABLE",
-        prefixWritable: true,
-      },
+      { type: "objects/SET_PREFIX_WRITABLE", prefixWritable: true }
     ]
     store.dispatch(actionsObjects.setPrefixWritable(true))
     const actions = store.getActions()
@@ -285,12 +218,7 @@ describe("Objects actions", () => {
 
   it("creates objects/REMOVE action", () => {
     const store = mockStore()
-    const expectedActions = [
-      {
-        type: "objects/REMOVE",
-        object: "obj1",
-      },
-    ]
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
     store.dispatch(actionsObjects.removeObject("obj1"))
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
@@ -298,19 +226,10 @@ describe("Objects actions", () => {
 
   it("creates objects/REMOVE action when object is deleted", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "test",
-      },
-      objects: {
-        currentPrefix: "pre1/",
-      },
+      buckets: { currentBucket: "test" },
+      objects: { currentPrefix: "pre1/" }
     })
-    const expectedActions = [
-      {
-        type: "objects/REMOVE",
-        object: "obj1",
-      },
-    ]
+    const expectedActions = [{ type: "objects/REMOVE", object: "obj1" }]
     store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
@@ -319,22 +238,14 @@ describe("Objects actions", () => {
 
   it("creates alert/SET action when invalid bucket is provided", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "",
-      },
-      objects: {
-        currentPrefix: "pre1/",
-      },
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
         type: "alert/SET",
-        alert: {
-          type: "danger",
-          message: "Invalid bucket",
-          id: 0,
-        },
-      },
+        alert: { type: "danger", message: "Invalid bucket", id: 0 }
+      }
     ]
     return store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {
       const actions = store.getActions()
@@ -349,8 +260,8 @@ describe("Objects actions", () => {
         type: "objects/SET_SHARE_OBJECT",
         show: true,
         object: "b.txt",
-        url: "test",
-      },
+        url: "test"
+      }
     ]
     store.dispatch(actionsObjects.showShareObject("b.txt", "test"))
     const actions = store.getActions()
@@ -364,8 +275,8 @@ describe("Objects actions", () => {
         type: "objects/SET_SHARE_OBJECT",
         show: false,
         object: "",
-        url: "",
-      },
+        url: ""
+      }
     ]
     store.dispatch(actionsObjects.hideShareObject())
     const actions = store.getActions()
@@ -374,28 +285,24 @@ describe("Objects actions", () => {
 
   it("creates objects/SET_SHARE_OBJECT when object is shared", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1",
-      },
-      objects: {
-        currentPrefix: "pre1/",
-      },
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
         type: "objects/SET_SHARE_OBJECT",
         show: true,
         object: "a.txt",
-        url: "https://test.com/bk1/pre1/b.txt",
+        url: "https://test.com/bk1/pre1/b.txt"
       },
       {
         type: "alert/SET",
         alert: {
           type: "success",
           message: "Object shared. Expires in 1 days 0 hours 0 minutes",
-          id: alertActions.alertId,
-        },
-      },
+          id: alertActions.alertId
+        }
+      }
     ]
     return store
       .dispatch(actionsObjects.shareObject("a.txt", 1, 0, 0))
@@ -407,12 +314,8 @@ describe("Objects actions", () => {
 
   it("creates alert/SET when shareObject is failed", () => {
     const store = mockStore({
-      buckets: {
-        currentBucket: "",
-      },
-      objects: {
-        currentPrefix: "pre1/",
-      },
+      buckets: { currentBucket: "" },
+      objects: { currentPrefix: "pre1/" }
     })
     const expectedActions = [
       {
@@ -420,9 +323,9 @@ describe("Objects actions", () => {
         alert: {
           type: "danger",
           message: "Invalid bucket",
-          id: alertActions.alertId,
-        },
-      },
+          id: alertActions.alertId
+        }
+      }
     ]
     return store
       .dispatch(actionsObjects.shareObject("a.txt", 1, 0, 0))
@@ -438,15 +341,11 @@ describe("Objects actions", () => {
       Object.defineProperty(window, "location", {
         set(url) {
           setLocation(url)
-        },
+        }
       })
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1",
-        },
-        objects: {
-          currentPrefix: "pre1/",
-        },
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       store.dispatch(actionsObjects.downloadObject("obj1"))
       const url = `${
@@ -460,21 +359,17 @@ describe("Objects actions", () => {
       Object.defineProperty(window, "location", {
         set(url) {
           setLocation(url)
-        },
+        }
       })
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1",
-        },
-        objects: {
-          currentPrefix: "pre1/",
-        },
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
         const url = `${
           window.location.origin
         }${minioBrowserPrefix}/download/bk1/${encodeURI(
-          "pre1/obj1",
+          "pre1/obj1"
         )}?token=test`
         expect(setLocation).toHaveBeenCalledWith(url)
       })
@@ -482,12 +377,8 @@ describe("Objects actions", () => {
 
     it("create alert/SET action when CreateUrlToken fails", () => {
       const store = mockStore({
-        buckets: {
-          currentBucket: "bk1",
-        },
-        objects: {
-          currentPrefix: "pre1/",
-        },
+        buckets: { currentBucket: "bk1" },
+        objects: { currentPrefix: "pre1/" }
       })
       const expectedActions = [
         {
@@ -495,9 +386,9 @@ describe("Objects actions", () => {
           alert: {
             type: "danger",
             message: "Error in creating token",
-            id: alertActions.alertId,
-          },
-        },
+            id: alertActions.alertId
+          }
+        }
       ]
       return store.dispatch(actionsObjects.downloadObject("obj1")).then(() => {
         const actions = store.getActions()
@@ -511,8 +402,8 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/CHECKED_LIST_ADD",
-        object: "obj1",
-      },
+        object: "obj1"
+      }
     ]
     store.dispatch(actionsObjects.checkObject("obj1"))
     const actions = store.getActions()
@@ -524,8 +415,8 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "objects/CHECKED_LIST_REMOVE",
-        object: "obj1",
-      },
+        object: "obj1"
+      }
     ]
     store.dispatch(actionsObjects.uncheckObject("obj1"))
     const actions = store.getActions()
@@ -536,8 +427,8 @@ describe("Objects actions", () => {
     const store = mockStore()
     const expectedActions = [
       {
-        type: "objects/CHECKED_LIST_RESET",
-      },
+        type: "objects/CHECKED_LIST_RESET"
+      }
     ]
     store.dispatch(actionsObjects.resetCheckedList())
     const actions = store.getActions()
@@ -549,18 +440,13 @@ describe("Objects actions", () => {
     const send = jest.fn()
     const xhrMockClass = () => ({
       open: open,
-      send: send,
+      send: send
     })
     window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
 
     const store = mockStore({
-      buckets: {
-        currentBucket: "bk1",
-      },
-      objects: {
-        currentPrefix: "pre1/",
-        checkedList: ["obj1"],
-      },
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/", checkedList: ["obj1"] }
     })
     return store.dispatch(actionsObjects.downloadCheckedObjects()).then(() => {
       const requestUrl = `${
@@ -571,8 +457,8 @@ describe("Objects actions", () => {
         JSON.stringify({
           bucketName: "bk1",
           prefix: "pre1/",
-          objects: ["obj1"],
-        }),
+          objects: ["obj1"]
+        })
       )
     })
   })
