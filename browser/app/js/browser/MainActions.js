@@ -39,7 +39,11 @@ export const MainActions = ({
     const uploadNextFile = function() {
       if (currentFileIndex < filesToUploadCount) {
         let file = files.item(currentFileIndex++)
-        if (file) uploadFile(file, currentFileIndex < filesToUploadCount ? uploadNextFile : null)
+        if (file) {
+          let nextFilePossible = currentFileIndex < filesToUploadCount
+          let callback = nextFilePossible ? uploadNextFile : null
+          uploadFile(file, callback)
+        }
       }
     }
     uploadNextFile()
