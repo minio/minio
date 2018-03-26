@@ -217,9 +217,9 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 	}()
 
 	b, err := json.Marshal(madmin.HealStartSuccess{
-		h.clientToken,
-		h.clientAddress,
-		h.startTime,
+		ClientToken:   h.clientToken,
+		ClientAddress: h.clientAddress,
+		StartTime:     h.startTime,
 	})
 	if err != nil {
 		errorIf(err, "Failed to marshal heal result into json.")
