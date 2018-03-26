@@ -23,7 +23,7 @@ export const PrefixContainer = ({ object, currentPrefix, selectPrefix }) => {
   const props = {
     name: object.name,
     contentType: object.contentType,
-    onClick: () => selectPrefix(`${currentPrefix}${object.name}`)
+    onClick: () => selectPrefix(`${currentPrefix}${object.name}`),
   }
 
   return <ObjectItem {...props} />
@@ -32,13 +32,13 @@ export const PrefixContainer = ({ object, currentPrefix, selectPrefix }) => {
 const mapStateToProps = (state, ownProps) => {
   return {
     object: ownProps.object,
-    currentPrefix: state.objects.currentPrefix
+    currentPrefix: state.objects.currentPrefix,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix))
+    selectPrefix: prefix => dispatch(actionsObjects.selectPrefix(prefix)),
   }
 }
 

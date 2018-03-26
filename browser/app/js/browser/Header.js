@@ -16,12 +16,12 @@
 
 import React from "react"
 import Path from "../objects/Path"
-import Toolbar from "../objects/Toolbar"
+import ObjectsBulkActions from "../objects/ObjectsBulkActions"
 
 export const Header = () => {
   return (
     <header className="header">
-      <Toolbar />
+      <ObjectsBulkActions />
       <Path />
     </header>
   )

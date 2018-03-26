@@ -22,13 +22,13 @@ import Bucket from "./Bucket"
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    isActive: getCurrentBucket(state) === ownProps.bucket
+    isActive: getCurrentBucket(state) === ownProps.bucket,
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
+    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket)),
   }
 }
 
