@@ -65,6 +65,12 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
+
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+
 EXAMPLES:
   1. Start minio gateway server for Aliyun OSS backend.
       $ export MINIO_ACCESS_KEY=accesskey
@@ -75,7 +81,6 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
       $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
       $ {{.HelpName}} https://oss.example.com
-
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
