@@ -112,6 +112,9 @@ ENVIRONMENT VARIABLES:
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+
   GCS credentials file:
      GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
 
@@ -122,7 +125,6 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
       $ {{.HelpName}} mygcsprojectid
-
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
