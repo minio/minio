@@ -78,12 +78,13 @@ async.waterfall([
       exec(cmd, cb)
     },
     function(stdout, stderr, cb) {
-      var cmd = 'gofmt -s -w -l bindata_assetfs.go'
+      var cmd = 'gofmt -s -w -l bindata.go'
       console.log('Running', cmd)
       exec(cmd, cb)
     },
     function(stdout, stderr, cb) {
-      fs.renameSync('bindata_assetfs.go', assetsFileName)
+      console.log("assetsFileName:", assetsFileName)
+      fs.renameSync('bindata.go', assetsFileName)
       fs.appendFileSync(assetsFileName, '\n')
       fs.appendFileSync(assetsFileName, 'var UIReleaseTag = "' + buildType + '.' +
                         releaseTag + '"\n')

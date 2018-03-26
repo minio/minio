@@ -33,7 +33,11 @@ export const MainActions = ({
   )
   const onFileUpload = e => {
     e.preventDefault()
-    uploadFile(e.target.files[0])
+    let files = e.target.files
+    for (var i = 0; i < files.length; i++) {
+      let file = files.item(i)
+      uploadFile(file)
+    }
     e.target.value = null
   }
 
