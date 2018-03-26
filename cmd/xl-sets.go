@@ -1105,7 +1105,7 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 
 	// Check if we had quorum to write, if not return an appropriate error.
 	_, afterDriveOnline := res.GetOnlineCounts()
-	if afterDriveOnline < s.setCount*s.drivesPerSet/2+1 {
+	if afterDriveOnline < ((s.setCount*s.drivesPerSet)/2)+1 {
 		return nil, toObjectErr(errXLWriteQuorum, bucket)
 	}
 
