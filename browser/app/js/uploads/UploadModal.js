@@ -58,7 +58,9 @@ export class UploadModal extends React.Component {
 
     return (
       <div className="alert alert-info alert--upload animated fadeInUp ">
-        <button type="button" className="close close--alt" onClick={showAbortModal}></button>
+        <button type="button" className="close" onClick={showAbortModal}>
+          <span>×</span>
+        </button>
         <div>{text}</div>
         <ProgressBar now={percent} />
         <div>
