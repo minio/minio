@@ -60,6 +60,7 @@ export const MainActions = ({
                 onChange={onFileUpload}
                 style={{ display: "none" }}
                 id="file-input"
+                multiple={true}
               />
               <label htmlFor="file-input">
                 <i className="zmdi zmdi-upload" />
