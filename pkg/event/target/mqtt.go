@@ -92,16 +92,15 @@ func (target *MQTTTarget) Close() error {
 
 // NewMQTTTarget - creates new MQTT target.
 func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
-	options := &mqtt.ClientOptions{
-		ClientID:             args.ClientID,
-		CleanSession:         true,
-		Username:             args.User,
-		Password:             args.Password,
-		MaxReconnectInterval: args.MaxReconnectInterval,
-		KeepAlive:            args.KeepAlive,
-		TLSConfig:            tls.Config{RootCAs: args.RootCAs},
-	}
-	options.AddBroker(args.Broker.String())
+	options := mqtt.NewClientOptions().
+		SetClientID(args.ClientID).
+		SetCleanSession(true).
+		SetUsername(args.User).
+		SetPassword(args.Password).
+		SetMaxReconnectInterval(args.MaxReconnectInterval).
+		SetKeepAlive(args.KeepAlive).
+		SetTLSConfig(&tls.Config{RootCAs: args.RootCAs}).
+		AddBroker(args.Broker.String())
 
 	client := mqtt.NewClient(options)
 	token := client.Connect()
