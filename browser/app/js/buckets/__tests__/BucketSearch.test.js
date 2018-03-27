@@ -26,11 +26,7 @@ describe("BucketSearch", () => {
   it("should call onChange with search text", () => {
     const onChange = jest.fn()
     const wrapper = shallow(<BucketSearch onChange={onChange} />)
-    wrapper.find("input").simulate("change", {
-      target: {
-        value: "test"
-      }
-    })
+    wrapper.find("input").simulate("change", { target: { value: "test" } })
     expect(onChange).toHaveBeenCalledWith("test")
   })
 })

@@ -88,14 +88,8 @@ describe("ShareObjectModal", () => {
 
   describe("Update expiry values", () => {
     const props = {
-      object: {
-        name: "obj1"
-      },
-      shareObjectDetails: {
-        show: true,
-        object: "obj1",
-        url: "test"
-      }
+      object: { name: "obj1" },
+      shareObjectDetails: { show: true, object: "obj1", url: "test" }
     }
     it("should have default expiry values", () => {
       const wrapper = shallow(<ShareObjectModal {...props} />)

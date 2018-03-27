@@ -19,8 +19,7 @@ import classNames from "classnames"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import { getCurrentBucket } from "./selectors"
-import { Dropdown } from "react-bootstrap"
-import { MenuItem } from "react-bootstrap"
+import Dropdown from "react-bootstrap/lib/Dropdown"
 
 export class BucketDropdown extends React.Component {
   constructor(props) {
@@ -45,35 +44,38 @@ export class BucketDropdown extends React.Component {
   render() {
     const { bucket, showBucketPolicy, deleteBucket, currentBucket } = this.props
     return (
-      <Dropdown
-        pullRight
-        open={this.state.showBucketDropdown}
-        onToggle={this.toggleDropdown.bind(this)}
-        className="buckets__item__actions"
+      <Dropdown 
+        open = {this.state.showBucketDropdown}
+        onToggle = {this.toggleDropdown.bind(this)}
+        className="bucket-dropdown" 
         id="bucket-dropdown"
       >
-        <Dropdown.Toggle noCaret className="dropdown-toggle--icon">
+        <Dropdown.Toggle noCaret>
           <i className="zmdi zmdi-more-vert" />
         </Dropdown.Toggle>
-        <Dropdown.Menu>
-          <MenuItem
-            onClick={e => {
-              e.stopPropagation()
-              showBucketPolicy()
-            }}
-          >
-            {" "}
-            Edit Policy
-          </MenuItem>
-          <MenuItem
-            onClick={e => {
-              e.stopPropagation()
-              deleteBucket(bucket)
-            }}
-          >
-            {" "}
-            Delete Bucket
-          </MenuItem>
+        <Dropdown.Menu className="dropdown-menu-right">
+          <li>
+            <a 
+              onClick={e => {
+                e.stopPropagation()
+                this.toggleDropdown()
+                showBucketPolicy()
+              }}
+            >
+              Edit policy
+            </a>
+          </li>
+          <li>
+            <a 
+              onClick={e => {
+                e.stopPropagation()
+                this.toggleDropdown()
+                deleteBucket(bucket)
+              }}
+            >
+              Delete
+            </a>
+          </li>
         </Dropdown.Menu>
       </Dropdown>
     )

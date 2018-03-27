@@ -29,19 +29,10 @@ describe("Alert actions", () => {
     const expectedActions = [
       {
         type: "alert/SET",
-        alert: {
-          id: 0,
-          message: "Test alert",
-          type: "danger"
-        }
+        alert: { id: 0, message: "Test alert", type: "danger" }
       }
     ]
-    store.dispatch(
-      actionsAlert.set({
-        message: "Test alert",
-        type: "danger"
-      })
-    )
+    store.dispatch(actionsAlert.set({ message: "Test alert", type: "danger" }))
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)
   })
@@ -51,23 +42,14 @@ describe("Alert actions", () => {
     const expectedActions = [
       {
         type: "alert/SET",
-        alert: {
-          id: 1,
-          message: "Test alert"
-        }
+        alert: { id: 1, message: "Test alert" }
       },
       {
         type: "alert/CLEAR",
-        alert: {
-          id: 1
-        }
+        alert: { id: 1 }
       }
     ]
-    store.dispatch(
-      actionsAlert.set({
-        message: "Test alert"
-      })
-    )
+    store.dispatch(actionsAlert.set({ message: "Test alert" }))
     jest.runAllTimers()
     const actions = store.getActions()
     expect(actions).toEqual(expectedActions)

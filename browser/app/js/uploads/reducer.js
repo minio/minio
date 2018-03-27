@@ -39,13 +39,7 @@ const stop = (files, action) => {
   return newFiles
 }
 
-export default (
-  state = {
-    files: {},
-    showAbortModal: false
-  },
-  action
-) => {
+export default (state = { files: {}, showAbortModal: false }, action) => {
   switch (action.type) {
     case uploadsActions.ADD:
       return {

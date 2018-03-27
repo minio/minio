@@ -24,6 +24,6 @@ const mockStore = configureStore()
 describe("Browser", () => {
   it("should render without crashing", () => {
     const store = mockStore()
-    shallow(<Browser store={store} />)
+    shallow(<Browser store={store}/>)
   })
 })

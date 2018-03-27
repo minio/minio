@@ -32,12 +32,8 @@ describe("ObjectsList", () => {
     )
     expect(wrapper.find("ObjectsList").length).toBe(1)
     expect(wrapper.find("ObjectsList").prop("objects")).toEqual([
-      {
-        name: "test1.jpg"
-      },
-      {
-        name: "test2.jpg"
-      }
+      { name: "test1.jpg" },
+      { name: "test2.jpg" }
     ])
   })
 
@@ -45,9 +41,6 @@ describe("ObjectsList", () => {
     const wrapper = shallow(
       <ObjectsListContainer currentBucket="test1" isTruncated={true} />
     )
-    expect(wrapper.find(".text-center").prop("style")).toHaveProperty(
-      "display",
-      "block"
-    )
+    expect(wrapper.find(".text-center").prop("style")).toHaveProperty("display", "block")
   })
 })

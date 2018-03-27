@@ -50,7 +50,7 @@ export class AbortConfirmModal extends React.Component {
         sub="This cannot be undone!"
         okText="Abort"
         okIcon={okIcon}
-        cancelText="Continue"
+        cancelText="Upload"
         cancelIcon={cancelIcon}
         okHandler={this.abortUploads.bind(this)}
         cancelHandler={hideAbort}

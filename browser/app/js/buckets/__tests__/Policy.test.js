@@ -28,31 +28,27 @@ jest.mock("../../web", () => ({
 
 describe("Policy", () => {
   it("should render without crashing", () => {
-    shallow(
-      <Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />
-    )
+    shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />)
   })
 
   it("should call web.setBucketPolicy and fetchPolicies on submit", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
-      <Policy
+      <Policy 
         currentBucket={"bucket"}
         prefix={"foo"}
         policy={READ_ONLY}
         fetchPolicies={fetchPolicies}
       />
     )
-    wrapper.find("button").simulate("click", {
-      preventDefault: jest.fn()
-    })
+    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
 
     expect(web.SetBucketPolicy).toHaveBeenCalledWith({
       bucketName: "bucket",
       prefix: "foo",
       policy: "none"
     })
-
+    
     setImmediate(() => {
       expect(fetchPolicies).toHaveBeenCalledWith("bucket")
     })
@@ -62,11 +58,6 @@ describe("Policy", () => {
     const wrapper = shallow(
       <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} />
     )
-    expect(
-      wrapper
-        .find("input")
-        .at(0)
-        .prop("value")
-    ).toEqual("*")
+    expect(wrapper.find(".pmbl-item").at(0).text()).toEqual("*")
   })
 })

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../constants"
+import { READ_ONLY, WRITE_ONLY, READ_WRITE } from '../constants'
 
 import React from "react"
 import { connect } from "react-redux"
@@ -37,61 +37,61 @@ export class PolicyInput extends React.Component {
   handlePolicySubmit(e) {
     e.preventDefault()
     const { currentBucket, fetchPolicies, showAlert } = this.props
-
-    if (this.prefix.value === "*") this.prefix.value = ""
-
+    
+    if (this.prefix.value === "*")
+      this.prefix.value = ""
+    
     let policyAlreadyExists = this.props.policies.some(
-      elem =>
-        this.prefix.value === elem.prefix && this.policy.value === elem.policy
+      elem => this.prefix.value === elem.prefix && this.policy.value === elem.policy
     )
     if (policyAlreadyExists) {
       showAlert("danger", "Policy for this prefix already exists.")
       return
     }
-
-    web
-      .SetBucketPolicy({
+    
+    web.
+      SetBucketPolicy({
         bucketName: currentBucket,
         prefix: this.prefix.value,
         policy: this.policy.value
       })
       .then(() => {
         fetchPolicies(currentBucket)
-        this.prefix.value = ""
+        this.prefix.value = ''
       })
       .catch(e => showAlert("danger", e.message))
   }
 
   render() {
     return (
-      <div className="policy__row policy__row--add">
-        <div className="form-group">
-          <input
+      <header className="pmb-list">
+        <div className="pmbl-item">
+          <input 
             type="text"
-            ref={prefix => (this.prefix = prefix)}
-            className="form-group__field"
+            ref={ prefix => this.prefix = prefix }
+            className="form-control"
             placeholder="Prefix"
           />
-          <i className="form-group__helper" />
         </div>
-        <div className="form-group policy__access">
-          <select
-            ref={policy => (this.policy = policy)}
-            className="form-group__field select"
-          >
-            <option value={READ_ONLY}>Read Only</option>
-            <option value={WRITE_ONLY}>Write Only</option>
-            <option value={READ_WRITE}>Read and Write</option>
+        <div className="pmbl-item">
+          <select ref={ policy => this.policy = policy } className="form-control">
+            <option value={ READ_ONLY }>
+              Read Only
+            </option>
+            <option value={ WRITE_ONLY }>
+              Write Only
+            </option>
+            <option value={ READ_WRITE }>
+              Read and Write
+            </option>
           </select>
-          <i className="form-group__helper" />
         </div>
-        <button
-          className="btn btn--sm btn--primary"
-          onClick={this.handlePolicySubmit.bind(this)}
-        >
-          Add
-        </button>
-      </div>
+        <div className="pmbl-item">
+          <button className="btn btn-block btn-primary" onClick={ this.handlePolicySubmit.bind(this) }>
+            Add
+          </button>
+        </div>
+      </header>
     )
   }
 }
@@ -108,12 +108,7 @@ const mapDispatchToProps = dispatch => {
     fetchPolicies: bucket => dispatch(actionsBuckets.fetchPolicies(bucket)),
     setPolicies: policies => dispatch(actionsBuckets.setPolicies(policies)),
     showAlert: (type, message) =>
-      dispatch(
-        actionsAlert.set({
-          type: type,
-          message: message
-        })
-      )
+      dispatch(actionsAlert.set({ type: type, message: message }))
   }
 }
 

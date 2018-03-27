@@ -20,12 +20,7 @@ import * as actionsCommon from "../actions"
 
 jest.mock("../../web", () => ({
   StorageInfo: jest.fn(() => {
-    return Promise.resolve({
-      storageInfo: {
-        Total: 100,
-        Free: 60
-      }
-    })
+    return Promise.resolve({ storageInfo: { Total: 100, Free: 60 } })
   }),
   ServerInfo: jest.fn(() => {
     return Promise.resolve({
@@ -45,13 +40,7 @@ describe("Common actions", () => {
   it("creates common/SET_STORAGE_INFO after fetching the storage details ", () => {
     const store = mockStore()
     const expectedActions = [
-      {
-        type: "common/SET_STORAGE_INFO",
-        storageInfo: {
-          total: 100,
-          free: 60
-        }
-      }
+      { type: "common/SET_STORAGE_INFO", storageInfo: { total: 100, free: 60 } }
     ]
     return store.dispatch(actionsCommon.fetchStorageInfo()).then(() => {
       const actions = store.getActions()

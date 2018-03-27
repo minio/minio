@@ -730,17 +730,20 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 
 	isDir := hasSuffix(object, slashSeparator)
 
-	// If its a directory request, no need to read metadata.
 	if !isDir {
 		// Read metadata associated with the object from all disks.
 		metaArr, errs := readAllXLMetadata(xl.getDisks(), bucket, object)
-
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(xl, metaArr, errs)
 		if err != nil {
 			return err
 		}
+		err = reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, writeQuorum)
+		if err != nil {
+			return err
+		}
 	} else {
+		// WriteQuorum is defaulted to N/2 + 1 for directories
 		writeQuorum = len(xl.getDisks())/2 + 1
 	}
 
@@ -755,16 +758,16 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 		wg.Add(1)
 		go func(index int, disk StorageAPI, isDir bool) {
 			defer wg.Done()
-			var err error
+			var e error
 			if isDir {
 				// DeleteFile() simply tries to remove a directory
 				// and will succeed only if that directory is empty.
-				err = disk.DeleteFile(bucket, object)
+				e = disk.DeleteFile(bucket, object)
 			} else {
-				err = cleanupDir(disk, bucket, object)
+				e = cleanupDir(disk, bucket, object)
 			}
-			if err != nil && errors.Cause(err) != errVolumeNotFound {
-				dErrs[index] = err
+			if e != nil && errors.Cause(e) != errVolumeNotFound {
+				dErrs[index] = e
 			}
 		}(index, disk, isDir)
 	}
@@ -772,6 +775,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Wait for all routines to finish.
 	wg.Wait()
 
+	// return errors if any during deletion
 	return reduceWriteQuorumErrs(dErrs, objectOpIgnoredErrs, writeQuorum)
 }
 

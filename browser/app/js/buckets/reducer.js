@@ -49,7 +49,7 @@ export default (
     case actionsBuckets.REMOVE:
       return {
         ...state,
-        list: removeBucket(state.list, action)
+        list: removeBucket(state.list, action),
       }
     case actionsBuckets.SET_FILTER:
       return {

@@ -54,9 +54,9 @@ describe("MainActions", () => {
     const wrapper = shallow(
       <MainActions showMakeBucketModal={showMakeBucketModal} />
     )
-    wrapper.find("#show-make-bucket").simulate("click", {
-      preventDefault: jest.fn()
-    })
+    wrapper
+      .find("#show-make-bucket")
+      .simulate("click", { preventDefault: jest.fn() })
     expect(showMakeBucketModal).toHaveBeenCalled()
   })
 

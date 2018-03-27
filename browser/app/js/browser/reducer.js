@@ -19,10 +19,7 @@ import * as actionsCommon from "./actions"
 export default (
   state = {
     sidebarOpen: false,
-    storageInfo: {
-      total: 0,
-      free: 0
-    },
+    storageInfo: { total: 0, free: 0 },
     serverInfo: {}
   },
   action
@@ -41,10 +38,7 @@ export default (
         storageInfo: action.storageInfo
       })
     case actionsCommon.SET_SERVER_INFO:
-      return {
-        ...state,
-        serverInfo: action.serverInfo
-      }
+      return { ...state, serverInfo: action.serverInfo }
     default:
       return state
   }

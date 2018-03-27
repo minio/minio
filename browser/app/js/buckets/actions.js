@@ -114,7 +114,7 @@ export const deleteBucket = bucket => {
         dispatch(removeBucket(bucket))
         dispatch(fetchBuckets())
       })
-      .catch(err => {
+      .catch(err => { 
         dispatch(
           alertActions.set({
             type: "danger",
@@ -153,8 +153,10 @@ export const fetchPolicies = bucket => {
       })
       .then(res => {
         let policies = res.policies
-        if (policies) dispatch(setPolicies(policies))
-        else dispatch(setPolicies([]))
+        if(policies)
+          dispatch(setPolicies(policies))
+        else
+          dispatch(setPolicies([]))
       })
       .catch(err => {
         dispatch(

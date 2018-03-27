@@ -21,7 +21,7 @@ import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../../constants"
 
 describe("BucketPolicyModal", () => {
   it("should render without crashing", () => {
-    shallow(<BucketPolicyModal policies={[]} />)
+    shallow(<BucketPolicyModal policies={[]}/>)
   })
 
   it("should call hideBucketPolicy when close button is clicked", () => {
@@ -29,13 +29,13 @@ describe("BucketPolicyModal", () => {
     const wrapper = shallow(
       <BucketPolicyModal hideBucketPolicy={hideBucketPolicy} policies={[]} />
     )
-    wrapper.find("i.close").simulate("click")
+    wrapper.find("button").simulate("click")
     expect(hideBucketPolicy).toHaveBeenCalled()
   })
 
   it("should include the PolicyInput and Policy components when there are any policies", () => {
     const wrapper = shallow(
-      <BucketPolicyModal policies={[{ prefix: "test", policy: READ_ONLY }]} />
+      <BucketPolicyModal policies={ [{prefix: "test", policy: READ_ONLY}] } />
     )
     expect(wrapper.find("Connect(PolicyInput)").length).toBe(1)
     expect(wrapper.find("Connect(Policy)").length).toBe(1)

@@ -19,17 +19,17 @@ import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 
 export const BucketSearch = ({ onChange }) => (
-  <div className="buckets__search">
-    <div className="form-group form-group--icon">
-      <i className="form-group__icon zmdi zmdi-search" />
-      <input
-        className="form-group__field"
-        type="text"
-        onChange={e => onChange(e.target.value)}
-        placeholder="Search Buckets..."
-      />
-      <i className="form-group__helper" />
-    </div>
+  <div
+    className="input-group ig-dark ig-left ig-search"
+    style={{ display: "block" }}
+  >
+    <input
+      className="ig-text"
+      type="text"
+      onChange={e => onChange(e.target.value)}
+      placeholder="Search Buckets..."
+    />
+    <i className="ig-helpers" />
   </div>
 )
 
