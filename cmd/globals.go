@@ -172,6 +172,8 @@ var (
 	// Set to store standard storage class
 	globalStandardStorageClass storageClass
 
+	globalWORMEnabled bool
+
 	// Add new variable global values here.
 )
 

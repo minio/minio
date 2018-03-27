@@ -745,6 +745,12 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = fsStatFile(fsNSObjPath); err == nil {
+			return ObjectInfo{}, errors.Trace(ObjectAlreadyExists{Bucket: bucket, Object: object})
+		}
+	}
 	if err = fsRenameFile(fsTmpObjPath, fsNSObjPath); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
