@@ -197,6 +197,12 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	// This is the number of drives we report free and total space for
 	availableDataDisks := uint64(onlineDisks - sscParity)
 
+	// Available data disks can be zero when onlineDisks is equal to parity,
+	// at that point we simply choose online disks to calculate the size.
+	if availableDataDisks == 0 {
+		availableDataDisks = uint64(onlineDisks)
+	}
+
 	// Return calculated storage info, choose the lowest Total and
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
