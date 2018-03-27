@@ -77,6 +77,6 @@ describe("MainActions", () => {
       }
     }
     input.simulate("change", event)
-    expect(uploadFile).toHaveBeenCalledWith(files[0], null)
+    expect(uploadFile).toHaveBeenCalledWith(files[0])
   })
 })

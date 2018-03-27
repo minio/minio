@@ -35,18 +35,10 @@ export const MainActions = ({
     e.preventDefault()
     let files = e.target.files
     let filesToUploadCount = files.length
-    let currentFileIndex = 0
-    const uploadNextFile = function() {
-      if (currentFileIndex < filesToUploadCount) {
-        let file = files.item(currentFileIndex++)
-        if (file) {
-          let nextFilePossible = currentFileIndex < filesToUploadCount
-          let callback = nextFilePossible ? uploadNextFile : null
-          uploadFile(file, callback)
-        }
-      }
+    for (let i = 0; i < filesToUploadCount; i++) {
+      uploadFile(files.item(i))
     }
-    uploadNextFile()
+    e.target.value = null
   }
 
   const loggedIn = web.LoggedIn()
@@ -106,7 +98,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    uploadFile: (file, cb) => dispatch(uploadsActions.uploadFile(file, cb)),
+    uploadFile: file => dispatch(uploadsActions.uploadFile(file)),
     showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal())
   }
 }
