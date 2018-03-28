@@ -75,8 +75,7 @@ export const abortUpload = slug => {
   }
 }
 
-export const uploadFile = (file, cb) => {
-  let callback = cb
+export const uploadFile = file => {
   return function(dispatch, getState) {
     const state = getState()
     const currentBucket = getCurrentBucket(state)
@@ -145,7 +144,6 @@ export const uploadFile = (file, cb) => {
             message: "File '" + file.name + "' uploaded successfully."
           })
         )
-        callback && callback()
         dispatch(objectsActions.selectPrefix(currentPrefix))
       }
     }
