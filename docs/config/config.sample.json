@@ -11,6 +11,11 @@
         "standard": "",
         "rrs": ""
     },
+    "cache": {
+        "drives": [],
+        "expiry": 90,
+        "exclude": []
+    },
     "notify": {
         "amqp": {
             "1": {

@@ -124,6 +124,22 @@ func handleCommonEnvVars() {
 		globalIsEnvDomainName = true
 	}
 
+	if drives := os.Getenv("MINIO_CACHE_DRIVES"); drives != "" {
+		driveList, err := parseCacheDrives(drives)
+		fatalIf(err, "Invalid value set in environment variable MINIO_CACHE_DRIVES")
+		globalCacheDrives = driveList
+		globalIsDiskCacheEnabled = true
+	}
+	if excludes := os.Getenv("MINIO_CACHE_EXCLUDE"); excludes != "" {
+		excludeList, err := parseCacheExcludes(excludes)
+		fatalIf(err, "Invalid value set in environment variable MINIO_CACHE_EXCLUDE")
+		globalCacheExcludes = excludeList
+	}
+	if expiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); expiryStr != "" {
+		expiry, err := parseCacheExpiry(expiryStr)
+		fatalIf(err, "Invalid value set in environment variable MINIO_CACHE_EXPIRY")
+		globalCacheExpiry = expiry
+	}
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.

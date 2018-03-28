@@ -579,3 +579,23 @@ type serverConfigV22 struct {
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
 }
+
+// serverConfigV23 is just like version '22' with addition of cache field
+type serverConfigV23 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BrowserFlag      `json:"browser"`
+	Domain     string           `json:"domain"`
+
+	// Storage class configuration
+	StorageClass storageClassConfig `json:"storageclass"`
+
+	// Cache configuration
+	Cache CacheConfig `json:"cache"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+}

@@ -42,7 +42,8 @@ import (
 type FSObjects struct {
 	// Path to be exported over S3 API.
 	fsPath string
-
+	// meta json filename, varies by fs / cache backend.
+	metaJSONFile string
 	// Unique value to be used for all
 	// temporary transactions.
 	fsUUID string
@@ -94,8 +95,8 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
-// NewFSObjectLayer - initialize new fs object layer.
-func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
+// newFSObjects - initialize new fs object layer.
+func newFSObjects(fsPath, metaJSONFile string) (ObjectLayer, error) {
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}
@@ -148,8 +149,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Initialize fs objects.
 	fs := &FSObjects{
-		fsPath: fsPath,
-		fsUUID: fsUUID,
+		fsPath:       fsPath,
+		metaJSONFile: metaJSONFile,
+		fsUUID:       fsUUID,
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
@@ -179,6 +181,11 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return fs, nil
+}
+
+// NewFSObjectLayer - initialize new fs object layer.
+func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
+	return newFSObjects(fsPath, fsMetaJSONFile)
 }
 
 // Shutdown - should be called when process shuts down.
@@ -392,7 +399,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		// Close any writer which was initialized.
 		defer srcInfo.Writer.Close()
 
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fsMetaJSONFile)
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
 			return oi, toObjectErr(errors.Trace(err), srcBucket, srcObject)
@@ -487,7 +494,7 @@ func (fs *FSObjects) getObject(bucket, object string, offset int64, length int64
 	}
 
 	if bucket != minioMetaBucket {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 		if lock {
 			_, err = fs.rwPool.Open(fsMetaPath)
 			if err != nil && err != errFileNotFound {
@@ -554,10 +561,10 @@ func (fs *FSObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e erro
 		return oi, toObjectErr(errFileNotFound, bucket, object)
 	}
 
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
+
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err == nil {
 		// Read from fs metadata only if it exists.
@@ -646,8 +653,9 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 // putObject - wrapper for PutObject
 func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	// No metadata is set, allocate a new one.
-	if metadata == nil {
-		metadata = make(map[string]string)
+	meta := make(map[string]string)
+	for k, v := range metadata {
+		meta[k] = v
 	}
 	var err error
 
@@ -657,7 +665,7 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 	}
 
 	fsMeta := newFSMetaV1()
-	fsMeta.Meta = metadata
+	fsMeta.Meta = meta
 
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
@@ -694,7 +702,8 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
-		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fsMetaJSONFile)
+
+		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(errors.Trace(err), bucket, object)
@@ -729,7 +738,7 @@ func (fs *FSObjects) putObject(bucket string, object string, data *hash.Reader, 
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	metadata["etag"] = hex.EncodeToString(data.MD5Current())
+	fsMeta.Meta["etag"] = hex.EncodeToString(data.MD5Current())
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
@@ -791,7 +800,7 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 	}
 
 	minioMetaBucketDir := pathJoin(fs.fsPath, minioMetaBucket)
-	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 	if bucket != minioMetaBucket {
 		rwlk, lerr := fs.rwPool.Write(fsMetaPath)
 		if lerr == nil {
@@ -839,7 +848,7 @@ func (fs *FSObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 // getObjectETag is a helper function, which returns only the md5sum
 // of the file on the disk.
 func (fs *FSObjects) getObjectETag(bucket, entry string, lock bool) (string, error) {
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fsMetaJSONFile)
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fs.metaJSONFile)
 
 	var reader io.Reader
 	var fi os.FileInfo

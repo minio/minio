@@ -29,6 +29,10 @@ func newObjectLayerFn() (layer ObjectLayer) {
 	return
 }
 
+func newCacheObjectsFn() CacheObjectLayer {
+	return globalCacheObjectAPI
+}
+
 // Composed function registering routers for only distributed XL setup.
 func registerDistXLRouters(mux *router.Router, endpoints EndpointList) error {
 	// Register storage rpc router only if its a distributed setup.

@@ -232,10 +232,13 @@ func isETagEqual(left, right string) bool {
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, bucket, object string, r *http.Request) (err error) {
-
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request) (err error) {
+	deleteObject := obj.DeleteObject
+	if cache != nil {
+		deleteObject = cache.DeleteObject
+	}
 	// Proceed to delete the object.
-	if err = obj.DeleteObject(ctx, bucket, object); err != nil {
+	if err = deleteObject(ctx, bucket, object); err != nil {
 		return err
 	}
 

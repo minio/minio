@@ -100,7 +100,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object)
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	objInfo, err := getObjectInfo(ctx, bucket, object)
 	if err != nil {
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
@@ -170,8 +175,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setHeadGetRespHeaders(w, r.URL.Query())
 	httpWriter := ioutil.WriteOnClose(writer)
 
-	// Reads the object at startOffset and writes to httpWriter.
-	if err = objectAPI.GetObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
+	getObject := objectAPI.GetObject
+	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+		getObject = api.CacheAPI().GetObject
+	}
+
+	// Reads the object at startOffset and writes to mw.
+	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -227,7 +237,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object)
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	objInfo, err := getObjectInfo(ctx, bucket, object)
 	if err != nil {
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
@@ -319,7 +334,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
 	dstObject := vars["object"]
-
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -645,6 +659,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 		reader    io.Reader
 		s3Err     APIErrorCode
+		putObject = objectAPI.PutObject
 	)
 	reader = r.Body
 	switch rAuthType {
@@ -713,7 +728,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata)
+	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+		putObject = api.CacheAPI().PutObject
+	}
+	// Create the object..
+	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -763,7 +782,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
 	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -820,7 +838,11 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[k] = v
 	}
 
-	uploadID, err := objectAPI.NewMultipartUpload(ctx, bucket, object, metadata)
+	newMultipartUpload := objectAPI.NewMultipartUpload
+	if api.CacheAPI() != nil {
+		newMultipartUpload = api.CacheAPI().NewMultipartUpload
+	}
+	uploadID, err := newMultipartUpload(ctx, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1036,7 +1058,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -1208,7 +1229,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	partInfo, err := objectAPI.PutObjectPart(ctx, bucket, object, uploadID, partID, hashReader)
+	putObjectPart := objectAPI.PutObjectPart
+	if api.CacheAPI() != nil {
+		putObjectPart = api.CacheAPI().PutObjectPart
+	}
+	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, hashReader)
 	if err != nil {
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1234,7 +1259,10 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
+	abortMultipartUpload := objectAPI.AbortMultipartUpload
+	if api.CacheAPI() != nil {
+		abortMultipartUpload = api.CacheAPI().AbortMultipartUpload
+	}
 	if s3Error := checkRequestAuthType(r, bucket, "s3:AbortMultipartUpload", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -1249,7 +1277,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	}
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
-	if err := objectAPI.AbortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
+	if err := abortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
 		errorIf(err, "AbortMultipartUpload failed")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1353,7 +1381,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		completeParts = append(completeParts, part)
 	}
 
-	objInfo, err := objectAPI.CompleteMultipartUpload(ctx, bucket, object, uploadID, completeParts)
+	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
+	if api.CacheAPI() != nil {
+		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
+	}
+	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts)
 	if err != nil {
 		err = errors.Cause(err)
 		switch oErr := err.(type) {
@@ -1434,7 +1466,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// Ignore delete object errors while replying to client, since we are
 	// suppposed to reply only 204. Additionally log the error for
 	// investigation.
-	if err := deleteObject(ctx, objectAPI, bucket, object, r); err != nil {
+	if err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r); err != nil {
 		errorIf(err, "Unable to delete an object %s", pathJoin(bucket, object))
 	}
 	writeSuccessNoContent(w)

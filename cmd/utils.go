@@ -334,3 +334,34 @@ func newContext(r *http.Request, api string) context.Context {
 
 	return logger.SetContext(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
 }
+
+// isNetworkOrHostDown - if there was a network error or if the host is down.
+func isNetworkOrHostDown(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch err.(type) {
+	case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+		return true
+	case *url.Error:
+		// For a URL error, where it replies back "connection closed"
+		if strings.Contains(err.Error(), "Connection closed by foreign host") {
+			return true
+		}
+		return true
+	default:
+		if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
+			// If error is - tlsHandshakeTimeoutError,.
+			return true
+		} else if strings.Contains(err.Error(), "i/o timeout") {
+			// If error is - tcp timeoutError.
+			return true
+		} else if strings.Contains(err.Error(), "connection timed out") {
+			// If err is a net.Dial timeout.
+			return true
+		} else if strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
+			return true
+		}
+	}
+	return false
+}

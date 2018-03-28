@@ -92,6 +92,13 @@ minio server /data
 
 By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in Minio server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
+### Cache
+|Field|Type|Description|
+|:---|:---|:---|
+|``drives``| _[]string_ | List of drives|
+|``exclude`` | _[]string_ | List of wildcard patterns for prefixes to exclude from cache |
+|``expiry`` | _int_ | Days to cache expiry |
+
 #### Notify
 |Field|Type|Description|
 |:---|:---|:---|

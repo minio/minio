@@ -131,10 +131,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV20ToV21(); err != nil {
 		t.Fatal("migrate v20 to v21 should succeed when no config file is found")
 	}
+	if err := migrateV21ToV22(); err != nil {
+		t.Fatal("migrate v21 to v22 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v21 is successfully done
-func TestServerConfigMigrateV2toV21(t *testing.T) {
+// Test if a config migration from v2 to v23 is successfully done
+func TestServerConfigMigrateV2toV23(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -262,6 +265,12 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV20ToV21(); err == nil {
 		t.Fatal("migrateConfigV20ToV21() should fail with a corrupted json")
+	}
+	if err := migrateV21ToV22(); err == nil {
+		t.Fatal("migrateConfigV21ToV22() should fail with a corrupted json")
+	}
+	if err := migrateV22ToV23(); err == nil {
+		t.Fatal("migrateConfigV22ToV23() should fail with a corrupted json")
 	}
 }
 

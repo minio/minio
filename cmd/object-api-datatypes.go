@@ -108,6 +108,8 @@ type ObjectInfo struct {
 	Writer       io.WriteCloser `json:"-"`
 	Reader       *hash.Reader   `json:"-"`
 	metadataOnly bool
+	// Date and time when the object was last accessed.
+	AccTime time.Time
 }
 
 // ListPartsInfo - represents list of all parts.

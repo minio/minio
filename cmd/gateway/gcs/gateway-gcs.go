@@ -109,6 +109,11 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  CACHE:
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days
+
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
@@ -124,6 +129,15 @@ EXAMPLES:
       (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} mygcsprojectid
+
+  2. Start minio gateway server for GCS backend with edge caching enabled.
+      $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+      $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}} mygcsprojectid
 `
 
