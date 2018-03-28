@@ -83,7 +83,6 @@ async.waterfall([
       exec(cmd, cb)
     },
     function(stdout, stderr, cb) {
-      console.log("assetsFileName:", assetsFileName)
       fs.renameSync('bindata.go', assetsFileName)
       fs.appendFileSync(assetsFileName, '\n')
       fs.appendFileSync(assetsFileName, 'var UIReleaseTag = "' + buildType + '.' +
