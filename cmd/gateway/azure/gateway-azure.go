@@ -19,7 +19,6 @@ package azure
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -39,6 +38,7 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	sha256 "github.com/minio/sha256-simd"
+	"github.com/skyrings/skyring-common/tools/uuid"
 
 	minio "github.com/minio/minio/cmd"
 )
@@ -342,17 +342,11 @@ func azureToObjectError(err error, params ...string) error {
 
 // mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
 func mustGetAzureUploadID() string {
-	var id [8]byte
-
-	n, err := io.ReadFull(rand.Reader, id[:])
+	uuid, err := uuid.New()
 	if err != nil {
-		panic(fmt.Errorf("unable to generate upload ID for azure. %s", err))
+		panic(err)
 	}
-	if n != len(id) {
-		panic(fmt.Errorf("insufficient random data (expected: %d, read: %d)", len(id), n))
-	}
-
-	return fmt.Sprintf("%x", id[:])
+	return fmt.Sprintf("%x", uuid[:])
 }
 
 // checkAzureUploadID - returns error in case of given string is upload ID.
@@ -695,9 +689,6 @@ func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID stri
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
 	uploadID = mustGetAzureUploadID()
-	if err = a.checkUploadIDExists(bucket, object, uploadID); err == nil {
-		return "", errors.Trace(fmt.Errorf("Upload ID name collision"))
-	}
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 
 	var jsonData []byte
