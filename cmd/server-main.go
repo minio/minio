@@ -76,6 +76,9 @@ ENVIRONMENT VARIABLES:
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
 
+  WORM:
+     MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared

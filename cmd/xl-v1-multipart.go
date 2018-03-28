@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -725,6 +725,13 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			// Request 4: CompleteMultipartUpload --part 2
 			// N.B. 1st part is not present. This part should be removed from the storage.
 			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
+		}
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if xl.isObject(bucket, object) {
+			return ObjectInfo{}, errors.Trace(ObjectAlreadyExists{Bucket: bucket, Object: object})
 		}
 	}
 
