@@ -131,6 +131,31 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.XL.This)
 }
 
+// connectDisks - attempt to connect all the endpoints, loads format
+// and re-arranges the disks in proper position.
+func (s *xlSets) connectDisks() {
+	for _, endpoint := range s.endpoints {
+		if s.isConnected(endpoint) {
+			continue
+		}
+		disk, format, err := connectEndpoint(endpoint)
+		if err != nil {
+			printEndpointError(endpoint, err)
+			continue
+		}
+		s.formatMu.RLock()
+		i, j, err := findDiskIndex(s.format, format)
+		s.formatMu.RUnlock()
+		if err != nil {
+			printEndpointError(endpoint, err)
+			continue
+		}
+		s.xlDisksMu.Lock()
+		s.xlDisks[i][j] = disk
+		s.xlDisksMu.Unlock()
+	}
+}
+
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
@@ -143,26 +168,7 @@ func (s *xlSets) monitorAndConnectEndpoints(doneCh chan struct{}, monitorInterva
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			for _, endpoint := range s.endpoints {
-				if s.isConnected(endpoint) {
-					continue
-				}
-				disk, format, err := connectEndpoint(endpoint)
-				if err != nil {
-					printEndpointError(endpoint, err)
-					continue
-				}
-				s.formatMu.RLock()
-				i, j, err := findDiskIndex(s.format, format)
-				s.formatMu.RUnlock()
-				if err != nil {
-					printEndpointError(endpoint, err)
-					continue
-				}
-				s.xlDisksMu.Lock()
-				s.xlDisks[i][j] = disk
-				s.xlDisksMu.Unlock()
-			}
+			s.connectDisks()
 		}
 	}
 }
@@ -1036,6 +1042,9 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 		s.formatMu.Lock()
 		s.format = refFormat
 		s.formatMu.Unlock()
+
+		// Connect disks, after saving the new reference format.
+		s.connectDisks()
 	}
 
 	return res, nil

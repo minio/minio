@@ -338,20 +338,24 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
 		}
+		var drive string
 		if v == nil {
+			if errs[i] != errDiskNotFound {
+				drive = outDatedDisks[i].String()
+			}
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: "",
+				Endpoint: drive,
 				State:    driveState,
 			})
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: "",
+				Endpoint: drive,
 				State:    driveState,
 			})
 			continue
 		}
-		drive := v.String()
+		drive = v.String()
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
 			Endpoint: drive,
@@ -492,7 +496,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 	}
 
 	// Rename from tmp location to the actual location.
-	for diskIndex, disk := range outDatedDisks {
+	for _, disk := range outDatedDisks {
 		if disk == nil {
 			continue
 		}
@@ -504,12 +508,9 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			return result, toObjectErr(errors.Trace(aErr), bucket, object)
 		}
 
-		realDiskIdx := unshuffleIndex(diskIndex, latestMeta.Erasure.Distribution)
-		if outDatedDisks[realDiskIdx] != nil {
-			for i, v := range result.After.Drives {
-				if v.Endpoint == outDatedDisks[realDiskIdx].String() {
-					result.After.Drives[i].State = madmin.DriveStateOk
-				}
+		for i, v := range result.Before.Drives {
+			if v.Endpoint == disk.String() {
+				result.After.Drives[i].State = madmin.DriveStateOk
 			}
 		}
 	}
