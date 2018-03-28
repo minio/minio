@@ -890,7 +890,7 @@ func (fs *FSObjects) getObjectETag(bucket, entry string, lock bool) (string, err
 	}
 
 	// Check if FS metadata is valid, if not return error.
-	if !isFSMetaValid(parseFSVersion(fsMetaBuf), parseFSFormat(fsMetaBuf)) {
+	if !isFSMetaValid(parseFSVersion(fsMetaBuf)) {
 		return "", toObjectErr(errors.Trace(errCorruptedFormat), bucket, entry)
 	}
 
