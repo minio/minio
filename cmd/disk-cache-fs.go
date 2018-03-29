@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -37,6 +38,8 @@ const (
 	// cache.json object metadata for cached objects.
 	cacheMetaJSONFile = "cache.json"
 	cacheMetaFormat   = "cache"
+
+	cacheEnvDelimiter = ";"
 )
 
 // cacheFSObjects implements the cache backend operations.
@@ -59,9 +62,13 @@ type cacheFSObjects struct {
 // Inits the cache directory if it is not init'ed already.
 // Initializing implies creation of new FS Object layer.
 func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObjects, error) {
-	obj, err := newFSObjects(dir, cacheMetaJSONFile)
-	if err != nil {
-		return nil, err
+	// Assign a new UUID for FS minio mode. Each server instance
+	// gets its own UUID for temporary file transaction.
+	fsUUID := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(dir, fsUUID); err != nil {
+		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	trashPath := pathJoin(dir, minioMetaBucket, cacheTrashDir)
@@ -72,9 +79,23 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 	if expiry == 0 {
 		expiry = globalCacheExpiry
 	}
-	var cacheFS cacheFSObjects
-	fsObjects := obj.(*FSObjects)
-	cacheFS = cacheFSObjects{
+
+	// Initialize fs objects.
+	fsObjects := &FSObjects{
+		fsPath:       dir,
+		metaJSONFile: cacheMetaJSONFile,
+		fsUUID:       fsUUID,
+		rwPool: &fsIOPool{
+			readersMap: make(map[string]*lock.RLockedFile),
+		},
+		nsMutex:       newNSLock(false),
+		listPool:      newTreeWalkPool(globalLookupTimeout),
+		appendFileMap: make(map[string]*fsAppendFile),
+	}
+
+	go fsObjects.cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+
+	cacheFS := cacheFSObjects{
 		FSObjects:       fsObjects,
 		dir:             dir,
 		expiry:          expiry,

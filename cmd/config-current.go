@@ -113,14 +113,7 @@ func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int) {
 
 // GetCacheConfig gets the current cache config
 func (s *serverConfig) GetCacheConfig() CacheConfig {
-	if s.Cache.Drives != nil {
-		return CacheConfig{
-			Drives:  s.Cache.Drives,
-			Exclude: s.Cache.Exclude,
-			Expiry:  s.Cache.Expiry,
-		}
-	}
-	return CacheConfig{}
+	return s.Cache
 }
 
 // Save config.
@@ -247,6 +240,7 @@ func newConfig() error {
 	if globalIsDiskCacheEnabled {
 		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
 	}
+
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
 	// unlock the mutex.
@@ -377,6 +371,7 @@ func loadConfig() error {
 	if globalIsDiskCacheEnabled {
 		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
 	}
+
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg

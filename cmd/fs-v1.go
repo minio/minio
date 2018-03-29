@@ -95,8 +95,8 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
-// newFSObjects - initialize new fs object layer.
-func newFSObjects(fsPath, metaJSONFile string) (ObjectLayer, error) {
+// NewFSObjectLayer - initialize new fs object layer.
+func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}
@@ -150,7 +150,7 @@ func newFSObjects(fsPath, metaJSONFile string) (ObjectLayer, error) {
 	// Initialize fs objects.
 	fs := &FSObjects{
 		fsPath:       fsPath,
-		metaJSONFile: metaJSONFile,
+		metaJSONFile: fsMetaJSONFile,
 		fsUUID:       fsUUID,
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
@@ -181,11 +181,6 @@ func newFSObjects(fsPath, metaJSONFile string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return fs, nil
-}
-
-// NewFSObjectLayer - initialize new fs object layer.
-func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
-	return newFSObjects(fsPath, fsMetaJSONFile)
 }
 
 // Shutdown - should be called when process shuts down.

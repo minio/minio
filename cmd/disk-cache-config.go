@@ -17,48 +17,58 @@
 package cmd
 
 import (
-	"strconv"
-	"strings"
-
-	"errors"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
 )
 
 // CacheConfig represents cache config settings
 type CacheConfig struct {
-	Drives  []string
-	Expiry  int
-	Exclude []string
+	Drives  []string `json:"drives"`
+	Expiry  int      `json:"expiry"`
+	Exclude []string `json:"exclude"`
+}
+
+// UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
+// json entries for CacheConfig.
+func (cfg *CacheConfig) UnmarshalJSON(data []byte) (err error) {
+	type Alias CacheConfig
+	var _cfg = &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(cfg),
+	}
+	if err = json.Unmarshal(data, _cfg); err != nil {
+		return err
+	}
+	if _, err = parseCacheDrives(_cfg.Drives); err != nil {
+		return err
+	}
+	if _, err = parseCacheExcludes(_cfg.Exclude); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Parses given cacheDrivesEnv and returns a list of cache drives.
-func parseCacheDrives(cacheDrivesEnv string) ([]string, error) {
-	cacheDrivesEnv = strings.ToLower(cacheDrivesEnv)
-	s := strings.Split(cacheDrivesEnv, ";")
-	c2 := make([]string, 0)
-	for _, d := range s {
-		if len(d) > 0 {
-			c2 = append(c2, d)
+func parseCacheDrives(drives []string) ([]string, error) {
+	for _, d := range drives {
+		if !filepath.IsAbs(d) {
+			return nil, fmt.Errorf("cache dir should be absolute path: %s", d)
 		}
 	}
-	return c2, nil
+	return drives, nil
 }
 
 // Parses given cacheExcludesEnv and returns a list of cache exclude patterns.
-func parseCacheExcludes(cacheExcludesEnv string) ([]string, error) {
-	s := strings.Split(cacheExcludesEnv, ";")
-	c2 := make([]string, 0)
-	for _, e := range s {
-		if len(e) > 0 {
-			if strings.HasPrefix(e, "/") {
-				return c2, errors.New("cache exclude patterns cannot start with / as prefix " + e)
-			}
-			c2 = append(c2, e)
+func parseCacheExcludes(excludes []string) ([]string, error) {
+	for _, e := range excludes {
+		if len(e) == 0 {
+			return nil, fmt.Errorf("cache exclude path (%s) cannot be empty", e)
+		}
+		if hasPrefix(e, slashSeparator) {
+			return nil, fmt.Errorf("cache exclude pattern (%s) cannot start with / as prefix", e)
 		}
 	}
-	return c2, nil
-}
-
-// Parses given cacheExpiryEnv and returns cache expiry in days.
-func parseCacheExpiry(cacheExpiryEnv string) (int, error) {
-	return strconv.Atoi(cacheExpiryEnv)
+	return excludes, nil
 }
