@@ -21,6 +21,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/minio/minio/pkg/event"
+	xnet "github.com/minio/minio/pkg/net"
+
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -74,6 +77,11 @@ type ObjectLayer interface {
 	RefreshBucketPolicy(context.Context, string) error
 	DeleteBucketPolicy(context.Context, string) error
 
+	// Notification operations
+	SetBucketNotificationConfig(context.Context, string, *event.Config) error
+	GetBucketNotificationConfig(context.Context, string) (*event.Config, error)
+	SetBucketListenerConfig(ctx context.Context, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error
+	DeleteBucketListenerConfig(ctx context.Context, bucketName string, targetID event.TargetID, addr xnet.Host) error
 	// Supported operations check
 	IsNotificationSupported() bool
 	IsEncryptionSupported() bool

@@ -22,8 +22,10 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
@@ -140,4 +142,24 @@ func (a GatewayUnsupported) IsNotificationSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (a GatewayUnsupported) IsEncryptionSupported() bool {
 	return false
+}
+
+// SetBucketNotificationConfig saves notification config to disk
+func (a GatewayUnsupported) SetBucketNotificationConfig(context.Context, string, *event.Config) error {
+	return errors.Trace(NotImplemented{})
+}
+
+// GetBucketNotificationConfig fetches bucket notification config from disk.
+func (a GatewayUnsupported) GetBucketNotificationConfig(ctx context.Context, bucketName string) (*event.Config, error) {
+	return nil, errors.Trace(NotImplemented{})
+}
+
+// SetBucketListenerConfig updates listener to listener config on disk
+func (a GatewayUnsupported) SetBucketListenerConfig(ctx context.Context, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
+	return errors.Trace(NotImplemented{})
+}
+
+// DeleteBucketListenerConfig deletes listener from listener config on disk
+func (a GatewayUnsupported) DeleteBucketListenerConfig(ctx context.Context, bucketName string, targetID event.TargetID, addr xnet.Host) error {
+	return errors.Trace(NotImplemented{})
 }
