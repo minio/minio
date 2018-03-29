@@ -57,15 +57,15 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";".
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
