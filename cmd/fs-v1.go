@@ -345,12 +345,6 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 		return toObjectErr(err, bucket)
 	}
 
-	// Cleanup all the previously incomplete multiparts.
-	minioMetaMultipartBucketDir := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket)
-	if err = fsRemoveAll(minioMetaMultipartBucketDir); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
 	// Cleanup all the bucket metadata.
 	minioMetadataBucketDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket)
 	if err = fsRemoveAll(minioMetadataBucketDir); err != nil {
