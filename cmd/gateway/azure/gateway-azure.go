@@ -19,6 +19,7 @@ package azure
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	sha256 "github.com/minio/sha256-simd"
-	"github.com/skyrings/skyring-common/tools/uuid"
 
 	minio "github.com/minio/minio/cmd"
 )
@@ -354,12 +354,20 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
+// this 8 byte restriction is needed because Azure block id has a restriction of length
+// upto 8 bytes.
 func mustGetAzureUploadID() string {
-	uuid, err := uuid.New()
+	var id [8]byte
+
+	n, err := io.ReadFull(rand.Reader, id[:])
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("unable to generate upload ID for azure. %s", err))
 	}
-	return fmt.Sprintf("%x", uuid[:])
+	if n != len(id) {
+		panic(fmt.Errorf("insufficient random data (expected: %d, read: %d)", len(id), n))
+	}
+
+	return hex.EncodeToString(id[:])
 }
 
 // checkAzureUploadID - returns error in case of given string is upload ID.
