@@ -24,6 +24,8 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/event"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -323,4 +325,24 @@ func (xl xlObjects) IsNotificationSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (xl xlObjects) IsEncryptionSupported() bool {
 	return true
+}
+
+// SetBucketNotificationConfig saves notification config to disk
+func (xl xlObjects) SetBucketNotificationConfig(ctx context.Context, bucket string, config *event.Config) error {
+	return saveNotificationConfig(ctx, xl, bucket, config)
+}
+
+// GetBucketNotificationConfig fetches bucket notification config from disk.
+func (xl xlObjects) GetBucketNotificationConfig(ctx context.Context, bucketName string) (*event.Config, error) {
+	return readNotificationConfig(ctx, xl, bucketName)
+}
+
+// SetBucketListenerConfig updates listener to listener config on disk
+func (xl xlObjects) SetBucketListenerConfig(ctx context.Context, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
+	return SaveListener(ctx, xl, bucketName, eventNames, pattern, targetID, addr)
+}
+
+// DeleteBucketListenerConfig deletes listener from listener config on disk
+func (xl xlObjects) DeleteBucketListenerConfig(ctx context.Context, bucketName string, targetID event.TargetID, addr xnet.Host) error {
+	return RemoveListener(ctx, xl, bucketName, targetID, addr)
 }

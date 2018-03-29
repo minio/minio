@@ -198,7 +198,7 @@ func (rpcClient *PeerRPCClient) UpdateBucketPolicy(bucketName string) error {
 	return rpcClient.Call("Peer.UpdateBucketPolicy", &args, &reply)
 }
 
-// PutBucketNotification - calls put bukcet notification RPC.
+// PutBucketNotification - calls put bucket notification RPC.
 func (rpcClient *PeerRPCClient) PutBucketNotification(bucketName string, rulesMap event.RulesMap) error {
 	args := PutBucketNotificationArgs{
 		BucketName: bucketName,

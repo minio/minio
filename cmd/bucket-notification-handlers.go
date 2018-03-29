@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -69,7 +70,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	// Attempt to successfully load notification config.
-	nConfig, err := readNotificationConfig(objAPI, bucketName)
+	nConfig, err := objAPI.GetBucketNotificationConfig(context.Background(), bucketName)
 	if err != nil {
 		// Ignore errNoSuchNotifications to comply with AWS S3.
 		if xerrors.Cause(err) != errNoSuchNotifications {
@@ -138,7 +139,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err = saveNotificationConfig(objectAPI, bucketName, config); err != nil {
+	if err = objectAPI.SetBucketNotificationConfig(context.Background(), bucketName, config); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -235,7 +236,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
 
 	thisAddr := xnet.MustParseHost(GetLocalPeer(globalEndpoints))
-	if err := SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
+	if err := SaveListener(ctx, objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
 		errorIf(err, "Unable to save HTTP listener %v", target)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -248,7 +249,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	<-target.DoneCh
 
-	if err := RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
+	if err := RemoveListener(ctx, objAPI, bucketName, target.ID(), *thisAddr); err != nil {
 		errorIf(err, "Unable to save HTTP listener %v", target)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
