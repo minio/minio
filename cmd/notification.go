@@ -496,14 +496,6 @@ func readConfig(objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 func readNotificationConfig(objAPI ObjectLayer, bucketName string) (*event.Config, error) {
 	// Construct path to notification.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-
-	// Get read lock.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, configFile)
-	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
-		return nil, err
-	}
-	defer objLock.RUnlock()
-
 	reader, err := readConfig(objAPI, configFile)
 	if err != nil {
 		return nil, err
@@ -519,14 +511,6 @@ func saveNotificationConfig(objAPI ObjectLayer, bucketName string, config *event
 	}
 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-
-	// Get write lock.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, configFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	return saveConfig(objAPI, configFile, data)
 }
 
