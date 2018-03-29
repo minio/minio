@@ -1,7 +1,6 @@
 # Large Bucket Support Design Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-This document explains the design approach, advanced use cases and limitations of the large bucket feature. If you're looking to get started with large bucket support, we suggest you 
-go through the [getting started document](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md) first.
+This document explains the design approach, advanced use cases and limits of the large bucket feature. If you're looking to get started with large bucket support, we suggest you go through the [getting started document](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md) first.
 
 ## Command-line
 
