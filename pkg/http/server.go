@@ -176,16 +176,16 @@ var defaultCipherSuites = []uint16{
 }
 
 // NewServer - creates new HTTP server using given arguments.
-func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate) *Server {
+func NewServer(addrs []string, handler http.Handler, certificateGetter func(*tls.ClientHelloInfo) (*tls.Certificate, error)) *Server {
 	var tlsConfig *tls.Config
-	if certificate != nil {
+	if certificateGetter != nil {
 		tlsConfig = &tls.Config{
 			PreferServerCipherSuites: true,
 			CipherSuites:             defaultCipherSuites,
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 		}
-		tlsConfig.Certificates = append(tlsConfig.Certificates, *certificate)
+		tlsConfig.GetCertificate = certificateGetter
 	}
 
 	httpServer := &Server{

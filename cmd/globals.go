@@ -127,7 +127,8 @@ var (
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
 
-	globalTLSCertificate *tls.Certificate
+	globalTLSCertificate         *tls.Certificate
+	globalTLSCertificateReloader *KeypairReloader
 
 	globalHTTPServer        *miniohttp.Server
 	globalHTTPServerErrorCh = make(chan error)
