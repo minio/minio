@@ -27,17 +27,13 @@ func TestDiskCacheFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = initDiskCaches(fsDirs, t)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// cformat := newFormatCacheV1([]string{cacheDataDir + "/format.json"})
+
 	_, err = initFormatCache(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Do the basic sanity checks to check if initFormatCache() did its job.
-	cacheFormatPath := pathJoin(fsDirs[0], formatConfigFile)
+	cacheFormatPath := pathJoin(fsDirs[0], minioMetaBucket, formatConfigFile)
 	f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)

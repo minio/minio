@@ -1752,7 +1752,7 @@ func migrateV21ToV22() error {
 	srvConfig := &serverConfigV22{
 		Notify: notifier{},
 	}
-	srvConfig.Version = serverConfigVersion
+	srvConfig.Version = "22"
 	srvConfig.Credential = cv21.Credential
 	srvConfig.Region = cv21.Region
 	if srvConfig.Region == "" {
@@ -1856,7 +1856,7 @@ func migrateV22ToV23() error {
 	srvConfig := &serverConfigV23{
 		Notify: notifier{},
 	}
-	srvConfig.Version = serverConfigVersion
+	srvConfig.Version = "23"
 	srvConfig.Credential = cv22.Credential
 	srvConfig.Region = cv22.Region
 	if srvConfig.Region == "" {
