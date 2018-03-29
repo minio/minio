@@ -138,14 +138,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Acquire a write lock on bucket before modifying its configuration.
-	bucketLock := globalNSMutex.NewNSLock(bucketName, "")
-	if err = bucketLock.GetLock(globalOperationTimeout); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-	defer bucketLock.Unlock()
-
 	if err = saveNotificationConfig(objectAPI, bucketName, config); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
