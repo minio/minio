@@ -1,55 +1,41 @@
-## Disk based caching
+# Disk Cache Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Disk caching can be turned on by updating the "cache" config
-settings for minio server. By default, this is at `${HOME}/.minio`.
+Disk caching feature here refers to the use of caching disks to store content closer to the tenants. For instance, if you access an object from a lets say `gateway azure` setup and download the object that gets cached, each subsequent request on the object gets served directly from the cache drives until it expires. This feature allows Minio users to have
 
-"cache" takes the drives location, duration to expiry (in days) and any
-wildcard patterns to exclude certain content from cache as 
-configuration settings. 
-```
+- Object to be delivered with the best possible performance.
+- Dramatic improvements for time to first byte for any object.
+
+## Get started
+
+### 1. Prerequisites
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+
+### 2. Run Minio with cache
+Disk caching can be enabled by updating the `cache` config settings for Minio server. Config `cache` settings takes the drive locations, cache expiry duration (in days) and any wildcard patterns to exclude from being cached.
+
+```json
 "cache": {
-	"drives": ["/path/drive1", "/path/drive2", "/path/drive3"],
-	"expiry": 30,
-	"exclude": ["*.png","bucket1/a/b","bucket2/*"]
+	"drives": ["/drive1", "/drive2", "/drive3"],
+	"expiry": 90,
+	"exclude": ["*.pdf","mybucket/*"]
 },
 ```
 
-The cache settings can also be set by the environment variables
-below. When set, environment variables override any cache settings in config.json
-```
+The cache settings may also be set through environment variables. When set, environment variables override any `cache` config settings for Minio server. Following example uses `/drive1`, `/drive2` and `/drive3` for caching, with expiry upto 90 days while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension while starting a standalone erasure coded setup.
+
+```bash
 export MINIO_CACHE_DRIVES="/drive1;/drive2;/drive3"
 export MINIO_CACHE_EXPIRY=90
-export MINIO_CACHE_EXCLUDE="pattern1;pattern2;pattern3"
+export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
+minio server /export{1...24}
 ```
 
- - Cache size is 80% of drive capacity. Disk caching requires
-   Atime support to be enabled on the cache drive.
+### 3. Test your setup
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the Minio endpoints.
 
- - Expiration of entries takes user provided expiry as a hint,
-   and defaults to 90 days if not provided.
-
- - Garbage collection sweep of the expired entries happens whenever
-   disk usage is > 80% of drive capacity until sufficient disk
-   space has been freed.
- - Object is cached only when drive has sufficient disk space for 100 times the size of current object
-
-### Behavior
-
-Disk caching happens on both GET and PUT operations.
-
-- GET caches new objects for entries not found in cache.
-  Otherwise serves from the cache.
-
-- PUT/POST caches all successfully uploaded objects. Replaces
-  existing cached entry for the same object if needed.
-
-When an object is deleted, it is automatically cleared from the cache.
-
-NOTE: Expiration happens automatically based on the configured
-interval as explained above, frequently accessed objects stay
-alive in cache for a significantly longer time on every cache hit.
-
-The following caveats apply for offline mode
-  - GET, LIST and HEAD operations will be served from the disk cache.
-  - PUT operations are disallowed when gateway backend is offline.
-  - Anonymous operations are not implemented as of now.
+# Explore Further
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
+- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [The Minio documentation website](https://docs.minio.io)
