@@ -68,9 +68,9 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days
+     MINIO_CACHE_DRIVES: List of cache drives delimited by ";".
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 	
   REGION:
      MINIO_REGION: To set custom region. By default all regions are accepted.
@@ -79,7 +79,7 @@ ENVIRONMENT VARIABLES:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 
   WORM:
      MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
