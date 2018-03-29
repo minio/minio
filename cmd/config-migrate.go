@@ -1934,6 +1934,10 @@ func migrateV22ToV23() error {
 	// Load domain config from existing config in the file.
 	srvConfig.Domain = cv22.Domain
 
+	// Load storage class config from existing storage class config in the file
+	srvConfig.StorageClass.RRS = cv22.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv22.StorageClass.Standard
+
 	// Init cache config.For future migration, Cache config needs to be copied over from previous version.
 	srvConfig.Cache.Drives = []string{}
 	srvConfig.Cache.Exclude = []string{}
