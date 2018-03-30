@@ -53,7 +53,6 @@ mc ls mygcs
 ```
 
 ### Known limitations
-
 Gateway inherits the following GCS limitations:
 
 - Maximum number of multipart parts per upload is 1024.
@@ -67,6 +66,5 @@ Other limitations:
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
-- [`minfs` filesystem interface](http://docs.minio.io/docs/minfs-quickstart-guide)
 - [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
 
