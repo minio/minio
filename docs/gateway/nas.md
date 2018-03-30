@@ -7,7 +7,7 @@ Minio Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple 
 docker run -p 9000:9000 --name nas-s3 \
  -e "MINIO_ACCESS_KEY=minio" \
  -e "MINIO_SECRET_KEY=minio123" \
- minio/minio:edge gateway nas /shared/nasvol
+ minio/minio gateway nas /shared/nasvol
 ```
 
 ### Using Binary

@@ -8,14 +8,14 @@ Minio Gateway adds Amazon S3 compatibility to Alibaba Cloud Object Storage Servi
 docker run -p 9000:9000 --name azure-s3 \
  -e "MINIO_ACCESS_KEY=ossaccesskey" \
  -e "MINIO_SECRET_KEY=osssecretkey" \
- minio/minio gateway azure
+ minio/minio gateway oss
 ```
 
 ### Using Binary
 ```
 export MINIO_ACCESS_KEY=ossaccesskey
 export MINIO_SECRET_KEY=osssecretkey
-minio gateway azure
+minio gateway oss
 ```
 
 ## Test using Minio Browser
@@ -54,5 +54,4 @@ Other limitations:
 
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
-- [`minfs` filesystem interface](http://docs.minio.io/docs/minfs-quickstart-guide)
 - [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
