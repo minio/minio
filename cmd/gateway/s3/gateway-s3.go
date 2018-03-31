@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,12 +97,16 @@ EXAMPLES:
 
 // Handler for 'minio gateway s3' command line.
 func s3GatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
-	host := ctx.Args().First()
-	// Validate gateway arguments.
-	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	args := ctx.Args()
+	if !ctx.Args().Present() {
+		args = cli.Args{"https://s3.amazonaws.com"}
+	}
 
-	minio.StartGateway(ctx, &S3{host})
+	// Validate gateway arguments.
+	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), args.First()), "Invalid argument")
+
+	// Start the gateway..
+	minio.StartGateway(ctx, &S3{args.First()})
 }
 
 // S3 implements Gateway.
@@ -115,34 +119,46 @@ func (g *S3) Name() string {
 	return s3Backend
 }
 
-// NewGatewayLayer returns s3 ObjectLayer.
-func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	var err error
-	var endpoint string
-	var secure = true
+// newS3 - Initializes a new client by auto probing S3 server signature.
+func newS3(url, accessKey, secretKey string) (*miniogo.Core, error) {
+	if url == "" {
+		url = "https://s3.amazonaws.com"
+	}
 
-	// Validate host parameters.
-	if g.host != "" {
-		// Override default params if the host is provided
-		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
+	// Override default params if the host is provided
+	endpoint, secure, err := minio.ParseGatewayEndpoint(url)
+	if err != nil {
+		return nil, err
+	}
+
+	clnt, err := miniogo.NewV4(endpoint, accessKey, secretKey, secure)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = clnt.BucketExists("probe-bucket-sign"); err != nil {
+		clnt, err = miniogo.NewV2(endpoint, accessKey, secretKey, secure)
 		if err != nil {
+			return nil, err
+		}
+		if _, err = clnt.BucketExists("probe-bucket-sign"); err != nil {
 			return nil, err
 		}
 	}
 
-	// Default endpoint parameters
-	if endpoint == "" {
-		endpoint = "s3.amazonaws.com"
-	}
+	return &miniogo.Core{Client: clnt}, nil
+}
 
-	// Initialize minio client object.
-	client, err := miniogo.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)
+// NewGatewayLayer returns s3 ObjectLayer.
+func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+	// Probe S3 signature with input credentials.
+	clnt, err := newS3(g.host, creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &s3Objects{
-		Client: client,
+		Client: clnt,
 	}, nil
 }
 
