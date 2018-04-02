@@ -1,4 +1,4 @@
-# Minio Server `config.json` (v22) Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio Server `config.json` (v23) Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 Minio server stores all its configuration data in `${HOME}/.minio/config.json` file by default. Following sections provide detailed explanation of each fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
@@ -95,7 +95,7 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 ### Cache
 |Field|Type|Description|
 |:---|:---|:---|
-|``drives``| _[]string_ | List of drives|
+|``drives``| _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled|
 |``exclude`` | _[]string_ | List of wildcard patterns for prefixes to exclude from cache |
 |``expiry`` | _int_ | Days to cache expiry |
 

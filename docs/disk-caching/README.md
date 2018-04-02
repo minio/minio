@@ -11,20 +11,20 @@ Disk caching feature here refers to the use of caching disks to store content cl
 Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
 
 ### 2. Run Minio with cache
-Disk caching can be enabled by updating the `cache` config settings for Minio server. Config `cache` settings takes the drive locations, cache expiry duration (in days) and any wildcard patterns to exclude from being cached.
+Disk caching can be enabled by updating the `cache` config settings for Minio server. Config `cache` settings takes the mounted drive(s) or directory paths, cache expiry duration (in days) and any wildcard patterns to exclude from being cached.
 
 ```json
 "cache": {
-	"drives": ["/drive1", "/drive2", "/drive3"],
+	"drives": ["/mnt/drive1", "/mnt/drive2", "/mnt/drive3"],
 	"expiry": 90,
 	"exclude": ["*.pdf","mybucket/*"]
 },
 ```
 
-The cache settings may also be set through environment variables. When set, environment variables override any `cache` config settings for Minio server. Following example uses `/drive1`, `/drive2` and `/drive3` for caching, with expiry upto 90 days while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension while starting a standalone erasure coded setup.
+The cache settings may also be set through environment variables. When set, environment variables override any `cache` config settings for Minio server. Following example uses `/mnt/drive1`, `/mnt/drive2` and `/mnt/drive3` for caching, with expiry upto 90 days while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension while starting a standalone erasure coded setup.
 
 ```bash
-export MINIO_CACHE_DRIVES="/drive1;/drive2;/drive3"
+export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3"
 export MINIO_CACHE_EXPIRY=90
 export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
 minio server /export{1...24}
@@ -34,6 +34,7 @@ minio server /export{1...24}
 To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the Minio endpoints.
 
 # Explore Further
+- [Disk cache design](https://github.com/minio/minio/blob/master/docs/disk-caching/DESIGN.md)
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
 - [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
