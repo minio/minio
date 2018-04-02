@@ -9,16 +9,16 @@ minio server -h
 ...
 ...
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";"
+     MINIO_CACHE_DRIVES: List of mounted cache drives or directories delimited by ";"
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
      MINIO_CACHE_EXPIRY: Cache expiry duration in days
 ...
 ...
 
-  7. Start minio server with edge caching enabled on '/drive1', '/drive2' and '/drive3',
+  7. Start minio server with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/drive3',
      exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension
      with expiry upto 40 days.
-     $ export MINIO_CACHE_DRIVES="/drive1;/drive2;/drive3"
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3"
      $ export MINIO_CACHE_EXCLUDE="mybucket/*;*.pdf"
      $ export MINIO_CACHE_EXPIRY=40
      $ minio server /home/shared
@@ -26,7 +26,7 @@ minio server -h
 
 ## Assumptions
 - Disk cache size defaults to 80% of your drive capacity.
-- Disk caching requires [`atime`](http://kerolasa.github.io/filetimes.html) support to be enabled on the cache drive.
+- The cache drives are required to be a filesystem mount point with [`atime`](http://kerolasa.github.io/filetimes.html) support to be enabled on the drive. Alternatively writable directories with atime support can be specified in MINIO_CACHE_DRIVES
 - Expiration of each cached entry takes user provided expiry as a hint, and defaults to 90 days if not provided.
 - Garbage collection sweep of the expired cache entries happens whenever cache usage is > 80% of drive capacity, GC continues until sufficient disk space is reclaimed.
 - An object is only cached when drive has sufficient disk space, upto 100 times the size of the object.
@@ -41,6 +41,9 @@ Disk caching caches objects for both **uploaded** and **downloaded** objects i.e
 - Cache disallows write operations when backend is offline.
 
 > NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
+
+### Crash Recovery
+Upon restart of minio server after a running minio process is killed or crashes, disk caching resumes automatically. The garbage collection cycle resumes and any previously cached entries are served from cache.
 
 ## Limits
 - Bucket policies are not cached, so anonymous operations are not supported when backend is offline.

@@ -74,7 +74,7 @@ ENVIRONMENT VARIABLES: (Default values in parenthesis)
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";".
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
@@ -92,7 +92,7 @@ EXAMPLES:
       $ {{.HelpName}}
 
   2. Start minio gateway server for Sia backend with edge caching enabled.
-      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
       $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
       $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}}
