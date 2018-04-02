@@ -725,27 +725,22 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			return result, toObjectErr(walkResult.err, bucket, prefix)
 		}
 
-		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if hasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = entry
-			objInfo.IsDir = true
+		var err error
+		if hasSuffix(walkResult.entry, slashSeparator) {
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(bucket, walkResult.entry)
 		} else {
-			// Set the Mode to a "regular" file.
-			var err error
-			objInfo, err = s.getHashedSet(entry).getObjectInfo(bucket, entry)
-			if err != nil {
-				// Ignore errFileNotFound as the object might have got
-				// deleted in the interim period of listing and getObjectInfo(),
-				// ignore quorum error as it might be an entry from an outdated disk.
-				switch errors.Cause(err) {
-				case errFileNotFound, errXLReadQuorum:
-					continue
-				}
-				return result, toObjectErr(err, bucket, prefix)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(bucket, walkResult.entry)
+		}
+		if err != nil {
+			// Ignore errFileNotFound as the object might have got
+			// deleted in the interim period of listing and getObjectInfo(),
+			// ignore quorum error as it might be an entry from an outdated disk.
+			switch errors.Cause(err) {
+			case errFileNotFound, errXLReadQuorum:
+				continue
 			}
+			return result, toObjectErr(err, bucket, prefix)
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
@@ -1270,23 +1265,19 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 		if walkResult.err != nil {
 			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if hasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = entry
-			objInfo.IsDir = true
+		var err error
+		if hasSuffix(walkResult.entry, slashSeparator) {
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(bucket, walkResult.entry)
 		} else {
-			var err error
-			objInfo, err = s.getHashedSet(entry).getObjectInfo(bucket, entry)
-			if err != nil {
-				// Ignore errFileNotFound
-				if errors.Cause(err) == errFileNotFound {
-					continue
-				}
-				return loi, toObjectErr(err, bucket, prefix)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(bucket, walkResult.entry)
+		}
+		if err != nil {
+			// Ignore errFileNotFound
+			if errors.Cause(err) == errFileNotFound {
+				continue
 			}
+			return loi, toObjectErr(err, bucket, prefix)
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
