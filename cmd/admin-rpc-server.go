@@ -102,7 +102,14 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	if err := query.IsAuthenticated(); err != nil {
 		return err
 	}
-	volLocks := listLocksInfo(query.Bucket, query.Prefix, query.Duration)
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+	volLocks, err := objectAPI.ListLocks(context.Background(), query.Bucket, query.Prefix, query.Duration)
+	if err != nil {
+		return err
+	}
 	*reply = ListLocksReply{VolLocks: volLocks}
 	return nil
 }

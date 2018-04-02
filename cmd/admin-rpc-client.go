@@ -89,7 +89,12 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 
 // ListLocks - Fetches lock information from local lock instrumentation.
 func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	return listLocksInfo(bucket, prefix, duration), nil
+	// check if objectLayer is initialized, if not return.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+	return objectAPI.ListLocks(context.Background(), bucket, prefix, duration)
 }
 
 func (rc remoteAdminClient) SignalService(s serviceSignal) (err error) {
