@@ -33,7 +33,11 @@ export const MainActions = ({
   )
   const onFileUpload = e => {
     e.preventDefault()
-    uploadFile(e.target.files[0])
+    let files = e.target.files
+    let filesToUploadCount = files.length
+    for (let i = 0; i < filesToUploadCount; i++) {
+      uploadFile(files.item(i))
+    }
     e.target.value = null
   }
 
@@ -55,6 +59,7 @@ export const MainActions = ({
                 onChange={onFileUpload}
                 style={{ display: "none" }}
                 id="file-input"
+                multiple={true}
               />
               <label htmlFor="file-input">
                 {" "}

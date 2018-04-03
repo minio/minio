@@ -63,11 +63,20 @@ describe("MainActions", () => {
   it("should call uploadFile when a file is selected for upload", () => {
     const uploadFile = jest.fn()
     const wrapper = shallow(<MainActions uploadFile={uploadFile} />)
-    const file = new Blob(["file content"], { type: "text/plain" })
-    wrapper.find("#file-input").simulate("change", {
+    const files = [new Blob(["file content"], { type: "text/plain" })]
+    const input = wrapper.find("#file-input")
+    const event = {
       preventDefault: jest.fn(),
-      target: { files: [file] }
-    })
-    expect(uploadFile).toHaveBeenCalledWith(file)
+      target: {
+        files: {
+          length: files.length,
+          item: function(index) {
+            return files[index]
+          }
+        }
+      }
+    }
+    input.simulate("change", event)
+    expect(uploadFile).toHaveBeenCalledWith(files[0])
   })
 })
