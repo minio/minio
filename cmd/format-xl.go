@@ -362,26 +362,6 @@ func loadFormatXLAll(endpoints EndpointList) ([]*formatXLV3, []error) {
 	return formats, sErrs
 }
 
-func undoSaveFormatXLAll(disks []StorageAPI) {
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
-	// Undo previous save format.json entry from all underlying storage disks.
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.DeleteFile(minioMetaBucket, formatConfigFile)
-		}(index, disk)
-	}
-
-	// Wait for all make vol to finish.
-	wg.Wait()
-}
-
 func saveFormatXL(disk StorageAPI, format interface{}) error {
 	// Marshal and write to disk.
 	formatBytes, err := json.Marshal(format)
@@ -390,7 +370,7 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 	}
 
 	// Purge any existing temporary file, okay to ignore errors here.
-	disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
+	defer disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
 
 	// Append file `format.json.tmp`.
 	if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
@@ -577,14 +557,7 @@ func saveFormatXLAll(endpoints EndpointList, formats []*formatXLV3) error {
 	wg.Wait()
 
 	writeQuorum := len(endpoints)/2 + 1
-	err = reduceWriteQuorumErrs(errs, nil, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
-		// Purge all successfully created `format.json`
-		// when we do not have enough quorum.
-		undoSaveFormatXLAll(storageDisks)
-	}
-
-	return err
+	return reduceWriteQuorumErrs(errs, nil, writeQuorum)
 }
 
 // Initialize storage disks based on input arguments.

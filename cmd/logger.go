@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"go/build"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -98,13 +99,17 @@ func (log *Logger) Printf(format string, args ...interface{}) {
 
 func init() {
 	var goPathList []string
+	var defaultgoPathList []string
 	// Add all possible GOPATH paths into trimStrings
 	// Split GOPATH depending on the OS type
 	if runtime.GOOS == "windows" {
 		goPathList = strings.Split(GOPATH, ";")
+		defaultgoPathList = strings.Split(build.Default.GOPATH, ";")
 	} else {
 		// All other types of OSs
 		goPathList = strings.Split(GOPATH, ":")
+		defaultgoPathList = strings.Split(build.Default.GOPATH, ":")
+
 	}
 
 	// Add trim string "{GOROOT}/src/" into trimStrings
@@ -115,6 +120,11 @@ func init() {
 	for _, goPathString := range goPathList {
 		trimStrings = append(trimStrings, filepath.Join(goPathString, "src")+string(filepath.Separator))
 	}
+
+	for _, defaultgoPathString := range defaultgoPathList {
+		trimStrings = append(trimStrings, filepath.Join(defaultgoPathString, "src")+string(filepath.Separator))
+	}
+
 	// Add "github.com/minio/minio" as the last to cover
 	// paths like "{GOROOT}/src/github.com/minio/minio"
 	// and "{GOPATH}/src/github.com/minio/minio"

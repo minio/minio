@@ -169,10 +169,9 @@ const (
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
 	ErrInvalidRequest
-
 	// Minio storage class error codes
 	ErrInvalidStorageClass
-
+	ErrBackendDown
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -831,6 +830,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrBackendDown: {
+		Code:           "XMinioBackendDown",
+		Description:    "Object storage backend is unreachable",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 
 	// Add your error structure here.
 }
@@ -975,6 +979,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrOverlappingFilterNotification
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
+	case BackendDown:
+		apiErr = ErrBackendDown
 	default:
 		apiErr = ErrInternalError
 	}

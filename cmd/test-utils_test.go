@@ -545,6 +545,14 @@ func resetGlobalHealState() {
 		}
 	}
 }
+func resetGlobalCacheEnvs() {
+	globalIsDiskCacheEnabled = false
+}
+
+// sets globalObjectAPI to `nil`.
+func resetGlobalCacheObjectAPI() {
+	globalCacheObjectAPI = nil
+}
 
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
@@ -567,6 +575,10 @@ func resetTestGlobals() {
 	resetGlobalStorageEnvs()
 	// Reset global heal state
 	resetGlobalHealState()
+	//Reset global disk cache flags
+	resetGlobalCacheEnvs()
+	//set globalCacheObjectAPI to nil
+	resetGlobalCacheObjectAPI()
 }
 
 // Configure the server for the test run.
@@ -2199,13 +2211,17 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 	bucketRouter := apiRouter.PathPrefix("/{bucket}").Subrouter()
 
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
-	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
+	// When the handlers get a HTTP request they use the underlying ObjectLayer to perform operations.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
 	globalObjLayerMutex.Unlock()
 
+	// When cache is enabled, Put and Get operations are passed
+	// to underlying cache layer to manage object layer operation and disk caching
+	// operation
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		CacheAPI:  newCacheObjectsFn,
 	}
 
 	// Register ListBuckets	handler.

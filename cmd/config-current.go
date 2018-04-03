@@ -39,9 +39,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "22"
+const serverConfigVersion = "23"
 
-type serverConfig = serverConfigV22
+type serverConfig = serverConfigV23
 
 var (
 	// globalServerConfig server config.
@@ -104,6 +104,18 @@ func (s *serverConfig) GetBrowser() bool {
 	return bool(s.Browser)
 }
 
+// SetCacheConfig sets the current cache config
+func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int) {
+	s.Cache.Drives = drives
+	s.Cache.Exclude = exclude
+	s.Cache.Expiry = expiry
+}
+
+// GetCacheConfig gets the current cache config
+func (s *serverConfig) GetCacheConfig() CacheConfig {
+	return s.Cache
+}
+
 // Save config.
 func (s *serverConfig) Save() error {
 	// Save config file.
@@ -164,6 +176,11 @@ func newServerConfig() *serverConfig {
 			Standard: storageClass{},
 			RRS:      storageClass{},
 		},
+		Cache: CacheConfig{
+			Drives:  []string{},
+			Exclude: []string{},
+			Expiry:  globalCacheExpiry,
+		},
 		Notify: notifier{},
 	}
 
@@ -187,6 +204,9 @@ func newServerConfig() *serverConfig {
 	srvCfg.Notify.Webhook = make(map[string]target.WebhookArgs)
 	srvCfg.Notify.Webhook["1"] = target.WebhookArgs{}
 
+	srvCfg.Cache.Drives = make([]string, 0)
+	srvCfg.Cache.Exclude = make([]string, 0)
+	srvCfg.Cache.Expiry = globalCacheExpiry
 	return srvCfg
 }
 
@@ -215,6 +235,10 @@ func newConfig() error {
 
 	if globalIsStorageClass {
 		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
+	}
+
+	if globalIsDiskCacheEnabled {
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -344,6 +368,10 @@ func loadConfig() error {
 		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
 	}
 
+	if globalIsDiskCacheEnabled {
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+	}
+
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg
@@ -361,6 +389,12 @@ func loadConfig() error {
 	}
 	if !globalIsStorageClass {
 		globalStandardStorageClass, globalRRStorageClass = globalServerConfig.GetStorageClass()
+	}
+	if !globalIsDiskCacheEnabled {
+		cacheConf := globalServerConfig.GetCacheConfig()
+		globalCacheDrives = cacheConf.Drives
+		globalCacheExcludes = cacheConf.Exclude
+		globalCacheExpiry = cacheConf.Expiry
 	}
 	globalServerConfigMu.Unlock()
 

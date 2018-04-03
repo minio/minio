@@ -72,11 +72,16 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  CACHE:
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
+     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+
   UPDATE:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests. Set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
@@ -88,6 +93,14 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
       $ {{.HelpName}} https://azure.example.com
+
+  3. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+      $ export MINIO_CACHE_EXPIRY=40
+      $ {{.HelpName}}
 
 `
 
@@ -341,6 +354,8 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
+// this 8 byte restriction is needed because Azure block id has a restriction of length
+// upto 8 bytes.
 func mustGetAzureUploadID() string {
 	var id [8]byte
 
@@ -352,7 +367,7 @@ func mustGetAzureUploadID() string {
 		panic(fmt.Errorf("insufficient random data (expected: %d, read: %d)", len(id), n))
 	}
 
-	return fmt.Sprintf("%x", id[:])
+	return hex.EncodeToString(id[:])
 }
 
 // checkAzureUploadID - returns error in case of given string is upload ID.
@@ -695,9 +710,6 @@ func (a *azureObjects) checkUploadIDExists(bucketName, objectName, uploadID stri
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
 	uploadID = mustGetAzureUploadID()
-	if err = a.checkUploadIDExists(bucket, object, uploadID); err == nil {
-		return "", errors.Trace(fmt.Errorf("Upload ID name collision"))
-	}
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 
 	var jsonData []byte

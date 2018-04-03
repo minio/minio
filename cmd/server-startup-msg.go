@@ -47,7 +47,11 @@ func getFormatStr(strLen int, padding int) string {
 func printStartupMessage(apiEndPoints []string) {
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
-
+	// If cache layer is enabled, print cache capacity.
+	cacheObjectAPI := newCacheObjectsFn()
+	if cacheObjectAPI != nil {
+		printCacheStorageInfo(cacheObjectAPI.StorageInfo(context.Background()))
+	}
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
@@ -182,6 +186,13 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 func printStorageInfo(storageInfo StorageInfo) {
 	log.Println(getStorageInfoMsg(storageInfo))
 	log.Println()
+}
+
+func printCacheStorageInfo(storageInfo StorageInfo) {
+	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Cache Capacity:"),
+		humanize.IBytes(uint64(storageInfo.Free)),
+		humanize.IBytes(uint64(storageInfo.Total)))
+	log.Println(msg)
 }
 
 // Prints certificate expiry date warning

@@ -165,6 +165,12 @@ func migrateConfig() error {
 		if err = migrateV21ToV22(); err != nil {
 			return err
 		}
+		fallthrough
+	case "22":
+		if err = migrateV22ToV23(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -1746,7 +1752,7 @@ func migrateV21ToV22() error {
 	srvConfig := &serverConfigV22{
 		Notify: notifier{},
 	}
-	srvConfig.Version = serverConfigVersion
+	srvConfig.Version = "22"
 	srvConfig.Credential = cv21.Credential
 	srvConfig.Region = cv21.Region
 	if srvConfig.Region == "" {
@@ -1829,5 +1835,118 @@ func migrateV21ToV22() error {
 	}
 
 	log.Printf(configMigrateMSGTemplate, configFile, cv21.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV22ToV23() error {
+	configFile := getConfigFile()
+
+	cv22 := &serverConfigV22{}
+	_, err := quick.Load(configFile, cv22)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘22’. %v", err)
+	}
+	if cv22.Version != "22" {
+		return nil
+	}
+
+	// Copy over fields from V22 into V23 config struct
+	srvConfig := &serverConfigV23{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "23"
+	srvConfig.Credential = cv22.Credential
+	srvConfig.Region = cv22.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv22.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv22.Notify.AMQP
+	}
+	if len(cv22.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv22.Notify.Elasticsearch
+	}
+	if len(cv22.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv22.Notify.Redis
+	}
+	if len(cv22.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv22.Notify.PostgreSQL
+	}
+	if len(cv22.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		srvConfig.Notify.Kafka = cv22.Notify.Kafka
+	}
+	if len(cv22.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv22.Notify.NATS
+	}
+	if len(cv22.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv22.Notify.Webhook
+	}
+	if len(cv22.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv22.Notify.MySQL
+	}
+
+	if len(cv22.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv22.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv22.Browser
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv22.Domain
+
+	// Load storage class config from existing storage class config in the file
+	srvConfig.StorageClass.RRS = cv22.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv22.StorageClass.Standard
+
+	// Init cache config.For future migration, Cache config needs to be copied over from previous version.
+	srvConfig.Cache.Drives = []string{}
+	srvConfig.Cache.Exclude = []string{}
+	srvConfig.Cache.Expiry = globalCacheExpiry
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv22.Version, srvConfig.Version, err)
+	}
+
+	log.Printf(configMigrateMSGTemplate, configFile, cv22.Version, srvConfig.Version)
 	return nil
 }

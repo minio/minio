@@ -108,6 +108,12 @@
 			"revisionTime": "2016-07-05T13:30:06-07:00"
 		},
 		{
+			"checksumSHA1": "QF48SiRNX1YDARpi0rJtgAizF5w=",
+			"path": "github.com/djherbis/atime",
+			"revision": "89517e96e10b93292169a79fd4523807bdc5d5fa",
+			"revisionTime": "2017-02-15T08:49:34Z"
+		},
+		{
 			"checksumSHA1": "rhLUtXvcmouYuBwOq9X/nYKzvNg=",
 			"path": "github.com/dustin/go-humanize",
 			"revision": "259d2a102b871d17f30e3cd9881a642961a1e486",
