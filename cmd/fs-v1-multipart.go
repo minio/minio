@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -624,6 +624,13 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	fsMeta.Meta["etag"] = s3MD5
 	if _, err = fsMeta.WriteTo(metaFile); err != nil {
 		return oi, toObjectErr(errors.Trace(err), bucket, object)
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = fsStatFile(pathJoin(fs.fsPath, bucket, object)); err == nil {
+			return ObjectInfo{}, errors.Trace(ObjectAlreadyExists{Bucket: bucket, Object: object})
+		}
 	}
 
 	err = fsRenameFile(appendFilePath, pathJoin(fs.fsPath, bucket, object))

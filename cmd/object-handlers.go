@@ -360,6 +360,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
+	}
+
 	if objectAPI.IsEncryptionSupported() {
 		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
@@ -681,6 +689,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
+	}
+
 	if objectAPI.IsEncryptionSupported() {
 		if hasSSECustomerHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
 			reader, err = EncryptRequest(hashReader, r, metadata)
@@ -751,6 +767,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
 	}
 
 	// Validate storage class metadata if present
@@ -861,6 +885,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
 	}
 
 	if objectAPI.IsEncryptionSupported() {
@@ -1119,6 +1151,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
+	}
+
 	if objectAPI.IsEncryptionSupported() {
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
@@ -1200,6 +1240,14 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
+	}
+
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := objectAPI.AbortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
 		errorIf(err, "AbortMultipartUpload failed")
@@ -1266,6 +1314,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
 	}
 
 	// Get upload id.
@@ -1363,6 +1419,14 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", globalServerConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		// Not required to check whether given object exists or not, because
+		// DeleteObject is always successful irrespective of object existence.
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 

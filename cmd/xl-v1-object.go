@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -691,6 +691,13 @@ func (xl xlObjects) putObject(bucket string, object string, data *hash.Reader, m
 	// Write unique `xl.json` for each disk.
 	if onlineDisks, err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if xl.isObject(bucket, object) {
+			return ObjectInfo{}, errors.Trace(ObjectAlreadyExists{Bucket: bucket, Object: object})
+		}
 	}
 
 	// Rename the successfully written temporary object to final location.
