@@ -59,14 +59,7 @@ var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolu
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
-	for _, disk := range xl.getDisks() {
-		// This closes storage rpc client connections if any.
-		// Otherwise this is a no-op.
-		if disk == nil {
-			continue
-		}
-		disk.Close()
-	}
+	closeStorageDisks(xl.getDisks())
 	return nil
 }
 

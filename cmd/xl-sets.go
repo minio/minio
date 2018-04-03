@@ -101,7 +101,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV3, error) {
 
 	format, err := loadFormatXL(disk)
 	if err != nil {
-		// close the internal connection, to avoid fd leaks.
+		// Close the internal connection to avoid connection leaks.
 		disk.Close()
 		return nil, nil, err
 	}
@@ -147,6 +147,8 @@ func (s *xlSets) connectDisks() {
 		i, j, err := findDiskIndex(s.format, format)
 		s.formatMu.RUnlock()
 		if err != nil {
+			// Close the internal connection to avoid connection leaks.
+			disk.Close()
 			printEndpointError(endpoint, err)
 			continue
 		}
@@ -215,19 +217,8 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 		go s.sets[i].cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
 
-	for _, endpoint := range endpoints {
-		disk, nformat, err := connectEndpoint(endpoint)
-		if err != nil {
-			errorIf(err, "Unable to connect to endpoint %s", endpoint)
-			continue
-		}
-		i, j, err := findDiskIndex(format, nformat)
-		if err != nil {
-			errorIf(err, "Unable to find the endpoint %s in reference format", endpoint)
-			continue
-		}
-		s.xlDisks[i][j] = disk
-	}
+	// Connect disks right away.
+	s.connectDisks()
 
 	// Initialize and load bucket policies.
 	var err error
@@ -267,18 +258,25 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	storageInfo.Backend.RRSCData = rrSCData
 	storageInfo.Backend.RRSCParity = rrSCparity
 
-	formats, sErrs := loadFormatXLAll(s.endpoints)
+	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
+	for i := range storageInfo.Backend.Sets {
+		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
+	}
+
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return storageInfo
+	}
+	defer closeStorageDisks(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+
 	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, sErrs)
 	refFormat, err := getFormatXLInQuorum(formats)
 	if err != nil {
 		// Ignore errors here, since this call cannot do anything at
 		// this point. too many disks are down already.
 		return storageInfo
-	}
-
-	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
-	for i := range storageInfo.Backend.Sets {
-		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
 	// fill all the available/online endpoints
@@ -921,8 +919,14 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 	}
 	defer formatLock.Unlock()
 
-	formats, sErrs := loadFormatXLAll(s.endpoints)
-	if err := checkFormatXLValues(formats); err != nil {
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return madmin.HealResultItem{}, err
+	}
+	defer closeStorageDisks(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+	if err = checkFormatXLValues(formats); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 
@@ -1025,12 +1029,12 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 
 		// Initialize meta volume, if volume already exists ignores it, all disks which
 		// are not found are ignored as well.
-		if err = initFormatXLMetaVolume(s.endpoints, tmpNewFormats); err != nil {
+		if err = initFormatXLMetaVolume(storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 		}
 
 		// Save formats `format.json` across all disks.
-		if err = saveFormatXLAll(s.endpoints, tmpNewFormats); err != nil {
+		if err = saveFormatXLAll(storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 
