@@ -101,7 +101,7 @@ iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
 service iptables restart
 ```
 
-### ufw in Debian
+### ufw
 
 For hosts with ufw enabled (Debian based distros), you can use `ufw` command to allow traffic to specific ports. Use below command to allow access to port 9000
 
@@ -113,6 +113,26 @@ Below command enables all incoming traffic to ports ranging from 9000 to 9010.
 
 ```sh
 ufw allow 9000:9010/tcp
+```
+
+### firewall-cmd
+
+For hosts with firewall-cmd enabled (CentOS), you can use `firewall-cmd` command to allow traffic to specific ports. Use below commands to allow access to port 9000
+
+```sh
+firewall-cmd --get-active-zones
+```
+
+This command gets the active zone(s). Now, apply port rules to the relevant zones returned above. For example if the zone is `public`, use
+
+```sh
+firewall-cmd --zone=public --add-port=9000/tcp --permanent
+```
+
+Note that `permanent` makes sure the rules are persistent across firewall start, restart or reload. Finally reload the firewall for changes to take effect.
+
+```sh
+firewall-cmd --reload
 ```
 
 ## Test using Minio Browser
