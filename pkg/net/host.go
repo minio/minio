@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-var hostLabelRegexp = regexp.MustCompile("^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$")
+var hostLabelRegexp = regexp.MustCompile("^[a-zA-Z0-9_]([a-zA-Z0-9-_]*[a-zA-Z0-9_])?$")
 
 // Host - holds network host IP/name and its port.
 type Host struct {
