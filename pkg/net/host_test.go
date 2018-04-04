@@ -181,6 +181,7 @@ func TestParseHost(t *testing.T) {
 		{"12play", &Host{"12play", 0, false}, false},
 		{"play-minio-io", &Host{"play-minio-io", 0, false}, false},
 		{"play--minio.io", &Host{"play--minio.io", 0, false}, false},
+		{"play_minio", &Host{"play_minio", 0, false}, false},
 		{":9000", nil, true},
 		{"play:", nil, true},
 		{"play::", nil, true},
