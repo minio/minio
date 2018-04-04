@@ -98,6 +98,9 @@ type ObjectInfo struct {
 	// by the Content-Type header field.
 	ContentEncoding string
 
+	// Specify object storage class
+	StorageClass string
+
 	// User-Defined metadata
 	UserDefined map[string]string
 
