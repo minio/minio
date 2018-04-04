@@ -123,7 +123,7 @@ spec:
         - name: data 
           mountPath: "/data"
         # Pulls the lastest Minio image from Docker Hub
-        image: minio/minio:RELEASE.2018-03-30T00-38-44Z
+        image: minio/minio:RELEASE.2018-04-04T05-20-54Z
         args:
         - server
         - /data
@@ -302,7 +302,7 @@ spec:
           value: "minio"
         - name: MINIO_SECRET_KEY
           value: "minio123"
-        image: minio/minio:RELEASE.2018-03-30T00-38-44Z
+        image: minio/minio:RELEASE.2018-04-04T05-20-54Z
         args:
         - server
         - http://minio-0.minio.default.svc.cluster.local/data
@@ -484,7 +484,7 @@ spec:
       containers:
       - name: minio
         # Pulls the default Minio image from Docker Hub
-        image: minio/minio:RELEASE.2018-03-30T00-38-44Z
+        image: minio/minio:RELEASE.2018-04-04T05-20-54Z
         args:
         - gateway
         - gcs
