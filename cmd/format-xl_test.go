@@ -87,6 +87,11 @@ func TestFixFormatV3(t *testing.T) {
 	}
 	endpoints := mustGetNewEndpointList(xlDirs...)
 
+	storageDisks, err := initStorageDisks(endpoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	format := newFormatXLV3(1, 8)
 	formats := make([]*formatXLV3, 8)
 
@@ -96,17 +101,18 @@ func TestFixFormatV3(t *testing.T) {
 		formats[j] = &newFormat
 	}
 
-	if err = initFormatXLMetaVolume(endpoints, formats); err != nil {
+	if err = initFormatXLMetaVolume(storageDisks, formats); err != nil {
 		t.Fatal(err)
 	}
 
 	formats[1] = nil
 	expThis := formats[2].XL.This
 	formats[2].XL.This = ""
-	if err := fixFormatXLV3(endpoints, formats); err != nil {
+	if err := fixFormatXLV3(storageDisks, endpoints, formats); err != nil {
 		t.Fatal(err)
 	}
-	newFormats, errs := loadFormatXLAll(endpoints)
+
+	newFormats, errs := loadFormatXLAll(storageDisks)
 	for _, err := range errs {
 		if err != nil && errors.Cause(err) != errUnformattedDisk {
 			t.Fatal(err)
