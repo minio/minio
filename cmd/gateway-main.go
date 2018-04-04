@@ -171,41 +171,18 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	router := mux.NewRouter().SkipClean(true)
 
+	// Add healthcheck router
+	registerHealthCheckRouter(router)
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		fatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
+
+	// Add API router.
 	registerAPIRouter(router)
 
-	var handlerFns = []HandlerFunc{
-		// Validate all the incoming paths.
-		setPathValidityHandler,
-		// Limits all requests size to a maximum fixed limit
-		setRequestSizeLimitHandler,
-		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
-		setCrossDomainPolicy,
-		// Validates all incoming requests to have a valid date header.
-		// Redirect some pre-defined browser request paths to a static location prefix.
-		setBrowserRedirectHandler,
-		// Validates if incoming request is for restricted buckets.
-		setReservedBucketHandler,
-		// Adds cache control for all browser requests.
-		setBrowserCacheControlHandler,
-		// Validates all incoming requests to have a valid date header.
-		setTimeValidityHandler,
-		// CORS setting for all browser API requests.
-		setCorsHandler,
-		// Validates all incoming URL resources, for invalid/unsupported
-		// resources client receives a HTTP error.
-		setIgnoreResourcesHandler,
-		// Auth handler verifies incoming authorization headers and
-		// routes them accordingly. Client receives a HTTP error for
-		// invalid/unsupported signatures.
-		setAuthHandler,
-		// Add new handlers here.
-	}
-
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
