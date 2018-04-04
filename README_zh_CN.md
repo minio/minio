@@ -84,7 +84,7 @@ go get -u github.com/minio/minio
 ## 使用Minio浏览器进行验证
 安装后使用浏览器访问[http://127.0.0.1:9000](http://127.0.0.1:9000)，如果可以访问，则表示minio已经安装成功。
 
-![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.jpg?raw=true)
+![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
 
 ## 使用Minio客户端 `mc`进行验证
 `mc` 提供了一些UNIX常用命令的替代品，像ls, cat, cp, mirror, diff这些。 它支持文件系统和亚马逊S3云存储服务。 更多信息请参考 [mc快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide) 。
