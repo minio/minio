@@ -71,7 +71,7 @@ func (d etcdConfig) Save(filename string) error {
 
 	kapi := etcdc.NewKeysAPI(d.clnt)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	_, err = kapi.Create(ctx, filename, string(dataBytes))
+	_, err = kapi.Update(ctx, filename, string(dataBytes))
 	cancel()
 	return err
 }
@@ -172,4 +172,33 @@ func NewEtcdConfig(data interface{}, clnt etcdc.Client) (Config, error) {
 	d.clnt = clnt
 	d.lock = &sync.Mutex{}
 	return d, nil
+}
+
+// GetEtcdVersion - extracts the version information.
+func GetEtcdVersion(filename string, clnt etcdc.Client) (version string, err error) {
+	var qc Config
+	if qc, err = LoadEtcdConfig(filename, &struct {
+		Version string
+	}{}, clnt); err != nil {
+		return "", err
+	}
+	return qc.Version(), err
+}
+
+// LoadEtcdConfig - loads json config from etcd backend for the given struct data
+func LoadEtcdConfig(filename string, data interface{}, clnt etcdc.Client) (qc Config, err error) {
+	if qc, err = NewEtcdConfig(data, clnt); err == nil {
+		err = qc.Load(filename)
+	}
+	return qc, err
+}
+
+// SaveEtcdConfig - saves given configuration data into etcd backend.
+func SaveEtcdConfig(filename string, data interface{}, clnt etcdc.Client) (err error) {
+	var qc Config
+	if qc, err = NewEtcdConfig(data, clnt); err == nil {
+		err = qc.Save(filename)
+	}
+
+	return err
 }

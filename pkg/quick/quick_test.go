@@ -45,7 +45,7 @@ func TestReadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	version, err := GetVersion("test.json")
+	version, err := GetLocalVersion("test.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestReadVersionErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = GetVersion("test.json")
+	_, err = GetLocalVersion("test.json")
 	if err == nil {
 		t.Fatal("Unexpected should fail to fetch version")
 	}
@@ -79,7 +79,7 @@ func TestReadVersionErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = GetVersion("test.json")
+	_, err = GetLocalVersion("test.json")
 	if err == nil {
 		t.Fatal("Unexpected should fail to fetch version")
 	}
@@ -155,7 +155,7 @@ func TestLoadFile(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{}
-	_, err := Load("test.json", &saveMe)
+	_, err := LoadLocalConfig("test.json", &saveMe)
 	if err == nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLoadFile(t *testing.T) {
 	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = Load("test.json", &saveMe)
+	_, err = LoadLocalConfig("test.json", &saveMe)
 	if err == nil {
 		t.Fatal("Unexpected should fail to load empty JSON")
 	}
@@ -195,7 +195,7 @@ func TestLoadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	saveMe1 := myStruct{}
-	_, err = Load("test.json", &saveMe1)
+	_, err = LoadLocalConfig("test.json", &saveMe1)
 	if err != nil {
 		t.Fatal(err)
 	}

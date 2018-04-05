@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -34,7 +36,51 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
+
+// Check if there are buckets on server without corresponding entry in etcd backend and
+// make entries. Here is the general flow
+// - Range over all the available buckets
+// - Check if a bucket has an entry in etcd backend
+// -- If no, make an entry
+// -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
+// -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
+func initFederatorBackend(objLayer ObjectLayer) {
+	// List all buckets
+	b, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return
+	}
+
+	g := errgroup.WithNErrs(len(b))
+	for index := range b {
+		index := index
+		g.Go(func() error {
+			r, gerr := globalDNSConfig.Get(b[index].Name)
+			if gerr != nil {
+				if client.IsKeyNotFound(gerr) {
+					// Make a new entry
+					return globalDNSConfig.Put(b[index].Name)
+				}
+				return gerr
+			}
+			if r.Host != globalDomainIP {
+				// Log error that entry already present for different host
+				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use %s to access the bucket, or rename it to a unique value", b[index].Name, globalDomainIP)
+			}
+			return nil
+		}, index)
+	}
+
+	for _, err := range g.Wait() {
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			return
+		}
+	}
+}
 
 // GetBucketLocationHandler - GET Bucket location.
 // -------------------------
@@ -158,7 +204,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
-
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil {
