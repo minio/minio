@@ -315,6 +315,13 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 	// All the parts per object.
 	objInfo.Parts = m.Parts
 
+	// Update storage class
+	if sc, ok := m.Meta[amzStorageClass]; ok {
+		objInfo.StorageClass = sc
+	} else {
+		objInfo.StorageClass = globalMinioDefaultStorageClass
+	}
+
 	// Success.
 	return objInfo
 }
