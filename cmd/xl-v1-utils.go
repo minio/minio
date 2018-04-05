@@ -19,8 +19,10 @@ package cmd
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,6 +79,18 @@ func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr e
 	default:
 		// No quorum satisfied.
 		maxErr = errors2.Trace(quorumErr, errs...)
+
+		// Log errors from disks to help admin take action.
+		var diskErrLogs []interface{}
+		var errCount int
+		for i, diskErr := range errs {
+			if diskErr != nil {
+				diskErrLogs = append(diskErrLogs,
+					fmt.Sprintf("disk [%d/%d]: %v", i+1, len(errs), diskErr.Error()))
+				errCount++
+			}
+		}
+		errorIf(quorumErr, strings.Repeat("\n\t%s", errCount), diskErrLogs...)
 	}
 	return
 }
