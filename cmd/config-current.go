@@ -127,10 +127,28 @@ func (s *serverConfig) GetCacheConfig() CacheConfig {
 	return s.Cache
 }
 
-// Save config.
-func (s *serverConfig) Save(configFile string) error {
-	// Save config file.
-	return quick.Save(configFile, s)
+// Save config file to corresponding backend
+func Save(configFile string, data interface{}) error {
+	if globalEtcdClient == nil {
+		return quick.SaveLocalConfig(configFile, data)
+	}
+	return quick.SaveEtcdConfig(configFile, data, globalEtcdClient)
+}
+
+// Load config from backend
+func Load(configFile string, data interface{}) (quick.Config, error) {
+	if globalEtcdClient == nil {
+		return quick.LoadLocalConfig(configFile, data)
+	}
+	return quick.LoadEtcdConfig(configFile, data, globalEtcdClient)
+}
+
+// GetVersion gets config version from backend
+func GetVersion(configFile string) (string, error) {
+	if globalEtcdClient == nil {
+		return quick.GetLocalVersion(configFile)
+	}
+	return quick.GetEtcdVersion(configFile, globalEtcdClient)
 }
 
 // Returns the string describing a difference with the given
@@ -272,7 +290,7 @@ func newConfig() error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return globalServerConfig.Save(getConfigFile())
+	return Save(getConfigFile(), globalServerConfig)
 }
 
 // newQuickConfig - initialize a new server config, with an allocated

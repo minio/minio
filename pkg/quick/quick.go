@@ -191,10 +191,10 @@ func NewLocalConfig(data interface{}) (Config, error) {
 	return d, nil
 }
 
-// GetVersion - extracts the version information.
-func GetVersion(filename string) (version string, err error) {
+// GetLocalVersion - extracts the version information.
+func GetLocalVersion(filename string) (version string, err error) {
 	var qc Config
-	if qc, err = Load(filename, &struct {
+	if qc, err = LoadLocalConfig(filename, &struct {
 		Version string
 	}{}); err != nil {
 		return "", err
@@ -202,16 +202,16 @@ func GetVersion(filename string) (version string, err error) {
 	return qc.Version(), err
 }
 
-// Load - loads json config from filename for the a given struct data
-func Load(filename string, data interface{}) (qc Config, err error) {
+// LoadLocalConfig - loads json config from filename for the a given struct data
+func LoadLocalConfig(filename string, data interface{}) (qc Config, err error) {
 	if qc, err = NewLocalConfig(data); err == nil {
 		err = qc.Load(filename)
 	}
 	return qc, err
 }
 
-// Save - saves given configuration data into given file as JSON.
-func Save(filename string, data interface{}) (err error) {
+// SaveLocalConfig - saves given configuration data into given file as JSON.
+func SaveLocalConfig(filename string, data interface{}) (err error) {
 	var qc Config
 	if qc, err = NewLocalConfig(data); err == nil {
 		err = qc.Save(filename)

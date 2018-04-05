@@ -628,13 +628,17 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		f.handler.ServeHTTP(w, r)
 		return
 	}
-
 	bucket, object := urlPath2BucketObjectName(r.URL.Path)
+	// MakeBucket request
 	if r.Method == http.MethodPut && bucket != "" && object == "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
-
+	// ListBucket request
+	if r.Method == http.MethodGet && bucket == "" && object == "" {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
 		if client.IsKeyNotFound(err) {
@@ -644,7 +648,6 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
-
 	if sr.Host != globalDomainIP {
 		backendURL := fmt.Sprintf("http://%s:%d", sr.Host, sr.Port)
 		if globalIsSSL {
@@ -658,7 +661,6 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		f.fwd.ServeHTTP(w, r)
 		return
 	}
-
 	f.handler.ServeHTTP(w, r)
 }
 
