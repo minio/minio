@@ -33,9 +33,11 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // FSObjects - Implements fs object layer.
@@ -173,7 +175,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(fs); err != nil {
+	if err = globalNotificationSys.Init(context.Background(), fs); err != nil {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
@@ -1100,4 +1102,24 @@ func (fs *FSObjects) IsNotificationSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (fs *FSObjects) IsEncryptionSupported() bool {
 	return true
+}
+
+// SetBucketNotificationConfig saves notification config to disk
+func (fs *FSObjects) SetBucketNotificationConfig(ctx context.Context, bucket string, config *event.Config) error {
+	return saveNotificationConfig(ctx, fs, bucket, config)
+}
+
+// GetBucketNotificationConfig fetches bucket notification config from disk.
+func (fs *FSObjects) GetBucketNotificationConfig(ctx context.Context, bucket string) (*event.Config, error) {
+	return readNotificationConfig(ctx, fs, bucket)
+}
+
+// SetBucketListenerConfig updates listener to listener config on disk
+func (fs *FSObjects) SetBucketListenerConfig(ctx context.Context, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
+	return saveListener(ctx, fs, bucketName, eventNames, pattern, targetID, addr)
+}
+
+// DeleteBucketListenerConfig deletes listener from listener config on disk
+func (fs *FSObjects) DeleteBucketListenerConfig(ctx context.Context, bucketName string, targetID event.TargetID, addr xnet.Host) error {
+	return removeListener(ctx, fs, bucketName, targetID, addr)
 }

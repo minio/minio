@@ -162,7 +162,7 @@ func (sys *NotificationSys) RemoteTargetExist(bucketName string, targetID event.
 }
 
 // initListeners - initializes PeerRPC clients available in listener.json.
-func (sys *NotificationSys) initListeners(objAPI ObjectLayer, bucketName string) error {
+func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLayer, bucketName string) error {
 	// listener.json is available/applicable only in DistXL mode.
 	if !globalIsDistXL {
 		return nil
@@ -181,7 +181,7 @@ func (sys *NotificationSys) initListeners(objAPI ObjectLayer, bucketName string)
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(objAPI, configFile)
+	reader, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
@@ -238,22 +238,22 @@ func (sys *NotificationSys) initListeners(objAPI ObjectLayer, bucketName string)
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
-func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
+func (sys *NotificationSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets(context.Background())
+	buckets, err := objAPI.ListBuckets(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, bucket := range buckets {
-		config, err := readNotificationConfig(objAPI, bucket.Name)
+		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
 		if err != nil {
 			if !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 				errorIf(err, "Unable to load notification configuration of bucket %v", bucket.Name)
@@ -263,7 +263,7 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 			sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 		}
 
-		if err = sys.initListeners(objAPI, bucket.Name); err != nil {
+		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
 			errorIf(err, "Unable to initialize HTTP listener for bucket %v", bucket.Name)
 			return err
 		}
@@ -462,20 +462,20 @@ func sendEvent(args eventArgs) {
 	}
 }
 
-func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
+func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
 	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data))
 	if err != nil {
 		return err
 	}
 
-	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil)
+	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, hashReader, nil)
 	return err
 }
 
-func readConfig(objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
+func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	err := objAPI.GetObject(context.Background(), minioMetaBucket, configFile, 0, -1, &buffer, "")
+	err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "")
 	if err != nil {
 		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
@@ -493,10 +493,11 @@ func readConfig(objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	return &buffer, nil
 }
 
-func readNotificationConfig(objAPI ObjectLayer, bucketName string) (*event.Config, error) {
+func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) (*event.Config, error) {
 	// Construct path to notification.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	reader, err := readConfig(objAPI, configFile)
+
+	reader, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		return nil, err
 	}
@@ -504,18 +505,19 @@ func readNotificationConfig(objAPI ObjectLayer, bucketName string) (*event.Confi
 	return event.ParseConfig(reader, globalServerConfig.GetRegion(), globalNotificationSys.targetList)
 }
 
-func saveNotificationConfig(objAPI ObjectLayer, bucketName string, config *event.Config) error {
+func saveNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, config *event.Config) error {
 	data, err := xml.Marshal(config)
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	return saveConfig(objAPI, configFile, data)
+
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-// SaveListener - saves HTTP client currently listening for events to listener.json.
-func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
+// saveListener - saves HTTP client currently listening for events to listener.json.
+func saveListener(ctx context.Context, objAPI ObjectLayer, bucketName string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
 	// listener.json is available/applicable only in DistXL mode.
 	if !globalIsDistXL {
 		return nil
@@ -534,7 +536,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(objAPI, configFile)
+	reader, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
@@ -559,11 +561,11 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-// RemoveListener - removes HTTP client currently listening for events from listener.json.
-func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.TargetID, addr xnet.Host) error {
+// removeListener - removes HTTP client currently listening for events from listener.json.
+func removeListener(ctx context.Context, objAPI ObjectLayer, bucketName string, targetID event.TargetID, addr xnet.Host) error {
 	// listener.json is available/applicable only in DistXL mode.
 	if !globalIsDistXL {
 		return nil
@@ -582,7 +584,7 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(objAPI, configFile)
+	reader, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
@@ -615,5 +617,5 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }

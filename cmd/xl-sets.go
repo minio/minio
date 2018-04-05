@@ -30,8 +30,10 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -228,7 +230,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 	}
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(s); err != nil {
+	if err = globalNotificationSys.Init(context.Background(), s); err != nil {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
@@ -469,6 +471,26 @@ func (s *xlSets) IsNotificationSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (s *xlSets) IsEncryptionSupported() bool {
 	return s.getHashedSet("").IsEncryptionSupported()
+}
+
+// GetBucketNotificationConfig returns bucket notification config from disk
+func (s *xlSets) GetBucketNotificationConfig(ctx context.Context, bucket string) (*event.Config, error) {
+	return s.getHashedSet(bucket).GetBucketNotificationConfig(ctx, bucket)
+}
+
+// SetBucketNotificationConfig saves notification config for the bucket to disk.
+func (s *xlSets) SetBucketNotificationConfig(ctx context.Context, bucket string, config *event.Config) error {
+	return s.getHashedSet(bucket).SetBucketNotificationConfig(ctx, bucket, config)
+}
+
+// SetBucketListenerConfig updates listener to listener config on disk
+func (s *xlSets) SetBucketListenerConfig(ctx context.Context, bucket string, eventNames []event.Name, pattern string, targetID event.TargetID, addr xnet.Host) error {
+	return s.getHashedSet(bucket).SetBucketListenerConfig(ctx, bucket, eventNames, pattern, targetID, addr)
+}
+
+// DeleteBucketListenerConfig deletes listener from listener config on disk
+func (s *xlSets) DeleteBucketListenerConfig(ctx context.Context, bucket string, targetID event.TargetID, addr xnet.Host) error {
+	return s.getHashedSet(bucket).DeleteBucketListenerConfig(ctx, bucket, targetID, addr)
 }
 
 // DeleteBucket - deletes a bucket on all sets simultaneously,
