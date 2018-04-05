@@ -57,6 +57,43 @@ func registerDistXLRouters(mux *router.Router, endpoints EndpointList) error {
 	return registerBrowserPeerRPCRouter(mux)
 }
 
+// List of some generic handlers which are applied for all incoming requests.
+var globalHandlers = []HandlerFunc{
+	// Ratelimit the incoming requests using a token bucket algorithm
+	setRateLimitHandler,
+	// Validate all the incoming paths.
+	setPathValidityHandler,
+	// Network statistics
+	setHTTPStatsHandler,
+	// Limits all requests size to a maximum fixed limit
+	setRequestSizeLimitHandler,
+	// Limits all header sizes to a maximum fixed limit
+	setRequestHeaderSizeLimitHandler,
+	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
+	setCrossDomainPolicy,
+	// Redirect some pre-defined browser request paths to a static location prefix.
+	setBrowserRedirectHandler,
+	// Validates if incoming request is for restricted buckets.
+	setReservedBucketHandler,
+	// Adds cache control for all browser requests.
+	setBrowserCacheControlHandler,
+	// Validates all incoming requests to have a valid date header.
+	setTimeValidityHandler,
+	// CORS setting for all browser API requests.
+	setCorsHandler,
+	// Validates all incoming URL resources, for invalid/unsupported
+	// resources client receives a HTTP error.
+	setIgnoreResourcesHandler,
+	// Auth handler verifies incoming authorization headers and
+	// routes them accordingly. Client receives a HTTP error for
+	// invalid/unsupported signatures.
+	setAuthHandler,
+	// filters HTTP headers which are treated as metadata and are reserved
+	// for internal use only.
+	filterReservedMetadata,
+	// Add new handlers here.
+}
+
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
@@ -90,43 +127,6 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	// Add API router.
 	registerAPIRouter(mux)
 
-	// List of some generic handlers which are applied for all incoming requests.
-	var handlerFns = []HandlerFunc{
-		// Ratelimit the incoming requests using a token bucket algorithm
-		setRateLimitHandler,
-		// Validate all the incoming paths.
-		setPathValidityHandler,
-		// Network statistics
-		setHTTPStatsHandler,
-		// Limits all requests size to a maximum fixed limit
-		setRequestSizeLimitHandler,
-		// Limits all header sizes to a maximum fixed limit
-		setRequestHeaderSizeLimitHandler,
-		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
-		setCrossDomainPolicy,
-		// Redirect some pre-defined browser request paths to a static location prefix.
-		setBrowserRedirectHandler,
-		// Validates if incoming request is for restricted buckets.
-		setReservedBucketHandler,
-		// Adds cache control for all browser requests.
-		setBrowserCacheControlHandler,
-		// Validates all incoming requests to have a valid date header.
-		setTimeValidityHandler,
-		// CORS setting for all browser API requests.
-		setCorsHandler,
-		// Validates all incoming URL resources, for invalid/unsupported
-		// resources client receives a HTTP error.
-		setIgnoreResourcesHandler,
-		// Auth handler verifies incoming authorization headers and
-		// routes them accordingly. Client receives a HTTP error for
-		// invalid/unsupported signatures.
-		setAuthHandler,
-		// filters HTTP headers which are treated as metadata and are reserved
-		// for internal use only.
-		filterReservedMetadata,
-		// Add new handlers here.
-	}
-
 	// Register rest of the handlers.
-	return registerHandlers(mux, handlerFns...), nil
+	return registerHandlers(mux, globalHandlers...), nil
 }
