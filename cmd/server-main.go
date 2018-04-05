@@ -96,26 +96,15 @@ EXAMPLES:
       $ export MINIO_DOMAIN=mydomain.com
       $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
-  3. Start minio server on a 12 disks server.
-      $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
-          /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
-          /mnt/export10/ /mnt/export11/ /mnt/export12/
-
-  4. Start distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
-      $ export MINIO_ACCESS_KEY=minio
-      $ export MINIO_SECRET_KEY=miniostorage
-      $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
-          http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
-
-  5. Start minio server on 64 disks server.
+  4. Start minio server on 64 disks server.
       $ {{.HelpName}} /mnt/export{1...64}
 
-  6. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
+  5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
 	
-  7. Start minio server with edge caching enabled.
+  6. Start minio server with edge caching enabled.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40

@@ -209,7 +209,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Print a warning message if gateway is not ready for production before the startup banner.
 		if !gw.Production() {
-			logger.StartupMessage(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+			logger.StartupMessage(colorYellow("               *** Warning: Not Ready for Production ***"))
 		}
 
 		// Print gateway startup message.
