@@ -339,7 +339,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = globalMinioDefaultStorageClass
+		content.StorageClass = object.StorageClass
 		content.Owner = owner
 		contents = append(contents, content)
 	}
@@ -385,7 +385,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = globalMinioDefaultStorageClass
+		content.StorageClass = object.StorageClass
 		content.Owner = owner
 		contents = append(contents, content)
 	}
