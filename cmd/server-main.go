@@ -25,8 +25,8 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
+	miniohttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/errors"
-	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 var serverFlags = []cli.Flag{
