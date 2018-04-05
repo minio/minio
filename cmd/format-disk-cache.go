@@ -17,13 +17,14 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"reflect"
 
-	errors2 "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
@@ -100,14 +101,14 @@ func createFormatCache(fsFormatPath string, format *formatCacheV1) error {
 	// open file using READ & WRITE permission
 	var file, err = os.OpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	// Close the locked file upon return.
 	defer file.Close()
 
 	fi, err := file.Stat()
 	if err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	if fi.Size() != 0 {
 		// format.json already got created because of another minio process's createFormatCache()
@@ -118,7 +119,7 @@ func createFormatCache(fsFormatPath string, format *formatCacheV1) error {
 
 // This function creates a cache format file on disk and returns a slice
 // of format cache config
-func initFormatCache(drives []string) (formats []*formatCacheV1, err error) {
+func initFormatCache(ctx context.Context, drives []string) (formats []*formatCacheV1, err error) {
 	nformats := newFormatCacheV1(drives)
 	for _, drive := range drives {
 		_, err = os.Stat(drive)
@@ -126,28 +127,36 @@ func initFormatCache(drives []string) (formats []*formatCacheV1, err error) {
 			continue
 		}
 		if !os.IsNotExist(err) {
+			logger.GetReqInfo(ctx).AppendTags("drive", drive)
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 		if err = os.Mkdir(drive, 0777); err != nil {
+			logger.GetReqInfo(ctx).AppendTags("drive", drive)
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 	}
 	for i, drive := range drives {
 		if err = os.Mkdir(pathJoin(drive, minioMetaBucket), 0777); err != nil {
 			if !os.IsExist(err) {
+				logger.GetReqInfo(ctx).AppendTags("drive", drive)
+				logger.LogIf(ctx, err)
 				return nil, err
 			}
 		}
 		cacheFormatPath := pathJoin(drive, minioMetaBucket, formatConfigFile)
 		// Fresh disk - create format.json for this cfs
 		if err = createFormatCache(cacheFormatPath, nformats[i]); err != nil {
+			logger.GetReqInfo(ctx).AppendTags("drive", drive)
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 	}
 	return nformats, nil
 }
 
-func loadFormatCache(drives []string) ([]*formatCacheV1, error) {
+func loadFormatCache(ctx context.Context, drives []string) ([]*formatCacheV1, error) {
 	formats := make([]*formatCacheV1, len(drives))
 	for i, drive := range drives {
 		cacheFormatPath := pathJoin(drive, minioMetaBucket, formatConfigFile)
@@ -156,6 +165,7 @@ func loadFormatCache(drives []string) ([]*formatCacheV1, error) {
 			if os.IsNotExist(err) {
 				continue
 			}
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 		defer f.Close()
@@ -268,7 +278,7 @@ func findCacheDiskIndex(disk string, disks []string) int {
 }
 
 // validate whether cache drives order has changed
-func validateCacheFormats(formats []*formatCacheV1) error {
+func validateCacheFormats(ctx context.Context, formats []*formatCacheV1) error {
 	count := 0
 	for _, format := range formats {
 		if format == nil {
@@ -279,12 +289,16 @@ func validateCacheFormats(formats []*formatCacheV1) error {
 		return errors.New("Cache format files missing on all drives")
 	}
 	if _, err := checkFormatCacheValues(formats); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 	if err := checkCacheDisksSliceConsistency(formats); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
-	return checkCacheDiskConsistency(formats)
+	err := checkCacheDiskConsistency(formats)
+	logger.LogIf(ctx, err)
+	return err
 }
 
 // return true if all of the list of cache drives are
@@ -303,16 +317,16 @@ func cacheDrivesUnformatted(drives []string) bool {
 // create format.json for each cache drive if fresh disk or load format from disk
 // Then validate the format for all drives in the cache to ensure order
 // of cache drives has not changed.
-func loadAndValidateCacheFormat(drives []string) (formats []*formatCacheV1, err error) {
+func loadAndValidateCacheFormat(ctx context.Context, drives []string) (formats []*formatCacheV1, err error) {
 	if cacheDrivesUnformatted(drives) {
-		formats, err = initFormatCache(drives)
+		formats, err = initFormatCache(ctx, drives)
 	} else {
-		formats, err = loadFormatCache(drives)
+		formats, err = loadFormatCache(ctx, drives)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err = validateCacheFormats(formats); err != nil {
+	if err = validateCacheFormats(ctx, formats); err != nil {
 		return nil, err
 	}
 	return formats, nil

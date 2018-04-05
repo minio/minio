@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"io"
 	"io/ioutil"
@@ -30,6 +31,7 @@ import (
 	"syscall"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -75,7 +77,7 @@ func isDirEmpty(dirname string) bool {
 	f, err := os.Open((dirname))
 	if err != nil {
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to access directory")
+			logger.LogIf(context.Background(), err)
 		}
 
 		return false
@@ -85,7 +87,7 @@ func isDirEmpty(dirname string) bool {
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
 		if !os.IsNotExist(err) {
-			errorIf(err, "Unable to list directory")
+			logger.LogIf(context.Background(), err)
 		}
 
 		return false

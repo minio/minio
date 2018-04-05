@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // objectAPIHandler implements and provides http handlers for S3 API.
@@ -35,7 +36,7 @@ func registerAPIRouter(mux *router.Router) {
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
 		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
-		fatalIf(err, "Unable to initialize disk caching")
+		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
 	// Initialize API.

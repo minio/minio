@@ -119,9 +119,9 @@ func TestS3ToObjectError(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		actualErr := minio.ErrorRespToObjectError(errors.Trace(tc.inputErr), tc.bucket, tc.object)
+		actualErr := minio.ErrorRespToObjectError(tc.inputErr, tc.bucket, tc.object)
 		if e, ok := actualErr.(*errors.Error); ok && e.Cause.Error() != tc.expectedErr.Error() {
-			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e)
+			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, actualErr)
 		}
 	}
 }

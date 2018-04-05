@@ -31,6 +31,7 @@ import (
 
 	"github.com/djherbis/atime"
 
+	"github.com/minio/minio/cmd/logger"
 	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/wildcard"
 
@@ -345,12 +346,12 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			if err != nil {
 				return false
 			}
-			_, err = fs.getObjectInfo(bucket, object)
+			_, err = fs.getObjectInfo(ctx, bucket, object)
 			return err == nil
 		}
 
 		listDir := listDirCacheFactory(isLeaf, cacheTreeWalkIgnoredErrs, c.cache.cfs)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -383,7 +384,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 				}
 				return result, toObjectErr(err, bucket, prefix)
 			}
-			objInfo, err = fs.getObjectInfo(bucket, entry)
+			objInfo, err = fs.getObjectInfo(ctx, bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
 				if errors2.Cause(err) == errFileNotFound {
@@ -754,7 +755,8 @@ func (c cacheObjects) StorageInfo(ctx context.Context) (storageInfo StorageInfo)
 			continue
 		}
 		info, err := getDiskInfo((cfs.fsPath))
-		errorIf(err, "Unable to get disk info %#v", cfs.fsPath)
+		logger.GetReqInfo(ctx).AppendTags("cachePath", cfs.fsPath)
+		logger.LogIf(ctx, err)
 		total += info.Total
 		free += info.Free
 	}
@@ -791,7 +793,8 @@ func (c cacheObjects) DeleteBucket(ctx context.Context, bucket string) (err erro
 // or the global env overrides.
 func newCache(config CacheConfig) (*diskCache, error) {
 	var cfsObjects []*cacheFSObjects
-	formats, err := loadAndValidateCacheFormat(config.Drives)
+	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+	formats, err := loadAndValidateCacheFormat(ctx, config.Drives)
 	if err != nil {
 		return nil, err
 	}

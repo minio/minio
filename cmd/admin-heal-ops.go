@@ -222,7 +222,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 		StartTime:     h.startTime,
 	})
 	if err != nil {
-		errorIf(err, "Failed to marshal heal result into json.")
+		logger.LogIf(context.Background(), err)
 		return nil, ErrInternalError, ""
 	}
 	return b, ErrNone, ""
@@ -270,7 +270,7 @@ func (ahs *allHealState) PopHealStatusJSON(path string,
 
 	jbytes, err := json.Marshal(h.currentStatus)
 	if err != nil {
-		errorIf(err, "Failed to marshal heal result into json.")
+		logger.LogIf(context.Background(), err)
 		return nil, ErrInternalError
 	}
 
@@ -321,7 +321,9 @@ type healSequence struct {
 func newHealSequence(bucket, objPrefix, clientAddr string,
 	numDisks int, hs madmin.HealOpts, forceStart bool) *healSequence {
 
-	ctx := logger.SetContext(context.Background(), &logger.ReqInfo{clientAddr, "", "", "Heal", bucket, objPrefix, nil})
+	reqInfo := &logger.ReqInfo{RemoteHost: clientAddr, API: "Heal", BucketName: bucket}
+	reqInfo.AppendTags("prefix", objPrefix)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
 
 	return &healSequence{
 		bucket:        bucket,

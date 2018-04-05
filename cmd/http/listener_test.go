@@ -19,6 +19,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -205,7 +206,7 @@ func TestNewHTTPListener(t *testing.T) {
 		writeTimeout           time.Duration
 		updateBytesReadFunc    func(int)
 		updateBytesWrittenFunc func(int)
-		errorLogFunc           func(error, string, ...interface{})
+		errorLogFunc           func(context.Context, error)
 		expectedErr            error
 	}{
 		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
@@ -227,7 +228,6 @@ func TestNewHTTPListener(t *testing.T) {
 			testCase.writeTimeout,
 			testCase.updateBytesReadFunc,
 			testCase.updateBytesWrittenFunc,
-			testCase.errorLogFunc,
 		)
 
 		if testCase.expectedErr == nil {
@@ -279,7 +279,6 @@ func TestHTTPListenerStartClose(t *testing.T) {
 			time.Duration(0),
 			nil,
 			nil,
-			nil,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -327,7 +326,6 @@ func TestHTTPListenerAddr(t *testing.T) {
 			time.Duration(0),
 			nil,
 			nil,
-			nil,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -370,7 +368,6 @@ func TestHTTPListenerAddrs(t *testing.T) {
 			time.Duration(0),
 			time.Duration(0),
 			time.Duration(0),
-			nil,
 			nil,
 			nil,
 		)
@@ -417,7 +414,6 @@ func TestHTTPListenerAccept(t *testing.T) {
 			time.Duration(0),
 			time.Duration(0),
 			time.Duration(0),
-			nil,
 			nil,
 			nil,
 		)
@@ -480,11 +476,6 @@ func TestHTTPListenerAccept(t *testing.T) {
 func TestHTTPListenerAcceptPeekError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
-	}
 
 	testCases := []struct {
 		serverAddrs []string
@@ -504,7 +495,6 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 			time.Duration(0),
 			nil,
 			nil,
-			errorFunc,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -540,11 +530,6 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 func TestHTTPListenerAcceptTLSError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
-	}
 
 	testCases := []struct {
 		serverAddrs []string
@@ -563,7 +548,6 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 			time.Duration(0),
 			nil,
 			nil,
-			errorFunc,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -609,11 +593,6 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 func TestHTTPListenerAcceptError(t *testing.T) {
 	tlsConfig := getTLSConfig(t)
 	nonLoopBackIP := getNonLoopBackIP(t)
-	errorFunc := func(err error, template string, args ...interface{}) {
-		msg := fmt.Sprintf("error: %v.  ", err)
-		msg += fmt.Sprintf(template, args...)
-		fmt.Println(msg)
-	}
 
 	testCases := []struct {
 		serverAddrs  []string
@@ -635,7 +614,6 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 			time.Duration(0),
 			nil,
 			nil,
-			errorFunc,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -759,7 +737,6 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			time.Duration(0),
 			time.Duration(0),
 			time.Duration(0),
-			nil,
 			nil,
 			nil,
 		)

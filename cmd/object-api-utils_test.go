@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -148,7 +149,7 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		result, err := getCompleteMultipartMD5(test.parts)
+		result, err := getCompleteMultipartMD5(context.Background(), test.parts)
 		if result != test.expectedResult {
 			t.Fatalf("test %d failed: expected: result=%v, got=%v", i+1, test.expectedResult, result)
 		}

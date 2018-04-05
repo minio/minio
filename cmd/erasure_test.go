@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"io"
 	"os"
@@ -52,11 +53,11 @@ func TestErasureDecode(t *testing.T) {
 		copy(buffer, data)
 
 		disks := make([]StorageAPI, test.dataBlocks+test.parityBlocks)
-		storage, err := NewErasureStorage(disks, test.dataBlocks, test.parityBlocks, blockSizeV1)
+		storage, err := NewErasureStorage(context.Background(), disks, test.dataBlocks, test.parityBlocks, blockSizeV1)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create erasure storage: %v", i, err)
 		}
-		encoded, err := storage.ErasureEncode(buffer)
+		encoded, err := storage.ErasureEncode(context.Background(), buffer)
 		if err != nil {
 			t.Fatalf("Test %d: failed to encode data: %v", i, err)
 		}
@@ -69,7 +70,7 @@ func TestErasureDecode(t *testing.T) {
 		}
 
 		if test.reconstructParity {
-			err = storage.ErasureDecodeDataAndParityBlocks(encoded)
+			err = storage.ErasureDecodeDataAndParityBlocks(context.Background(), encoded)
 		} else {
 			err = storage.ErasureDecodeDataBlocks(encoded)
 		}
@@ -98,7 +99,7 @@ func TestErasureDecode(t *testing.T) {
 			}
 
 			decodedData := new(bytes.Buffer)
-			if _, err = writeDataBlocks(decodedData, decoded, test.dataBlocks, 0, int64(len(data))); err != nil {
+			if _, err = writeDataBlocks(context.Background(), decodedData, decoded, test.dataBlocks, 0, int64(len(data))); err != nil {
 				t.Errorf("Test %d: failed to write data blocks: %v", i, err)
 			}
 			if !bytes.Equal(decodedData.Bytes(), data) {

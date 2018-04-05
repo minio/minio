@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -399,7 +400,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			}
 
 			ipList, err := getHostIP4(host)
-			fatalIf(err, "unexpected error when resolving host '%s'", host)
+			logger.FatalIf(err, "unexpected error when resolving host '%s'", host)
 
 			// Filter ipList by IPs those start with '127.'.
 			loopBackIPs := ipList.FuncMatch(func(ip string, matchString string) bool {

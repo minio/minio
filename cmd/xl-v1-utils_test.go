@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
@@ -91,11 +92,11 @@ func TestReduceErrs(t *testing.T) {
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
-		gotErr := reduceReadQuorumErrs(testCase.errs, testCase.ignoredErrs, 5)
+		gotErr := reduceReadQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 5)
 		if errors.Cause(gotErr) != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
-		gotNewErr := reduceWriteQuorumErrs(testCase.errs, testCase.ignoredErrs, 6)
+		gotNewErr := reduceWriteQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 6)
 		if errors.Cause(gotNewErr) != errXLWriteQuorum {
 			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
 		}
@@ -312,7 +313,7 @@ func TestGetXLMetaV1GJson1(t *testing.T) {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
 
-	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(xlMetaJSON)
+	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
 	if err != nil {
 		t.Errorf("gjson parsing of XLMeta failed: %v", err)
 	}
@@ -329,7 +330,7 @@ func TestGetXLMetaV1GJson10(t *testing.T) {
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
-	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(xlMetaJSON)
+	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
 	if err != nil {
 		t.Errorf("gjson parsing of XLMeta failed: %v", err)
 	}
@@ -359,7 +360,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		s, err := calculatePartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
+		s, err := calculatePartSizeFromIdx(context.Background(), testCase.totalSize, testCase.partSize, testCase.partIndex)
 		if err != nil {
 			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
 		}
@@ -383,7 +384,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCaseFailure := range testCasesFailure {
-		_, err := calculatePartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		_, err := calculatePartSizeFromIdx(context.Background(), testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
 		if err == nil {
 			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
 		}

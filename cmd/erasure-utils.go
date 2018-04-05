@@ -18,10 +18,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // getDataBlockLen - get length of data blocks from encoded blocks.
@@ -36,20 +37,23 @@ func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 
 // Writes all the data blocks from encoded blocks until requested
 // outSize length. Provides a way to skip bytes until the offset.
-func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
+func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
 	// Offset and out size cannot be negative.
 	if offset < 0 || length < 0 {
-		return 0, errors.Trace(errUnexpected)
+		logger.LogIf(ctx, errUnexpected)
+		return 0, errUnexpected
 	}
 
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
-		return 0, errors.Trace(reedsolomon.ErrTooFewShards)
+		logger.LogIf(ctx, reedsolomon.ErrTooFewShards)
+		return 0, reedsolomon.ErrTooFewShards
 	}
 
 	// Do we have enough data?
 	if int64(getDataBlockLen(enBlocks, dataBlocks)) < length {
-		return 0, errors.Trace(reedsolomon.ErrShortData)
+		logger.LogIf(ctx, reedsolomon.ErrShortData)
+		return 0, reedsolomon.ErrShortData
 	}
 
 	// Counter to decrement total left to write.
@@ -77,7 +81,8 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
 			if err != nil {
-				return 0, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return 0, err
 			}
 			totalWritten += n
 			break
@@ -85,7 +90,8 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
-			return 0, errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return 0, err
 		}
 
 		// Decrement output size.

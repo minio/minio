@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
@@ -71,7 +74,7 @@ func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request)
 	jsonBytes, err := json.Marshal(adminAPIVersionInfo)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal Admin API Version to JSON.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 
@@ -99,7 +102,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 	uptime, err := getPeerUptimes(globalAdminPeers)
 	if err != nil {
 		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
-		errorIf(err, "Possibly failed to get uptime from majority of servers.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 
@@ -113,7 +116,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 	jsonBytes, err := json.Marshal(serverStatus)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal storage info into json.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 	// Reply with storage information (across nodes in a
@@ -136,7 +139,7 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 	var sa madmin.ServiceAction
 	err := json.NewDecoder(r.Body).Decode(&sa)
 	if err != nil {
-		errorIf(err, "Error parsing body JSON")
+		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, ErrRequestBodyParse, r.URL)
 		return
 	}
@@ -149,7 +152,7 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 		serviceSig = serviceStop
 	default:
 		writeErrorResponseJSON(w, ErrMalformedPOSTRequest, r.URL)
-		errorIf(err, "Invalid service action received")
+		logger.LogIf(context.Background(), errors.New("Invalid service action received"))
 		return
 	}
 
@@ -243,7 +246,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 			serverInfoData, err := peer.cmdRunner.ServerInfoData()
 			if err != nil {
-				errorIf(err, "Unable to get server info from %s.", peer.addr)
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
 				reply[idx].Error = err.Error()
 				return
 			}
@@ -258,7 +263,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	jsonBytes, err := json.Marshal(reply)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal storage info into json.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 
@@ -292,7 +297,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 	}
 	duration, err := time.ParseDuration(olderThanStr)
 	if err != nil {
-		errorIf(err, "Failed to parse duration passed as query value.")
+		logger.LogIf(context.Background(), err)
 		return "", "", time.Duration(0), ErrInvalidDuration
 	}
 
@@ -325,7 +330,7 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 		duration)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to fetch lock information from remote nodes.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 
@@ -333,7 +338,7 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal lock information into json.")
+		logger.LogIf(context.Background(), err)
 		return
 	}
 
@@ -369,7 +374,7 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 		duration)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to fetch lock information from remote nodes.")
+		logger.LogIf(ctx, err)
 		return
 	}
 
@@ -377,7 +382,7 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		errorIf(err, "Failed to marshal lock information into json.")
+		logger.LogIf(ctx, err)
 		return
 	}
 
@@ -425,7 +430,7 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 	if clientToken == "" {
 		jerr := json.NewDecoder(r.Body).Decode(&hs)
 		if jerr != nil {
-			errorIf(jerr, "Error parsing body JSON")
+			logger.LogIf(context.Background(), jerr)
 			err = ErrRequestBodyParse
 			return
 		}
@@ -583,7 +588,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// occurring on a quorum of the servers is returned.
 	configBytes, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
-		errorIf(err, "Failed to get config from peers")
+		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
@@ -655,6 +660,7 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 // SetConfigHandler - PUT /minio/admin/v1/config
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 
+	ctx := context.Background()
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
@@ -678,7 +684,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err != io.ErrUnexpectedEOF {
-		errorIf(err, "Failed to read config from request body.")
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -688,7 +694,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// Validate JSON provided in the request body: check the
 	// client has not sent JSON objects with duplicate keys.
 	if err = checkDupJSONKeys(string(configBytes)); err != nil {
-		errorIf(err, "config contains duplicate JSON entries.")
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
@@ -696,7 +702,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	var config serverConfig
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		errorIf(err, "Failed to unmarshal JSON configuration", err)
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -718,7 +724,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	errs := writeTmpConfigPeers(globalAdminPeers, tmpFileName, configBytes)
 
 	// Check if the operation succeeded in quorum or more nodes.
-	rErr := reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	rErr := reduceWriteQuorumErrs(ctx, errs, nil, len(globalAdminPeers)/2+1)
 	if rErr != nil {
 		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
 		return
@@ -736,7 +742,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Rename the temporary config file to config.json
 	errs = commitConfigPeers(globalAdminPeers, tmpFileName)
-	rErr = reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	rErr = reduceWriteQuorumErrs(ctx, errs, nil, len(globalAdminPeers)/2+1)
 	if rErr != nil {
 		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
 		return
@@ -777,7 +783,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	var req madmin.SetCredsReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		errorIf(err, "Error parsing body JSON")
+		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, ErrRequestBodyParse, r.URL)
 		return
 	}
@@ -804,7 +810,9 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	// Notify all other Minio peers to update credentials
 	updateErrs := updateCredsOnPeers(creds)
 	for peer, err := range updateErrs {
-		errorIf(err, "Unable to update credentials on peer %s.", peer)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	// Update local credentials in memory.

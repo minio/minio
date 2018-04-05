@@ -17,9 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"io"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 type errIdx struct {
@@ -27,7 +28,7 @@ type errIdx struct {
 	err error
 }
 
-func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64,
+func (s ErasureStorage) readConcurrent(ctx context.Context, volume, path string, offset, length int64,
 	verifiers []*BitrotVerifier) (buffers [][]byte, needsReconstruction bool,
 	err error) {
 
@@ -39,7 +40,8 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 		stageBuffers[i] = make([]byte, length)
 		disk := s.disks[i]
 		if disk == OfflineDisk {
-			errChan <- errIdx{i, errors.Trace(errDiskNotFound)}
+			logger.LogIf(ctx, errDiskNotFound)
+			errChan <- errIdx{i, errDiskNotFound}
 			return
 		}
 		_, rerr := disk.ReadFile(volume, path, offset, stageBuffers[i], verifiers[i])
@@ -75,7 +77,8 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 	}
 	if successCount != s.dataBlocks {
 		// Not enough disks returns data.
-		err = errors.Trace(errXLReadQuorum)
+		err = errXLReadQuorum
+		logger.LogIf(ctx, err)
 	}
 	return
 }
@@ -86,18 +89,21 @@ func (s ErasureStorage) readConcurrent(volume, path string, offset, length int64
 // integrity of the given file. ReadFile will read data from the given
 // offset up to the given length. If parts of the file are corrupted
 // ReadFile tries to reconstruct the data.
-func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
+func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, volume, path string, offset,
 	length, totalLength int64, checksums [][]byte, algorithm BitrotAlgorithm,
 	blocksize int64) (f ErasureFileInfo, err error) {
 
 	if offset < 0 || length < 0 {
-		return f, errors.Trace(errUnexpected)
+		logger.LogIf(ctx, errUnexpected)
+		return f, errUnexpected
 	}
 	if offset+length > totalLength {
-		return f, errors.Trace(errUnexpected)
+		logger.LogIf(ctx, errUnexpected)
+		return f, errUnexpected
 	}
 	if !algorithm.Available() {
-		return f, errors.Trace(errBitrotHashAlgoInvalid)
+		logger.LogIf(ctx, errBitrotHashAlgoInvalid)
+		return f, errBitrotHashAlgoInvalid
 	}
 
 	f.Checksums = make([][]byte, len(s.disks))
@@ -145,7 +151,7 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 
 	var buffers [][]byte
 	var needsReconstruction bool
-	buffers, needsReconstruction, err = s.readConcurrent(volume, path,
+	buffers, needsReconstruction, err = s.readConcurrent(ctx, volume, path,
 		partDataStartIndex, partDataLength, verifiers)
 	if err != nil {
 		// Could not read enough disks.
@@ -194,7 +200,8 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 
 		if needsReconstruction {
 			if err = s.ErasureDecodeDataBlocks(blocks); err != nil {
-				return f, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return f, err
 			}
 		}
 
@@ -210,7 +217,7 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset,
 				writeLength = lastBlockLength - writeStart
 			}
 		}
-		n, err := writeDataBlocks(writer, blocks, s.dataBlocks, writeStart, writeLength)
+		n, err := writeDataBlocks(ctx, writer, blocks, s.dataBlocks, writeStart, writeLength)
 		if err != nil {
 			return f, err
 		}

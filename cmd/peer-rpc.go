@@ -22,7 +22,7 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	xerrors "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -103,7 +103,10 @@ func (receiver *PeerRPCReceiver) ListenBucketNotification(args *ListenBucketNoti
 	target := NewPeerRPCClientTarget(args.BucketName, args.TargetID, rpcClient)
 	rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
 	if err := globalNotificationSys.AddRemoteTarget(args.BucketName, target, rulesMap); err != nil {
-		errorIf(err, "Unable to add PeerRPCClientTarget %v to globalNotificationSys.targetList.", target)
+		reqInfo := &logger.ReqInfo{BucketName: target.bucketName}
+		reqInfo.AppendTags("target", target.id.Name)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return err
 	}
 	return nil
@@ -158,7 +161,10 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 	}
 
 	if err != nil {
-		errorIf(err, "unable to send event %v to target %v", args.Event, args.TargetID)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", args.Event.EventName.String())
+		reqInfo.AppendTags("target", args.TargetID.Name)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	reply.Error = err
@@ -169,7 +175,8 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 func registerS3PeerRPCRouter(router *mux.Router) error {
 	peerRPCServer := newRPCServer()
 	if err := peerRPCServer.RegisterName("Peer", &PeerRPCReceiver{}); err != nil {
-		return xerrors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 
 	subrouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
@@ -250,7 +257,11 @@ func (rpcClient *PeerRPCClient) SendEvent(bucketName string, targetID, remoteTar
 	}
 
 	if reply.Error != nil {
-		errorIf(reply.Error, "unable to send event %v to rpc target %v of bucket %v", args, targetID, bucketName)
+		reqInfo := &logger.ReqInfo{BucketName: bucketName}
+		reqInfo.AppendTags("targetID", targetID.Name)
+		reqInfo.AppendTags("event", eventData.EventName.String())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, reply.Error)
 		globalNotificationSys.RemoveRemoteTarget(bucketName, targetID)
 	}
 

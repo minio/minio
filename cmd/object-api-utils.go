@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"path"
@@ -24,7 +25,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -174,12 +175,13 @@ func mustGetUUID() string {
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
-func getCompleteMultipartMD5(parts []CompletePart) (string, error) {
+func getCompleteMultipartMD5(ctx context.Context, parts []CompletePart) (string, error) {
 	var finalMD5Bytes []byte
 	for _, part := range parts {
 		md5Bytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
-			return "", errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return "", err
 		}
 		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 	}
