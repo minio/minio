@@ -166,10 +166,14 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		}
 	}
 
-	// Extract etag from metadata.
 	objInfo.ETag = extractETag(m.Meta)
 	objInfo.ContentType = m.Meta["content-type"]
 	objInfo.ContentEncoding = m.Meta["content-encoding"]
+	if storageClass, ok := m.Meta[amzStorageClass]; ok {
+		objInfo.StorageClass = storageClass
+	} else {
+		objInfo.StorageClass = globalMinioDefaultStorageClass
+	}
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
