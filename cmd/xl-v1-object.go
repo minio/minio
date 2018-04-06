@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -468,7 +467,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 	// We can safely allow RenameFile errors up to len(xl.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Undo all the partial rename operations.
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
 	}
@@ -783,7 +782,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 			} else {
 				e = cleanupDir(ctx, disk, bucket, object)
 			}
-			if e != nil && errors.Cause(e) != errVolumeNotFound {
+			if e != nil && e != errVolumeNotFound {
 				dErrs[index] = e
 			}
 		}(index, disk, isDir)

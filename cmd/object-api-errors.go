@@ -19,19 +19,12 @@ package cmd
 import (
 	"fmt"
 	"io"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Converts underlying storage error. Convenience function written to
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
-	e, ok := err.(*errors.Error)
-	if ok {
-		err = e.Cause
-	}
-
 	switch err {
 	case errVolumeNotFound:
 		if len(params) >= 1 {
@@ -95,10 +88,6 @@ func toObjectErr(err error, params ...string) error {
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}
-	}
-	if ok {
-		e.Cause = err
-		return e
 	}
 	return err
 }
@@ -400,7 +389,6 @@ func (e BackendDown) Error() string {
 
 // isErrIncompleteBody - Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case IncompleteBody:
 		return true
@@ -410,7 +398,6 @@ func isErrIncompleteBody(err error) bool {
 
 // isErrBucketPolicyNotFound - Check if error type is BucketPolicyNotFound.
 func isErrBucketPolicyNotFound(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case PolicyNotFound:
 		return true
@@ -420,7 +407,6 @@ func isErrBucketPolicyNotFound(err error) bool {
 
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
-	err = errors.Cause(err)
 	switch err.(type) {
 	case ObjectNotFound:
 		return true

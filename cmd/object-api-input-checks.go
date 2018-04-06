@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -214,7 +213,7 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 func checkBucketExist(ctx context.Context, bucket string, obj ObjectLayer) error {
 	_, err := obj.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		return errors.Cause(err)
+		return err
 	}
 	return nil
 }

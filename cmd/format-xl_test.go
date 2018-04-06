@@ -22,8 +22,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Test get offline/online uuids.
@@ -114,7 +112,7 @@ func TestFixFormatV3(t *testing.T) {
 
 	newFormats, errs := loadFormatXLAll(storageDisks)
 	for _, err := range errs {
-		if err != nil && errors.Cause(err) != errUnformattedDisk {
+		if err != nil && err != errUnformattedDisk {
 			t.Fatal(err)
 		}
 	}

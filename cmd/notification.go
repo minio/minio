@@ -27,7 +27,6 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
-	xerrors "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
@@ -183,7 +182,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	defer objLock.Unlock()
 
 	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
 
@@ -263,7 +262,7 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
 		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
 		if err != nil {
-			if !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+			if !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 				return err
 			}
 		} else {
@@ -551,7 +550,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	defer objLock.Unlock()
 
 	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
 
@@ -602,7 +601,7 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	defer objLock.Unlock()
 
 	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !xerrors.IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return err
 	}
 

@@ -24,7 +24,6 @@ import (
 
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 )
 
 var printEndpointError = func() func(Endpoint, error) {
@@ -142,7 +141,7 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 	}
 
 	for i, sErr := range sErrs {
-		if _, ok := formatCriticalErrors[errors.Cause(sErr)]; ok {
+		if _, ok := formatCriticalErrors[sErr]; ok {
 			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
 		}
 	}

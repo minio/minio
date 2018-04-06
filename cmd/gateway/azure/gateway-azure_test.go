@@ -25,7 +25,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Test canonical metadata.
@@ -67,7 +66,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"invalid--meta": "value",
 	}
 	_, _, err = s3MetaToAzureProperties(context.Background(), headers)
-	if err = errors.Cause(err); err != nil {
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}

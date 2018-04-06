@@ -41,6 +41,21 @@ import (
 	"github.com/pkg/profile"
 )
 
+// IsErrIgnored returns whether given error is ignored or not.
+func IsErrIgnored(err error, ignoredErrs ...error) bool {
+	return IsErr(err, ignoredErrs...)
+}
+
+// IsErr returns whether given error is exact error.
+func IsErr(err error, errs ...error) bool {
+	for _, exactErr := range errs {
+		if err == exactErr {
+			return true
+		}
+	}
+	return false
+}
+
 // Close Http tracing file.
 func stopHTTPTrace() {
 	if globalHTTPTraceFile != nil {

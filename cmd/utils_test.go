@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -425,6 +426,29 @@ func TestCeilFrac(t *testing.T) {
 		ceiling := ceilFrac(testCase.numerator, testCase.denominator)
 		if ceiling != testCase.ceiling {
 			t.Errorf("Case %d: Unexpected result: %d", i, ceiling)
+		}
+	}
+}
+
+// Test if isErrIgnored works correctly.
+func TestIsErrIgnored(t *testing.T) {
+	var errIgnored = fmt.Errorf("ignored error")
+	var testCases = []struct {
+		err     error
+		ignored bool
+	}{
+		{
+			err:     nil,
+			ignored: false,
+		},
+		{
+			err:     errIgnored,
+			ignored: true,
+		},
+	}
+	for i, testCase := range testCases {
+		if ok := IsErrIgnored(testCase.err, errIgnored); ok != testCase.ignored {
+			t.Errorf("Test: %d, Expected %t, got %t", i+1, testCase.ignored, ok)
 		}
 	}
 }
