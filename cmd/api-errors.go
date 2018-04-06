@@ -138,6 +138,7 @@ const (
 	ErrMissingSSECustomerKey
 	ErrMissingSSECustomerKeyMD5
 	ErrSSECustomerKeyMD5Mismatch
+	ErrInvalidSSECustomerParameters
 
 	// Bucket notification related errors.
 	ErrEventNotification
@@ -629,7 +630,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInsecureSSECustomerRequest: {
 		Code:           "InvalidRequest",
-		Description:    errInsecureSSERequest.Error(),
+		Description:    "Requests specifying Server Side Encryption with Customer provided keys must be made over a secure connection.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSSEMultipartEncrypted: {
@@ -639,7 +640,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrSSEEncryptedObject: {
 		Code:           "InvalidRequest",
-		Description:    errEncryptedObject.Error(),
+		Description:    "The object was stored using a form of Server Side Encryption. The correct parameters must be provided to retrieve the object.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionParameters: {
@@ -649,27 +650,32 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidSSECustomerAlgorithm: {
 		Code:           "InvalidArgument",
-		Description:    errInvalidSSEAlgorithm.Error(),
+		Description:    "Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidSSECustomerKey: {
 		Code:           "InvalidArgument",
-		Description:    errInvalidSSEKey.Error(),
+		Description:    "The secret key was invalid for the specified algorithm.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSSECustomerKey: {
 		Code:           "InvalidArgument",
-		Description:    errMissingSSEKey.Error(),
+		Description:    "Requests specifying Server Side Encryption with Customer provided keys must provide an appropriate secret key.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSSECustomerKeyMD5: {
 		Code:           "InvalidArgument",
-		Description:    errMissingSSEKeyMD5.Error(),
+		Description:    "Requests specifying Server Side Encryption with Customer provided keys must provide the client calculated MD5 of the secret key.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSSECustomerKeyMD5Mismatch: {
 		Code:           "InvalidArgument",
-		Description:    errSSEKeyMD5Mismatch.Error(),
+		Description:    "The calculated MD5 hash of the key did not match the hash that was provided.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidSSECustomerParameters: {
+		Code:           "InvalidArgument",
+		Description:    "The provided encryption parameters did not match the ones used originally.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
@@ -884,6 +890,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		return ErrObjectTampered
 	case errEncryptedObject:
 		return ErrSSEEncryptedObject
+	case errInvalidSSEParameters:
+		return ErrInvalidSSECustomerParameters
 	case errSSEKeyMismatch:
 		return ErrAccessDenied // no access without correct key
 	}
