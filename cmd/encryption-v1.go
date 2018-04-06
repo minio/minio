@@ -35,14 +35,15 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errInsecureSSERequest  = errors.New("Requests specifying Server Side Encryption with Customer provided keys must be made over a secure connection")
-	errEncryptedObject     = errors.New("The object was stored using a form of Server Side Encryption. The correct parameters must be provided to retrieve the object")
-	errInvalidSSEAlgorithm = errors.New("Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm")
-	errMissingSSEKey       = errors.New("Requests specifying Server Side Encryption with Customer provided keys must provide an appropriate secret key")
-	errInvalidSSEKey       = errors.New("The secret key was invalid for the specified algorithm")
-	errMissingSSEKeyMD5    = errors.New("Requests specifying Server Side Encryption with Customer provided keys must provide the client calculated MD5 of the secret key")
-	errSSEKeyMD5Mismatch   = errors.New("The calculated MD5 hash of the key did not match the hash that was provided")
-	errSSEKeyMismatch      = errors.New("The client provided key does not match the key provided when the object was encrypted") // this msg is not shown to the client
+	errInsecureSSERequest   = errors.New("SSE-C requests require TLS connections")
+	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
+	errInvalidSSEAlgorithm  = errors.New("The SSE-C algorithm is not valid")
+	errMissingSSEKey        = errors.New("The SSE-C request is missing the customer key")
+	errInvalidSSEKey        = errors.New("The SSE-C key is invalid")
+	errMissingSSEKeyMD5     = errors.New("The SSE-C request is missing the customer key MD5")
+	errSSEKeyMD5Mismatch    = errors.New("The key MD5 does not match the SSE-C key")
+	errSSEKeyMismatch       = errors.New("The SSE-C key is not correct")                  // access denied
+	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 
 	// Additional Minio errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
@@ -247,9 +248,6 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 
 // This function rotates old to new key.
 func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
-	if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
-		return nil
-	}
 	delete(metadata, SSECustomerKey) // make sure we do not save the key by accident
 
 	if metadata[ServerSideEncryptionSealAlgorithm] != SSESealAlgorithmDareSha256 { // currently DARE-SHA256 is the only option
@@ -273,10 +271,14 @@ func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
 	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
 		Key: keyEncryptionKey,
 	})
-	if n != 32 || err != nil {
-		// Either the provided key does not match or the object was tampered.
-		// To provide strict AWS S3 compatibility we return: access denied.
-		return errSSEKeyMismatch
+	if n != 32 || err != nil { // Either the provided key does not match or the object was tampered.
+		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
+			return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
+		}
+		return errSSEKeyMismatch // To provide strict AWS S3 compatibility we return: access denied.
+	}
+	if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
+		return nil // we don't need to rotate keys if newKey == oldKey
 	}
 
 	nonce := make([]byte, 32) // generate random values for key derivation
