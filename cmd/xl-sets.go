@@ -83,7 +83,13 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 			if s.xlDisks[i][j] == nil {
 				continue
 			}
-			if s.xlDisks[i][j].String() != endpoint.String() {
+			var endpointStr string
+			if endpoint.IsLocal {
+				endpointStr = endpoint.Path
+			} else {
+				endpointStr = endpoint.String()
+			}
+			if s.xlDisks[i][j].String() != endpointStr {
 				continue
 			}
 			return s.xlDisks[i][j].IsOnline()
