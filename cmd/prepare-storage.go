@@ -145,11 +145,21 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 		}
 	}
 
-	if shouldInitXLDisks(sErrs) {
-		if !firstDisk {
-			return nil, errNotFirstDisk
-		}
+	// All disks report unformatted we should initialized everyone.
+	if shouldInitXLDisks(sErrs) && firstDisk {
 		return initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
+	}
+
+	// Return error when quorum unformatted disks - indicating we are
+	// waiting for first server to be online.
+	if quorumUnformattedDisks(sErrs) && !firstDisk {
+		return nil, errNotFirstDisk
+	}
+
+	// Return error when quorum unformatted disks but waiting for rest
+	// of the servers to be online.
+	if quorumUnformattedDisks(sErrs) && firstDisk {
+		return nil, errFirstDiskWait
 	}
 
 	// Following function is added to fix a regressions which was introduced
@@ -218,6 +228,10 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.
 					logger.Info("Waiting for the first server to format the disks.")
+					continue
+				case errFirstDiskWait:
+					// Fresh setup, wait for other servers to come up.
+					logger.Info("Waiting for all other servers to be online to format the disks.")
 					continue
 				case errXLReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
