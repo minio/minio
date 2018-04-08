@@ -181,6 +181,15 @@ func b2ToObjectError(err error, params ...string) error {
 		} else if bucket != "" {
 			err = minio.BucketNotFound{Bucket: bucket}
 		}
+	case "bad_json":
+		if object != "" {
+			err = minio.ObjectNameInvalid{
+				Bucket: bucket,
+				Object: object,
+			}
+		} else if bucket != "" {
+			err = minio.BucketNameInvalid{Bucket: bucket}
+		}
 	case "bad_bucket_id":
 		err = minio.BucketNotFound{Bucket: bucket}
 	case "file_not_present", "not_found":
