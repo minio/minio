@@ -225,9 +225,9 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	}, nil
 }
 
-// Production - Manta is not production ready.
+// Production - Manta is production ready.
 func (g *Manta) Production() bool {
-	return false
+	return true
 }
 
 // tritonObjects - Implements Object layer for Triton Manta storage

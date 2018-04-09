@@ -149,9 +149,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	}, nil
 }
 
-// Production - oss is not production ready yet.
+// Production - oss is production ready.
 func (g *OSS) Production() bool {
-	return false
+	return true
 }
 
 // appendS3MetaToOSSOptions converts metadata meant for S3 PUT/COPY
