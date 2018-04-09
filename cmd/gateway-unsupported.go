@@ -89,6 +89,11 @@ func (a GatewayUnsupported) DeleteBucketPolicy(ctx context.Context, bucket strin
 	return NotImplemented{}
 }
 
+// ReloadFormat - Not implemented stub.
+func (a GatewayUnsupported) ReloadFormat(ctx context.Context, dryRun bool) error {
+	return NotImplemented{}
+}
+
 // HealFormat - Not implemented stub
 func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	logger.LogIf(ctx, NotImplemented{})

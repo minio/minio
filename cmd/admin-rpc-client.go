@@ -84,8 +84,7 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(context.Background(), dryRun)
-	return err
+	return objectAPI.ReloadFormat(context.Background(), dryRun)
 }
 
 // ListLocks - Fetches lock information from local lock instrumentation.

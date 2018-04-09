@@ -136,6 +136,9 @@ func (authClient *AuthRPCClient) Login() (err error) {
 		}
 
 		if err = rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
+			// Closing the connection here.
+			rpcClient.Close()
+
 			// gob doesn't provide any typed errors for us to reflect
 			// upon, this is the only way to return proper error.
 			if strings.Contains(err.Error(), "gob: wrong type") {
@@ -198,6 +201,9 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 		// gob doesn't provide any typed errors for us to reflect
 		// upon, this is the only way to return proper error.
 		if err != nil && strings.Contains(err.Error(), "gob: wrong type") {
+			// Close the rpc client also when the servers have mismatching rpc versions.
+			authClient.Close()
+
 			err = errRPCAPIVersionUnsupported
 		}
 		break
