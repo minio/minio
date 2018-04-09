@@ -539,11 +539,17 @@ func (h *healSequence) healDiskFormat() error {
 	}
 
 	res, err := objectAPI.HealFormat(h.ctx, h.settings.DryRun)
-	if err != nil {
+	// return any error, ignore error returned when disks have
+	// already healed.
+	if err != nil && err != errNoHealRequired {
 		return errFnHealFromAPIErr(err)
 	}
 
-	peersReInitFormat(globalAdminPeers, h.settings.DryRun)
+	// Healing succeeded notify the peers to reload format and re-initialize disks.
+	// We will not notify peers only if healing succeeded.
+	if err == nil {
+		peersReInitFormat(globalAdminPeers, h.settings.DryRun)
+	}
 
 	// Push format heal result
 	return h.pushHealResultItem(res)

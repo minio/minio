@@ -27,6 +27,10 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
+func (xl xlObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
+	return errors.Trace(NotImplemented{})
+}
+
 func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}

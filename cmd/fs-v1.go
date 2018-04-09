@@ -1046,6 +1046,11 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	return result, nil
 }
 
+// ReloadFormat - no-op for fs, Valid only for XL.
+func (fs *FSObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
+	return errors.Trace(NotImplemented{})
+}
+
 // HealFormat - no-op for fs, Valid only for XL.
 func (fs *FSObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	logger.LogIf(ctx, NotImplemented{})

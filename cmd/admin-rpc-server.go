@@ -94,8 +94,7 @@ func (s *adminCmd) ReInitFormat(args *ReInitFormatArgs, reply *AuthRPCReply) err
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(context.Background(), args.DryRun)
-	return err
+	return objectAPI.ReloadFormat(context.Background(), args.DryRun)
 }
 
 // ListLocks - lists locks held by requests handled by this server instance.

@@ -36,14 +36,26 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+// setsStorageAPI is encapsulated type for Close()
+type setsStorageAPI [][]StorageAPI
+
+func (s setsStorageAPI) Close() error {
+	for i := 0; i < len(s); i++ {
+		for _, disk := range s[i] {
+			if disk == nil {
+				continue
+			}
+			disk.Close()
+		}
+	}
+	return nil
+}
+
 // xlSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type xlSets struct {
 	sets []*xlObjects
-
-	// Format mutex to lock format.
-	formatMu sync.RWMutex
 
 	// Reference format.
 	format *formatXLV3
@@ -52,7 +64,7 @@ type xlSets struct {
 	xlDisksMu sync.RWMutex
 
 	// Re-ordered list of disks per set.
-	xlDisks [][]StorageAPI
+	xlDisks setsStorageAPI
 
 	// List of endpoints provided on the command line.
 	endpoints EndpointList
@@ -138,6 +150,29 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.XL.This)
 }
 
+// Re initializes all disks based on the reference format, this function is
+// only used by HealFormat and ReloadFormat calls.
+func (s *xlSets) reInitDisks(refFormat *formatXLV3, storageDisks []StorageAPI, formats []*formatXLV3) [][]StorageAPI {
+	xlDisks := make([][]StorageAPI, s.setCount)
+	for i := 0; i < len(refFormat.XL.Sets); i++ {
+		xlDisks[i] = make([]StorageAPI, s.drivesPerSet)
+	}
+	for k := range storageDisks {
+		if storageDisks[k] == nil || formats[k] == nil {
+			continue
+		}
+		i, j, err := findDiskIndex(refFormat, formats[k])
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", storageDisks[i].String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			continue
+		}
+		xlDisks[i][j] = storageDisks[k]
+	}
+	return xlDisks
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
@@ -150,9 +185,7 @@ func (s *xlSets) connectDisks() {
 			printEndpointError(endpoint, err)
 			continue
 		}
-		s.formatMu.RLock()
 		i, j, err := findDiskIndex(s.format, format)
-		s.formatMu.RUnlock()
 		if err != nil {
 			// Close the internal connection to avoid connection leaks.
 			disk.Close()
@@ -168,11 +201,15 @@ func (s *xlSets) connectDisks() {
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
-func (s *xlSets) monitorAndConnectEndpoints(doneCh chan struct{}, monitorInterval time.Duration) {
+func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 	ticker := time.NewTicker(monitorInterval)
 	for {
 		select {
-		case <-doneCh:
+		case <-globalServiceDoneCh:
+			// Stop the timer.
+			ticker.Stop()
+			return
+		case <-s.disksConnectDoneCh:
 			// Stop the timer.
 			ticker.Stop()
 			return
@@ -240,7 +277,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 	}
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(globalServiceDoneCh, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
 
 	return s, nil
 }
@@ -917,12 +954,76 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 	return beforeDrives
 }
 
-// HealFormat - heals missing `format.json` on freshly or corrupted
-// disks (missing format.json but does have erasure coded data in it).
-func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+// Reloads the format from the disk, usually called by a remote peer notifier while
+// healing in a distributed setup.
+func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Acquire lock on format.json
 	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
+	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
+		return err
+	}
+	defer formatLock.RUnlock()
+
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return err
+	}
+	defer func(storageDisks []StorageAPI) {
+		if err != nil {
+			closeStorageDisks(storageDisks)
+		}
+	}(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+	if err = checkFormatXLValues(formats); err != nil {
+		return err
+	}
+
+	for index, sErr := range sErrs {
+		if sErr != nil {
+			// Look for acceptable heal errors, for any other
+			// errors we should simply quit and return.
+			if _, ok := formatHealErrors[sErr]; !ok {
+				return fmt.Errorf("Disk %s: %s", s.endpoints[index], sErr)
+			}
+		}
+	}
+
+	refFormat, err := getFormatXLInQuorum(formats)
+	if err != nil {
+		return err
+	}
+
+	// kill the monitoring loop such that we stop writing
+	// to indicate that we will re-initialize everything
+	// with new format.
+	s.disksConnectDoneCh <- struct{}{}
+
+	// Replace the new format.
+	s.format = refFormat
+
+	s.xlDisksMu.Lock()
+	{
+		// Close all existing disks.
+		s.xlDisks.Close()
+
+		// Re initialize disks, after saving the new reference format.
+		s.xlDisks = s.reInitDisks(refFormat, storageDisks, formats)
+	}
+	s.xlDisksMu.Unlock()
+
+	// Restart monitoring loop to monitor reformatted disks again.
+	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+
+	return nil
+}
+
+// HealFormat - heals missing `format.json` on freshly or corrupted
+// disks (missing format.json but does have erasure coded data in it).
+func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
+	// Acquire lock on format.json
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
@@ -931,7 +1032,12 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 	if err != nil {
 		return madmin.HealResultItem{}, err
 	}
-	defer closeStorageDisks(storageDisks)
+
+	defer func(storageDisks []StorageAPI) {
+		if err != nil {
+			closeStorageDisks(storageDisks)
+		}
+	}(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
 	if err = checkFormatXLValues(formats); err != nil {
@@ -939,7 +1045,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 	}
 
 	// Prepare heal-result
-	res := madmin.HealResultItem{
+	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
 		Detail:    "disk-format",
 		DiskCount: s.setCount * s.drivesPerSet,
@@ -965,8 +1071,9 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 		}
 	}
 
+	// no errors found, no healing is required.
 	if !hasAnyErrors(sErrs) {
-		return res, nil
+		return res, errNoHealRequired
 	}
 
 	for index, sErr := range sErrs {
@@ -1046,12 +1153,26 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 			return madmin.HealResultItem{}, err
 		}
 
-		s.formatMu.Lock()
-		s.format = refFormat
-		s.formatMu.Unlock()
+		// kill the monitoring loop such that we stop writing
+		// to indicate that we will re-initialize everything
+		// with new format.
+		s.disksConnectDoneCh <- struct{}{}
 
-		// Connect disks, after saving the new reference format.
-		s.connectDisks()
+		// Replace with new reference format.
+		s.format = refFormat
+
+		s.xlDisksMu.Lock()
+		{
+			// Disconnect/relinquish all existing disks.
+			s.xlDisks.Close()
+
+			// Re initialize disks, after saving the new reference format.
+			s.xlDisks = s.reInitDisks(refFormat, storageDisks, tmpNewFormats)
+		}
+		s.xlDisksMu.Unlock()
+
+		// Restart our monitoring loop to start monitoring newly formatted disks.
+		go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
