@@ -20,10 +20,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
@@ -72,15 +72,15 @@ func (a GatewayUnsupported) CompleteMultipartUpload(ctx context.Context, bucket 
 }
 
 // SetBucketPolicy sets policy on bucket
-func (a GatewayUnsupported) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (a GatewayUnsupported) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
 // GetBucketPolicy will get policy on bucket
-func (a GatewayUnsupported) GetBucketPolicy(ctx context.Context, bucket string) (bal policy.BucketAccessPolicy, err error) {
+func (a GatewayUnsupported) GetBucketPolicy(ctx context.Context, bucket string) (bucketPolicy *policy.Policy, err error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return bal, NotImplemented{}
+	return nil, NotImplemented{}
 }
 
 // DeleteBucketPolicy deletes all policies on bucket

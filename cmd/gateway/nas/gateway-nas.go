@@ -20,9 +20,9 @@ import (
 	"context"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/policy"
 )
 
 const (
@@ -132,6 +132,6 @@ func (l *nasObjects) IsNotificationSupported() bool {
 }
 
 // GetBucketPolicy will get policy on bucket
-func (l *nasObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	return minio.ReadBucketPolicy(bucket, l)
+func (l *nasObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return minio.GetPolicyConfig(l, bucket)
 }

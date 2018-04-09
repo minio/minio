@@ -20,14 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go"
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
 
 	minio "github.com/minio/minio/cmd"
 )
@@ -428,31 +429,32 @@ func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 }
 
 // SetBucketPolicy sets policy on bucket
-func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	data, err := json.Marshal(&policyInfo)
+func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
+	data, err := json.Marshal(bucketPolicy)
 	if err != nil {
-		return err
+		// This should not happen.
+		logger.LogIf(ctx, err)
+		return minio.ErrorRespToObjectError(err, bucket)
 	}
+
 	if err := l.Client.SetBucketPolicy(bucket, string(data)); err != nil {
 		logger.LogIf(ctx, err)
-		return minio.ErrorRespToObjectError(err, bucket, "")
+		return minio.ErrorRespToObjectError(err, bucket)
 	}
 
 	return nil
 }
 
 // GetBucketPolicy will get policy on bucket
-func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
+func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	data, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return policy.BucketAccessPolicy{}, minio.ErrorRespToObjectError(err, bucket, "")
+		return nil, minio.ErrorRespToObjectError(err, bucket)
 	}
-	var policyInfo policy.BucketAccessPolicy
-	if err = json.Unmarshal([]byte(data), &policyInfo); err != nil {
-		return policyInfo, err
-	}
-	return policyInfo, nil
+
+	bucketPolicy, err := policy.ParseConfig(strings.NewReader(data), bucket)
+	return bucketPolicy, minio.ErrorRespToObjectError(err, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket

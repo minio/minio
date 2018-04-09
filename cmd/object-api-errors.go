@@ -366,13 +366,6 @@ func (e PolicyNesting) Error() string {
 	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
 }
 
-// PolicyNotFound - policy not found
-type PolicyNotFound GenericError
-
-func (e PolicyNotFound) Error() string {
-	return "Policy not found"
-}
-
 // UnsupportedMetadata - unsupported metadata
 type UnsupportedMetadata struct{}
 
@@ -391,15 +384,6 @@ func (e BackendDown) Error() string {
 func isErrIncompleteBody(err error) bool {
 	switch err.(type) {
 	case IncompleteBody:
-		return true
-	}
-	return false
-}
-
-// isErrBucketPolicyNotFound - Check if error type is BucketPolicyNotFound.
-func isErrBucketPolicyNotFound(err error) bool {
-	switch err.(type) {
-	case PolicyNotFound:
 		return true
 	}
 	return false

@@ -52,7 +52,7 @@ func TestS3ToObjectError(t *testing.T) {
 		},
 		{
 			inputErr:    errResponse("NoSuchBucketPolicy"),
-			expectedErr: minio.PolicyNotFound{},
+			expectedErr: minio.BucketPolicyNotFound{},
 		},
 		{
 			inputErr:    errResponse("NoSuchBucket"),

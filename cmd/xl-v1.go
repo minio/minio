@@ -43,9 +43,6 @@ type xlObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	// Variable represents bucket policies in memory.
-	bucketPolicies *bucketPolicies
-
 	// TODO: Deprecated only kept here for tests, should be removed in future.
 	storageDisks []StorageAPI
 
