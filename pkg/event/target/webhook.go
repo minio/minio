@@ -79,12 +79,11 @@ func (target *WebhookTarget) Send(eventData event.Event) error {
 	// FIXME: log returned error. ignore time being.
 	_ = resp.Body.Close()
 
-	switch resp.StatusCode {
-	case http.StatusOK, http.StatusAccepted, http.StatusContinue:
-		return nil
-	default:
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
+
+	return nil
 }
 
 // Close - does nothing and available for interface compatibility.
