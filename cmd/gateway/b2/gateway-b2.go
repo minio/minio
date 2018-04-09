@@ -126,10 +126,9 @@ func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	}, nil
 }
 
-// Production - Ready for production use?
+// Production - Ready for production use.
 func (g *B2) Production() bool {
-	// Not ready for production use just yet.
-	return false
+	return true
 }
 
 // b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.

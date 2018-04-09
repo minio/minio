@@ -147,9 +147,9 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	}, nil
 }
 
-// Production - s3 gateway is not production ready.
+// Production - s3 gateway is production ready.
 func (g *S3) Production() bool {
-	return false
+	return true
 }
 
 // s3Objects implements gateway for Minio and S3 compatible object storage servers.

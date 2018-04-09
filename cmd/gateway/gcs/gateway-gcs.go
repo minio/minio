@@ -210,9 +210,9 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	return gcs, nil
 }
 
-// Production - FIXME: GCS is not production ready yet.
+// Production - GCS gateway is production ready.
 func (g *GCS) Production() bool {
-	return false
+	return true
 }
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
