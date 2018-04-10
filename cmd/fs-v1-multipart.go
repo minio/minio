@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	mioutil "github.com/minio/minio/pkg/ioutil"
 
 	"github.com/minio/minio/pkg/hash"
@@ -304,7 +303,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
-		if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errFileAccessDenied {
+		if err == errFileNotFound || err == errFileAccessDenied {
 			return pi, InvalidUploadID{UploadID: uploadID}
 		}
 		return pi, toObjectErr(err, bucket, object)
@@ -384,7 +383,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
-		if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errFileAccessDenied {
+		if err == errFileNotFound || err == errFileAccessDenied {
 			return result, InvalidUploadID{UploadID: uploadID}
 		}
 		return result, toObjectErr(err, bucket, object)
@@ -498,7 +497,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
-		if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errFileAccessDenied {
+		if err == errFileNotFound || err == errFileAccessDenied {
 			return oi, InvalidUploadID{UploadID: uploadID}
 		}
 		return oi, toObjectErr(err, bucket, object)
@@ -523,7 +522,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		var fi os.FileInfo
 		fi, err = fsStatFile(ctx, partPath)
 		if err != nil {
-			if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errFileAccessDenied {
+			if err == errFileNotFound || err == errFileAccessDenied {
 				return oi, InvalidPart{}
 			}
 			return oi, err
@@ -698,7 +697,7 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
-		if errors.Cause(err) == errFileNotFound || errors.Cause(err) == errFileAccessDenied {
+		if err == errFileNotFound || err == errFileAccessDenied {
 			return InvalidUploadID{UploadID: uploadID}
 		}
 		return toObjectErr(err, bucket, object)

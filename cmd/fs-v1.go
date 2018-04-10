@@ -31,7 +31,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -527,7 +526,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
 	fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
-	if err != nil && errors.Cause(err) != errFileAccessDenied {
+	if err != nil && err != errFileAccessDenied {
 		return oi, toObjectErr(err, bucket, object)
 	}
 	if fi != nil {
@@ -552,7 +551,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 			// `fs.json` can be empty due to previously failed
 			// PutObject() transaction, if we arrive at such
 			// a situation we just ignore and continue.
-			if errors.Cause(rerr) != io.EOF {
+			if rerr != io.EOF {
 				return oi, toObjectErr(rerr, bucket, object)
 			}
 		}
@@ -807,7 +806,7 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
 		err := fsDeleteFile(ctx, minioMetaBucketDir, fsMetaPath)
-		if err != nil && errors.Cause(err) != errFileNotFound {
+		if err != nil && err != errFileNotFound {
 			return toObjectErr(err, bucket, object)
 		}
 	}
@@ -980,7 +979,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			// File not found is a valid case.
-			if errors.Cause(walkResult.err) == errFileNotFound {
+			if walkResult.err == errFileNotFound {
 				return loi, nil
 			}
 			return loi, toObjectErr(walkResult.err, bucket, prefix)
@@ -1020,7 +1019,8 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 
 // ReloadFormat - no-op for fs, Valid only for XL.
 func (fs *FSObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	return errors.Trace(NotImplemented{})
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
 }
 
 // HealFormat - no-op for fs, Valid only for XL.

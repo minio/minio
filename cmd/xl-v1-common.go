@@ -21,7 +21,6 @@ import (
 	"path"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
@@ -65,7 +64,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 			return true
 		}
 		// Ignore for file not found,  disk not found or faulty disk.
-		if errors.IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
+		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 			continue
 		}
 		reqInfo := &logger.ReqInfo{BucketName: bucket}

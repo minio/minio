@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -79,7 +78,7 @@ func (xl xlObjects) statPart(ctx context.Context, bucket, object, uploadID, part
 			return fileInfo, nil
 		}
 		// For any reason disk was deleted or goes offline we continue to next disk.
-		if errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
+		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
@@ -129,7 +128,7 @@ func commitXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcPre
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(ctx, disks, dstBucket, dstPrefix, mErrs)
 	}
@@ -337,7 +336,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if errors.Cause(reducedErr) == errXLWriteQuorum {
+	if reducedErr == errXLWriteQuorum {
 		preUploadIDLock.RUnlock()
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
@@ -413,7 +412,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Read metadata again because it might be updated with parallel upload of another part.
 	partsMetadata, errs = readAllXLMetadata(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath)
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if errors.Cause(reducedErr) == errXLWriteQuorum {
+	if reducedErr == errXLWriteQuorum {
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -610,7 +609,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if errors.Cause(reducedErr) == errXLWriteQuorum {
+	if reducedErr == errXLWriteQuorum {
 		return oi, toObjectErr(reducedErr, bucket, object)
 	}
 

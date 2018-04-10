@@ -24,7 +24,6 @@ import (
 	"runtime"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -175,7 +174,6 @@ func fsStat(ctx context.Context, statLoc string) (os.FileInfo, error) {
 func fsStatVolume(ctx context.Context, volume string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, volume)
 	if err != nil {
-		err = errors.Cause(err)
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
 		} else if os.IsPermission(err) {
@@ -200,7 +198,6 @@ func osErrToFSFileErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	err = errors.Cause(err)
 	if os.IsNotExist(err) {
 		return errFileNotFound
 	}

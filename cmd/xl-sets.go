@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -661,7 +660,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredE
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
-				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
+				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
 				logger.LogIf(ctx, err)
@@ -779,7 +778,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			// Ignore errFileNotFound as the object might have got
 			// deleted in the interim period of listing and getObjectInfo(),
 			// ignore quorum error as it might be an entry from an outdated disk.
-			switch errors.Cause(err) {
+			switch err {
 			case errFileNotFound, errXLReadQuorum:
 				continue
 			}
@@ -1407,7 +1406,7 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 		}
 		if err != nil {
 			// Ignore errFileNotFound
-			if errors.Cause(err) == errFileNotFound {
+			if err == errFileNotFound {
 				continue
 			}
 			return loi, toObjectErr(err, bucket, prefix)

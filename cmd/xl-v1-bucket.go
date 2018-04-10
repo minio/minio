@@ -24,7 +24,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -75,7 +74,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	writeQuorum := len(xl.getDisks())/2 + 1
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(xl.getDisks(), bucket)
 	}
@@ -142,7 +141,7 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 		logger.LogIf(ctx, serr)
 		err = serr
 		// For any reason disk went offline continue and pick the next one.
-		if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
+		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			bucketErrs = append(bucketErrs, err)
 			continue
 		}
@@ -208,7 +207,7 @@ func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, 
 		}
 		logger.LogIf(ctx, err)
 		// Ignore any disks not found.
-		if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
+		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break
@@ -268,7 +267,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 			err = cleanupDir(ctx, disk, minioMetaMultipartBucket, bucket)
 
 			if err != nil {
-				if errors.Cause(err) == errVolumeNotFound {
+				if err == errVolumeNotFound {
 					return
 				}
 				dErrs[index] = err
@@ -281,7 +280,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 	writeQuorum := len(xl.getDisks())/2 + 1
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
 	}
 	if err != nil {

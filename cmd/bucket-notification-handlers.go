@@ -24,7 +24,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
-	xerrors "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
@@ -72,7 +71,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	nConfig, err := readNotificationConfig(ctx, objAPI, bucketName)
 	if err != nil {
 		// Ignore errNoSuchNotifications to comply with AWS S3.
-		if xerrors.Cause(err) != errNoSuchNotifications {
+		if err != errNoSuchNotifications {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}

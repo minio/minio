@@ -30,7 +30,6 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
-	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 )
@@ -279,7 +278,7 @@ func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data 
 	}
 	_, err := cfs.PutObject(ctx, bucket, object, data, metadata)
 	// if err is due to disk being offline , mark cache drive as offline
-	if errors2.IsErr(err, baseErrs...) {
+	if IsErr(err, baseErrs...) {
 		cfs.setOnline(false)
 	}
 	return err

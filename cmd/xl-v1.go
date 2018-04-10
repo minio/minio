@@ -24,7 +24,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // XL constants.
@@ -142,7 +141,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
 			logger.LogIf(context.Background(), err)
-			if errors.IsErr(err, baseErrs...) {
+			if IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue
 			}

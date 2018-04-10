@@ -19,8 +19,6 @@ package cmd
 import (
 	"context"
 	"sort"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Returns function "listDir" of the type listDirFunc.
@@ -39,7 +37,7 @@ func listDirFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredErrs 
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
-				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
+				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
 				return nil, false, err
@@ -114,7 +112,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
 				// ignore quorum error as it might be an entry from an outdated disk.
-				switch errors.Cause(err) {
+				switch err {
 				case errFileNotFound, errXLReadQuorum:
 					continue
 				}

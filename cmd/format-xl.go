@@ -27,7 +27,6 @@ import (
 	"encoding/hex"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/errors"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -303,7 +302,7 @@ func hasAnyErrors(errs []error) bool {
 func countErrs(errs []error, err error) int {
 	var i = 0
 	for _, err1 := range errs {
-		if errors.Cause(err1) == err {
+		if err1 == err {
 			i++
 		}
 	}
@@ -644,17 +643,17 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disk
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create `.minio.sys`.
 	if err := disk.MakeVol(minioMetaBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaTmpBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaMultipartBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
 )
 
 func ossErrResponse(code string) error {
@@ -104,8 +103,8 @@ func TestOSSToObjectError(t *testing.T) {
 
 	for i, tc := range testCases {
 		actualErr := ossToObjectError(tc.inputErr, tc.bucket, tc.object)
-		if e, ok := actualErr.(*errors.Error); ok && e.Cause != tc.expectedErr {
-			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, e.Cause)
+		if actualErr != nil && tc.expectedErr != nil && actualErr.Error() != tc.expectedErr.Error() {
+			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, actualErr)
 		}
 	}
 }
@@ -118,7 +117,7 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"x-amz-meta-invalid_meta": "value",
 	}
 	_, err = appendS3MetaToOSSOptions(context.Background(), nil, headers)
-	if err = errors.Cause(err); err != nil {
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
