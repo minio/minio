@@ -601,10 +601,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if ContainsSSECustomerHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
+		if SSECustomerHeaders.Contains(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
 			var reader io.Reader
 			var key []byte
-			key, err = ParseSSECustomerHeaders(formValues)
+			key, err = SSECustomerHeaders.Parse(formValues)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return

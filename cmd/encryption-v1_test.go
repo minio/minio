@@ -43,7 +43,7 @@ func TestContainsSSECopyCustomerHeader(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if ContainsSSECopyCustomerHeader(headers) != test.sseRequest {
+		if SSECopyCustomerHeaders.Contains(headers) != test.sseRequest {
 			t.Errorf("Test %d: Expected ContainsSSECopyCustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
@@ -68,7 +68,7 @@ func TestContainsSSECustomerHeader(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if ContainsSSECustomerHeader(headers) != test.sseRequest {
+		if SSECustomerHeaders.Contains(headers) != test.sseRequest {
 			t.Errorf("Test %d: Expected ContainsSSECustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
@@ -162,7 +162,7 @@ func TestParseSSECustomerRequest(t *testing.T) {
 		}
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECustomerHeaders(headers)
+		_, err := SSECustomerHeaders.Parse(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
@@ -262,7 +262,7 @@ func TestParseSSECopyCustomerRequest(t *testing.T) {
 		}
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECopyCustomerHeaders(headers)
+		_, err := SSECopyCustomerHeaders.Parse(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}

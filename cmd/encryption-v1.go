@@ -164,31 +164,40 @@ const (
 	SSESealAlgorithmDareSha256 = "DARE-SHA256"
 )
 
-// ContainsSSECustomerHeader returns true if the given HTTP header
-// contains server-side-encryption with customer provided key fields.
-func ContainsSSECustomerHeader(header http.Header) bool {
-	return header.Get(SSECustomerAlgorithm) != "" || header.Get(SSECustomerKey) != "" || header.Get(SSECustomerKeyMD5) != ""
+var (
+	// SSECustomerHeaders can parse regular SSE-C requests.
+	SSECustomerHeaders = sseCustomerHeaders{
+		algorithm: SSECustomerAlgorithm,
+		key:       SSECustomerKey,
+		keyMD5:    SSECustomerKeyMD5,
+	}
+
+	// SSECopyCustomerHeaders can parse SSE-C copy requests.
+	SSECopyCustomerHeaders = sseCustomerHeaders{
+		algorithm: SSECopyCustomerAlgorithm,
+		key:       SSECopyCustomerKey,
+		keyMD5:    SSECopyCustomerKeyMD5,
+	}
+)
+
+// sseCustomerHeaders contains the SSE-C headers
+// which must be present in the client request.
+type sseCustomerHeaders struct {
+	algorithm string
+	key       string
+	keyMD5    string
 }
 
-// ContainsSSECopyCustomerHeader returns true if the given HTTP header
-// contains copy source server-side-encryption with customer provided key fields.
-func ContainsSSECopyCustomerHeader(header http.Header) bool {
-	return header.Get(SSECopyCustomerAlgorithm) != "" || header.Get(SSECopyCustomerKey) != "" || header.Get(SSECopyCustomerKeyMD5) != ""
+// Contains returns true if the provided headers contain
+// the at least one SSE-C header field.
+func (sse sseCustomerHeaders) Contains(header http.Header) bool {
+	return header.Get(sse.algorithm) != "" || header.Get(sse.key) != "" || header.Get(sse.keyMD5) != ""
 }
 
-// parseSSECustomerHeaders parses the SSE-C header fields of the provided headers depending
-// on the three provided S3 sse headers (either regular request or copy request).
-// It erases the client key form the HTTP headers.
-//
-// It also returns an error if (valid) SSE-C headers are provided but the server does not run
-// in TLS mode.
-func parseSSECustomerHeaders(header http.Header, sseHeaders [3]string) (key []byte, err error) {
-	var (
-		sseAlgorithm = sseHeaders[0]
-		sseKey       = sseHeaders[1]
-		sseKeyMD5    = sseHeaders[2]
-	)
-	defer func() { header.Del(sseKey) }() // Remove SSE-C key from header
+// Parse parses the SSE-C header fields of the provided HTTP headers.
+// It returns the client provided 256 bit key on success.
+func (sse sseCustomerHeaders) Parse(header http.Header) (key []byte, err error) {
+	defer func() { header.Del(sse.algorithm) }() // Remove SSE-C key from header
 
 	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
 		// we cannot use r.TLS == nil here because Go's http implementation reflects on
@@ -197,22 +206,22 @@ func parseSSECustomerHeaders(header http.Header, sseHeaders [3]string) (key []by
 		// will always fail -> r.TLS is always nil even for TLS requests.
 		return nil, errInsecureSSERequest
 	}
-	if algorithm := header.Get(sseAlgorithm); algorithm != SSECustomerAlgorithmAES256 {
+	if algorithm := header.Get(sse.algorithm); algorithm != SSECustomerAlgorithmAES256 {
 		return nil, errInvalidSSEAlgorithm
 	}
-	if header.Get(sseKey) == "" {
+	if header.Get(sse.key) == "" {
 		return nil, errMissingSSEKey
 	}
-	if header.Get(sseKeyMD5) == "" {
+	if header.Get(sse.keyMD5) == "" {
 		return nil, errMissingSSEKeyMD5
 	}
 
-	key, err = base64.StdEncoding.DecodeString(header.Get(sseKey))
+	key, err = base64.StdEncoding.DecodeString(header.Get(sse.key))
 	if err != nil || len(key) != SSECustomerKeySize {
 		return nil, errInvalidSSEKey
 	}
 
-	keyMD5, err := base64.StdEncoding.DecodeString(header.Get(sseKeyMD5))
+	keyMD5, err := base64.StdEncoding.DecodeString(header.Get(sse.keyMD5))
 	if err != nil {
 		return nil, errSSEKeyMD5Mismatch
 	}
@@ -220,24 +229,6 @@ func parseSSECustomerHeaders(header http.Header, sseHeaders [3]string) (key []by
 		return nil, errSSEKeyMD5Mismatch
 	}
 	return key, nil
-}
-
-// ParseSSECopyCustomerHeaders parses the SSE-C header fields and returns
-// the client provided key on success. It erases the client key form the
-// HTTP headers.
-func ParseSSECopyCustomerHeaders(header http.Header) (key []byte, err error) {
-	return parseSSECustomerHeaders(header, [...]string{
-		SSECopyCustomerAlgorithm, SSECopyCustomerKey, SSECopyCustomerKeyMD5,
-	})
-}
-
-// ParseSSECustomerHeaders parses the SSE-C header fields and returns
-// the client provided key on success. It erases the client key form the
-// HTTP headers.
-func ParseSSECustomerHeaders(header http.Header) (key []byte, err error) {
-	return parseSSECustomerHeaders(header, [...]string{
-		SSECustomerAlgorithm, SSECustomerKey, SSECustomerKeyMD5,
-	})
 }
 
 // ObjectEncryptionKey is a 256 bit key used to either en/decrypt a single-part object
@@ -430,7 +421,7 @@ func newEncryptReader(content io.Reader, key []byte, metadata map[string]string)
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
 func EncryptRequest(content io.Reader, r *http.Request, metadata map[string]string) (io.Reader, error) {
-	key, err := ParseSSECustomerHeaders(r.Header)
+	key, err := SSECustomerHeaders.Parse(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +431,7 @@ func EncryptRequest(content io.Reader, r *http.Request, metadata map[string]stri
 // DecryptCopyRequest decrypts the object with the client provided key. It also removes
 // the client-side-encryption metadata from the object and sets the correct headers.
 func DecryptCopyRequest(client io.Writer, r *http.Request, metadata map[string]string) (io.WriteCloser, error) {
-	key, err := ParseSSECopyCustomerHeaders(r.Header)
+	key, err := SSECopyCustomerHeaders.Parse(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +478,7 @@ func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte,
 // DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
 // the client-side-encryption metadata from the object and sets the correct headers.
 func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	key, err := ParseSSECustomerHeaders(r.Header)
+	key, err := SSECustomerHeaders.Parse(r.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -533,10 +524,10 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	var err error
 	if w.copySource {
 		w.req.Header.Set(SSECopyCustomerKey, w.customerKeyHeader)
-		key, err = ParseSSECopyCustomerHeaders(w.req.Header)
+		key, err = SSECopyCustomerHeaders.Parse(w.req.Header)
 	} else {
 		w.req.Header.Set(SSECustomerKey, w.customerKeyHeader)
-		key, err = ParseSSECustomerHeaders(w.req.Header)
+		key, err = SSECustomerHeaders.Parse(w.req.Header)
 	}
 	if err != nil {
 		return err
@@ -803,7 +794,7 @@ func (o *ObjectInfo) EncryptedSize() int64 {
 //
 // DecryptCopyObjectInfo also returns whether the object is encrypted or not.
 func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
-	return decryptObjectInfoSize(info, headers, ContainsSSECopyCustomerHeader)
+	return decryptObjectInfoSize(info, headers, SSECopyCustomerHeaders)
 }
 
 // DecryptObjectInfo tries to decrypt the provided object if it is encrypted.
@@ -814,17 +805,17 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
 func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
-	return decryptObjectInfoSize(info, headers, ContainsSSECustomerHeader)
+	return decryptObjectInfoSize(info, headers, SSECustomerHeaders)
 }
 
-func decryptObjectInfoSize(info *ObjectInfo, headers http.Header, containsSSE func(http.Header) bool) (apiErr APIErrorCode, encrypted bool) {
+func decryptObjectInfoSize(info *ObjectInfo, headers http.Header, sseHeaders sseCustomerHeaders) (apiErr APIErrorCode, encrypted bool) {
 	if info.IsDir { // Directories are never encrypted.
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && containsSSE(headers) {
+	if apiErr, encrypted = ErrNone, info.IsEncrypted(); !encrypted && sseHeaders.Contains(headers) {
 		apiErr = ErrInvalidEncryptionParameters
 	} else if encrypted {
-		if !containsSSE(headers) {
+		if !sseHeaders.Contains(headers) {
 			apiErr = ErrSSEEncryptedObject
 			return
 		}
