@@ -197,7 +197,7 @@ func (sse sseCustomerHeaders) Contains(header http.Header) bool {
 // Parse parses the SSE-C header fields of the provided HTTP headers.
 // It returns the client provided 256 bit key on success.
 func (sse sseCustomerHeaders) Parse(header http.Header) (key []byte, err error) {
-	defer func() { header.Del(sse.algorithm) }() // Remove SSE-C key from header
+	defer func() { header.Del(sse.key) }() // Remove SSE-C key from header
 
 	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
 		// we cannot use r.TLS == nil here because Go's http implementation reflects on
