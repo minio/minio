@@ -151,7 +151,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-content-type-options", "nosniff")
 	// Prevents against XSS Atacks
 	w.Header().Set("X-XSS-Protection", "\"1; mode=block\"")
-	//Prevents against Clickjacking
+	// Prevents against Clickjacking
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	
 	// Encode the response.
