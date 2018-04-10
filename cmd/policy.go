@@ -163,11 +163,11 @@ func savePolicyConfig(objAPI ObjectLayer, bucketName string, bucketPolicy *polic
 	return saveConfig(objAPI, configFile, data)
 }
 
-func removePolicyConfig(objAPI ObjectLayer, bucketName string) error {
+func removePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) error {
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	if err := objAPI.DeleteObject(context.Background(), minioMetaBucket, configFile); err != nil {
+	if err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucketName}
 		}

@@ -301,7 +301,7 @@ func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return removePolicyConfig(xl, bucket)
+	return removePolicyConfig(ctx, xl, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
