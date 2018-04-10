@@ -506,7 +506,7 @@ func renameXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcEnt
 	isDir := false
 	srcXLJSON := path.Join(srcEntry, xlMetaJSONFile)
 	dstXLJSON := path.Join(dstEntry, xlMetaJSONFile)
-	return rename(ctx, disks, srcBucket, srcXLJSON, dstBucket, dstXLJSON, isDir, quorum)
+	return rename(ctx, disks, srcBucket, srcXLJSON, dstBucket, dstXLJSON, isDir, quorum, []error{errFileNotFound})
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.

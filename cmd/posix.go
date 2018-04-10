@@ -994,6 +994,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		// we still need to allow overwriting an empty directory since it represents
 		// an object empty directory.
 		_, err = os.Stat(dstFilePath)
+
 		if err == nil && !isDirEmpty(dstFilePath) {
 			return errFileAccessDenied
 		}
