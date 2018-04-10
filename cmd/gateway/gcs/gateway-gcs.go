@@ -758,13 +758,26 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash
 	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
+	metadata := make(map[string]string)
+	for k, v := range attrs.Metadata {
+		metadata[k] = v
+	}
+	if attrs.CacheControl != "" {
+		metadata["cache-control"] = attrs.CacheControl
+	}
+	if attrs.ContentDisposition != "" {
+		metadata["content-disposition"] = attrs.ContentDisposition
+	}
+	if attrs.ContentLanguage != "" {
+		metadata["content-language"] = attrs.ContentLanguage
+	}
 	return minio.ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
 		ETag:            minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C)),
-		UserDefined:     attrs.Metadata,
+		UserDefined:     metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
 	}
