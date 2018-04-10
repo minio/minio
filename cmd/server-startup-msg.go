@@ -115,17 +115,17 @@ func printServerCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logger.Println(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	logger.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
-	logger.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
+	logger.StartupMessage(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	logger.StartupMessage(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
+	logger.StartupMessage(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
 	if region != "" {
-		logger.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+		logger.StartupMessage(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
 	}
 	printEventNotifiers()
 
 	if globalIsBrowserEnabled {
-		logger.Println(colorBlue("\nBrowser Access:"))
-		logger.Println(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
+		logger.StartupMessage(colorBlue("\nBrowser Access:"))
+		logger.StartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}
 }
 
@@ -141,7 +141,7 @@ func printEventNotifiers() {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(arn), 1), arn))
 	}
 
-	logger.Println(arnMsg)
+	logger.StartupMessage(arnMsg)
 }
 
 // Prints startup message for command line access. Prints link to our documentation
@@ -151,24 +151,24 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	cred := globalServerConfig.GetCredential()
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	logger.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
+	logger.StartupMessage(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
 	if runtime.GOOS == globalWindowsOSName {
 		mcMessage := fmt.Sprintf("$ mc.exe config host add %s %s %s %s", alias, endPoint, cred.AccessKey, cred.SecretKey)
-		logger.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		logger.StartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
 		mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s", alias, endPoint, cred.AccessKey, cred.SecretKey)
-		logger.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		logger.StartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }
 
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	logger.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
-	logger.Println(colorBlue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
-	logger.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
-	logger.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
-	logger.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
-	logger.Println(colorBlue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
+	logger.StartupMessage(colorBlue("\nObject API (Amazon S3 compatible):"))
+	logger.StartupMessage(colorBlue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
+	logger.StartupMessage(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
+	logger.StartupMessage(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
+	logger.StartupMessage(colorBlue("   JavaScript: ") + jsQuickStartGuide)
+	logger.StartupMessage(colorBlue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
 }
 
 // Get formatted disk/storage info message.
@@ -185,15 +185,14 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
-	logger.Println(getStorageInfoMsg(storageInfo))
-	logger.Println()
+	logger.StartupMessage(getStorageInfoMsg(storageInfo) + "\n")
 }
 
 func printCacheStorageInfo(storageInfo StorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Cache Capacity:"),
 		humanize.IBytes(uint64(storageInfo.Free)),
 		humanize.IBytes(uint64(storageInfo.Total)))
-	logger.Println(msg)
+	logger.StartupMessage(msg)
 }
 
 // Prints certificate expiry date warning
@@ -216,5 +215,5 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 
 // Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
-	logger.Println(getCertificateChainMsg(certs))
+	logger.StartupMessage(getCertificateChainMsg(certs))
 }
