@@ -210,8 +210,13 @@ func serverMain(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid SSL certificate file")
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
-	if globalIsDistXL && globalEndpoints.IsHTTPS() && !globalIsSSL {
-		logger.FatalIf(errInvalidArgument, "No certificates found for HTTPS endpoints (%s)", globalEndpoints)
+	if globalIsDistXL {
+		if globalEndpoints.IsHTTPS() && !globalIsSSL {
+			logger.FatalIf(errInvalidArgument, "No certificates found, use HTTP endpoints (%s)", globalEndpoints)
+		}
+		if !globalEndpoints.IsHTTPS() && globalIsSSL {
+			logger.FatalIf(errInvalidArgument, "TLS Certificates found, use HTTPS endpoints (%s)", globalEndpoints)
+		}
 	}
 
 	if !quietFlag {
