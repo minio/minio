@@ -45,7 +45,8 @@ type Level int8
 
 // Enumerated level types
 const (
-	Error Level = iota + 1
+	Information Level = iota + 1
+	Error
 	Fatal
 )
 
@@ -61,6 +62,8 @@ var matchingFuncNames = [...]string{
 func (level Level) String() string {
 	var lvlStr string
 	switch level {
+	case Information:
+		lvlStr = "INFO"
 	case Error:
 		lvlStr = "ERROR"
 	case Fatal:
@@ -69,9 +72,26 @@ func (level Level) String() string {
 	return lvlStr
 }
 
+// Console interface describes the methods that needs to be implemented to satisfy the interface requirements.
+type Console interface {
+	json(msg string, args ...interface{})
+	quiet(msg string, args ...interface{})
+	pretty(msg string, args ...interface{})
+}
+
+func consoleLog(console Console, msg string, args ...interface{}) {
+	if jsonFlag {
+		console.json(msg, args...)
+	} else if quiet {
+		console.quiet(msg, args...)
+	} else {
+		console.pretty(msg, args...)
+	}
+}
+
 type traceEntry struct {
-	Message   string            `json:"message"`
-	Source    []string          `json:"source"`
+	Message   string            `json:"message,omitempty"`
+	Source    []string          `json:"source,omitempty"`
 	Variables map[string]string `json:"variables,omitempty"`
 }
 type args struct {
@@ -81,18 +101,18 @@ type args struct {
 
 type api struct {
 	Name string `json:"name,omitempty"`
-	Args args   `json:"args,omitempty"`
+	Args *args  `json:"args,omitempty"`
 }
 
 type logEntry struct {
-	Level      string     `json:"level"`
-	Time       string     `json:"time"`
-	API        api        `json:"api,omitempty"`
-	RemoteHost string     `json:"remotehost,omitempty"`
-	RequestID  string     `json:"requestID,omitempty"`
-	UserAgent  string     `json:"userAgent,omitempty"`
-	Cause      string     `json:"cause,omitempty"`
-	Trace      traceEntry `json:"error"`
+	Level      string      `json:"level"`
+	Time       string      `json:"time"`
+	API        *api        `json:"api,omitempty"`
+	RemoteHost string      `json:"remotehost,omitempty"`
+	RequestID  string      `json:"requestID,omitempty"`
+	UserAgent  string      `json:"userAgent,omitempty"`
+	Message    string      `json:"message,omitempty"`
+	Trace      *traceEntry `json:"error,omitempty"`
 }
 
 // quiet: Hide startup messages if enabled
@@ -110,20 +130,6 @@ func EnableQuiet() {
 func EnableJSON() {
 	jsonFlag = true
 	quiet = true
-}
-
-// Println - wrapper to console.Println() with quiet flag.
-func Println(args ...interface{}) {
-	if !quiet {
-		console.Println(args...)
-	}
-}
-
-// Printf - wrapper to console.Printf() with quiet flag.
-func Printf(format string, args ...interface{}) {
-	if !quiet {
-		console.Printf(format, args...)
-	}
 }
 
 // Init sets the trimStrings to possible GOPATHs
@@ -171,6 +177,17 @@ func trimTrace(f string) string {
 	return filepath.FromSlash(f)
 }
 
+func getSource() string {
+	pc, file, lineNumber, ok := runtime.Caller(5)
+	if ok {
+		// Clean up the common prefixes
+		file = trimTrace(file)
+		_, funcName := filepath.Split(runtime.FuncForPC(pc).Name())
+		return fmt.Sprintf("%v:%v:%v()", file, lineNumber, funcName)
+	}
+	return ""
+}
+
 // getTrace method - creates and returns stack trace
 func getTrace(traceLevel int) []string {
 	var trace []string
@@ -201,57 +218,6 @@ func getTrace(traceLevel int) []string {
 		pc, file, lineNumber, ok = runtime.Caller(traceLevel)
 	}
 	return trace
-}
-
-func logIf(level Level, err error, msg string,
-	data ...interface{}) {
-	if err == nil {
-		return
-	}
-	// Get the cause for the Error
-	cause := err.Error()
-	// Get full stack trace
-	trace := getTrace(3)
-	// Get time
-	timeOfError := time.Now().UTC().Format(time.RFC3339Nano)
-	// Output the formatted log message at console
-	var output string
-	message := fmt.Sprintf(msg, data...)
-	if jsonFlag {
-		logJSON, err := json.Marshal(&logEntry{
-			Level: level.String(),
-			Time:  timeOfError,
-			Cause: cause,
-			Trace: traceEntry{Source: trace, Message: message},
-		})
-		if err != nil {
-			panic("json marshal of logEntry failed: " + err.Error())
-		}
-		output = string(logJSON)
-	} else {
-		// Add a sequence number and formatting for each stack trace
-		// No formatting is required for the first entry
-		trace[0] = "1: " + trace[0]
-		for i, element := range trace[1:] {
-			trace[i+1] = fmt.Sprintf("%8v: %s", i+2, element)
-		}
-		errMsg := fmt.Sprintf("[%s] [%s] %s (%s)",
-			timeOfError, level.String(), message, cause)
-
-		output = fmt.Sprintf("\nTrace: %s\n%s",
-			strings.Join(trace, "\n"),
-			colorRed(colorBold(errMsg)))
-	}
-	fmt.Println(output)
-
-	if level == Fatal {
-		os.Exit(1)
-	}
-}
-
-// FatalIf :
-func FatalIf(err error, msg string, data ...interface{}) {
-	logIf(Fatal, err, msg, data...)
 }
 
 // LogIf :
@@ -289,8 +255,8 @@ func LogIf(ctx context.Context, err error) {
 			RequestID:  req.RequestID,
 			UserAgent:  req.UserAgent,
 			Time:       time.Now().UTC().Format(time.RFC3339Nano),
-			API:        api{Name: API, Args: args{Bucket: req.BucketName, Object: req.ObjectName}},
-			Trace:      traceEntry{Message: message, Source: trace, Variables: tags},
+			API:        &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
+			Trace:      &traceEntry{Message: message, Source: trace, Variables: tags},
 		})
 		if err != nil {
 			panic(err)
@@ -347,4 +313,94 @@ func LogIf(ctx context.Context, err error) {
 			colorRed(colorBold(message)), tagString, strings.Join(trace, "\n"))
 	}
 	fmt.Println(output)
+}
+
+// FatalIf :
+func FatalIf(err error, msg string, data ...interface{}) {
+	if err != nil {
+		if msg != "" {
+			consoleLog(fatalMessage, msg, data...)
+		} else {
+			consoleLog(fatalMessage, err.Error())
+		}
+	}
+}
+
+var fatalMessage fatalMsg
+
+type fatalMsg struct {
+}
+
+func (f fatalMsg) json(msg string, args ...interface{}) {
+	logJSON, err := json.Marshal(&logEntry{
+		Level: Fatal.String(),
+		Time:  time.Now().UTC().Format(time.RFC3339Nano),
+		Trace: &traceEntry{Message: fmt.Sprintf(msg, args...), Source: []string{getSource()}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(logJSON))
+	os.Exit(1)
+
+}
+
+func (f fatalMsg) quiet(msg string, args ...interface{}) {
+	f.pretty(msg, args...)
+}
+
+func (f fatalMsg) pretty(msg string, args ...interface{}) {
+	errMsg := fmt.Sprintf(msg, args...)
+	fmt.Println(colorRed(colorBold("Error: " + errMsg)))
+	os.Exit(1)
+}
+
+var info infoMsg
+
+type infoMsg struct {
+}
+
+func (i infoMsg) json(msg string, args ...interface{}) {
+	logJSON, err := json.Marshal(&logEntry{
+		Level:   Information.String(),
+		Message: fmt.Sprintf(msg, args...),
+		Time:    time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(logJSON))
+}
+
+func (i infoMsg) quiet(msg string, args ...interface{}) {
+	i.pretty(msg, args...)
+}
+
+func (i infoMsg) pretty(msg string, args ...interface{}) {
+	console.Printf(msg, args...)
+}
+
+// Info :
+func Info(msg string, data ...interface{}) {
+	consoleLog(info, msg+"\n", data...)
+}
+
+var startupMessage startUpMsg
+
+type startUpMsg struct {
+}
+
+func (s startUpMsg) json(msg string, args ...interface{}) {
+}
+
+func (s startUpMsg) quiet(msg string, args ...interface{}) {
+}
+
+func (s startUpMsg) pretty(msg string, args ...interface{}) {
+	console.Printf(msg, args...)
+}
+
+// StartupMessage :
+func StartupMessage(msg string, data ...interface{}) {
+	consoleLog(startupMessage, msg+"\n", data...)
 }

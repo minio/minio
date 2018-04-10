@@ -22,7 +22,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -218,11 +217,11 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 				switch err {
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.
-					console.Println("Waiting for the first server to format the disks.")
+					logger.Info("Waiting for the first server to format the disks.")
 					continue
 				case errXLReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					console.Printf("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
 					continue
 				case errXLV3ThisEmpty:
 					// need to wait for this error to be healed, so continue.
