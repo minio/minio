@@ -30,7 +30,6 @@ import (
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	sha256 "github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
@@ -416,7 +415,7 @@ func (xl xlObjects) readXLMetaParts(ctx context.Context, bucket, object string) 
 		}
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
-		if errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
+		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
@@ -444,7 +443,7 @@ func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (
 		}
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
-		if errors.IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
+		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
@@ -542,7 +541,7 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
 	}
@@ -581,7 +580,7 @@ func writeSameXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
+	if err == errXLWriteQuorum {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
 	}

@@ -22,7 +22,6 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -853,7 +852,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		return ErrNone
 	}
 
-	err = errors.Cause(err)
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errSignatureMismatch:

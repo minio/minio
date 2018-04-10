@@ -33,7 +33,6 @@ import (
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -1386,7 +1385,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts)
 	if err != nil {
-		err = errors.Cause(err)
 		switch oErr := err.(type) {
 		case PartTooSmall:
 			// Write part too small error.

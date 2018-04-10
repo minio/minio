@@ -26,7 +26,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -86,7 +85,7 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		return nil, errors.Cause(err)
+		return nil, err
 	}
 
 	policies := make(map[string]policy.BucketAccessPolicy)
@@ -96,9 +95,9 @@ func initBucketPolicies(objAPI ObjectLayer) (*bucketPolicies, error) {
 		if pErr != nil {
 			// net.Dial fails for rpc client or any
 			// other unexpected errors during net.Dial.
-			if !errors.IsErrIgnored(pErr, errDiskNotFound) {
+			if !IsErrIgnored(pErr, errDiskNotFound) {
 				if !isErrBucketPolicyNotFound(pErr) {
-					return nil, errors.Cause(pErr)
+					return nil, pErr
 				}
 			}
 			// Continue to load other bucket policies if possible.
@@ -126,7 +125,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, PolicyNotFound{Bucket: bucket}
 		}
-		return nil, errors.Cause(err)
+		return nil, err
 	}
 
 	return &buffer, nil
@@ -156,7 +155,6 @@ func removeBucketPolicy(ctx context.Context, bucket string, objAPI ObjectLayer) 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	err := objAPI.DeleteObject(ctx, minioMetaBucket, policyPath)
 	if err != nil {
-		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -177,11 +175,11 @@ func writeBucketPolicy(ctx context.Context, bucket string, objAPI ObjectLayer, b
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return errors.Cause(err)
+		return err
 	}
 
 	if _, err = objAPI.PutObject(ctx, minioMetaBucket, policyPath, hashReader, nil); err != nil {
-		return errors.Cause(err)
+		return err
 	}
 	return nil
 }

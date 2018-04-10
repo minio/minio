@@ -32,7 +32,6 @@ import (
 	"github.com/djherbis/atime"
 
 	"github.com/minio/minio/cmd/logger"
-	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/wildcard"
 
 	"github.com/minio/minio/pkg/hash"
@@ -104,8 +103,8 @@ type CacheObjectLayer interface {
 
 // backendDownError returns true if err is due to backend failure or faulty disk if in server mode
 func backendDownError(err error) bool {
-	_, backendDown := errors2.Cause(err).(BackendDown)
-	return backendDown || errors2.IsErr(err, baseErrs...)
+	_, backendDown := err.(BackendDown)
+	return backendDown || IsErr(err, baseErrs...)
 }
 
 // get cache disk where object is currently cached for a GET operation. If object does not exist at that location,
@@ -192,7 +191,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	objInfo, err := GetObjectInfoFn(ctx, bucket, object)
 	backendDown := backendDownError(err)
 	if err != nil && !backendDown {
-		if _, ok := errors2.Cause(err).(ObjectNotFound); ok {
+		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
@@ -256,7 +255,7 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) 
 	}
 	objInfo, err := getObjectInfoFn(ctx, bucket, object)
 	if err != nil {
-		if _, ok := errors2.Cause(err).(ObjectNotFound); ok {
+		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 			return ObjectInfo{}, err
@@ -379,7 +378,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			fs, err := c.cache.getCacheFS(ctx, bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if errors2.Cause(err) == errFileNotFound {
+				if err == errFileNotFound {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)
@@ -387,7 +386,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			objInfo, err = fs.getObjectInfo(ctx, bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if errors2.Cause(err) == errFileNotFound {
+				if err == errFileNotFound {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)

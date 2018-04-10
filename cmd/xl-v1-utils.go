@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/tidwall/gjson"
 )
 
@@ -39,7 +38,7 @@ import (
 func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) {
 	errorCounts := make(map[error]int)
 	for _, err := range errs {
-		if errors2.IsErrIgnored(err, ignoredErrs...) {
+		if IsErrIgnored(err, ignoredErrs...) {
 			continue
 		}
 		errorCounts[err]++

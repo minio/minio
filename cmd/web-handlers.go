@@ -37,7 +37,6 @@ import (
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -759,7 +758,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	var policyInfo, err = objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
 	if err != nil {
-		_, ok := errors.Cause(err).(BucketPolicyNotFound)
+		_, ok := err.(BucketPolicyNotFound)
 		if !ok {
 			return toJSONError(err, args.BucketName)
 		}
@@ -801,7 +800,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	}
 	var policyInfo, err = objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
 	if err != nil {
-		_, ok := errors.Cause(err).(PolicyNotFound)
+		_, ok := err.(PolicyNotFound)
 		if !ok {
 			return toJSONError(err, args.BucketName)
 		}
@@ -848,7 +847,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	var policyInfo, err = objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
 	if err != nil {
-		if _, ok := errors.Cause(err).(PolicyNotFound); !ok {
+		if _, ok := err.(PolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
 		}
 		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -1007,7 +1006,6 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(err error) APIError {
-	err = errors.Cause(err)
 	if err == errAuthentication {
 		return APIError{
 			Code:           "AccessDenied",

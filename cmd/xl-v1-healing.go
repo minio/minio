@@ -23,12 +23,12 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func (xl xlObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	return errors.Trace(NotImplemented{})
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
 }
 
 func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
@@ -120,13 +120,13 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			if _, serr := disk.StatVol(bucket); serr != nil {
-				if errors.Cause(serr) == errDiskNotFound {
+				if serr == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
 					afterState[index] = madmin.DriveStateOffline
 					dErrs[index] = serr
 					return
 				}
-				if errors.Cause(serr) != errVolumeNotFound {
+				if serr != errVolumeNotFound {
 					beforeState[index] = madmin.DriveStateCorrupt
 					afterState[index] = madmin.DriveStateCorrupt
 					dErrs[index] = serr
@@ -190,7 +190,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	}
 
 	reducedErr := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if errors.Cause(reducedErr) == errXLWriteQuorum {
+	if reducedErr == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
@@ -256,7 +256,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 		var volsInfo []VolInfo
 		volsInfo, err = disk.ListVols()
 		if err != nil {
-			if errors.IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
+			if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 				continue
 			}
 			return nil, nil, err
@@ -330,11 +330,11 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			result.ObjectSize = partsMetadata[i].Stat.Size
 			result.ParityBlocks = partsMetadata[i].Erasure.ParityBlocks
 			result.DataBlocks = partsMetadata[i].Erasure.DataBlocks
-		case errors.Cause(errs[i]) == errDiskNotFound:
+		case errs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
-		case errors.Cause(errs[i]) == errFileNotFound, errors.Cause(errs[i]) == errVolumeNotFound:
+		case errs[i] == errFileNotFound, errs[i] == errVolumeNotFound:
 			fallthrough
-		case errors.Cause(dataErrs[i]) == errFileNotFound, errors.Cause(dataErrs[i]) == errVolumeNotFound:
+		case dataErrs[i] == errFileNotFound, dataErrs[i] == errVolumeNotFound:
 			driveState = madmin.DriveStateMissing
 		default:
 			// all remaining cases imply corrupt data/metadata
@@ -412,8 +412,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			continue
 		}
 
-		// List and delete the object directory, ignoring
-		// errors.
+		// List and delete the object directory,
 		files, derr := disk.ListDir(bucket, object)
 		if derr == nil {
 			for _, entry := range files {

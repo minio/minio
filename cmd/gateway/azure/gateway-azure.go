@@ -37,7 +37,6 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	sha256 "github.com/minio/sha256-simd"
 
@@ -714,7 +713,7 @@ func (a *azureObjects) checkUploadIDExists(ctx context.Context, bucketName, obje
 		Bucket: bucketName,
 		Object: objectName,
 	}
-	if errors.Cause(err) == oerr {
+	if err == oerr {
 		logger.LogIf(ctx, minio.InvalidUploadID{UploadID: uploadID})
 		err = minio.InvalidUploadID{
 			UploadID: uploadID,
