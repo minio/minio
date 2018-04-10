@@ -72,6 +72,51 @@ func checkPathLength(pathName string) error {
 	return nil
 }
 
+func checkPathValid(path string) (string, error) {
+	if path == "" {
+		return path, errInvalidArgument
+	}
+
+	var err error
+	// Disallow relative paths, figure out absolute paths.
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return path, err
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		return path, err
+	}
+	if os.IsNotExist(err) {
+		// Disk not found create it.
+		if err = os.MkdirAll(path, 0777); err != nil {
+			return path, err
+		}
+	}
+	if fi != nil && !fi.IsDir() {
+		return path, syscall.ENOTDIR
+	}
+
+	di, err := getDiskInfo(path)
+	if err != nil {
+		return path, err
+	}
+	if err = checkDiskMinTotal(di); err != nil {
+		return path, err
+	}
+
+	// check if backend is writable.
+	file, err := os.Create(pathJoin(path, ".writable-check.tmp"))
+	if err != nil {
+		return path, err
+	}
+	file.Close()
+
+	err = os.Remove(pathJoin(path, ".writable-check.tmp"))
+	return path, err
+}
+
 // isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open((dirname))
@@ -98,17 +143,13 @@ func isDirEmpty(dirname string) bool {
 
 // Initialize a new storage disk.
 func newPosix(path string) (StorageAPI, error) {
-	if path == "" {
-		return nil, errInvalidArgument
-	}
-	// Disallow relative paths, figure out absolute paths.
-	diskPath, err := filepath.Abs(path)
-	if err != nil {
+	var err error
+	if path, err = checkPathValid(path); err != nil {
 		return nil, err
 	}
 
 	st := &posix{
-		diskPath: diskPath,
+		diskPath: path,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -117,30 +158,6 @@ func newPosix(path string) (StorageAPI, error) {
 			},
 		},
 	}
-	fi, err := os.Stat((diskPath))
-	if err == nil {
-		if !fi.IsDir() {
-			return nil, syscall.ENOTDIR
-		}
-	}
-	if os.IsNotExist(err) {
-		// Disk not found create it.
-		err = os.MkdirAll(diskPath, 0777)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	di, err := getDiskInfo((diskPath))
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if disk has minimum required total space.
-	if err = checkDiskMinTotal(di); err != nil {
-		return nil, err
-	}
-
 	st.connected = true
 
 	// Success.
@@ -435,7 +452,10 @@ func (s *posix) DeleteVol(volume string) (err error) {
 			return errVolumeNotFound
 		} else if isSysErrNotEmpty(err) {
 			return errVolumeNotEmpty
+		} else if os.IsPermission(err) {
+			return errDiskAccessDenied
 		}
+
 		return err
 	}
 	return nil
@@ -678,7 +698,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
-	if st, err = os.Stat((filePath)); err == nil {
+	if st, err = os.Stat(filePath); err == nil {
 		if !st.Mode().IsRegular() {
 			return nil, errIsNotRegular
 		}
@@ -690,10 +710,12 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	}
 
-	w, err := os.OpenFile((filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	w, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
+			return nil, errFileAccessDenied
+		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
 		}
 		return nil, err
