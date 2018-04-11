@@ -21,6 +21,7 @@ import (
 	"crypto"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"path"
@@ -42,7 +43,7 @@ var DefaultBitrotAlgorithm = HighwayHash256
 func init() {
 	hh256Key, err := hex.DecodeString(magicHighwayHash256Key)
 	if err != nil || len(hh256Key) != highwayhash.Size {
-		panic("Failed to decode fixed magic HighwayHash256 key: Please report this bug at https://github.com/minio/minio/issues")
+		logger.CriticalIf(context.Background(), errors.New("Failed to decode fixed magic HighwayHash256 key. Please report this bug at https://github.com/minio/minio/issues"))
 	}
 
 	newBLAKE2b := func() hash.Hash {
@@ -80,11 +81,12 @@ var bitrotAlgorithms = map[BitrotAlgorithm]string{
 	HighwayHash256: "highwayhash256",
 }
 
-// New returns a new hash.Hash calculating the given bitrot algorithm. New panics
-// if the algorithm is not supported or not linked into the binary.
+// New returns a new hash.Hash calculating the given bitrot algorithm.
+// New logs error and exits if the algorithm is not supported or not
+// linked into the binary.
 func (a BitrotAlgorithm) New() hash.Hash {
 	if _, ok := bitrotAlgorithms[a]; !ok {
-		panic(fmt.Sprintf("bitrot algorithm #%d is not supported", a))
+		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
 	}
 	return crypto.Hash(a).New()
 }
@@ -98,10 +100,11 @@ func (a BitrotAlgorithm) Available() bool {
 // String returns the string identifier for a given bitrot algorithm.
 // If the algorithm is not supported String panics.
 func (a BitrotAlgorithm) String() string {
-	if name, ok := bitrotAlgorithms[a]; ok {
-		return name
+	name, ok := bitrotAlgorithms[a]
+	if !ok {
+		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
 	}
-	panic(fmt.Sprintf("bitrot algorithm #%d is not supported", a))
+	return name
 }
 
 // BitrotAlgorithmFromString returns a bitrot algorithm from the given string representation.

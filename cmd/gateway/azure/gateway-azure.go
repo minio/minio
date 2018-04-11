@@ -344,21 +344,21 @@ func azureToObjectError(err error, params ...string) error {
 	return err
 }
 
-// mustGetAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
+// getAzureUploadID - returns new upload ID which is hex encoded 8 bytes random value.
 // this 8 byte restriction is needed because Azure block id has a restriction of length
 // upto 8 bytes.
-func mustGetAzureUploadID() string {
+func getAzureUploadID() (string, error) {
 	var id [8]byte
 
 	n, err := io.ReadFull(rand.Reader, id[:])
 	if err != nil {
-		panic(fmt.Errorf("unable to generate upload ID for azure. %s", err))
+		return "", err
 	}
 	if n != len(id) {
-		panic(fmt.Errorf("insufficient random data (expected: %d, read: %d)", len(id), n))
+		return "", fmt.Errorf("Unexpected random data size. Expected: %d, read: %d)", len(id), n)
 	}
 
-	return hex.EncodeToString(id[:])
+	return hex.EncodeToString(id[:]), nil
 }
 
 // checkAzureUploadID - returns error in case of given string is upload ID.
@@ -724,7 +724,11 @@ func (a *azureObjects) checkUploadIDExists(ctx context.Context, bucketName, obje
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	uploadID = mustGetAzureUploadID()
+	uploadID, err = getAzureUploadID()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return "", err
+	}
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 
 	var jsonData []byte

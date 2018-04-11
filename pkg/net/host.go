@@ -139,12 +139,3 @@ func ParseHost(s string) (*Host, error) {
 		IsPortSet: isPortSet,
 	}, nil
 }
-
-// MustParseHost - parses given string to Host, else panics.
-func MustParseHost(s string) *Host {
-	host, err := ParseHost(s)
-	if err != nil {
-		panic(err)
-	}
-	return host
-}
