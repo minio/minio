@@ -156,7 +156,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	var writer io.Writer
 	writer = w
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(r.Header) {
+		if SSECustomerHeaders.Contains(r.Header) {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
@@ -177,7 +177,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	httpWriter := ioutil.WriteOnClose(writer)
 
 	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+	if api.CacheAPI() != nil && !SSECustomerHeaders.Contains(r.Header) {
 		getObject = api.CacheAPI().GetObject
 	}
 
@@ -426,10 +426,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		var oldKey, newKey []byte
-		sseCopyC := hasSSECopyCustomerHeader(r.Header)
-		sseC := hasSSECustomerHeader(r.Header)
+		sseCopyC := SSECopyCustomerHeaders.Contains(r.Header)
+		sseC := SSECustomerHeaders.Contains(r.Header)
 		if sseC {
-			newKey, err = ParseSSECustomerRequest(r)
+			newKey, err = SSECustomerHeaders.Parse(r.Header)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -441,7 +441,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// otherwise we proceed to encrypt/decrypt.
 		if sseCopyC && sseC && cpSrcDstSame {
 			// Get the old key which needs to be rotated.
-			oldKey, err = ParseSSECopyCustomerRequest(r)
+			oldKey, err = SSECopyCustomerHeaders.Parse(r.Header)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -450,7 +450,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
-			if err = rotateKey(oldKey, newKey, encMetadata); err != nil {
+			if err = RotateKeys(oldKey, newKey, encMetadata); err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -711,7 +711,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
+		if SSECustomerHeaders.Contains(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
 			reader, err = EncryptRequest(hashReader, r, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -726,7 +726,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+	if api.CacheAPI() != nil && !SSECustomerHeaders.Contains(r.Header) {
 		putObject = api.CacheAPI().PutObject
 	}
 	// Create the object..
@@ -738,7 +738,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(r.Header) {
+		if SSECustomerHeaders.Contains(r.Header) {
 			w.Header().Set(SSECustomerAlgorithm, r.Header.Get(SSECustomerAlgorithm))
 			w.Header().Set(SSECustomerKeyMD5, r.Header.Get(SSECustomerKeyMD5))
 		}
@@ -805,8 +805,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	var encMetadata = map[string]string{}
 
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(r.Header) {
-			key, err := ParseSSECustomerRequest(r)
+		if SSECustomerHeaders.Contains(r.Header) {
+			key, err := SSECustomerHeaders.Parse(r.Header)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -974,7 +974,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
-		sseCopyC := hasSSECopyCustomerHeader(r.Header)
+		sseCopyC := SSECopyCustomerHeaders.Contains(r.Header)
 		if sseCopyC {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
@@ -987,12 +987,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			}
 		}
 		if li.IsEncrypted() {
-			if !hasSSECustomerHeader(r.Header) {
+			if !SSECustomerHeaders.Contains(r.Header) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
 				return
 			}
 			var key []byte
-			key, err = ParseSSECustomerRequest(r)
+			key, err = SSECustomerHeaders.Parse(r.Header)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1187,12 +1187,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		if li.IsEncrypted() {
-			if !hasSSECustomerHeader(r.Header) {
+			if !SSECustomerHeaders.Contains(r.Header) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
 				return
 			}
 			var key []byte
-			key, err = ParseSSECustomerRequest(r)
+			key, err = SSECustomerHeaders.Parse(r.Header)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return

@@ -18,11 +18,13 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"testing"
 )
 
-var hasSSECopyCustomerHeaderTests = []struct {
+var containsSSECopyCustomerHeaderTests = []struct {
 	headers    map[string]string
 	sseRequest bool
 }{
@@ -35,19 +37,19 @@ var hasSSECopyCustomerHeaderTests = []struct {
 	{headers: map[string]string{SSECopyCustomerAlgorithm: "", SSECopyCustomerKey: "", SSECopyCustomerKeyMD5: ""}, sseRequest: false},                               // 6
 }
 
-func TestIsSSECopyCustomerRequest(t *testing.T) {
-	for i, test := range hasSSECopyCustomerHeaderTests {
+func TestContainsSSECopyCustomerHeader(t *testing.T) {
+	for i, test := range containsSSECopyCustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if hasSSECopyCustomerHeader(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected hasSSECopyCustomerHeader to return %v", i, test.sseRequest)
+		if SSECopyCustomerHeaders.Contains(headers) != test.sseRequest {
+			t.Errorf("Test %d: Expected ContainsSSECopyCustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
 }
 
-var hasSSECustomerHeaderTests = []struct {
+var containsSSECustomerHeaderTests = []struct {
 	headers    map[string]string
 	sseRequest bool
 }{
@@ -60,14 +62,14 @@ var hasSSECustomerHeaderTests = []struct {
 	{headers: map[string]string{SSECustomerAlgorithm: "", SSECustomerKey: "", SSECustomerKeyMD5: ""}, sseRequest: false},                               // 6
 }
 
-func TesthasSSECustomerHeader(t *testing.T) {
-	for i, test := range hasSSECustomerHeaderTests {
+func TestContainsSSECustomerHeader(t *testing.T) {
+	for i, test := range containsSSECustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		if hasSSECustomerHeader(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected hasSSECustomerHeader to return %v", i, test.sseRequest)
+		if SSECustomerHeaders.Contains(headers) != test.sseRequest {
+			t.Errorf("Test %d: Expected ContainsSSECustomerHeader to return %v", i, test.sseRequest)
 		}
 	}
 }
@@ -158,15 +160,13 @@ func TestParseSSECustomerRequest(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		request := &http.Request{}
-		request.Header = headers
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECustomerRequest(request)
+		_, err := SSECustomerHeaders.Parse(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(SSECustomerKey)
+		key := headers.Get(SSECustomerKey)
 		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
 			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
 		}
@@ -260,15 +260,13 @@ func TestParseSSECopyCustomerRequest(t *testing.T) {
 		for k, v := range test.headers {
 			headers.Set(k, v)
 		}
-		request := &http.Request{}
-		request.Header = headers
 		globalIsSSL = test.useTLS
 
-		_, err := ParseSSECopyCustomerRequest(request)
+		_, err := SSECopyCustomerHeaders.Parse(headers)
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(SSECopyCustomerKey)
+		key := headers.Get(SSECopyCustomerKey)
 		if (err == nil || err == errSSEKeyMD5Mismatch) && key != "" {
 			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
 		}
@@ -459,6 +457,187 @@ func TestDecryptObjectInfo(t *testing.T) {
 			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)
 		} else if !encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is not encrypted but it is", i)
+		}
+	}
+}
+
+var decryptCopyObjectInfoTests = []struct {
+	info    ObjectInfo
+	headers http.Header
+	expErr  APIErrorCode
+}{
+	{
+		info:    ObjectInfo{Size: 100},
+		headers: http.Header{},
+		expErr:  ErrNone,
+	},
+	{
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
+		headers: http.Header{SSECopyCustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
+		expErr:  ErrNone,
+	},
+	{
+		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
+		headers: http.Header{SSECopyCustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
+		expErr:  ErrNone,
+	},
+	{
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
+		headers: http.Header{},
+		expErr:  ErrSSEEncryptedObject,
+	},
+	{
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{}},
+		headers: http.Header{SSECopyCustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
+		expErr:  ErrInvalidEncryptionParameters,
+	},
+	{
+		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareSha256}},
+		headers: http.Header{SSECopyCustomerAlgorithm: []string{SSECustomerAlgorithmAES256}},
+		expErr:  ErrObjectTampered,
+	},
+}
+
+func TestDecryptCopyObjectInfo(t *testing.T) {
+	for i, test := range decryptCopyObjectInfoTests {
+		if err, encrypted := DecryptCopyObjectInfo(&test.info, test.headers); err != test.expErr {
+			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
+		} else if enc := test.info.IsEncrypted(); encrypted && enc != encrypted {
+			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)
+		} else if !encrypted && enc != encrypted {
+			t.Errorf("Test %d: Decryption thinks object is not encrypted but it is", i)
+		}
+	}
+}
+
+var unmarshalObjectEncryptionKeyTests = []struct {
+	key        []byte
+	metadata   map[string]string
+	shouldFail bool
+}{
+	{
+		key: make([]byte, 32),
+		metadata: map[string]string{
+			"X-Minio-Internal-Server-Side-Encryption-Iv":             "quG9piiYxLKEwPgTPpGAJSDX7dunXDtM9Rldtv6ks8A=",
+			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "DARE-SHA256",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "IAAfALY6SRKZgLZ7fOj+bIkLKmORp10HC3CmdOLmHEBZJPjTYVcgp40z659/bbBlm6e/dsWiDRUQ/KASsL0J1w==",
+		},
+		shouldFail: false,
+	},
+	{
+		key: make([]byte, 33),
+		metadata: map[string]string{
+			"X-Minio-Internal-Server-Side-Encryption-Iv":             "2/mcHQdT9KMXGZTeQFKHYpaXXcN2XxkJ7ahRi+4oHNI=",
+			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "DARE-SHA256",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "IAAfALpfVzXMQCpD8Uj8MTiq+X7DxlBRfhGw59GVivaHa+VsUdtA6kY1kdVXsFbf7f9gviA32tTDqQ8lTzwHAg==",
+		},
+		shouldFail: true,
+	},
+	{
+		key: append([]byte{1}, make([]byte, 31)...),
+		metadata: map[string]string{
+			"X-Minio-Internal-Server-Side-Encryption-Iv":             "2/mcHQdT9KMXGZTeQFKHYpaXXcN2XxkJ7ahRi+4oHNI=",
+			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "DARE-SHA256",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "IAAfALpfVzXMQCpD8Uj8MTiq+X7DxlBRfhGw59GVivaHa+VsUdtA6kY1kdVXsFbf7f9gviA32tTDqQ8lTzwHAg==",
+		},
+		shouldFail: true,
+	},
+	{
+		key: make([]byte, 32),
+		metadata: map[string]string{
+			"X-Minio-Internal-Server-Side-Encryption-Iv":             "2/mcHQdT9KMXGZTeQAKHYpaXXcN2XxkJ7ahRi+4oHNI=", // modified IV
+			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "DARE-SHA256",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "IAAfALpfVzXMQCpD8Uj8MTiq+X7DxlBRfhGw59GVivaHa+VsUdtA6kY1kdVXsFbf7f9gviA32tTDqQ8lTzwHAg==",
+		},
+		shouldFail: true,
+	},
+	{
+		key: make([]byte, 32),
+		metadata: map[string]string{ // missing X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm
+			"X-Minio-Internal-Server-Side-Encryption-Iv":         "2/mcHQdT9KMXGZTeQFKHYpaXXcN2XxkJ7ahRi+4oHNI=",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key": "IAAfALpfVzXMQCpD8Uj8MTiq+X7DxlBRfhGw59GVivaHa+VsUdtA6kY1kdVXsFbf7f9gviA32tTDqQ8lTzwHAg==",
+		},
+		shouldFail: true,
+	},
+	{
+		key: make([]byte, 32),
+		metadata: map[string]string{
+			"X-Minio-Internal-Server-Side-Encryption-Iv":             "2/mcHQdT9KMXGZTeQFKHYpaXXcN2XxkJ7ahRi+4oHNI=",
+			"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "DARE-SHA256",
+			"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "IAAfALpfVzXMQCpD8Uj8MTiq+X7DxlBRfhGw59GVivaHa+VsUdtA6kY1kdVXsFbf7f9gviA32tT0qQ8lTzwHAg==", // modified key
+		},
+		shouldFail: true,
+	},
+}
+
+func TestUnmarshalObjectEncryptionKey(t *testing.T) {
+	for i, test := range unmarshalObjectEncryptionKeyTests {
+		_, err := UnmarshalObjectEncryptionKey(test.key, test.metadata)
+		if err != nil && !test.shouldFail {
+			t.Errorf("Test %d: failed to unmarshal metadata: %v", i, err)
+		}
+		if err == nil && test.shouldFail {
+			t.Errorf("Test %d: should fail but passed successfully", i)
+		}
+	}
+}
+
+func TestMarshalObjectEncryptionKey(t *testing.T) {
+	key := make([]byte, 32)
+	metadata := map[string]string{
+		SSECustomerKey:     base64.StdEncoding.EncodeToString(key),
+		SSECopyCustomerKey: base64.StdEncoding.EncodeToString(key),
+	}
+
+	objectKey, err := DeriveObjectEncryptionKey(key)
+	if err != nil {
+		t.Errorf("Failed to derive object encryption key: %v", err)
+	}
+	kek, err := DeriveKeyEncryptionKey(key)
+	if err != nil {
+		t.Errorf("Failed to derive key encryption key: %v", err)
+	}
+	kek.Marshal(objectKey, metadata)
+
+	if _, ok := metadata[SSECustomerKey]; ok {
+		t.Errorf("%s survived in metadata", SSECustomerKey)
+	}
+	if _, ok := metadata[SSECopyCustomerKey]; ok {
+		t.Errorf("%s survived in metadata", SSECopyCustomerKey)
+	}
+
+	decryptedKey, err := UnmarshalObjectEncryptionKey(key, metadata)
+	if err != nil {
+		t.Errorf("Failed to unmarshal object encryption key: %v", err)
+	}
+	if objectKey != decryptedKey {
+		t.Error("Decrypted object encryption key does not match original key")
+	}
+}
+
+var derivePartKeyTests = []struct {
+	key    string
+	partID int
+}{
+	{partID: 1, key: "9325e77cbce096f91d55cb556a21e07c091cebe37b8d3c3223e9524836afe744"},
+	{partID: 2, key: "29a689195c35bb4f2687b3e0e92740456f7ae635bcd345302d5f001bd78197bc"},
+	{partID: 10000, key: "cdbd28833c1748e9fb6ebc3e3b548c662b0ad71584f596ba41df2e79346abcd0"},
+}
+
+func TestDerivePartKey(t *testing.T) {
+	var objKey ObjectEncryptionKey
+	key, _ := hex.DecodeString("b997f84afa94eb4482953512c98a5850d85dd5ad1cac483ad69ef073915ab3f5")
+	copy(objKey[:], key)
+
+	for i, test := range derivePartKeyTests {
+		key, err := hex.DecodeString(test.key)
+		if err != nil {
+			t.Errorf("Test %d: failed to decode key: %v", i, err)
+		}
+
+		partKey := objKey.DerivePartKey(test.partID)
+		if !bytes.Equal(key, partKey[:]) {
+			t.Errorf("Test %d: derived key does not match", i)
 		}
 	}
 }
