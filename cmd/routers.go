@@ -59,6 +59,8 @@ func registerDistXLRouters(mux *router.Router, endpoints EndpointList) error {
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []HandlerFunc{
+	// set HTTP security headers such as Content-Security-Policy.
+	addSecurityHeaders,
 	// Ratelimit the incoming requests using a token bucket algorithm
 	setRateLimitHandler,
 	// Validate all the incoming paths.
