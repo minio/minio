@@ -314,6 +314,11 @@ func shouldInitXLDisks(errs []error) bool {
 	return countErrs(errs, errUnformattedDisk) == len(errs)
 }
 
+// Check if unformatted disks are equal to write quorum.
+func quorumUnformattedDisks(errs []error) bool {
+	return countErrs(errs, errUnformattedDisk) >= (len(errs)/2)+1
+}
+
 // loadFormatXLAll - load all format config from all input disks in parallel.
 func loadFormatXLAll(storageDisks []StorageAPI) ([]*formatXLV3, []error) {
 	// Initialize sync waitgroup.
