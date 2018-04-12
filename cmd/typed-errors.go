@@ -62,3 +62,6 @@ var errInvalidRangeSource = errors.New("Range specified exceeds source object si
 // error returned by disks which are to be initialized are waiting for the
 // first server to initialize them in distributed set to initialize them.
 var errNotFirstDisk = errors.New("Not first disk")
+
+// error returned by first disk waiting to initialize other servers.
+var errFirstDiskWait = errors.New("Waiting on other disks")
