@@ -625,3 +625,19 @@ func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	l.handler.ServeHTTP(w, r)
 }
+
+type securityHeaderHandler struct {
+	handler http.Handler
+}
+
+func addSecurityHeaders(h http.Handler) http.Handler {
+	return securityHeaderHandler{handler: h}
+}
+
+func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	header.Set("X-XSS-Protection", "\"1; mode=block\"")              // Prevents against XSS attacks
+	header.Set("X-Frame-Options", "SAMEORIGIN")                      // Prevents against Clickjacking
+	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
+	s.handler.ServeHTTP(w, r)
+}
