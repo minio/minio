@@ -381,11 +381,11 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	// get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(xl, metaArr, errs)
 	if err != nil {
-		return objInfo, toObjectErr(err, bucket, object)
+		return objInfo, err
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return objInfo, toObjectErr(reducedErr, bucket, object)
+		return objInfo, reducedErr
 	}
 
 	// List all the file commit ids from parts metadata.
@@ -432,7 +432,7 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // rename - common function that renamePart and renameObject use to rename
 // the respective underlying storage layer representations.
-func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int) ([]StorageAPI, error) {
+func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -453,10 +453,11 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
-			if err != nil && err != errFileNotFound {
-				logger.LogIf(ctx, err)
-				errs[index] = err
+			if err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
+				if !IsErrIgnored(err, ignoredErr...) {
+					logger.LogIf(ctx, err)
+					errs[index] = err
+				}
 			}
 		}(index, disk)
 	}
@@ -480,7 +481,16 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 // its proper location.
 func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart string, quorum int) ([]StorageAPI, error) {
 	isDir := false
-	return rename(ctx, disks, srcBucket, srcPart, dstBucket, dstPart, isDir, quorum)
+	return rename(ctx, disks, srcBucket, srcPart, dstBucket, dstPart, isDir, quorum, []error{errFileNotFound})
+}
+
+// renameObjectDir - renames all source objects directories to destination
+// object directories across all disks in parallel. Additionally if we have
+// errors and do not have a readQuorum partially renamed files are renamed
+// back to its proper location.
+func renameObjectDir(ctx context.Context, disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) ([]StorageAPI, error) {
+	isDir := true
+	return rename(ctx, disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum, []error{errFileNotFound, errFileAccessDenied})
 }
 
 // renameObject - renames all source objects to destination object
@@ -489,7 +499,7 @@ func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcPart, dst
 // its proper location.
 func renameObject(ctx context.Context, disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) ([]StorageAPI, error) {
 	isDir := true
-	return rename(ctx, disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum)
+	return rename(ctx, disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum, []error{errFileNotFound})
 }
 
 // PutObject - creates an object upon reading from the input stream
@@ -548,7 +558,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 
 		// Rename the successfully written temporary object to final location.
-		if _, err = renameObject(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+		if _, err = renameObjectDir(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 

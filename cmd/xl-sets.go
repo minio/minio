@@ -721,9 +721,10 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredE
 // ListObjects - implements listing of objects across sets, each set is independently
 // listed and subsequently merge lexically sorted inside listDirSetsFactory(). Resulting
 // value through the walk channel receives the data properly lexically sorted.
-func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	var result ListObjectsInfo
 	// validate all the inputs for listObjects
-	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return result, err
 	}
 
@@ -762,6 +763,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			eof = true
 			break
 		}
+
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			return result, toObjectErr(walkResult.err, bucket, prefix)
@@ -778,8 +780,10 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			// Ignore errFileNotFound as the object might have got
 			// deleted in the interim period of listing and getObjectInfo(),
 			// ignore quorum error as it might be an entry from an outdated disk.
-			switch err {
-			case errFileNotFound, errXLReadQuorum:
+			if IsErrIgnored(err, []error{
+				errFileNotFound,
+				errXLReadQuorum,
+			}...) {
 				continue
 			}
 			return result, toObjectErr(err, bucket, prefix)
