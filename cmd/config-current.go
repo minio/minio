@@ -139,6 +139,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "Domain configuration differs"
 	case s.StorageClass != t.StorageClass:
 		return "StorageClass configuration differs"
+	case !reflect.DeepEqual(s.Cache, t.Cache):
+		return "Cache configuration differs"
 	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):

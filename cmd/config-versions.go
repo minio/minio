@@ -580,7 +580,10 @@ type serverConfigV22 struct {
 	Notify notifier `json:"notify"`
 }
 
-// serverConfigV23 is just like version '22' with addition of cache field
+// serverConfigV23 is just like version '22' with addition of cache field.
+//
+// IMPORTANT NOTE: When updating this struct make sure that
+// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV23 struct {
 	Version string `json:"version"`
 
