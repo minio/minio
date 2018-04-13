@@ -136,6 +136,11 @@ func loadFileConfig(filename string, v interface{}) error {
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
+
+	if err = checkDupJSONKeys(string(fileData)); err != nil {
+		return err
+	}
+
 	// Unmarshal file's content
 	return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 }
