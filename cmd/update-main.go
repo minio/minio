@@ -81,6 +81,12 @@ var (
 		minioReleaseURL + "minio.sha256sum",
 		minioReleaseURL + "minio.shasum",
 	}
+
+	// For windows our files have .exe additionally.
+	minioReleaseWindowsInfoURLs = []string{
+		minioReleaseURL + "minio.exe.sha256sum",
+		minioReleaseURL + "minio.exe.shasum",
+	}
 )
 
 // minioVersionToReleaseTime - parses a standard official release
@@ -334,13 +340,19 @@ func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode s
 
 // DownloadReleaseData - downloads release data from minio official server.
 func DownloadReleaseData(timeout time.Duration, mode string) (data string, err error) {
-	for _, url := range minioReleaseInfoURLs {
-		data, err = downloadReleaseURL(url, timeout, mode)
-		if err == nil {
-			return data, err
-		}
+	releaseURLs := minioReleaseInfoURLs
+	if runtime.GOOS == globalWindowsOSName {
+		releaseURLs = minioReleaseWindowsInfoURLs
 	}
-	return data, fmt.Errorf("Failed to fetch release URL - last error: %s", err)
+	return func() (data string, err error) {
+		for _, url := range releaseURLs {
+			data, err = downloadReleaseURL(url, timeout, mode)
+			if err == nil {
+				return data, nil
+			}
+		}
+		return data, fmt.Errorf("Failed to fetch release URL - last error: %s", err)
+	}()
 }
 
 // parseReleaseData - parses release info file content fetched from
