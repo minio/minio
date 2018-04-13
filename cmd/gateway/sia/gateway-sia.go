@@ -163,9 +163,11 @@ func (g *Sia) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	colorBlue := color.New(color.FgBlue).SprintfFunc()
 	colorBold := color.New(color.Bold).SprintFunc()
 
-	logger.StartupMessage(colorBlue("\nSia Gateway Configuration:"))
-	logger.StartupMessage(colorBlue("  Sia Daemon API Address:") + colorBold(fmt.Sprintf(" %s\n", sia.Address)))
-	logger.StartupMessage(colorBlue("  Sia Temp Directory:") + colorBold(fmt.Sprintf(" %s\n", sia.TempDir)))
+	formatStr := "%" + fmt.Sprintf("%ds", len(sia.Address)+7)
+	logger.StartupMessage(colorBlue("\nSia Configuration:"))
+	logger.StartupMessage(colorBlue("  API Address:") + colorBold(fmt.Sprintf(formatStr, sia.Address)))
+	logger.StartupMessage(colorBlue("  Staging Directory:") + colorBold(fmt.Sprintf(" %s", sia.TempDir)))
+
 	return sia, nil
 }
 
