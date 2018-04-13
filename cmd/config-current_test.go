@@ -24,7 +24,6 @@ import (
 
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/tidwall/gjson"
 )
 
 func TestServerConfig(t *testing.T) {
@@ -124,34 +123,6 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	if globalServerConfig.Domain != "domain.com" {
 		t.Errorf("Expecting Domain to be `domain.com` found " + globalServerConfig.Domain)
 	}
-}
-
-func TestCheckDupJSONKeys(t *testing.T) {
-	testCases := []struct {
-		json       string
-		shouldPass bool
-	}{
-		{`{}`, true},
-		{`{"version" : "13"}`, true},
-		{`{"version" : "13", "version": "14"}`, false},
-		{`{"version" : "13", "credential": {"accessKey": "12345"}}`, true},
-		{`{"version" : "13", "credential": {"accessKey": "12345", "accessKey":"12345"}}`, false},
-		{`{"version" : "13", "notify": {"amqp": {"1"}, "webhook":{"3"}}}`, true},
-		{`{"version" : "13", "notify": {"amqp": {"1"}, "amqp":{"3"}}}`, false},
-		{`{"version" : "13", "notify": {"amqp": {"1":{}, "2":{}}}}`, true},
-		{`{"version" : "13", "notify": {"amqp": {"1":{}, "1":{}}}}`, false},
-	}
-
-	for i, testCase := range testCases {
-		err := doCheckDupJSONKeys(gjson.Result{}, gjson.Parse(testCase.json))
-		if testCase.shouldPass && err != nil {
-			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, err)
-		}
-		if !testCase.shouldPass && err == nil {
-			t.Errorf("Test %d, should fail but it succeed.", i+1)
-		}
-	}
-
 }
 
 // Tests config validator..
