@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/quick"
 )
 
 const (
@@ -693,7 +694,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Validate JSON provided in the request body: check the
 	// client has not sent JSON objects with duplicate keys.
-	if err = checkDupJSONKeys(string(configBytes)); err != nil {
+	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
 		return
