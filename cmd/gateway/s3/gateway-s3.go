@@ -18,6 +18,7 @@ package s3
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 
 	"github.com/minio/cli"
@@ -428,7 +429,11 @@ func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 // SetBucketPolicy sets policy on bucket
 func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	if err := l.Client.PutBucketPolicy(bucket, policyInfo); err != nil {
+	data, err := json.Marshal(&policyInfo)
+	if err != nil {
+		return err
+	}
+	if err := l.Client.SetBucketPolicy(bucket, string(data)); err != nil {
 		logger.LogIf(ctx, err)
 		return minio.ErrorRespToObjectError(err, bucket, "")
 	}
@@ -438,17 +443,21 @@ func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, policyIn
 
 // GetBucketPolicy will get policy on bucket
 func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	policyInfo, err := l.Client.GetBucketPolicy(bucket)
+	data, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return policy.BucketAccessPolicy{}, minio.ErrorRespToObjectError(err, bucket, "")
+	}
+	var policyInfo policy.BucketAccessPolicy
+	if err = json.Unmarshal([]byte(data), &policyInfo); err != nil {
+		return policyInfo, err
 	}
 	return policyInfo, nil
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
+	if err := l.Client.SetBucketPolicy(bucket, ""); err != nil {
 		logger.LogIf(ctx, err)
 		return minio.ErrorRespToObjectError(err, bucket, "")
 	}
