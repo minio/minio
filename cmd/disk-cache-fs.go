@@ -37,7 +37,6 @@ import (
 const (
 	// cache.json object metadata for cached objects.
 	cacheMetaJSONFile = "cache.json"
-	cacheMetaFormat   = "cache"
 
 	cacheEnvDelimiter = ";"
 )

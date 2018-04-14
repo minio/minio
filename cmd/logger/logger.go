@@ -33,9 +33,8 @@ import (
 
 // global colors.
 var (
-	colorBold   = color.New(color.Bold).SprintFunc()
-	colorYellow = color.New(color.FgYellow).SprintfFunc()
-	colorRed    = color.New(color.FgRed).SprintfFunc()
+	colorBold = color.New(color.Bold).SprintFunc()
+	colorRed  = color.New(color.FgRed).SprintfFunc()
 )
 
 var trimStrings []string

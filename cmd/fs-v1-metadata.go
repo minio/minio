@@ -202,14 +202,6 @@ func parseFSVersion(fsMetaBuf []byte) string {
 	return gjson.GetBytes(fsMetaBuf, "version").String()
 }
 
-func parseFSFormat(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "format").String()
-}
-
-func parseFSRelease(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "minio.release").String()
-}
-
 func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
 	// Get xlMetaV1.Meta map.
 	metaMapResult := gjson.GetBytes(fsMetaBuf, "meta").Map()
