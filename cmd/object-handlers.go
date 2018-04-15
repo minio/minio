@@ -31,7 +31,7 @@ import (
 	"sort"
 	"strconv"
 
-	mux "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"

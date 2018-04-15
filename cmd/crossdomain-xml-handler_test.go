@@ -21,14 +21,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 )
 
 // Test cross domain xml handler.
 func TestCrossXMLHandler(t *testing.T) {
 	// Server initialization.
-	mux := router.NewRouter().SkipClean(true)
-	handler := setCrossDomainPolicy(mux)
+	router := mux.NewRouter().SkipClean(true)
+	handler := setCrossDomainPolicy(router)
 	srv := httptest.NewServer(handler)
 
 	resp, err := http.Get(srv.URL + crossDomainXMLEntity)

@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"time"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -219,7 +219,7 @@ func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigRep
 
 // registerAdminRPCRouter - registers RPC methods for service status,
 // stop and restart commands.
-func registerAdminRPCRouter(mux *router.Router) error {
+func registerAdminRPCRouter(router *mux.Router) error {
 	adminRPCHandler := &adminCmd{}
 	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
@@ -227,7 +227,7 @@ func registerAdminRPCRouter(mux *router.Router) error {
 		logger.LogIf(context.Background(), err)
 		return err
 	}
-	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	adminRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)
 	return nil
 }
