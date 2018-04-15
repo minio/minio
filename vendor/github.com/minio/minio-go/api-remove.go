@@ -195,6 +195,12 @@ func (c Client) RemoveObjectsWithContext(ctx context.Context, bucketName string,
 				contentMD5Base64: sumMD5Base64(removeBytes),
 				contentSHA256Hex: sum256Hex(removeBytes),
 			})
+			if resp != nil {
+				if resp.StatusCode != http.StatusOK {
+					e := httpRespToErrorResponse(resp, bucketName, "")
+					errorCh <- RemoveObjectError{ObjectName: "", Err: e}
+				}
+			}
 			if err != nil {
 				for _, b := range batch {
 					errorCh <- RemoveObjectError{ObjectName: b, Err: err}

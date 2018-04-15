@@ -44,7 +44,7 @@ func (o GetObjectOptions) Header() http.Header {
 	for k, v := range o.headers {
 		headers.Set(k, v)
 	}
-	if o.ServerSideEncryption != nil {
+	if o.ServerSideEncryption != nil && o.ServerSideEncryption.Type() != encrypt.S3 {
 		o.ServerSideEncryption.Marshal(headers)
 	}
 	return headers

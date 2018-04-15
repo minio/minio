@@ -17,7 +17,41 @@
 
 package minio
 
+import (
+	"context"
+	"net/http"
+
+	"github.com/minio/minio-go/pkg/encrypt"
+)
+
 // CopyObject - copy a source object into a new object
 func (c Client) CopyObject(dst DestinationInfo, src SourceInfo) error {
-	return c.ComposeObject(dst, []SourceInfo{src})
+	header := make(http.Header)
+	for k, v := range src.Headers {
+		header[k] = v
+	}
+	if src.encryption != nil {
+		encrypt.SSECopy(src.encryption).Marshal(header)
+	}
+	if dst.encryption != nil {
+		dst.encryption.Marshal(header)
+	}
+	for k, v := range dst.getUserMetaHeadersMap(true) {
+		header.Set(k, v)
+	}
+
+	resp, err := c.executeMethod(context.Background(), "PUT", requestMetadata{
+		bucketName:   dst.bucket,
+		objectName:   dst.object,
+		customHeader: header,
+	})
+	if err != nil {
+		return err
+	}
+	defer closeResponse(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp, dst.bucket, dst.object)
+	}
+	return nil
 }
