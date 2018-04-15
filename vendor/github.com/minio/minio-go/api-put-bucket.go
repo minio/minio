@@ -20,13 +20,12 @@ package minio
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"encoding/xml"
-	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
@@ -100,54 +99,26 @@ func (c Client) MakeBucket(bucketName string, location string) (err error) {
 }
 
 // SetBucketPolicy set the access permissions on an existing bucket.
-//
-// For example
-//
-//  none - owner gets full access [default].
-//  readonly - anonymous get access for everyone at a given object prefix.
-//  readwrite - anonymous list/put/delete access to a given object prefix.
-//  writeonly - anonymous put/delete access to a given object prefix.
-func (c Client) SetBucketPolicy(bucketName string, objectPrefix string, bucketPolicy policy.BucketPolicy) error {
+func (c Client) SetBucketPolicy(bucketName, policy string) error {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return err
 	}
-	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
-		return err
-	}
 
-	if !bucketPolicy.IsValidBucketPolicy() {
-		return ErrInvalidArgument(fmt.Sprintf("Invalid bucket policy provided. %s", bucketPolicy))
+	// If policy is empty then delete the bucket policy.
+	if policy == "" {
+		return c.removeBucketPolicy(bucketName)
 	}
-
-	policyInfo, err := c.getBucketPolicy(bucketName)
-	errResponse := ToErrorResponse(err)
-	if err != nil && errResponse.Code != "NoSuchBucketPolicy" {
-		return err
-	}
-
-	if bucketPolicy == policy.BucketPolicyNone && policyInfo.Statements == nil {
-		// As the request is for removing policy and the bucket
-		// has empty policy statements, just return success.
-		return nil
-	}
-
-	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketPolicy, bucketName, objectPrefix)
 
 	// Save the updated policies.
-	return c.putBucketPolicy(bucketName, policyInfo)
+	return c.putBucketPolicy(bucketName, policy)
 }
 
 // Saves a new bucket policy.
-func (c Client) putBucketPolicy(bucketName string, policyInfo policy.BucketAccessPolicy) error {
+func (c Client) putBucketPolicy(bucketName, policy string) error {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return err
-	}
-
-	// If there are no policy statements, we should remove entire policy.
-	if len(policyInfo.Statements) == 0 {
-		return c.removeBucketPolicy(bucketName)
 	}
 
 	// Get resources properly escaped and lined up before
@@ -155,19 +126,18 @@ func (c Client) putBucketPolicy(bucketName string, policyInfo policy.BucketAcces
 	urlValues := make(url.Values)
 	urlValues.Set("policy", "")
 
-	policyBytes, err := json.Marshal(&policyInfo)
+	// Content-length is mandatory for put policy request
+	policyReader := strings.NewReader(policy)
+	b, err := ioutil.ReadAll(policyReader)
 	if err != nil {
 		return err
 	}
 
-	policyBuffer := bytes.NewReader(policyBytes)
 	reqMetadata := requestMetadata{
-		bucketName:       bucketName,
-		queryValues:      urlValues,
-		contentBody:      policyBuffer,
-		contentLength:    int64(len(policyBytes)),
-		contentMD5Base64: sumMD5Base64(policyBytes),
-		contentSHA256Hex: sum256Hex(policyBytes),
+		bucketName:    bucketName,
+		queryValues:   urlValues,
+		contentBody:   policyReader,
+		contentLength: int64(len(b)),
 	}
 
 	// Execute PUT to upload a new bucket policy.

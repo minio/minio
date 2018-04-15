@@ -20,6 +20,7 @@ package encrypt
 import (
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -29,6 +30,11 @@ import (
 const (
 	// sseGenericHeader is the AWS SSE header used for SSE-S3 and SSE-KMS.
 	sseGenericHeader = "X-Amz-Server-Side-Encryption"
+
+	// sseKmsKeyID is the AWS SSE-KMS key id.
+	sseKmsKeyID = sseGenericHeader + "-Aws-Kms-Key-Id"
+	// sseEncryptionContext is the AWS SSE-KMS Encryption Context data.
+	sseEncryptionContext = sseGenericHeader + "-Encryption-Context"
 
 	// sseCustomerAlgorithm is the AWS SSE-C algorithm HTTP header key.
 	sseCustomerAlgorithm = sseGenericHeader + "-Customer-Algorithm"
@@ -90,6 +96,18 @@ type ServerSide interface {
 // Using SSE-S3 the server will encrypt the object with server-managed keys.
 func NewSSE() ServerSide { return s3{} }
 
+// NewSSEKMS returns a new server-side-encryption using SSE-KMS and the provided Key Id and context.
+func NewSSEKMS(keyID string, context interface{}) (ServerSide, error) {
+	if context == nil {
+		return kms{key: keyID, hasContext: false}, nil
+	}
+	serializedContext, err := json.Marshal(context)
+	if err != nil {
+		return nil, err
+	}
+	return kms{key: keyID, context: serializedContext, hasContext: true}, nil
+}
+
 // NewSSEC returns a new server-side-encryption using SSE-C and the provided key.
 // The key must be 32 bytes long.
 func NewSSEC(key []byte) (ServerSide, error) {
@@ -99,6 +117,21 @@ func NewSSEC(key []byte) (ServerSide, error) {
 	sse := ssec{}
 	copy(sse[:], key)
 	return sse, nil
+}
+
+// SSE transforms a SSE-C copy encryption into a SSE-C encryption.
+// It is the inverse of SSECopy(...).
+//
+// If the provided sse is no SSE-C copy encryption SSE returns
+// sse unmodified.
+func SSE(sse ServerSide) ServerSide {
+	if sse == nil || sse.Type() != SSEC {
+		return sse
+	}
+	if sse, ok := sse.(ssecCopy); ok {
+		return ssec(sse)
+	}
+	return sse
 }
 
 // SSECopy transforms a SSE-C encryption into a SSE-C copy
@@ -144,3 +177,19 @@ type s3 struct{}
 func (s s3) Type() Type { return S3 }
 
 func (s s3) Marshal(h http.Header) { h.Set(sseGenericHeader, "AES256") }
+
+type kms struct {
+	key        string
+	context    []byte
+	hasContext bool
+}
+
+func (s kms) Type() Type { return KMS }
+
+func (s kms) Marshal(h http.Header) {
+	h.Set(sseGenericHeader, "aws:kms")
+	h.Set(sseKmsKeyID, s.key)
+	if s.hasContext {
+		h.Set(sseEncryptionContext, base64.StdEncoding.EncodeToString(s.context))
+	}
+}
