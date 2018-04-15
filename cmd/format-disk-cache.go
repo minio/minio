@@ -87,15 +87,6 @@ func newFormatCacheV1(drives []string) []*formatCacheV1 {
 	return formats
 }
 
-// Returns format.Cache.Version
-func formatCacheGetVersion(r io.ReadSeeker) (string, error) {
-	format := &formatCacheVersionDetect{}
-	if err := jsonLoad(r, format); err != nil {
-		return "", err
-	}
-	return format.Cache.Version, nil
-}
-
 // Creates a new cache format.json if unformatted.
 func createFormatCache(fsFormatPath string, format *formatCacheV1) error {
 	// open file using READ & WRITE permission

@@ -18,9 +18,19 @@ package cmd
 
 import (
 	"context"
+	"io"
 	"os"
 	"testing"
 )
+
+// Returns format.Cache.Version
+func formatCacheGetVersion(r io.ReadSeeker) (string, error) {
+	format := &formatCacheVersionDetect{}
+	if err := jsonLoad(r, format); err != nil {
+		return "", err
+	}
+	return format.Cache.Version, nil
+}
 
 // TestDiskCacheFormat - tests initFormatCache, formatMetaGetFormatBackendCache, formatCacheGetVersion.
 func TestDiskCacheFormat(t *testing.T) {

@@ -369,17 +369,6 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 	return shuffledDisks
 }
 
-// unshuffleIndex - performs reverse of the shuffleDisks operations
-// for a single 0-based index.
-func unshuffleIndex(n int, distribution []int) int {
-	for i, v := range distribution {
-		if v-1 == n {
-			return i
-		}
-	}
-	return -1
-}
-
 // evalDisks - returns a new slice of disks where nil is set if
 // the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
