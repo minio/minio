@@ -56,7 +56,7 @@ func checkBucketExistsInQuorum(ctx context.Context, storageDisks []StorageAPI, b
 	wg.Wait()
 
 	readQuorum := len(storageDisks) / 2
-	return reduceWriteQuorumErrs(ctx, errs, nil, readQuorum)
+	return reduceReadQuorumErrs(ctx, errs, nil, readQuorum)
 }
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
