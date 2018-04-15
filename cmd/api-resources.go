@@ -78,13 +78,3 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	encodingType = values.Get("encoding-type")
 	return
 }
-
-// Validates filter values
-func validateFilterValues(values []string) (err APIErrorCode) {
-	for _, value := range values {
-		if !IsValidObjectPrefix(value) {
-			return ErrFilterValueInvalid
-		}
-	}
-	return ErrNone
-}

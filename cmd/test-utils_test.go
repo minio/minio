@@ -1157,6 +1157,11 @@ func getCredentialString(accessKeyID, location string, t time.Time) string {
 	return accessKeyID + "/" + getScope(t, location)
 }
 
+// getMD5HashBase64 returns MD5 hash in base64 encoding of given data.
+func getMD5HashBase64(data []byte) string {
+	return base64.StdEncoding.EncodeToString(getMD5Sum(data))
+}
+
 // Returns new HTTP request object.
 func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
 	if method == "" {

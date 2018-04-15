@@ -233,6 +233,18 @@ func TestStartProfiler(t *testing.T) {
 	}
 }
 
+// checkURL - checks if passed address correspond
+func checkURL(urlStr string) (*url.URL, error) {
+	if urlStr == "" {
+		return nil, errors.New("Address cannot be empty")
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("`%s` invalid: %s", urlStr, err.Error())
+	}
+	return u, nil
+}
+
 // TestCheckURL tests valid url.
 func TestCheckURL(t *testing.T) {
 	testCases := []struct {
