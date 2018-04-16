@@ -79,6 +79,9 @@ var errCrossDeviceLink = errors.New("Rename across devices not allowed, please f
 // errMinDiskSize - cannot create volume or files when disk size is less than threshold.
 var errMinDiskSize = errors.New("The disk size is less than the minimum threshold")
 
+// errLessData - returned when less data available than what was requested.
+var errLessData = errors.New("less data available than what was requested")
+
 // hashMisMatchError - represents a bit-rot hash verification failure
 // error.
 type hashMismatchError struct {

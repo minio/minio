@@ -1140,7 +1140,7 @@ func TestPosixReadFile(t *testing.T) {
 
 	// Create all files needed during testing.
 	appendFiles := testCases[:4]
-
+	v := NewBitrotVerifier(SHA256, getSHA256Sum([]byte("hello, world")))
 	// Create test files for further reading.
 	for i, appendFile := range appendFiles {
 		err = posixStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
@@ -1149,21 +1149,11 @@ func TestPosixReadFile(t *testing.T) {
 		}
 	}
 
-	// Check PathError specially.
 	{
 		buf := make([]byte, 5)
-		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, nil); err != nil {
-			isPathError := false
-			switch err.(type) {
-			case *os.PathError:
-				isPathError = true
-			}
-
-			if !isPathError {
-				t.Fatalf("expected: <os.PathError>, got: %v", err)
-			}
-		} else {
-			t.Fatalf("expected: <os.PathError>, got: <nil>")
+		// Test for negative offset.
+		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
+			t.Fatalf("expected: error, got: <nil>")
 		}
 	}
 
@@ -1172,7 +1162,7 @@ func TestPosixReadFile(t *testing.T) {
 		var n int64
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, nil)
+		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1201,7 +1191,7 @@ func TestPosixReadFile(t *testing.T) {
 			// results. In this scenario return 'n' is always lesser than the input buffer.
 			if err == io.ErrUnexpectedEOF {
 				if !bytes.Equal(testCase.expectedBuf, buf[:n]) {
-					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
+					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:n]))
 				}
 				if n > int64(len(buf)) {
 					t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
@@ -1245,7 +1235,7 @@ func TestPosixReadFile(t *testing.T) {
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, nil); err != errFileAccessDenied {
+		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}

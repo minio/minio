@@ -54,15 +54,14 @@ var erasureCreateFileTests = []struct {
 	{dataBlocks: 7, onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 9
 	{dataBlocks: 8, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                 // 10
 	{dataBlocks: 5, onDisks: 10, offDisks: 3, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                  // 11
-	{dataBlocks: 6, onDisks: 12, offDisks: 5, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 102, algorithm: 0, shouldFail: true, shouldFailQuorum: false},                                    // 12
-	{dataBlocks: 3, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},     // 13
-	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(oneMiByte / 2), data: oneMiByte, offset: oneMiByte/2 + 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 14
-	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(oneMiByte - 1), data: oneMiByte, offset: oneMiByte - 1, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},               // 15
-	{dataBlocks: 8, onDisks: 12, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 16
-	{dataBlocks: 8, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 17
-	{dataBlocks: 10, onDisks: 14, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 17, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},              // 18
-	{dataBlocks: 2, onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},       // 19
-	{dataBlocks: 10, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                // 20
+	{dataBlocks: 3, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},     // 12
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(oneMiByte / 2), data: oneMiByte, offset: oneMiByte/2 + 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 13
+	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(oneMiByte - 1), data: oneMiByte, offset: oneMiByte - 1, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},               // 14
+	{dataBlocks: 8, onDisks: 12, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 15
+	{dataBlocks: 8, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                // 16
+	{dataBlocks: 10, onDisks: 14, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 17, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},              // 17
+	{dataBlocks: 2, onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte / 2, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},       // 18
+	{dataBlocks: 10, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                // 19
 }
 
 func TestErasureCreateFile(t *testing.T) {
@@ -71,7 +70,8 @@ func TestErasureCreateFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		storage, err := NewErasureStorage(context.Background(), setup.disks, test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
+		disks := setup.disks
+		storage, err := NewErasureStorage(context.Background(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -83,25 +83,43 @@ func TestErasureCreateFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
 		}
-		file, err := storage.CreateFile(context.Background(), bytes.NewReader(data[test.offset:]), "testbucket", "object", buffer, test.algorithm, test.dataBlocks+1)
+		writers := make([]*bitrotWriter, len(disks))
+		for i, disk := range disks {
+			if disk == OfflineDisk {
+				continue
+			}
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", test.algorithm)
+		}
+		n, err := storage.CreateFile(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, storage.dataBlocks+1)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
 		if err == nil && test.shouldFail {
 			t.Errorf("Test %d: should fail but it passed", i)
 		}
-
-		if err == nil {
-			if length := int64(len(data[test.offset:])); file.Size != length {
-				t.Errorf("Test %d: invalid number of bytes written: got: #%d want #%d", i, file.Size, length)
+		for i, w := range writers {
+			if w == nil {
+				disks[i] = OfflineDisk
 			}
-			for j := range storage.disks[:test.offDisks] {
-				storage.disks[j] = badDisk{nil}
+		}
+		if err == nil {
+			if length := int64(len(data[test.offset:])); n != length {
+				t.Errorf("Test %d: invalid number of bytes written: got: #%d want #%d", i, n, length)
+			}
+			writers := make([]*bitrotWriter, len(disks))
+			for i, disk := range disks {
+				if disk == nil {
+					continue
+				}
+				writers[i] = newBitrotWriter(disk, "testbucket", "object2", test.algorithm)
+			}
+			for j := range disks[:test.offDisks] {
+				writers[j].disk = badDisk{nil}
 			}
 			if test.offDisks > 0 {
-				storage.disks[0] = OfflineDisk
+				writers[0] = nil
 			}
-			file, err = storage.CreateFile(context.Background(), bytes.NewReader(data[test.offset:]), "testbucket", "object2", buffer, test.algorithm, test.dataBlocks+1)
+			n, err = storage.CreateFile(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, storage.dataBlocks+1)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}
@@ -109,8 +127,8 @@ func TestErasureCreateFile(t *testing.T) {
 				t.Errorf("Test %d: should fail but it passed", i)
 			}
 			if err == nil {
-				if length := int64(len(data[test.offset:])); file.Size != length {
-					t.Errorf("Test %d: invalid number of bytes written: got: #%d want #%d", i, file.Size, length)
+				if length := int64(len(data[test.offset:])); n != length {
+					t.Errorf("Test %d: invalid number of bytes written: got: #%d want #%d", i, n, length)
 				}
 			}
 		}
@@ -126,25 +144,33 @@ func benchmarkErasureWrite(data, parity, dataDown, parityDown int, size int64, b
 		b.Fatalf("failed to create test setup: %v", err)
 	}
 	defer setup.Remove()
-	storage, err := NewErasureStorage(context.Background(), setup.disks, data, parity, blockSizeV1)
+	storage, err := NewErasureStorage(context.Background(), data, parity, blockSizeV1)
 	if err != nil {
 		b.Fatalf("failed to create ErasureStorage: %v", err)
 	}
+	disks := setup.disks
 	buffer := make([]byte, blockSizeV1, 2*blockSizeV1)
 	content := make([]byte, size)
 
 	for i := 0; i < dataDown; i++ {
-		storage.disks[i] = OfflineDisk
+		disks[i] = OfflineDisk
 	}
 	for i := data; i < data+parityDown; i++ {
-		storage.disks[i] = OfflineDisk
+		disks[i] = OfflineDisk
 	}
 
 	b.ResetTimer()
 	b.SetBytes(size)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, err := storage.CreateFile(context.Background(), bytes.NewReader(content), "testbucket", "object", buffer, DefaultBitrotAlgorithm, data+1)
+		writers := make([]*bitrotWriter, len(disks))
+		for i, disk := range disks {
+			if disk == OfflineDisk {
+				continue
+			}
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", DefaultBitrotAlgorithm)
+		}
+		_, err := storage.CreateFile(context.Background(), bytes.NewReader(content), writers, buffer, storage.dataBlocks+1)
 		if err != nil {
 			panic(err)
 		}

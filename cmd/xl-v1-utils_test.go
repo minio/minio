@@ -214,7 +214,6 @@ func getSampleXLMeta(totalParts int) xlMetaV1 {
 
 // Compare the unmarshaled XLMetaV1 with the one obtained from gjson parsing.
 func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
-
 	// Start comparing the fields of xlMetaV1 obtained from gjson parsing with one parsed using json unmarshaling.
 	if unMarshalXLMeta.Version != gjsonXLMeta.Version {
 		t.Errorf("Expected the Version to be \"%s\", but got \"%s\".", unMarshalXLMeta.Version, gjsonXLMeta.Version)
@@ -268,6 +267,7 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
 			}
 		}
 	}
+
 	if unMarshalXLMeta.Minio.Release != gjsonXLMeta.Minio.Release {
 		t.Errorf("Expected the Release string to be \"%s\", but got \"%s\".", unMarshalXLMeta.Minio.Release, gjsonXLMeta.Minio.Release)
 	}
