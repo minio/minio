@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/minio/mc/pkg/console"
+	c "github.com/minio/mc/pkg/console"
 )
 
 // global colors.
@@ -376,7 +376,7 @@ func (i infoMsg) quiet(msg string, args ...interface{}) {
 }
 
 func (i infoMsg) pretty(msg string, args ...interface{}) {
-	console.Printf(msg, args...)
+	c.Printf(msg, args...)
 }
 
 // Info :
@@ -396,7 +396,7 @@ func (s startUpMsg) quiet(msg string, args ...interface{}) {
 }
 
 func (s startUpMsg) pretty(msg string, args ...interface{}) {
-	console.Printf(msg, args...)
+	c.Printf(msg, args...)
 }
 
 // StartupMessage :
