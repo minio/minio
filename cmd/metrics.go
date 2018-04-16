@@ -124,7 +124,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 
 	var totalDisks, offlineDisks int
 	// Setting totalDisks to 1 and offlineDisks to 0 in FS mode
-	if s.Backend.Type == FS {
+	if s.Backend.Type == BackendFS {
 		totalDisks = 1
 		offlineDisks = 0
 	} else {

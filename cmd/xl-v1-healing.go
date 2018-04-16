@@ -447,7 +447,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	// Heal each part. erasureHealFile() will write the healed
 	// part to .minio/tmp/uuid/ which needs to be renamed later to
 	// the final location.
-	storage, err := NewErasureStorage(ctx, latestMeta.Erasure.DataBlocks,
+	erasure, err := NewErasure(ctx, latestMeta.Erasure.DataBlocks,
 		latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object)
@@ -456,7 +456,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
-		erasure := latestMeta.Erasure
+		erasureInfo := latestMeta.Erasure
 		var algorithm BitrotAlgorithm
 		bitrotReaders := make([]*bitrotReader, len(latestDisks))
 		for i, disk := range latestDisks {
@@ -465,7 +465,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			}
 			info := partsMetadata[i].Erasure.GetChecksumInfo(partName)
 			algorithm = info.Algorithm
-			endOffset := getErasureShardFileEndOffset(0, partSize, partSize, erasure.BlockSize, storage.dataBlocks)
+			endOffset := getErasureShardFileEndOffset(0, partSize, partSize, erasureInfo.BlockSize, erasure.dataBlocks)
 			bitrotReaders[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), algorithm, endOffset, info.Hash)
 		}
 		bitrotWriters := make([]*bitrotWriter, len(outDatedDisks))
@@ -475,7 +475,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			}
 			bitrotWriters[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), algorithm)
 		}
-		hErr := storage.HealFile(ctx, bitrotReaders, bitrotWriters, partSize)
+		hErr := erasure.Heal(ctx, bitrotReaders, bitrotWriters, partSize)
 		if hErr != nil {
 			return result, toObjectErr(hErr, bucket, object)
 		}

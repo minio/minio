@@ -127,8 +127,8 @@ func (p *parallelReader) Read() ([][]byte, error) {
 	return nil, errXLReadQuorum
 }
 
-// ReadFile reads from readers, reconstructs data if needed and writes the data to the writer.
-func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, readers []*bitrotReader, offset, length, totalLength int64) error {
+// Decode reads from readers, reconstructs data if needed and writes the data to the writer.
+func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []*bitrotReader, offset, length, totalLength int64) error {
 	if offset < 0 || length < 0 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return errInvalidArgument
@@ -141,27 +141,27 @@ func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, readers 
 		return nil
 	}
 
-	reader := newParallelReader(readers, s.dataBlocks, offset, totalLength, s.blockSize)
+	reader := newParallelReader(readers, e.dataBlocks, offset, totalLength, e.blockSize)
 
-	startBlock := offset / s.blockSize
-	endBlock := (offset + length) / s.blockSize
+	startBlock := offset / e.blockSize
+	endBlock := (offset + length) / e.blockSize
 
 	var bytesWritten int64
 	for block := startBlock; block <= endBlock; block++ {
 		var blockOffset, blockLength int64
 		switch {
 		case startBlock == endBlock:
-			blockOffset = offset % s.blockSize
+			blockOffset = offset % e.blockSize
 			blockLength = length
 		case block == startBlock:
-			blockOffset = offset % s.blockSize
-			blockLength = s.blockSize - blockOffset
+			blockOffset = offset % e.blockSize
+			blockLength = e.blockSize - blockOffset
 		case block == endBlock:
 			blockOffset = 0
-			blockLength = (offset + length) % s.blockSize
+			blockLength = (offset + length) % e.blockSize
 		default:
 			blockOffset = 0
-			blockLength = s.blockSize
+			blockLength = e.blockSize
 		}
 		if blockLength == 0 {
 			break
@@ -170,11 +170,11 @@ func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, readers 
 		if err != nil {
 			return err
 		}
-		if err = s.ErasureDecodeDataBlocks(bufs); err != nil {
+		if err = e.DecodeDataBlocks(bufs); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
-		n, err := writeDataBlocks(ctx, writer, bufs, s.dataBlocks, blockOffset, blockLength)
+		n, err := writeDataBlocks(ctx, writer, bufs, e.dataBlocks, blockOffset, blockLength)
 		if err != nil {
 			return err
 		}

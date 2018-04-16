@@ -31,9 +31,9 @@ type BackendType int
 const (
 	Unknown BackendType = iota
 	// Filesystem backend.
-	FS
-	// Multi disk Erasure (single, distributed) backend.
-	Erasure
+	BackendFS
+	// Multi disk BackendErasure (single, distributed) backend.
+	BackendErasure
 	// Add your own backend.
 )
 

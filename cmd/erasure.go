@@ -23,26 +23,23 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-// OfflineDisk represents an unavailable disk.
-var OfflineDisk StorageAPI // zero value is nil
-
-// ErasureStorage - erasure encoding details.
-type ErasureStorage struct {
-	erasure                  reedsolomon.Encoder
+// Erasure - erasure encoding details.
+type Erasure struct {
+	encoder                  reedsolomon.Encoder
 	dataBlocks, parityBlocks int
 	blockSize                int64
 }
 
-// NewErasureStorage creates a new ErasureStorage.
-func NewErasureStorage(ctx context.Context, dataBlocks, parityBlocks int, blockSize int64) (s ErasureStorage, err error) {
+// NewErasure creates a new ErasureStorage.
+func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int64) (e Erasure, err error) {
 	shardsize := int(ceilFrac(blockSize, int64(dataBlocks)))
 	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return s, err
+		return e, err
 	}
-	s = ErasureStorage{
-		erasure:      erasure,
+	e = Erasure{
+		encoder:      erasure,
 		dataBlocks:   dataBlocks,
 		parityBlocks: parityBlocks,
 		blockSize:    blockSize,
@@ -50,30 +47,30 @@ func NewErasureStorage(ctx context.Context, dataBlocks, parityBlocks int, blockS
 	return
 }
 
-// ErasureEncode encodes the given data and returns the erasure-coded data.
+// EncodeData encodes the given data and returns the erasure-coded data.
 // It returns an error if the erasure coding failed.
-func (s *ErasureStorage) ErasureEncode(ctx context.Context, data []byte) ([][]byte, error) {
+func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error) {
 	if len(data) == 0 {
-		return make([][]byte, s.dataBlocks+s.parityBlocks), nil
+		return make([][]byte, e.dataBlocks+e.parityBlocks), nil
 	}
-	encoded, err := s.erasure.Split(data)
+	encoded, err := e.encoder.Split(data)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-	if err = s.erasure.Encode(encoded); err != nil {
+	if err = e.encoder.Encode(encoded); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	return encoded, nil
 }
 
-// ErasureDecodeDataBlocks decodes the given erasure-coded data.
+// DecodeDataBlocks decodes the given erasure-coded data.
 // It only decodes the data blocks but does not verify them.
 // It returns an error if the decoding failed.
-func (s *ErasureStorage) ErasureDecodeDataBlocks(data [][]byte) error {
+func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	needsReconstruction := false
-	for _, b := range data[:s.dataBlocks] {
+	for _, b := range data[:e.dataBlocks] {
 		if b == nil {
 			needsReconstruction = true
 			break
@@ -82,16 +79,16 @@ func (s *ErasureStorage) ErasureDecodeDataBlocks(data [][]byte) error {
 	if !needsReconstruction {
 		return nil
 	}
-	if err := s.erasure.ReconstructData(data); err != nil {
+	if err := e.encoder.ReconstructData(data); err != nil {
 		return err
 	}
 	return nil
 }
 
-// ErasureDecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
+// DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
 // It returns an error if the decoding failed.
-func (s *ErasureStorage) ErasureDecodeDataAndParityBlocks(ctx context.Context, data [][]byte) error {
-	if err := s.erasure.Reconstruct(data); err != nil {
+func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) error {
+	if err := e.encoder.Reconstruct(data); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}

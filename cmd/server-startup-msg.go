@@ -174,7 +174,7 @@ func printObjectAPIMsg() {
 // Get formatted disk/storage info message.
 func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var msg string
-	if storageInfo.Backend.Type == Erasure {
+	if storageInfo.Backend.Type == BackendErasure {
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
 		msg += colorBlue("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}

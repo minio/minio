@@ -23,7 +23,7 @@ import (
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/sha256-simd"
+	sha256 "github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -70,7 +70,7 @@ func (a BitrotAlgorithm) New() hash.Hash {
 	}
 }
 
-// Available reports whether the given algorihm is available.
+// Available reports whether the given algorithm is available.
 func (a BitrotAlgorithm) Available() bool {
 	_, ok := bitrotAlgorithms[a]
 	return ok

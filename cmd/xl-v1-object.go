@@ -262,7 +262,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	}
 
 	var totalBytesRead int64
-	storage, err := NewErasureStorage(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -292,7 +292,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			bitrotReaders[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), checksumInfo.Algorithm, endOffset, checksumInfo.Hash)
 		}
 
-		err := storage.ReadFile(ctx, writer, bitrotReaders, partOffset, partLength, partSize)
+		err := erasure.Decode(ctx, writer, bitrotReaders, partOffset, partLength, partSize)
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
@@ -609,7 +609,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Total size of the written object
 	var sizeWritten int64
 
-	storage, err := NewErasureStorage(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -668,7 +668,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, DefaultBitrotAlgorithm)
 		}
-		n, erasureErr := storage.CreateFile(ctx, curPartReader, writers, buffer, storage.dataBlocks+1)
+		n, erasureErr := erasure.Encode(ctx, curPartReader, writers, buffer, erasure.dataBlocks+1)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
