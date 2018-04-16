@@ -198,6 +198,14 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
+			if entry > marker {
+				select {
+				case <-endWalkCh:
+					logger.LogIf(ctx, errWalkAbort)
+					return errWalkAbort
+				case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: false}:
+				}
+			}
 			if tErr := doTreeWalk(ctx, bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
 				return tErr
 			}

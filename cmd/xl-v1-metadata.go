@@ -295,6 +295,12 @@ func isXLMetaErasureInfoValid(data, parity int) bool {
 
 // Converts metadata to object info.
 func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
+
+	if hasSuffix(object, slashSeparator) {
+		m.Meta["etag"] = emptyETag // For directories etag is d41d8cd98f00b204e9800998ecf8427e
+		m.Meta["content-type"] = "application/octet-stream"
+	}
+
 	objInfo := ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,

@@ -104,6 +104,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 			objInfo.Bucket = bucket
 			objInfo.Name = entry
 			objInfo.IsDir = true
+			objInfo.ETag = emptyETag
 		} else {
 			// Set the Mode to a "regular" file.
 			var err error
@@ -136,7 +137,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
+		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
