@@ -69,8 +69,8 @@ func testParseStorageClass(obj ObjectLayer, instanceType string, t TestErrHandle
 			t.Errorf("Test %d, Expected %v, got %v", i+1, tt.wantSc, gotSc)
 			return
 		}
-		if tt.expectedError != nil && !reflect.DeepEqual(err, tt.expectedError) {
-			t.Errorf("Test %d, Expected %v, got %v", i+1, tt.expectedError, err)
+		if tt.expectedError != nil && err.Error() != tt.expectedError.Error() {
+			t.Errorf("Test %d, Expected `%v`, got `%v`", i+1, tt.expectedError, err)
 		}
 	}
 }

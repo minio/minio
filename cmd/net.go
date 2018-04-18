@@ -352,15 +352,15 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 func CheckLocalServerAddr(serverAddr string) error {
 	host, port, err := net.SplitHostPort(serverAddr)
 	if err != nil {
-		return err
+		return uiErrInvalidAddressFlag(err)
 	}
 
 	// Check whether port is a valid port number.
 	p, err := strconv.Atoi(port)
 	if err != nil {
-		return fmt.Errorf("invalid port number")
+		return uiErrInvalidAddressFlag(err).Msg("invalid port number")
 	} else if p < 1 || p > 65535 {
-		return fmt.Errorf("port number must be between 1 to 65535")
+		return uiErrInvalidAddressFlag(nil).Msg("port number must be between 1 to 65535")
 	}
 
 	// 0.0.0.0 is a wildcard address and refers to local network
@@ -372,7 +372,7 @@ func CheckLocalServerAddr(serverAddr string) error {
 			return err
 		}
 		if !isLocalHost {
-			return fmt.Errorf("host in server address should be this server")
+			return uiErrInvalidAddressFlag(nil).Msg("host in server address should be this server")
 		}
 	}
 

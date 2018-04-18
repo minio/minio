@@ -70,11 +70,10 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	}
 
 	setIndexes = make([][]uint64, len(totalSizes))
-	for i, totalSize := range totalSizes {
+	for _, totalSize := range totalSizes {
 		// Check if totalSize has minimum range upto setSize
 		if totalSize < setSizes[0] {
-			return nil, fmt.Errorf("Invalid inputs (%s). Ellipses range or number of args %d should be atleast divisible by least possible set size %d",
-				args[i], totalSize, setSizes[0])
+			return nil, uiErrInvalidNumberOfErasureEndpoints(nil)
 		}
 	}
 
@@ -103,8 +102,7 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 
 	// Check whether setSize is with the supported range.
 	if !isValidSetSize(setSize) {
-		return nil, fmt.Errorf("Invalid inputs (%s). Ellipses range or number of args %d should be atleast divisible by least possible set size %d",
-			args, setSize, setSizes[0])
+		return nil, uiErrInvalidNumberOfErasureEndpoints(nil)
 	}
 
 	for i := range totalSizes {
@@ -167,14 +165,14 @@ func parseEndpointSet(args ...string) (ep endpointSet, err error) {
 	for i, arg := range args {
 		patterns, perr := ellipses.FindEllipsesPatterns(arg)
 		if perr != nil {
-			return endpointSet{}, perr
+			return endpointSet{}, uiErrInvalidErasureEndpoints(nil).Msg(perr.Error())
 		}
 		argPatterns[i] = patterns
 	}
 
 	ep.setIndexes, err = getSetIndexes(args, getTotalSizes(argPatterns))
 	if err != nil {
-		return endpointSet{}, err
+		return endpointSet{}, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
 	ep.argPatterns = argPatterns
@@ -223,7 +221,7 @@ func getAllSets(args ...string) ([][]string, error) {
 	for _, sargs := range setArgs {
 		for _, arg := range sargs {
 			if uniqueArgs.Contains(arg) {
-				return nil, fmt.Errorf("Input args (%s) has duplicate ellipses", args)
+				return nil, uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Input args (%s) has duplicate ellipses", args))
 			}
 			uniqueArgs.Add(arg)
 		}

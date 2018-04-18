@@ -24,7 +24,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -113,7 +112,6 @@ func formatFSMigrateV1ToV2(ctx context.Context, wlk *lock.LockedFile, fsPath str
 	}
 
 	if err = os.MkdirAll(path.Join(fsPath, minioMetaMultipartBucket), 0755); err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 
@@ -147,7 +145,7 @@ func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) e
 		return err
 	}
 	if version != formatFSVersionV2 {
-		return fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version)
+		return uiErrUnexpectedBackendVersion(fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version))
 	}
 	return nil
 }
@@ -158,7 +156,6 @@ func createFormatFS(ctx context.Context, fsFormatPath string) error {
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	// Close the locked file upon return.
@@ -166,7 +163,6 @@ func createFormatFS(ctx context.Context, fsFormatPath string) error {
 
 	fi, err := lk.Stat()
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	if fi.Size() != 0 {
@@ -195,7 +191,6 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			var fi os.FileInfo
 			fi, err = rlk.Stat()
 			if err != nil {
-				logger.LogIf(ctx, err)
 				return nil, err
 			}
 			isEmpty = fi.Size() == 0
@@ -214,7 +209,6 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 				continue
 			}
 			if err != nil {
-				logger.LogIf(ctx, err)
 				return nil, err
 			}
 			// After successfully creating format.json try to hold a read-lock on
@@ -222,13 +216,11 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			continue
 		}
 		if err != nil {
-			logger.LogIf(ctx, err)
 			return nil, err
 		}
 
 		formatBackend, err := formatMetaGetFormatBackendFS(rlk)
 		if err != nil {
-			logger.LogIf(ctx, err)
 			return nil, err
 		}
 		if formatBackend != formatBackendFS {

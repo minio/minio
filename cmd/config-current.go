@@ -287,7 +287,7 @@ func getValidConfig() (*serverConfig, error) {
 func loadConfig() error {
 	srvCfg, err := getValidConfig()
 	if err != nil {
-		return err
+		return uiErrInvalidConfig(nil).Msg(err.Error())
 	}
 
 	// If env is set override the credentials from config file.

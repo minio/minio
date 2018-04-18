@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 )
 
@@ -54,7 +53,7 @@ func (cfg *CacheConfig) UnmarshalJSON(data []byte) (err error) {
 func parseCacheDrives(drives []string) ([]string, error) {
 	for _, d := range drives {
 		if !filepath.IsAbs(d) {
-			return nil, fmt.Errorf("cache dir should be absolute path: %s", d)
+			return nil, uiErrInvalidCacheDrivesValue(nil).Msg("cache dir should be absolute path: %s", d)
 		}
 	}
 	return drives, nil
@@ -64,10 +63,10 @@ func parseCacheDrives(drives []string) ([]string, error) {
 func parseCacheExcludes(excludes []string) ([]string, error) {
 	for _, e := range excludes {
 		if len(e) == 0 {
-			return nil, fmt.Errorf("cache exclude path (%s) cannot be empty", e)
+			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude path (%s) cannot be empty", e)
 		}
 		if hasPrefix(e, slashSeparator) {
-			return nil, fmt.Errorf("cache exclude pattern (%s) cannot start with / as prefix", e)
+			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude pattern (%s) cannot start with / as prefix", e)
 		}
 	}
 	return excludes, nil

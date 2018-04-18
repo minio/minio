@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -80,6 +79,7 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	// optimizing all other calls. Create minio meta volume,
 	// if it doesn't exist yet.
 	metaBucketPath := pathJoin(fsPath, minioMetaBucket)
+
 	if err := os.MkdirAll(metaBucketPath, 0777); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	var err error
 	if fsPath, err = checkPathValid(fsPath); err != nil {
-		return nil, err
+		return nil, uiErrUnableToWriteInBackend(err)
 	}
 
 	// Assign a new UUID for FS minio mode. Each server instance
@@ -112,7 +112,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Initialize meta volume, if volume already exists ignores it.
 	if err = initMetaVolumeFS(fsPath, fsUUID); err != nil {
-		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+		return nil, err
 	}
 
 	// Initialize `format.json`, this function also returns.
@@ -142,12 +142,12 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(fs); err != nil {
-		return nil, fmt.Errorf("Unable to initialize notification system. %v", err)
+		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize notification system")
 	}
 
 	// Initialize policy system.
 	if err = globalPolicySys.Init(fs); err != nil {
-		return nil, fmt.Errorf("Unable to initialize policy system. %v", err)
+		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
 	}
 
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
