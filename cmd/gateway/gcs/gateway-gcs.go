@@ -758,15 +758,54 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash
 	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
+	metadata := make(map[string]string)
+	for k, v := range attrs.Metadata {
+		metadata[k] = v
+	}
+	if attrs.ContentType != "" {
+		metadata["content-type"] = attrs.ContentType
+	}
+	if attrs.ContentEncoding != "" {
+		metadata["content-encoding"] = attrs.ContentEncoding
+	}
+	if attrs.CacheControl != "" {
+		metadata["cache-control"] = attrs.CacheControl
+	}
+	if attrs.ContentDisposition != "" {
+		metadata["content-disposition"] = attrs.ContentDisposition
+	}
+	if attrs.ContentLanguage != "" {
+		metadata["content-language"] = attrs.ContentLanguage
+	}
 	return minio.ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
 		ETag:            minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C)),
-		UserDefined:     attrs.Metadata,
+		UserDefined:     metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
+	}
+}
+
+// applyMetadataToGCSAttrs applies metadata to a GCS ObjectAttrs instance
+func applyMetadataToGCSAttrs(metadata map[string]string, attrs *storage.ObjectAttrs) {
+	attrs.ContentType = metadata["content-type"]
+	attrs.ContentEncoding = metadata["content-encoding"]
+	attrs.CacheControl = metadata["cache-control"]
+	attrs.ContentDisposition = metadata["content-disposition"]
+	attrs.ContentLanguage = metadata["content-language"]
+
+	attrs.Metadata = make(map[string]string)
+	for k, v := range metadata {
+		attrs.Metadata[k] = v
+	}
+	// Filter metadata which is stored as a unique attribute
+	for _, key := range []string{
+		"content-type", "content-encoding", "cache-control", "content-disposition", "content-language",
+	} {
+		delete(attrs.Metadata, key)
 	}
 }
 
@@ -800,10 +839,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, d
 	object := l.client.Bucket(bucket).Object(key)
 
 	w := object.NewWriter(l.ctx)
-
-	w.ContentType = metadata["content-type"]
-	w.ContentEncoding = metadata["content-encoding"]
-	w.Metadata = metadata
+	applyMetadataToGCSAttrs(metadata, &w.ObjectAttrs)
 
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
@@ -832,7 +868,7 @@ func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject
 	dst := l.client.Bucket(destBucket).Object(destObject)
 
 	copier := dst.CopierFrom(src)
-	copier.ObjectAttrs.Metadata = srcInfo.UserDefined
+	applyMetadataToGCSAttrs(srcInfo.UserDefined, &copier.ObjectAttrs)
 
 	attrs, err := copier.Run(l.ctx)
 	if err != nil {
@@ -865,9 +901,7 @@ func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key 
 	w := l.client.Bucket(bucket).Object(meta).NewWriter(l.ctx)
 	defer w.Close()
 
-	w.ContentType = metadata["content-type"]
-	w.ContentEncoding = metadata["content-encoding"]
-	w.Metadata = metadata
+	applyMetadataToGCSAttrs(metadata, &w.ObjectAttrs)
 
 	if err = json.NewEncoder(w).Encode(gcsMultipartMetaV1{
 		gcsMinioMultipartMetaCurrentVersion,
@@ -1076,6 +1110,10 @@ func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	composer := l.client.Bucket(bucket).Object(key).ComposerFrom(parts...)
 	composer.ContentType = partZeroAttrs.ContentType
+	composer.ContentEncoding = partZeroAttrs.ContentEncoding
+	composer.CacheControl = partZeroAttrs.CacheControl
+	composer.ContentDisposition = partZeroAttrs.ContentDisposition
+	composer.ContentLanguage = partZeroAttrs.ContentLanguage
 	composer.Metadata = partZeroAttrs.Metadata
 	attrs, err := composer.Run(l.ctx)
 	if err != nil {
