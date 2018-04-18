@@ -205,6 +205,17 @@ func guessIsHealthCheckReq(req *http.Request) bool {
 			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
 }
 
+// guessIsMetricsReq - returns true if incoming request looks
+// like metrics request
+func guessIsMetricsReq(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	aType := getRequestAuthType(req)
+	return aType == authTypeAnonymous &&
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsPath
+}
+
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
 func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
@@ -275,7 +286,7 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), isAdminReq(r):
+	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), guessIsMetricsReq(r), isAdminReq(r):
 		// Allow access to reserved buckets
 	default:
 		// For all other requests reject access to reserved
