@@ -187,12 +187,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
-
-	// Start server, automatically configures TLS if certs are available.
-	go func() {
-		globalHTTPServerErrorCh <- globalHTTPServer.Start()
-	}()
+	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate, globalHTTPServerErrorCh)
+	globalHTTPServer.Start()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
@@ -216,5 +212,5 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
 	}
 
-	handleSignals()
+	handleEvents()
 }

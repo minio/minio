@@ -274,6 +274,18 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return httptracer.TraceReqHandlerFunc(f, globalHTTPTraceFile, false)
 }
 
+// checkCertStatus returns an error when the server TLS certificate is revoked
+func checkCertStatus(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if globalIsCertRevoked {
+			writeErrorResponse(w, ErrRevokedCertificate, r.URL)
+			return
+		}
+		f(w, r)
+		return
+	}
+}
+
 // Returns "/bucketName/objectName" for path-style or virtual-host-style requests.
 func getResource(path string, host string, domain string) (string, error) {
 	if domain == "" {

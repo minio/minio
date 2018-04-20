@@ -84,29 +84,29 @@ func registerWebRouter(mux *router.Router) error {
 	}
 
 	// RPC handler at URI - /minio/webrpc
-	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
-	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
+	webBrowserRouter.Methods("POST").Path("/webrpc").HandlerFunc(checkCertStatus(webRPC.ServeHTTP))
+	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(checkCertStatus(web.Upload))
 
 	// These methods use short-expiry tokens in the URLs. These tokens may unintentionally
 	// be logged, so a new one must be generated for each request.
-	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
-	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
+	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(checkCertStatus(web.Download))
+	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(checkCertStatus(web.DownloadZip))
 
 	// Add compression for assets.
 	h := http.FileServer(assetFS())
-	compressedAssets := handlers.CompressHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	compressedAssets := handlers.CompressHandler(checkCertStatus(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idx := strings.LastIndex(r.URL.Path, slashSeparator)
 		if idx != -1 {
 			r.URL.Path = r.URL.Path[idx+1:]
 		}
 		h.ServeHTTP(w, r)
-	}))
+	})))
 
 	// Serve javascript files and favicon from assets.
-	webBrowserRouter.Path(fmt.Sprintf("/{assets:%s}", specialAssets)).Handler(compressedAssets)
+	webBrowserRouter.Path(fmt.Sprintf("/{assets:%s}", specialAssets)).HandlerFunc(checkCertStatus(compressedAssets.ServeHTTP))
 
 	// Serve index.html for rest of the requests.
-	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(minioReservedBucketPath, h)})
+	webBrowserRouter.Path("/{index:.*}").HandlerFunc(checkCertStatus(indexHandler{http.StripPrefix(minioReservedBucketPath, h)}.ServeHTTP))
 
 	return nil
 }

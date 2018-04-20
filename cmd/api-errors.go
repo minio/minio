@@ -184,6 +184,7 @@ const (
 	ErrAdminConfigBadJSON
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
+	ErrRevokedCertificate
 	ErrObjectTampered
 	ErrHealNotImplemented
 	ErrHealNoSuchProcess
@@ -770,6 +771,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrRevokedCertificate: {
+		Code:           "XMinioRevokedCertificate",
+		Description:    "Cannot respond to requests when the TLS certificate is revoked",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrOperationTimedOut: {

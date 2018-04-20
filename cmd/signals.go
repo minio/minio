@@ -20,10 +20,11 @@ import (
 	"context"
 	"os"
 
+	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
-func handleSignals() {
+func handleEvents() {
 	// Custom exit function
 	exit := func(state bool) {
 		// If global profiler is set stop before we exit.
@@ -59,13 +60,16 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			logger.LogIf(context.Background(), err)
-			var oerr error
-			if objAPI := newObjectLayerFn(); objAPI != nil {
-				oerr = objAPI.Shutdown(context.Background())
+			if err == http.ErrCertRevoked {
+				globalIsCertRevoked = true
+			} else {
+				logger.LogIf(context.Background(), err)
+				var oerr error
+				if objAPI := newObjectLayerFn(); objAPI != nil {
+					oerr = objAPI.Shutdown(context.Background())
+				}
+				exit(err == nil && oerr == nil)
 			}
-
-			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
 			stopHTTPTrace()
 			logger.Info("Exiting on signal %v", osSignal)
