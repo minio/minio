@@ -104,7 +104,7 @@ func (receiver *PeerRPCReceiver) ListenBucketNotification(args *ListenBucketNoti
 	rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
 	if err := globalNotificationSys.AddRemoteTarget(args.BucketName, target, rulesMap); err != nil {
 		reqInfo := &logger.ReqInfo{BucketName: target.bucketName}
-		reqInfo.AppendTags("target", target.id.Name)
+		reqInfo.AppendTags("targetName", target.id.Name)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, err)
 		return err
@@ -155,14 +155,13 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 	if errMap := globalNotificationSys.send(args.BucketName, args.Event, args.TargetID); len(errMap) != 0 {
 		var found bool
 		if err, found = errMap[args.TargetID]; !found {
-			// errMap must be zero or one element map because we sent to only one target ID.
-			panic(fmt.Errorf("error for target %v not found in error map %+v", args.TargetID, errMap))
+			return fmt.Errorf("error for target %v not found in error map %+v", args.TargetID, errMap)
 		}
 	}
 
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", args.Event.EventName.String())
-		reqInfo.AppendTags("target", args.TargetID.Name)
+		reqInfo.AppendTags("targetName", args.TargetID.Name)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, err)
 	}
@@ -275,7 +274,8 @@ func makeRemoteRPCClients(endpoints EndpointList) map[xnet.Host]*PeerRPCClient {
 	cred := globalServerConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, s3Path)
 	for _, hostStr := range GetRemotePeers(endpoints) {
-		host := xnet.MustParseHost(hostStr)
+		host, err := xnet.ParseHost(hostStr)
+		logger.CriticalIf(context.Background(), err)
 		peerRPCClientMap[*host] = &PeerRPCClient{newAuthRPCClient(authConfig{
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,

@@ -19,7 +19,6 @@ package target
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -118,24 +117,28 @@ func (target *HTTPClientTarget) Close() error {
 	return nil
 }
 
-func mustGetNewUUID() string {
+func getNewUUID() (string, error) {
 	uuid, err := uuid.New()
 	if err != nil {
-		panic(fmt.Sprintf("%s. Unable to generate random UUID", err))
+		return "", err
 	}
 
-	return uuid.String()
+	return uuid.String(), nil
 }
 
 // NewHTTPClientTarget - creates new HTTP client target.
-func NewHTTPClientTarget(host xnet.Host, w http.ResponseWriter) *HTTPClientTarget {
+func NewHTTPClientTarget(host xnet.Host, w http.ResponseWriter) (*HTTPClientTarget, error) {
+	uuid, err := getNewUUID()
+	if err != nil {
+		return nil, err
+	}
 	c := &HTTPClientTarget{
-		id:      event.TargetID{"httpclient" + "+" + mustGetNewUUID() + "+" + host.Name, host.Port.String()},
+		id:      event.TargetID{"httpclient" + "+" + uuid + "+" + host.Name, host.Port.String()},
 		w:       w,
 		eventCh: make(chan []byte),
 		DoneCh:  make(chan struct{}),
 		stopCh:  make(chan struct{}),
 	}
 	c.start()
-	return c
+	return c, nil
 }

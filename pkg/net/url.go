@@ -35,7 +35,10 @@ func (u URL) IsEmpty() bool {
 func (u URL) String() string {
 	// if port number 80 and 443, remove for http and https scheme respectively
 	if u.Host != "" {
-		host := MustParseHost(u.Host)
+		host, err := ParseHost(u.Host)
+		if err != nil {
+			panic(err)
+		}
 		switch {
 		case u.Scheme == "http" && host.Port == 80:
 			fallthrough

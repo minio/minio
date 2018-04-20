@@ -30,7 +30,10 @@ func testAuthenticate(authType string, t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 	defer os.RemoveAll(testPath)
-	cred := auth.MustGetNewCredentials()
+	cred, err := auth.GetNewCredentials()
+	if err != nil {
+		t.Fatalf("Error getting new credentials: %s", err)
+	}
 	globalServerConfig.SetCredential(cred)
 
 	// Define test cases.

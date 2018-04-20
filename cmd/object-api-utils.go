@@ -168,7 +168,7 @@ func pathJoin(elem ...string) string {
 func mustGetUUID() string {
 	uuid, err := uuid.New()
 	if err != nil {
-		panic(fmt.Sprintf("Random UUID generation failed. Error: %s", err))
+		logger.CriticalIf(context.Background(), err)
 	}
 
 	return uuid.String()

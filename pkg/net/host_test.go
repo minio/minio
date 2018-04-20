@@ -207,30 +207,3 @@ func TestParseHost(t *testing.T) {
 		}
 	}
 }
-
-func TestMustParseHost(t *testing.T) {
-	testCases := []struct {
-		s            string
-		expectedHost *Host
-	}{
-		{"play", &Host{"play", 0, false}},
-		{"play:0", &Host{"play", 0, true}},
-		{"play:9000", &Host{"play", 9000, true}},
-		{"play.minio.io", &Host{"play.minio.io", 0, false}},
-		{"play.minio.io:9000", &Host{"play.minio.io", 9000, true}},
-		{"147.75.201.93", &Host{"147.75.201.93", 0, false}},
-		{"147.75.201.93:9000", &Host{"147.75.201.93", 9000, true}},
-		{"play12", &Host{"play12", 0, false}},
-		{"12play", &Host{"12play", 0, false}},
-		{"play-minio-io", &Host{"play-minio-io", 0, false}},
-		{"play--minio.io", &Host{"play--minio.io", 0, false}},
-	}
-
-	for i, testCase := range testCases {
-		host := MustParseHost(testCase.s)
-
-		if !reflect.DeepEqual(host, testCase.expectedHost) {
-			t.Fatalf("test %v: host: expected: %#v, got: %#v", i+1, testCase.expectedHost, host)
-		}
-	}
-}

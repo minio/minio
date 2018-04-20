@@ -314,7 +314,19 @@ func LogIf(ctx context.Context, err error) {
 	fmt.Println(output)
 }
 
+// CriticalIf :
+// Like LogIf with exit
+// It'll be called for fatal error conditions during run-time
+func CriticalIf(ctx context.Context, err error) {
+	if err != nil {
+		LogIf(ctx, err)
+		os.Exit(1)
+	}
+}
+
 // FatalIf :
+// Just fatal error message, no stack trace
+// It'll be called for input validation failures
 func FatalIf(err error, msg string, data ...interface{}) {
 	if err != nil {
 		if msg != "" {
