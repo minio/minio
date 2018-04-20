@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
@@ -27,7 +28,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
@@ -739,10 +742,9 @@ func (li *ListPartsInfo) IsEncrypted() bool {
 // DecryptedSize returns the size of the object after decryption in bytes.
 // It returns an error if the object is not encrypted or marked as encrypted
 // but has an invalid size.
-// DecryptedSize panics if the referred object is not encrypted.
 func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !o.IsEncrypted() {
-		panic("cannot compute decrypted size of an object which is not encrypted")
+		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
 	size, err := sio.DecryptedSize(uint64(o.Size))
 	if err != nil {
@@ -757,7 +759,11 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 func (o *ObjectInfo) EncryptedSize() int64 {
 	size, err := sio.EncryptedSize(uint64(o.Size))
 	if err != nil {
-		panic(err) // Since AWS S3 allows parts to be 5GB at most this cannot happen - sio max. size is 256 TB
+		// This cannot happen since AWS S3 allows parts to be 5GB at most
+		// sio max. size is 256 TB
+		reqInfo := (&logger.ReqInfo{}).AppendTags("size", strconv.FormatUint(size, 10))
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.CriticalIf(ctx, err)
 	}
 	return int64(size)
 }

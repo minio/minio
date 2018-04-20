@@ -220,8 +220,12 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	host := xnet.MustParseHost(r.RemoteAddr)
-	target := target.NewHTTPClientTarget(*host, w)
+	host, e := xnet.ParseHost(r.RemoteAddr)
+	logger.CriticalIf(ctx, e)
+
+	target, e := target.NewHTTPClientTarget(*host, w)
+	logger.CriticalIf(ctx, e)
+
 	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
 
 	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
@@ -233,7 +237,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
 	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
 
-	thisAddr := xnet.MustParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, e := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	logger.CriticalIf(ctx, e)
+
 	if err := SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)

@@ -42,13 +42,3 @@ func ParsePort(s string) (p Port, err error) {
 
 	return Port(i), nil
 }
-
-// MustParsePort - parses string into Port, else panics
-func MustParsePort(s string) Port {
-	p, err := ParsePort(s)
-	if err != nil {
-		panic(err)
-	}
-
-	return p
-}

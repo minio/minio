@@ -25,6 +25,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sys"
 	"github.com/rs/cors"
 	"golang.org/x/time/rate"
@@ -602,9 +603,7 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // cancelled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	if err != nil {
-		panic(err)
-	}
+	logger.CriticalIf(context.Background(), err)
 	// Burst value is set to 1 to allow only maxOpenFileLimit
 	// requests to happen at once.
 	l := rate.NewLimiter(rate.Limit(maxLimit), 1)

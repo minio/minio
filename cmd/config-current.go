@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/minio/minio/cmd/logger"
+
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
@@ -167,9 +169,12 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 }
 
 func newServerConfig() *serverConfig {
+	cred, err := auth.GetNewCredentials()
+	logger.FatalIf(err, "")
+
 	srvCfg := &serverConfig{
 		Version:    serverConfigVersion,
-		Credential: auth.MustGetNewCredentials(),
+		Credential: cred,
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
 		StorageClass: storageClassConfig{

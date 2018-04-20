@@ -81,30 +81,37 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 	return cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1
 }
 
-// MustGetNewCredentials generates and returns new credential.
-func MustGetNewCredentials() (cred Credentials) {
-	readBytes := func(size int) (data []byte) {
+// GetNewCredentials generates and returns new credential.
+func GetNewCredentials() (cred Credentials, err error) {
+	readBytes := func(size int) (data []byte, err error) {
 		data = make([]byte, size)
-		if n, err := rand.Read(data); err != nil {
-			panic(err)
+		var n int
+		if n, err = rand.Read(data); err != nil {
+			return nil, err
 		} else if n != size {
-			panic(fmt.Errorf("not enough data read. expected: %v, got: %v", size, n))
+			return nil, fmt.Errorf("Not enough data. Expected to read: %v bytes, got: %v bytes", size, n)
 		}
-		return
+		return data, nil
 	}
 
 	// Generate access key.
-	keyBytes := readBytes(accessKeyMaxLen)
+	keyBytes, err := readBytes(accessKeyMaxLen)
+	if err != nil {
+		return cred, err
+	}
 	for i := 0; i < accessKeyMaxLen; i++ {
 		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
 	cred.AccessKey = string(keyBytes)
 
 	// Generate secret key.
-	keyBytes = readBytes(secretKeyMaxLen)
+	keyBytes, err = readBytes(secretKeyMaxLen)
+	if err != nil {
+		return cred, err
+	}
 	cred.SecretKey = string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
 
-	return cred
+	return cred, nil
 }
 
 // CreateCredentials returns new credential with the given access key and secret key.
