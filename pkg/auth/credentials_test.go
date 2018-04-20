@@ -54,8 +54,11 @@ func TestIsSecretKeyValid(t *testing.T) {
 	}
 }
 
-func TestMustGetNewCredentials(t *testing.T) {
-	cred := MustGetNewCredentials()
+func TestGetNewCredentials(t *testing.T) {
+	cred, err := GetNewCredentials()
+	if err != nil {
+		t.Fatalf("Failed to get a new credential")
+	}
 	if !cred.IsValid() {
 		t.Fatalf("Failed to get new valid credential")
 	}
@@ -106,7 +109,14 @@ func TestCreateCredentials(t *testing.T) {
 }
 
 func TestCredentialsEqual(t *testing.T) {
-	cred := MustGetNewCredentials()
+	cred, err := GetNewCredentials()
+	if err != nil {
+		t.Fatalf("Failed to get a new credential")
+	}
+	cred2, err := GetNewCredentials()
+	if err != nil {
+		t.Fatalf("Failed to get a new credential")
+	}
 	testCases := []struct {
 		cred           Credentials
 		ccred          Credentials
@@ -119,7 +129,7 @@ func TestCredentialsEqual(t *testing.T) {
 		// Empty credentials.
 		{Credentials{}, cred, false},
 		// Two different credentialss
-		{cred, MustGetNewCredentials(), false},
+		{cred, cred2, false},
 		// Access key is different in credentials to compare.
 		{cred, Credentials{AccessKey: "myuser", SecretKey: cred.SecretKey}, false},
 		// Secret key is different in credentials to compare.

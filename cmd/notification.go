@@ -181,14 +181,15 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
-		return err
+	reader, e := readConfig(ctx, objAPI, configFile)
+	if e != nil && !IsErrIgnored(e, errDiskNotFound, errNoSuchNotifications) {
+		return e
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
 	if reader != nil {
-		if err = json.NewDecoder(reader).Decode(&listenerList); err != nil {
+		err := json.NewDecoder(reader).Decode(&listenerList)
+		if err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -201,8 +202,8 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 
 	activeListenerList := []ListenBucketNotificationArgs{}
 	for _, args := range listenerList {
-		var found bool
-		if found, err = isLocalHost(args.Addr.Name); err != nil {
+		found, err := isLocalHost(args.Addr.Name)
+		if err != nil {
 			logger.GetReqInfo(ctx).AppendTags("host", args.Addr.Name)
 			logger.LogIf(ctx, err)
 			return err
@@ -217,8 +218,8 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			return fmt.Errorf("unable to find PeerRPCClient by address %v in listener.json for bucket %v", args.Addr, bucketName)
 		}
 
-		var exist bool
-		if exist, err = rpcClient.RemoteTargetExist(bucketName, args.TargetID); err != nil {
+		exist, err := rpcClient.RemoteTargetExist(bucketName, args.TargetID)
+		if err != nil {
 			logger.GetReqInfo(ctx).AppendTags("targetID", args.TargetID.Name)
 			logger.LogIf(ctx, err)
 			return err
@@ -231,7 +232,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 		target := NewPeerRPCClientTarget(bucketName, args.TargetID, rpcClient)
 		rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
 		if err = sys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-			logger.GetReqInfo(ctx).AppendTags("targetID", target.id.Name)
+			logger.GetReqInfo(ctx).AppendTags("targetName", target.id.Name)
 			logger.LogIf(ctx, err)
 			return err
 		}

@@ -71,22 +71,3 @@ func TestParsePort(t *testing.T) {
 		}
 	}
 }
-
-func TestMustParsePort(t *testing.T) {
-	testCases := []struct {
-		s            string
-		expectedPort Port
-	}{
-		{"0", Port(0)},
-		{"9000", Port(9000)},
-		{"65535", Port(65535)},
-	}
-
-	for i, testCase := range testCases {
-		port := MustParsePort(testCase.s)
-
-		if port != testCase.expectedPort {
-			t.Fatalf("test %v: error: port: %v, got: %v", i+1, testCase.expectedPort, port)
-		}
-	}
-}
