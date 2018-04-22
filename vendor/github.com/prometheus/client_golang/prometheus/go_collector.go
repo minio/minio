@@ -265,7 +265,7 @@ func (c *goCollector) Collect(ch chan<- Metric) {
 		quantiles[float64(idx+1)/float64(len(stats.PauseQuantiles)-1)] = pq.Seconds()
 	}
 	quantiles[0.0] = stats.PauseQuantiles[0].Seconds()
-	ch <- MustNewConstSummary(c.gcDesc, uint64(stats.NumGC), float64(stats.PauseTotal.Seconds()), quantiles)
+	ch <- MustNewConstSummary(c.gcDesc, uint64(stats.NumGC), stats.PauseTotal.Seconds(), quantiles)
 
 	ch <- MustNewConstMetric(c.goInfoDesc, GaugeValue, 1)
 
