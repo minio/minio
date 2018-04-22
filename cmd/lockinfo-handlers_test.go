@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -99,7 +100,10 @@ func TestListLocksInfo(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		actual := listLocksInfo(test.bucket, test.prefix, test.duration)
+		actual, err := objAPI.ListLocks(context.Background(), test.bucket, test.prefix, test.duration)
+		if err != nil {
+			t.Errorf("Test %d - Expected success, got %s", i+1, err)
+		}
 		if len(actual) != test.numLocks {
 			t.Errorf("Test %d - Expected %d locks but observed %d locks",
 				i+1, test.numLocks, len(actual))

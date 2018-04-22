@@ -356,6 +356,13 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ClearLocks")
 
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
@@ -387,7 +394,7 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	newObjectLayerFn().ClearLocks(ctx, volLocks)
+	objLayer.ClearLocks(ctx, volLocks)
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
@@ -561,17 +568,10 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 // GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
-
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// check if objectLayer is initialized, if not return.
-	if newObjectLayerFn() == nil {
-		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
