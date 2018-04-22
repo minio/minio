@@ -52,7 +52,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio/cmd/logger"
@@ -398,7 +398,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 // The object Layer will be a temp back used for testing purpose.
 func initTestStorageRPCEndPoint(endpoints EndpointList) http.Handler {
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerStorageRPCRouters(muxRouter, endpoints)
 	return muxRouter
 }
@@ -469,16 +469,16 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.Obj = objLayer
 	globalObjLayerMutex.Unlock()
 
-	mux := router.NewRouter().SkipClean(true)
+	router := mux.NewRouter().SkipClean(true)
 	// need storage layer for bucket config storage.
-	registerStorageRPCRouters(mux, endpoints)
+	registerStorageRPCRouters(router, endpoints)
 	// need API layer to send requests, etc.
-	registerAPIRouter(mux)
+	registerAPIRouter(router)
 	// module being tested is Peer RPCs router.
-	registerS3PeerRPCRouter(mux)
+	registerS3PeerRPCRouter(router)
 
 	// Run TestServer.
-	testRPCServer.Server = httptest.NewServer(mux)
+	testRPCServer.Server = httptest.NewServer(router)
 
 	// initialize remainder of serverCmdConfig
 	testRPCServer.endpoints = endpoints
@@ -2130,7 +2130,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	defer removeRoots(erasureDisks)
 }
 
-func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFunctions ...string) {
+func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunctions ...string) {
 	for _, apiFunction := range apiFunctions {
 		switch apiFunction {
 		case "PostPolicy":
@@ -2204,14 +2204,14 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 }
 
 // registerAPIFunctions helper function to add API functions identified by name to the routers.
-func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFunctions ...string) {
+func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFunctions ...string) {
 	if len(apiFunctions) == 0 {
 		// Register all api endpoints by default.
 		registerAPIRouter(muxRouter)
 		return
 	}
 	// API Router.
-	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
+	apiRouter := muxRouter.PathPrefix("/").Subrouter()
 	// Bucket router.
 	bucketRouter := apiRouter.PathPrefix("/{bucket}").Subrouter()
 
@@ -2241,7 +2241,7 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
 	// initialize a new mux router.
 	// goriilla/mux is the library used to register all the routes and handle them.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
@@ -2258,7 +2258,7 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	globalObjLayerMutex.Unlock()
 
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerWebRouter(muxRouter)
 	return muxRouter
 }
@@ -2266,7 +2266,7 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 // Initialize browser RPC endpoint.
 func initTestBrowserPeerRPCEndPoint() http.Handler {
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerBrowserPeerRPCRouter(muxRouter)
 	return muxRouter
 }
@@ -2320,7 +2320,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	globalObjLayerMutex.Unlock()
 
 	// Register router on a new mux
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	err = registerS3PeerRPCRouter(muxRouter)
 	if err != nil {
 		t.Fatalf("%s", err)

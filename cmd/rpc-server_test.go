@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 )
 
 type ArithArgs struct {
@@ -49,10 +49,10 @@ func TestGoHTTPRPC(t *testing.T) {
 		AuthRPCServer: AuthRPCServer{},
 	})
 
-	mux := router.NewRouter().SkipClean(true)
-	mux.Path("/foo").Handler(newServer)
+	router := mux.NewRouter().SkipClean(true)
+	router.Path("/foo").Handler(newServer)
 
-	httpServer := httptest.NewServer(mux)
+	httpServer := httptest.NewServer(router)
 	defer httpServer.Close()
 
 	rootPath, err := newTestConfig("us-east-1")

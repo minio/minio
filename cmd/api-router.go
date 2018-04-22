@@ -19,7 +19,7 @@ package cmd
 import (
 	"net/http"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -30,7 +30,7 @@ type objectAPIHandlers struct {
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(mux *router.Router) {
+func registerAPIRouter(router *mux.Router) {
 	var err error
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
@@ -46,8 +46,8 @@ func registerAPIRouter(mux *router.Router) {
 	}
 
 	// API Router
-	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
-	var routers []*router.Router
+	apiRouter := router.PathPrefix("/").Subrouter()
+	var routers []*mux.Router
 	if globalDomainName != "" {
 		routers = append(routers, apiRouter.Host("{bucket:.+}."+globalDomainName).Subrouter())
 	}

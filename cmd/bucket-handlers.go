@@ -30,7 +30,7 @@ import (
 	"strings"
 	"sync"
 
-	mux "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
