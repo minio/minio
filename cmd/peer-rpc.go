@@ -178,7 +178,7 @@ func registerS3PeerRPCRouter(router *mux.Router) error {
 		return err
 	}
 
-	subrouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	subrouter.Path(s3Path).Handler(peerRPCServer)
 	return nil
 }

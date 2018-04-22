@@ -25,7 +25,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
-	miniohttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -129,7 +129,7 @@ var (
 
 	globalTLSCertificate *tls.Certificate
 
-	globalHTTPServer        *miniohttp.Server
+	globalHTTPServer        *xhttp.Server
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 

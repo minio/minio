@@ -19,7 +19,7 @@ package cmd
 import (
 	"net/http"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 )
 
 const (
@@ -31,11 +31,11 @@ type adminAPIHandlers struct {
 }
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(mux *router.Router) {
+func registerAdminRouter(router *mux.Router) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
-	adminRouter := mux.NewRoute().PathPrefix(adminAPIPathPrefix).Subrouter()
+	adminRouter := router.PathPrefix(adminAPIPathPrefix).Subrouter()
 
 	// Version handler
 	adminRouter.Methods(http.MethodGet).Path("/version").HandlerFunc(adminAPI.VersionHandler)

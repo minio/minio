@@ -22,7 +22,7 @@ import (
 	"path"
 	"time"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 )
@@ -221,7 +221,7 @@ func newStorageRPCServer(endpoints EndpointList) (servers []*storageServer, err 
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error {
+func registerStorageRPCRouters(router *mux.Router, endpoints EndpointList) error {
 	// Initialize storage rpc servers for every disk that is hosted on this node.
 	storageRPCs, err := newStorageRPCServer(endpoints)
 	if err != nil {
@@ -238,7 +238,7 @@ func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error
 			return err
 		}
 		// Add minio storage routes.
-		storageRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
+		storageRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 		storageRouter.Path(path.Join(storageRPCPath, stServer.path)).Handler(storageRPCServer)
 	}
 	return nil

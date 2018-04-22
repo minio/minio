@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
-	mux "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/wildcard"
