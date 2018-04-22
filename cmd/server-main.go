@@ -26,7 +26,7 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
-	miniohttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -246,7 +246,7 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
 	globalHTTPServer.ReadTimeout = globalConnReadTimeout
 	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes

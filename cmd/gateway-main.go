@@ -29,7 +29,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
-	miniohttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -187,7 +187,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
+	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
