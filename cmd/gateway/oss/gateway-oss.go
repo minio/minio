@@ -368,11 +368,6 @@ func (l *ossObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 
 // ossGeBucketInfo gets bucket metadata.
 func ossGeBucketInfo(ctx context.Context, client *oss.Client, bucket string) (bi minio.BucketInfo, err error) {
-	if !ossIsValidBucketName(bucket) {
-		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
-		return bi, minio.BucketNameInvalid{Bucket: bucket}
-	}
-
 	bgir, err := client.GetBucketInfo(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)

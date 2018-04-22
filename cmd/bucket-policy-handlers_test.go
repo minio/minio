@@ -357,7 +357,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Test case - 8.
 		// non-existent bucket is used.
 		// writing BucketPolicy should fail.
-		// should result is 500 InternalServerError.
+		// should result is 404 StatusNotFound
 		{
 			bucketName:         "non-existent-bucket",
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket"))),
@@ -368,9 +368,9 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 9.
-		// invalid bucket name is used.
+		// non-existent bucket is used (with invalid bucket name)
 		// writing BucketPolicy should fail.
-		// should result is 400 StatusBadRequest.
+		// should result is 404 StatusNotFound
 		{
 			bucketName:         ".invalid-bucket",
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket"))),
@@ -378,7 +378,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusNotFound,
 		},
 	}
 
@@ -535,13 +535,13 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			expectedRespStatus:   http.StatusNotFound,
 		},
 		// Test case - 3.
-		// Case with invalid bucket name.
+		// Case with non-existent bucket name.
 		{
 			bucketName:           ".invalid-bucket-name",
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: "",
-			expectedRespStatus:   http.StatusBadRequest,
+			expectedRespStatus:   http.StatusNotFound,
 		},
 	}
 	// Iterating over the cases, fetching the policy and validating the response.
@@ -742,12 +742,12 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
-		// Case with invalid bucket name.
+		// Case with non-existent-bucket.
 		{
 			bucketName:         ".invalid-bucket-name",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusNotFound,
 		},
 	}
 	// Iterating over the cases and deleting the bucket policy and then asserting response.

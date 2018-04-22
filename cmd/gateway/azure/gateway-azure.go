@@ -431,6 +431,15 @@ func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
 
 // MakeBucketWithLocation - Create a new container on azure backend.
 func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+	// Verify if bucket (container-name) is valid.
+	// IsValidBucketName has same restrictions as container names mentioned
+	// in azure documentation, so we will simply use the same function here.
+	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
+	if !minio.IsValidBucketName(bucket) {
+		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
+		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+
 	container := a.client.GetContainerReference(bucket)
 	err := container.Create(&storage.CreateContainerOptions{
 		Access: storage.ContainerAccessTypePrivate,
@@ -441,15 +450,6 @@ func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket, locat
 
 // GetBucketInfo - Get bucket metadata..
 func (a *azureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
-	// Verify if bucket (container-name) is valid.
-	// IsValidBucketName has same restrictions as container names mentioned
-	// in azure documentation, so we will simply use the same function here.
-	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
-	if !minio.IsValidBucketName(bucket) {
-		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
-		return bi, minio.BucketNameInvalid{Bucket: bucket}
-	}
-
 	// Azure does not have an equivalent call, hence use
 	// ListContainers with prefix
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{

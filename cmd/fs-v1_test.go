@@ -166,7 +166,15 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), "a", "")
+	if !isSameType(err, BucketNameInvalid{}) {
+		t.Fatal("BucketNameInvalid error not returned")
+	}
+
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Test with valid parameters
 	info, err := fs.GetBucketInfo(context.Background(), bucketName)
@@ -177,10 +185,10 @@ func TestFSGetBucketInfo(t *testing.T) {
 		t.Fatalf("wrong bucket name, expected: %s, found: %s", bucketName, info.Name)
 	}
 
-	// Test with inexistant bucket
+	// Test with non-existent bucket
 	_, err = fs.GetBucketInfo(context.Background(), "a")
-	if !isSameType(err, BucketNameInvalid{}) {
-		t.Fatal("BucketNameInvalid error not returned")
+	if !isSameType(err, BucketNotFound{}) {
+		t.Fatal("BucketNotFound error not returned")
 	}
 
 	// Check for buckets and should get disk not found.
@@ -319,9 +327,10 @@ func TestFSDeleteBucket(t *testing.T) {
 	}
 
 	// Test with an invalid bucket name
-	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(err, BucketNameInvalid{}) {
+	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
+
 	// Test with an inexistant bucket
 	if err = fs.DeleteBucket(context.Background(), "foobucket"); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)

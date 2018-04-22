@@ -355,10 +355,11 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// Empty string = no error
 		expect string
 	}{
-		{"", false, token, "Bucket Name  is invalid"},
+		{"", false, token, "The specified bucket  does not exist."},
 		{".", false, "auth", "Authentication failed"},
-		{".", false, token, "Bucket Name . is invalid"},
-		{"ab", false, token, "Bucket Name ab is invalid"},
+		{".", false, token, "The specified bucket . does not exist."},
+		{"..", false, token, "The specified bucket .. does not exist."},
+		{"ab", false, token, "The specified bucket ab does not exist."},
 		{"minio", false, "false token", "Authentication failed"},
 		{"minio", false, token, "specified bucket minio does not exist"},
 		{bucketName, false, token, ""},
