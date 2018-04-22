@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"time"
 )
 
@@ -65,10 +64,4 @@ type OpsLockState struct {
 	LockType    lockType   `json:"type"`   // Lock type (RLock, WLock)
 	Status      statusType `json:"status"` // Status can be Running/Ready/Blocked.
 	Since       time.Time  `json:"since"`  // Time when the lock was initially held.
-}
-
-// listLocksInfo - Fetches locks held on bucket, matching prefix held for longer than duration.
-func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockInfo {
-	locksInfo, _ := newObjectLayerFn().ListLocks(context.Background(), bucket, prefix, duration)
-	return locksInfo
 }
