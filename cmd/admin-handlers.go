@@ -245,7 +245,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			// Initialize server info at index
 			reply[idx] = ServerInfo{Addr: peer.addr}
 
-			serverInfoData, err := peer.cmdRunner.ServerInfoData()
+			serverInfoData, err := peer.cmdRunner.ServerInfo()
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
@@ -808,19 +808,18 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(creds)
-	for peer, err := range updateErrs {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
 	if err = globalServerConfig.Save(); err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
+	}
+
+	// Notify all other Minio peers to update credentials
+	for host, err := range globalNotificationSys.SetCredentials(creds) {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", host.String())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	// At this stage, the operation is successful, return 200 OK
