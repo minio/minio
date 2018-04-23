@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	etcdc "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/client"
 )
 
 // create a new coredns service record for the bucket.
@@ -43,7 +43,7 @@ func newCoreDNSMsg(bucket string, ip string, port int, ttl uint32) ([]byte, erro
 
 // Retrieves list of DNS entries for a bucket.
 func (c *coreDNS) List() ([]SrvRecord, error) {
-	kapi := etcdc.NewKeysAPI(c.etcdClient)
+	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.", c.domainName), defaultPrefixPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	r, err := kapi.Get(ctx, key, nil)
@@ -69,7 +69,7 @@ func (c *coreDNS) List() ([]SrvRecord, error) {
 
 // Retrieves DNS record for a bucket.
 func (c *coreDNS) Get(bucket string) (SrvRecord, error) {
-	kapi := etcdc.NewKeysAPI(c.etcdClient)
+	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	r, err := kapi.Get(ctx, key, nil)
@@ -91,7 +91,7 @@ func (c *coreDNS) Put(bucket string) error {
 	if err != nil {
 		return err
 	}
-	kapi := etcdc.NewKeysAPI(c.etcdClient)
+	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	_, err = kapi.Set(ctx, key, string(bucketMsg), nil)
@@ -101,7 +101,7 @@ func (c *coreDNS) Put(bucket string) error {
 
 // Removes DNS entries added in Put().
 func (c *coreDNS) Delete(bucket string) error {
-	kapi := etcdc.NewKeysAPI(c.etcdClient)
+	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	_, err := kapi.Delete(ctx, key, nil)
@@ -113,11 +113,11 @@ func (c *coreDNS) Delete(bucket string) error {
 type coreDNS struct {
 	domainName, domainIP string
 	domainPort           int
-	etcdClient           etcdc.Client
+	etcdClient           etcd.Client
 }
 
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(domainName, domainIP, domainPort string, etcdClient etcdc.Client) (Config, error) {
+func NewCoreDNS(domainName, domainIP, domainPort string, etcdClient etcd.Client) (Config, error) {
 	if domainName == "" || domainIP == "" || etcdClient == nil {
 		return nil, errors.New("invalid argument")
 	}

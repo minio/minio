@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	etcdc "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/client"
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -49,7 +49,7 @@ func checkUpdate(mode string) {
 // Initialize and load config from remote etcd or local config directory
 func initConfig() {
 	if globalEtcdClient != nil {
-		kapi := etcdc.NewKeysAPI(globalEtcdClient)
+		kapi := etcd.NewKeysAPI(globalEtcdClient)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		_, err := kapi.Get(ctx, getConfigFile(), nil)
 		cancel()
@@ -57,7 +57,7 @@ func initConfig() {
 			logger.FatalIf(migrateConfig(), "Config migration failed.")
 			logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
 		} else {
-			if etcdc.IsKeyNotFound(err) {
+			if etcd.IsKeyNotFound(err) {
 				logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
 				logger.Info("Created minio configuration file successfully at", globalEtcdClient.Endpoints())
 			} else {
@@ -154,7 +154,7 @@ func handleCommonEnvVars() {
 	if ok {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
 		var err error
-		globalEtcdClient, err = etcdc.New(etcdc.Config{
+		globalEtcdClient, err = etcd.New(etcd.Config{
 			Endpoints: etcdEndpoints,
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
