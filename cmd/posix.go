@@ -142,14 +142,15 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (StorageAPI, error) {
+func newPosix(path string) (*posix, error) {
 	var err error
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
 
-	st := &posix{
-		diskPath: path,
+	return &posix{
+		connected: true,
+		diskPath:  path,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -157,11 +158,7 @@ func newPosix(path string) (StorageAPI, error) {
 				return &b
 			},
 		},
-	}
-	st.connected = true
-
-	// Success.
-	return st, nil
+	}, nil
 }
 
 // getDiskInfo returns given disk information.
