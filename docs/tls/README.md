@@ -43,6 +43,9 @@ or protect the private key additionally with a password:
 ```sh
 openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
 ```
+
+Notice that the NIST curves P-384 and P-521 are not supported yet.
+
 2. **RSA:**
 ```sh
 openssl genrsa -out private.key 2048
