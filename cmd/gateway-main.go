@@ -198,8 +198,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), getCert)
-	globalHTTPServer.ReadTimeout = globalConnReadTimeout
-	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
