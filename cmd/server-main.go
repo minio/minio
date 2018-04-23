@@ -262,8 +262,6 @@ func serverMain(ctx *cli.Context) {
 	initGlobalAdminPeers(globalEndpoints)
 
 	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
-	globalHTTPServer.ReadTimeout = globalConnReadTimeout
-	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {

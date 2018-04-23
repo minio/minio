@@ -222,7 +222,7 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	return req.Method == http.MethodConnect && req.Proto == "HTTP/1.0"
+	return req.Method == http.MethodPost
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
