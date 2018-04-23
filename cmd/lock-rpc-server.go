@@ -18,258 +18,76 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
-	"sync"
+	"path"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/dsync"
 	"github.com/minio/minio/cmd/logger"
+	xrpc "github.com/minio/minio/cmd/rpc"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 const (
 	// Lock rpc server endpoint.
-	lockServicePath = "/lock"
+	lockServiceSubPath = "/lock"
 
 	// Lock rpc service name.
 	lockServiceName = "Dsync"
 
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 1 * time.Minute // 1 minute.
+	lockMaintenanceInterval = 1 * time.Minute
 
 	// Lock validity check interval.
-	lockValidityCheckInterval = 2 * time.Minute // 2 minutes.
+	lockValidityCheckInterval = 2 * time.Minute
 )
 
-// lockRequesterInfo stores various info from the client for each lock that is requested.
-type lockRequesterInfo struct {
-	writer          bool      // Bool whether write or read lock.
-	node            string    // Network address of client claiming lock.
-	serviceEndpoint string    // RPC path of client claiming lock.
-	uid             string    // UID to uniquely identify request of client.
-	timestamp       time.Time // Timestamp set at the time of initialization.
-	timeLastCheck   time.Time // Timestamp for last check of validity of lock.
+var lockServicePath = path.Join(minioReservedBucketPath, lockServiceSubPath)
+
+// LockArgs represents arguments for any authenticated lock RPC call.
+type LockArgs struct {
+	AuthArgs
+	LockArgs dsync.LockArgs
 }
 
-// isWriteLock returns whether the lock is a write or read lock.
-func isWriteLock(lri []lockRequesterInfo) bool {
-	return len(lri) == 1 && lri[0].writer
-}
-
-// lockServer is type for RPC handlers
-type lockServer struct {
-	AuthRPCServer
+// lockRPCReceiver is type for RPC handlers
+type lockRPCReceiver struct {
 	ll localLocker
 }
 
-// Start lock maintenance from all lock servers.
-func startLockMaintenance(lkSrv *lockServer) {
-	// Start loop for stale lock maintenance
-	go func(lk *lockServer) {
-		// Initialize a new ticker with a minute between each ticks.
-		ticker := time.NewTicker(lockMaintenanceInterval)
-		// Stop the timer upon service closure and cleanup the go-routine.
-		defer ticker.Stop()
-
-		// Start with random sleep time, so as to avoid "synchronous checks" between servers
-		time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
-		for {
-			// Verifies every minute for locks held more than 2minutes.
-			select {
-			case <-globalServiceDoneCh:
-				return
-			case <-ticker.C:
-				lk.lockMaintenance(lockValidityCheckInterval)
-			}
-		}
-	}(lkSrv)
-}
-
-// Register distributed NS lock handlers.
-func registerDistNSLockRouter(router *mux.Router, endpoints EndpointList) error {
-	// Start lock maintenance from all lock servers.
-	startLockMaintenance(globalLockServer)
-
-	// Register initialized lock servers to their respective rpc endpoints.
-	return registerStorageLockers(router, globalLockServer)
-}
-
-// registerStorageLockers - register locker rpc handlers for net/rpc library clients
-func registerStorageLockers(router *mux.Router, lkSrv *lockServer) error {
-	lockRPCServer := newRPCServer()
-	if err := lockRPCServer.RegisterName(lockServiceName, lkSrv); err != nil {
-		logger.LogIf(context.Background(), err)
-		return err
-	}
-	lockRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-	lockRouter.Path(lockServicePath).Handler(lockRPCServer)
-	return nil
-}
-
-// localLocker implements Dsync.NetLocker
-type localLocker struct {
-	mutex           sync.Mutex
-	serviceEndpoint string
-	serverAddr      string
-	lockMap         map[string][]lockRequesterInfo
-}
-
-func (l *localLocker) ServerAddr() string {
-	return l.serverAddr
-}
-
-func (l *localLocker) ServiceEndpoint() string {
-	return l.serviceEndpoint
-}
-
-func (l *localLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	_, isLockTaken := l.lockMap[args.Resource]
-	if !isLockTaken { // No locks held on the given name, so claim write lock
-		l.lockMap[args.Resource] = []lockRequesterInfo{
-			{
-				writer:          true,
-				node:            args.ServerAddr,
-				serviceEndpoint: args.ServiceEndpoint,
-				uid:             args.UID,
-				timestamp:       UTCNow(),
-				timeLastCheck:   UTCNow(),
-			},
-		}
-	}
-	// return reply=true if lock was granted.
-	return !isLockTaken, nil
-}
-
-func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	var lri []lockRequesterInfo
-	if lri, reply = l.lockMap[args.Resource]; !reply {
-		// No lock is held on the given name
-		return reply, fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.Resource)
-	}
-	if reply = isWriteLock(lri); !reply {
-		// Unless it is a write lock
-		return reply, fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Resource, len(lri))
-	}
-	if !l.removeEntry(args.Resource, args.UID, &lri) {
-		return false, fmt.Errorf("Unlock unable to find corresponding lock for uid: %s", args.UID)
-	}
-	return true, nil
-
-}
-
-func (l *localLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	lrInfo := lockRequesterInfo{
-		writer:          false,
-		node:            args.ServerAddr,
-		serviceEndpoint: args.ServiceEndpoint,
-		uid:             args.UID,
-		timestamp:       UTCNow(),
-		timeLastCheck:   UTCNow(),
-	}
-	if lri, ok := l.lockMap[args.Resource]; ok {
-		if reply = !isWriteLock(lri); reply {
-			// Unless there is a write lock
-			l.lockMap[args.Resource] = append(l.lockMap[args.Resource], lrInfo)
-		}
-	} else {
-		// No locks held on the given name, so claim (first) read lock
-		l.lockMap[args.Resource] = []lockRequesterInfo{lrInfo}
-		reply = true
-	}
-	return reply, nil
-}
-
-func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	var lri []lockRequesterInfo
-	if lri, reply = l.lockMap[args.Resource]; !reply {
-		// No lock is held on the given name
-		return reply, fmt.Errorf("RUnlock attempted on an unlocked entity: %s", args.Resource)
-	}
-	if reply = !isWriteLock(lri); !reply {
-		// A write-lock is held, cannot release a read lock
-		return reply, fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.Resource)
-	}
-	if !l.removeEntry(args.Resource, args.UID, &lri) {
-		return false, fmt.Errorf("RUnlock unable to find corresponding read lock for uid: %s", args.UID)
-	}
-	return reply, nil
-}
-
-func (l *localLocker) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	if len(args.UID) != 0 {
-		return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
-	}
-	if _, ok := l.lockMap[args.Resource]; ok {
-		// Only clear lock when it is taken
-		// Remove the lock (irrespective of write or read lock)
-		delete(l.lockMap, args.Resource)
-	}
-	return true, nil
-}
-
-///  Distributed lock handlers
-
 // Lock - rpc handler for (single) write lock operation.
-func (l *lockServer) Lock(args *LockArgs, reply *bool) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) Lock(args *LockArgs, reply *bool) (err error) {
 	*reply, err = l.ll.Lock(args.LockArgs)
 	return err
 }
 
 // Unlock - rpc handler for (single) write unlock operation.
-func (l *lockServer) Unlock(args *LockArgs, reply *bool) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) Unlock(args *LockArgs, reply *bool) (err error) {
 	*reply, err = l.ll.Unlock(args.LockArgs)
 	return err
 }
 
 // RLock - rpc handler for read lock operation.
-func (l *lockServer) RLock(args *LockArgs, reply *bool) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) RLock(args *LockArgs, reply *bool) (err error) {
 	*reply, err = l.ll.RLock(args.LockArgs)
 	return err
 }
 
 // RUnlock - rpc handler for read unlock operation.
-func (l *lockServer) RUnlock(args *LockArgs, reply *bool) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) RUnlock(args *LockArgs, reply *bool) (err error) {
 	*reply, err = l.ll.RUnlock(args.LockArgs)
 	return err
 }
 
 // ForceUnlock - rpc handler for force unlock operation.
-func (l *lockServer) ForceUnlock(args *LockArgs, reply *bool) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) ForceUnlock(args *LockArgs, reply *bool) (err error) {
 	*reply, err = l.ll.ForceUnlock(args.LockArgs)
 	return err
 }
 
 // Expired - rpc handler for expired lock status.
-func (l *lockServer) Expired(args *LockArgs, reply *bool) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
+func (l *lockRPCReceiver) Expired(args *LockArgs, reply *bool) error {
 	l.ll.mutex.Lock()
 	defer l.ll.mutex.Unlock()
 	// Lock found, proceed to verify if belongs to given uid.
@@ -288,12 +106,6 @@ func (l *lockServer) Expired(args *LockArgs, reply *bool) error {
 	return nil
 }
 
-// nameLockRequesterInfoPair is a helper type for lock maintenance
-type nameLockRequesterInfoPair struct {
-	name string
-	lri  lockRequesterInfo
-}
-
 // lockMaintenance loops over locks that have been active for some time and checks back
 // with the original server whether it is still alive or not
 //
@@ -302,24 +114,22 @@ type nameLockRequesterInfoPair struct {
 // - some network error (and server is up normally)
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
-func (l *lockServer) lockMaintenance(interval time.Duration) {
+func (l *lockRPCReceiver) lockMaintenance(interval time.Duration) {
 	l.ll.mutex.Lock()
 	// Get list of long lived locks to check for staleness.
 	nlripLongLived := getLongLivedLocks(l.ll.lockMap, interval)
 	l.ll.mutex.Unlock()
 
-	serverCred := globalServerConfig.GetCredential()
 	// Validate if long lived locks are indeed clean.
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.
-		c := newLockRPCClient(authConfig{
-			accessKey:       serverCred.AccessKey,
-			secretKey:       serverCred.SecretKey,
-			serverAddr:      nlrip.lri.node,
-			secureConn:      globalIsSSL,
-			serviceEndpoint: nlrip.lri.serviceEndpoint,
-			serviceName:     lockServiceName,
-		})
+		host, err := xnet.ParseHost(nlrip.lri.node)
+		logger.CriticalIf(context.Background(), err)
+		c, err := NewLockRPCClient(host)
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			continue
+		}
 
 		// Call back to original server verify whether the lock is still active (based on name & uid)
 		expired, _ := c.Expired(dsync.LockArgs{
@@ -328,7 +138,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 		})
 
 		// Close the connection regardless of the call response.
-		c.AuthRPCClient.Close()
+		c.Close()
 
 		// For successful response, verify if lock is indeed active or stale.
 		if expired {
@@ -339,4 +149,45 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 			l.ll.mutex.Unlock()
 		}
 	}
+}
+
+// Start lock maintenance from all lock servers.
+func startLockMaintenance(lkSrv *lockRPCReceiver) {
+	// Initialize a new ticker with a minute between each ticks.
+	ticker := time.NewTicker(lockMaintenanceInterval)
+	// Stop the timer upon service closure and cleanup the go-routine.
+	defer ticker.Stop()
+
+	// Start with random sleep time, so as to avoid "synchronous checks" between servers
+	time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
+	for {
+		// Verifies every minute for locks held more than 2minutes.
+		select {
+		case <-globalServiceDoneCh:
+			return
+		case <-ticker.C:
+			lkSrv.lockMaintenance(lockValidityCheckInterval)
+		}
+	}
+}
+
+// NewLockRPCServer - returns new lock RPC server.
+func NewLockRPCServer() (*xrpc.Server, error) {
+	rpcServer := xrpc.NewServer()
+	if err := rpcServer.RegisterName(lockServiceName, globalLockServer); err != nil {
+		return nil, err
+	}
+	return rpcServer, nil
+}
+
+// Register distributed NS lock handlers.
+func registerDistNSLockRouter(router *mux.Router) {
+	rpcServer, err := NewLockRPCServer()
+	logger.CriticalIf(context.Background(), err)
+
+	// Start lock maintenance from all lock servers.
+	go startLockMaintenance(globalLockServer)
+
+	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
+	subrouter.Path(lockServiceSubPath).Handler(rpcServer)
 }
