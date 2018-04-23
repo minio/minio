@@ -129,26 +129,17 @@ func (s *serverConfig) GetCacheConfig() CacheConfig {
 
 // Save config file to corresponding backend
 func Save(configFile string, data interface{}) error {
-	if globalEtcdClient == nil {
-		return quick.SaveLocalConfig(configFile, data)
-	}
-	return quick.SaveEtcdConfig(configFile, data, globalEtcdClient)
+	return quick.SaveConfig(data, configFile, globalEtcdClient)
 }
 
 // Load config from backend
 func Load(configFile string, data interface{}) (quick.Config, error) {
-	if globalEtcdClient == nil {
-		return quick.LoadLocalConfig(configFile, data)
-	}
-	return quick.LoadEtcdConfig(configFile, data, globalEtcdClient)
+	return quick.LoadConfig(configFile, globalEtcdClient, data)
 }
 
 // GetVersion gets config version from backend
 func GetVersion(configFile string) (string, error) {
-	if globalEtcdClient == nil {
-		return quick.GetLocalVersion(configFile)
-	}
-	return quick.GetEtcdVersion(configFile, globalEtcdClient)
+	return quick.GetVersion(configFile, globalEtcdClient)
 }
 
 // Returns the string describing a difference with the given
@@ -296,17 +287,7 @@ func newConfig() error {
 // newQuickConfig - initialize a new server config, with an allocated
 // quick.Config interface.
 func newQuickConfig(srvCfg *serverConfig) (*serverConfig, error) {
-	if globalEtcdClient == nil {
-		qcfg, err := quick.NewLocalConfig(srvCfg)
-		if err != nil {
-			return nil, err
-		}
-
-		srvCfg.Config = qcfg
-		return srvCfg, nil
-	}
-
-	qcfg, err := quick.NewEtcdConfig(srvCfg, globalEtcdClient)
+	qcfg, err := quick.NewConfig(srvCfg, globalEtcdClient)
 	if err != nil {
 		return nil, err
 	}

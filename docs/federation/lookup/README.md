@@ -4,7 +4,7 @@ There are primarily two types of federation
 - Bucket lookup from DNS
 - Bucket is shared across many clusters
 
-This document will explain in detail about how to configure Minio supporting `Bucket lookup`
+This document will explain about how to configure Minio to support `Bucket lookup from DNS` style federation.
 
 ## Federation (Bucket Lookup)
 Bucket lookup federation requires two dependencies
@@ -33,15 +33,17 @@ minio server http://rack{5...8}.host{5...8}.domain.com/mnt/export{1...32}
 ```
 
 In this configuration you can see `MINIO_ETCD_ENDPOINTS` points to the etcd backend which manages Minio's
-`config.json` and bucket SRV records. `MINIO_DOMAIN` indicates the domain suffix for the bucket which
-will be used to resolve bucket from DNS. For example if you have a bucket such as `mybucket`, the
-client can use now `mybucket.domain.com` to directly resolve to the right cluster. `MINIO_PUBLIC_IP`
-points to the public IP address where each cluster might be accessible, this is unique per each cluster.
+`config.json` and bucket DNS SRV records. `MINIO_DOMAIN` indicates the domain suffix for the bucket which
+will be used to resolve bucket through DNS. For example if you have a bucket such as `mybucket`, the
+client can use now `mybucket.domain.com` to directly resolve itself to the right cluster. `MINIO_PUBLIC_IP`
+points to the public IP address where each cluster might be accessible, this is unique for each cluster.
 
-NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this is truly random and
+NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this is random and
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then
-it is truly random which cluster might provision the bucket. This control is not provided to the
-client yet, but can be done based on the `region` parameter as supported by `AWS S3` specification.
+it is randomized which cluster might provision the bucket.
+
+TODO: For now the control to create the bucket from a client to the right cluster using `region` paramter
+is not implemented yet.
 
 
 

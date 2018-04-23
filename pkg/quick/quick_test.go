@@ -36,7 +36,7 @@ func TestReadVersion(t *testing.T) {
 		Version string
 	}
 	saveMe := myStruct{"1"}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestReadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	version, err := GetLocalVersion("test.json")
+	version, err := GetVersion("test.json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestReadVersionErr(t *testing.T) {
 		Version int
 	}
 	saveMe := myStruct{1}
-	_, err := NewLocalConfig(&saveMe)
+	_, err := NewConfig(&saveMe, nil)
 	if err == nil {
 		t.Fatal("Unexpected should fail in initialization for bad input")
 	}
@@ -69,7 +69,7 @@ func TestReadVersionErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = GetLocalVersion("test.json")
+	_, err = GetVersion("test.json", nil)
 	if err == nil {
 		t.Fatal("Unexpected should fail to fetch version")
 	}
@@ -79,7 +79,7 @@ func TestReadVersionErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = GetLocalVersion("test.json")
+	_, err = GetVersion("test.json", nil)
 	if err == nil {
 		t.Fatal("Unexpected should fail to fetch version")
 	}
@@ -95,7 +95,7 @@ func TestSaveFailOnDir(t *testing.T) {
 		Version string
 	}
 	saveMe := myStruct{"1"}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestLoadFile(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{}
-	_, err := LoadLocalConfig("test.json", &saveMe)
+	_, err := LoadConfig("test.json", nil, &saveMe)
 	if err == nil {
 		t.Fatal(err)
 	}
@@ -167,11 +167,11 @@ func TestLoadFile(t *testing.T) {
 	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = LoadLocalConfig("test.json", &saveMe)
+	_, err = LoadConfig("test.json", nil, &saveMe)
 	if err == nil {
 		t.Fatal("Unexpected should fail to load empty JSON")
 	}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestLoadFile(t *testing.T) {
 	}
 
 	saveMe = myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err = NewLocalConfig(&saveMe)
+	config, err = NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestLoadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	saveMe1 := myStruct{}
-	_, err = LoadLocalConfig("test.json", &saveMe1)
+	_, err = LoadConfig("test.json", nil, &saveMe1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ directories:
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ directories:
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = NewLocalConfig(&loadMe)
+	config, err = NewConfig(&loadMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestJSONFormat(t *testing.T) {
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestJSONFormat(t *testing.T) {
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = NewLocalConfig(&loadMe)
+	config, err = NewConfig(&loadMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestSaveLoad(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestSaveLoad(t *testing.T) {
 	}
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := NewLocalConfig(&loadMe)
+	newConfig, err := NewConfig(&loadMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestSaveBackup(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestSaveBackup(t *testing.T) {
 	}
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := NewLocalConfig(&loadMe)
+	newConfig, err := NewConfig(&loadMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +424,7 @@ func TestSaveBackup(t *testing.T) {
 		t.Fatal("Expected to mismatch but succeeded instead")
 	}
 
-	config, err = NewLocalConfig(&mismatch)
+	config, err = NewConfig(&mismatch, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,20 +442,20 @@ func TestDiff(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	type myNewLocalConfigStruct struct {
+	type myNewConfigStruct struct {
 		Version string
 		// User     string
 		Password    string
 		Directories []string
 	}
 
-	mismatch := myNewLocalConfigStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := NewLocalConfig(&mismatch)
+	mismatch := myNewConfigStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
+	newConfig, err := NewConfig(&mismatch, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,13 +482,13 @@ func TestDeepDiff(t *testing.T) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := NewLocalConfig(&saveMe)
+	config, err := NewConfig(&saveMe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	mismatch := myStruct{"1", "Guest", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := NewLocalConfig(&mismatch)
+	newConfig, err := NewConfig(&mismatch, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
