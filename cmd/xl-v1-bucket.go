@@ -163,11 +163,6 @@ func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucket
 		return bi, e
 	}
 	defer bucketLock.RUnlock()
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return bi, BucketNameInvalid{Bucket: bucket}
-	}
-
 	bucketInfo, err := xl.getBucketInfo(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -228,17 +223,11 @@ func (xl xlObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 
 // DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
-
 	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}
 	defer bucketLock.Unlock()
-
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
 
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}

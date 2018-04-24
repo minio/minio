@@ -195,13 +195,9 @@ func (fs *FSObjects) ClearLocks(ctx context.Context, info []VolumeLockInfo) erro
 // corresponding valid bucket names on the backend in a platform
 // compatible way for all operating systems.
 func (fs *FSObjects) getBucketDir(ctx context.Context, bucket string) (string, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		err := BucketNameInvalid{Bucket: bucket}
-		logger.LogIf(ctx, err)
-		return "", err
+	if bucket == "" || bucket == "." || bucket == ".." {
+		return "", errVolumeNotFound
 	}
-
 	bucketDir := pathJoin(fs.fsPath, bucket)
 	return bucketDir, nil
 }
@@ -226,6 +222,12 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 		return err
 	}
 	defer bucketLock.Unlock()
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		err := BucketNameInvalid{Bucket: bucket}
+		logger.LogIf(ctx, err)
+		return err
+	}
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
