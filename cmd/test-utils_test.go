@@ -53,12 +53,12 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // Tests should initNSLock only once.
@@ -354,8 +354,11 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, testServer.Disks)
 	if err != nil {
-		t.Fatalf("Unable to initialize queue configuration")
+		t.Fatalf("Unable to create new notification system. %v", err)
 	}
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	return testServer
 }
@@ -1715,16 +1718,13 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return xl.storageDisks
 	}
 
-	// Initialize and load bucket policies.
-	xl.bucketPolicies, err = initBucketPolicies(xl)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize a new event notifier.
+	// Create new notification system.
 	if globalNotificationSys, err = NewNotificationSys(globalServerConfig, endpoints); err != nil {
 		return nil, err
 	}
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	return xl, nil
 }
@@ -1821,7 +1821,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 //   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
 //           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, policyFunc func(string, string) policy.Statement) {
+	anonReq *http.Request, bucketPolicy *policy.Policy) {
 
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
@@ -1863,7 +1863,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// HEAD HTTTP request doesn't contain response body.
 	if anonReq.Method != "HEAD" {
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		var actualContent []byte
+		actualContent, err = ioutil.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
@@ -1872,13 +1873,13 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 			t.Fatal(failTestStr(anonTestStr, "error response content differs from expected value"))
 		}
 	}
-	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
-	// request to go through.
-	bp := policy.BucketAccessPolicy{
-		Version:    "1.0",
-		Statements: []policy.Statement{policyFunc(bucketName, "")},
+
+	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
+		t.Fatalf("unexpected error. %v", err)
 	}
-	obj.SetBucketPolicy(context.Background(), bucketName, bp)
+	globalPolicySys.Set(bucketName, *bucketPolicy)
+	defer globalPolicySys.Remove(bucketName)
+
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 

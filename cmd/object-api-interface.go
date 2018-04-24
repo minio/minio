@@ -21,9 +21,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // ObjectLayer implements primitives for object API layer.
@@ -70,9 +70,8 @@ type ObjectLayer interface {
 	ClearLocks(context.Context, []VolumeLockInfo) error
 
 	// Policy operations
-	SetBucketPolicy(context.Context, string, policy.BucketAccessPolicy) error
-	GetBucketPolicy(context.Context, string) (policy.BucketAccessPolicy, error)
-	RefreshBucketPolicy(context.Context, string) error
+	SetBucketPolicy(context.Context, string, *policy.Policy) error
+	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
 	DeleteBucketPolicy(context.Context, string) error
 
 	// Supported operations check

@@ -181,6 +181,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 		return nil, err
 	}
 
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
+
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
 	registerAdminRouter(adminRouter)

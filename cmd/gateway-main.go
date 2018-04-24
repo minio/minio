@@ -167,9 +167,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
-	// Initialize notification system.
+	// Create new notification system.
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, EndpointList{})
-	logger.FatalIf(err, "Unable to initialize notification system.")
+	logger.FatalIf(err, "Unable to create new notification system.")
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
 	logger.FatalIf(err, "Unable to initialize gateway layer")

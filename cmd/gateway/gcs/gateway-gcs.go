@@ -33,10 +33,12 @@ import (
 	"cloud.google.com/go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/condition"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -1132,10 +1134,16 @@ func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string,
 }
 
 // SetBucketPolicy - Set policy on bucket
-func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	var policies []minio.BucketAccessPolicy
+func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
+	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
+	if err != nil {
+		// This should not happen.
+		logger.LogIf(ctx, err)
+		return gcsToObjectError(err, bucket)
+	}
 
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket, "") {
+	var policies []minio.BucketAccessPolicy
+	for prefix, policy := range miniogopolicy.GetPolicies(policyInfo.Statements, bucket, "") {
 		policies = append(policies, minio.BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,
@@ -1154,7 +1162,7 @@ func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, policyI
 	}
 
 	acl := l.client.Bucket(bucket).ACL()
-	if policies[0].Policy == policy.BucketPolicyNone {
+	if policies[0].Policy == miniogopolicy.BucketPolicyNone {
 		if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
 			logger.LogIf(ctx, err)
 			return gcsToObjectError(err, bucket)
@@ -1164,9 +1172,9 @@ func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, policyI
 
 	var role storage.ACLRole
 	switch policies[0].Policy {
-	case policy.BucketPolicyReadOnly:
+	case miniogopolicy.BucketPolicyReadOnly:
 		role = storage.RoleReader
-	case policy.BucketPolicyWriteOnly:
+	case miniogopolicy.BucketPolicyWriteOnly:
 		role = storage.RoleWriter
 	default:
 		logger.LogIf(ctx, minio.NotImplemented{})
@@ -1182,30 +1190,63 @@ func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, policyI
 }
 
 // GetBucketPolicy - Get policy on bucket
-func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
+func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return policy.BucketAccessPolicy{}, gcsToObjectError(err, bucket)
+		return nil, gcsToObjectError(err, bucket)
 	}
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
+
+	var readOnly, writeOnly bool
 	for _, r := range rules {
 		if r.Entity != storage.AllUsers || r.Role == storage.RoleOwner {
 			continue
 		}
+
 		switch r.Role {
 		case storage.RoleReader:
-			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
+			readOnly = true
 		case storage.RoleWriter:
-			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyWriteOnly, bucket, "")
+			writeOnly = true
 		}
 	}
-	// Return NoSuchBucketPolicy error, when policy is not set
-	if len(policyInfo.Statements) == 0 {
-		logger.LogIf(ctx, minio.PolicyNotFound{})
-		return policy.BucketAccessPolicy{}, gcsToObjectError(minio.PolicyNotFound{}, bucket)
+
+	actionSet := policy.NewActionSet()
+	if readOnly {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketAction)
+		actionSet.Add(policy.GetObjectAction)
 	}
-	return policyInfo, nil
+	if writeOnly {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketMultipartUploadsAction)
+		actionSet.Add(policy.AbortMultipartUploadAction)
+		actionSet.Add(policy.DeleteObjectAction)
+		actionSet.Add(policy.ListMultipartUploadPartsAction)
+		actionSet.Add(policy.PutObjectAction)
+	}
+
+	// Return NoSuchBucketPolicy error, when policy is not set
+	if len(actionSet) == 0 {
+		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
+		return nil, gcsToObjectError(minio.BucketPolicyNotFound{}, bucket)
+	}
+
+	return &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				actionSet,
+				policy.NewResourceSet(
+					policy.NewResource(bucket, ""),
+					policy.NewResource(bucket, "*"),
+				),
+				condition.NewFunctions(),
+			),
+		},
+	}, nil
 }
 
 // DeleteBucketPolicy - Delete all policies on bucket

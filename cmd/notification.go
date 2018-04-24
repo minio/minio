@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -30,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // NotificationSys - notification system.
@@ -75,15 +77,33 @@ func (sys *NotificationSys) DeleteBucket(bucketName string) map[xnet.Host]error 
 	return errors
 }
 
-// UpdateBucketPolicy - calls UpdateBucketPolicy RPC call on all peers.
-func (sys *NotificationSys) UpdateBucketPolicy(bucketName string) map[xnet.Host]error {
+// SetBucketPolicy - calls SetBucketPolicy RPC call on all peers.
+func (sys *NotificationSys) SetBucketPolicy(bucketName string, bucketPolicy *policy.Policy) map[xnet.Host]error {
 	errors := make(map[xnet.Host]error)
 	var wg sync.WaitGroup
 	for addr, client := range sys.peerRPCClientMap {
 		wg.Add(1)
 		go func(addr xnet.Host, client *PeerRPCClient) {
 			defer wg.Done()
-			if err := client.UpdateBucketPolicy(bucketName); err != nil {
+			if err := client.SetBucketPolicy(bucketName, bucketPolicy); err != nil {
+				errors[addr] = err
+			}
+		}(addr, client)
+	}
+	wg.Wait()
+
+	return errors
+}
+
+// RemoveBucketPolicy - calls RemoveBucketPolicy RPC call on all peers.
+func (sys *NotificationSys) RemoveBucketPolicy(bucketName string) map[xnet.Host]error {
+	errors := make(map[xnet.Host]error)
+	var wg sync.WaitGroup
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient) {
+			defer wg.Done()
+			if err := client.RemoveBucketPolicy(bucketName); err != nil {
 				errors[addr] = err
 			}
 		}(addr, client)
@@ -182,7 +202,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	defer objLock.Unlock()
 
 	reader, e := readConfig(ctx, objAPI, configFile)
-	if e != nil && !IsErrIgnored(e, errDiskNotFound, errNoSuchNotifications) {
+	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
 		return e
 	}
 
@@ -433,7 +453,7 @@ func (args eventArgs) ToEvent() event.Event {
 			Bucket: event.Bucket{
 				Name:          args.BucketName,
 				OwnerIdentity: event.Identity{creds.AccessKey},
-				ARN:           bucketARNPrefix + args.BucketName,
+				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{
 				Key:       url.QueryEscape(args.Object.Name),
@@ -483,6 +503,8 @@ func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
 	return err
 }
 
+var errConfigNotFound = errors.New("config file not found")
+
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
@@ -490,8 +512,9 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*by
 	if err != nil {
 		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errNoSuchNotifications
+			return nil, errConfigNotFound
 		}
+
 		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
 		logger.LogIf(ctx, err)
 		return nil, err
@@ -510,6 +533,10 @@ func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
 	reader, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
+		if err == errConfigNotFound {
+			err = errNoSuchNotifications
+		}
+
 		return nil, err
 	}
 
@@ -551,7 +578,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	defer objLock.Unlock()
 
 	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 
@@ -602,7 +629,7 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	defer objLock.Unlock()
 
 	reader, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 

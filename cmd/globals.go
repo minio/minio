@@ -120,6 +120,7 @@ var (
 	globalMinioHost = ""
 
 	globalNotificationSys *NotificationSys
+	globalPolicySys       *PolicySys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool

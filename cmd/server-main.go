@@ -239,9 +239,12 @@ func serverMain(ctx *cli.Context) {
 	handler, err = configureServerHandler(globalEndpoints)
 	logger.FatalIf(err, "Unable to configure one of server's RPC services.")
 
-	// Initialize notification system.
+	// Create new notification system.
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	logger.FatalIf(err, "Unable to initialize notification system.")
+	logger.FatalIf(err, "Unable to create new notification system.")
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
