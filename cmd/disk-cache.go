@@ -289,12 +289,20 @@ func listDirCacheFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks [
 	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string, err error) {
 		var entries []string
 		for _, disk := range disks {
+			// ignore disk-caches that might be missing/offline
+			if disk == nil {
+				continue
+			}
 			fs := disk.FSObjects
 			entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
+
+			// For any reason disk was deleted or goes offline, continue
+			// and list from other disks if possible.
 			if err != nil {
-				// For any reason disk was deleted or goes offline, continue
-				// and list from other disks if possible.
-				continue
+				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
+					continue
+				}
+				return nil, err
 			}
 
 			// Filter entries that have the prefix prefixEntry.
@@ -377,16 +385,16 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			var err error
 			fs, err := c.cache.getCacheFS(ctx, bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound
-				if err == errFileNotFound {
+				// Ignore errDiskNotFound
+				if err == errDiskNotFound {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)
 			}
 			objInfo, err = fs.getObjectInfo(ctx, bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound
-				if err == errFileNotFound {
+				// Ignore ObjectNotFound error
+				if _, ok := err.(ObjectNotFound); ok {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)
@@ -469,6 +477,10 @@ func (c cacheObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continu
 func (c cacheObjects) listBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
 	m := make(map[string]string)
 	for _, cache := range c.cache.cfs {
+		// ignore disk-caches that might be missing/offline
+		if cache == nil {
+			continue
+		}
 		entries, err := cache.ListBuckets(ctx)
 
 		if err != nil {
@@ -507,6 +519,10 @@ func (c cacheObjects) GetBucketInfo(ctx context.Context, bucket string) (bucketI
 	bucketInfo, err = getBucketInfoFn(ctx, bucket)
 	if backendDownError(err) {
 		for _, cache := range c.cache.cfs {
+			// ignore disk-caches that might be missing/offline
+			if cache == nil {
+				continue
+			}
 			if bucketInfo, err = cache.GetBucketInfo(ctx, bucket); err == nil {
 				return
 			}
@@ -772,6 +788,10 @@ func (c cacheObjects) DeleteBucket(ctx context.Context, bucket string) (err erro
 	deleteBucketFn := c.DeleteBucketFn
 	var toDel []*cacheFSObjects
 	for _, cfs := range c.cache.cfs {
+		// ignore disk-caches that might be missing/offline
+		if cfs == nil {
+			continue
+		}
 		if _, cerr := cfs.GetBucketInfo(ctx, bucket); cerr == nil {
 			toDel = append(toDel, cfs)
 		}
