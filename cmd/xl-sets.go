@@ -21,17 +21,16 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -76,9 +75,6 @@ type xlSets struct {
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
-
-	// Variable represents bucket policies in memory.
-	bucketPolicies *bucketPolicies
 
 	// Pack level listObjects pool management.
 	listPool *treeWalkPool
@@ -263,16 +259,14 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 	// Connect disks right away.
 	s.connectDisks()
 
-	// Initialize and load bucket policies.
-	var err error
-	s.bucketPolicies, err = initBucketPolicies(s)
-	if err != nil {
-		return nil, err
+	// Initialize notification system.
+	if err := globalNotificationSys.Init(s); err != nil {
+		return nil, fmt.Errorf("Unable to initialize notification system. %v", err)
 	}
 
-	// Initialize notification system.
-	if err = globalNotificationSys.Init(s); err != nil {
-		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
+	// Initialize policy system.
+	if err := globalPolicySys.Init(s); err != nil {
+		return nil, fmt.Errorf("Unable to initialize policy system. %v", err)
 	}
 
 	// Start the disk monitoring and connect routine.
@@ -473,35 +467,18 @@ func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuation
 }
 
 // SetBucketPolicy persist the new policy on the bucket.
-func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, false, policy, s)
+func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	return savePolicyConfig(s, bucket, policy)
 }
 
 // GetBucketPolicy will return a policy on a bucket
-func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	// fetch bucket policy from cache.
-	bpolicy := s.bucketPolicies.GetBucketPolicy(bucket)
-	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
-		return ReadBucketPolicy(bucket, s)
-	}
-	return bpolicy, nil
+func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return GetPolicyConfig(s, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, true, emptyBucketPolicy, s)
-}
-
-// RefreshBucketPolicy refreshes policy cache from disk
-func (s *xlSets) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	policy, err := ReadBucketPolicy(bucket, s)
-	if err != nil {
-		if reflect.DeepEqual(policy, emptyBucketPolicy) {
-			return s.bucketPolicies.DeleteBucketPolicy(bucket)
-		}
-		return err
-	}
-	return s.bucketPolicies.SetBucketPolicy(bucket, policy)
+	return removePolicyConfig(ctx, s, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

@@ -30,11 +30,13 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/condition"
 )
 
 const (
@@ -962,8 +964,14 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 // oss.ACLPublicReadWrite: readwrite in minio terminology
 // oss.ACLPublicRead: readonly in minio terminology
 // oss.ACLPrivate: none in minio terminology
-func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	bucketPolicies := policy.GetPolicies(policyInfo.Statements, bucket, "")
+func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
+	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
+	if err != nil {
+		// This should not happen.
+		return ossToObjectError(err, bucket)
+	}
+
+	bucketPolicies := miniogopolicy.GetPolicies(policyInfo.Statements, bucket, "")
 	if len(bucketPolicies) != 1 {
 		logger.LogIf(ctx, minio.NotImplemented{})
 		return minio.NotImplemented{}
@@ -978,11 +986,11 @@ func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, policyI
 
 		var acl oss.ACLType
 		switch bucketPolicy {
-		case policy.BucketPolicyNone:
+		case miniogopolicy.BucketPolicyNone:
 			acl = oss.ACLPrivate
-		case policy.BucketPolicyReadOnly:
+		case miniogopolicy.BucketPolicyReadOnly:
 			acl = oss.ACLPublicRead
-		case policy.BucketPolicyReadWrite:
+		case miniogopolicy.BucketPolicyReadWrite:
 			acl = oss.ACLPublicReadWrite
 		default:
 			logger.LogIf(ctx, minio.NotImplemented{})
@@ -1000,29 +1008,60 @@ func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, policyI
 }
 
 // GetBucketPolicy will get policy on bucket.
-func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
+func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	result, err := l.Client.GetBucketACL(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return policy.BucketAccessPolicy{}, ossToObjectError(err)
+		return nil, ossToObjectError(err)
 	}
 
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
+	var readOnly, readWrite bool
 	switch result.ACL {
 	case string(oss.ACLPrivate):
 		// By default, all buckets starts with a "private" policy.
-		logger.LogIf(ctx, minio.PolicyNotFound{})
-		return policy.BucketAccessPolicy{}, ossToObjectError(minio.PolicyNotFound{}, bucket)
+		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
+		return nil, ossToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	case string(oss.ACLPublicRead):
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
+		readOnly = true
 	case string(oss.ACLPublicReadWrite):
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadWrite, bucket, "")
+		readWrite = true
 	default:
 		logger.LogIf(ctx, minio.NotImplemented{})
-		return policy.BucketAccessPolicy{}, minio.NotImplemented{}
+		return nil, minio.NotImplemented{}
 	}
 
-	return policyInfo, nil
+	actionSet := policy.NewActionSet()
+	if readOnly {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketAction)
+		actionSet.Add(policy.GetObjectAction)
+	}
+	if readWrite {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketAction)
+		actionSet.Add(policy.GetObjectAction)
+		actionSet.Add(policy.ListBucketMultipartUploadsAction)
+		actionSet.Add(policy.AbortMultipartUploadAction)
+		actionSet.Add(policy.DeleteObjectAction)
+		actionSet.Add(policy.ListMultipartUploadPartsAction)
+		actionSet.Add(policy.PutObjectAction)
+	}
+
+	return &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				actionSet,
+				policy.NewResourceSet(
+					policy.NewResource(bucket, ""),
+					policy.NewResource(bucket, "*"),
+				),
+				condition.NewFunctions(),
+			),
+		},
+	}, nil
 }
 
 // DeleteBucketPolicy deletes all policies on bucket.

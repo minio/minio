@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/policy"
 )
 
 const s3Path = "/s3/remote"
@@ -43,23 +44,33 @@ type DeleteBucketArgs struct {
 // DeleteBucket - handles delete bucket RPC call which removes all values of given bucket in global NotificationSys object.
 func (receiver *PeerRPCReceiver) DeleteBucket(args *DeleteBucketArgs, reply *AuthRPCArgs) error {
 	globalNotificationSys.RemoveNotification(args.BucketName)
+	globalPolicySys.Remove(args.BucketName)
 	return nil
 }
 
-// UpdateBucketPolicyArgs - update bucket policy RPC arguments.
-type UpdateBucketPolicyArgs struct {
+// SetBucketPolicyArgs - set bucket policy RPC arguments.
+type SetBucketPolicyArgs struct {
+	AuthRPCArgs
+	BucketName string
+	Policy     policy.Policy
+}
+
+// SetBucketPolicy - handles set bucket policy RPC call which adds bucket policy to globalPolicySys.
+func (receiver *PeerRPCReceiver) SetBucketPolicy(args *SetBucketPolicyArgs, reply *AuthRPCArgs) error {
+	globalPolicySys.Set(args.BucketName, args.Policy)
+	return nil
+}
+
+// RemoveBucketPolicyArgs - delete bucket policy RPC arguments.
+type RemoveBucketPolicyArgs struct {
 	AuthRPCArgs
 	BucketName string
 }
 
-// UpdateBucketPolicy - handles update bucket policy RPC call which sets bucket policies to given bucket in global BucketPolicies object.
-func (receiver *PeerRPCReceiver) UpdateBucketPolicy(args *UpdateBucketPolicyArgs, reply *AuthRPCArgs) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		// If the object layer is just coming up then it will load the policy from the disk.
-		return nil
-	}
-	return objectAPI.RefreshBucketPolicy(context.Background(), args.BucketName)
+// RemoveBucketPolicy - handles delete bucket policy RPC call which removes bucket policy to globalPolicySys.
+func (receiver *PeerRPCReceiver) RemoveBucketPolicy(args *RemoveBucketPolicyArgs, reply *AuthRPCArgs) error {
+	globalPolicySys.Remove(args.BucketName)
+	return nil
 }
 
 // PutBucketNotificationArgs - put bucket notification RPC arguments.
@@ -195,13 +206,23 @@ func (rpcClient *PeerRPCClient) DeleteBucket(bucketName string) error {
 	return rpcClient.Call("Peer.DeleteBucket", &args, &reply)
 }
 
-// UpdateBucketPolicy - calls update bucket policy RPC.
-func (rpcClient *PeerRPCClient) UpdateBucketPolicy(bucketName string) error {
-	args := UpdateBucketPolicyArgs{
+// SetBucketPolicy - calls set bucket policy RPC.
+func (rpcClient *PeerRPCClient) SetBucketPolicy(bucketName string, bucketPolicy *policy.Policy) error {
+	args := SetBucketPolicyArgs{
+		BucketName: bucketName,
+		Policy:     *bucketPolicy,
+	}
+	reply := AuthRPCReply{}
+	return rpcClient.Call("Peer.SetBucketPolicy", &args, &reply)
+}
+
+// RemoveBucketPolicy - calls remove bucket policy RPC.
+func (rpcClient *PeerRPCClient) RemoveBucketPolicy(bucketName string) error {
+	args := RemoveBucketPolicyArgs{
 		BucketName: bucketName,
 	}
 	reply := AuthRPCReply{}
-	return rpcClient.Call("Peer.UpdateBucketPolicy", &args, &reply)
+	return rpcClient.Call("Peer.RemoveBucketPolicy", &args, &reply)
 }
 
 // PutBucketNotification - calls put bukcet notification RPC.

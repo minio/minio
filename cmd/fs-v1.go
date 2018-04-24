@@ -24,16 +24,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // FSObjects - Implements fs object layer.
@@ -60,9 +59,6 @@ type FSObjects struct {
 
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
-
-	// Variable represents bucket policies in memory.
-	bucketPolicies *bucketPolicies
 }
 
 // Represents the background append file.
@@ -139,15 +135,14 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
 
-	// Initialize and load bucket policies.
-	fs.bucketPolicies, err = initBucketPolicies(fs)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to load all bucket policies. %s", err)
-	}
-
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(fs); err != nil {
-		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
+		return nil, fmt.Errorf("Unable to initialize notification system. %v", err)
+	}
+
+	// Initialize policy system.
+	if err = globalPolicySys.Init(fs); err != nil {
+		return nil, fmt.Errorf("Unable to initialize policy system. %v", err)
 	}
 
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
@@ -1058,22 +1053,18 @@ func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) 
 }
 
 // SetBucketPolicy sets policy on bucket
-func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, false, policy, fs)
+func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	return savePolicyConfig(fs, bucket, policy)
 }
 
 // GetBucketPolicy will get policy on bucket
-func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	policy := fs.bucketPolicies.GetBucketPolicy(bucket)
-	if reflect.DeepEqual(policy, emptyBucketPolicy) {
-		return ReadBucketPolicy(bucket, fs)
-	}
-	return policy, nil
+func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return GetPolicyConfig(fs, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, true, emptyBucketPolicy, fs)
+	return removePolicyConfig(ctx, fs, bucket)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
@@ -1091,19 +1082,6 @@ func (fs *FSObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 		Prefixes:              loi.Prefixes,
 	}
 	return listObjectsV2Info, err
-}
-
-// RefreshBucketPolicy refreshes cache policy with what's on disk.
-func (fs *FSObjects) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	policy, err := ReadBucketPolicy(bucket, fs)
-
-	if err != nil {
-		if reflect.DeepEqual(policy, emptyBucketPolicy) {
-			return fs.bucketPolicies.DeleteBucketPolicy(bucket)
-		}
-		return err
-	}
-	return fs.bucketPolicies.SetBucketPolicy(bucket, policy)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

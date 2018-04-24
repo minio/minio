@@ -85,7 +85,7 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 
 func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer) {
 	// Delete bucket access policy, if present - ignore any errors.
-	removeBucketPolicy(ctx, bucket, objAPI)
+	removePolicyConfig(ctx, objAPI, bucket)
 
 	// Delete notification config, if present - ignore any errors.
 	removeNotificationConfig(ctx, objAPI, bucket)

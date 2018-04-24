@@ -34,10 +34,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/condition"
 	sha256 "github.com/minio/sha256-simd"
 
 	minio "github.com/minio/minio/cmd"
@@ -1020,10 +1022,16 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 // storage.ContainerAccessTypePrivate - none in minio terminology
 // As the common denominator for minio and azure is readonly and none, we support
 // these two policies at the bucket level.
-func (a *azureObjects) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	var policies []minio.BucketAccessPolicy
+func (a *azureObjects) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
+	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
+	if err != nil {
+		// This should not happen.
+		logger.LogIf(ctx, err)
+		return azureToObjectError(err, bucket)
+	}
 
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket, "") {
+	var policies []minio.BucketAccessPolicy
+	for prefix, policy := range miniogopolicy.GetPolicies(policyInfo.Statements, bucket, "") {
 		policies = append(policies, minio.BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,
@@ -1038,7 +1046,7 @@ func (a *azureObjects) SetBucketPolicy(ctx context.Context, bucket string, polic
 		logger.LogIf(ctx, minio.NotImplemented{})
 		return minio.NotImplemented{}
 	}
-	if policies[0].Policy != policy.BucketPolicyReadOnly {
+	if policies[0].Policy != miniogopolicy.BucketPolicyReadOnly {
 		logger.LogIf(ctx, minio.NotImplemented{})
 		return minio.NotImplemented{}
 	}
@@ -1047,31 +1055,47 @@ func (a *azureObjects) SetBucketPolicy(ctx context.Context, bucket string, polic
 		AccessPolicies: nil,
 	}
 	container := a.client.GetContainerReference(bucket)
-	err := container.SetPermissions(perm, nil)
+	err = container.SetPermissions(perm, nil)
 	logger.LogIf(ctx, err)
 	return azureToObjectError(err, bucket)
 }
 
 // GetBucketPolicy - Get the container ACL and convert it to canonical []bucketAccessPolicy
-func (a *azureObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
+func (a *azureObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	container := a.client.GetContainerReference(bucket)
 	perm, err := container.GetPermissions(nil)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return policy.BucketAccessPolicy{}, azureToObjectError(err, bucket)
+		return nil, azureToObjectError(err, bucket)
 	}
-	switch perm.AccessType {
-	case storage.ContainerAccessTypePrivate:
-		logger.LogIf(ctx, minio.PolicyNotFound{Bucket: bucket})
-		return policy.BucketAccessPolicy{}, minio.PolicyNotFound{Bucket: bucket}
-	case storage.ContainerAccessTypeContainer:
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
-	default:
+
+	if perm.AccessType == storage.ContainerAccessTypePrivate {
+		logger.LogIf(ctx, minio.BucketPolicyNotFound{Bucket: bucket})
+		return nil, minio.BucketPolicyNotFound{Bucket: bucket}
+	} else if perm.AccessType != storage.ContainerAccessTypeContainer {
 		logger.LogIf(ctx, minio.NotImplemented{})
-		return policy.BucketAccessPolicy{}, azureToObjectError(minio.NotImplemented{})
+		return nil, azureToObjectError(minio.NotImplemented{})
 	}
-	return policyInfo, nil
+
+	return &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(
+					policy.GetBucketLocationAction,
+					policy.ListBucketAction,
+					policy.GetObjectAction,
+				),
+				policy.NewResourceSet(
+					policy.NewResource(bucket, ""),
+					policy.NewResource(bucket, "*"),
+				),
+				condition.NewFunctions(),
+			),
+		},
+	}, nil
 }
 
 // DeleteBucketPolicy - Set the container ACL to "private"

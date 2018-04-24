@@ -37,9 +37,10 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio-go/pkg/set"
+	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/condition"
 )
 
 // Implement a dummy flush writer.
@@ -555,12 +556,22 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Expected error `%s`", err)
 	}
 
-	policy := policy.BucketAccessPolicy{
-		Version:    "1.0",
-		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
+	bucketPolicy := &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{policy.NewStatement(
+			policy.Allow,
+			policy.NewPrincipal("*"),
+			policy.NewActionSet(policy.GetObjectAction),
+			policy.NewResourceSet(policy.NewResource(bucketName, "*")),
+			condition.NewFunctions(),
+		)},
 	}
 
-	obj.SetBucketPolicy(context.Background(), bucketName, policy)
+	if err = obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
+		t.Fatalf("unexpected error. %v", err)
+	}
+	globalPolicySys.Set(bucketName, *bucketPolicy)
+	defer globalPolicySys.Remove(bucketName)
 
 	// Unauthenticated ListObjects with READ bucket policy should succeed.
 	err, reply = test("")
@@ -929,12 +940,22 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
 
-	bp := policy.BucketAccessPolicy{
-		Version:    "1.0",
-		Statements: []policy.Statement{getWriteOnlyObjectStatement(bucketName, "")},
+	bucketPolicy := &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{policy.NewStatement(
+			policy.Allow,
+			policy.NewPrincipal("*"),
+			policy.NewActionSet(policy.PutObjectAction),
+			policy.NewResourceSet(policy.NewResource(bucketName, "*")),
+			condition.NewFunctions(),
+		)},
 	}
 
-	obj.SetBucketPolicy(context.Background(), bucketName, bp)
+	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
+		t.Fatalf("unexpected error. %v", err)
+	}
+	globalPolicySys.Set(bucketName, *bucketPolicy)
+	defer globalPolicySys.Remove(bucketName)
 
 	// Unauthenticated upload with WRITE policy should succeed.
 	code = test("", true)
@@ -1036,12 +1057,22 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
 
-	bp := policy.BucketAccessPolicy{
-		Version:    "1.0",
-		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
+	bucketPolicy := &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{policy.NewStatement(
+			policy.Allow,
+			policy.NewPrincipal("*"),
+			policy.NewActionSet(policy.GetObjectAction),
+			policy.NewResourceSet(policy.NewResource(bucketName, "*")),
+			condition.NewFunctions(),
+		)},
 	}
 
-	obj.SetBucketPolicy(context.Background(), bucketName, bp)
+	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
+		t.Fatalf("unexpected error. %v", err)
+	}
+	globalPolicySys.Set(bucketName, *bucketPolicy)
+	defer globalPolicySys.Remove(bucketName)
 
 	// Unauthenticated download with READ policy should succeed.
 	code, bodyContent = test("")
@@ -1260,43 +1291,40 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	rec := httptest.NewRecorder()
 
 	bucketName := getRandomBucketName()
-	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	policyVal := policy.BucketAccessPolicy{
-		Version: "2012-10-17",
+	bucketPolicy := &policy.Policy{
+		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
-			{
-				Actions: set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
-				Effect:  "Allow",
-				Principal: policy.User{
-					AWS: set.CreateStringSet("*"),
-				},
-				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
-				Sid:       "",
-			},
-			{
-				Actions: set.CreateStringSet("s3:GetObject"),
-				Effect:  "Allow",
-				Principal: policy.User{
-					AWS: set.CreateStringSet("*"),
-				},
-				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/*"),
-				Sid:       "",
-			},
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(),
+			),
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.GetObjectAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "*")),
+				condition.NewFunctions(),
+			),
 		},
 	}
-	if err := writeBucketPolicy(context.Background(), bucketName, obj, policyVal); err != nil {
+
+	if err = savePolicyConfig(obj, bucketName, bucketPolicy); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	testCases := []struct {
 		bucketName     string
 		prefix         string
-		expectedResult policy.BucketPolicy
+		expectedResult miniogopolicy.BucketPolicy
 	}{
-		{bucketName, "", policy.BucketPolicyReadOnly},
+		{bucketName, "", miniogopolicy.BucketPolicyReadOnly},
 	}
 
 	for i, testCase := range testCases {
@@ -1338,57 +1366,63 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	bucketName := getRandomBucketName()
-	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	stringEqualsConditions := policy.ConditionMap{}
-	stringEqualsConditions["StringEquals"] = make(policy.ConditionKeyMap)
-	stringEqualsConditions["StringEquals"].Add("s3:prefix", set.CreateStringSet("hello"))
+	func1, err := condition.NewStringEqualsFunc(condition.S3Prefix, "hello")
+	if err != nil {
+		t.Fatalf("Unable to create string equals condition function. %v", err)
+	}
 
-	policyVal := policy.BucketAccessPolicy{
-		Version: "2012-10-17",
+	bucketPolicy := &policy.Policy{
+		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
-			{
-				Actions:   set.CreateStringSet("s3:GetBucketLocation"),
-				Effect:    "Allow",
-				Principal: policy.User{AWS: set.CreateStringSet("*")},
-				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
-				Sid:       "",
-			},
-			{
-				Actions:    set.CreateStringSet("s3:ListBucket"),
-				Conditions: stringEqualsConditions,
-				Effect:     "Allow",
-				Principal:  policy.User{AWS: set.CreateStringSet("*")},
-				Resources:  set.CreateStringSet(bucketARNPrefix + bucketName),
-				Sid:        "",
-			},
-			{
-				Actions:   set.CreateStringSet("s3:ListBucketMultipartUploads"),
-				Effect:    "Allow",
-				Principal: policy.User{AWS: set.CreateStringSet("*")},
-				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
-				Sid:       "",
-			},
-			{
-				Actions: set.CreateStringSet("s3:AbortMultipartUpload", "s3:DeleteObject",
-					"s3:GetObject", "s3:ListMultipartUploadParts", "s3:PutObject"),
-				Effect:    "Allow",
-				Principal: policy.User{AWS: set.CreateStringSet("*")},
-				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/hello*"),
-				Sid:       "",
-			},
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.GetBucketLocationAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(),
+			),
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.ListBucketAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(func1),
+			),
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(policy.ListBucketMultipartUploadsAction),
+				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				condition.NewFunctions(),
+			),
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				policy.NewActionSet(
+					policy.AbortMultipartUploadAction,
+					policy.DeleteObjectAction,
+					policy.GetObjectAction,
+					policy.ListMultipartUploadPartsAction,
+					policy.PutObjectAction,
+				),
+				policy.NewResourceSet(policy.NewResource(bucketName, "hello*")),
+				condition.NewFunctions(),
+			),
 		},
 	}
-	if err := writeBucketPolicy(context.Background(), bucketName, obj, policyVal); err != nil {
+
+	if err = savePolicyConfig(obj, bucketName, bucketPolicy); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	testCaseResult1 := []BucketAccessPolicy{{
 		Bucket: bucketName,
 		Prefix: "hello",
-		Policy: policy.BucketPolicyReadWrite,
+		Policy: miniogopolicy.BucketPolicyReadWrite,
 	}}
 	testCases := []struct {
 		bucketName     string
@@ -1460,7 +1494,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	}
 
 	for i, testCase := range testCases {
-		args := &SetBucketPolicyArgs{BucketName: testCase.bucketName, Prefix: testCase.prefix, Policy: testCase.policy}
+		args := &SetBucketPolicyWebArgs{BucketName: testCase.bucketName, Prefix: testCase.prefix, Policy: testCase.policy}
 		reply := &WebGenericRep{}
 		// Call SetBucketPolicy RPC
 		req, err := newTestWebRPCRequest("Web.SetBucketPolicy", authorization, args)
@@ -1719,7 +1753,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		{"ListBuckets", AuthRPCArgs{Version: globalRPCAPIVersion}, ListBucketsRep{}},
 		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
 		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
-		{"SetBucketPolicy", SetBucketPolicyArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
+		{"SetBucketPolicy", SetBucketPolicyWebArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
 	}
 
 	for _, rpcCall := range webRPCs {

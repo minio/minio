@@ -18,12 +18,11 @@ package cmd
 
 import (
 	"context"
-	"reflect"
 	"sort"
 	"sync"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -280,36 +279,18 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 }
 
 // SetBucketPolicy sets policy on bucket
-func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, false, policy, xl)
+func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	return savePolicyConfig(xl, bucket, policy)
 }
 
 // GetBucketPolicy will get policy on bucket
-func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	// fetch bucket policy from cache.
-	bpolicy := xl.bucketPolicies.GetBucketPolicy(bucket)
-	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
-		return ReadBucketPolicy(bucket, xl)
-	}
-	return bpolicy, nil
+func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return GetPolicyConfig(xl, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return persistAndNotifyBucketPolicyChange(ctx, bucket, true, emptyBucketPolicy, xl)
-}
-
-// RefreshBucketPolicy refreshes policy cache from disk
-func (xl xlObjects) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	policy, err := ReadBucketPolicy(bucket, xl)
-
-	if err != nil {
-		if reflect.DeepEqual(policy, emptyBucketPolicy) {
-			return xl.bucketPolicies.DeleteBucketPolicy(bucket)
-		}
-		return err
-	}
-	return xl.bucketPolicies.SetBucketPolicy(bucket, policy)
+	return removePolicyConfig(ctx, xl, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

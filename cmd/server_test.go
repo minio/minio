@@ -36,6 +36,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // API suite container common to both FS and XL.
@@ -319,7 +320,7 @@ func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *check) {
 // Deletes the policy and verifies the deletion by fetching it back.
 func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 	// Sample bucket policy.
-	bucketPolicyBuf := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation","s3:ListBucket"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s"],"Sid":""},{"Action":["s3:GetObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s/this*"],"Sid":""}]}`
+	bucketPolicyBuf := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation","s3:ListBucket"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s"]},{"Action":["s3:GetObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s/this*"]}]}`
 
 	// generate a random bucket Name.
 	bucketName := getRandomBucketName()
@@ -361,7 +362,11 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 	bucketPolicyReadBuf, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
 	// Verify if downloaded policy matches with previousy uploaded.
-	c.Assert(bytes.Equal([]byte(bucketPolicyStr), bucketPolicyReadBuf), true)
+	expectedPolicy, err := policy.ParseConfig(strings.NewReader(bucketPolicyStr), bucketName)
+	c.Assert(err, nil)
+	gotPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), bucketName)
+	c.Assert(err, nil)
+	c.Assert(reflect.DeepEqual(expectedPolicy, gotPolicy), true)
 
 	// Delete policy.
 	request, err = newTestSignedRequest("DELETE", getDeletePolicyURL(s.endPoint, bucketName), 0, nil,
