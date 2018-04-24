@@ -409,7 +409,7 @@ kubectl delete statefulset minio \
 && kubectl delete svc minio-service
 ```
 
-### Deploying on a cluster with no storageclass
+### Deploying on cluster nodes with local host path
 
 If your cluster does not have a storage solution or PV abstraction, you must explicitly define what nodes you wish to run Minio on, and define a homogeneous path to a local fast block device available on every host.
 
