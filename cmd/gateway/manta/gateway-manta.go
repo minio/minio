@@ -45,6 +45,7 @@ const (
 	mantaBackend     = "manta"
 	defaultMantaRoot = "/stor"
 	defaultMantaURL  = "https://us-east.manta.joyent.com"
+  mantaMinioMultipartPathV1 = minio.GatewayMinioSysTmp +"%s/multipart/v1/%s.%s/manta.json"
 )
 
 var mantaRoot = defaultMantaRoot
@@ -138,6 +139,7 @@ func (g *Manta) Name() string {
 func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	var signer authentication.Signer
+  var secure = true
 	var endpoint = defaultMantaURL
 	ctx := context.Background()
 
@@ -147,6 +149,11 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 			return nil, err
 		}
 	}
+  if secure {
+    endpoint = fmt.Sprintf("%s%s", "https://", endpoint)
+  } else {
+    endpoint = fmt.Sprintf("%s%s", "http://", endpoint)
+  }
 
 	if overrideRoot, ok := os.LookupEnv("MANTA_ROOT"); ok {
 		mantaRoot = overrideRoot
@@ -205,16 +212,20 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 			logger.LogIf(ctx, err)
 			return nil, err
 		}
-	}
+  }
 
-	tc, err := storage.NewClient(&triton.ClientConfig{
-		MantaURL:    endpoint,
-		AccountName: creds.AccessKey,
-		Signers:     []authentication.Signer{signer},
-	})
-	if err != nil {
-		return nil, err
-	}
+  config := &triton.ClientConfig{
+    MantaURL:     endpoint,
+    AccountName:  creds.AccessKey,
+    Signers:      []authentication.Signer{signer},
+  }
+  if userName, ok := os.LookupEnv("MANTA_SUBUSER"); ok {
+    config.Username = userName
+  }
+  tc, err := storage.NewClient(config)
+  if err != nil {
+    return nil, errors.Trace(err)
+  }
 
 	tc.Client.HTTPClient = &http.Client{
 		Transport: minio.NewCustomHTTPTransport(),
@@ -222,6 +233,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	return &tritonObjects{
 		client: tc,
+    ctx: ctx,
 	}, nil
 }
 
