@@ -261,8 +261,8 @@ func (s *posix) DiskInfo() (info disk.Info, err error) {
 // compatible way for all operating systems. If volume is not found
 // an error is generated.
 func (s *posix) getVolDir(volume string) (string, error) {
-	if !isValidVolname(volume) {
-		return "", errInvalidArgument
+	if volume == "" || volume == "." || volume == ".." {
+		return "", errVolumeNotFound
 	}
 	volumeDir := pathJoin(s.diskPath, volume)
 	return volumeDir, nil
@@ -299,6 +299,10 @@ func (s *posix) MakeVol(volume string) (err error) {
 
 	if err = s.checkDiskFound(); err != nil {
 		return err
+	}
+
+	if !isValidVolname(volume) {
+		return errInvalidArgument
 	}
 
 	volumeDir, err := s.getVolDir(volume)

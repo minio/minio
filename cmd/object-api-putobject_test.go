@@ -80,11 +80,11 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{".test", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: ".test"}},
-		{"------", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: "------"}},
+		{".test", "obj", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: ".test"}},
+		{"------", "obj", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: "------"}},
 		{"$this-is-not-valid-too", "obj", []byte(""), nil, "", 0, "",
-			BucketNameInvalid{Bucket: "$this-is-not-valid-too"}},
-		{"a", "obj", []byte(""), nil, "", 0, "", BucketNameInvalid{Bucket: "a"}},
+			BucketNotFound{Bucket: "$this-is-not-valid-too"}},
+		{"a", "obj", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: "a"}},
 
 		// Test case - 5.
 		// Case with invalid object names.

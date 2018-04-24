@@ -172,6 +172,18 @@ func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
 
 // MakeBucket creates a new container on S3 backend.
 func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+	// Verify if bucket name is valid.
+	// We are using a separate helper function here to validate bucket
+	// names instead of IsValidBucketName() because there is a possibility
+	// that certains users might have buckets which are non-DNS compliant
+	// in us-east-1 and we might severely restrict them by not allowing
+	// access to these buckets.
+	// Ref - http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+	if s3utils.CheckValidBucketName(bucket) != nil {
+		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
+		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+
 	err := l.Client.MakeBucket(bucket, location)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -182,18 +194,6 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 // GetBucketInfo gets bucket metadata..
 func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
-	// Verify if bucket name is valid.
-	// We are using a separate helper function here to validate bucket
-	// names instead of IsValidBucketName() because there is a possibility
-	// that certains users might have buckets which are non-DNS compliant
-	// in us-east-1 and we might severely restrict them by not allowing
-	// access to these buckets.
-	// Ref - http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
-	if s3utils.CheckValidBucketName(bucket) != nil {
-		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
-		return bi, minio.BucketNameInvalid{Bucket: bucket}
-	}
-
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
 		logger.LogIf(ctx, err)
