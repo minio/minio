@@ -26,7 +26,7 @@ func (s *TestSigner) KeyFingerprint() string {
 	return ""
 }
 
-func (s *TestSigner) Sign(dateHeader string) (string, error) {
+func (s *TestSigner) Sign(dateHeader string, isManta bool) (string, error) {
 	return "", nil
 }
 

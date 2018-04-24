@@ -1,39 +1,68 @@
 ## Unreleased
 
-- Add support for managing columes in Triton [#100]
+- identity/roles: Add support for SetRoleTags [#112]
+
+## 1.2.0 (March 20 2018)
+
+- compute/instance: Instance Deletion status now included in the GET instance response [#138]
+
+## 1.1.1 (March 13 2018)
+
+- client: Adding the rbac user support to the SSHAgentSigner [BUG!]
+
+## 1.1.0 (March 13 2018)
+
+- client: Add support for Manta RBAC http signatures
+
+## 1.0.0 (February 28 2018)
+
+- client: Add support for querystring in client/ExecuteRequestRaw [#121]
+- client: Introduce SetHeader for overriding API request header [#125]
+- compute/instances: Add support for passing a list of tags to filter List instances [#116]
+- compute/instances: Add support for getting a count of current instances from the CloudAPI [#119]
+- compute/instances: Add ability to support name-prefix [#129]
+- compute/instances: Add support for Instance Deletion Protection [#131]
+- identity/user: Add support for ChangeUserPassword [#111]
+- expose GetTritonEnv as a root level func [#126]
+
+## 0.9.0 (January 23 2018)
+
+**Please Note:** This is a precursor release to marking triton-go as 1.0.0. We are going to wait and fix any bugs that occur from this large set of changes that has happened since 0.5.2
+
+- Add support for managing volumes in Triton [#100]
 - identity/policies: Add support for managing policies in Triton [#86]
-- addition of triton-go errors package to expose unwraping of internal errors
+- addition of triton-go errors package to expose unwrapping of internal errors
 - Migration from hashicorp/errwrap to pkg/errors
 - Using path.Join() for URL structures rather than fmt.Sprintf()
 
-## 0.5.2 (December 28)
+## 0.5.2 (December 28 2017)
 
 - Standardise the API SSH Signers input casing and naming
 
-## 0.5.1 (December 28)
+## 0.5.1 (December 28 2017)
 
 - Include leading '/' when working with SSH Agent signers
 
-## 0.5.0 (December 28)
+## 0.5.0 (December 28 2017)
 
 - Add support for RBAC in triton-go [#82]
 This is a breaking change. No longer do we pass individual parameters to the SSH Signer funcs, but we now pass an input Struct. This will guard from from additional parameter changes in the future. 
 We also now add support for using `SDC_*` and `TRITON_*` env vars when working with the Default agent signer
 
-## 0.4.2 (December 22)
+## 0.4.2 (December 22 2017)
 
 - Fixing a panic when the user loses network connectivity when making a GET request to instance [#81]
 
-## 0.4.1 (December 15)
+## 0.4.1 (December 15 2017)
 
 - Clean up the handling of directory sanitization. Use abs paths everywhere [#79]
 
-## 0.4.0 (December 15)
+## 0.4.0 (December 15 2017)
 
 - Fix an issue where Manta HEAD requests do not return an error resp body [#77]
 - Add support for recursively creating child directories [#78]
 
-## 0.3.0 (December 14)
+## 0.3.0 (December 14 2017)
 
 - Introduce CloudAPI's ListRulesMachines under networking
 - Enable HTTP KeepAlives by default in the client.  15s idle timeout, 2x
@@ -46,11 +75,11 @@ We also now add support for using `SDC_*` and `TRITON_*` env vars when working w
 - Add support for ForceDelete of all children of a directory [#71](https://github.com/joyent/issues/71)
 - storage: Introduce `Objects.GetInfo` and `Objects.IsDir` using HEAD requests [#74](https://github.com/joyent/triton-go/issues/74)
 
-## 0.2.1 (November 8)
+## 0.2.1 (November 8 2017)
 
 - Fixing a bug where CreateUser and UpdateUser didn't return the UserID
 
-## 0.2.0 (November 7)
+## 0.2.0 (November 7 2017)
 
 - Introduce CloudAPI's Ping under compute
 - Introduce CloudAPI's RebootMachine under compute instances
@@ -59,6 +88,6 @@ We also now add support for using `SDC_*` and `TRITON_*` env vars when working w
 - tools: Introduce unit testing and scripts for linting, etc.
 - bug: Fix the `compute.ListMachineRules` endpoint
 
-## 0.1.0 (November 2)
+## 0.1.0 (November 2 2017)
 
 - Initial release of a versioned SDK

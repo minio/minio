@@ -144,7 +144,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	ctx := context.Background()
 
 	if g.host != "" {
-		endpoint, _, err = minio.ParseGatewayEndpoint(g.host)
+		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
@@ -233,6 +233,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	return &tritonObjects{
 		client: tc,
+    ctx: ctx,
 	}, nil
 }
 
@@ -245,6 +246,7 @@ func (g *Manta) Production() bool {
 type tritonObjects struct {
 	minio.GatewayUnsupported
 	client *storage.StorageClient
+  ctx context.Context
 }
 
 // Shutdown - save any gateway metadata to disk
@@ -631,7 +633,7 @@ func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, de
 //
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
 func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string) error {
-	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
+	if err := t.client.Objects().Delete(t.ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
 		logger.LogIf(ctx, err)

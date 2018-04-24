@@ -9,6 +9,8 @@
 package storage
 
 import (
+	"net/http"
+
 	triton "github.com/joyent/triton-go"
 	"github.com/joyent/triton-go/client"
 )
@@ -32,6 +34,12 @@ func NewClient(config *triton.ClientConfig) (*StorageClient, error) {
 		return nil, err
 	}
 	return newStorageClient(client), nil
+}
+
+// SetHeader allows a consumer of the current client to set a custom header for
+// the next backend HTTP request sent to CloudAPI.
+func (c *StorageClient) SetHeader(header *http.Header) {
+	c.Client.RequestHeader = header
 }
 
 // Dir returns a DirectoryClient used for accessing functions pertaining to

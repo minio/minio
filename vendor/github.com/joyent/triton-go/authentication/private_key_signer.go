@@ -16,7 +16,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"path"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -87,7 +86,7 @@ func NewPrivateKeySigner(input PrivateKeySignerInput) (*PrivateKeySigner, error)
 	return signer, nil
 }
 
-func (s *PrivateKeySigner) Sign(dateHeader string) (string, error) {
+func (s *PrivateKeySigner) Sign(dateHeader string, isManta bool) (string, error) {
 	const headerName = "date"
 
 	hash := s.hashFunc.New()
@@ -100,14 +99,14 @@ func (s *PrivateKeySigner) Sign(dateHeader string) (string, error) {
 	}
 	signedBase64 := base64.StdEncoding.EncodeToString(signed)
 
-	var keyID string
-	if s.userName != "" {
-
-		keyID = path.Join("/", s.accountName, "users", s.userName, "keys", s.formattedKeyFingerprint)
-	} else {
-		keyID = path.Join("/", s.accountName, "keys", s.formattedKeyFingerprint)
+	key := &KeyID{
+		UserName:    s.userName,
+		AccountName: s.accountName,
+		Fingerprint: s.formattedKeyFingerprint,
+		IsManta:     isManta,
 	}
-	return fmt.Sprintf(authorizationHeaderFormat, keyID, "rsa-sha1", headerName, signedBase64), nil
+
+	return fmt.Sprintf(authorizationHeaderFormat, key.generate(), "rsa-sha1", headerName, signedBase64), nil
 }
 
 func (s *PrivateKeySigner) SignRaw(toSign string) (string, string, error) {
