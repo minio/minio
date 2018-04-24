@@ -172,6 +172,9 @@ var defaultCipherSuites = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 }
 
+// Go only provides constant-time implementations of Curve25519 and NIST P-256 curve.
+var secureCurves = []tls.CurveID{tls.X25519, tls.CurveP256}
+
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate) *Server {
 	var tlsConfig *tls.Config
@@ -179,6 +182,7 @@ func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificat
 		tlsConfig = &tls.Config{
 			PreferServerCipherSuites: true,
 			CipherSuites:             defaultCipherSuites,
+			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 		}

@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -141,6 +143,16 @@ func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsC
 	var cert tls.Certificate
 	if cert, err = loadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
 		return nil, nil, nil, false, err
+	}
+	// Ensure that the private key is not a P-384 or P-521 EC key.
+	// The Go TLS stack does not provide constant-time implementations of P-384 and P-521.
+	if priv, ok := cert.PrivateKey.(crypto.Signer); ok {
+		if pub, ok := priv.Public().(*ecdsa.PublicKey); ok {
+			if name := pub.Params().Name; name == "P-384" || name == "P-521" { // unfortunately there is no cleaner way to check
+				return nil, nil, nil, false, fmt.Errorf("TLS: the ECDSA curve '%s' is not supported", name)
+			}
+		}
+
 	}
 
 	tlsCert = &cert
