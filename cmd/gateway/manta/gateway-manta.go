@@ -224,7 +224,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
   }
   tc, err := storage.NewClient(config)
   if err != nil {
-    return nil, errors.Trace(err)
+    return nil, err
   }
 
 	tc.Client.HTTPClient = &http.Client{
@@ -233,7 +233,6 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	return &tritonObjects{
 		client: tc,
-    ctx: ctx,
 	}, nil
 }
 
@@ -587,6 +586,31 @@ func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, da
 	return t.GetObjectInfo(ctx, bucket, object)
 }
 
+// MultiPartUpload
+//
+//
+type mantaMultipartMetaV1 struct {
+  Name  string                  `json:"object"`
+  Metadata map[string]string    `json:"metadata"`
+}
+
+func (t *tritonObjects) MultiUploadURL(ctx context.Context, bucket, location string) error {
+  err := t.client.Dir().Put(ctx, &storage.PutDirectoryInput{
+    DirectoryName: path.Join(mantaRoot, "uploads"),
+  })
+  if err != nil {
+    return err
+  }
+  return nil
+}
+
+func (t *tritonObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader) (info minio.PartInfo, err error) {
+  info.PartNumber = partID
+  info.LastModified = minio.UTCNow()
+  return info, nil
+}
+
+
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Manta Snaplinks API.
 //
@@ -613,6 +637,5 @@ func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string)
 		logger.LogIf(ctx, err)
 		return err
 	}
-
 	return nil
 }
