@@ -163,7 +163,9 @@ func fsStat(ctx context.Context, statLoc string) (os.FileInfo, error) {
 	}
 	fi, err := os.Stat((statLoc))
 	if err != nil {
-		logger.LogIf(ctx, err)
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
 		return nil, err
 	}
 
