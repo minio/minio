@@ -17,7 +17,7 @@
     - [Create Minio Statefulset](#create-minio-statefulset)
     - [Create LoadBalancer Service](#create-minio-service)
   - [Update existing Minio StatefulSet](#update-existing-minio-statefulset)
-  - [Deploying on a cluster with no storageclass](#deploying-on-a-cluster-with-no-storageclass)
+  - [Deploying on cluster nodes with local host path](#deploying-on-cluster-nodes-with-local-host-path)
   - [Resource cleanup](#distributed-resource-cleanup)
 
 - [Minio GCS Gateway Deployment](#minio-gcs-gateway-deployment)
