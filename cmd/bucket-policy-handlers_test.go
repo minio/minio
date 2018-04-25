@@ -110,6 +110,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
 
+	bucketPolicyTemplateWithoutVersion := `{"Version":"","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
+
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
@@ -207,7 +209,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Test case - 8.
 		// non-existent bucket is used.
 		// writing BucketPolicy should fail.
-		// should result is 404 StatusNotFound
+		// should result in 404 StatusNotFound
 		{
 			bucketName:         "non-existent-bucket",
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket"))),
@@ -220,7 +222,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Test case - 9.
 		// non-existent bucket is used (with invalid bucket name)
 		// writing BucketPolicy should fail.
-		// should result is 404 StatusNotFound
+		// should result in 404 StatusNotFound
 		{
 			bucketName:         ".invalid-bucket",
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket"))),
@@ -229,6 +231,19 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 10.
+		// Existent bucket with policy with Version field empty.
+		// writing BucketPolicy should fail.
+		// should result in 400 StatusBadRequest.
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplateWithoutVersion, bucketName, bucketName))),
+
+			policyLen:          len(fmt.Sprintf(bucketPolicyTemplateWithoutVersion, bucketName, bucketName)),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 
