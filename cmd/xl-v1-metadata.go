@@ -387,8 +387,7 @@ func (m xlMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partInd
 }
 
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
-// slice of xlmeta content. If no value is found this function panics
-// and dies.
+// slice of xlmeta content.
 func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time) (xmv xlMetaV1, e error) {
 	// Pick latest valid metadata.
 	for _, meta := range metaArr {
