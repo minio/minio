@@ -51,6 +51,7 @@ const (
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 	azureBackend               = "azure"
+	azureMarkerPrefix          = "{minio}"
 )
 
 func init() {
@@ -113,6 +114,12 @@ EXAMPLES:
 		CustomHelpTemplate: azureGatewayTemplate,
 		HideHelpCommand:    true,
 	})
+}
+
+// Returns true if marker was returned by Azure, i.e prefixed with
+// {minio}
+func isAzureMarker(marker string) bool {
+	return strings.HasPrefix(marker, azureMarkerPrefix)
 }
 
 // Handler for 'minio gateway azure' command line.
@@ -507,14 +514,34 @@ func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
 // and marker, uses Azure equivalent ListBlobs.
+// To accommodate S3-compatible applications using
+// ListObjectsV1 to use object keys as markers to control the
+// listing of objects, we use the following encoding scheme to
+// distinguish between Azure continuation tokens and application
+// supplied markers.
+//
+// - NextMarker in ListObjectsV1 response is constructed by
+//   prefixing "{minio}" to the Azure continuation token,
+//   e.g, "{minio}CgRvYmoz"
+//
+// - Application supplied markers are used as-is to list
+//   object keys that appear after it in the lexicographical order.
 func (a *azureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	var objects []minio.ObjectInfo
 	var prefixes []string
+
+	azureListMarker := ""
+	if isAzureMarker(marker) {
+		// If application is using Azure continuation token we should
+		// strip the azureTokenPrefix we added in the previous list response.
+		azureListMarker = strings.TrimPrefix(marker, azureMarkerPrefix)
+	}
+
 	container := a.client.GetContainerReference(bucket)
 	for len(objects) == 0 && len(prefixes) == 0 {
 		resp, err := container.ListBlobs(storage.ListBlobsParameters{
 			Prefix:     prefix,
-			Marker:     marker,
+			Marker:     azureListMarker,
 			Delimiter:  delimiter,
 			MaxResults: uint(maxKeys),
 		})
@@ -523,38 +550,57 @@ func (a *azureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 			return result, azureToObjectError(err, bucket, prefix)
 		}
 
-		for _, object := range resp.Blobs {
-			if strings.HasPrefix(object.Name, minio.GatewayMinioSysTmp) {
+		for _, blob := range resp.Blobs {
+			if strings.HasPrefix(blob.Name, minio.GatewayMinioSysTmp) {
+				// We filter out minio.GatewayMinioSysTmp entries in the recursive listing.
+				continue
+			}
+			if !isAzureMarker(marker) && blob.Name <= marker {
+				// If the application used ListObjectsV1 style marker then we
+				// skip all the entries till we reach the marker.
 				continue
 			}
 			objects = append(objects, minio.ObjectInfo{
 				Bucket:          bucket,
-				Name:            object.Name,
-				ModTime:         time.Time(object.Properties.LastModified),
-				Size:            object.Properties.ContentLength,
-				ETag:            minio.ToS3ETag(object.Properties.Etag),
-				ContentType:     object.Properties.ContentType,
-				ContentEncoding: object.Properties.ContentEncoding,
+				Name:            blob.Name,
+				ModTime:         time.Time(blob.Properties.LastModified),
+				Size:            blob.Properties.ContentLength,
+				ETag:            minio.ToS3ETag(blob.Properties.Etag),
+				ContentType:     blob.Properties.ContentType,
+				ContentEncoding: blob.Properties.ContentEncoding,
 			})
 		}
 
-		// Remove minio.sys.tmp prefix.
-		for _, prefix := range resp.BlobPrefixes {
-			if prefix != minio.GatewayMinioSysTmp {
-				prefixes = append(prefixes, prefix)
+		for _, blobPrefix := range resp.BlobPrefixes {
+			if prefix == minio.GatewayMinioSysTmp {
+				// We don't do strings.HasPrefix(blob.Name, minio.GatewayMinioSysTmp) here so that
+				// we can use tools like mc to inspect the contents of minio.sys.tmp/
+				// It is OK to allow listing of minio.sys.tmp/ in non-recursive mode as it aids in debugging.
+				continue
 			}
+			if !isAzureMarker(marker) && blobPrefix <= marker {
+				// If the application used ListObjectsV1 style marker then we
+				// skip all the entries till we reach the marker.
+				continue
+			}
+			prefixes = append(prefixes, blobPrefix)
 		}
 
-		marker = resp.NextMarker
-		if resp.NextMarker == "" {
+		azureListMarker = resp.NextMarker
+		if azureListMarker == "" {
+			// Reached end of listing.
 			break
 		}
 	}
 
 	result.Objects = objects
 	result.Prefixes = prefixes
-	result.NextMarker = marker
-	result.IsTruncated = (marker != "")
+	if azureListMarker != "" {
+		// We add the {minio} prefix so that we know in the subsequent request that this
+		// marker is a azure continuation token and not ListObjectV1 marker.
+		result.NextMarker = azureMarkerPrefix + azureListMarker
+		result.IsTruncated = true
+	}
 	return result, nil
 }
 
