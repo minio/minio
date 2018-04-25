@@ -1379,19 +1379,8 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		var objInfo ObjectInfo
-		var err error
-		if hasSuffix(walkResult.entry, slashSeparator) {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
-		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
-		}
-		if err != nil {
-			// Ignore errFileNotFound
-			if err == errFileNotFound {
-				continue
-			}
-			return loi, toObjectErr(err, bucket, prefix)
-		}
+		objInfo.Bucket = bucket
+		objInfo.Name = walkResult.entry
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
 		i++

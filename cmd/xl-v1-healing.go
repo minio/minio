@@ -284,11 +284,20 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 
 	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, bucket, object)
 
-	// readQuorum suffices for xl.json since we use monotonic
-	// system time to break the tie when a split-brain situation
-	// arises.
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, quorum); reducedErr != nil {
-		return result, toObjectErr(reducedErr, bucket, object)
+	errCount := 0
+	for _, err := range errs {
+		if err != nil {
+			errCount++
+		}
+	}
+
+	if errCount == len(errs) {
+		// Only if we get errors from all the disks we return error. Else we need to
+		// continue to return filled madmin.HealResultItem struct which includes info
+		// on what disks the file is available etc.
+		if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, quorum); reducedErr != nil {
+			return result, toObjectErr(reducedErr, bucket, object)
+		}
 	}
 
 	// List of disks having latest version of the object xl.json
@@ -536,17 +545,11 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 // and later the disk comes back up again, heal on the object
 // should delete it.
 func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
-
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
-	// get read quorum for this object
-	var readQuorum int
-	readQuorum, _, err = objectQuorumFromMeta(xl, partsMetadata, errs)
-	if err != nil {
-		return hr, err
-	}
+	latestXLMeta, _ := getLatestXLMeta(partsMetadata, errs)
 
 	// Lock the object before healing.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
@@ -556,5 +559,5 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	defer objectLock.RUnlock()
 
 	// Heal the object.
-	return healObject(ctx, xl.getDisks(), bucket, object, readQuorum, dryRun)
+	return healObject(ctx, xl.getDisks(), bucket, object, latestXLMeta.Erasure.DataBlocks, dryRun)
 }

@@ -144,7 +144,7 @@ func TestHealObjectXL(t *testing.T) {
 	// Try healing now, expect to receive errDiskNotFound.
 	_, err = obj.HealObject(context.Background(), bucket, object, false)
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
-	if err != errXLReadQuorum {
-		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
+	if _, ok := err.(InsufficientReadQuorum); !ok {
+		t.Errorf("Expected %v but received %v", InsufficientWriteQuorum{}, err)
 	}
 }
