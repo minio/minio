@@ -37,6 +37,9 @@ var (
 	colorRed  = color.New(color.FgRed).SprintfFunc()
 )
 
+// Disable disables all logging, false by default. (used for "go test")
+var Disable = false
+
 var trimStrings []string
 
 // Level type
@@ -79,6 +82,9 @@ type Console interface {
 }
 
 func consoleLog(console Console, msg string, args ...interface{}) {
+	if Disable {
+		return
+	}
 	if jsonFlag {
 		console.json(msg, args...)
 	} else if quiet {
@@ -221,6 +227,10 @@ func getTrace(traceLevel int) []string {
 
 // LogIf :
 func LogIf(ctx context.Context, err error) {
+	if Disable {
+		return
+	}
+
 	if err == nil {
 		return
 	}
