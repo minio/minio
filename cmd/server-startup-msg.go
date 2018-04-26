@@ -47,6 +47,10 @@ func getFormatStr(strLen int, padding int) string {
 func printStartupMessage(apiEndPoints []string) {
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+
+	//helper message fix
+	strippedAPIEndpoints[0] = sanitizeEndpoint(strippedAPIEndpoints[0])
+
 	// If cache layer is enabled, print cache capacity.
 	cacheObjectAPI := newCacheObjectsFn()
 	if cacheObjectAPI != nil {
@@ -64,6 +68,7 @@ func printStartupMessage(apiEndPoints []string) {
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
 	printCLIAccessMsg(strippedAPIEndpoints[0], "myminio")
+	//printCLIAccessMsg("{YOUR_HOST_IP}", "myminio")
 
 	// Prints documentation message.
 	printObjectAPIMsg()
@@ -73,6 +78,13 @@ func printStartupMessage(apiEndPoints []string) {
 	if globalIsSSL {
 		printCertificateMsg(globalPublicCerts)
 	}
+}
+
+
+//helper message fix - to avoid the docker host ip
+func sanitizeEndpoint(apiEndpoint string) string {
+	endpointLen := len(apiEndpoint)
+	return "http://{YOUR_IP}:"+apiEndpoint[endpointLen-4:endpointLen]
 }
 
 // strip api endpoints list with standard ports such as
@@ -146,6 +158,7 @@ func printEventNotifiers() {
 // Prints startup message for command line access. Prints link to our documentation
 // and custom platform specific message.
 func printCLIAccessMsg(endPoint string, alias string) {
+
 	// Get saved credentials.
 	cred := globalServerConfig.GetCredential()
 
