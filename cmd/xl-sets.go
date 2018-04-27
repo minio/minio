@@ -243,6 +243,11 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 	}
 
 	mutex := newNSLock(globalIsDistXL)
+
+	// Initialize byte pool once for all sets, bpool size is set to
+	// setCount * drivesPerSet with each memory upto blockSizeV1.
+	bp := bpool.NewBytePoolCap(setCount*drivesPerSet, blockSizeV1, blockSizeV1*2)
+
 	for i := 0; i < len(format.XL.Sets); i++ {
 		s.xlDisks[i] = make([]StorageAPI, drivesPerSet)
 
@@ -250,7 +255,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 		s.sets[i] = &xlObjects{
 			getDisks: s.GetDisks(i),
 			nsMutex:  mutex,
-			bp:       bpool.NewBytePoolCap(setCount*drivesPerSet, blockSizeV1, blockSizeV1*2),
+			bp:       bp,
 		}
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
