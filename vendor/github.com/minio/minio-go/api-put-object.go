@@ -208,7 +208,7 @@ func (c Client) putObjectMultipartStreamNoLength(ctx context.Context, bucketName
 		if rErr == io.EOF && partNumber > 1 {
 			break
 		}
-		if rErr != nil && rErr != io.ErrUnexpectedEOF {
+		if rErr != nil && rErr != io.ErrUnexpectedEOF && rErr != io.EOF {
 			return 0, rErr
 		}
 		// Update progress reader appropriately to the latest offset

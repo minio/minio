@@ -23,10 +23,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xerrors "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/policy"
 )
 
 const (
@@ -43,6 +44,9 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "GetBucketNotification")
 
+	vars := mux.Vars(r)
+	bucketName := vars["bucket"]
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -53,27 +57,23 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
-	vars := mux.Vars(r)
-	bucketName := vars["bucket"]
-
 	_, err := objAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Attempt to successfully load notification config.
-	nConfig, err := readNotificationConfig(objAPI, bucketName)
+	nConfig, err := readNotificationConfig(ctx, objAPI, bucketName)
 	if err != nil {
 		// Ignore errNoSuchNotifications to comply with AWS S3.
-		if xerrors.Cause(err) != errNoSuchNotifications {
-			errorIf(err, "Unable to read notification configuration.")
+		if err != errNoSuchNotifications {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -83,7 +83,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	notificationBytes, err := xml.Marshal(nConfig)
 	if err != nil {
-		errorIf(err, "Unable to marshal notification configuration into XML.", err)
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -106,13 +106,14 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 
 	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
@@ -146,7 +147,8 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	rulesMap := config.ToRulesMap()
 	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
 	for addr, err := range globalNotificationSys.PutBucketNotification(bucketName, rulesMap) {
-		errorIf(err, "unable to put bucket notification to remote peer %v", addr)
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+		logger.LogIf(ctx, err)
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -167,13 +169,14 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
-	if s3Error := checkRequestAuthType(r, "", "", globalServerConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListenBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 
 	values := r.URL.Query()
 
@@ -217,39 +220,48 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	}
 
 	if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
-		errorIf(err, "Unable to get bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
-	host := xnet.MustParseHost(r.RemoteAddr)
-	target := target.NewHTTPClientTarget(*host, w)
+	host, e := xnet.ParseHost(r.RemoteAddr)
+	logger.CriticalIf(ctx, e)
+
+	target, e := target.NewHTTPClientTarget(*host, w)
+	logger.CriticalIf(ctx, e)
+
 	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
 
 	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-		errorIf(err, "Unable to add httpclient target %v to globalNotificationSys.targetList.", target)
+		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
 	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
 
-	thisAddr := xnet.MustParseHost(GetLocalPeer(globalEndpoints))
+	thisAddr, e := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	logger.CriticalIf(ctx, e)
+
 	if err := SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
-		errorIf(err, "Unable to save HTTP listener %v", target)
+		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	errors := globalNotificationSys.ListenBucketNotification(bucketName, eventNames, pattern, target.ID(), *thisAddr)
 	for addr, err := range errors {
-		errorIf(err, "unable to call listen bucket notification to remote peer %v", addr)
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+		logger.LogIf(ctx, err)
 	}
 
 	<-target.DoneCh
 
 	if err := RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
-		errorIf(err, "Unable to save HTTP listener %v", target)
+		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
+		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

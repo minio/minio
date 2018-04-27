@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Attempt to retry only this many number of times before
@@ -133,6 +135,9 @@ func (authClient *AuthRPCClient) Login() (err error) {
 		}
 
 		if err = rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
+			// Closing the connection here.
+			rpcClient.Close()
+
 			// gob doesn't provide any typed errors for us to reflect
 			// upon, this is the only way to return proper error.
 			if strings.Contains(err.Error(), "gob: wrong type") {
@@ -192,11 +197,16 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 				}
 			}
 		}
+
 		// gob doesn't provide any typed errors for us to reflect
 		// upon, this is the only way to return proper error.
 		if err != nil && strings.Contains(err.Error(), "gob: wrong type") {
+			// Close the rpc client also when the servers have mismatching rpc versions.
+			authClient.Close()
+
 			err = errRPCAPIVersionUnsupported
 		}
+
 		break
 	}
 	return err
@@ -248,7 +258,7 @@ func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient 
 				Op:   "dial-http",
 				Net:  serverAddr + serviceEndpoint,
 				Addr: nil,
-				Err:  fmt.Errorf("Unable to parse server address <%s>: %s", serverAddr, err),
+				Err:  fmt.Errorf("Unable to parse server address <%s>/<%s>: %s", serverAddr, serviceEndpoint, err),
 			}
 		}
 		// ServerName in tls.Config needs to be specified to support SNI certificates.
@@ -264,7 +274,9 @@ func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient 
 		// Print RPC connection errors that are worthy to display in log.
 		switch err.(type) {
 		case x509.HostnameError:
-			errorIf(err, "Unable to establish secure connection to %s", serverAddr)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("serverAddr", serverAddr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 		}
 
 		return nil, &net.OpError{
@@ -302,7 +314,7 @@ func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient 
 	}
 	if resp.Status != connectSuccessMessage {
 		conn.Close()
-		return nil, errors.New("unexpected HTTP response: " + resp.Status)
+		return nil, fmt.Errorf("Unexpected HTTP response: %s from %s/%s", resp.Status, serverAddr, serviceEndpoint)
 	}
 
 	// Initialize rpc client.

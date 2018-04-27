@@ -17,6 +17,7 @@
 package azure
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Test canonical metadata.
@@ -55,7 +55,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"X_Amz_Matdesc":    "{}",
 		"X_Amz_Iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	meta, _, err := s3MetaToAzureProperties(headers)
+	meta, _, err := s3MetaToAzureProperties(context.Background(), headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
@@ -65,8 +65,8 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"invalid--meta": "value",
 	}
-	_, _, err = s3MetaToAzureProperties(headers)
-	if err = errors.Cause(err); err != nil {
+	_, _, err = s3MetaToAzureProperties(context.Background(), headers)
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
@@ -75,7 +75,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"content-md5": "Dce7bmCX61zvxzP5QmfelQ==",
 	}
-	_, props, err := s3MetaToAzureProperties(headers)
+	_, props, err := s3MetaToAzureProperties(context.Background(), headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
@@ -137,53 +137,46 @@ func TestAzureToObjectError(t *testing.T) {
 			nil, nil, "", "",
 		},
 		{
-			errors.Trace(fmt.Errorf("Non azure error")),
+			fmt.Errorf("Non azure error"),
 			fmt.Errorf("Non azure error"), "", "",
 		},
 		{
 			storage.AzureStorageServiceError{
 				Code: "ContainerAlreadyExists",
-			}, storage.AzureStorageServiceError{
-				Code: "ContainerAlreadyExists",
-			}, "bucket", "",
+			}, minio.BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
-				Code: "ContainerAlreadyExists",
-			}), minio.BucketExists{Bucket: "bucket"}, "bucket", "",
-		},
-		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
-			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "RequestBodyTooLarge",
-			}), minio.PartTooBig{}, "", "",
+			}, minio.PartTooBig{}, "", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				Code: "InvalidMetadata",
-			}), minio.UnsupportedMetadata{}, "", "",
+			}, minio.UnsupportedMetadata{}, "", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), minio.ObjectNotFound{
+			}, minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			}, "bucket", "object",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}), minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
+			}, minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			errors.Trace(storage.AzureStorageServiceError{
+			storage.AzureStorageServiceError{
 				StatusCode: http.StatusBadRequest,
-			}), minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 	}
 	for i, testCase := range testCases {
@@ -307,7 +300,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range invalidUploadIDs {
-		if err := checkAzureUploadID(uploadID); err == nil {
+		if err := checkAzureUploadID(context.Background(), uploadID); err == nil {
 			t.Fatalf("%s: expected: <error>, got: <nil>", uploadID)
 		}
 	}
@@ -318,7 +311,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range validUploadIDs {
-		if err := checkAzureUploadID(uploadID); err != nil {
+		if err := checkAzureUploadID(context.Background(), uploadID); err != nil {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}

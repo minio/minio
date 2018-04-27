@@ -25,6 +25,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sys"
 	"github.com/rs/cors"
 	"golang.org/x/time/rate"
@@ -205,6 +206,17 @@ func guessIsHealthCheckReq(req *http.Request) bool {
 			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
 }
 
+// guessIsMetricsReq - returns true if incoming request looks
+// like metrics request
+func guessIsMetricsReq(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	aType := getRequestAuthType(req)
+	return aType == authTypeAnonymous &&
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsPath
+}
+
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
 func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
@@ -275,7 +287,7 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), isAdminReq(r):
+	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), guessIsMetricsReq(r), isAdminReq(r):
 		// Allow access to reserved buckets
 	default:
 		// For all other requests reject access to reserved
@@ -375,9 +387,18 @@ var defaultAllowableHTTPMethods = []string{
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
-	commonS3Headers := []string{"Content-Length", "Content-Type", "Connection",
-		"Date", "ETag", "Server", "x-amz-delete-marker", "x-amz-id-2",
-		"x-amz-request-id", "x-amz-version-id"}
+	commonS3Headers := []string{
+		"Date",
+		"ETag",
+		"Server",
+		"Connection",
+		"Accept-Ranges",
+		"Content-Range",
+		"Content-Encoding",
+		"Content-Length",
+		"Content-Type",
+		"x-amz-request-id",
+	}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   defaultAllowableHTTPMethods,
@@ -582,9 +603,7 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // cancelled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	if err != nil {
-		panic(err)
-	}
+	logger.CriticalIf(context.Background(), err)
 	// Burst value is set to 1 to allow only maxOpenFileLimit
 	// requests to happen at once.
 	l := rate.NewLimiter(rate.Limit(maxLimit), 1)
@@ -615,4 +634,19 @@ func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	l.handler.ServeHTTP(w, r)
+}
+
+type securityHeaderHandler struct {
+	handler http.Handler
+}
+
+func addSecurityHeaders(h http.Handler) http.Handler {
+	return securityHeaderHandler{handler: h}
+}
+
+func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	header.Set("X-XSS-Protection", "\"1; mode=block\"")              // Prevents against XSS attacks
+	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
+	s.handler.ServeHTTP(w, r)
 }

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"net/url"
-	"strings"
 	"testing"
 )
 
@@ -186,41 +185,6 @@ func TestGetObjectsResources(t *testing.T) {
 		}
 		if encodingType != testCase.encodingType {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.encodingType, encodingType)
-		}
-	}
-}
-
-// Validates if filter values are correct
-func TestValidateFilterValues(t *testing.T) {
-	testCases := []struct {
-		values        []string
-		expectedError APIErrorCode
-	}{
-		{
-			values:        []string{""},
-			expectedError: ErrNone,
-		},
-		{
-			values:        []string{"", "prefix"},
-			expectedError: ErrNone,
-		},
-		{
-			values:        []string{strings.Repeat("a", 1025)},
-			expectedError: ErrFilterValueInvalid,
-		},
-		{
-			values:        []string{"a\\b"},
-			expectedError: ErrFilterValueInvalid,
-		},
-		{
-			values:        []string{string([]byte{0xff, 0xfe, 0xfd})},
-			expectedError: ErrFilterValueInvalid,
-		},
-	}
-
-	for i, testCase := range testCases {
-		if actualError := validateFilterValues(testCase.values); actualError != testCase.expectedError {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedError, actualError)
 		}
 	}
 }

@@ -231,7 +231,7 @@ func TestPosixReadAll(t *testing.T) {
 		{
 			volume: "ab",
 			path:   "as-file",
-			err:    errInvalidArgument,
+			err:    errVolumeNotFound,
 		},
 	}
 
@@ -389,10 +389,25 @@ func TestPosixMakeVol(t *testing.T) {
 		if err = os.Chmod(permDeniedDir, 0400); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
+
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		// change backend permissions for MakeVol error.
+		if err = os.Chmod(permDeniedDir, 0400); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
 		if err := posixStorage.MakeVol("test-vol"); err != errDiskAccessDenied {
@@ -462,7 +477,7 @@ func TestPosixDeleteVol(t *testing.T) {
 		{
 			volName:     "ab",
 			ioErrCount:  0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 	}
 
@@ -491,13 +506,28 @@ func TestPosixDeleteVol(t *testing.T) {
 		if err = os.Chmod(permDeniedDir, 0400); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
+
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.DeleteVol("bin"); !os.IsPermission(err) {
+		// change backend permissions for MakeVol error.
+		if err = os.Chmod(permDeniedDir, 0400); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
+		if err = posixStorage.DeleteVol("mybucket"); err != errDiskAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
@@ -558,7 +588,7 @@ func TestPosixStatVol(t *testing.T) {
 		{
 			volName:     "ab",
 			ioErrCount:  0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 	}
 
@@ -726,7 +756,7 @@ func TestPosixPosixListDir(t *testing.T) {
 			srcVol:      "ab",
 			srcPath:     "success-file",
 			ioErrCnt:    0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestPosix case - 4.
 		// TestPosix case with io error count > max limit.
@@ -774,14 +804,22 @@ func TestPosixPosixListDir(t *testing.T) {
 		defer removePermDeniedFile(permDeniedDir)
 
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		errMsg := fmt.Sprintf("stat %v: permission denied", slashpath.Join(permDeniedDir, "mybucket"))
-		if err = posixStorage.DeleteFile("mybucket", "myobject"); err.Error() != errMsg {
-			t.Errorf("expected: %s, got: %s", errMsg, err)
+		if err = posixStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -864,7 +902,7 @@ func TestPosixDeleteFile(t *testing.T) {
 			srcVol:      "my",
 			srcPath:     "success-file",
 			ioErrCnt:    0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestPosix case - 5.
 		// TestPosix case with non-existent volume.
@@ -912,14 +950,22 @@ func TestPosixDeleteFile(t *testing.T) {
 		defer removePermDeniedFile(permDeniedDir)
 
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		errMsg := fmt.Sprintf("stat %v: permission denied", slashpath.Join(permDeniedDir, "mybucket"))
-		if err = posixStorage.DeleteFile("mybucket", "myobject"); err.Error() != errMsg {
-			t.Errorf("expected: %s, got: %s", errMsg, err)
+		if err = posixStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -1022,7 +1068,7 @@ func TestPosixReadFile(t *testing.T) {
 		},
 		// Empty volume name. - 12
 		{
-			"", "myobject", 14, 1, nil, errInvalidArgument,
+			"", "myobject", 14, 1, nil, errVolumeNotFound,
 		},
 		// Empty filename name. - 13
 		{
@@ -1124,18 +1170,29 @@ func TestPosixReadFile(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir := createPermDeniedFile(t)
+		defer removePermDeniedFile(permDeniedDir)
+
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/")
-		if err != nil {
-			t.Errorf("Unable to initialize posix, %s", err)
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
 		}
-		if err == nil {
-			// Common read buffer.
-			var buf = make([]byte, 10)
-			if _, err = posixStorage.ReadFile("proc", "1/fd", 0, buf, nil); err != errFileAccessDenied {
-				t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
-			}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
+		posixStorage, err = newPosix(permDeniedDir)
+		if err != nil {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		// Common read buffer.
+		var buf = make([]byte, 10)
+		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, nil); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -1295,19 +1352,29 @@ func TestPosixAppendFile(t *testing.T) {
 
 		var posixPermStorage StorageAPI
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixPermStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixPermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); !os.IsPermission(err) {
+		if err = posixPermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
+
 	// TestPosix case with invalid volume name.
 	// A valid volume name should be atleast of size 3.
 	err = posixStorage.AppendFile("bn", "yes", []byte("hello, world"))
-	if err != errInvalidArgument {
+	if err != errVolumeNotFound {
 		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
 	}
 
@@ -1386,27 +1453,36 @@ func TestPosixPrepareFile(t *testing.T) {
 
 		var posixPermStorage StorageAPI
 		// Initialize posix storage layer for permission denied error.
+		_, err = newPosix(permDeniedDir)
+		if err != nil && !os.IsPermission(err) {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = os.Chmod(permDeniedDir, 0755); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
+
 		posixPermStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixPermStorage.PrepareFile("mybucket", "myobject", 16); !os.IsPermission(err) {
+		if err = posixPermStorage.PrepareFile("mybucket", "myobject", 16); err != errFileAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
-	}
-
-	// TestPosix case with invalid file size which should be strictly positive
-	err = posixStorage.PrepareFile("bn", "yes", -3)
-	if err != errInvalidArgument {
-		t.Fatalf("should fail: %v", err)
 	}
 
 	// TestPosix case with invalid volume name.
 	// A valid volume name should be atleast of size 3.
 	err = posixStorage.PrepareFile("bn", "yes", 16)
-	if err != errInvalidArgument {
+	if err != errVolumeNotFound {
 		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
+	}
+
+	// TestPosix case with invalid file size which should be strictly positive
+	err = posixStorage.PrepareFile("success-vol", "yes", -3)
+	if err != errInvalidArgument {
+		t.Fatalf("should fail: %v", err)
 	}
 
 	// TestPosix case with IO error count > max limit.
@@ -1605,7 +1681,7 @@ func TestPosixRenameFile(t *testing.T) {
 			srcPath:     "file4",
 			destPath:    "new-path/",
 			ioErrCnt:    0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestPosix case - 14.
 		// TestPosix case with invalid destination volume name. Length should be atleast 3.
@@ -1616,7 +1692,7 @@ func TestPosixRenameFile(t *testing.T) {
 			srcPath:     "file4",
 			destPath:    "new-path/",
 			ioErrCnt:    0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestPosix case - 15.
 		// TestPosix case with invalid destination volume name. Length should be atleast 3.
@@ -1627,7 +1703,7 @@ func TestPosixRenameFile(t *testing.T) {
 			srcPath:     "file4",
 			destPath:    "new-path/",
 			ioErrCnt:    0,
-			expectedErr: errInvalidArgument,
+			expectedErr: errVolumeNotFound,
 		},
 		// TestPosix case - 16.
 		// TestPosix case with the parent of the destination being a file.

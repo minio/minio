@@ -25,8 +25,8 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 // minio configuration related constants.
@@ -120,6 +120,7 @@ var (
 	globalMinioHost = ""
 
 	globalNotificationSys *NotificationSys
+	globalPolicySys       *PolicySys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -129,7 +130,7 @@ var (
 
 	globalTLSCertificate *tls.Certificate
 
-	globalHTTPServer        *miniohttp.Server
+	globalHTTPServer        *xhttp.Server
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
@@ -191,7 +192,6 @@ var (
 	colorBold   = color.New(color.Bold).SprintFunc()
 	colorBlue   = color.New(color.FgBlue).SprintfFunc()
 	colorYellow = color.New(color.FgYellow).SprintfFunc()
-	colorRed    = color.New(color.FgRed).SprintfFunc()
 )
 
 // Returns minio global information, as a key value map.

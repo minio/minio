@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/pkg/set"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
@@ -84,13 +84,17 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(context.Background(), dryRun)
-	return err
+	return objectAPI.ReloadFormat(context.Background(), dryRun)
 }
 
 // ListLocks - Fetches lock information from local lock instrumentation.
 func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	return listLocksInfo(bucket, prefix, duration), nil
+	// check if objectLayer is initialized, if not return.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+	return objectAPI.ListLocks(context.Background(), bucket, prefix, duration)
 }
 
 func (rc remoteAdminClient) SignalService(s serviceSignal) (err error) {
@@ -201,7 +205,7 @@ func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byt
 
 	err := rc.Call(writeTmpConfigRPC, &wArgs, &WriteConfigReply{})
 	if err != nil {
-		errorIf(err, "Failed to write temporary config file.")
+		logger.LogIf(context.Background(), err)
 		return err
 	}
 
@@ -215,7 +219,10 @@ func (lc localAdminClient) CommitConfig(tmpFileName string) error {
 	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
 
 	err := os.Rename(tmpConfigFile, configFile)
-	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
+	reqInfo.AppendTags("configFile", configFile)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	logger.LogIf(ctx, err)
 	return err
 }
 
@@ -228,7 +235,7 @@ func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
 	cReply := CommitConfigReply{}
 	err := rc.Call(commitConfigRPC, &cArgs, &cReply)
 	if err != nil {
-		errorIf(err, "Failed to rename config file.")
+		logger.LogIf(context.Background(), err)
 		return err
 	}
 
@@ -436,7 +443,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	latestUptime := time.Duration(0)
 	for _, uptime := range uptimes {
 		if uptime.err != nil {
-			errorIf(uptime.err, "Unable to fetch uptime")
+			logger.LogIf(context.Background(), uptime.err)
 			continue
 		}
 
@@ -489,15 +496,17 @@ func getPeerConfig(peers adminPeers) ([]byte, error) {
 		// Unmarshal the received config files.
 		err := json.Unmarshal(configBytes, &serverConfigs[i])
 		if err != nil {
-			errorIf(err, "Failed to unmarshal serverConfig from ", peers[i].addr)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peers[i].addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 	}
 
 	configJSON, err := getValidServerConfig(serverConfigs, errs)
 	if err != nil {
-		errorIf(err, "Unable to find a valid server config")
-		return nil, errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return nil, err
 	}
 
 	// Return the config.json that was present quorum or more

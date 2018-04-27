@@ -17,14 +17,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 
-	router "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/minio/dsync"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
@@ -86,21 +87,22 @@ func startLockMaintenance(lkSrv *lockServer) {
 }
 
 // Register distributed NS lock handlers.
-func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error {
+func registerDistNSLockRouter(router *mux.Router, endpoints EndpointList) error {
 	// Start lock maintenance from all lock servers.
 	startLockMaintenance(globalLockServer)
 
 	// Register initialized lock servers to their respective rpc endpoints.
-	return registerStorageLockers(mux, globalLockServer)
+	return registerStorageLockers(router, globalLockServer)
 }
 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
-func registerStorageLockers(mux *router.Router, lkSrv *lockServer) error {
+func registerStorageLockers(router *mux.Router, lkSrv *lockServer) error {
 	lockRPCServer := newRPCServer()
 	if err := lockRPCServer.RegisterName(lockServiceName, lkSrv); err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
-	lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
+	lockRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	lockRouter.Path(lockServicePath).Handler(lockRPCServer)
 	return nil
 }

@@ -21,28 +21,39 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
+
+// setsStorageAPI is encapsulated type for Close()
+type setsStorageAPI [][]StorageAPI
+
+func (s setsStorageAPI) Close() error {
+	for i := 0; i < len(s); i++ {
+		for _, disk := range s[i] {
+			if disk == nil {
+				continue
+			}
+			disk.Close()
+		}
+	}
+	return nil
+}
 
 // xlSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type xlSets struct {
 	sets []*xlObjects
-
-	// Format mutex to lock format.
-	formatMu sync.RWMutex
 
 	// Reference format.
 	format *formatXLV3
@@ -51,7 +62,7 @@ type xlSets struct {
 	xlDisksMu sync.RWMutex
 
 	// Re-ordered list of disks per set.
-	xlDisks [][]StorageAPI
+	xlDisks setsStorageAPI
 
 	// List of endpoints provided on the command line.
 	endpoints EndpointList
@@ -64,9 +75,6 @@ type xlSets struct {
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
-
-	// Variable represents bucket policies in memory.
-	bucketPolicies *bucketPolicies
 
 	// Pack level listObjects pool management.
 	listPool *treeWalkPool
@@ -82,7 +90,13 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 			if s.xlDisks[i][j] == nil {
 				continue
 			}
-			if s.xlDisks[i][j].String() != endpoint.String() {
+			var endpointStr string
+			if endpoint.IsLocal {
+				endpointStr = endpoint.Path
+			} else {
+				endpointStr = endpoint.String()
+			}
+			if s.xlDisks[i][j].String() != endpointStr {
 				continue
 			}
 			return s.xlDisks[i][j].IsOnline()
@@ -101,7 +115,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV3, error) {
 
 	format, err := loadFormatXL(disk)
 	if err != nil {
-		// close the internal connection, to avoid fd leaks.
+		// Close the internal connection to avoid connection leaks.
 		disk.Close()
 		return nil, nil, err
 	}
@@ -131,6 +145,29 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.XL.This)
 }
 
+// Re initializes all disks based on the reference format, this function is
+// only used by HealFormat and ReloadFormat calls.
+func (s *xlSets) reInitDisks(refFormat *formatXLV3, storageDisks []StorageAPI, formats []*formatXLV3) [][]StorageAPI {
+	xlDisks := make([][]StorageAPI, s.setCount)
+	for i := 0; i < len(refFormat.XL.Sets); i++ {
+		xlDisks[i] = make([]StorageAPI, s.drivesPerSet)
+	}
+	for k := range storageDisks {
+		if storageDisks[k] == nil || formats[k] == nil {
+			continue
+		}
+		i, j, err := findDiskIndex(refFormat, formats[k])
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", storageDisks[i].String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			continue
+		}
+		xlDisks[i][j] = storageDisks[k]
+	}
+	return xlDisks
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
@@ -143,10 +180,10 @@ func (s *xlSets) connectDisks() {
 			printEndpointError(endpoint, err)
 			continue
 		}
-		s.formatMu.RLock()
 		i, j, err := findDiskIndex(s.format, format)
-		s.formatMu.RUnlock()
 		if err != nil {
+			// Close the internal connection to avoid connection leaks.
+			disk.Close()
 			printEndpointError(endpoint, err)
 			continue
 		}
@@ -159,11 +196,15 @@ func (s *xlSets) connectDisks() {
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
-func (s *xlSets) monitorAndConnectEndpoints(doneCh chan struct{}, monitorInterval time.Duration) {
+func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 	ticker := time.NewTicker(monitorInterval)
 	for {
 		select {
-		case <-doneCh:
+		case <-globalServiceDoneCh:
+			// Stop the timer.
+			ticker.Stop()
+			return
+		case <-s.disksConnectDoneCh:
 			// Stop the timer.
 			ticker.Stop()
 			return
@@ -212,37 +253,24 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 			nsMutex:  mutex,
 			bp:       bpool.NewBytePoolCap(setCount*drivesPerSet, blockSizeV1, blockSizeV1*2),
 		}
-		go s.sets[i].cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
 
-	for _, endpoint := range endpoints {
-		disk, nformat, err := connectEndpoint(endpoint)
-		if err != nil {
-			errorIf(err, "Unable to connect to endpoint %s", endpoint)
-			continue
-		}
-		i, j, err := findDiskIndex(format, nformat)
-		if err != nil {
-			errorIf(err, "Unable to find the endpoint %s in reference format", endpoint)
-			continue
-		}
-		s.xlDisks[i][j] = disk
-	}
-
-	// Initialize and load bucket policies.
-	var err error
-	s.bucketPolicies, err = initBucketPolicies(s)
-	if err != nil {
-		return nil, err
-	}
+	// Connect disks right away.
+	s.connectDisks()
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(s); err != nil {
-		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
+	if err := globalNotificationSys.Init(s); err != nil {
+		return nil, fmt.Errorf("Unable to initialize notification system. %v", err)
+	}
+
+	// Initialize policy system.
+	if err := globalPolicySys.Init(s); err != nil {
+		return nil, fmt.Errorf("Unable to initialize policy system. %v", err)
 	}
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(globalServiceDoneCh, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
 
 	return s, nil
 }
@@ -267,18 +295,25 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	storageInfo.Backend.RRSCData = rrSCData
 	storageInfo.Backend.RRSCParity = rrSCparity
 
-	formats, sErrs := loadFormatXLAll(s.endpoints)
+	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
+	for i := range storageInfo.Backend.Sets {
+		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
+	}
+
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return storageInfo
+	}
+	defer closeStorageDisks(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+
 	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, sErrs)
 	refFormat, err := getFormatXLInQuorum(formats)
 	if err != nil {
 		// Ignore errors here, since this call cannot do anything at
 		// this point. too many disks are down already.
 		return storageInfo
-	}
-
-	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
-	for i := range storageInfo.Backend.Sets {
-		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
 	// fill all the available/online endpoints
@@ -432,35 +467,18 @@ func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuation
 }
 
 // SetBucketPolicy persist the new policy on the bucket.
-func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
-	return persistAndNotifyBucketPolicyChange(bucket, false, policy, s)
+func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	return savePolicyConfig(s, bucket, policy)
 }
 
 // GetBucketPolicy will return a policy on a bucket
-func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
-	// fetch bucket policy from cache.
-	bpolicy := s.bucketPolicies.GetBucketPolicy(bucket)
-	if reflect.DeepEqual(bpolicy, emptyBucketPolicy) {
-		return ReadBucketPolicy(bucket, s)
-	}
-	return bpolicy, nil
+func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return GetPolicyConfig(s, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, s)
-}
-
-// RefreshBucketPolicy refreshes policy cache from disk
-func (s *xlSets) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	policy, err := ReadBucketPolicy(bucket, s)
-	if err != nil {
-		if reflect.DeepEqual(policy, emptyBucketPolicy) {
-			return s.bucketPolicies.DeleteBucketPolicy(bucket)
-		}
-		return err
-	}
-	return s.bucketPolicies.SetBucketPolicy(bucket, policy)
+	return removePolicyConfig(ctx, s, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
@@ -500,7 +518,7 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string) error {
 	}
 
 	// Delete all bucket metadata.
-	deleteBucketMetadata(bucket, s)
+	deleteBucketMetadata(ctx, bucket, s)
 
 	// Success.
 	return nil
@@ -587,26 +605,26 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	go func() {
-		if gerr := srcSet.getObject(srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+				logger.LogIf(ctx, gerr)
 			}
 			return
 		}
 		// Close writer explicitly signalling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			logger.LogIf(ctx, gerr)
 			return
 		}
 	}()
 
-	return destSet.putObject(destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
+	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
 }
 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
+func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string, err error) {
 		for _, disk := range disks {
 			if disk == nil {
@@ -619,10 +637,11 @@ func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
-				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
+				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
-				return nil, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, err
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -679,9 +698,10 @@ func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...
 // ListObjects - implements listing of objects across sets, each set is independently
 // listed and subsequently merge lexically sorted inside listDirSetsFactory(). Resulting
 // value through the walk channel receives the data properly lexically sorted.
-func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	var result ListObjectsInfo
 	// validate all the inputs for listObjects
-	if err = checkListObjsArgs(bucket, prefix, marker, delimiter, s); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return result, err
 	}
 
@@ -709,8 +729,8 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
-		listDir := listDirSetsFactory(isLeaf, xlTreeWalkIgnoredErrs, setDisks...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		listDir := listDirSetsFactory(ctx, isLeaf, xlTreeWalkIgnoredErrs, setDisks...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -720,32 +740,30 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			eof = true
 			break
 		}
+
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			return result, toObjectErr(walkResult.err, bucket, prefix)
 		}
 
-		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if hasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = entry
-			objInfo.IsDir = true
+		var err error
+		if hasSuffix(walkResult.entry, slashSeparator) {
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
 		} else {
-			// Set the Mode to a "regular" file.
-			var err error
-			objInfo, err = s.getHashedSet(entry).getObjectInfo(bucket, entry)
-			if err != nil {
-				// Ignore errFileNotFound as the object might have got
-				// deleted in the interim period of listing and getObjectInfo(),
-				// ignore quorum error as it might be an entry from an outdated disk.
-				switch errors.Cause(err) {
-				case errFileNotFound, errXLReadQuorum:
-					continue
-				}
-				return result, toObjectErr(err, bucket, prefix)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
+		}
+		if err != nil {
+			// Ignore errFileNotFound as the object might have got
+			// deleted in the interim period of listing and getObjectInfo(),
+			// ignore quorum error as it might be an entry from an outdated disk.
+			if IsErrIgnored(err, []error{
+				errFileNotFound,
+				errXLReadQuorum,
+			}...) {
+				continue
 			}
+			return result, toObjectErr(err, bucket, prefix)
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
@@ -794,12 +812,12 @@ func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destB
 	go func() {
 		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+				logger.LogIf(ctx, gerr)
 				return
 			}
 		}
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			logger.LogIf(ctx, gerr)
 			return
 		}
 	}()
@@ -916,23 +934,98 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 	return beforeDrives
 }
 
-// HealFormat - heals missing `format.json` on freshly or corrupted
-// disks (missing format.json but does have erasure coded data in it).
-func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+// Reloads the format from the disk, usually called by a remote peer notifier while
+// healing in a distributed setup.
+func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Acquire lock on format.json
 	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
+	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
+		return err
+	}
+	defer formatLock.RUnlock()
+
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return err
+	}
+	defer func(storageDisks []StorageAPI) {
+		if err != nil {
+			closeStorageDisks(storageDisks)
+		}
+	}(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+	if err = checkFormatXLValues(formats); err != nil {
+		return err
+	}
+
+	for index, sErr := range sErrs {
+		if sErr != nil {
+			// Look for acceptable heal errors, for any other
+			// errors we should simply quit and return.
+			if _, ok := formatHealErrors[sErr]; !ok {
+				return fmt.Errorf("Disk %s: %s", s.endpoints[index], sErr)
+			}
+		}
+	}
+
+	refFormat, err := getFormatXLInQuorum(formats)
+	if err != nil {
+		return err
+	}
+
+	// kill the monitoring loop such that we stop writing
+	// to indicate that we will re-initialize everything
+	// with new format.
+	s.disksConnectDoneCh <- struct{}{}
+
+	// Replace the new format.
+	s.format = refFormat
+
+	s.xlDisksMu.Lock()
+	{
+		// Close all existing disks.
+		s.xlDisks.Close()
+
+		// Re initialize disks, after saving the new reference format.
+		s.xlDisks = s.reInitDisks(refFormat, storageDisks, formats)
+	}
+	s.xlDisksMu.Unlock()
+
+	// Restart monitoring loop to monitor reformatted disks again.
+	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+
+	return nil
+}
+
+// HealFormat - heals missing `format.json` on freshly or corrupted
+// disks (missing format.json but does have erasure coded data in it).
+func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
+	// Acquire lock on format.json
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
 
-	formats, sErrs := loadFormatXLAll(s.endpoints)
-	if err := checkFormatXLValues(formats); err != nil {
+	storageDisks, err := initStorageDisks(s.endpoints)
+	if err != nil {
+		return madmin.HealResultItem{}, err
+	}
+
+	defer func(storageDisks []StorageAPI) {
+		if err != nil {
+			closeStorageDisks(storageDisks)
+		}
+	}(storageDisks)
+
+	formats, sErrs := loadFormatXLAll(storageDisks)
+	if err = checkFormatXLValues(formats); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 
 	// Prepare heal-result
-	res := madmin.HealResultItem{
+	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
 		Detail:    "disk-format",
 		DiskCount: s.setCount * s.drivesPerSet,
@@ -958,8 +1051,9 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 		}
 	}
 
+	// no errors found, no healing is required.
 	if !hasAnyErrors(sErrs) {
-		return res, nil
+		return res, errNoHealRequired
 	}
 
 	for index, sErr := range sErrs {
@@ -1030,21 +1124,35 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 
 		// Initialize meta volume, if volume already exists ignores it, all disks which
 		// are not found are ignored as well.
-		if err = initFormatXLMetaVolume(s.endpoints, tmpNewFormats); err != nil {
+		if err = initFormatXLMetaVolume(storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 		}
 
 		// Save formats `format.json` across all disks.
-		if err = saveFormatXLAll(s.endpoints, tmpNewFormats); err != nil {
+		if err = saveFormatXLAll(ctx, storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 
-		s.formatMu.Lock()
-		s.format = refFormat
-		s.formatMu.Unlock()
+		// kill the monitoring loop such that we stop writing
+		// to indicate that we will re-initialize everything
+		// with new format.
+		s.disksConnectDoneCh <- struct{}{}
 
-		// Connect disks, after saving the new reference format.
-		s.connectDisks()
+		// Replace with new reference format.
+		s.format = refFormat
+
+		s.xlDisksMu.Lock()
+		{
+			// Disconnect/relinquish all existing disks.
+			s.xlDisks.Close()
+
+			// Re initialize disks, after saving the new reference format.
+			s.xlDisks = s.reInitDisks(refFormat, storageDisks, tmpNewFormats)
+		}
+		s.xlDisksMu.Unlock()
+
+		// Restart our monitoring loop to start monitoring newly formatted disks.
+		go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
@@ -1229,7 +1337,7 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 }
 
 // listObjectsHeal - wrapper function implemented over file tree walk.
-func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
@@ -1253,7 +1361,7 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 		}
 
 		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -1270,24 +1378,9 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 		if walkResult.err != nil {
 			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if hasSuffix(entry, slashSeparator) {
-			// Object name needs to be full path.
-			objInfo.Bucket = bucket
-			objInfo.Name = entry
-			objInfo.IsDir = true
-		} else {
-			var err error
-			objInfo, err = s.getHashedSet(entry).getObjectInfo(bucket, entry)
-			if err != nil {
-				// Ignore errFileNotFound
-				if errors.Cause(err) == errFileNotFound {
-					continue
-				}
-				return loi, toObjectErr(err, bucket, prefix)
-			}
-		}
+		objInfo.Bucket = bucket
+		objInfo.Name = walkResult.entry
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
 		i++
@@ -1325,7 +1418,7 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 
 // This is not implemented yet, will be implemented later to comply with Admin API refactor.
 func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if err = checkListObjsArgs(bucket, prefix, marker, delimiter, s); err != nil {
+	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
 
@@ -1348,7 +1441,7 @@ func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 	}
 
 	// Initiate a list operation, if successful filter and return quickly.
-	listObjInfo, err := s.listObjectsHeal(bucket, prefix, marker, delimiter, maxKeys)
+	listObjInfo, err := s.listObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err == nil {
 		// We got the entries successfully return.
 		return listObjInfo, nil

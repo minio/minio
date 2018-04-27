@@ -31,7 +31,7 @@ import (
 
 	"github.com/djherbis/atime"
 
-	errors2 "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/wildcard"
 
 	"github.com/minio/minio/pkg/hash"
@@ -103,8 +103,8 @@ type CacheObjectLayer interface {
 
 // backendDownError returns true if err is due to backend failure or faulty disk if in server mode
 func backendDownError(err error) bool {
-	_, backendDown := errors2.Cause(err).(BackendDown)
-	return backendDown || errors2.IsErr(err, baseErrs...)
+	_, backendDown := err.(BackendDown)
+	return backendDown || IsErr(err, baseErrs...)
 }
 
 // get cache disk where object is currently cached for a GET operation. If object does not exist at that location,
@@ -191,7 +191,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	objInfo, err := GetObjectInfoFn(ctx, bucket, object)
 	backendDown := backendDownError(err)
 	if err != nil && !backendDown {
-		if _, ok := errors2.Cause(err).(ObjectNotFound); ok {
+		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
@@ -255,7 +255,7 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) 
 	}
 	objInfo, err := getObjectInfoFn(ctx, bucket, object)
 	if err != nil {
-		if _, ok := errors2.Cause(err).(ObjectNotFound); ok {
+		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 			return ObjectInfo{}, err
@@ -289,12 +289,20 @@ func listDirCacheFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks [
 	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string, err error) {
 		var entries []string
 		for _, disk := range disks {
+			// ignore disk-caches that might be missing/offline
+			if disk == nil {
+				continue
+			}
 			fs := disk.FSObjects
 			entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
+
+			// For any reason disk was deleted or goes offline, continue
+			// and list from other disks if possible.
 			if err != nil {
-				// For any reason disk was deleted or goes offline, continue
-				// and list from other disks if possible.
-				continue
+				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
+					continue
+				}
+				return nil, err
 			}
 
 			// Filter entries that have the prefix prefixEntry.
@@ -345,12 +353,12 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			if err != nil {
 				return false
 			}
-			_, err = fs.getObjectInfo(bucket, object)
+			_, err = fs.getObjectInfo(ctx, bucket, object)
 			return err == nil
 		}
 
 		listDir := listDirCacheFactory(isLeaf, cacheTreeWalkIgnoredErrs, c.cache.cfs)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -377,16 +385,16 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			var err error
 			fs, err := c.cache.getCacheFS(ctx, bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound
-				if errors2.Cause(err) == errFileNotFound {
+				// Ignore errDiskNotFound
+				if err == errDiskNotFound {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)
 			}
-			objInfo, err = fs.getObjectInfo(bucket, entry)
+			objInfo, err = fs.getObjectInfo(ctx, bucket, entry)
 			if err != nil {
-				// Ignore errFileNotFound
-				if errors2.Cause(err) == errFileNotFound {
+				// Ignore ObjectNotFound error
+				if _, ok := err.(ObjectNotFound); ok {
 					continue
 				}
 				return result, toObjectErr(err, bucket, prefix)
@@ -469,6 +477,10 @@ func (c cacheObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continu
 func (c cacheObjects) listBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
 	m := make(map[string]string)
 	for _, cache := range c.cache.cfs {
+		// ignore disk-caches that might be missing/offline
+		if cache == nil {
+			continue
+		}
 		entries, err := cache.ListBuckets(ctx)
 
 		if err != nil {
@@ -507,6 +519,10 @@ func (c cacheObjects) GetBucketInfo(ctx context.Context, bucket string) (bucketI
 	bucketInfo, err = getBucketInfoFn(ctx, bucket)
 	if backendDownError(err) {
 		for _, cache := range c.cache.cfs {
+			// ignore disk-caches that might be missing/offline
+			if cache == nil {
+				continue
+			}
 			if bucketInfo, err = cache.GetBucketInfo(ctx, bucket); err == nil {
 				return
 			}
@@ -754,7 +770,8 @@ func (c cacheObjects) StorageInfo(ctx context.Context) (storageInfo StorageInfo)
 			continue
 		}
 		info, err := getDiskInfo((cfs.fsPath))
-		errorIf(err, "Unable to get disk info %#v", cfs.fsPath)
+		logger.GetReqInfo(ctx).AppendTags("cachePath", cfs.fsPath)
+		logger.LogIf(ctx, err)
 		total += info.Total
 		free += info.Free
 	}
@@ -771,6 +788,10 @@ func (c cacheObjects) DeleteBucket(ctx context.Context, bucket string) (err erro
 	deleteBucketFn := c.DeleteBucketFn
 	var toDel []*cacheFSObjects
 	for _, cfs := range c.cache.cfs {
+		// ignore disk-caches that might be missing/offline
+		if cfs == nil {
+			continue
+		}
 		if _, cerr := cfs.GetBucketInfo(ctx, bucket); cerr == nil {
 			toDel = append(toDel, cfs)
 		}
@@ -791,7 +812,8 @@ func (c cacheObjects) DeleteBucket(ctx context.Context, bucket string) (err erro
 // or the global env overrides.
 func newCache(config CacheConfig) (*diskCache, error) {
 	var cfsObjects []*cacheFSObjects
-	formats, err := loadAndValidateCacheFormat(config.Drives)
+	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+	formats, err := loadAndValidateCacheFormat(ctx, config.Drives)
 	if err != nil {
 		return nil, err
 	}

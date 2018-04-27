@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -27,8 +29,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
-	"github.com/minio/minio/pkg/errors"
-	miniohttp "github.com/minio/minio/pkg/http"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 )
 
 var (
@@ -100,10 +102,14 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 	return nil
 }
 
+func init() {
+	logger.Init(GOPATH)
+}
+
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
 	if gw == nil {
-		fatalIf(errUnexpected, "Gateway implementation not initialized, exiting.")
+		logger.FatalIf(errUnexpected, "Gateway implementation not initialized, exiting.")
 	}
 
 	// Validate if we have access, secret set through environment.
@@ -116,13 +122,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// enable json and quite modes if jason flag is turned on.
 	jsonFlag := ctx.IsSet("json") || ctx.GlobalIsSet("json")
 	if jsonFlag {
-		log.EnableJSON()
+		logger.EnableJSON()
 	}
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
 	if quietFlag {
-		log.EnableQuiet()
+		logger.EnableQuiet()
 	}
 
 	// Fetch address option
@@ -139,73 +145,52 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		errorIf(fmt.Errorf("Access and secret keys not set"), "Access and Secret keys should be set through ENVs for backend [%s]", gatewayName)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("gatewayName", gatewayName)
+		contxt := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(contxt, errors.New("Access and Secret keys should be set through ENVs for backend"))
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
 	// Create certs path.
-	fatalIf(createConfigDir(), "Unable to create configuration directories.")
+	logger.FatalIf(createConfigDir(), "Unable to create configuration directories.")
 
 	// Initialize gateway config.
 	initConfig()
 
-	// Init the error tracing module.
-	errors.Init(GOPATH, "github.com/minio/minio")
-
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL certificate file")
+	logger.FatalIf(err, "Invalid SSL certificate file")
 
 	// Set system resources to maximum.
-	errorIf(setMaxResources(), "Unable to change resource limit")
+	logger.LogIf(context.Background(), setMaxResources())
 
 	initNSLock(false) // Enable local namespace lock.
 
-	// Initialize notification system.
+	// Create new notification system.
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, EndpointList{})
-	fatalIf(err, "Unable to initialize notification system.")
+	logger.FatalIf(err, "Unable to create new notification system.")
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
-	fatalIf(err, "Unable to initialize gateway layer")
+	logger.FatalIf(err, "Unable to initialize gateway layer")
 
 	router := mux.NewRouter().SkipClean(true)
 
+	// Add healthcheck router
+	registerHealthCheckRouter(router)
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
-		fatalIf(registerWebRouter(router), "Unable to configure web browser")
+		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
+
+	// Add API router.
 	registerAPIRouter(router)
 
-	var handlerFns = []HandlerFunc{
-		// Validate all the incoming paths.
-		setPathValidityHandler,
-		// Limits all requests size to a maximum fixed limit
-		setRequestSizeLimitHandler,
-		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
-		setCrossDomainPolicy,
-		// Validates all incoming requests to have a valid date header.
-		// Redirect some pre-defined browser request paths to a static location prefix.
-		setBrowserRedirectHandler,
-		// Validates if incoming request is for restricted buckets.
-		setReservedBucketHandler,
-		// Adds cache control for all browser requests.
-		setBrowserCacheControlHandler,
-		// Validates all incoming requests to have a valid date header.
-		setTimeValidityHandler,
-		// CORS setting for all browser API requests.
-		setCorsHandler,
-		// Validates all incoming URL resources, for invalid/unsupported
-		// resources client receives a HTTP error.
-		setIgnoreResourcesHandler,
-		// Auth handler verifies incoming authorization headers and
-		// routes them accordingly. Client receives a HTTP error for
-		// invalid/unsupported signatures.
-		setAuthHandler,
-		// Add new handlers here.
-	}
-
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
+	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -227,7 +212,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Print a warning message if gateway is not ready for production before the startup banner.
 		if !gw.Production() {
-			log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+			logger.StartupMessage(colorYellow("               *** Warning: Not Ready for Production ***"))
 		}
 
 		// Print gateway startup message.

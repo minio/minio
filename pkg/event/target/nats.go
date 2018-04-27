@@ -112,7 +112,10 @@ func NewNATSTarget(id string, args NATSArgs) (*NATSTarget, error) {
 
 		clientID := args.Streaming.ClientID
 		if clientID == "" {
-			clientID = mustGetNewUUID()
+			clientID, err = getNewUUID()
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		connOpts := []stan.Option{stan.NatsURL(addressURL)}

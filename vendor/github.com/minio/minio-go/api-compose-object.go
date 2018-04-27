@@ -132,12 +132,6 @@ func NewSourceInfo(bucket, object string, sse encrypt.ServerSide) SourceInfo {
 
 	// Set the source header
 	r.Headers.Set("x-amz-copy-source", s3utils.EncodePath(bucket+"/"+object))
-
-	// Assemble decryption headers for upload-part-copy request
-	if r.encryption != nil {
-		encrypt.SSECopy(r.encryption).Marshal(r.Headers)
-	}
-
 	return r
 }
 
@@ -197,7 +191,7 @@ func (s *SourceInfo) getProps(c Client) (size int64, etag string, userMeta map[s
 	// Get object info - need size and etag here. Also, decryption
 	// headers are added to the stat request if given.
 	var objInfo ObjectInfo
-	opts := StatObjectOptions{GetObjectOptions{ServerSideEncryption: s.encryption}}
+	opts := StatObjectOptions{GetObjectOptions{ServerSideEncryption: encrypt.SSE(s.encryption)}}
 	objInfo, err = c.statObject(context.Background(), s.bucket, s.object, opts)
 	if err != nil {
 		err = ErrInvalidArgument(fmt.Sprintf("Could not stat object - %s/%s: %v", s.bucket, s.object, err))
@@ -427,37 +421,7 @@ func (c Client) ComposeObject(dst DestinationInfo, srcs []SourceInfo) error {
 	// involved, it is being copied wholly and at most 5GiB in
 	// size, emptyfiles are also supported).
 	if (totalParts == 1 && srcs[0].start == -1 && totalSize <= maxPartSize) || (totalSize == 0) {
-		h := srcs[0].Headers
-		// Add destination encryption headers
-		if dst.encryption != nil {
-			dst.encryption.Marshal(h)
-		}
-
-		// If no user metadata is specified (and so, the
-		// for-loop below is not entered), metadata from the
-		// source is copied to the destination (due to
-		// single-part copy-object PUT request behaviour).
-		for k, v := range dst.getUserMetaHeadersMap(true) {
-			h.Set(k, v)
-		}
-
-		// Send copy request
-		resp, err := c.executeMethod(ctx, "PUT", requestMetadata{
-			bucketName:   dst.bucket,
-			objectName:   dst.object,
-			customHeader: h,
-		})
-		defer closeResponse(resp)
-		if err != nil {
-			return err
-		}
-		// Check if we got an error response.
-		if resp.StatusCode != http.StatusOK {
-			return httpRespToErrorResponse(resp, dst.bucket, dst.object)
-		}
-
-		// Return nil on success.
-		return nil
+		return c.CopyObject(dst, srcs[0])
 	}
 
 	// Now, handle multipart-copy cases.
@@ -487,6 +451,9 @@ func (c Client) ComposeObject(dst DestinationInfo, srcs []SourceInfo) error {
 	partIndex := 1
 	for i, src := range srcs {
 		h := src.Headers
+		if src.encryption != nil {
+			src.encryption.Marshal(h)
+		}
 		// Add destination encryption headers
 		if dst.encryption != nil {
 			dst.encryption.Marshal(h)

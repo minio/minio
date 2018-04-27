@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -25,13 +26,12 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
 )
 
 func ossErrResponse(code string) error {
-	return errors.Trace(oss.ServiceError{
+	return oss.ServiceError{
 		Code: code,
-	})
+	}
 }
 
 func TestOSSToObjectError(t *testing.T) {
@@ -103,8 +103,8 @@ func TestOSSToObjectError(t *testing.T) {
 
 	for i, tc := range testCases {
 		actualErr := ossToObjectError(tc.inputErr, tc.bucket, tc.object)
-		if e, ok := actualErr.(*errors.Error); ok && e.Cause != tc.expectedErr {
-			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, e.Cause)
+		if actualErr != nil && tc.expectedErr != nil && actualErr.Error() != tc.expectedErr.Error() {
+			t.Errorf("Test case %d: Expected error '%v' but received error '%v'", i+1, tc.expectedErr, actualErr)
 		}
 	}
 }
@@ -116,8 +116,8 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 	headers = map[string]string{
 		"x-amz-meta-invalid_meta": "value",
 	}
-	_, err = appendS3MetaToOSSOptions(nil, headers)
-	if err = errors.Cause(err); err != nil {
+	_, err = appendS3MetaToOSSOptions(context.Background(), nil, headers)
+	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
 		}
@@ -133,7 +133,7 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	opts, err := appendS3MetaToOSSOptions(nil, headers)
+	opts, err := appendS3MetaToOSSOptions(context.Background(), nil, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}

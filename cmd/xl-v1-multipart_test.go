@@ -21,8 +21,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests cleanup multipart uploads for erasure coded backend.
@@ -57,7 +55,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go xl.cleanupStaleMultipartUploads(20*time.Millisecond, 0, globalServiceDoneCh)
+	go xl.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, globalServiceDoneCh)
 
 	// Wait for 40ms such that - we have given enough time for
 	// cleanup routine to kick in.
@@ -68,7 +66,6 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
-		err = errors.Cause(err)
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}

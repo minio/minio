@@ -30,11 +30,13 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/condition"
 )
 
 const (
@@ -72,7 +74,7 @@ ENVIRONMENT VARIABLES:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 	
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";".
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
@@ -90,7 +92,7 @@ EXAMPLES:
   3. Start minio gateway server for Aliyun OSS backend with edge caching enabled.
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
-      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
       $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
       $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}}
@@ -113,7 +115,7 @@ func ossGatewayMain(ctx *cli.Context) {
 
 	// Validate gateway arguments.
 	host := ctx.Args().First()
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
 	minio.StartGateway(ctx, &OSS{host})
 }
@@ -149,9 +151,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	}, nil
 }
 
-// Production - oss is not production ready yet.
+// Production - oss is production ready.
 func (g *OSS) Production() bool {
-	return false
+	return true
 }
 
 // appendS3MetaToOSSOptions converts metadata meant for S3 PUT/COPY
@@ -161,7 +163,7 @@ func (g *OSS) Production() bool {
 // `X-Amz-Meta-` prefix and converted into `X-Oss-Meta-`.
 //
 // Header names are canonicalized as in http.Header.
-func appendS3MetaToOSSOptions(opts []oss.Option, s3Metadata map[string]string) ([]oss.Option, error) {
+func appendS3MetaToOSSOptions(ctx context.Context, opts []oss.Option, s3Metadata map[string]string) ([]oss.Option, error) {
 	if opts == nil {
 		opts = make([]oss.Option, 0, len(s3Metadata))
 	}
@@ -173,7 +175,8 @@ func appendS3MetaToOSSOptions(opts []oss.Option, s3Metadata map[string]string) (
 			metaKey := k[len("X-Amz-Meta-"):]
 			// NOTE(timonwong): OSS won't allow headers with underscore(_).
 			if strings.Contains(metaKey, "_") {
-				return nil, errors.Trace(minio.UnsupportedMetadata{})
+				logger.LogIf(ctx, minio.UnsupportedMetadata{})
+				return nil, minio.UnsupportedMetadata{}
 			}
 			opts = append(opts, oss.Meta(metaKey, v))
 		case k == "X-Amz-Acl":
@@ -271,15 +274,6 @@ func ossToObjectError(err error, params ...string) error {
 		return nil
 	}
 
-	e, ok := err.(*errors.Error)
-	if !ok {
-		// Code should be fixed if this function is called without doing errors.Trace()
-		// Else handling different situations in this function makes this function complicated.
-		minio.ErrorIf(err, "Expected type *Error")
-		return err
-	}
-
-	err = e.Cause
 	bucket := ""
 	object := ""
 	uploadID := ""
@@ -298,7 +292,7 @@ func ossToObjectError(err error, params ...string) error {
 	if !ok {
 		// We don't interpret non OSS errors. As oss errors will
 		// have StatusCode to help to convert to object errors.
-		return e
+		return err
 	}
 
 	switch ossErr.Code {
@@ -330,8 +324,7 @@ func ossToObjectError(err error, params ...string) error {
 		err = minio.InvalidPart{}
 	}
 
-	e.Cause = err
-	return e
+	return err
 }
 
 // ossObjects implements gateway for Aliyun Object Storage Service.
@@ -366,22 +359,21 @@ func ossIsValidBucketName(bucket string) bool {
 // MakeBucketWithLocation creates a new container on OSS backend.
 func (l *ossObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	if !ossIsValidBucketName(bucket) {
-		return errors.Trace(minio.BucketNameInvalid{Bucket: bucket})
+		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
+		return minio.BucketNameInvalid{Bucket: bucket}
 	}
 
 	err := l.Client.CreateBucket(bucket)
-	return ossToObjectError(errors.Trace(err), bucket)
+	logger.LogIf(ctx, err)
+	return ossToObjectError(err, bucket)
 }
 
 // ossGeBucketInfo gets bucket metadata.
-func ossGeBucketInfo(client *oss.Client, bucket string) (bi minio.BucketInfo, err error) {
-	if !ossIsValidBucketName(bucket) {
-		return bi, errors.Trace(minio.BucketNameInvalid{Bucket: bucket})
-	}
-
+func ossGeBucketInfo(ctx context.Context, client *oss.Client, bucket string) (bi minio.BucketInfo, err error) {
 	bgir, err := client.GetBucketInfo(bucket)
 	if err != nil {
-		return bi, ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return bi, ossToObjectError(err, bucket)
 	}
 
 	return minio.BucketInfo{
@@ -392,7 +384,7 @@ func ossGeBucketInfo(client *oss.Client, bucket string) (bi minio.BucketInfo, er
 
 // GetBucketInfo gets bucket metadata.
 func (l *ossObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
-	return ossGeBucketInfo(l.Client, bucket)
+	return ossGeBucketInfo(ctx, l.Client, bucket)
 }
 
 // ListBuckets lists all OSS buckets.
@@ -401,7 +393,8 @@ func (l *ossObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	for {
 		lbr, err := l.Client.ListBuckets(marker)
 		if err != nil {
-			return nil, ossToObjectError(errors.Trace(err))
+			logger.LogIf(ctx, err)
+			return nil, ossToObjectError(err)
 		}
 
 		for _, bi := range lbr.Buckets {
@@ -424,7 +417,8 @@ func (l *ossObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	err := l.Client.DeleteBucket(bucket)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket)
 	}
 	return nil
 }
@@ -462,10 +456,11 @@ func fromOSSClientListObjectsResult(bucket string, lor oss.ListObjectsResult) mi
 }
 
 // ossListObjects lists all blobs in OSS bucket filtered by prefix.
-func ossListObjects(client *oss.Client, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
+func ossListObjects(ctx context.Context, client *oss.Client, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	buck, err := client.Bucket(bucket)
 	if err != nil {
-		return loi, ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return loi, ossToObjectError(err, bucket)
 	}
 
 	// maxKeys should default to 1000 or less.
@@ -475,19 +470,20 @@ func ossListObjects(client *oss.Client, bucket, prefix, marker, delimiter string
 
 	lor, err := buck.ListObjects(oss.Prefix(prefix), oss.Marker(marker), oss.Delimiter(delimiter), oss.MaxKeys(maxKeys))
 	if err != nil {
-		return loi, ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return loi, ossToObjectError(err, bucket)
 	}
 
 	return fromOSSClientListObjectsResult(bucket, lor), nil
 }
 
 // ossListObjectsV2 lists all blobs in OSS bucket filtered by prefix.
-func ossListObjectsV2(client *oss.Client, bucket, prefix, continuationToken, delimiter string, maxKeys int,
+func ossListObjectsV2(ctx context.Context, client *oss.Client, bucket, prefix, continuationToken, delimiter string, maxKeys int,
 	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
 	// fetchOwner and startAfter are not supported and unused.
 	marker := continuationToken
 
-	resultV1, err := ossListObjects(client, bucket, prefix, marker, delimiter, maxKeys)
+	resultV1, err := ossListObjects(ctx, client, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return loi, err
 	}
@@ -503,13 +499,13 @@ func ossListObjectsV2(client *oss.Client, bucket, prefix, continuationToken, del
 
 // ListObjects lists all blobs in OSS bucket filtered by prefix.
 func (l *ossObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-	return ossListObjects(l.Client, bucket, prefix, marker, delimiter, maxKeys)
+	return ossListObjects(ctx, l.Client, bucket, prefix, marker, delimiter, maxKeys)
 }
 
 // ListObjectsV2 lists all blobs in OSS bucket filtered by prefix
 func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int,
 	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
-	return ossListObjectsV2(l.Client, bucket, prefix, continuationToken, delimiter, maxKeys, fetchOwner, startAfter)
+	return ossListObjectsV2(ctx, l.Client, bucket, prefix, continuationToken, delimiter, maxKeys, fetchOwner, startAfter)
 }
 
 // ossGetObject reads an object on OSS. Supports additional
@@ -518,14 +514,16 @@ func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func ossGetObject(client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
+func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
-		return ossToObjectError(errors.Trace(fmt.Errorf("Invalid argument")), bucket, key)
+		logger.LogIf(ctx, fmt.Errorf("Invalid argument"))
+		return ossToObjectError(fmt.Errorf("Invalid argument"), bucket, key)
 	}
 
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, key)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, key)
 	}
 
 	var opts []oss.Option
@@ -535,12 +533,14 @@ func ossGetObject(client *oss.Client, bucket, key string, startOffset, length in
 
 	object, err := bkt.GetObject(key, opts...)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, key)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, key)
 	}
 	defer object.Close()
 
 	if _, err := io.Copy(writer, object); err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, key)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, key)
 	}
 	return nil
 }
@@ -552,7 +552,7 @@ func ossGetObject(client *oss.Client, bucket, key string, startOffset, length in
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (l *ossObjects) GetObject(ctx context.Context, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
-	return ossGetObject(l.Client, bucket, key, startOffset, length, writer, etag)
+	return ossGetObject(ctx, l.Client, bucket, key, startOffset, length, writer, etag)
 }
 
 func translatePlainError(err error) error {
@@ -569,15 +569,17 @@ func translatePlainError(err error) error {
 }
 
 // ossGetObjectInfo reads object info and replies back ObjectInfo.
-func ossGetObjectInfo(client *oss.Client, bucket, object string) (objInfo minio.ObjectInfo, err error) {
+func ossGetObjectInfo(ctx context.Context, client *oss.Client, bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return objInfo, ossToObjectError(err, bucket, object)
 	}
 
 	header, err := bkt.GetObjectDetailedMeta(object)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(translatePlainError(err)), bucket, object)
+		logger.LogIf(ctx, translatePlainError(err))
+		return objInfo, ossToObjectError(translatePlainError(err), bucket, object)
 	}
 
 	// Build S3 metadata from OSS metadata
@@ -600,40 +602,43 @@ func ossGetObjectInfo(client *oss.Client, bucket, object string) (objInfo minio.
 
 // GetObjectInfo reads object info and replies back ObjectInfo.
 func (l *ossObjects) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo minio.ObjectInfo, err error) {
-	return ossGetObjectInfo(l.Client, bucket, object)
+	return ossGetObjectInfo(ctx, l.Client, bucket, object)
 }
 
 // ossPutObject creates a new object with the incoming data.
-func ossPutObject(client *oss.Client, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return objInfo, ossToObjectError(err, bucket, object)
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(nil, metadata)
+	opts, err := appendS3MetaToOSSOptions(ctx, nil, metadata)
 	if err != nil {
 		return objInfo, ossToObjectError(err, bucket, object)
 	}
 
 	err = bkt.PutObject(object, data, opts...)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return objInfo, ossToObjectError(err, bucket, object)
 	}
 
-	return ossGetObjectInfo(client, bucket, object)
+	return ossGetObjectInfo(ctx, client, bucket, object)
 }
 
 // PutObject creates a new object with the incoming data.
 func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
-	return ossPutObject(l.Client, bucket, object, data, metadata)
+	return ossPutObject(ctx, l.Client, bucket, object, data, metadata)
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *ossObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Client.Bucket(srcBucket)
 	if err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
+		logger.LogIf(ctx, err)
+		return objInfo, ossToObjectError(err, srcBucket, srcObject)
 	}
 
 	opts := make([]oss.Option, 0, len(srcInfo.UserDefined)+1)
@@ -644,13 +649,14 @@ func (l *ossObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	opts = append(opts, oss.MetadataDirective(oss.MetaReplace))
 
 	// Build OSS metadata
-	opts, err = appendS3MetaToOSSOptions(opts, srcInfo.UserDefined)
+	opts, err = appendS3MetaToOSSOptions(ctx, opts, srcInfo.UserDefined)
 	if err != nil {
 		return objInfo, ossToObjectError(err, srcBucket, srcObject)
 	}
 
 	if _, err = bkt.CopyObjectTo(dstBucket, dstObject, srcObject, opts...); err != nil {
-		return objInfo, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
+		logger.LogIf(ctx, err)
+		return objInfo, ossToObjectError(err, srcBucket, srcObject)
 	}
 	return l.GetObjectInfo(ctx, dstBucket, dstObject)
 }
@@ -659,12 +665,14 @@ func (l *ossObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) error {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, object)
 	}
 
 	err = bkt.DeleteObject(object)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, object)
 	}
 	return nil
 }
@@ -701,13 +709,15 @@ func fromOSSClientListMultipartsInfo(lmur oss.ListMultipartUploadResult) minio.L
 func (l *ossObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
-		return lmi, ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return lmi, ossToObjectError(err, bucket)
 	}
 
 	lmur, err := bkt.ListMultipartUploads(oss.Prefix(prefix), oss.KeyMarker(keyMarker), oss.UploadIDMarker(uploadIDMarker),
 		oss.Delimiter(delimiter), oss.MaxUploads(maxUploads))
 	if err != nil {
-		return lmi, ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return lmi, ossToObjectError(err, bucket)
 	}
 
 	return fromOSSClientListMultipartsInfo(lmur), nil
@@ -717,18 +727,20 @@ func (l *ossObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, k
 func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
-		return uploadID, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return uploadID, ossToObjectError(err, bucket, object)
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(nil, metadata)
+	opts, err := appendS3MetaToOSSOptions(ctx, nil, metadata)
 	if err != nil {
 		return uploadID, ossToObjectError(err, bucket, object)
 	}
 
 	lmur, err := bkt.InitiateMultipartUpload(object, opts...)
 	if err != nil {
-		return uploadID, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return uploadID, ossToObjectError(err, bucket, object)
 	}
 
 	return lmur.UploadID, nil
@@ -738,7 +750,8 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi minio.PartInfo, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
-		return pi, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return pi, ossToObjectError(err, bucket, object)
 	}
 
 	imur := oss.InitiateMultipartUploadResult{
@@ -749,7 +762,8 @@ func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	size := data.Size()
 	up, err := bkt.UploadPart(imur, data, size, partID)
 	if err != nil {
-		return pi, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return pi, ossToObjectError(err, bucket, object)
 	}
 
 	return minio.PartInfo{
@@ -820,11 +834,12 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 
 	bkt, err := l.Client.Bucket(destBucket)
 	if err != nil {
-		return p, ossToObjectError(errors.Trace(err), destBucket)
+		logger.LogIf(ctx, err)
+		return p, ossToObjectError(err, destBucket)
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(nil, srcInfo.UserDefined)
+	opts, err := appendS3MetaToOSSOptions(ctx, nil, srcInfo.UserDefined)
 	if err != nil {
 		return p, ossToObjectError(err, srcBucket, srcObject)
 	}
@@ -835,7 +850,8 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 	}, srcBucket, srcObject, startOffset, length, partID, opts...)
 
 	if err != nil {
-		return p, ossToObjectError(errors.Trace(err), srcBucket, srcObject)
+		logger.LogIf(ctx, err)
+		return p, ossToObjectError(err, srcBucket, srcObject)
 	}
 
 	p.PartNumber = completePart.PartNumber
@@ -847,7 +863,8 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi minio.ListPartsInfo, err error) {
 	lupr, err := ossListObjectParts(l.Client, bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		return lpi, ossToObjectError(errors.Trace(err), bucket, object, uploadID)
+		logger.LogIf(ctx, err)
+		return lpi, ossToObjectError(err, bucket, object, uploadID)
 	}
 
 	return fromOSSClientListPartsInfo(lupr, partNumberMarker), nil
@@ -857,7 +874,8 @@ func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 func (l *ossObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, object)
 	}
 
 	err = bkt.AbortMultipartUpload(oss.InitiateMultipartUploadResult{
@@ -866,7 +884,8 @@ func (l *ossObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		UploadID: uploadID,
 	})
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket, object)
 	}
 	return nil
 }
@@ -876,7 +895,8 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	client := l.Client
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		return oi, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return oi, ossToObjectError(err, bucket, object)
 	}
 
 	// Error out if uploadedParts except last part sizing < 5MiB.
@@ -886,7 +906,8 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	for lupr.IsTruncated {
 		lupr, err = ossListObjectParts(client, bucket, object, uploadID, partNumberMarker, ossMaxParts)
 		if err != nil {
-			return oi, ossToObjectError(errors.Trace(err), bucket, object, uploadID)
+			logger.LogIf(ctx, err)
+			return oi, ossToObjectError(err, bucket, object, uploadID)
 		}
 
 		uploadedParts := lupr.UploadedParts
@@ -900,11 +921,16 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 		for _, part := range uploadedParts {
 			if part.Size < ossS3MinPartSize {
-				return oi, errors.Trace(minio.PartTooSmall{
+				logger.LogIf(ctx, minio.PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   int64(part.Size),
 					PartETag:   minio.ToS3ETag(part.ETag),
 				})
+				return oi, minio.PartTooSmall{
+					PartNumber: part.PartNumber,
+					PartSize:   int64(part.Size),
+					PartETag:   minio.ToS3ETag(part.ETag),
+				}
 			}
 		}
 
@@ -926,7 +952,8 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	_, err = bkt.CompleteMultipartUpload(imur, parts)
 	if err != nil {
-		return oi, ossToObjectError(errors.Trace(err), bucket, object)
+		logger.LogIf(ctx, err)
+		return oi, ossToObjectError(err, bucket, object)
 	}
 
 	return l.GetObjectInfo(ctx, bucket, object)
@@ -937,33 +964,43 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 // oss.ACLPublicReadWrite: readwrite in minio terminology
 // oss.ACLPublicRead: readonly in minio terminology
 // oss.ACLPrivate: none in minio terminology
-func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, policyInfo policy.BucketAccessPolicy) error {
-	bucketPolicies := policy.GetPolicies(policyInfo.Statements, bucket, "")
+func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
+	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
+	if err != nil {
+		// This should not happen.
+		return ossToObjectError(err, bucket)
+	}
+
+	bucketPolicies := miniogopolicy.GetPolicies(policyInfo.Statements, bucket, "")
 	if len(bucketPolicies) != 1 {
-		return errors.Trace(minio.NotImplemented{})
+		logger.LogIf(ctx, minio.NotImplemented{})
+		return minio.NotImplemented{}
 	}
 
 	prefix := bucket + "/*" // For all objects inside the bucket.
 	for policyPrefix, bucketPolicy := range bucketPolicies {
 		if policyPrefix != prefix {
-			return errors.Trace(minio.NotImplemented{})
+			logger.LogIf(ctx, minio.NotImplemented{})
+			return minio.NotImplemented{}
 		}
 
 		var acl oss.ACLType
 		switch bucketPolicy {
-		case policy.BucketPolicyNone:
+		case miniogopolicy.BucketPolicyNone:
 			acl = oss.ACLPrivate
-		case policy.BucketPolicyReadOnly:
+		case miniogopolicy.BucketPolicyReadOnly:
 			acl = oss.ACLPublicRead
-		case policy.BucketPolicyReadWrite:
+		case miniogopolicy.BucketPolicyReadWrite:
 			acl = oss.ACLPublicReadWrite
 		default:
-			return errors.Trace(minio.NotImplemented{})
+			logger.LogIf(ctx, minio.NotImplemented{})
+			return minio.NotImplemented{}
 		}
 
 		err := l.Client.SetBucketACL(bucket, acl)
 		if err != nil {
-			return ossToObjectError(errors.Trace(err), bucket)
+			logger.LogIf(ctx, err)
+			return ossToObjectError(err, bucket)
 		}
 	}
 
@@ -971,33 +1008,68 @@ func (l *ossObjects) SetBucketPolicy(ctx context.Context, bucket string, policyI
 }
 
 // GetBucketPolicy will get policy on bucket.
-func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
+func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	result, err := l.Client.GetBucketACL(bucket)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, ossToObjectError(errors.Trace(err))
+		logger.LogIf(ctx, err)
+		return nil, ossToObjectError(err)
 	}
 
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
+	var readOnly, readWrite bool
 	switch result.ACL {
 	case string(oss.ACLPrivate):
 		// By default, all buckets starts with a "private" policy.
-		return policy.BucketAccessPolicy{}, ossToObjectError(errors.Trace(minio.PolicyNotFound{}), bucket)
+		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
+		return nil, ossToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	case string(oss.ACLPublicRead):
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
+		readOnly = true
 	case string(oss.ACLPublicReadWrite):
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadWrite, bucket, "")
+		readWrite = true
 	default:
-		return policy.BucketAccessPolicy{}, errors.Trace(minio.NotImplemented{})
+		logger.LogIf(ctx, minio.NotImplemented{})
+		return nil, minio.NotImplemented{}
 	}
 
-	return policyInfo, nil
+	actionSet := policy.NewActionSet()
+	if readOnly {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketAction)
+		actionSet.Add(policy.GetObjectAction)
+	}
+	if readWrite {
+		actionSet.Add(policy.GetBucketLocationAction)
+		actionSet.Add(policy.ListBucketAction)
+		actionSet.Add(policy.GetObjectAction)
+		actionSet.Add(policy.ListBucketMultipartUploadsAction)
+		actionSet.Add(policy.AbortMultipartUploadAction)
+		actionSet.Add(policy.DeleteObjectAction)
+		actionSet.Add(policy.ListMultipartUploadPartsAction)
+		actionSet.Add(policy.PutObjectAction)
+	}
+
+	return &policy.Policy{
+		Version: policy.DefaultVersion,
+		Statements: []policy.Statement{
+			policy.NewStatement(
+				policy.Allow,
+				policy.NewPrincipal("*"),
+				actionSet,
+				policy.NewResourceSet(
+					policy.NewResource(bucket, ""),
+					policy.NewResource(bucket, "*"),
+				),
+				condition.NewFunctions(),
+			),
+		},
+	}, nil
 }
 
 // DeleteBucketPolicy deletes all policies on bucket.
 func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	err := l.Client.SetBucketACL(bucket, oss.ACLPrivate)
 	if err != nil {
-		return ossToObjectError(errors.Trace(err), bucket)
+		logger.LogIf(ctx, err)
+		return ossToObjectError(err, bucket)
 	}
 	return nil
 }

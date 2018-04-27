@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 	"time"
 
-	router "github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const adminPath = "/admin"
@@ -94,8 +94,7 @@ func (s *adminCmd) ReInitFormat(args *ReInitFormatArgs, reply *AuthRPCReply) err
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
-	_, err := objectAPI.HealFormat(context.Background(), args.DryRun)
-	return err
+	return objectAPI.ReloadFormat(context.Background(), args.DryRun)
 }
 
 // ListLocks - lists locks held by requests handled by this server instance.
@@ -103,7 +102,14 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	if err := query.IsAuthenticated(); err != nil {
 		return err
 	}
-	volLocks := listLocksInfo(query.Bucket, query.Prefix, query.Duration)
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+	volLocks, err := objectAPI.ListLocks(context.Background(), query.Bucket, query.Prefix, query.Duration)
+	if err != nil {
+		return err
+	}
 	*reply = ListLocksReply{VolLocks: volLocks}
 	return nil
 }
@@ -176,7 +182,9 @@ type WriteConfigReply struct {
 func writeTmpConfigCommon(tmpFileName string, configBytes []byte) error {
 	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
 	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
-	errorIf(err, fmt.Sprintf("Failed to write to temporary config file %s", tmpConfigFile))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	logger.LogIf(ctx, err)
 	return err
 }
 
@@ -209,20 +217,24 @@ func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigRep
 	tmpConfigFile := filepath.Join(getConfigDir(), cArgs.FileName)
 
 	err := os.Rename(tmpConfigFile, configFile)
-	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
+	reqInfo.AppendTags("configFile", configFile)
+	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	logger.LogIf(ctx, err)
 	return err
 }
 
 // registerAdminRPCRouter - registers RPC methods for service status,
 // stop and restart commands.
-func registerAdminRPCRouter(mux *router.Router) error {
+func registerAdminRPCRouter(router *mux.Router) error {
 	adminRPCHandler := &adminCmd{}
 	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
-	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	adminRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)
 	return nil
 }

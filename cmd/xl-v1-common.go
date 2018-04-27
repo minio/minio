@@ -17,9 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"path"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
@@ -34,7 +35,7 @@ func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 // This function does the following check, suppose
 // object is "a/b/c/d", stat makes sure that objects ""a/b/c""
 // "a/b" and "a" do not exist.
-func (xl xlObjects) parentDirIsObject(bucket, parent string) bool {
+func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
 		if p == "." || p == "/" {
@@ -63,10 +64,14 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 			return true
 		}
 		// Ignore for file not found,  disk not found or faulty disk.
-		if errors.IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
+		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 			continue
 		}
-		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)
+		reqInfo := &logger.ReqInfo{BucketName: bucket}
+		reqInfo.AppendTags("prefix", prefix)
+		reqInfo.AppendTags("xlMetaJSONFile", xlMetaJSONFile)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	} // Exhausted all disks - return false.
 	return false
 }

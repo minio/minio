@@ -22,9 +22,10 @@ import (
 	"path"
 
 	"github.com/gorilla/mux"
-	xerrors "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/policy"
 )
 
 const s3Path = "/s3/remote"
@@ -43,23 +44,33 @@ type DeleteBucketArgs struct {
 // DeleteBucket - handles delete bucket RPC call which removes all values of given bucket in global NotificationSys object.
 func (receiver *PeerRPCReceiver) DeleteBucket(args *DeleteBucketArgs, reply *AuthRPCArgs) error {
 	globalNotificationSys.RemoveNotification(args.BucketName)
+	globalPolicySys.Remove(args.BucketName)
 	return nil
 }
 
-// UpdateBucketPolicyArgs - update bucket policy RPC arguments.
-type UpdateBucketPolicyArgs struct {
+// SetBucketPolicyArgs - set bucket policy RPC arguments.
+type SetBucketPolicyArgs struct {
+	AuthRPCArgs
+	BucketName string
+	Policy     policy.Policy
+}
+
+// SetBucketPolicy - handles set bucket policy RPC call which adds bucket policy to globalPolicySys.
+func (receiver *PeerRPCReceiver) SetBucketPolicy(args *SetBucketPolicyArgs, reply *AuthRPCArgs) error {
+	globalPolicySys.Set(args.BucketName, args.Policy)
+	return nil
+}
+
+// RemoveBucketPolicyArgs - delete bucket policy RPC arguments.
+type RemoveBucketPolicyArgs struct {
 	AuthRPCArgs
 	BucketName string
 }
 
-// UpdateBucketPolicy - handles update bucket policy RPC call which sets bucket policies to given bucket in global BucketPolicies object.
-func (receiver *PeerRPCReceiver) UpdateBucketPolicy(args *UpdateBucketPolicyArgs, reply *AuthRPCArgs) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		// If the object layer is just coming up then it will load the policy from the disk.
-		return nil
-	}
-	return objectAPI.RefreshBucketPolicy(context.Background(), args.BucketName)
+// RemoveBucketPolicy - handles delete bucket policy RPC call which removes bucket policy to globalPolicySys.
+func (receiver *PeerRPCReceiver) RemoveBucketPolicy(args *RemoveBucketPolicyArgs, reply *AuthRPCArgs) error {
+	globalPolicySys.Remove(args.BucketName)
+	return nil
 }
 
 // PutBucketNotificationArgs - put bucket notification RPC arguments.
@@ -103,7 +114,10 @@ func (receiver *PeerRPCReceiver) ListenBucketNotification(args *ListenBucketNoti
 	target := NewPeerRPCClientTarget(args.BucketName, args.TargetID, rpcClient)
 	rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
 	if err := globalNotificationSys.AddRemoteTarget(args.BucketName, target, rulesMap); err != nil {
-		errorIf(err, "Unable to add PeerRPCClientTarget %v to globalNotificationSys.targetList.", target)
+		reqInfo := &logger.ReqInfo{BucketName: target.bucketName}
+		reqInfo.AppendTags("targetName", target.id.Name)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return err
 	}
 	return nil
@@ -152,13 +166,15 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 	if errMap := globalNotificationSys.send(args.BucketName, args.Event, args.TargetID); len(errMap) != 0 {
 		var found bool
 		if err, found = errMap[args.TargetID]; !found {
-			// errMap must be zero or one element map because we sent to only one target ID.
-			panic(fmt.Errorf("error for target %v not found in error map %+v", args.TargetID, errMap))
+			return fmt.Errorf("error for target %v not found in error map %+v", args.TargetID, errMap)
 		}
 	}
 
 	if err != nil {
-		errorIf(err, "unable to send event %v to target %v", args.Event, args.TargetID)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", args.Event.EventName.String())
+		reqInfo.AppendTags("targetName", args.TargetID.Name)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	reply.Error = err
@@ -169,10 +185,11 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 func registerS3PeerRPCRouter(router *mux.Router) error {
 	peerRPCServer := newRPCServer()
 	if err := peerRPCServer.RegisterName("Peer", &PeerRPCReceiver{}); err != nil {
-		return xerrors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 
-	subrouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	subrouter.Path(s3Path).Handler(peerRPCServer)
 	return nil
 }
@@ -189,13 +206,23 @@ func (rpcClient *PeerRPCClient) DeleteBucket(bucketName string) error {
 	return rpcClient.Call("Peer.DeleteBucket", &args, &reply)
 }
 
-// UpdateBucketPolicy - calls update bucket policy RPC.
-func (rpcClient *PeerRPCClient) UpdateBucketPolicy(bucketName string) error {
-	args := UpdateBucketPolicyArgs{
+// SetBucketPolicy - calls set bucket policy RPC.
+func (rpcClient *PeerRPCClient) SetBucketPolicy(bucketName string, bucketPolicy *policy.Policy) error {
+	args := SetBucketPolicyArgs{
+		BucketName: bucketName,
+		Policy:     *bucketPolicy,
+	}
+	reply := AuthRPCReply{}
+	return rpcClient.Call("Peer.SetBucketPolicy", &args, &reply)
+}
+
+// RemoveBucketPolicy - calls remove bucket policy RPC.
+func (rpcClient *PeerRPCClient) RemoveBucketPolicy(bucketName string) error {
+	args := RemoveBucketPolicyArgs{
 		BucketName: bucketName,
 	}
 	reply := AuthRPCReply{}
-	return rpcClient.Call("Peer.UpdateBucketPolicy", &args, &reply)
+	return rpcClient.Call("Peer.RemoveBucketPolicy", &args, &reply)
 }
 
 // PutBucketNotification - calls put bukcet notification RPC.
@@ -250,7 +277,11 @@ func (rpcClient *PeerRPCClient) SendEvent(bucketName string, targetID, remoteTar
 	}
 
 	if reply.Error != nil {
-		errorIf(reply.Error, "unable to send event %v to rpc target %v of bucket %v", args, targetID, bucketName)
+		reqInfo := &logger.ReqInfo{BucketName: bucketName}
+		reqInfo.AppendTags("targetID", targetID.Name)
+		reqInfo.AppendTags("event", eventData.EventName.String())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, reply.Error)
 		globalNotificationSys.RemoveRemoteTarget(bucketName, targetID)
 	}
 
@@ -264,7 +295,8 @@ func makeRemoteRPCClients(endpoints EndpointList) map[xnet.Host]*PeerRPCClient {
 	cred := globalServerConfig.GetCredential()
 	serviceEndpoint := path.Join(minioReservedBucketPath, s3Path)
 	for _, hostStr := range GetRemotePeers(endpoints) {
-		host := xnet.MustParseHost(hostStr)
+		host, err := xnet.ParseHost(hostStr)
+		logger.CriticalIf(context.Background(), err)
 		peerRPCClientMap[*host] = &PeerRPCClient{newAuthRPCClient(authConfig{
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,

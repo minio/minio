@@ -17,8 +17,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"time"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
@@ -29,7 +32,10 @@ func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 			// Remove failed, in case it is a:
 			if nlrip.lri.writer {
 				// Writer: this should never happen as the whole (mapped) entry should have been deleted
-				errorIf(errors.New(""), "Lock maintenance failed to remove entry for write lock (should never happen) %#v %#v %#v", nlrip.name, nlrip.lri.uid, lri)
+				reqInfo := (&logger.ReqInfo{}).AppendTags("name", nlrip.name)
+				reqInfo.AppendTags("uid", nlrip.lri.uid)
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, errors.New("Lock maintenance failed to remove entry for write lock (should never happen)"))
 			} // Reader: this can happen if multiple read locks were active and
 			// the one we are looking for has been released concurrently (so it is fine).
 		} // Removal went okay, all is fine.

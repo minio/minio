@@ -17,9 +17,10 @@
 package cmd
 
 import (
-	router "github.com/gorilla/mux"
+	"context"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Set up an RPC endpoint that receives browser related calls. The
@@ -36,16 +37,17 @@ type browserPeerAPIHandlers struct {
 }
 
 // Register RPC router
-func registerBrowserPeerRPCRouter(mux *router.Router) error {
+func registerBrowserPeerRPCRouter(router *mux.Router) error {
 	bpHandlers := &browserPeerAPIHandlers{AuthRPCServer{}}
 
 	bpRPCServer := newRPCServer()
 	err := bpRPCServer.RegisterName("BrowserPeer", bpHandlers)
 	if err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 
-	bpRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	bpRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	bpRouter.Path(browserPeerPath).Handler(bpRPCServer)
 	return nil
 }

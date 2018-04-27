@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/rpc"
 
-	miniohttp "github.com/minio/minio/pkg/http"
+	miniohttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // ServeHTTP implements an http.Handler that answers RPC requests,
@@ -34,7 +36,9 @@ func (server *rpcServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	conn, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
-		errorIf(err, "rpc hijacking failed for: %s", req.RemoteAddr)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("remoteaddr", req.RemoteAddr)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return
 	}
 

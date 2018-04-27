@@ -31,4 +31,4 @@ after_success:
 - bash <(curl -s https://codecov.io/bash)
 
 go:
-- 1.9.4
+- '1.10.1'

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -26,7 +27,6 @@ import (
 	"encoding/hex"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/pkg/errors"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -302,7 +302,7 @@ func hasAnyErrors(errs []error) bool {
 func countErrs(errs []error, err error) int {
 	var i = 0
 	for _, err1 := range errs {
-		if errors.Cause(err1) == err {
+		if err1 == err {
 			i++
 		}
 	}
@@ -314,28 +314,24 @@ func shouldInitXLDisks(errs []error) bool {
 	return countErrs(errs, errUnformattedDisk) == len(errs)
 }
 
+// Check if unformatted disks are equal to write quorum.
+func quorumUnformattedDisks(errs []error) bool {
+	return countErrs(errs, errUnformattedDisk) >= (len(errs)/2)+1
+}
+
 // loadFormatXLAll - load all format config from all input disks in parallel.
-func loadFormatXLAll(endpoints EndpointList) ([]*formatXLV3, []error) {
+func loadFormatXLAll(storageDisks []StorageAPI) ([]*formatXLV3, []error) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
-	bootstrapDisks := make([]StorageAPI, len(endpoints))
-	for i, endpoint := range endpoints {
-		disk, err := newStorageAPI(endpoint)
-		if err != nil {
-			continue
-		}
-		bootstrapDisks[i] = disk
-	}
-
 	// Initialize list of errors.
-	var sErrs = make([]error, len(bootstrapDisks))
+	var sErrs = make([]error, len(storageDisks))
 
 	// Initialize format configs.
-	var formats = make([]*formatXLV3, len(bootstrapDisks))
+	var formats = make([]*formatXLV3, len(storageDisks))
 
 	// Load format from each disk in parallel
-	for index, disk := range bootstrapDisks {
+	for index, disk := range storageDisks {
 		if disk == nil {
 			sErrs[index] = errDiskNotFound
 			continue
@@ -344,10 +340,9 @@ func loadFormatXLAll(endpoints EndpointList) ([]*formatXLV3, []error) {
 		// Launch go-routine per disk.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
+
 			format, lErr := loadFormatXL(disk)
 			if lErr != nil {
-				// close the internal connection, to avoid fd leaks.
-				disk.Close()
 				sErrs[index] = lErr
 				return
 			}
@@ -362,26 +357,6 @@ func loadFormatXLAll(endpoints EndpointList) ([]*formatXLV3, []error) {
 	return formats, sErrs
 }
 
-func undoSaveFormatXLAll(disks []StorageAPI) {
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
-	// Undo previous save format.json entry from all underlying storage disks.
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.DeleteFile(minioMetaBucket, formatConfigFile)
-		}(index, disk)
-	}
-
-	// Wait for all make vol to finish.
-	wg.Wait()
-}
-
 func saveFormatXL(disk StorageAPI, format interface{}) error {
 	// Marshal and write to disk.
 	formatBytes, err := json.Marshal(format)
@@ -390,7 +365,7 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 	}
 
 	// Purge any existing temporary file, okay to ignore errors here.
-	disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
+	defer disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
 
 	// Append file `format.json.tmp`.
 	if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
@@ -550,12 +525,7 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 }
 
 // saveFormatXLAll - populates `format.json` on disks in its order.
-func saveFormatXLAll(endpoints EndpointList, formats []*formatXLV3) error {
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return err
-	}
-
+func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatXLV3) error {
 	var errs = make([]error, len(storageDisks))
 
 	var wg = &sync.WaitGroup{}
@@ -576,15 +546,18 @@ func saveFormatXLAll(endpoints EndpointList, formats []*formatXLV3) error {
 	// Wait for the routines to finish.
 	wg.Wait()
 
-	writeQuorum := len(endpoints)/2 + 1
-	err = reduceWriteQuorumErrs(errs, nil, writeQuorum)
-	if errors.Cause(err) == errXLWriteQuorum {
-		// Purge all successfully created `format.json`
-		// when we do not have enough quorum.
-		undoSaveFormatXLAll(storageDisks)
-	}
+	writeQuorum := len(storageDisks)/2 + 1
+	return reduceWriteQuorumErrs(ctx, errs, nil, writeQuorum)
+}
 
-	return err
+// relinquishes the underlying connection for all storage disks.
+func closeStorageDisks(storageDisks []StorageAPI) {
+	for _, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		disk.Close()
+	}
 }
 
 // Initialize storage disks based on input arguments.
@@ -592,8 +565,6 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
 	for index, endpoint := range endpoints {
-		// Intentionally ignore disk not found errors. XL is designed
-		// to handle these errors internally.
 		storage, err := newStorageAPI(endpoint)
 		if err != nil && err != errDiskNotFound {
 			return nil, err
@@ -625,12 +596,7 @@ func formatXLV3ThisEmpty(formats []*formatXLV3) bool {
 }
 
 // fixFormatXLV3 - fix format XL configuration on all disks.
-func fixFormatXLV3(endpoints EndpointList, formats []*formatXLV3) error {
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return err
-	}
-
+func fixFormatXLV3(storageDisks []StorageAPI, endpoints EndpointList, formats []*formatXLV3) error {
 	for i, format := range formats {
 		if format == nil || !endpoints[i].IsLocal {
 			continue
@@ -644,7 +610,7 @@ func fixFormatXLV3(endpoints EndpointList, formats []*formatXLV3) error {
 		}
 		if format.XL.This == "" {
 			formats[i].XL.This = format.XL.Sets[0][i]
-			if err = saveFormatXL(storageDisks[i], formats[i]); err != nil {
+			if err := saveFormatXL(storageDisks[i], formats[i]); err != nil {
 				return err
 			}
 		}
@@ -653,9 +619,9 @@ func fixFormatXLV3(endpoints EndpointList, formats []*formatXLV3) error {
 }
 
 // initFormatXL - save XL format configuration on all disks.
-func initFormatXL(endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	format = newFormatXLV3(setCount, disksPerSet)
-	formats := make([]*formatXLV3, len(endpoints))
+	formats := make([]*formatXLV3, len(storageDisks))
 
 	for i := 0; i < setCount; i++ {
 		for j := 0; j < disksPerSet; j++ {
@@ -666,12 +632,12 @@ func initFormatXL(endpoints EndpointList, setCount, disksPerSet int) (format *fo
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err = initFormatXLMetaVolume(endpoints, formats); err != nil {
+	if err = initFormatXLMetaVolume(storageDisks, formats); err != nil {
 		return format, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save formats `format.json` across all disks.
-	if err = saveFormatXLAll(endpoints, formats); err != nil {
+	if err = saveFormatXLAll(ctx, storageDisks, formats); err != nil {
 		return nil, err
 	}
 
@@ -682,17 +648,17 @@ func initFormatXL(endpoints EndpointList, setCount, disksPerSet int) (format *fo
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create `.minio.sys`.
 	if err := disk.MakeVol(minioMetaBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaTmpBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaMultipartBucket); err != nil {
-		if !errors.IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
 	}
@@ -702,12 +668,7 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
 
 // Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(endpoints EndpointList, formats []*formatXLV3) error {
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return err
-	}
-
+func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.

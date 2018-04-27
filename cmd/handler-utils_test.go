@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
@@ -25,8 +26,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests validate bucket LocationConstraint.
@@ -114,9 +113,9 @@ func TestValidateFormFieldSize(t *testing.T) {
 
 	// Run validate form field size check under all test cases.
 	for i, testCase := range testCases {
-		err := validateFormFieldSize(testCase.header)
+		err := validateFormFieldSize(context.Background(), testCase.header)
 		if err != nil {
-			if errors.Cause(err).Error() != testCase.err.Error() {
+			if err.Error() != testCase.err.Error() {
 				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.err, err)
 			}
 		}
@@ -180,7 +179,7 @@ func TestExtractMetadataHeaders(t *testing.T) {
 
 	// Validate if the extracting headers.
 	for i, testCase := range testCases {
-		metadata, err := extractMetadataFromHeader(testCase.header)
+		metadata, err := extractMetadataFromHeader(context.Background(), testCase.header)
 		if err != nil && !testCase.shouldFail {
 			t.Fatalf("Test %d failed to extract metadata: %v", i+1, err)
 		}

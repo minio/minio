@@ -23,9 +23,9 @@ import (
 	"github.com/minio/dsync"
 )
 
-// Allow any RPC call request time should be no more/less than 3 seconds.
-// 3 seconds is chosen arbitrarily.
-const rpcSkewTimeAllowed = 3 * time.Second
+// Allow any RPC call request time should be no more/less than 15 minutes.
+// 15 minute is chosen to be best for majority use cases.
+const rpcSkewTimeAllowed = 15 * time.Minute
 
 // RPC V1 - Initial version
 // RPC V2 - format.json XL version changed to 2

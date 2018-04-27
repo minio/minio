@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"io"
 	"reflect"
@@ -74,7 +75,7 @@ func TestErasureHealFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
 		}
-		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
+		storage, err := NewErasureStorage(context.Background(), setup.disks, test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -89,7 +90,7 @@ func TestErasureHealFile(t *testing.T) {
 			algorithm = DefaultBitrotAlgorithm
 		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
-		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, algorithm, test.dataBlocks+1)
+		file, err := storage.CreateFile(context.Background(), bytes.NewReader(data), "testbucket", "testobject", buffer, algorithm, test.dataBlocks+1)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
@@ -113,7 +114,7 @@ func TestErasureHealFile(t *testing.T) {
 		}
 
 		// test case setup is complete - now call Healfile()
-		info, err := storage.HealFile(staleDisks, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Checksums)
+		info, err := storage.HealFile(context.Background(), staleDisks, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Checksums)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}

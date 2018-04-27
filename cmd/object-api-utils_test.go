@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -138,7 +139,7 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 		expectedErr    string
 	}{
 		// Wrong MD5 hash string
-		{[]CompletePart{{ETag: "wrong-md5-hash-string"}}, "", "encoding/hex: odd length hex string"},
+		{[]CompletePart{{ETag: "wrong-md5-hash-string"}}, "", "encoding/hex: invalid byte: U+0077 'w'"},
 
 		// Single CompletePart with valid MD5 hash string.
 		{[]CompletePart{{ETag: "cf1f738a5924e645913c984e0fe3d708"}}, "10dc1617fbcf0bd0858048cb96e6bd77-1", ""},
@@ -148,7 +149,7 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		result, err := getCompleteMultipartMD5(test.parts)
+		result, err := getCompleteMultipartMD5(context.Background(), test.parts)
 		if result != test.expectedResult {
 			t.Fatalf("test %d failed: expected: result=%v, got=%v", i+1, test.expectedResult, result)
 		}

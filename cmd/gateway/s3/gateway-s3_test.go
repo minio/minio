@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	miniogo "github.com/minio/minio-go"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 
 	minio "github.com/minio/minio/cmd"
@@ -53,7 +52,7 @@ func TestS3ToObjectError(t *testing.T) {
 		},
 		{
 			inputErr:    errResponse("NoSuchBucketPolicy"),
-			expectedErr: minio.PolicyNotFound{},
+			expectedErr: minio.BucketPolicyNotFound{},
 		},
 		{
 			inputErr:    errResponse("NoSuchBucket"),
@@ -110,18 +109,12 @@ func TestS3ToObjectError(t *testing.T) {
 			inputErr:    fmt.Errorf("not a minio.ErrorResponse"),
 			expectedErr: fmt.Errorf("not a minio.ErrorResponse"),
 		},
-		// Special test case for error value that is not of
-		// type (*Error)
-		{
-			inputErr:    fmt.Errorf("not a *Error"),
-			expectedErr: fmt.Errorf("not a *Error"),
-		},
 	}
 
 	for i, tc := range testCases {
-		actualErr := minio.ErrorRespToObjectError(errors.Trace(tc.inputErr), tc.bucket, tc.object)
-		if e, ok := actualErr.(*errors.Error); ok && e.Cause.Error() != tc.expectedErr.Error() {
-			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, e)
+		actualErr := minio.ErrorRespToObjectError(tc.inputErr, tc.bucket, tc.object)
+		if actualErr != nil && tc.expectedErr != nil && actualErr.Error() != tc.expectedErr.Error() {
+			t.Errorf("Test case %d: Expected error %v but received error %v", i+1, tc.expectedErr, actualErr)
 		}
 	}
 }

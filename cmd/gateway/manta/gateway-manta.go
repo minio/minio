@@ -33,8 +33,8 @@ import (
 	"github.com/joyent/triton-go/storage"
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -75,7 +75,7 @@ ENVIRONMENT VARIABLES:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of cache drives delimited by ";".
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
@@ -99,7 +99,7 @@ EXAMPLES:
   4. Start minio gateway server for Manta Object Storage backend with edge caching enabled.
       $ export MINIO_ACCESS_KEY=manta_account_name
       $ export MINIO_SECRET_KEY=manta_key_id
-      $ export MINIO_CACHE_DRIVES="/home/drive1;/home/drive2;/home/drive3;/home/drive4"
+      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
       $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
       $ export MINIO_CACHE_EXPIRY=40
       $ {{.HelpName}}
@@ -118,7 +118,7 @@ func mantaGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
 	// Validate gateway arguments.
-	minio.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
 	minio.StartGateway(ctx, &Manta{host})
 }
@@ -139,6 +139,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	var err error
 	var signer authentication.Signer
 	var endpoint = defaultMantaURL
+	ctx := context.Background()
 
 	if g.host != "" {
 		endpoint, _, err = minio.ParseGatewayEndpoint(g.host)
@@ -163,7 +164,8 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 		}
 		signer, err = authentication.NewSSHAgentSigner(input)
 		if err != nil {
-			return nil, errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return nil, err
 		}
 	} else {
 		var keyBytes []byte
@@ -200,7 +202,8 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 		signer, err = authentication.NewPrivateKeySigner(input)
 		if err != nil {
-			return nil, errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return nil, err
 		}
 	}
 
@@ -222,9 +225,9 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	}, nil
 }
 
-// Production - Manta is not production ready.
+// Production - Manta is production ready.
 func (g *Manta) Production() bool {
-	return false
+	return true
 }
 
 // tritonObjects - Implements Object layer for Triton Manta storage
@@ -352,7 +355,8 @@ func (t *tritonObjects) ListObjects(ctx context.Context, bucket, prefix, marker,
 		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
-		return result, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return result, err
 	}
 
 	for _, obj := range objs.Entries {
@@ -362,7 +366,8 @@ func (t *tritonObjects) ListObjects(ctx context.Context, bucket, prefix, marker,
 			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
 			objs, err = t.client.Dir().List(ctx, input)
 			if err != nil {
-				return result, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return result, err
 			}
 			break
 		}
@@ -428,7 +433,8 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 		if terrors.IsResourceNotFoundError(err) {
 			return result, nil
 		}
-		return result, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return result, err
 	}
 
 	for _, obj := range objs.Entries {
@@ -436,7 +442,8 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 			input.DirectoryName = path.Join(mantaRoot, bucket, prefix)
 			objs, err = t.client.Dir().List(ctx, input)
 			if err != nil {
-				return result, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return result, err
 			}
 			break
 		}
@@ -479,7 +486,8 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 func (t *tritonObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		return errors.Trace(fmt.Errorf("Unexpected error"))
+		logger.LogIf(ctx, fmt.Errorf("Unexpected error"))
+		return fmt.Errorf("Unexpected error")
 	}
 
 	output, err := t.client.Objects().Get(ctx, &storage.GetObjectInput{
@@ -555,11 +563,13 @@ func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, da
 		ObjectReader: dummySeeker{data},
 		ForceInsert:  true,
 	}); err != nil {
-		return objInfo, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return objInfo, err
 	}
 	if err = data.Verify(); err != nil {
 		t.DeleteObject(ctx, bucket, object)
-		return objInfo, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return objInfo, err
 	}
 
 	return t.GetObjectInfo(ctx, bucket, object)
@@ -574,7 +584,8 @@ func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, de
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
 		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
 	}); err != nil {
-		return objInfo, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return objInfo, err
 	}
 
 	return t.GetObjectInfo(ctx, destBucket, destObject)
@@ -587,7 +598,8 @@ func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string)
 	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
-		return errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
 	return nil

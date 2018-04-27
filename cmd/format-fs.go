@@ -17,13 +17,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"time"
 
-	errors2 "github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -97,7 +98,7 @@ func formatFSGetVersion(r io.ReadSeeker) (string, error) {
 
 // Migrate from V1 to V2. V2 implements new backend format for multipart
 // uploads. Delete the previous multipart directory.
-func formatFSMigrateV1ToV2(wlk *lock.LockedFile, fsPath string) error {
+func formatFSMigrateV1ToV2(ctx context.Context, wlk *lock.LockedFile, fsPath string) error {
 	version, err := formatFSGetVersion(wlk)
 	if err != nil {
 		return err
@@ -107,11 +108,12 @@ func formatFSMigrateV1ToV2(wlk *lock.LockedFile, fsPath string) error {
 		return fmt.Errorf(`format.json version expected %s, found %s`, formatFSVersionV1, version)
 	}
 
-	if err = fsRemoveAll(path.Join(fsPath, minioMetaMultipartBucket)); err != nil {
+	if err = fsRemoveAll(ctx, path.Join(fsPath, minioMetaMultipartBucket)); err != nil {
 		return err
 	}
 
 	if err = os.MkdirAll(path.Join(fsPath, minioMetaMultipartBucket), 0755); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 
@@ -122,7 +124,7 @@ func formatFSMigrateV1ToV2(wlk *lock.LockedFile, fsPath string) error {
 // Migration should happen when formatFSV1.FS.Version changes. This version
 // can change when there is a change to the struct formatFSV1.FS or if there
 // is any change in the backend file system tree structure.
-func formatFSMigrate(wlk *lock.LockedFile, fsPath string) error {
+func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) error {
 	// Add any migration code here in case we bump format.FS.Version
 	version, err := formatFSGetVersion(wlk)
 	if err != nil {
@@ -131,7 +133,7 @@ func formatFSMigrate(wlk *lock.LockedFile, fsPath string) error {
 
 	switch version {
 	case formatFSVersionV1:
-		if err = formatFSMigrateV1ToV2(wlk, fsPath); err != nil {
+		if err = formatFSMigrateV1ToV2(ctx, wlk, fsPath); err != nil {
 			return err
 		}
 		fallthrough
@@ -151,19 +153,21 @@ func formatFSMigrate(wlk *lock.LockedFile, fsPath string) error {
 }
 
 // Creates a new format.json if unformatted.
-func createFormatFS(fsFormatPath string) error {
+func createFormatFS(ctx context.Context, fsFormatPath string) error {
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return errors2.Trace(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 	// Close the locked file upon return.
 	defer lk.Close()
 
 	fi, err := lk.Stat()
 	if err != nil {
-		return errors2.Trace(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 	if fi.Size() != 0 {
 		// format.json already got created because of another minio process's createFormatFS()
@@ -177,7 +181,7 @@ func createFormatFS(fsFormatPath string) error {
 // The file descriptor should be kept open throughout the life
 // of the process so that another minio process does not try to
 // migrate the backend when we are actively working on the backend.
-func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
+func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, err error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 	// Any read on format.json should be done with read-lock.
 	// Any write on format.json should be done with write-lock.
@@ -191,7 +195,8 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			var fi os.FileInfo
 			fi, err = rlk.Stat()
 			if err != nil {
-				return nil, errors2.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, err
 			}
 			isEmpty = fi.Size() == 0
 		}
@@ -200,7 +205,7 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 				rlk.Close()
 			}
 			// Fresh disk - create format.json
-			err = createFormatFS(fsFormatPath)
+			err = createFormatFS(ctx, fsFormatPath)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again.
 				// Can happen in a rare situation when a parallel minio process
@@ -209,19 +214,22 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 				continue
 			}
 			if err != nil {
-				return nil, errors2.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, err
 			}
 			// After successfully creating format.json try to hold a read-lock on
 			// the file.
 			continue
 		}
 		if err != nil {
-			return nil, errors2.Trace(err)
+			logger.LogIf(ctx, err)
+			return nil, err
 		}
 
 		formatBackend, err := formatMetaGetFormatBackendFS(rlk)
 		if err != nil {
-			return nil, errors2.Trace(err)
+			logger.LogIf(ctx, err)
+			return nil, err
 		}
 		if formatBackend != formatBackendFS {
 			return nil, fmt.Errorf(`%s file: expected format-type: %s, found: %s`, formatConfigFile, formatBackendFS, formatBackend)
@@ -244,7 +252,7 @@ func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 			if err != nil {
 				return nil, err
 			}
-			err = formatFSMigrate(wlk, fsPath)
+			err = formatFSMigrate(ctx, wlk, fsPath)
 			wlk.Close()
 			if err != nil {
 				// Migration failed, bail out so that the user can observe what happened.

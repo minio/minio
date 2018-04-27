@@ -52,12 +52,13 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/policy"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // Tests should initNSLock only once.
@@ -74,8 +75,7 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	log = NewLogger()
-	log.EnableQuiet()
+	logger.EnableQuiet()
 }
 
 // concurreny level for certain parallel tests.
@@ -187,7 +187,7 @@ func prepareXL32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 2, 16)
+	format, err := waitForFormatXL(context.Background(), true, endpoints, 2, 16)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -354,8 +354,11 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, testServer.Disks)
 	if err != nil {
-		t.Fatalf("Unable to initialize queue configuration")
+		t.Fatalf("Unable to create new notification system. %v", err)
 	}
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	return testServer
 }
@@ -398,7 +401,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 // The object Layer will be a temp back used for testing purpose.
 func initTestStorageRPCEndPoint(endpoints EndpointList) http.Handler {
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerStorageRPCRouters(muxRouter, endpoints)
 	return muxRouter
 }
@@ -469,16 +472,16 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.Obj = objLayer
 	globalObjLayerMutex.Unlock()
 
-	mux := router.NewRouter().SkipClean(true)
+	router := mux.NewRouter().SkipClean(true)
 	// need storage layer for bucket config storage.
-	registerStorageRPCRouters(mux, endpoints)
+	registerStorageRPCRouters(router, endpoints)
 	// need API layer to send requests, etc.
-	registerAPIRouter(mux)
+	registerAPIRouter(router)
 	// module being tested is Peer RPCs router.
-	registerS3PeerRPCRouter(mux)
+	registerS3PeerRPCRouter(router)
 
 	// Run TestServer.
-	testRPCServer.Server = httptest.NewServer(mux)
+	testRPCServer.Server = httptest.NewServer(router)
 
 	// initialize remainder of serverCmdConfig
 	testRPCServer.endpoints = endpoints
@@ -1157,6 +1160,11 @@ func getCredentialString(accessKeyID, location string, t time.Time) string {
 	return accessKeyID + "/" + getScope(t, location)
 }
 
+// getMD5HashBase64 returns MD5 hash in base64 encoding of given data.
+func getMD5HashBase64(data []byte) string {
+	return base64.StdEncoding.EncodeToString(getMD5Sum(data))
+}
+
 // Returns new HTTP request object.
 func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
 	if method == "" {
@@ -1685,7 +1693,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	_, err = waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)
+	_, err = waitForFormatXL(context.Background(), endpoints[0].IsLocal, endpoints, 1, 16)
 	if err != nil {
 		return nil, err
 	}
@@ -1710,16 +1718,13 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return xl.storageDisks
 	}
 
-	// Initialize and load bucket policies.
-	xl.bucketPolicies, err = initBucketPolicies(xl)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize a new event notifier.
+	// Create new notification system.
 	if globalNotificationSys, err = NewNotificationSys(globalServerConfig, endpoints); err != nil {
 		return nil, err
 	}
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
 
 	return xl, nil
 }
@@ -1816,7 +1821,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 //   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
 //           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, policyFunc func(string, string) policy.Statement) {
+	anonReq *http.Request, bucketPolicy *policy.Policy) {
 
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
@@ -1858,7 +1863,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// HEAD HTTTP request doesn't contain response body.
 	if anonReq.Method != "HEAD" {
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		var actualContent []byte
+		actualContent, err = ioutil.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
@@ -1867,13 +1873,13 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 			t.Fatal(failTestStr(anonTestStr, "error response content differs from expected value"))
 		}
 	}
-	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
-	// request to go through.
-	bp := policy.BucketAccessPolicy{
-		Version:    "1.0",
-		Statements: []policy.Statement{policyFunc(bucketName, "")},
+
+	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
+		t.Fatalf("unexpected error. %v", err)
 	}
-	obj.SetBucketPolicy(context.Background(), bucketName, bp)
+	globalPolicySys.Set(bucketName, *bucketPolicy)
+	defer globalPolicySys.Remove(bucketName)
+
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 
@@ -2125,7 +2131,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	defer removeRoots(erasureDisks)
 }
 
-func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFunctions ...string) {
+func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunctions ...string) {
 	for _, apiFunction := range apiFunctions {
 		switch apiFunction {
 		case "PostPolicy":
@@ -2199,14 +2205,14 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 }
 
 // registerAPIFunctions helper function to add API functions identified by name to the routers.
-func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFunctions ...string) {
+func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFunctions ...string) {
 	if len(apiFunctions) == 0 {
 		// Register all api endpoints by default.
 		registerAPIRouter(muxRouter)
 		return
 	}
 	// API Router.
-	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
+	apiRouter := muxRouter.PathPrefix("/").Subrouter()
 	// Bucket router.
 	bucketRouter := apiRouter.PathPrefix("/{bucket}").Subrouter()
 
@@ -2236,7 +2242,7 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
 	// initialize a new mux router.
 	// goriilla/mux is the library used to register all the routes and handle them.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
@@ -2253,7 +2259,7 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	globalObjLayerMutex.Unlock()
 
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerWebRouter(muxRouter)
 	return muxRouter
 }
@@ -2261,7 +2267,7 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 // Initialize browser RPC endpoint.
 func initTestBrowserPeerRPCEndPoint() http.Handler {
 	// Initialize router.
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	registerBrowserPeerRPCRouter(muxRouter)
 	return muxRouter
 }
@@ -2315,7 +2321,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	globalObjLayerMutex.Unlock()
 
 	// Register router on a new mux
-	muxRouter := router.NewRouter().SkipClean(true)
+	muxRouter := mux.NewRouter().SkipClean(true)
 	err = registerS3PeerRPCRouter(muxRouter)
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -2423,12 +2429,12 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 	if len(args) == 1 {
 		endpoint, err := NewEndpoint(args[0])
-		fatalIf(err, "unable to create new endpoint")
+		logger.FatalIf(err, "unable to create new endpoint")
 		endpoints = append(endpoints, endpoint)
 	} else {
 		var err error
 		endpoints, err = NewEndpointList(args...)
-		fatalIf(err, "unable to create new endpoint list")
+		logger.FatalIf(err, "unable to create new endpoint list")
 	}
 	return endpoints
 }

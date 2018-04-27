@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/hex"
 
 	"github.com/minio/sha256-simd"
@@ -46,9 +45,4 @@ func getMD5Sum(data []byte) []byte {
 // getMD5Hash returns MD5 hash in hex encoding of given data.
 func getMD5Hash(data []byte) string {
 	return hex.EncodeToString(getMD5Sum(data))
-}
-
-// getMD5HashBase64 returns MD5 hash in base64 encoding of given data.
-func getMD5HashBase64(data []byte) string {
-	return base64.StdEncoding.EncodeToString(getMD5Sum(data))
 }

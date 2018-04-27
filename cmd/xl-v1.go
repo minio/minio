@@ -21,9 +21,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/errors"
 )
 
 // XL constants.
@@ -43,9 +43,6 @@ type xlObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	// Variable represents bucket policies in memory.
-	bucketPolicies *bucketPolicies
-
 	// TODO: Deprecated only kept here for tests, should be removed in future.
 	storageDisks []StorageAPI
 
@@ -59,14 +56,7 @@ var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolu
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
-	for _, disk := range xl.getDisks() {
-		// This closes storage rpc client connections if any.
-		// Otherwise this is a no-op.
-		if disk == nil {
-			continue
-		}
-		disk.Close()
-	}
+	closeStorageDisks(xl.getDisks())
 	return nil
 }
 
@@ -147,8 +137,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		}
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
-			if errors.IsErr(err, baseErrs...) {
+			logger.LogIf(context.Background(), err)
+			if IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue
 			}

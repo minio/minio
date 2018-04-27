@@ -21,9 +21,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // ObjectLayer implements primitives for object API layer.
@@ -58,6 +58,7 @@ type ObjectLayer interface {
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Healing operations.
+	ReloadFormat(ctx context.Context, dryRun bool) error
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun bool) ([]madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error)
@@ -69,9 +70,8 @@ type ObjectLayer interface {
 	ClearLocks(context.Context, []VolumeLockInfo) error
 
 	// Policy operations
-	SetBucketPolicy(context.Context, string, policy.BucketAccessPolicy) error
-	GetBucketPolicy(context.Context, string) (policy.BucketAccessPolicy, error)
-	RefreshBucketPolicy(context.Context, string) error
+	SetBucketPolicy(context.Context, string, *policy.Policy) error
+	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
 	DeleteBucketPolicy(context.Context, string) error
 
 	// Supported operations check

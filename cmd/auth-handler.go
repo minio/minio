@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -25,7 +26,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // Verify if request has JWT.
@@ -114,33 +116,91 @@ func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 		s3Err = isReqAuthenticated(r, region)
 	}
 	if s3Err != ErrNone {
-		errorIf(errors.New(getAPIError(s3Err).Description), "%s", dumpRequest(r))
+		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description))
 	}
 	return s3Err
 }
 
-func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) APIErrorCode {
-	reqAuthType := getRequestAuthType(r)
+func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) APIErrorCode {
+	isOwner := true
+	accountName := globalServerConfig.GetCredential().AccessKey
 
-	switch reqAuthType {
+	switch getRequestAuthType(r) {
+	case authTypeUnknown:
+		return ErrAccessDenied
 	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		return isReqAuthenticatedV2(r)
-	case authTypeSigned, authTypePresigned:
-		return isReqAuthenticated(r, region)
-	}
-
-	if reqAuthType == authTypeAnonymous && policyAction != "" {
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		resource, err := getResource(r.URL.Path, r.Host, globalDomainName)
-		if err != nil {
-			return ErrInternalError
+		if errorCode := isReqAuthenticatedV2(r); errorCode != ErrNone {
+			return errorCode
 		}
-		return enforceBucketPolicy(bucket, policyAction, resource,
-			r.Referer(), handlers.GetSourceIP(r), r.URL.Query())
+	case authTypeSigned, authTypePresigned:
+		region := globalServerConfig.GetRegion()
+		switch action {
+		case policy.GetBucketLocationAction, policy.ListAllMyBucketsAction:
+			region = ""
+		}
+
+		if errorCode := isReqAuthenticated(r, region); errorCode != ErrNone {
+			return errorCode
+		}
+	default:
+		isOwner = false
+		accountName = ""
 	}
 
-	// By default return ErrAccessDenied
+	// LocationConstraint is valid only for CreateBucketAction.
+	var locationConstraint string
+	if action == policy.CreateBucketAction {
+		// To extract region from XML in request body, get copy of request body.
+		payload, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return ErrAccessDenied
+		}
+
+		// Populate payload to extract location constraint.
+		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+
+		var s3Error APIErrorCode
+		locationConstraint, s3Error = parseLocationConstraint(r)
+		if s3Error != ErrNone {
+			return ErrAccessDenied
+		}
+
+		// Populate payload again to handle it in HTTP handler.
+		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+	}
+
+	if globalPolicySys.IsAllowed(policy.Args{
+		AccountName:     accountName,
+		Action:          action,
+		BucketName:      bucketName,
+		ConditionValues: getConditionValues(r, locationConstraint),
+		IsOwner:         isOwner,
+		ObjectName:      objectName,
+	}) {
+		return ErrNone
+	}
+
+	// As policy.ListBucketAction and policy.ListObjectsAction are same but different names,
+	// policy.ListBucketAction is used across the code but user may used policy.ListObjectsAction
+	// in bucket policy to denote the same. In below try again with policy.ListObjectsAction.
+	if action != policy.ListBucketAction {
+		return ErrAccessDenied
+	}
+
+	if globalPolicySys.IsAllowed(policy.Args{
+		AccountName:     accountName,
+		Action:          policy.ListObjectsAction,
+		BucketName:      bucketName,
+		ConditionValues: getConditionValues(r, locationConstraint),
+		IsOwner:         isOwner,
+		ObjectName:      objectName,
+	}) {
+		return ErrNone
+	}
+
 	return ErrAccessDenied
 }
 
@@ -176,7 +236,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		errorIf(err, "Unable to read request body for signature verification")
+		logger.LogIf(context.Background(), err)
 		return ErrInternalError
 	}
 

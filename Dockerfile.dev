@@ -1,6 +1,6 @@
-FROM golang:1.9.4-alpine3.6
+FROM golang:1.10.1-alpine3.7
 
-MAINTAINER Minio Inc <dev@minio.io>
+LABEL maintainer="Minio Inc <dev@minio.io>"
 
 ENV GOPATH /go
 ENV PATH $PATH:$GOPATH/bin

@@ -149,6 +149,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Prevents Internet Explorer from MIME-sniffing a response away
 	// from the declared content-type
 	w.Header().Set("x-content-type-options", "nosniff")
+
 	// Encode the response.
 	if errResult == nil {
 		codecReq.WriteResponse(w, reply.Interface())

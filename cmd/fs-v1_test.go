@@ -23,8 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/minio/minio/pkg/errors"
 )
 
 // Tests for if parent directory is object
@@ -91,7 +89,7 @@ func TestFSParentDirIsObject(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		gotValue := fs.parentDirIsObject(bucketName, testCase.objectName)
+		gotValue := fs.parentDirIsObject(context.Background(), bucketName, testCase.objectName)
 		if testCase.parentIsObject != gotValue {
 			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
 		}
@@ -168,7 +166,15 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), "a", "")
+	if !isSameType(err, BucketNameInvalid{}) {
+		t.Fatal("BucketNameInvalid error not returned")
+	}
+
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Test with valid parameters
 	info, err := fs.GetBucketInfo(context.Background(), bucketName)
@@ -179,17 +185,17 @@ func TestFSGetBucketInfo(t *testing.T) {
 		t.Fatalf("wrong bucket name, expected: %s, found: %s", bucketName, info.Name)
 	}
 
-	// Test with inexistant bucket
+	// Test with non-existent bucket
 	_, err = fs.GetBucketInfo(context.Background(), "a")
-	if !isSameType(errors.Cause(err), BucketNameInvalid{}) {
-		t.Fatal("BucketNameInvalid error not returned")
+	if !isSameType(err, BucketNotFound{}) {
+		t.Fatal("BucketNotFound error not returned")
 	}
 
 	// Check for buckets and should get disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 
 	_, err = fs.GetBucketInfo(context.Background(), bucketName)
-	if !isSameType(errors.Cause(err), BucketNotFound{}) {
+	if !isSameType(err, BucketNotFound{}) {
 		t.Fatal("BucketNotFound error not returned")
 	}
 }
@@ -212,7 +218,7 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
-	if _, ok := errors.Cause(err).(BucketNotFound); !ok {
+	if _, ok := err.(BucketNotFound); !ok {
 		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
 	}
 
@@ -221,7 +227,7 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
-	if _, ok := errors.Cause(err).(BucketNotFound); !ok {
+	if _, ok := err.(BucketNotFound); !ok {
 		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
 	}
 
@@ -233,7 +239,7 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backend corruption occurred")
 	}
-	if nerr, ok := errors.Cause(err).(PrefixAccessDenied); !ok {
+	if nerr, ok := err.(PrefixAccessDenied); !ok {
 		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
@@ -248,7 +254,7 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backned corruption occurred")
 	}
-	if nerr, ok := errors.Cause(err).(PrefixAccessDenied); !ok {
+	if nerr, ok := err.(PrefixAccessDenied); !ok {
 		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
@@ -275,19 +281,19 @@ func TestFSDeleteObject(t *testing.T) {
 	obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 
 	// Test with invalid bucket name
-	if err := fs.DeleteObject(context.Background(), "fo", objectName); !isSameType(errors.Cause(err), BucketNameInvalid{}) {
+	if err := fs.DeleteObject(context.Background(), "fo", objectName); !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with bucket does not exist
-	if err := fs.DeleteObject(context.Background(), "foobucket", "fooobject"); !isSameType(errors.Cause(err), BucketNotFound{}) {
+	if err := fs.DeleteObject(context.Background(), "foobucket", "fooobject"); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with invalid object name
-	if err := fs.DeleteObject(context.Background(), bucketName, "\\"); !isSameType(errors.Cause(err), ObjectNameInvalid{}) {
+	if err := fs.DeleteObject(context.Background(), bucketName, "\\"); !isSameType(err, ObjectNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with object does not exist.
-	if err := fs.DeleteObject(context.Background(), bucketName, "foooobject"); !isSameType(errors.Cause(err), ObjectNotFound{}) {
+	if err := fs.DeleteObject(context.Background(), bucketName, "foooobject"); !isSameType(err, ObjectNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with valid condition
@@ -298,7 +304,7 @@ func TestFSDeleteObject(t *testing.T) {
 	// Delete object should err disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err := fs.DeleteObject(context.Background(), bucketName, objectName); err != nil {
-		if !isSameType(errors.Cause(err), BucketNotFound{}) {
+		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
@@ -321,11 +327,12 @@ func TestFSDeleteBucket(t *testing.T) {
 	}
 
 	// Test with an invalid bucket name
-	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(errors.Cause(err), BucketNameInvalid{}) {
+	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
+
 	// Test with an inexistant bucket
-	if err = fs.DeleteBucket(context.Background(), "foobucket"); !isSameType(errors.Cause(err), BucketNotFound{}) {
+	if err = fs.DeleteBucket(context.Background(), "foobucket"); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with a valid case
@@ -338,7 +345,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	// Delete bucket should get error disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
-		if !isSameType(errors.Cause(err), BucketNotFound{}) {
+		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
@@ -381,7 +388,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 
 	if _, err := fs.ListBuckets(context.Background()); err != nil {
-		if errors.Cause(err) != errDiskNotFound {
+		if err != errDiskNotFound {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
@@ -389,7 +396,7 @@ func TestFSListBuckets(t *testing.T) {
 	longPath := fmt.Sprintf("%0256d", 1)
 	fs.fsPath = longPath
 	if _, err := fs.ListBuckets(context.Background()); err != nil {
-		if errors.Cause(err) != errFileNameTooLong {
+		if err != errFileNameTooLong {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
@@ -402,7 +409,7 @@ func TestFSHealObject(t *testing.T) {
 
 	obj := initFSObjects(disk, t)
 	_, err := obj.HealObject(context.Background(), "bucket", "object", false)
-	if err == nil || !isSameType(errors.Cause(err), NotImplemented{}) {
+	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
 }
@@ -414,7 +421,7 @@ func TestFSListObjectsHeal(t *testing.T) {
 
 	obj := initFSObjects(disk, t)
 	_, err := obj.ListObjectsHeal(context.Background(), "bucket", "prefix", "marker", "delimiter", 1000)
-	if err == nil || !isSameType(errors.Cause(err), NotImplemented{}) {
+	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
 }

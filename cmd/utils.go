@@ -23,7 +23,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -41,10 +40,27 @@ import (
 	"github.com/pkg/profile"
 )
 
+// IsErrIgnored returns whether given error is ignored or not.
+func IsErrIgnored(err error, ignoredErrs ...error) bool {
+	return IsErr(err, ignoredErrs...)
+}
+
+// IsErr returns whether given error is exact error.
+func IsErr(err error, errs ...error) bool {
+	for _, exactErr := range errs {
+		if err == exactErr {
+			return true
+		}
+	}
+	return false
+}
+
 // Close Http tracing file.
 func stopHTTPTrace() {
 	if globalHTTPTraceFile != nil {
-		errorIf(globalHTTPTraceFile.Close(), "Unable to close httpTraceFile %s", globalHTTPTraceFile.Name())
+		reqInfo := (&logger.ReqInfo{}).AppendTags("traceFile", globalHTTPTraceFile.Name())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, globalHTTPTraceFile.Close())
 		globalHTTPTraceFile = nil
 	}
 }
@@ -215,18 +231,6 @@ func isFile(path string) bool {
 	return false
 }
 
-// checkURL - checks if passed address correspond
-func checkURL(urlStr string) (*url.URL, error) {
-	if urlStr == "" {
-		return nil, errors.New("Address cannot be empty")
-	}
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, fmt.Errorf("`%s` invalid: %s", urlStr, err.Error())
-	}
-	return u, nil
-}
-
 // UTCNow - returns current UTC time.
 func UTCNow() time.Time {
 	return time.Now().UTC()
@@ -331,8 +335,8 @@ func newContext(r *http.Request, api string) context.Context {
 	if prefix != "" {
 		object = prefix
 	}
-
-	return logger.SetContext(context.Background(), &logger.ReqInfo{r.RemoteAddr, r.Header.Get("user-agent"), "", api, bucket, object, nil})
+	reqInfo := &logger.ReqInfo{RemoteHost: r.RemoteAddr, UserAgent: r.Header.Get("user-agent"), API: api, BucketName: bucket, ObjectName: object}
+	return logger.SetReqInfo(context.Background(), reqInfo)
 }
 
 // isNetworkOrHostDown - if there was a network error or if the host is down.
