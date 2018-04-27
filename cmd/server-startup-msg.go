@@ -70,7 +70,6 @@ func printStartupMessage(apiEndPoints []string) {
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
 	printCLIAccessMsg(strippedAPIEndpoints[0], "myminio")
-	//printCLIAccessMsg("{YOUR_HOST_IP}", "myminio")
 
 	// Prints documentation message.
 	printObjectAPIMsg()
