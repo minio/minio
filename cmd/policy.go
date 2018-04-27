@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -87,6 +88,20 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 				return err
 			}
 		} else {
+			// This part is specifically written to handle migration
+			// when the Version string is empty, this was allowed
+			// in all previous minio releases but we need to migrate
+			// those policies by properly setting the Version string
+			// from now on.
+			if config.Version == "" {
+				logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
+				config.Version = policy.DefaultVersion
+
+				if err = savePolicyConfig(objAPI, bucket.Name, config); err != nil {
+					return err
+				}
+			}
+
 			sys.Set(bucket.Name, *config)
 		}
 	}
@@ -143,12 +158,7 @@ func GetPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 		return nil, err
 	}
 
-	bucketPolicy, err := policy.ParseConfig(reader, bucketName)
-	if err != nil {
-		return nil, err
-	}
-
-	return bucketPolicy, nil
+	return policy.ParseConfig(reader, bucketName)
 }
 
 func savePolicyConfig(objAPI ObjectLayer, bucketName string, bucketPolicy *policy.Policy) error {

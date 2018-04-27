@@ -79,6 +79,12 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Version in policy must not be empty
+	if bucketPolicy.Version == "" {
+		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+		return
+	}
+
 	if err = objAPI.SetBucketPolicy(ctx, bucket, bucketPolicy); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
