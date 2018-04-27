@@ -17,6 +17,7 @@
     - [Create Minio Statefulset](#create-minio-statefulset)
     - [Create LoadBalancer Service](#create-minio-service)
   - [Update existing Minio StatefulSet](#update-existing-minio-statefulset)
+  - [Deploying on cluster nodes with local host path](#deploying-on-cluster-nodes-with-local-host-path)
   - [Resource cleanup](#distributed-resource-cleanup)
 
 - [Minio GCS Gateway Deployment](#minio-gcs-gateway-deployment)
@@ -406,6 +407,35 @@ You can cleanup the cluster using
 kubectl delete statefulset minio \
 &&  kubectl delete svc minio \
 && kubectl delete svc minio-service
+```
+
+### Deploying on cluster nodes with local host path
+
+If your cluster does not have a storage solution or PV abstraction, you must explicitly define what nodes you wish to run Minio on, and define a homogeneous path to a local fast block device available on every host.
+
+This must be changed in the example daemonset: [minio-distributed-daemonset.yaml](minio-distributed-daemonset.yaml)
+
+Specifically the hostpath:
+```yaml
+        hostPath:
+          path: /data/minio/
+```
+
+And the list of hosts:
+```yaml
+        - http://hostname1:9000/data/minio
+        - http://hostname2:9000/data/minio
+        - http://hostname3:9000/data/minio
+        - http://hostname4:9000/data/minio
+```
+
+Once deployed, tag the defined host with the `minio-server=true` label:
+
+```bash
+kubectl label node hostname1  -l minio-server=true
+kubectl label node hostname2  -l minio-server=true
+kubectl label node hostname3  -l minio-server=true
+kubectl label node hostname4  -l minio-server=true
 ```
 
 ## Minio GCS Gateway Deployment
