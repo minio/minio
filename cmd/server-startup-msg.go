@@ -23,8 +23,9 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
-
-	humanize "github.com/dustin/go-humanize"
+	"os"
+	"github.com/dustin/go-humanize"
+	"net"
 )
 
 // Documentation links, these are part of message printing code.
@@ -83,7 +84,18 @@ func printStartupMessage(apiEndPoints []string) {
 
 //helper message fix - to avoid the docker host ip
 func sanitizeEndpoint(apiEndpoint string) string {
+
 	endpointLen := len(apiEndpoint)
+
+	HOST_ENV_IP := os.Getenv("HOST_IP")
+
+	if len(HOST_ENV_IP) > 0 {
+		addr := net.ParseIP(HOST_ENV_IP)
+		if addr != nil {
+			return "http://"+HOST_ENV_IP+":"+apiEndpoint[endpointLen-4:endpointLen]
+		}
+	}
+
 	return "http://{YOUR_IP}:"+apiEndpoint[endpointLen-4:endpointLen]
 }
 
