@@ -998,8 +998,9 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	return nil
 }
 
-// HealFormat - heals missing `format.json` on freshly or corrupted
-// disks (missing format.json but does have erasure coded data in it).
+// HealFormat - heals missing `format.json` on fresh unformatted disks.
+// TODO: In future support corrupted disks missing format.json but has erasure
+// coded data in it.
 func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
 	// Acquire lock on format.json
 	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
@@ -1051,11 +1052,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		}
 	}
 
-	// no errors found, no healing is required.
-	if !hasAnyErrors(sErrs) {
-		return res, errNoHealRequired
-	}
-
 	for index, sErr := range sErrs {
 		if sErr != nil {
 			// Look for acceptable heal errors, for any other
@@ -1064,6 +1060,12 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 				return res, fmt.Errorf("Disk %s: %s", s.endpoints[index], sErr)
 			}
 		}
+	}
+
+	if !hasAnyErrorsUnformatted(sErrs) {
+		// No unformatted disks found disks are either offline
+		// or online, no healing is required.
+		return res, errNoHealRequired
 	}
 
 	// All disks are unformatted, return quorum error.
