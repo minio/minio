@@ -53,7 +53,10 @@ func printStartupMessage(apiEndPoints []string) {
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
 
 	//helper message fix
-	strippedAPIEndpoints[0] = sanitizeEndpoint(strippedAPIEndpoints[0])
+	if IsDocker() {
+		strippedAPIEndpoints[0] = sanitizeEndpoint(strippedAPIEndpoints[0])
+	}
+
 
 	// If cache layer is enabled, print cache capacity.
 	cacheObjectAPI := newCacheObjectsFn()
