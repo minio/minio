@@ -77,7 +77,7 @@ func (policy Policy) IsEmpty() bool {
 
 // isValid - checks if Policy is valid or not.
 func (policy Policy) isValid() error {
-	if policy.Version != DefaultVersion {
+	if policy.Version != DefaultVersion && policy.Version != "" {
 		return fmt.Errorf("invalid version '%v'", policy.Version)
 	}
 

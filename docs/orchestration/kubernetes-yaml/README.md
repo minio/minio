@@ -17,6 +17,7 @@
     - [Create Minio Statefulset](#create-minio-statefulset)
     - [Create LoadBalancer Service](#create-minio-service)
   - [Update existing Minio StatefulSet](#update-existing-minio-statefulset)
+  - [Deploying on cluster nodes with local host path](#deploying-on-cluster-nodes-with-local-host-path)
   - [Resource cleanup](#distributed-resource-cleanup)
 
 - [Minio GCS Gateway Deployment](#minio-gcs-gateway-deployment)
@@ -123,7 +124,7 @@ spec:
         - name: data 
           mountPath: "/data"
         # Pulls the lastest Minio image from Docker Hub
-        image: minio/minio:RELEASE.2018-04-19T22-54-58Z
+        image: minio/minio:RELEASE.2018-04-27T23-33-52Z
         args:
         - server
         - /data
@@ -302,7 +303,7 @@ spec:
           value: "minio"
         - name: MINIO_SECRET_KEY
           value: "minio123"
-        image: minio/minio:RELEASE.2018-04-19T22-54-58Z
+        image: minio/minio:RELEASE.2018-04-27T23-33-52Z
         args:
         - server
         - http://minio-0.minio.default.svc.cluster.local/data
@@ -408,6 +409,35 @@ kubectl delete statefulset minio \
 && kubectl delete svc minio-service
 ```
 
+### Deploying on cluster nodes with local host path
+
+If your cluster does not have a storage solution or PV abstraction, you must explicitly define what nodes you wish to run Minio on, and define a homogeneous path to a local fast block device available on every host.
+
+This must be changed in the example daemonset: [minio-distributed-daemonset.yaml](minio-distributed-daemonset.yaml)
+
+Specifically the hostpath:
+```yaml
+        hostPath:
+          path: /data/minio/
+```
+
+And the list of hosts:
+```yaml
+        - http://hostname1:9000/data/minio
+        - http://hostname2:9000/data/minio
+        - http://hostname3:9000/data/minio
+        - http://hostname4:9000/data/minio
+```
+
+Once deployed, tag the defined host with the `minio-server=true` label:
+
+```bash
+kubectl label node hostname1  -l minio-server=true
+kubectl label node hostname2  -l minio-server=true
+kubectl label node hostname3  -l minio-server=true
+kubectl label node hostname4  -l minio-server=true
+```
+
 ## Minio GCS Gateway Deployment
 
 The following section describes the process to deploy [Minio](https://minio.io/) GCS Gateway on Kubernetes. The deployment uses the [official Minio Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
@@ -484,7 +514,7 @@ spec:
       containers:
       - name: minio
         # Pulls the default Minio image from Docker Hub
-        image: minio/minio:RELEASE.2018-04-19T22-54-58Z
+        image: minio/minio:RELEASE.2018-04-27T23-33-52Z
         args:
         - gateway
         - gcs

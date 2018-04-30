@@ -572,8 +572,8 @@ func (l *gcsGateway) ListObjects(ctx context.Context, bucket string, prefix stri
 	// supplied markers.
 	//
 	// - NextMarker in ListObjectsV1 response is constructed by
-	//   prefixing "##minio" to the GCS continuation token,
-	//   e.g, "##minioCgRvYmoz"
+	//   prefixing "{minio}" to the GCS continuation token,
+	//   e.g, "{minio}CgRvYmoz"
 	//
 	// - Application supplied markers are used as-is to list
 	//   object keys that appear after it in the lexicographical order.
