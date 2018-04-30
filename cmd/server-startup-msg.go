@@ -23,8 +23,10 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"os"
+	"github.com/dustin/go-humanize"
+	"net"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -48,6 +50,13 @@ func getFormatStr(strLen int, padding int) string {
 func printStartupMessage(apiEndPoints []string) {
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+
+	//helper message fix
+	if IsDocker() {
+		strippedAPIEndpoints[0] = sanitizeEndpoint(strippedAPIEndpoints[0])
+	}
+
+
 	// If cache layer is enabled, print cache capacity.
 	cacheObjectAPI := newCacheObjectsFn()
 	if cacheObjectAPI != nil {
@@ -74,6 +83,24 @@ func printStartupMessage(apiEndPoints []string) {
 	if globalIsSSL {
 		printCertificateMsg(globalPublicCerts)
 	}
+}
+
+
+//helper message fix - to avoid the docker host ip
+func sanitizeEndpoint(apiEndpoint string) string {
+
+	endpointLen := len(apiEndpoint)
+
+	HOST_ENV_IP := os.Getenv("HOST_IP")
+
+	if len(HOST_ENV_IP) > 0 {
+		addr := net.ParseIP(HOST_ENV_IP)
+		if addr != nil {
+			return "http://"+HOST_ENV_IP+":"+apiEndpoint[endpointLen-4:endpointLen]
+		}
+	}
+
+	return "http://{YOUR_IP}:"+apiEndpoint[endpointLen-4:endpointLen]
 }
 
 // strip api endpoints list with standard ports such as
@@ -147,6 +174,7 @@ func printEventNotifiers() {
 // Prints startup message for command line access. Prints link to our documentation
 // and custom platform specific message.
 func printCLIAccessMsg(endPoint string, alias string) {
+
 	// Get saved credentials.
 	cred := globalServerConfig.GetCredential()
 
