@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"strings"
 	"os"
-	"github.com/dustin/go-humanize"
 	"net"
+	humanize "github.com/dustin/go-humanize"
 
 	"github.com/minio/minio/cmd/logger"
 )
