@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -119,12 +120,12 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(context.Background(), minioMetaBucket, policyPath, 0, -1, &buffer, "")
+	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket})
+	err = objAPI.GetObject(ctx, minioMetaBucket, policyPath, 0, -1, &buffer, "")
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, PolicyNotFound{Bucket: bucket}
 		}
-		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, errors.Cause(err)
 	}
 
@@ -151,9 +152,9 @@ func ReadBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPol
 
 // removeBucketPolicy - removes any previously written bucket policy. Returns BucketPolicyNotFound
 // if no policies are found.
-func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
+func removeBucketPolicy(ctx context.Context, bucket string, objAPI ObjectLayer) error {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
-	err := objAPI.DeleteObject(context.Background(), minioMetaBucket, policyPath)
+	err := objAPI.DeleteObject(ctx, minioMetaBucket, policyPath)
 	if err != nil {
 		err = errors.Cause(err)
 		if _, ok := err.(ObjectNotFound); ok {
@@ -165,21 +166,21 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 }
 
 // writeBucketPolicy - save a bucket policy that is assumed to be validated.
-func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAccessPolicy) error {
+func writeBucketPolicy(ctx context.Context, bucket string, objAPI ObjectLayer, bpy policy.BucketAccessPolicy) error {
 	buf, err := json.Marshal(bpy)
+
 	if err != nil {
-		errorIf(err, "Unable to marshal bucket policy '%#v' to JSON", bpy)
+		logger.LogIf(ctx, err)
 		return err
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	hashReader, err := hash.NewReader(bytes.NewReader(buf), int64(len(buf)), "", getSHA256Hash(buf))
 	if err != nil {
-		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		logger.LogIf(ctx, err)
 		return errors.Cause(err)
 	}
 
-	if _, err = objAPI.PutObject(context.Background(), minioMetaBucket, policyPath, hashReader, nil); err != nil {
-		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+	if _, err = objAPI.PutObject(ctx, minioMetaBucket, policyPath, hashReader, nil); err != nil {
 		return errors.Cause(err)
 	}
 	return nil
@@ -188,9 +189,9 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAcces
 // persistAndNotifyBucketPolicyChange - takes a policyChange argument,
 // persists it to storage, and notify nodes in the cluster about the
 // change. In-memory state is updated in response to the notification.
-func persistAndNotifyBucketPolicyChange(bucket string, isRemove bool, bktPolicy policy.BucketAccessPolicy, objAPI ObjectLayer) error {
+func persistAndNotifyBucketPolicyChange(ctx context.Context, bucket string, isRemove bool, bktPolicy policy.BucketAccessPolicy, objAPI ObjectLayer) error {
 	if isRemove {
-		err := removeBucketPolicy(bucket, objAPI)
+		err := removeBucketPolicy(ctx, bucket, objAPI)
 		if err != nil {
 			return err
 		}
@@ -198,7 +199,7 @@ func persistAndNotifyBucketPolicyChange(bucket string, isRemove bool, bktPolicy 
 		if reflect.DeepEqual(bktPolicy, emptyBucketPolicy) {
 			return errInvalidArgument
 		}
-		if err := writeBucketPolicy(bucket, objAPI, bktPolicy); err != nil {
+		if err := writeBucketPolicy(ctx, bucket, objAPI, bktPolicy); err != nil {
 			return err
 		}
 	}

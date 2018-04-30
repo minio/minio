@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -29,6 +30,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Attempt to retry only this many number of times before
@@ -264,7 +267,9 @@ func rpcDial(serverAddr, serviceEndpoint string, secureConn bool) (netRPCClient 
 		// Print RPC connection errors that are worthy to display in log.
 		switch err.(type) {
 		case x509.HostnameError:
-			errorIf(err, "Unable to establish secure connection to %s", serverAddr)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("serverAddr", serverAddr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 		}
 
 		return nil, &net.OpError{

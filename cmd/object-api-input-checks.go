@@ -19,165 +19,200 @@ package cmd
 import (
 	"context"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 // Checks on GetObject arguments, bucket and object.
-func checkGetObjArgs(bucket, object string) error {
-	return checkBucketAndObjectNames(bucket, object)
+func checkGetObjArgs(ctx context.Context, bucket, object string) error {
+	return checkBucketAndObjectNames(ctx, bucket, object)
 }
 
 // Checks on DeleteObject arguments, bucket and object.
-func checkDelObjArgs(bucket, object string) error {
-	return checkBucketAndObjectNames(bucket, object)
+func checkDelObjArgs(ctx context.Context, bucket, object string) error {
+	return checkBucketAndObjectNames(ctx, bucket, object)
 }
 
 // Checks bucket and object name validity, returns nil if both are valid.
-func checkBucketAndObjectNames(bucket, object string) error {
+func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return errors.Trace(BucketNameInvalid{Bucket: bucket})
+		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if len(object) == 0 {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
+		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if !IsValidObjectPrefix(object) {
-		return errors.Trace(ObjectNameInvalid{Bucket: bucket, Object: object})
+		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	return nil
 }
 
 // Checks for all ListObjects arguments validity.
-func checkListObjsArgs(bucket, prefix, marker, delimiter string, obj ObjectLayer) error {
+func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
-	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+	if err := checkBucketExist(ctx, bucket, obj); err != nil {
+		return err
 	}
 	// Validates object prefix validity after bucket exists.
 	if !IsValidObjectPrefix(prefix) {
-		return errors.Trace(ObjectNameInvalid{
+		logger.LogIf(ctx, ObjectNameInvalid{
 			Bucket: bucket,
 			Object: prefix,
 		})
+		return ObjectNameInvalid{
+			Bucket: bucket,
+			Object: prefix,
+		}
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return errors.Trace(UnsupportedDelimiter{
+		logger.LogIf(ctx, UnsupportedDelimiter{
 			Delimiter: delimiter,
 		})
+		return UnsupportedDelimiter{
+			Delimiter: delimiter,
+		}
 	}
 	// Verify if marker has prefix.
 	if marker != "" && !hasPrefix(marker, prefix) {
-		return errors.Trace(InvalidMarkerPrefixCombination{
+		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
 		})
+		return InvalidMarkerPrefixCombination{
+			Marker: marker,
+			Prefix: prefix,
+		}
 	}
 	return nil
 }
 
 // Checks for all ListMultipartUploads arguments validity.
-func checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, obj ObjectLayer) error {
-	if err := checkListObjsArgs(bucket, prefix, keyMarker, delimiter, obj); err != nil {
+func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, obj ObjectLayer) error {
+	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, delimiter, obj); err != nil {
 		return err
 	}
 	if uploadIDMarker != "" {
 		if hasSuffix(keyMarker, slashSeparator) {
-			return errors.Trace(InvalidUploadIDKeyCombination{
+
+			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
 			})
+			return InvalidUploadIDKeyCombination{
+				UploadIDMarker: uploadIDMarker,
+				KeyMarker:      keyMarker,
+			}
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
-			return errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return err
 		}
 		if id.IsZero() {
-			return errors.Trace(MalformedUploadID{
+			logger.LogIf(ctx, MalformedUploadID{
 				UploadID: uploadIDMarker,
 			})
+
+			return MalformedUploadID{
+				UploadID: uploadIDMarker,
+			}
 		}
 	}
 	return nil
 }
 
 // Checks for NewMultipartUpload arguments validity, also validates if bucket exists.
-func checkNewMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(bucket, object, obj)
+func checkNewMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
 // Checks for PutObjectPart arguments validity, also validates if bucket exists.
-func checkPutObjectPartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(bucket, object, obj)
+func checkPutObjectPartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
 // Checks for ListParts arguments validity, also validates if bucket exists.
-func checkListPartsArgs(bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(bucket, object, obj)
+func checkListPartsArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
 // Checks for CompleteMultipartUpload arguments validity, also validates if bucket exists.
-func checkCompleteMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(bucket, object, obj)
+func checkCompleteMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
 // Checks for AbortMultipartUpload arguments validity, also validates if bucket exists.
-func checkAbortMultipartArgs(bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(bucket, object, obj)
+func checkAbortMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
 // Checks Object arguments validity, also validates if bucket exists.
-func checkObjectArgs(bucket, object string, obj ObjectLayer) error {
+func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
-	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+	if err := checkBucketExist(ctx, bucket, obj); err != nil {
+		return err
 	}
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
-		return errors.Trace(ObjectNameInvalid{
+		logger.LogIf(ctx, ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
+
+		return ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		}
 	}
 	return nil
 }
 
 // Checks for PutObject arguments validity, also validates if bucket exists.
-func checkPutObjectArgs(bucket, object string, obj ObjectLayer, size int64) error {
+func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer, size int64) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
 	// happen before we return an error for invalid object name.
 	// FIXME: should be moved to handler layer.
-	if err := checkBucketExist(bucket, obj); err != nil {
-		return errors.Trace(err)
+	if err := checkBucketExist(ctx, bucket, obj); err != nil {
+		return err
 	}
 
 	if len(object) == 0 ||
 		hasPrefix(object, slashSeparator) ||
 		(hasSuffix(object, slashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
-		return errors.Trace(ObjectNameInvalid{
+		logger.LogIf(ctx, ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
+
+		return ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		}
 	}
 	return nil
 }
 
 // Checks whether bucket exists and returns appropriate error if not.
-func checkBucketExist(bucket string, obj ObjectLayer) error {
-	_, err := obj.GetBucketInfo(context.Background(), bucket)
+func checkBucketExist(ctx context.Context, bucket string, obj ObjectLayer) error {
+	_, err := obj.GetBucketInfo(ctx, bucket)
 	if err != nil {
 		return errors.Cause(err)
 	}

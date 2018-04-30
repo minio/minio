@@ -92,7 +92,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		gotValue := fs.parentDirIsObject(bucketName, testCase.objectName)
+		gotValue := fs.parentDirIsObject(context.Background(), bucketName, testCase.objectName)
 		if testCase.parentIsObject != gotValue {
 			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
 		}

@@ -213,7 +213,7 @@ func TestListOnlineDisks(t *testing.T) {
 		}
 
 		// Fetch xl.json from first disk to construct partsMetadata for the tests.
-		xlMeta, err := readXLMeta(xlDisks[0], bucket, object)
+		xlMeta, err := readXLMeta(context.Background(), xlDisks[0], bucket, object)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to read xl.json %v", i+1, err)
 		}
@@ -265,7 +265,7 @@ func TestListOnlineDisks(t *testing.T) {
 				i+1, test.expectedTime, modTime)
 		}
 
-		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
+		availableDisks, newErrs, _ := disksWithAllParts(context.Background(), onlineDisks, partsMetadata, test.errs, bucket, object)
 		test.errs = newErrs
 
 		if test._tamperBackend != noTamper {
@@ -279,6 +279,7 @@ func TestListOnlineDisks(t *testing.T) {
 }
 
 func TestDisksWithAllParts(t *testing.T) {
+	ctx := context.Background()
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Failed to initialize config - %v", err)
@@ -299,19 +300,19 @@ func TestDisksWithAllParts(t *testing.T) {
 	xl := obj.(*xlObjects)
 	xlDisks := xl.storageDisks
 
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+	_, err = obj.PutObject(ctx, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	partsMetadata, errs := readAllXLMetadata(xlDisks, bucket, object)
+	partsMetadata, errs := readAllXLMetadata(ctx, xlDisks, bucket, object)
 	readQuorum := len(xl.storageDisks) / 2
-	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}
 
@@ -330,7 +331,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	errs = make([]error, len(xlDisks))
-	filteredDisks, errs, err := disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err := disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -360,12 +361,12 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	// Test that all disks are returned without any failures with
 	// unmodified meta data
-	partsMetadata, errs = readAllXLMetadata(xlDisks, bucket, object)
+	partsMetadata, errs = readAllXLMetadata(ctx, xlDisks, bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	filteredDisks, errs, err = disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err = disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}

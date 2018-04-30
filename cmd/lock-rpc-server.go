@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -24,7 +25,7 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/dsync"
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
@@ -98,7 +99,8 @@ func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error 
 func registerStorageLockers(mux *router.Router, lkSrv *lockServer) error {
 	lockRPCServer := newRPCServer()
 	if err := lockRPCServer.RegisterName(lockServiceName, lkSrv); err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 	lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
 	lockRouter.Path(lockServicePath).Handler(lockRPCServer)

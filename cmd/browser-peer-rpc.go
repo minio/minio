@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -62,7 +64,7 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
 
-		errorIf(err, "Unable to update the config with new credentials sent from browser RPC.")
+		logger.LogIf(context.Background(), err)
 		return err
 	}
 

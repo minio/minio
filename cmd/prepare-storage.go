@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/minio/mc/pkg/console"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/errors"
 )
 
@@ -29,19 +31,21 @@ var printEndpointError = func() func(Endpoint, error) {
 	printOnce := make(map[Endpoint]map[string]bool)
 
 	return func(endpoint Endpoint, err error) {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.Host)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		m, ok := printOnce[endpoint]
 		if !ok {
 			m = make(map[string]bool)
 			m[err.Error()] = true
 			printOnce[endpoint] = m
-			errorIf(err, "%s: %s", endpoint, err)
+			logger.LogIf(ctx, err)
 			return
 		}
 		if m[err.Error()] {
 			return
 		}
 		m[err.Error()] = true
-		errorIf(err, "%s: %s", endpoint, err)
+		logger.LogIf(ctx, err)
 	}
 }()
 
@@ -147,7 +151,7 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 		if !firstDisk {
 			return nil, errNotFirstDisk
 		}
-		return initFormatXL(storageDisks, setCount, drivesPerSet)
+		return initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
 	}
 
 	// Following function is added to fix a regressions which was introduced
@@ -178,7 +182,7 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
 		return nil, errInvalidArgument
 	}

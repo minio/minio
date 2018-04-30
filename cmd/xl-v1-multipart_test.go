@@ -57,7 +57,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go xl.cleanupStaleMultipartUploads(20*time.Millisecond, 0, globalServiceDoneCh)
+	go xl.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, globalServiceDoneCh)
 
 	// Wait for 40ms such that - we have given enough time for
 	// cleanup routine to kick in.

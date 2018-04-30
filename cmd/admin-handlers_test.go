@@ -33,7 +33,6 @@ import (
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -264,7 +263,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpointList(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 16)
+	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
@@ -762,13 +761,13 @@ func buildAdminRequest(queryVal url.Values, method, path string,
 		"/minio/admin/v1"+path+"?"+queryVal.Encode(),
 		contentLength, bodySeeker)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	cred := globalServerConfig.GetCredential()
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	return req, nil

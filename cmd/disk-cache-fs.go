@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	errors2 "github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
@@ -93,7 +94,7 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 		appendFileMap: make(map[string]*fsAppendFile),
 	}
 
-	go fsObjects.cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+	go fsObjects.cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	cacheFS := cacheFSObjects{
 		FSObjects:       fsObjects,
@@ -116,7 +117,9 @@ func (cfs *cacheFSObjects) diskUsageLow() bool {
 	minUsage := cfs.maxDiskUsagePct * 80 / 100
 	di, err := disk.GetInfo(cfs.dir)
 	if err != nil {
-		errorIf(err, "Error getting disk information on %s", cfs.dir)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", cfs.dir)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return false
 	}
 	usedPercent := (di.Total - di.Free) * 100 / di.Total
@@ -128,7 +131,9 @@ func (cfs *cacheFSObjects) diskUsageLow() bool {
 func (cfs *cacheFSObjects) diskUsageHigh() bool {
 	di, err := disk.GetInfo(cfs.dir)
 	if err != nil {
-		errorIf(err, "Error getting disk information on %s", cfs.dir)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", cfs.dir)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return true
 	}
 	usedPercent := (di.Total - di.Free) * 100 / di.Total
@@ -140,7 +145,9 @@ func (cfs *cacheFSObjects) diskUsageHigh() bool {
 func (cfs *cacheFSObjects) diskAvailable(size int64) bool {
 	di, err := disk.GetInfo(cfs.dir)
 	if err != nil {
-		errorIf(err, "Error getting disk information on %s", cfs.dir)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", cfs.dir)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 		return false
 	}
 	usedPercent := (di.Total - (di.Free - uint64(size))) * 100 / di.Total
@@ -163,14 +170,15 @@ func (cfs *cacheFSObjects) purgeTrash() {
 				return
 			}
 			for _, entry := range entries {
-				fi, err := fsStatVolume(pathJoin(trashPath, entry))
+				ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+				fi, err := fsStatVolume(ctx, pathJoin(trashPath, entry))
 				if err != nil {
 					continue
 				}
 				dir := path.Join(trashPath, fi.Name())
 
 				// Delete all expired cache content.
-				fsRemoveAll(dir)
+				fsRemoveAll(ctx, dir)
 			}
 		}
 	}
@@ -193,7 +201,7 @@ func (cfs *cacheFSObjects) purge() {
 			deletedCount := 0
 			buckets, err := cfs.ListBuckets(ctx)
 			if err != nil {
-				errorIf(err, "Unable to list buckets.")
+				logger.LogIf(ctx, err)
 			}
 			// Reset cache online status if drive was offline earlier.
 			if !cfs.IsOnline() {
@@ -221,7 +229,7 @@ func (cfs *cacheFSObjects) purge() {
 							continue
 						}
 						if err = cfs.DeleteObject(ctx, bucket.Name, object.Name); err != nil {
-							errorIf(err, "Unable to remove cache entry in dir %s/%s", bucket.Name, object.Name)
+							logger.LogIf(ctx, err)
 							continue
 						}
 						deletedCount++
@@ -313,7 +321,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	var err error
 
 	// Validate if bucket name is valid and exists.
-	if _, err = fs.statBucketDir(bucket); err != nil {
+	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
@@ -325,31 +333,32 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	// and return success.
 	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
-		if fs.parentDirIsObject(bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(errors2.Trace(errFileAccessDenied), bucket, object)
+		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 		}
 		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		var fi os.FileInfo
-		if fi, err = fsStatDir(pathJoin(fs.fsPath, bucket, object)); err != nil {
+		if fi, err = fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object)); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	if err = checkPutObjectArgs(bucket, object, fs, data.Size()); err != nil {
+	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
 
 	// Check if an object is present as one of the parent dir.
-	if fs.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(errors2.Trace(errFileAccessDenied), bucket, object)
+	if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 	}
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < 0 {
-		return ObjectInfo{}, errors2.Trace(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return ObjectInfo{}, errInvalidArgument
 	}
 
 	var wlk *lock.LockedFile
@@ -359,7 +368,8 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(errors2.Trace(err), bucket, object)
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -367,7 +377,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 			// Remove meta file when PutObject encounters any error
 			if retErr != nil {
 				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
-				fsRemoveMeta(bucketMetaDir, fsMetaPath, tmpDir)
+				fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir)
 			}
 		}()
 	}
@@ -385,10 +395,9 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(fsTmpObjPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
 	if err != nil {
-		fsRemoveFile(fsTmpObjPath)
-		errorIf(err, "Failed to create object %s/%s", bucket, object)
+		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fsMeta.Meta["etag"] == "" {
@@ -397,18 +406,18 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		fsRemoveFile(fsTmpObjPath)
-		return ObjectInfo{}, errors2.Trace(IncompleteBody{})
+		fsRemoveFile(ctx, fsTmpObjPath)
+		return ObjectInfo{}, IncompleteBody{}
 	}
 
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be
 	// nothing to delete.
-	defer fsRemoveFile(fsTmpObjPath)
+	defer fsRemoveFile(ctx, fsTmpObjPath)
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
-	if err = fsRenameFile(fsTmpObjPath, fsNSObjPath); err != nil {
+	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -420,7 +429,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	}
 
 	// Stat the file to fetch timestamp, size.
-	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
+	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -447,11 +456,11 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 		}
 	}
 	fs := cfs.FSObjects
-	if err := checkNewMultipartArgs(bucket, object, fs); err != nil {
+	if err := checkNewMultipartArgs(ctx, bucket, object, fs); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
 
-	if _, err := fs.statBucketDir(bucket); err != nil {
+	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
 
@@ -459,7 +468,8 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 
 	err := mkdirAll(uploadIDDir, 0755)
 	if err != nil {
-		return "", errors2.Trace(err)
+		logger.LogIf(ctx, err)
+		return "", err
 	}
 
 	// Initialize fs.json values.
@@ -468,11 +478,13 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 
 	fsMetaBytes, err := json.Marshal(fsMeta)
 	if err != nil {
-		return "", errors2.Trace(err)
+		logger.LogIf(ctx, err)
+		return "", err
 	}
 
 	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0644); err != nil {
-		return "", errors2.Trace(err)
+		logger.LogIf(ctx, err)
+		return "", err
 	}
 	return uploadID, nil
 }
@@ -485,7 +497,7 @@ func (cfs *cacheFSObjects) moveBucketToTrash(ctx context.Context, bucket string)
 		return err
 	}
 	defer bucketLock.Unlock()
-	bucketDir, err := fs.getBucketDir(bucket)
+	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -493,12 +505,13 @@ func (cfs *cacheFSObjects) moveBucketToTrash(ctx context.Context, bucket string)
 	expiredDir := path.Join(trashPath, bucket)
 	// Attempt to move regular bucket to expired directory.
 	if err = fsRenameDir(bucketDir, expiredDir); err != nil {
+		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket)
 	}
 	// Cleanup all the bucket metadata.
 	ominioMetadataBucketDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket)
 	nminioMetadataBucketDir := pathJoin(trashPath, MustGetUUID())
-	_ = fsRenameDir(ominioMetadataBucketDir, nminioMetadataBucketDir)
+	logger.LogIf(ctx, fsRenameDir(ominioMetadataBucketDir, nminioMetadataBucketDir))
 	return nil
 }
 
@@ -506,22 +519,22 @@ func (cfs *cacheFSObjects) moveBucketToTrash(ctx context.Context, bucket string)
 // paths for windows automatically.
 func fsRenameDir(dirPath, newPath string) (err error) {
 	if dirPath == "" || newPath == "" {
-		return errors2.Trace(errInvalidArgument)
+		return errInvalidArgument
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	if err = checkPathLength(newPath); err != nil {
-		return errors2.Trace(err)
+		return err
 	}
 	if err = os.Rename(dirPath, newPath); err != nil {
 		if os.IsNotExist(err) {
-			return errors2.Trace(errVolumeNotFound)
+			return errVolumeNotFound
 		} else if isSysErrNotEmpty(err) {
-			return errors2.Trace(errVolumeNotEmpty)
+			return errVolumeNotEmpty
 		}
-		return errors2.Trace(err)
+		return err
 	}
 	return nil
 }

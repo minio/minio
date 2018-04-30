@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"os"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 func handleSignals() {
@@ -44,11 +46,11 @@ func handleSignals() {
 		}
 
 		err = globalHTTPServer.Shutdown()
-		errorIf(err, "Unable to shutdown http server")
+		logger.LogIf(context.Background(), err)
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
-			errorIf(oerr, "Unable to shutdown object layer")
+			logger.LogIf(context.Background(), oerr)
 		}
 
 		return (err == nil && oerr == nil)
@@ -57,33 +59,32 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			errorIf(err, "http server exited abnormally")
+			logger.LogIf(context.Background(), err)
 			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
 				oerr = objAPI.Shutdown(context.Background())
-				errorIf(oerr, "Unable to shutdown object layer")
 			}
 
 			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
 			stopHTTPTrace()
-			log.Printf("Exiting on signal %v\n", osSignal)
+			logger.Printf("Exiting on signal %v\n", osSignal)
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
 			switch signal {
 			case serviceStatus:
 				// Ignore this at the moment.
 			case serviceRestart:
-				log.Println("Restarting on service signal")
+				logger.Println("Restarting on service signal")
 				err := globalHTTPServer.Shutdown()
-				errorIf(err, "Unable to shutdown http server")
+				logger.LogIf(context.Background(), err)
 				stopHTTPTrace()
 				rerr := restartProcess()
-				errorIf(rerr, "Unable to restart the server")
+				logger.LogIf(context.Background(), rerr)
 
 				exit(err == nil && rerr == nil)
 			case serviceStop:
-				log.Println("Stopping on service signal")
+				logger.Println("Stopping on service signal")
 				stopHTTPTrace()
 				exit(stopProcess())
 			}

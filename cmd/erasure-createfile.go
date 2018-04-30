@@ -17,18 +17,20 @@
 package cmd
 
 import (
+	"context"
 	"hash"
 	"io"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
 // the file at the given volume and path. It will read from src until an io.EOF occurs. The given algorithm will
 // be used to protect the erasure encoded file.
-func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, algorithm BitrotAlgorithm, writeQuorum int) (f ErasureFileInfo, err error) {
+func (s *ErasureStorage) CreateFile(ctx context.Context, src io.Reader, volume, path string, buffer []byte, algorithm BitrotAlgorithm, writeQuorum int) (f ErasureFileInfo, err error) {
 	if !algorithm.Available() {
-		return f, errors.Trace(errBitrotHashAlgoInvalid)
+		logger.LogIf(ctx, errBitrotHashAlgoInvalid)
+		return f, errBitrotHashAlgoInvalid
 	}
 	f.Checksums = make([][]byte, len(s.disks))
 	hashers := make([]hash.Hash, len(s.disks))
@@ -50,21 +52,22 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 			}
 			blocks = make([][]byte, len(s.disks)) // write empty block
 		} else if err == nil || (n > 0 && err == io.ErrUnexpectedEOF) {
-			blocks, err = s.ErasureEncode(buffer[:n])
+			blocks, err = s.ErasureEncode(ctx, buffer[:n])
 			if err != nil {
 				return f, err
 			}
 		} else {
-			return f, errors.Trace(err)
+			logger.LogIf(ctx, err)
+			return f, err
 		}
 
 		for i := range errChans { // span workers
-			go erasureAppendFile(s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
+			go erasureAppendFile(ctx, s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
 		}
 		for i := range errChans { // wait until all workers are finished
 			errs[i] = <-errChans[i]
 		}
-		if err = reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, writeQuorum); err != nil {
+		if err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum); err != nil {
 			return f, err
 		}
 		s.disks = evalDisks(s.disks, errs)
@@ -83,9 +86,10 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 
 // erasureAppendFile appends the content of buf to the file on the given disk and updates computes
 // the hash of the written data. It sends the write error (or nil) over the error channel.
-func erasureAppendFile(disk StorageAPI, volume, path string, hash hash.Hash, buf []byte, errChan chan<- error) {
+func erasureAppendFile(ctx context.Context, disk StorageAPI, volume, path string, hash hash.Hash, buf []byte, errChan chan<- error) {
 	if disk == OfflineDisk {
-		errChan <- errors.Trace(errDiskNotFound)
+		logger.LogIf(ctx, errDiskNotFound)
+		errChan <- errDiskNotFound
 		return
 	}
 	err := disk.AppendFile(volume, path, buf)

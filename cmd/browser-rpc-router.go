@@ -17,9 +17,10 @@
 package cmd
 
 import (
-	router "github.com/gorilla/mux"
+	"context"
 
-	"github.com/minio/minio/pkg/errors"
+	router "github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Set up an RPC endpoint that receives browser related calls. The
@@ -42,7 +43,8 @@ func registerBrowserPeerRPCRouter(mux *router.Router) error {
 	bpRPCServer := newRPCServer()
 	err := bpRPCServer.RegisterName("BrowserPeer", bpHandlers)
 	if err != nil {
-		return errors.Trace(err)
+		logger.LogIf(context.Background(), err)
+		return err
 	}
 
 	bpRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()

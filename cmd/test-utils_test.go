@@ -55,6 +55,7 @@ import (
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/hash"
@@ -74,8 +75,7 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	log = NewLogger()
-	log.EnableQuiet()
+	logger.EnableQuiet()
 }
 
 // concurreny level for certain parallel tests.
@@ -187,7 +187,7 @@ func prepareXL32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 2, 16)
+	format, err := waitForFormatXL(context.Background(), true, endpoints, 2, 16)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -1685,7 +1685,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	_, err = waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)
+	_, err = waitForFormatXL(context.Background(), endpoints[0].IsLocal, endpoints, 1, 16)
 	if err != nil {
 		return nil, err
 	}
@@ -2423,12 +2423,12 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 func mustGetNewEndpointList(args ...string) (endpoints EndpointList) {
 	if len(args) == 1 {
 		endpoint, err := NewEndpoint(args[0])
-		fatalIf(err, "unable to create new endpoint")
+		logger.FatalIf(err, "unable to create new endpoint")
 		endpoints = append(endpoints, endpoint)
 	} else {
 		var err error
 		endpoints, err = NewEndpointList(args...)
-		fatalIf(err, "unable to create new endpoint list")
+		logger.FatalIf(err, "unable to create new endpoint list")
 	}
 	return endpoints
 }

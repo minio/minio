@@ -2206,7 +2206,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 
 	// on successful complete multipart operation the s3MD5 for the parts uploaded will be returned.
-	s3MD5, err := getCompleteMultipartMD5(inputParts[3].parts)
+	s3MD5, err := getCompleteMultipartMD5(context.Background(), inputParts[3].parts)
 	if err != nil {
 		t.Fatalf("Obtaining S3MD5 failed")
 	}

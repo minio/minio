@@ -793,7 +793,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Generic Invalid-Request error. Should be used for response errors only for unlikely
-	// corner case errors for which introducing new APIErrorCode is not worth it. errorIf()
+	// corner case errors for which introducing new APIErrorCode is not worth it. LogIf()
 	// should be used to log the error at the source of the error for debugging purposes.
 	ErrInvalidRequest: {
 		Code:           "InvalidRequest",

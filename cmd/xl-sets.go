@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
@@ -214,7 +215,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 			nsMutex:  mutex,
 			bp:       bpool.NewBytePoolCap(setCount*drivesPerSet, blockSizeV1, blockSizeV1*2),
 		}
-		go s.sets[i].cleanupStaleMultipartUploads(globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
 
 	// Connect disks right away.
@@ -431,7 +432,7 @@ func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuation
 
 // SetBucketPolicy persist the new policy on the bucket.
 func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy policy.BucketAccessPolicy) error {
-	return persistAndNotifyBucketPolicyChange(bucket, false, policy, s)
+	return persistAndNotifyBucketPolicyChange(ctx, bucket, false, policy, s)
 }
 
 // GetBucketPolicy will return a policy on a bucket
@@ -446,7 +447,7 @@ func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (policy.Buc
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return persistAndNotifyBucketPolicyChange(bucket, true, emptyBucketPolicy, s)
+	return persistAndNotifyBucketPolicyChange(ctx, bucket, true, emptyBucketPolicy, s)
 }
 
 // RefreshBucketPolicy refreshes policy cache from disk
@@ -498,7 +499,7 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string) error {
 	}
 
 	// Delete all bucket metadata.
-	deleteBucketMetadata(bucket, s)
+	deleteBucketMetadata(ctx, bucket, s)
 
 	// Success.
 	return nil
@@ -585,26 +586,26 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	go func() {
-		if gerr := srcSet.getObject(srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+				logger.LogIf(ctx, gerr)
 			}
 			return
 		}
 		// Close writer explicitly signalling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			errorIf(gerr, "Unable to read the object %s/%s.", srcBucket, srcObject)
+			logger.LogIf(ctx, gerr)
 			return
 		}
 	}()
 
-	return destSet.putObject(destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
+	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
 }
 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
+func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string, err error) {
 		for _, disk := range disks {
 			if disk == nil {
@@ -620,7 +621,8 @@ func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...
 				if errors.IsErrIgnored(err, treeWalkIgnoredErrs...) {
 					continue
 				}
-				return nil, errors.Trace(err)
+				logger.LogIf(ctx, err)
+				return nil, err
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -679,7 +681,7 @@ func listDirSetsFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...
 // value through the walk channel receives the data properly lexically sorted.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 	// validate all the inputs for listObjects
-	if err = checkListObjsArgs(bucket, prefix, marker, delimiter, s); err != nil {
+	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return result, err
 	}
 
@@ -707,8 +709,8 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
-		listDir := listDirSetsFactory(isLeaf, xlTreeWalkIgnoredErrs, setDisks...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		listDir := listDirSetsFactory(ctx, isLeaf, xlTreeWalkIgnoredErrs, setDisks...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -726,9 +728,9 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		var objInfo ObjectInfo
 		var err error
 		if hasSuffix(walkResult.entry, slashSeparator) {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(bucket, walkResult.entry)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
 		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(bucket, walkResult.entry)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
 		}
 		if err != nil {
 			// Ignore errFileNotFound as the object might have got
@@ -787,12 +789,12 @@ func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destB
 	go func() {
 		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+				logger.LogIf(ctx, gerr)
 				return
 			}
 		}
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			logger.LogIf(ctx, gerr)
 			return
 		}
 	}()
@@ -1034,7 +1036,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResult
 		}
 
 		// Save formats `format.json` across all disks.
-		if err = saveFormatXLAll(storageDisks, tmpNewFormats); err != nil {
+		if err = saveFormatXLAll(ctx, storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 
@@ -1228,7 +1230,7 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 }
 
 // listObjectsHeal - wrapper function implemented over file tree walk.
-func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
@@ -1252,7 +1254,7 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 		}
 
 		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -1272,9 +1274,9 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 		var objInfo ObjectInfo
 		var err error
 		if hasSuffix(walkResult.entry, slashSeparator) {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(bucket, walkResult.entry)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
 		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(bucket, walkResult.entry)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
 		}
 		if err != nil {
 			// Ignore errFileNotFound
@@ -1320,7 +1322,7 @@ func (s *xlSets) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKe
 
 // This is not implemented yet, will be implemented later to comply with Admin API refactor.
 func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if err = checkListObjsArgs(bucket, prefix, marker, delimiter, s); err != nil {
+	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
 
@@ -1343,7 +1345,7 @@ func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 	}
 
 	// Initiate a list operation, if successful filter and return quickly.
-	listObjInfo, err := s.listObjectsHeal(bucket, prefix, marker, delimiter, maxKeys)
+	listObjInfo, err := s.listObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err == nil {
 		// We got the entries successfully return.
 		return listObjInfo, nil

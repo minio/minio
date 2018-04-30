@@ -22,17 +22,19 @@ import (
 	"path"
 	"sync"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
-	return madmin.HealResultItem{}, errors.Trace(NotImplemented{})
+	logger.LogIf(ctx, NotImplemented{})
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // checks for bucket if it exists in writeQuorum number of disks, this call
 // is only used by healBucket().
-func checkBucketExistsInQuorum(storageDisks []StorageAPI, bucketName string) (err error) {
+func checkBucketExistsInQuorum(ctx context.Context, storageDisks []StorageAPI, bucketName string) (err error) {
 	var wg = &sync.WaitGroup{}
 
 	errs := make([]error, len(storageDisks))
@@ -50,7 +52,7 @@ func checkBucketExistsInQuorum(storageDisks []StorageAPI, bucketName string) (er
 	wg.Wait()
 
 	readQuorum := len(storageDisks) / 2
-	return reduceWriteQuorumErrs(errs, nil, readQuorum)
+	return reduceWriteQuorumErrs(ctx, errs, nil, readQuorum)
 }
 
 // Heals a bucket if it doesn't exist on one of the disks, additionally
@@ -64,7 +66,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) 
 	// Check if bucket doesn't exist in writeQuorum number of disks, if quorum
 	// number of disks returned that bucket does not exist we quickly return
 	// and do not proceed to heal.
-	if err = checkBucketExistsInQuorum(storageDisks, bucket); err != nil {
+	if err = checkBucketExistsInQuorum(ctx, storageDisks, bucket); err != nil {
 		return results, err
 	}
 
@@ -73,7 +75,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) 
 
 	// Heal bucket.
 	var result madmin.HealResultItem
-	result, err = healBucket(storageDisks, bucket, writeQuorum, dryRun)
+	result, err = healBucket(ctx, storageDisks, bucket, writeQuorum, dryRun)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) 
 }
 
 // Heal bucket - create buckets on disks where it does not exist.
-func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
+func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, writeQuorum int,
 	dryRun bool) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
@@ -102,7 +104,8 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			dErrs[index] = errors.Trace(errDiskNotFound)
+			logger.LogIf(ctx, errDiskNotFound)
+			dErrs[index] = errDiskNotFound
 			beforeState[index] = madmin.DriveStateOffline
 			afterState[index] = madmin.DriveStateOffline
 			continue
@@ -182,7 +185,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int,
 		})
 	}
 
-	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
+	reducedErr := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if errors.Cause(reducedErr) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
@@ -196,7 +199,9 @@ func healBucketMetadata(xl xlObjects, bucket string, dryRun bool) (
 	results []madmin.HealResultItem, err error) {
 
 	healBucketMetaFn := func(metaPath string) error {
-		result, healErr := xl.HealObject(context.Background(), minioMetaBucket, metaPath, dryRun)
+		reqInfo := &logger.ReqInfo{BucketName: bucket}
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		result, healErr := xl.HealObject(ctx, minioMetaBucket, metaPath, dryRun)
 		// If object is not found, no result to add.
 		if isErrObjectNotFound(healErr) {
 			return nil
@@ -270,15 +275,15 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
-func healObject(storageDisks []StorageAPI, bucket string, object string,
+func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, object string,
 	quorum int, dryRun bool) (result madmin.HealResultItem, err error) {
 
-	partsMetadata, errs := readAllXLMetadata(storageDisks, bucket, object)
+	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, bucket, object)
 
 	// readQuorum suffices for xl.json since we use monotonic
 	// system time to break the tie when a split-brain situation
 	// arises.
-	if reducedErr := reduceReadQuorumErrs(errs, nil, quorum); reducedErr != nil {
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, quorum); reducedErr != nil {
 		return result, toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -287,7 +292,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// List of disks having all parts as per latest xl.json.
-	availableDisks, dataErrs, aErr := disksWithAllParts(latestDisks, partsMetadata, errs, bucket, object)
+	availableDisks, dataErrs, aErr := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object)
 	if aErr != nil {
 		return result, toObjectErr(aErr, bucket, object)
 	}
@@ -387,7 +392,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 
 	// Latest xlMetaV1 for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, pErr := pickValidXLMeta(partsMetadata, modTime)
+	latestMeta, pErr := pickValidXLMeta(ctx, partsMetadata, modTime)
 	if pErr != nil {
 		return result, toObjectErr(pErr, bucket, object)
 	}
@@ -430,7 +435,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 	// Heal each part. erasureHealFile() will write the healed
 	// part to .minio/tmp/uuid/ which needs to be renamed later to
 	// the final location.
-	storage, err := NewErasureStorage(latestDisks, latestMeta.Erasure.DataBlocks,
+	storage, err := NewErasureStorage(ctx, latestDisks, latestMeta.Erasure.DataBlocks,
 		latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object)
@@ -449,7 +454,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 			}
 		}
 		// Heal the part file.
-		file, hErr := storage.HealFile(outDatedDisks, bucket, pathJoin(object, partName),
+		file, hErr := storage.HealFile(ctx, outDatedDisks, bucket, pathJoin(object, partName),
 			erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize,
 			algorithm, checksums)
 		if hErr != nil {
@@ -489,7 +494,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 	}
 
 	// Generate and write `xl.json` generated from other disks.
-	outDatedDisks, aErr = writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID,
+	outDatedDisks, aErr = writeUniqueXLMetadata(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
 		partsMetadata, diskCount(outDatedDisks))
 	if aErr != nil {
 		return result, toObjectErr(aErr, bucket, object)
@@ -505,7 +510,8 @@ func healObject(storageDisks []StorageAPI, bucket string, object string,
 		aErr = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket,
 			retainSlash(object))
 		if aErr != nil {
-			return result, toObjectErr(errors.Trace(aErr), bucket, object)
+			logger.LogIf(ctx, aErr)
+			return result, toObjectErr(aErr, bucket, object)
 		}
 
 		for i, v := range result.Before.Drives {
@@ -530,7 +536,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks
-	partsMetadata, errs := readAllXLMetadata(xl.getDisks(), bucket, object)
+	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
 	// get read quorum for this object
 	var readQuorum int
@@ -547,5 +553,5 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	defer objectLock.RUnlock()
 
 	// Heal the object.
-	return healObject(xl.getDisks(), bucket, object, readQuorum, dryRun)
+	return healObject(ctx, xl.getDisks(), bucket, object, readQuorum, dryRun)
 }

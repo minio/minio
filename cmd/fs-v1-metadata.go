@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -25,7 +26,7 @@ import (
 	pathutil "path"
 	"strings"
 
-	"github.com/minio/minio/pkg/errors"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/tidwall/gjson"
@@ -237,20 +238,23 @@ func parseFSPartsArray(fsMetaBuf []byte) []objectPartInfo {
 	return partsArray
 }
 
-func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
+func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
 	fi, err := lk.Stat()
 	if err != nil {
-		return 0, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return 0, err
 	}
 
 	fsMetaBuf, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
-		return 0, errors.Trace(err)
+		logger.LogIf(ctx, err)
+		return 0, err
 	}
 
 	if len(fsMetaBuf) == 0 {
-		return 0, errors.Trace(io.EOF)
+		logger.LogIf(ctx, io.EOF)
+		return 0, io.EOF
 	}
 
 	// obtain version.
@@ -259,7 +263,9 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
 	if !isFSMetaValid(m.Version) {
-		return 0, errors.Trace(errCorruptedFormat)
+		logger.GetReqInfo(ctx).AppendTags("file", lk.Name())
+		logger.LogIf(ctx, errCorruptedFormat)
+		return 0, errCorruptedFormat
 	}
 
 	// obtain parts information

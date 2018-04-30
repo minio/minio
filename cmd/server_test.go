@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
@@ -2732,7 +2733,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 		part.ETag = canonicalizeETag(part.ETag)
 		parts = append(parts, part)
 	}
-	etag, err := getCompleteMultipartMD5(parts)
+	etag, err := getCompleteMultipartMD5(context.Background(), parts)
 	c.Assert(err, nil)
 	c.Assert(canonicalizeETag(response.Header.Get("Etag")), etag)
 }
