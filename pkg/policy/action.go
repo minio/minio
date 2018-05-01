@@ -24,7 +24,7 @@ import (
 )
 
 // Action - policy action.
-// Refer https://docs.aws.amazon.com/IAM/latest/UserGuide/list_s3.html
+// Refer https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html
 // for more information about available actions.
 type Action string
 
@@ -75,9 +75,6 @@ const (
 	// ListMultipartUploadPartsAction - ListParts Rest API action.
 	ListMultipartUploadPartsAction = "s3:ListMultipartUploadParts"
 
-	// ListObjectsAction - ListObjects Rest API action exactly same behavior as ListBucketAction.
-	ListObjectsAction = "s3:ListObjects"
-
 	// PutBucketNotificationAction - PutObjectNotification Rest API action.
 	PutBucketNotificationAction = "s3:PutBucketNotification"
 
@@ -113,7 +110,7 @@ func (action Action) IsValid() bool {
 		fallthrough
 	case ListBucketMultipartUploadsAction, ListenBucketNotificationAction:
 		fallthrough
-	case ListMultipartUploadPartsAction, ListObjectsAction, PutBucketNotificationAction:
+	case ListMultipartUploadPartsAction, PutBucketNotificationAction:
 		fallthrough
 	case PutBucketPolicyAction, PutObjectAction:
 		return true
@@ -233,14 +230,6 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	),
 
 	ListMultipartUploadPartsAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	ListObjectsAction: condition.NewKeySet(
-		condition.S3Prefix,
-		condition.S3Delimiter,
-		condition.S3MaxKeys,
 		condition.AWSReferer,
 		condition.AWSSourceIP,
 	),

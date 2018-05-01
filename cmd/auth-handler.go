@@ -183,24 +183,6 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		return ErrNone
 	}
 
-	// As policy.ListBucketAction and policy.ListObjectsAction are same but different names,
-	// policy.ListBucketAction is used across the code but user may used policy.ListObjectsAction
-	// in bucket policy to denote the same. In below try again with policy.ListObjectsAction.
-	if action != policy.ListBucketAction {
-		return ErrAccessDenied
-	}
-
-	if globalPolicySys.IsAllowed(policy.Args{
-		AccountName:     accountName,
-		Action:          policy.ListObjectsAction,
-		BucketName:      bucketName,
-		ConditionValues: getConditionValues(r, locationConstraint),
-		IsOwner:         isOwner,
-		ObjectName:      objectName,
-	}) {
-		return ErrNone
-	}
-
 	return ErrAccessDenied
 }
 
