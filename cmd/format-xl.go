@@ -288,10 +288,10 @@ func formatXLMigrateV2ToV3(export string) error {
 	return ioutil.WriteFile(formatPath, b, 0644)
 }
 
-// Returns true, if one of the errors is non-nil.
-func hasAnyErrors(errs []error) bool {
+// Returns true, if one of the errors is non-nil and is Unformatted disk.
+func hasAnyErrorsUnformatted(errs []error) bool {
 	for _, err := range errs {
-		if err != nil {
+		if err != nil && err == errUnformattedDisk {
 			return true
 		}
 	}
