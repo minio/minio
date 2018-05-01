@@ -6,12 +6,11 @@
 
 package blake2b
 
-func init() {
-	useSSE4 = supportsSSE4()
-}
+import "golang.org/x/sys/cpu"
 
-//go:noescape
-func supportsSSE4() bool
+func init() {
+	useSSE4 = cpu.X86.HasSSE41
+}
 
 //go:noescape
 func hashBlocksSSE4(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte)

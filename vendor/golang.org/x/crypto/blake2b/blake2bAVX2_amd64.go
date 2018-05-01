@@ -6,20 +6,13 @@
 
 package blake2b
 
+import "golang.org/x/sys/cpu"
+
 func init() {
-	useAVX2 = supportsAVX2()
-	useAVX = supportsAVX()
-	useSSE4 = supportsSSE4()
+	useAVX2 = cpu.X86.HasAVX2
+	useAVX = cpu.X86.HasAVX
+	useSSE4 = cpu.X86.HasSSE41
 }
-
-//go:noescape
-func supportsSSE4() bool
-
-//go:noescape
-func supportsAVX() bool
-
-//go:noescape
-func supportsAVX2() bool
 
 //go:noescape
 func hashBlocksAVX2(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte)
@@ -31,13 +24,14 @@ func hashBlocksAVX(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte)
 func hashBlocksSSE4(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte)
 
 func hashBlocks(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte) {
-	if useAVX2 {
+	switch {
+	case useAVX2:
 		hashBlocksAVX2(h, c, flag, blocks)
-	} else if useAVX {
+	case useAVX:
 		hashBlocksAVX(h, c, flag, blocks)
-	} else if useSSE4 {
+	case useSSE4:
 		hashBlocksSSE4(h, c, flag, blocks)
-	} else {
+	default:
 		hashBlocksGeneric(h, c, flag, blocks)
 	}
 }
