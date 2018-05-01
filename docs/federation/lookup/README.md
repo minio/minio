@@ -42,7 +42,7 @@ NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then
 it is randomized which cluster might provision the bucket.
 
-TODO: For now the control to create the bucket from a client to the right cluster using `region` paramter
+TODO: For now the control to create the bucket from a client to the right cluster using `region` parameter
 is not implemented yet.
 
 
