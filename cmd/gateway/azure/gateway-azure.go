@@ -716,6 +716,17 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 		logger.LogIf(ctx, err)
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
+	// Azure will copy metadata from the source object when an empty metadata map is provided.
+	// To handle the case where the source object should be copied without its metadata,
+	// the metadata must be removed from the dest. object after the copy completes
+	if len(azureMeta) == 0 && len(destBlob.Metadata) != 0 {
+		destBlob.Metadata = azureMeta
+		err = destBlob.SetMetadata(nil)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return objInfo, azureToObjectError(err, srcBucket, srcObject)
+		}
+	}
 	destBlob.Properties = props
 	err = destBlob.SetProperties(nil)
 	if err != nil {
