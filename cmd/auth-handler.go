@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -153,10 +154,10 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	var locationConstraint string
 	if action == policy.CreateBucketAction {
 		// To extract region from XML in request body, get copy of request body.
-		payload, err := ioutil.ReadAll(r.Body)
+		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, maxLocationConstraintSize))
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return ErrAccessDenied
+			return ErrMalformedXML
 		}
 
 		// Populate payload to extract location constraint.
@@ -165,7 +166,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		var s3Error APIErrorCode
 		locationConstraint, s3Error = parseLocationConstraint(r)
 		if s3Error != ErrNone {
-			return ErrAccessDenied
+			return s3Error
 		}
 
 		// Populate payload again to handle it in HTTP handler.
