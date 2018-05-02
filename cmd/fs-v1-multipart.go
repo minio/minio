@@ -714,11 +714,11 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 // blocking and should be run in a go-routine.
 func (fs *FSObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
 	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-doneCh:
-			// Stop the timer.
-			ticker.Stop()
 			return
 		case <-ticker.C:
 			now := time.Now()

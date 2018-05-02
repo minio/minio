@@ -69,6 +69,8 @@ func startLockMaintenance(lkSrv *lockServer) {
 	go func(lk *lockServer) {
 		// Initialize a new ticker with a minute between each ticks.
 		ticker := time.NewTicker(lockMaintenanceInterval)
+		// Stop the timer upon service closure and cleanup the go-routine.
+		defer ticker.Stop()
 
 		// Start with random sleep time, so as to avoid "synchronous checks" between servers
 		time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
@@ -76,8 +78,6 @@ func startLockMaintenance(lkSrv *lockServer) {
 			// Verifies every minute for locks held more than 2minutes.
 			select {
 			case <-globalServiceDoneCh:
-				// Stop the timer upon service closure and cleanup the go-routine.
-				ticker.Stop()
 				return
 			case <-ticker.C:
 				lk.lockMaintenance(lockValidityCheckInterval)

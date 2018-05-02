@@ -198,15 +198,14 @@ func (s *xlSets) connectDisks() {
 // the set topology, this monitoring happens at a given monitoring interval.
 func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 	ticker := time.NewTicker(monitorInterval)
+	// Stop the timer.
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-globalServiceDoneCh:
-			// Stop the timer.
-			ticker.Stop()
 			return
 		case <-s.disksConnectDoneCh:
-			// Stop the timer.
-			ticker.Stop()
 			return
 		case <-ticker.C:
 			s.connectDisks()

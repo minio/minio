@@ -155,11 +155,11 @@ func (cfs *cacheFSObjects) diskAvailable(size int64) bool {
 // purges all content marked trash from the cache.
 func (cfs *cacheFSObjects) purgeTrash() {
 	ticker := time.NewTicker(time.Minute * cacheCleanupInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-globalServiceDoneCh:
-			// Stop the timer.
-			ticker.Stop()
 			return
 		case <-ticker.C:
 			trashPath := path.Join(cfs.fsPath, minioMetaBucket, cacheTrashDir)

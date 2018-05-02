@@ -62,8 +62,10 @@ func (target *HTTPClientTarget) start() {
 			return nil
 		}
 
+		keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+		defer keepAliveTicker.Stop()
+
 		for {
-			keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 			select {
 			case <-target.stopCh:
 				// We are asked to stop.
