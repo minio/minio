@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"bytes"
 )
 
 // TLSPrivateKeyPassword is the environment variable which contains the password used
@@ -38,6 +39,9 @@ func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	if data, err = ioutil.ReadFile(certFile); err != nil {
 		return nil, err
 	}
+
+	//Trimming leading and tailing spaces
+	data = bytes.TrimSpace(data)
 
 	// Parse all certs in the chain.
 	current := data
