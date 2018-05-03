@@ -11,6 +11,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 
 WORKDIR /go/src/github.com/minio/
 
+
 COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
 
 RUN  \
