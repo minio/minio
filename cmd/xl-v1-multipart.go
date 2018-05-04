@@ -837,11 +837,11 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 // Clean-up the old multipart uploads. Should be run in a Go routine.
 func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
 	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-doneCh:
-			ticker.Stop()
 			return
 		case <-ticker.C:
 			var disk StorageAPI
