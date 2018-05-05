@@ -78,8 +78,9 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := xl.isObject
+		isLeafDir := xl.isObjectDir
 		listDir := listDirFactory(ctx, isLeaf, xlTreeWalkIgnoredErrs, xl.getLoadBalancedDisks()...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -136,7 +137,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
+		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}

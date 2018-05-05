@@ -357,8 +357,16 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			return err == nil
 		}
 
+		isLeafDir := func(bucket, object string) bool {
+			fs, err := c.cache.getCacheFS(ctx, bucket, object)
+			if err != nil {
+				return false
+			}
+			return fs.isObjectDir(bucket, object)
+		}
+
 		listDir := listDirCacheFactory(isLeaf, cacheTreeWalkIgnoredErrs, c.cache.cfs)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -417,7 +425,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 	result = ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
+		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}

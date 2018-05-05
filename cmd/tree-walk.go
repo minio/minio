@@ -98,6 +98,9 @@ type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, 
 // 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
 type isLeafFunc func(string, string) bool
 
+// A function isLeafDir of type isLeafDirFunc is used to detect if an entry represents an empty directory.
+type isLeafDirFunc func(string, string) bool
+
 func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf isLeafFunc) ([]string, bool) {
 	// Listing needs to be sorted.
 	sort.Strings(entries)
@@ -125,7 +128,7 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 }
 
 // treeWalk walks directory tree recursively pushing treeWalkResult into the channel as and when it encounters files.
-func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
+func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -167,17 +170,30 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		return nil
 	}
 	for i, entry := range entries {
+		var leaf, leafDir bool
+
 		// Decision to do isLeaf check was pushed from listDir() to here.
-		if delayIsLeaf && isLeaf(bucket, pathJoin(prefixDir, entry)) {
-			entry = strings.TrimSuffix(entry, slashSeparator)
+		if delayIsLeaf {
+			leaf = isLeaf(bucket, pathJoin(prefixDir, entry))
+			if leaf {
+				entry = strings.TrimSuffix(entry, slashSeparator)
+			}
+		} else {
+			leaf = !strings.HasSuffix(entry, slashSeparator)
 		}
+
+		if strings.HasSuffix(entry, slashSeparator) {
+			leafDir = isLeafDir(bucket, pathJoin(prefixDir, entry))
+		}
+
+		isDir := !leafDir && !leaf
 
 		if i == 0 && markerDir == entry {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
 				continue
 			}
-			if recursive && !hasSuffix(entry, slashSeparator) {
+			if recursive && !isDir {
 				// We should not skip for recursive listing and if markerDir is a directory
 				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
 				// should not be skipped, instead it will need to be treeWalk()'ed into.
@@ -186,7 +202,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 				continue
 			}
 		}
-		if recursive && hasSuffix(entry, slashSeparator) {
+		if recursive && isDir {
 			// If the entry is a directory, we will need recurse into it.
 			markerArg := ""
 			if entry == markerDir {
@@ -198,7 +214,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
-			if tErr := doTreeWalk(ctx, bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, resultCh, endWalkCh, markIsEnd); tErr != nil {
+			if tErr := doTreeWalk(ctx, bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, isLeafDir, resultCh, endWalkCh, markIsEnd); tErr != nil {
 				return tErr
 			}
 			continue
@@ -218,7 +234,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, endWalkCh chan struct{}) chan treeWalkResult {
+func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, endWalkCh chan struct{}) chan treeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -240,7 +256,7 @@ func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive
 	marker = strings.TrimPrefix(marker, prefixDir)
 	go func() {
 		isEnd := true // Indication to start walking the tree with end as true.
-		doTreeWalk(ctx, bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, isLeaf, resultCh, endWalkCh, isEnd)
+		doTreeWalk(ctx, bucket, prefixDir, entryPrefixMatch, marker, recursive, listDir, isLeaf, isLeafDir, resultCh, endWalkCh, isEnd)
 		close(resultCh)
 	}()
 	return resultCh
