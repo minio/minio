@@ -313,7 +313,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 // Extract metadata relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Metadata-Directive.
-func getCpObjMetadataFromHeader(ctx context.Context, header http.Header, userMeta map[string]string) (map[string]string, error) {
+func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta map[string]string) (map[string]string, error) {
 	// Make a copy of the supplied metadata to avoid
 	// to change the original one.
 	defaultMeta := make(map[string]string, len(userMeta))
@@ -323,13 +323,13 @@ func getCpObjMetadataFromHeader(ctx context.Context, header http.Header, userMet
 
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
-	if isMetadataReplace(header) {
-		return extractMetadataFromHeader(ctx, header)
+	if isMetadataReplace(r.Header) {
+		return extractMetadata(ctx, r)
 	}
 
 	// if x-amz-metadata-directive says COPY then we
 	// return the default metadata.
-	if isMetadataCopy(header) {
+	if isMetadataCopy(r.Header) {
 		return defaultMeta, nil
 	}
 
@@ -514,7 +514,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	srcInfo.Writer = writer
 
-	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r.Header, srcInfo.UserDefined)
+	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
 	if err != nil {
 		pipeWriter.CloseWithError(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
@@ -699,12 +699,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Extract metadata to be saved from incoming HTTP header.
-	metadata, err := extractMetadataFromHeader(ctx, r.Header)
+	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
+
 	if rAuthType == authTypeStreamingSigned {
 		if contentEncoding, ok := metadata["content-encoding"]; ok {
 			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
@@ -806,6 +806,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
 		putObject = api.CacheAPI().PutObject
 	}
+
 	// Create the object..
 	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata)
 	if err != nil {
@@ -901,7 +902,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// Extract metadata that needs to be saved.
-	metadata, err := extractMetadataFromHeader(ctx, r.Header)
+	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return

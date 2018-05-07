@@ -601,7 +601,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	// Extract metadata to be saved from received Form.
-	metadata, err := extractMetadataFromHeader(ctx, formValues)
+	metadata := make(map[string]string)
+	err = extractMetadataFromMap(ctx, formValues, metadata)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return

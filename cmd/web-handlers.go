@@ -629,7 +629,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract incoming metadata if any.
-	metadata, err := extractMetadataFromHeader(context.Background(), r.Header)
+	metadata, err := extractMetadata(context.Background(), r)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
