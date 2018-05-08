@@ -33,7 +33,7 @@ func listDirFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredErrs 
 			}
 			var entries []string
 			var newEntries []string
-			entries, err = disk.ListDir(bucket, prefixDir)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.

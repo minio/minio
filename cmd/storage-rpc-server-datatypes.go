@@ -134,6 +134,9 @@ type ListDirArgs struct {
 
 	// Name of the path.
 	Path string
+
+	// Number of wanted results
+	Count int
 }
 
 // RenameFileArgs represents rename file RPC arguments.

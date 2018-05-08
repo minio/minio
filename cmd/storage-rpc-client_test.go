@@ -435,7 +435,7 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 				t.Error("Unable to initiate MakeVol", err)
 			}
 		}
-		dirs, err := storageDisk.ListDir("myvol", "")
+		dirs, err := storageDisk.ListDir("myvol", "", -1)
 		if err != nil {
 			t.Error(err)
 		}
@@ -448,7 +448,7 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 				t.Error("Unable to initiate DeleteVol", err)
 			}
 		}
-		dirs, err = storageDisk.ListDir("myvol", "")
+		dirs, err = storageDisk.ListDir("myvol", "", -1)
 		if err != nil {
 			t.Error(err)
 		}

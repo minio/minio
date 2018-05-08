@@ -898,7 +898,7 @@ func (fs *FSObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 // and the prefix represents an empty directory. An S3 empty directory
 // is also an empty directory in the FS backend.
 func (fs *FSObjects) isObjectDir(bucket, prefix string) bool {
-	entries, err := readDir(pathJoin(fs.fsPath, bucket, prefix))
+	entries, err := readDirN(pathJoin(fs.fsPath, bucket, prefix), 1)
 	if err != nil {
 		return false
 	}

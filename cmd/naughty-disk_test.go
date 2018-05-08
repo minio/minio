@@ -108,11 +108,11 @@ func (d *naughtyDisk) DeleteVol(volume string) (err error) {
 	return d.disk.DeleteVol(volume)
 }
 
-func (d *naughtyDisk) ListDir(volume, path string) (entries []string, err error) {
+func (d *naughtyDisk) ListDir(volume, path string, count int) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
 	}
-	return d.disk.ListDir(volume, path)
+	return d.disk.ListDir(volume, path, count)
 }
 
 func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {

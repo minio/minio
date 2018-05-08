@@ -83,7 +83,7 @@ func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
 			continue
 		}
 		// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-		ctnts, err := disk.ListDir(bucket, prefix)
+		ctnts, err := disk.ListDir(bucket, prefix, 1)
 		if err == nil {
 			if len(ctnts) == 0 {
 				return true

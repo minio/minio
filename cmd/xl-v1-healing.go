@@ -422,7 +422,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 		}
 
 		// List and delete the object directory,
-		files, derr := disk.ListDir(bucket, object)
+		files, derr := disk.ListDir(bucket, object, -1)
 		if derr == nil {
 			for _, entry := range files {
 				_ = disk.DeleteFile(bucket,

@@ -283,10 +283,11 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 }
 
 // ListDir - list all entries at prefix.
-func (n *networkStorage) ListDir(volume, path string) (entries []string, err error) {
+func (n *networkStorage) ListDir(volume, path string, count int) (entries []string, err error) {
 	if err = n.call("Storage.ListDirHandler", &ListDirArgs{
-		Vol:  volume,
-		Path: path,
+		Vol:   volume,
+		Path:  path,
+		Count: count,
 	}, &entries); err != nil {
 		return nil, err
 	}

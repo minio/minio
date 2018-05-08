@@ -120,7 +120,7 @@ func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error
 		return err
 	}
 
-	entries, err := s.storage.ListDir(args.Vol, args.Path)
+	entries, err := s.storage.ListDir(args.Vol, args.Path, args.Count)
 	if err != nil {
 		return err
 	}

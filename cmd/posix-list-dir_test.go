@@ -201,3 +201,41 @@ func TestReadDir(t *testing.T) {
 		}
 	}
 }
+
+func TestReadDirN(t *testing.T) {
+	testCases := []struct {
+		numFiles    int
+		n           int
+		expectedNum int
+	}{
+		{0, 0, 0},
+		{0, 1, 0},
+		{1, 0, 1},
+		{0, -1, 0},
+		{1, -1, 1},
+		{10, -1, 10},
+		{1, 1, 1},
+		{2, 1, 1},
+		{10, 9, 9},
+		{10, 10, 10},
+		{10, 11, 10},
+	}
+
+	for i, testCase := range testCases {
+		dir := mustSetupDir(t)
+		defer os.RemoveAll(dir)
+
+		for c := 1; c <= testCase.numFiles; c++ {
+			if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("%d", c)), []byte{}, os.ModePerm); err != nil {
+				t.Fatalf("Unable to create a file, %s", err)
+			}
+		}
+		entries, err := readDirN(dir, testCase.n)
+		if err != nil {
+			t.Fatalf("Unable to read entries, %s", err)
+		}
+		if len(entries) != testCase.expectedNum {
+			t.Fatalf("Test %d: unexpected number of entries, waiting for %d, but found %d", i+1, testCase.expectedNum, len(entries))
+		}
+	}
+}

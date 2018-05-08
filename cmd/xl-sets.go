@@ -632,7 +632,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 
 			var entries []string
 			var newEntries []string
-			entries, err = disk.ListDir(bucket, prefixDir)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
@@ -1274,7 +1274,7 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 			}
 			var entries []string
 			var newEntries []string
-			entries, err = disk.ListDir(bucket, prefixDir)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				continue
 			}
