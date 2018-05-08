@@ -449,6 +449,9 @@ var notimplementedBucketResourceNames = map[string]bool{
 	"requestPayment": true,
 	"versioning":     true,
 	"website":        true,
+	"inventory":      true,
+	"metrics":        true,
+	"accelerate":     true,
 }
 
 // List of not implemented object queries
@@ -456,6 +459,9 @@ var notimplementedObjectResourceNames = map[string]bool{
 	"torrent": true,
 	"acl":     true,
 	"policy":  true,
+	"tagging": true,
+	"restore": true,
+	"select":  true,
 }
 
 // Resource handler ServeHTTP() wrapper
