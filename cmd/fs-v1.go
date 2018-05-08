@@ -480,7 +480,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 		}
 	}
 
-	if etag != "" {
+	if etag != "" && etag != defaultEtag {
 		objEtag, perr := fs.getObjectETag(ctx, bucket, object, lock)
 		if perr != nil {
 			return toObjectErr(perr, bucket, object)
