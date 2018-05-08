@@ -146,9 +146,9 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	rulesMap := config.ToRulesMap()
 	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
-	for addr, err := range globalNotificationSys.PutBucketNotification(bucketName, rulesMap) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.PutBucketNotification(bucketName, rulesMap) {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -251,10 +251,10 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	errors := globalNotificationSys.ListenBucketNotification(bucketName, eventNames, pattern, target.ID(), *thisAddr)
-	for addr, err := range errors {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	errs := globalNotificationSys.ListenBucketNotification(bucketName, eventNames, pattern, target.ID(), *thisAddr)
+	for _, nerr := range errs {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	<-target.DoneCh

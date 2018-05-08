@@ -169,9 +169,9 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	globalNotificationSys.RemoveNotification(args.BucketName)
 	globalPolicySys.Remove(args.BucketName)
-	for addr, err := range globalNotificationSys.DeleteBucket(args.BucketName) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.DeleteBucket(args.BucketName) {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -943,9 +943,9 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	globalPolicySys.Set(args.BucketName, *bucketPolicy)
-	for addr, err := range globalNotificationSys.SetBucketPolicy(args.BucketName, bucketPolicy) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.SetBucketPolicy(args.BucketName, bucketPolicy) {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	return nil
