@@ -91,9 +91,9 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	globalPolicySys.Set(bucket, *bucketPolicy)
-	for addr, err := range globalNotificationSys.SetBucketPolicy(bucket, bucketPolicy) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.SetBucketPolicy(bucket, bucketPolicy) {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	// Success.
@@ -130,9 +130,9 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	globalPolicySys.Remove(bucket)
-	for addr, err := range globalNotificationSys.RemoveBucketPolicy(bucket) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
-		logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.RemoveBucketPolicy(bucket) {
+		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
+		logger.LogIf(ctx, nerr.Err)
 	}
 
 	// Success.
