@@ -551,7 +551,7 @@ func (a *azureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		}
 
 		for _, blob := range resp.Blobs {
-			if strings.HasPrefix(blob.Name, minio.GatewayMinioSysTmp) {
+			if delimiter == "" && strings.HasPrefix(blob.Name, minio.GatewayMinioSysTmp) {
 				// We filter out minio.GatewayMinioSysTmp entries in the recursive listing.
 				continue
 			}
@@ -572,7 +572,7 @@ func (a *azureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 		}
 
 		for _, blobPrefix := range resp.BlobPrefixes {
-			if prefix == minio.GatewayMinioSysTmp {
+			if blobPrefix == minio.GatewayMinioSysTmp {
 				// We don't do strings.HasPrefix(blob.Name, minio.GatewayMinioSysTmp) here so that
 				// we can use tools like mc to inspect the contents of minio.sys.tmp/
 				// It is OK to allow listing of minio.sys.tmp/ in non-recursive mode as it aids in debugging.
