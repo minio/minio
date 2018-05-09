@@ -1,6 +1,6 @@
 ## Minio Prometheus Metric
 
-Minio server exposes an endpoint for Promethueus to scrape server data at `/minio/prometheus/metric`.
+Minio server exposes an endpoint for Promethueus to scrape server data at `/minio/prometheus/metrics`.
 
 ### Prometheus probe
 Prometheus is used to monitor Minio server information like http request, disk storage, network stats etc.. It uses a config file named `prometheus.yaml` to scrape data from server. The value for `metrics_path` and `targets` need to be configured in the config yaml to specify the endpoint and url as shown:
