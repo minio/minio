@@ -61,9 +61,8 @@ func giveBuf(buf *bytes.Buffer) {
 // name).
 //
 // Deprecated: Please note the issues described in the doc comment of
-// InstrumentHandler. You might want to consider using promhttp.Handler instead
-// (which is not instrumented, but can be instrumented with the tooling provided
-// in package promhttp).
+// InstrumentHandler. You might want to consider using
+// promhttp.InstrumentedHandler instead.
 func Handler() http.Handler {
 	return InstrumentHandler("prometheus", UninstrumentedHandler())
 }
@@ -116,7 +115,7 @@ func decorateWriter(request *http.Request, writer io.Writer) (io.Writer, string)
 	header := request.Header.Get(acceptEncodingHeader)
 	parts := strings.Split(header, ",")
 	for _, part := range parts {
-		part := strings.TrimSpace(part)
+		part = strings.TrimSpace(part)
 		if part == "gzip" || strings.HasPrefix(part, "gzip;") {
 			return gzip.NewWriter(writer), "gzip"
 		}
@@ -139,16 +138,6 @@ func (n nowFunc) Now() time.Time {
 var now nower = nowFunc(func() time.Time {
 	return time.Now()
 })
-
-func nowSeries(t ...time.Time) nower {
-	return nowFunc(func() time.Time {
-		defer func() {
-			t = t[1:]
-		}()
-
-		return t[0]
-	})
-}
 
 // InstrumentHandler wraps the given HTTP handler for instrumentation. It
 // registers four metric collectors (if not already done) and reports HTTP
@@ -353,10 +342,9 @@ func computeApproximateRequestSize(r *http.Request) <-chan int {
 type responseWriterDelegator struct {
 	http.ResponseWriter
 
-	handler, method string
-	status          int
-	written         int64
-	wroteHeader     bool
+	status      int
+	written     int64
+	wroteHeader bool
 }
 
 func (r *responseWriterDelegator) WriteHeader(code int) {

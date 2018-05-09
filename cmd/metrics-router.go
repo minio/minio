@@ -17,8 +17,7 @@
 package cmd
 
 import (
-	router "github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/gorilla/mux"
 )
 
 const (
@@ -26,8 +25,8 @@ const (
 )
 
 // registerMetricsRouter - add handler functions for metrics.
-func registerMetricsRouter(mux *router.Router) {
+func registerMetricsRouter(router *mux.Router) {
 	// metrics router
-	metricsRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	metricsRouter.Handle(prometheusMetricsPath, metricsHandler(prometheus.Handler()))
+	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
 }
