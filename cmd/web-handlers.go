@@ -169,7 +169,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	globalNotificationSys.RemoveNotification(args.BucketName)
 	globalPolicySys.Remove(args.BucketName)
-	for _, nerr := range globalNotificationSys.DeleteBucket(args.BucketName) {
+	for nerr := range globalNotificationSys.DeleteBucket(args.BucketName) {
 		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
 		logger.LogIf(ctx, nerr.Err)
 	}
@@ -943,7 +943,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	globalPolicySys.Set(args.BucketName, *bucketPolicy)
-	for _, nerr := range globalNotificationSys.SetBucketPolicy(args.BucketName, bucketPolicy) {
+	for nerr := range globalNotificationSys.SetBucketPolicy(args.BucketName, bucketPolicy) {
 		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
 		logger.LogIf(ctx, nerr.Err)
 	}

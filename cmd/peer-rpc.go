@@ -163,18 +163,12 @@ func (receiver *PeerRPCReceiver) SendEvent(args *SendEventArgs, reply *SendEvent
 	}
 
 	var err error
-	if errMap := globalNotificationSys.send(args.BucketName, args.Event, args.TargetID); len(errMap) != 0 {
-		var found bool
-		if err, found = errMap[args.TargetID]; !found {
-			return fmt.Errorf("error for target %v not found in error map %+v", args.TargetID, errMap)
-		}
-	}
-
-	if err != nil {
+	for _, terr := range globalNotificationSys.send(args.BucketName, args.Event, args.TargetID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", args.Event.EventName.String())
 		reqInfo.AppendTags("targetName", args.TargetID.Name)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, terr.Err)
+		err = terr.Err
 	}
 
 	reply.Error = err

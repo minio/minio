@@ -168,9 +168,9 @@ func TestTargetListRemove(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		errors := testCase.targetList.Remove(testCase.targetID)
-		err := errors[testCase.targetID]
-		expectErr := (err != nil)
+		errCh := testCase.targetList.Remove(testCase.targetID)
+		err := <-errCh
+		expectErr := (err.Err != nil)
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
@@ -255,9 +255,9 @@ func TestTargetListSend(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		errors := testCase.targetList.Send(Event{}, testCase.targetID)
-		err := errors[testCase.targetID]
-		expectErr := (err != nil)
+		errCh := testCase.targetList.Send(Event{}, testCase.targetID)
+		err := <-errCh
+		expectErr := (err.Err != nil)
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
