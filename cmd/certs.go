@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/tls"
@@ -37,6 +38,9 @@ func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	if data, err = ioutil.ReadFile(certFile); err != nil {
 		return nil, err
 	}
+
+	// Trimming leading and tailing white spaces.
+	data = bytes.TrimSpace(data)
 
 	// Parse all certs in the chain.
 	current := data
