@@ -532,7 +532,7 @@ func sendEvent(args eventArgs) {
 		reqInfo.AppendTags("EventName", args.EventName.String())
 		reqInfo.AppendTags("targetID", err.ID.Name)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err.Err)
+		logger.LogOnceIf(ctx, err.Err, err.ID)
 	}
 }
 
