@@ -19,7 +19,7 @@ package cmd
 var (
 	uiErrInvalidConfig = newUIErrFn(
 		"Invalid value found in the configuration file",
-		"Please ensure putting a valid value in the configuration file",
+		"Please ensure a valid value in the configuration file, for more details refer https://docs.minio.io/docs/minio-server-configuration-guide",
 		"",
 	)
 
@@ -50,27 +50,28 @@ var (
 	uiErrInvalidCredentials = newUIErrFn(
 		"Passed credentials are not suitable for use",
 		"Please provide correct credentials",
-		`- Access key length should be between 3 and 20 characters.
-- Secret key should not be between 8 and 40 characters.`,
+		`Access key length should be between minimum 3 characters in length.
+Secret key should not be between 8 and 40 characters.`,
 	)
 
 	uiErrInvalidErasureEndpoints = newUIErrFn(
-		"Endpoints unsuitable to activate Erasure mode",
+		"Invalid endpoints to use in erasure mode",
 		"Please provide correct combinations of local/remote paths",
-		"",
+		"For more information, please refer to the following link: https://docs.minio.io/docs/minio-erasure-code-quickstart-guide",
 	)
 
 	uiErrInvalidNumberOfErasureEndpoints = newUIErrFn(
-		"Number of endpoints are not suitable for use in Erasure mode",
+		"The total number of endpoints is not suitable for erasure mode",
 		"Please provide an even number of endpoints greater or equal to 4",
-		"",
+		"For more information, please refer to the following link: https://docs.minio.io/docs/minio-erasure-code-quickstart-guide",
 	)
 
 	uiErrStorageClassValue = newUIErrFn(
 		"Invalid storage class value",
 		"Please check the passed value",
 		`MINIO_STORAGE_CLASS_STANDARD: Format "EC:<Default_Parity_Standard_Class>" (e.g. "EC:3"). This sets the number of parity disks for Minio server in Standard mode. Object are stored in Standard mode, if storage class is not defined in Put request.
-MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (e.g. "EC:3"). This sets the number of parity disks for Minio server in reduced redundancy mode. Objects are stored in Reduced Redundancy mode, if Put request specifies RRS storage class.`,
+MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (e.g. "EC:3"). This sets the number of parity disks for Minio server in reduced redundancy mode. Objects are stored in Reduced Redundancy mode, if Put request specifies RRS storage class.
+Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storage-class for more information.`,
 	)
 
 	uiErrUnexpectedBackendVersion = newUIErrFn(
@@ -80,7 +81,7 @@ MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (
 	)
 
 	uiErrInvalidAddressFlag = newUIErrFn(
-		"--address parameter is not suitable for use",
+		"--address input is invalid",
 		"Please check --address parameter",
 		`--address binds a specific ADDRESS:PORT, ADDRESS can be an  IP or hostname (default:':9000')
     Examples: --address ':443'
@@ -88,63 +89,63 @@ MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (
 	)
 
 	uiErrInvalidFSEndpoint = newUIErrFn(
-		"The given endpoint is not suitable to activate standalone mode",
+		"The given endpoint is not suitable to activate standalone FS mode",
 		"Please check the given FS endpoint",
-		`Standalone mode requires only one local disk path to be activated.
+		`FS mode requires only one writable disk path.
 Example 1:
-   $ minio server /var/data/minio/`,
+   $ minio server /data/minio/`,
 	)
 
 	uiErrUnableToWriteInBackend = newUIErrFn(
-		"Unable to write on the specified endpoint",
-		"Please ensure that Minio binary has enough permissions to write in the backend",
+		"Unable to write to the backend",
+		"Please ensure that Minio binary has write permissions to the backend",
 		"",
 	)
 
 	uiErrUnableToReadFromBackend = newUIErrFn(
-		"Unable to read data from the backend",
-		"Please ensure that Minio binary has enough permission to read data from the backend",
+		"Unable to read from the backend",
+		"Please ensure that Minio binary has read permission from the backend",
 		"",
 	)
 
 	uiErrPortAlreadyInUse = newUIErrFn(
 		"Port is already in use",
-		"Please ensure no other program is reserving the same address/port",
+		"Please ensure no other program is using the same address/port",
 		"",
 	)
 
-	uiErrNoPrivilegesToAccessDirFiles = newUIErrFn(
-		"Missing privileges to access to the specified path",
-		"Please ensure the specified path can be accessed with your privileges",
+	uiErrNoPermissionsToAccessDirFiles = newUIErrFn(
+		"Missing permissions to access to the specified path",
+		"Please ensure the specified path can be accessed",
 		"",
 	)
 
 	uiErrSSLUnexpectedError = newUIErrFn(
-		"Something wrong with your TLS certificate",
+		"Invalid TLS certificate",
 		"Please check the content of your certificate data",
 		`Only PEM (x.509) format is accepted as valid public & private certificates.`,
 	)
 
 	uiErrSSLUnexpectedData = newUIErrFn(
-		"Something wrong with your TLS certificate",
-		"Please check your provided certificate",
+		"Something is wrong with your TLS certificate",
+		"Please check your certificate",
 		"",
 	)
 
 	uiErrSSLNoPassword = newUIErrFn(
-		"The private key is protected by a password but no password is specified",
-		"Please set the password to this variable environment `"+TLSPrivateKeyPassword+"` so Minio can decrypt the private",
+		"no password was specified",
+		"Please set the password to this environment variable `"+TLSPrivateKeyPassword+"` so the private key can be decrypted",
 		"",
 	)
 
 	uiErrNoCertsAndHTTPSEndpoints = newUIErrFn(
-		"HTTPS is specified in endpoint urls but no certificate is found in the local machine",
-		"Please add a certificate or switch to HTTP",
-		"",
+		"HTTPS is specified in endpoint URLs but no TLS certificate is found on the local machine",
+		"Please add a certificate or switch to HTTP.",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in th server.",
 	)
 
 	uiErrCertsAndHTTPEndpoints = newUIErrFn(
-		"HTTP is specified in endpoint urls but the server in the local machine is configured with a TLS certificate",
+		"HTTP is specified in endpoint URLs but the server in the local machine is configured with a TLS certificate",
 		"Please remove the certificate in the configuration directory or switch to HTTPS",
 		"",
 	)
@@ -157,13 +158,13 @@ Example 1:
 
 	uiErrUnexpectedDataContent = newUIErrFn(
 		"Unexpected data content",
-		"Please contact the team at https://slack.minio.io",
+		"Please contact us at https://slack.minio.io",
 		"",
 	)
 
 	uiErrUnexpectedError = newUIErrFn(
 		"Unexpected error",
-		"Please contact the team at https://slack.minio.io",
+		"Please contact us at https://slack.minio.io",
 		"",
 	)
 )

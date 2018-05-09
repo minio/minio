@@ -87,17 +87,18 @@ func errorToUIErr(err error) uiErr {
 		}
 	case *os.PathError:
 		if os.IsPermission(e) {
-			return uiErrNoPrivilegesToAccessDirFiles(e).Msg("Missing privileges to access `" + e.Path + "` path")
+			return uiErrNoPermissionsToAccessDirFiles(e).Msg("Unsufficent permissions to access `" + e.Path + "` path")
 		}
 	}
 
 	switch err {
 	case io.ErrUnexpectedEOF:
 		return uiErrUnexpectedDataContent(err)
+	default:
+		// Failed to identify what type of error this, return a simple UI error
+		return uiErr{msg: err.Error()}
 	}
 
-	// Failed to identify what type of error this, return a simple UI error
-	return uiErr{msg: err.Error()}
 }
 
 // fmtError() converts a fatal error message to a more understood error
@@ -128,7 +129,7 @@ func fmtError(introMsg string, err error, jsonFlag bool) string {
 	// Add help
 	if uiErr.help != "" {
 		renderedTxt += colorBold("HELP:") + "\n"
-		renderedTxt += uiErr.help
+		renderedTxt += "  " + uiErr.help
 	}
 	return renderedTxt
 }

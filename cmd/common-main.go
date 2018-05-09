@@ -107,7 +107,7 @@ func handleCommonEnvVars() {
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBrowserFlag(browser)
 		if err != nil {
-			logger.Fatal(uiErrInvalidBrowserValue(nil), "Unable to validate MINIO_BROWSER value")
+			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Unable to validate MINIO_BROWSER environment variable")
 		}
 
 		// browser Envs are set globally, this does not represent

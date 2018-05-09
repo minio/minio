@@ -274,7 +274,7 @@ func serverMain(ctx *cli.Context) {
 
 	newObject, err := newObjectLayer(globalEndpoints)
 	if err != nil {
-		_ = globalHTTPServer.Shutdown()
+		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize backend")
 	}
 
