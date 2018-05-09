@@ -48,7 +48,7 @@ func mustSplitHostPort(hostPort string) (host, port string) {
 func mustGetLocalIP4() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
 	addrs, err := net.InterfaceAddrs()
-	logger.FatalIf(err, "Unable to get IP addresses of this host.")
+	logger.FatalIf(err, "Unable to get IP addresses of this host")
 
 	for _, addr := range addrs {
 		var ip net.IP

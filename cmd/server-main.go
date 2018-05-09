@@ -246,13 +246,13 @@ func serverMain(ctx *cli.Context) {
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
 	if err != nil {
-		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services.")
+		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
 
 	// Create new notification system.
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
 	if err != nil {
-		logger.Fatal(uiErrUnexpectedError(err), "Unable to create new notification system.")
+		logger.Fatal(err, "Unable to initialize the notification system")
 	}
 
 	// Create new policy system.
