@@ -44,10 +44,10 @@ func checkUpdate(mode string) {
 func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
-		logger.FatalIf(migrateConfig(), "Config migration failed.")
+		logger.FatalIf(migrateConfig(), "Config migration failed")
 		logger.FatalIf(loadConfig(), "Unable to load the configuration file")
 	} else {
-		logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+		logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time")
 		logger.Info("Created minio configuration file successfully at " + getConfigDir())
 	}
 }
@@ -71,12 +71,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		// default config directory.
 		configDir = getConfigDir()
 		if configDir == "" {
-			logger.FatalIf(errors.New("missing option"), "config-dir option must be provided.")
+			logger.FatalIf(errors.New("missing option"), "config-dir option must be provided")
 		}
 	}
 
 	if configDir == "" {
-		logger.FatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
+		logger.FatalIf(errors.New("empty directory"), "Configuration directory cannot be empty")
 	}
 
 	// Disallow relative paths, figure out absolute paths.
@@ -140,7 +140,7 @@ func handleCommonEnvVars() {
 	if excludes := os.Getenv("MINIO_CACHE_EXCLUDE"); excludes != "" {
 		excludeList, err := parseCacheExcludes(strings.Split(excludes, cacheEnvDelimiter))
 		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_CACHE_EXCLUDE value (`%s`).", excludes)
+			logger.Fatal(err, "Unable to parse MINIO_CACHE_EXCLUDE value (`%s`)", excludes)
 		}
 		globalCacheExcludes = excludeList
 	}
@@ -165,25 +165,25 @@ func handleCommonEnvVars() {
 		// Check for environment variables and parse into storageClass struct
 		if ssc := os.Getenv(standardStorageClassEnv); ssc != "" {
 			globalStandardStorageClass, err = parseStorageClass(ssc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
 		}
 
 		if rrsc := os.Getenv(reducedRedundancyStorageClassEnv); rrsc != "" {
 			globalRRStorageClass, err = parseStorageClass(rrsc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
 		}
 
 		// Validation is done after parsing both the storage classes. This is needed because we need one
 		// storage class value to deduce the correct value of the other storage class.
 		if globalRRStorageClass.Scheme != "" {
 			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s.", reducedRedundancyStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
 			globalIsStorageClass = true
 		}
 
 		if globalStandardStorageClass.Scheme != "" {
 			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s.", standardStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
 			globalIsStorageClass = true
 		}
 	}
