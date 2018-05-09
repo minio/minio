@@ -56,32 +56,47 @@ func (list *TargetList) Exists(id TargetID) bool {
 	return found
 }
 
+// TargetIDErr returns error associated for a targetID
+type TargetIDErr struct {
+	// ID where the remove or send were initiated.
+	ID TargetID
+	// Stores any error while removing a target or while sending an event.
+	Err error
+}
+
 // Remove - closes and removes targets by given target IDs.
-func (list *TargetList) Remove(ids ...TargetID) map[TargetID]error {
+func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 	list.Lock()
 	defer list.Unlock()
 
-	errors := make(map[TargetID]error)
+	errCh := make(chan TargetIDErr)
 
-	var wg sync.WaitGroup
-	for _, id := range ids {
-		if target, ok := list.targets[id]; ok {
-			wg.Add(1)
-			go func(id TargetID, target Target) {
-				defer wg.Done()
-				if err := target.Close(); err != nil {
-					errors[id] = err
-				}
-			}(id, target)
+	go func() {
+		defer close(errCh)
+
+		var wg sync.WaitGroup
+		for _, id := range targetids {
+			if target, ok := list.targets[id]; ok {
+				wg.Add(1)
+				go func(id TargetID, target Target) {
+					defer wg.Done()
+					if err := target.Close(); err != nil {
+						errCh <- TargetIDErr{
+							ID:  id,
+							Err: err,
+						}
+					}
+				}(id, target)
+			}
 		}
-	}
-	wg.Wait()
+		wg.Wait()
 
-	for _, id := range ids {
-		delete(list.targets, id)
-	}
+		for _, id := range targetids {
+			delete(list.targets, id)
+		}
+	}()
 
-	return errors
+	return errCh
 }
 
 // List - returns available target IDs.
@@ -98,27 +113,34 @@ func (list *TargetList) List() []TargetID {
 }
 
 // Send - sends events to targets identified by target IDs.
-func (list *TargetList) Send(event Event, targetIDs ...TargetID) map[TargetID]error {
+func (list *TargetList) Send(event Event, targetIDs ...TargetID) <-chan TargetIDErr {
 	list.Lock()
 	defer list.Unlock()
 
-	errors := make(map[TargetID]error)
+	errCh := make(chan TargetIDErr)
 
-	var wg sync.WaitGroup
-	for _, id := range targetIDs {
-		if target, ok := list.targets[id]; ok {
-			wg.Add(1)
-			go func(id TargetID, target Target) {
-				defer wg.Done()
-				if err := target.Send(event); err != nil {
-					errors[id] = err
-				}
-			}(id, target)
+	go func() {
+		defer close(errCh)
+
+		var wg sync.WaitGroup
+		for _, id := range targetIDs {
+			if target, ok := list.targets[id]; ok {
+				wg.Add(1)
+				go func(id TargetID, target Target) {
+					defer wg.Done()
+					if err := target.Send(event); err != nil {
+						errCh <- TargetIDErr{
+							ID:  id,
+							Err: err,
+						}
+					}
+				}(id, target)
+			}
 		}
-	}
-	wg.Wait()
+		wg.Wait()
+	}()
 
-	return errors
+	return errCh
 }
 
 // NewTargetList - creates TargetList.
