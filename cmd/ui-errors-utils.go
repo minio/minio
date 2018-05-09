@@ -87,7 +87,7 @@ func errorToUIErr(err error) uiErr {
 		}
 	case *os.PathError:
 		if os.IsPermission(e) {
-			return uiErrNoPermissionsToAccessDirFiles(e).Msg("Unsufficent permissions to access `" + e.Path + "` path")
+			return uiErrNoPermissionsToAccessDirFiles(e).Msg("Insufficient permissions to access path, `" + e.Path + "`")
 		}
 	}
 
@@ -101,7 +101,7 @@ func errorToUIErr(err error) uiErr {
 
 }
 
-// fmtError() converts a fatal error message to a more understood error
+// fmtError() converts a fatal error message to a more clear error
 // using some colors
 func fmtError(introMsg string, err error, jsonFlag bool) string {
 	renderedTxt := ""
