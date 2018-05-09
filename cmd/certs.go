@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"io/ioutil"
 	"os"
 )
@@ -44,19 +43,19 @@ func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	for len(current) > 0 {
 		var pemBlock *pem.Block
 		if pemBlock, current = pem.Decode(current); pemBlock == nil {
-			return nil, fmt.Errorf("Could not read PEM block from file %s", certFile)
+			return nil, uiErrSSLUnexpectedData(nil).Msg("Could not read PEM block from file %s", certFile)
 		}
 
 		var x509Cert *x509.Certificate
 		if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return nil, err
+			return nil, uiErrSSLUnexpectedData(err)
 		}
 
 		x509Certs = append(x509Certs, x509Cert)
 	}
 
 	if len(x509Certs) == 0 {
-		return nil, fmt.Errorf("Empty public certificate file %s", certFile)
+		return nil, uiErrSSLUnexpectedData(nil).Msg("Empty public certificate file %s", certFile)
 	}
 
 	return x509Certs, nil
@@ -107,28 +106,32 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	certPEMBlock, err := ioutil.ReadFile(certFile)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("TLS: failed to read cert file: %v", err)
+		return tls.Certificate{}, uiErrSSLUnexpectedError(err)
 	}
 	keyPEMBlock, err := ioutil.ReadFile(keyFile)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("TLS: failed to read private key: %v", err)
+		return tls.Certificate{}, uiErrSSLUnexpectedError(err)
 	}
 	key, rest := pem.Decode(keyPEMBlock)
 	if len(rest) > 0 {
-		return tls.Certificate{}, fmt.Errorf("TLS: private key contains additional data")
+		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg("The private key contains additional data")
 	}
 	if x509.IsEncryptedPEMBlock(key) {
 		password, ok := os.LookupEnv(TLSPrivateKeyPassword)
 		if !ok {
-			return tls.Certificate{}, fmt.Errorf("TLS: private key is encrypted but no password is present - set env var: %s", TLSPrivateKeyPassword)
+			return tls.Certificate{}, uiErrSSLNoPassword(nil)
 		}
 		decryptedKey, decErr := x509.DecryptPEMBlock(key, []byte(password))
 		if decErr != nil {
-			return tls.Certificate{}, fmt.Errorf("TLS: failed to decrypt private key: %v", decErr)
+			return tls.Certificate{}, uiErrSSLWrongPassword(decErr)
 		}
 		keyPEMBlock = pem.EncodeToMemory(&pem.Block{Type: key.Type, Bytes: decryptedKey})
 	}
-	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+	cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+	if err != nil {
+		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg(err.Error())
+	}
+	return cert, nil
 }
 
 func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
@@ -149,7 +152,7 @@ func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsC
 	if priv, ok := cert.PrivateKey.(crypto.Signer); ok {
 		if pub, ok := priv.Public().(*ecdsa.PublicKey); ok {
 			if name := pub.Params().Name; name == "P-384" || name == "P-521" { // unfortunately there is no cleaner way to check
-				return nil, nil, nil, false, fmt.Errorf("TLS: the ECDSA curve '%s' is not supported", name)
+				return nil, nil, nil, false, uiErrSSLUnexpectedData(nil).Msg("tls: the ECDSA curve '%s' is not supported", name)
 			}
 		}
 

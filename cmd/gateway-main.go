@@ -112,6 +112,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(errUnexpected, "Gateway implementation not initialized, exiting.")
 	}
 
+	// Disable logging until gateway initialization is complete, any
+	// error during initialization will be shown as a fatal message
+	logger.Disable = true
+
 	// Validate if we have access, secret set through environment.
 	gatewayName := gw.Name()
 	if ctx.Args().First() == "help" {
@@ -218,6 +222,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
 	}
+
+	// Reenable logging
+	logger.Disable = false
 
 	handleSignals()
 }

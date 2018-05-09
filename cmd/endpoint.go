@@ -252,14 +252,14 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			return serverAddr, endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
-			return serverAddr, endpoints, setupType, fmt.Errorf("use path style endpoint for FS setup")
+			return serverAddr, endpoints, setupType, uiErrInvalidFSEndpoint(nil).Msg("use path style endpoint for FS setup")
 		}
 		endpoints = append(endpoints, endpoint)
 		setupType = FSSetupType
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(endpoints); err != nil {
-			return serverAddr, endpoints, setupType, err
+			return serverAddr, endpoints, setupType, uiErrInvalidFSEndpoint(nil).Msg(err.Error())
 		}
 		return serverAddr, endpoints, setupType, nil
 	}
@@ -270,12 +270,12 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		var eps EndpointList
 		eps, err = NewEndpointList(iargs...)
 		if err != nil {
-			return serverAddr, endpoints, setupType, err
+			return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(eps); err != nil {
-			return serverAddr, endpoints, setupType, err
+			return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
 		for _, ep := range eps {
@@ -316,7 +316,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 
 	// No local endpoint found.
 	if localEndpointCount == 0 {
-		return serverAddr, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
+		return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg("no endpoint pointing to the local machine is found")
 	}
 
 	// Check whether same path is not used in endpoints of a host on different port.
@@ -331,8 +331,8 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			hostIPSet, _ := getHostIP4(host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
-					err = fmt.Errorf("path '%s' can not be served by different port on same address", endpoint.Path)
-					return serverAddr, endpoints, setupType, err
+					return serverAddr, endpoints, setupType,
+						uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
 				}
 				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
 			} else {
@@ -349,8 +349,8 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 				continue
 			}
 			if localPathSet.Contains(endpoint.Path) {
-				err = fmt.Errorf("path '%s' cannot be served by different address on same server", endpoint.Path)
-				return serverAddr, endpoints, setupType, err
+				return serverAddr, endpoints, setupType,
+					uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
 			}
 			localPathSet.Add(endpoint.Path)
 		}
@@ -360,12 +360,11 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 	{
 		if !localPortSet.Contains(serverAddrPort) {
 			if len(localPortSet) > 1 {
-				err = fmt.Errorf("port number in server address must match with one of the port in local endpoints")
-			} else {
-				err = fmt.Errorf("server address and local endpoint have different ports")
+				return serverAddr, endpoints, setupType,
+					uiErrInvalidErasureEndpoints(nil).Msg("port number in server address must match with one of the port in local endpoints")
 			}
-
-			return serverAddr, endpoints, setupType, err
+			return serverAddr, endpoints, setupType,
+				uiErrInvalidErasureEndpoints(nil).Msg("server address and local endpoint have different ports")
 		}
 	}
 
@@ -374,7 +373,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		// If all endpoints have same port number, then this is XL setup using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerAddrSet) > 1 {
-				// TODO: Eventhough all endpoints are local, the local host is referred by different IP/name.
+				// TODO: Even though all endpoints are local, the local host is referred by different IP/name.
 				// eg '172.0.0.1', 'localhost' and 'mylocalhostname' point to same local host.
 				//
 				// In this case, we bind to 0.0.0.0 ie to all interfaces.
@@ -388,7 +387,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			return serverAddr, endpoints, setupType, nil
 		}
 
-		// Eventhough all endpoints are local, but those endpoints use different ports.
+		// Even though all endpoints are local, but those endpoints use different ports.
 		// This means it is DistXL setup.
 	} else {
 		// This is DistXL setup.

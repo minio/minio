@@ -18,10 +18,10 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 
 	"github.com/minio/cli"
@@ -118,26 +118,26 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// Server address.
 	serverAddr := ctx.String("address")
-	logger.FatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
+	logger.FatalIf(CheckLocalServerAddr(serverAddr), "Unable to validate passed arguments")
 
 	var setupType SetupType
 	var err error
 
 	if len(ctx.Args()) > serverCommandLineArgsMax {
-		logger.FatalIf(errInvalidArgument, "Invalid total number of arguments (%d) passed, supported upto 32 unique arguments", len(ctx.Args()))
+		uErr := uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments", len(ctx.Args())))
+		logger.FatalIf(uErr, "Unable to validate passed endpoints")
 	}
 
 	globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
-	logger.FatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
+	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	if runtime.GOOS == "darwin" {
-		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
-		// to IPv6 address ie minio will start listening on IPv6 address whereas another
-		// (non-)minio process is listening on IPv4 of given port.
-		// To avoid this error sutiation we check for port availability only for macOS.
-		logger.FatalIf(checkPortAvailability(globalMinioPort), "Port %d already in use", globalMinioPort)
-	}
+
+	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+	// to IPv6 address ie minio will start listening on IPv6 address whereas another
+	// (non-)minio process is listening on IPv4 of given port.
+	// To avoid this error sutiation we check for port availability.
+	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the server")
 
 	globalIsXL = (setupType == XLSetupType)
 	globalIsDistXL = (setupType == DistXLSetupType)
@@ -168,6 +168,10 @@ func serverMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
+	// Disable logging until server initialization is complete, any
+	// error during initialization will be shown as a fatal message
+	logger.Disable = true
+
 	// Get "json" flag from command line argument and
 	// enable json and quite modes if jason flag is turned on.
 	jsonFlag := ctx.IsSet("json") || ctx.GlobalIsSet("json")
@@ -181,6 +185,8 @@ func serverMain(ctx *cli.Context) {
 		logger.EnableQuiet()
 	}
 
+	logger.RegisterUIError(fmtError)
+
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
@@ -188,7 +194,7 @@ func serverMain(ctx *cli.Context) {
 	serverHandleEnvVars()
 
 	// Create certs path.
-	logger.FatalIf(createConfigDir(), "Unable to create configuration directories.")
+	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
 
 	// Initialize server config.
 	initConfig()
@@ -196,15 +202,15 @@ func serverMain(ctx *cli.Context) {
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	logger.FatalIf(err, "Invalid SSL certificate file")
+	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
 		if globalEndpoints.IsHTTPS() && !globalIsSSL {
-			logger.FatalIf(errInvalidArgument, "No certificates found, use HTTP endpoints (%s)", globalEndpoints)
+			logger.Fatal(uiErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
 		if !globalEndpoints.IsHTTPS() && globalIsSSL {
-			logger.FatalIf(errInvalidArgument, "TLS Certificates found, use HTTPS endpoints (%s)", globalEndpoints)
+			logger.Fatal(uiErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}
 
@@ -225,7 +231,9 @@ func serverMain(ctx *cli.Context) {
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
 		globalDsync, err = dsync.New(newDsyncNodes(globalEndpoints))
-		logger.FatalIf(err, "Unable to initialize distributed locking on %s", globalEndpoints)
+		if err != nil {
+			logger.Fatal(err, "Unable to initialize distributed locking on %s", globalEndpoints)
+		}
 	}
 
 	// Initialize name space lock.
@@ -237,11 +245,15 @@ func serverMain(ctx *cli.Context) {
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
-	logger.FatalIf(err, "Unable to configure one of server's RPC services.")
+	if err != nil {
+		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services.")
+	}
 
 	// Create new notification system.
 	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	logger.FatalIf(err, "Unable to create new notification system.")
+	if err != nil {
+		logger.Fatal(uiErrUnexpectedError(err), "Unable to create new notification system.")
+	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
@@ -262,10 +274,8 @@ func serverMain(ctx *cli.Context) {
 
 	newObject, err := newObjectLayer(globalEndpoints)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
-		err = globalHTTPServer.Shutdown()
-		logger.LogIf(context.Background(), err)
-		os.Exit(1)
+		globalHTTPServer.Shutdown()
+		logger.FatalIf(err, "Unable to initialize backend")
 	}
 
 	globalObjLayerMutex.Lock()
@@ -278,6 +288,9 @@ func serverMain(ctx *cli.Context) {
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
+
+	// Re-enable logging
+	logger.Disable = false
 
 	handleSignals()
 }

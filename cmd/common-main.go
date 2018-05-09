@@ -45,7 +45,7 @@ func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
 		logger.FatalIf(migrateConfig(), "Config migration failed.")
-		logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
+		logger.FatalIf(loadConfig(), "Unable to load the configuration file")
 	} else {
 		logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
 		logger.Info("Created minio configuration file successfully at " + getConfigDir())
@@ -95,7 +95,9 @@ func handleCommonEnvVars() {
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey != "" && secretKey != "" {
 		cred, err := auth.CreateCredentials(accessKey, secretKey)
-		logger.FatalIf(err, "Invalid access/secret Key set in environment.")
+		if err != nil {
+			logger.Fatal(uiErrInvalidCredentials(err), "Unable to validate credentials inherited from the shell environment")
+		}
 
 		// credential Envs are set globally.
 		globalIsEnvCreds = true
@@ -105,7 +107,7 @@ func handleCommonEnvVars() {
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBrowserFlag(browser)
 		if err != nil {
-			logger.FatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Unable to validate MINIO_BROWSER environment variable")
 		}
 
 		// browser Envs are set globally, this does not represent
@@ -128,18 +130,26 @@ func handleCommonEnvVars() {
 
 	if drives := os.Getenv("MINIO_CACHE_DRIVES"); drives != "" {
 		driveList, err := parseCacheDrives(strings.Split(drives, cacheEnvDelimiter))
-		logger.FatalIf(err, "Invalid value set in environment variable MINIO_CACHE_DRIVES %s.", drives)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_CACHE_DRIVES value (%s)", drives)
+		}
 		globalCacheDrives = driveList
 		globalIsDiskCacheEnabled = true
 	}
+
 	if excludes := os.Getenv("MINIO_CACHE_EXCLUDE"); excludes != "" {
 		excludeList, err := parseCacheExcludes(strings.Split(excludes, cacheEnvDelimiter))
-		logger.FatalIf(err, "Invalid value set in environment variable MINIO_CACHE_EXCLUDE %s.", excludes)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_CACHE_EXCLUDE value (`%s`).", excludes)
+		}
 		globalCacheExcludes = excludeList
 	}
+
 	if expiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); expiryStr != "" {
 		expiry, err := strconv.Atoi(expiryStr)
-		logger.FatalIf(err, "Invalid value set in environment variable MINIO_CACHE_EXPIRY %s.", expiryStr)
+		if err != nil {
+			logger.Fatal(uiErrInvalidCacheExpiryValue(err), "Unable to parse MINIO_CACHE_EXPIRY value (`%s`)", expiryStr)
+		}
 		globalCacheExpiry = expiry
 	}
 

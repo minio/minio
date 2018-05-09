@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -104,20 +103,20 @@ func parseStorageClass(storageClassEnv string) (sc storageClass, err error) {
 
 	// only two elements allowed in the string - "scheme" and "number of parity disks"
 	if len(s) > 2 {
-		return storageClass{}, errors.New("Too many sections in " + storageClassEnv)
+		return storageClass{}, uiErrStorageClassValue(nil).Msg("Too many sections in " + storageClassEnv)
 	} else if len(s) < 2 {
-		return storageClass{}, errors.New("Too few sections in " + storageClassEnv)
+		return storageClass{}, uiErrStorageClassValue(nil).Msg("Too few sections in " + storageClassEnv)
 	}
 
 	// only allowed scheme is "EC"
 	if s[0] != supportedStorageClassScheme {
-		return storageClass{}, errors.New("Unsupported scheme " + s[0] + ". Supported scheme is EC")
+		return storageClass{}, uiErrStorageClassValue(nil).Msg("Unsupported scheme " + s[0] + ". Supported scheme is EC")
 	}
 
 	// Number of parity disks should be integer
 	parityDisks, err := strconv.Atoi(s[1])
 	if err != nil {
-		return storageClass{}, err
+		return storageClass{}, uiErrStorageClassValue(err)
 	}
 
 	sc = storageClass{

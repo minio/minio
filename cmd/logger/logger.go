@@ -27,14 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	c "github.com/minio/mc/pkg/console"
-)
-
-// global colors.
-var (
-	colorBold = color.New(color.Bold).SprintFunc()
-	colorRed  = color.New(color.FgRed).SprintfFunc()
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // Disable disables all logging, false by default. (used for "go test")
@@ -47,9 +41,9 @@ type Level int8
 
 // Enumerated level types
 const (
-	Information Level = iota + 1
-	Error
-	Fatal
+	InformationLvl Level = iota + 1
+	ErrorLvl
+	FatalLvl
 )
 
 const loggerTimeFormat string = "15:04:05 MST 01/02/2006"
@@ -64,11 +58,11 @@ var matchingFuncNames = [...]string{
 func (level Level) String() string {
 	var lvlStr string
 	switch level {
-	case Information:
+	case InformationLvl:
 		lvlStr = "INFO"
-	case Error:
+	case ErrorLvl:
 		lvlStr = "ERROR"
-	case Fatal:
+	case FatalLvl:
 		lvlStr = "FATAL"
 	}
 	return lvlStr
@@ -82,10 +76,9 @@ type Console interface {
 }
 
 func consoleLog(console Console, msg string, args ...interface{}) {
-	if Disable {
-		return
-	}
 	if jsonFlag {
+		// Strip escape control characters from json message
+		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
 	} else if quiet {
 		console.quiet(msg, args...)
@@ -124,6 +117,8 @@ type logEntry struct {
 // jsonFlag: Display in JSON format, if enabled
 var (
 	quiet, jsonFlag bool
+	// Custom function to format error
+	errorFmtFunc func(string, error, bool) string
 )
 
 // EnableQuiet - turns quiet option on.
@@ -137,11 +132,18 @@ func EnableJSON() {
 	quiet = true
 }
 
+// RegisterUIError registers the specified rendering function. This latter
+// will be called for a pretty rendering of fatal errors.
+func RegisterUIError(f func(string, error, bool) string) {
+	errorFmtFunc = f
+}
+
 // Init sets the trimStrings to possible GOPATHs
 // and GOROOT directories. Also append github.com/minio/minio
 // This is done to clean up the filename, when stack trace is
 // displayed when an error happens.
 func Init(goPath string) {
+
 	var goPathList []string
 	var defaultgoPathList []string
 	// Add all possible GOPATH paths into trimStrings
@@ -182,8 +184,8 @@ func trimTrace(f string) string {
 	return filepath.FromSlash(f)
 }
 
-func getSource() string {
-	pc, file, lineNumber, ok := runtime.Caller(5)
+func getSource(level int) string {
+	pc, file, lineNumber, ok := runtime.Caller(level)
 	if ok {
 		// Clean up the common prefixes
 		file = trimTrace(file)
@@ -225,7 +227,8 @@ func getTrace(traceLevel int) []string {
 	return trace
 }
 
-// LogIf :
+// LogIf prints a detailed error message during
+// the execution of the server.
 func LogIf(ctx context.Context, err error) {
 	if Disable {
 		return
@@ -251,15 +254,17 @@ func LogIf(ctx context.Context, err error) {
 		tags[entry.Key] = entry.Val
 	}
 
-	// Get the cause for the Error
-	message := err.Error()
 	// Get full stack trace
 	trace := getTrace(2)
+
+	// Get the cause for the Error
+	message := err.Error()
+
 	// Output the formatted log message at console
 	var output string
 	if jsonFlag {
 		logJSON, err := json.Marshal(&logEntry{
-			Level:      Error.String(),
+			Level:      ErrorLvl.String(),
 			RemoteHost: req.RemoteHost,
 			RequestID:  req.RequestID,
 			UserAgent:  req.UserAgent,
@@ -317,9 +322,10 @@ func LogIf(ctx context.Context, err error) {
 			tagString = "\n       " + tagString
 		}
 
+		var msg = colorFgRed(colorBold(message))
 		output = fmt.Sprintf("\n%s\n%s%s%s%s\nError: %s%s\n%s",
 			apiString, timeString, requestID, remoteHost, userAgent,
-			colorRed(colorBold(message)), tagString, strings.Join(trace, "\n"))
+			msg, tagString, strings.Join(trace, "\n"))
 	}
 	fmt.Println(output)
 }
@@ -334,17 +340,28 @@ func CriticalIf(ctx context.Context, err error) {
 	}
 }
 
-// FatalIf :
-// Just fatal error message, no stack trace
-// It'll be called for input validation failures
+// FatalIf is similar to Fatal() but it ignores passed nil error
 func FatalIf(err error, msg string, data ...interface{}) {
-	if err != nil {
-		if msg != "" {
-			consoleLog(fatalMessage, msg, data...)
-		} else {
-			consoleLog(fatalMessage, err.Error())
-		}
+	if err == nil {
+		return
 	}
+	fatal(err, msg, data...)
+}
+
+// Fatal prints only fatal error message without no stack trace
+// it will be called for input validation failures
+func Fatal(err error, msg string, data ...interface{}) {
+	fatal(err, msg, data...)
+}
+
+func fatal(err error, msg string, data ...interface{}) {
+	var errMsg string
+	if msg != "" {
+		errMsg = errorFmtFunc(fmt.Sprintf(msg, data...), err, jsonFlag)
+	} else {
+		errMsg = err.Error()
+	}
+	consoleLog(fatalMessage, errMsg)
 }
 
 var fatalMessage fatalMsg
@@ -354,14 +371,15 @@ type fatalMsg struct {
 
 func (f fatalMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&logEntry{
-		Level: Fatal.String(),
+		Level: FatalLvl.String(),
 		Time:  time.Now().UTC().Format(time.RFC3339Nano),
-		Trace: &traceEntry{Message: fmt.Sprintf(msg, args...), Source: []string{getSource()}},
+		Trace: &traceEntry{Message: fmt.Sprintf(msg, args...), Source: []string{getSource(6)}},
 	})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(string(logJSON))
+
 	os.Exit(1)
 
 }
@@ -370,9 +388,65 @@ func (f fatalMsg) quiet(msg string, args ...interface{}) {
 	f.pretty(msg, args...)
 }
 
+var (
+	logTag       = "ERROR"
+	logBanner    = colorBgRed(colorFgWhite(colorBold(logTag))) + " "
+	emptyBanner  = colorBgRed(strings.Repeat(" ", len(logTag))) + " "
+	minimumWidth = 80
+	bannerWidth  = len(logTag) + 1
+)
+
 func (f fatalMsg) pretty(msg string, args ...interface{}) {
+	// Build the passed error message
 	errMsg := fmt.Sprintf(msg, args...)
-	fmt.Println(colorRed(colorBold("Error: " + errMsg)))
+	// Check terminal width
+	termWidth, _, err := terminal.GetSize(0)
+	if err != nil || termWidth < minimumWidth {
+		termWidth = minimumWidth
+	}
+	// Calculate available widht without the banner
+	width := termWidth - bannerWidth
+
+	tagPrinted := false
+
+	// Print the error message: the following code takes care
+	// of splitting error text and always pretty printing the
+	// red banner along with the error message. Since the error
+	// message itself contains some colored text, we needed
+	// to use some ANSI control escapes to cursor color state
+	// and freely move in the screen.
+	for _, line := range strings.Split(errMsg, "\n") {
+		if len(line) == 0 {
+			// No more text to print, just quit.
+			break
+		}
+
+		for {
+			// Save the attributes of the current cursor helps
+			// us save the text color of the passed error message
+			ansiSaveAttributes()
+			// Print banner with or without the log tag
+			if !tagPrinted {
+				fmt.Print(logBanner)
+				tagPrinted = true
+			} else {
+				fmt.Print(emptyBanner)
+			}
+			// Restore the text color of the error message
+			ansiRestoreAttributes()
+			ansiMoveRight(bannerWidth)
+			// Continue  error message printing
+			if len(line) > width {
+				fmt.Println(line[:width])
+				line = line[width:]
+			} else {
+				fmt.Println(line)
+				break
+			}
+		}
+	}
+
+	// Exit because this is a fatal error message
 	os.Exit(1)
 }
 
@@ -383,7 +457,7 @@ type infoMsg struct {
 
 func (i infoMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&logEntry{
-		Level:   Information.String(),
+		Level:   InformationLvl.String(),
 		Message: fmt.Sprintf(msg, args...),
 		Time:    time.Now().UTC().Format(time.RFC3339Nano),
 	})
