@@ -420,6 +420,11 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
+		// Enable GetBucketACL dummy call specifically.
+		if name == "acl" && req.Method == http.MethodGet {
+			return false
+		}
+
 		if notimplementedBucketResourceNames[name] {
 			return true
 		}
@@ -430,6 +435,10 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
+		// Enable GetObjectACL dummy call specifically.
+		if name == "acl" && req.Method == http.MethodGet {
+			return false
+		}
 		if notimplementedObjectResourceNames[name] {
 			return true
 		}
