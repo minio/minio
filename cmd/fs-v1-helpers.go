@@ -225,6 +225,15 @@ func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 	return fi, nil
 }
 
+// Returns if the dirPath is a directory.
+func fsIsDir(ctx context.Context, dirPath string) bool {
+	fi, err := fsStat(ctx, dirPath)
+	if err != nil {
+		return false
+	}
+	return fi.IsDir()
+}
+
 // Lookup if file exists, returns file attributes upon success.
 func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, statFile)
@@ -240,6 +249,15 @@ func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
 		return nil, errFileAccessDenied
 	}
 	return fi, nil
+}
+
+// Returns if the filePath is a regular file.
+func fsIsFile(ctx context.Context, filePath string) bool {
+	fi, err := fsStat(ctx, filePath)
+	if err != nil {
+		return false
+	}
+	return fi.Mode().IsRegular()
 }
 
 // Opens the file at given path, optionally from an offset. Upon success returns
@@ -402,7 +420,9 @@ func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
 	}
 
 	if err := deleteFile(basePath, deletePath); err != nil {
-		logger.LogIf(ctx, err)
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	return nil

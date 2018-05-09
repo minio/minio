@@ -563,17 +563,16 @@ func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
-	fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
-	if err != nil && err != errFileAccessDenied {
-		return oi, err
-	}
-	if fi != nil {
-		// If file found and request was with object ending with "/", consider it
-		// as directory and return object info
-		if hasSuffix(object, slashSeparator) {
-			return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	if hasSuffix(object, slashSeparator) {
+		// Since we support PUT of a "directory" object, we allow HEAD.
+		if !fsIsDir(ctx, pathJoin(fs.fsPath, bucket, object)) {
+			return oi, errFileNotFound
 		}
-		return oi, errFileNotFound
+		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
+		if err != nil {
+			return oi, err
+		}
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
@@ -602,7 +601,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	}
 
 	// Stat the file to get file size.
-	fi, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return oi, err
 	}
@@ -664,7 +663,7 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 		if p == "." || p == "/" {
 			return false
 		}
-		if _, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, p)); err == nil {
+		if fsIsFile(ctx, pathJoin(fs.fsPath, bucket, p)) {
 			// If there is already a file at prefix "p", return true.
 			return true
 		}

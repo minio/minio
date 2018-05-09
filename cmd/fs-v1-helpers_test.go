@@ -547,3 +547,33 @@ func TestFSRemoveMeta(t *testing.T) {
 		t.Fatalf("`%s` parent directory found though it should have been deleted.", filePath)
 	}
 }
+
+func TestFSIsDir(t *testing.T) {
+	dirPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create tmp directory %s", err)
+	}
+	defer os.RemoveAll(dirPath)
+
+	if !fsIsDir(context.Background(), dirPath) {
+		t.Fatalf("Expected %s to be a directory", dirPath)
+	}
+}
+
+func TestFSIsFile(t *testing.T) {
+	dirPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create tmp directory %s", err)
+	}
+	defer os.RemoveAll(dirPath)
+
+	filePath := pathJoin(dirPath, "tmpfile")
+
+	if err = ioutil.WriteFile(filePath, nil, 0777); err != nil {
+		t.Fatalf("Unable to create file %s", filePath)
+	}
+
+	if !fsIsFile(context.Background(), filePath) {
+		t.Fatalf("Expected %s to be a file", filePath)
+	}
+}

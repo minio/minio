@@ -137,7 +137,6 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 			}
 			return bucketInfo, nil
 		}
-		logger.LogIf(ctx, serr)
 		err = serr
 		// For any reason disk went offline continue and pick the next one.
 		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {

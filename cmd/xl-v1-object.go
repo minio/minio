@@ -832,7 +832,6 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
-		logger.LogIf(ctx, ObjectNotFound{bucket, object})
 		return ObjectNotFound{bucket, object}
 	} // else proceed to delete the object.
 
