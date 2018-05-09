@@ -112,6 +112,12 @@ var readDirBufPool = sync.Pool{
 
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
+	return readDirN(dirPath, -1)
+}
+
+// Return count entries at the directory dirPath and all entries
+// if count is set to -1
+func readDirN(dirPath string, count int) (entries []string, err error) {
 	bufp := readDirBufPool.Get().(*[]byte)
 	buf := *bufp
 	defer readDirBufPool.Put(bufp)
@@ -135,7 +141,11 @@ func readDir(dirPath string) (entries []string, err error) {
 	defer d.Close()
 
 	fd := int(d.Fd())
-	for {
+
+	remaining := count
+	done := false
+
+	for !done {
 		nbuf, err := syscall.ReadDirent(fd, buf)
 		if err != nil {
 			return nil, err
@@ -146,6 +156,13 @@ func readDir(dirPath string) (entries []string, err error) {
 		var tmpEntries []string
 		if tmpEntries, err = parseDirents(dirPath, buf[:nbuf]); err != nil {
 			return nil, err
+		}
+		if count > 0 {
+			if remaining <= len(tmpEntries) {
+				tmpEntries = tmpEntries[:remaining]
+				done = true
+			}
+			remaining -= len(tmpEntries)
 		}
 		entries = append(entries, tmpEntries...)
 	}

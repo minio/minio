@@ -623,7 +623,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
+func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string, err error) {
 		for _, disk := range disks {
 			if disk == nil {
@@ -632,7 +632,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, treeWalkIgnoredE
 
 			var entries []string
 			var newEntries []string
-			entries, err = disk.ListDir(bucket, prefixDir)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				// For any reason disk was deleted or goes offline, continue
 				// and list from other disks if possible.
@@ -723,13 +723,17 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			return s.getHashedSet(entry).isObject(bucket, entry)
 		}
 
+		isLeafDir := func(bucket, entry string) bool {
+			return s.getHashedSet(entry).isObjectDir(bucket, entry)
+		}
+
 		var setDisks = make([][]StorageAPI, len(s.sets))
 		for _, set := range s.sets {
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
-		listDir := listDirSetsFactory(ctx, isLeaf, xlTreeWalkIgnoredErrs, setDisks...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, xlTreeWalkIgnoredErrs, setDisks...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -781,7 +785,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 	result = ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
+		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
@@ -1270,7 +1274,7 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 			}
 			var entries []string
 			var newEntries []string
-			entries, err = disk.ListDir(bucket, prefixDir)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				continue
 			}
@@ -1362,7 +1366,7 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 		}
 
 		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, nil, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo

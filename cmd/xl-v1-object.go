@@ -359,6 +359,9 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (o
 	}
 
 	if hasSuffix(object, slashSeparator) {
+		if !xl.isObjectDir(bucket, object) {
+			return oi, toObjectErr(errFileNotFound, bucket, object)
+		}
 		if oi, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
 			return oi, toObjectErr(e, bucket, object)
 		}

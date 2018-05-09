@@ -627,6 +627,10 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 		return oi, toObjectErr(err, bucket)
 	}
 
+	if strings.HasSuffix(object, slashSeparator) && !fs.isObjectDir(bucket, object) {
+		return oi, errFileNotFound
+	}
+
 	return fs.getObjectInfo(ctx, bucket, object)
 }
 
@@ -890,6 +894,17 @@ func (fs *FSObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	return listDir
 }
 
+// isObjectDir returns true if the specified bucket & prefix exists
+// and the prefix represents an empty directory. An S3 empty directory
+// is also an empty directory in the FS backend.
+func (fs *FSObjects) isObjectDir(bucket, prefix string) bool {
+	entries, err := readDirN(pathJoin(fs.fsPath, bucket, prefix), 1)
+	if err != nil {
+		return false
+	}
+	return len(entries) == 0
+}
+
 // getObjectETag is a helper function, which returns only the md5sum
 // of the file on the disk.
 func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lock bool) (string, error) {
@@ -1019,8 +1034,15 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 			// object string does not end with "/".
 			return !hasSuffix(object, slashSeparator)
 		}
+		// Return true if the specified object is an empty directory
+		isLeafDir := func(bucket, object string) bool {
+			if !hasSuffix(object, slashSeparator) {
+				return false
+			}
+			return fs.isObjectDir(bucket, object)
+		}
 		listDir := fs.listDirFactory(isLeaf)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -1065,7 +1087,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
+		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}

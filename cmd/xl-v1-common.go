@@ -76,6 +76,32 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	return false
 }
 
+// isObjectDir returns if the specified path represents an empty directory.
+func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
+	for _, disk := range xl.getLoadBalancedDisks() {
+		if disk == nil {
+			continue
+		}
+		// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
+		ctnts, err := disk.ListDir(bucket, prefix, 1)
+		if err == nil {
+			if len(ctnts) == 0 {
+				return true
+			}
+			return false
+		}
+		// Ignore for file not found,  disk not found or faulty disk.
+		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
+			continue
+		}
+		reqInfo := &logger.ReqInfo{BucketName: bucket}
+		reqInfo.AppendTags("prefix", prefix)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
+	} // Exhausted all disks - return false.
+	return false
+}
+
 // Calculate the space occupied by an object in a single disk
 func (xl xlObjects) sizeOnDisk(fileSize int64, blockSize int64, dataBlocks int) int64 {
 	numBlocks := fileSize / blockSize

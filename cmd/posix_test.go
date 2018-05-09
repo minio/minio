@@ -785,7 +785,7 @@ func TestPosixPosixListDir(t *testing.T) {
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
-		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath)
+		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath, -1)
 		if err != testCase.expectedErr {
 			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
