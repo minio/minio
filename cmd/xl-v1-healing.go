@@ -539,12 +539,74 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	return result, nil
 }
 
+// healObjectDir - heals object directory specifically, this special call
+// is needed since we do not have a special backend format for directories.
+func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
+	storageDisks := xl.getDisks()
+
+	// Initialize heal result object
+	hr = madmin.HealResultItem{
+		Type:         madmin.HealItemObject,
+		Bucket:       bucket,
+		Object:       object,
+		DiskCount:    len(storageDisks),
+		ParityBlocks: len(storageDisks) / 2,
+		DataBlocks:   len(storageDisks) / 2,
+		ObjectSize:   0,
+	}
+
+	// Prepare object creation in all disks
+	for _, disk := range storageDisks {
+		if disk == nil {
+			hr.Before.Drives = append(hr.Before.Drives, madmin.HealDriveInfo{
+				UUID:  "",
+				State: madmin.DriveStateOffline,
+			})
+			hr.After.Drives = append(hr.After.Drives, madmin.HealDriveInfo{
+				UUID:  "",
+				State: madmin.DriveStateMissing,
+			})
+			continue
+		}
+
+		drive := disk.String()
+		hr.Before.Drives = append(hr.Before.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    madmin.DriveStateMissing,
+		})
+		hr.After.Drives = append(hr.After.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: drive,
+			State:    madmin.DriveStateMissing,
+		})
+
+		if !dryRun {
+			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil && err != errVolumeExists {
+				return hr, toObjectErr(err, bucket, object)
+			}
+
+			for i, v := range hr.Before.Drives {
+				if v.Endpoint == drive {
+					hr.After.Drives[i].State = madmin.DriveStateOk
+				}
+			}
+		}
+	}
+	return hr, nil
+}
+
 // HealObject - heal the given object.
 //
 // FIXME: If an object object was deleted and one disk was down,
 // and later the disk comes back up again, heal on the object
 // should delete it.
 func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
+	// Healing directories handle it separately.
+	if hasSuffix(object, slashSeparator) {
+		return xl.healObjectDir(ctx, bucket, object, dryRun)
+	}
+
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)

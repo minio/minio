@@ -153,6 +153,12 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			return err
 		}
 	}
+
+	// When isleaf check is delayed, make sure that it is set correctly here.
+	if delayIsLeaf && isLeaf == nil {
+		return errInvalidArgument
+	}
+
 	// For an empty list return right here.
 	if len(entries) == 0 {
 		return nil
@@ -169,6 +175,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 	if len(entries) == 0 {
 		return nil
 	}
+
 	for i, entry := range entries {
 		var leaf, leafDir bool
 
@@ -187,7 +194,6 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		}
 
 		isDir := !leafDir && !leaf
-
 		if i == 0 && markerDir == entry {
 			if !recursive {
 				// Skip as the marker would already be listed in the previous listing.
