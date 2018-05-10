@@ -1360,13 +1360,17 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 			return s.getHashedSet(entry).isObject(bucket, entry)
 		}
 
+		isLeafDir := func(bucket, entry string) bool {
+			return s.getHashedSet(entry).isObjectDir(bucket, entry)
+		}
+
 		var setDisks = make([][]StorageAPI, len(s.sets))
 		for _, set := range s.sets {
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
 		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, nil, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, isLeafDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -1403,20 +1407,7 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 	result := ListObjectsInfo{IsTruncated: !eof}
 	for _, objInfo := range objInfos {
 		result.NextMarker = objInfo.Name
-		if objInfo.IsDir {
-			result.Prefixes = append(result.Prefixes, objInfo.Name)
-			continue
-		}
-
-		// Add each object seen to the result - objects are
-		// checked for healing later.
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:  bucket,
-			Name:    objInfo.Name,
-			ModTime: objInfo.ModTime,
-			Size:    objInfo.Size,
-			IsDir:   false,
-		})
+		result.Objects = append(result.Objects, objInfo)
 	}
 	return result, nil
 }
