@@ -28,10 +28,13 @@ import (
 	"time"
 
 	etcd "github.com/coreos/etcd/client"
+
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Check for updates and print a notification message
@@ -59,7 +62,7 @@ func initConfig() {
 		} else {
 			if etcd.IsKeyNotFound(err) {
 				logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-				logger.Info("Created minio configuration file successfully at", globalEtcdClient.Endpoints())
+				logger.Info("Created minio configuration file successfully at %v", globalEtcdClient.Endpoints())
 			} else {
 				logger.FatalIf(err, "Unable to load config version: '%s'.", serverConfigVersion)
 			}
@@ -168,10 +171,20 @@ func handleCommonEnvVars() {
 		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 	}
 
-	globalDomainIP = os.Getenv("MINIO_PUBLIC_IP")
-	if globalDomainName != "" && globalDomainIP != "" && globalEtcdClient != nil {
+	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
+	if ok {
+		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
+		globalDomainIPs = set.NewStringSet()
+		for i, ip := range minioEndpoints {
+			if net.ParseIP(ip) == nil {
+				logger.FatalIf(errInvalidArgument, "Unable to initialize Minio server with invalid MINIO_PUBLIC_IPS[%d]: %s", i, ip)
+			}
+			globalDomainIPs.Add(ip)
+		}
+	}
+	if globalDomainName != "" && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 		var err error
-		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIP, globalMinioPort, globalEtcdClient)
+		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIPs, globalMinioPort, globalEtcdClient)
 		logger.FatalIf(err, "Unable to initialize DNS config for %s.", globalDomainName)
 	}
 

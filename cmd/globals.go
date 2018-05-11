@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/minio/minio-go/pkg/set"
+
 	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -161,8 +163,8 @@ var (
 	globalPublicCerts []*x509.Certificate
 
 	globalIsEnvDomainName bool
-	globalDomainName      string // Root domain for virtual host style requests
-	globalDomainIP        string // Root domain IP address
+	globalDomainName      string        // Root domain for virtual host style requests
+	globalDomainIPs       set.StringSet // Root domain IP address(s) for a distributed Minio deployment
 
 	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops

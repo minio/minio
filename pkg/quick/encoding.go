@@ -140,6 +140,9 @@ func saveFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error 
 	kapi := etcd.NewKeysAPI(clnt)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	_, err = kapi.Update(ctx, filename, string(dataBytes))
+	if etcd.IsKeyNotFound(err) {
+		_, err = kapi.Create(ctx, filename, string(dataBytes))
+	}
 	cancel()
 	return err
 }
