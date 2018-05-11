@@ -21,18 +21,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/pkg/set"
+
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	etcd "github.com/coreos/etcd/client"
 )
 
+// ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
+var ErrNoEntriesFound = errors.New("No entries found for this key")
+
 // create a new coredns service record for the bucket.
-func newCoreDNSMsg(bucket string, ip string, port int, ttl uint32) ([]byte, error) {
+func newCoreDNSMsg(bucket, ip string, port int, ttl uint32) ([]byte, error) {
 	return json.Marshal(&SrvRecord{
 		Host:         ip,
 		Port:         port,
@@ -41,12 +45,24 @@ func newCoreDNSMsg(bucket string, ip string, port int, ttl uint32) ([]byte, erro
 	})
 }
 
-// Retrieves list of DNS entries for a bucket.
+// Retrieves list of DNS entries for the domain.
 func (c *coreDNS) List() ([]SrvRecord, error) {
-	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.", c.domainName), defaultPrefixPath)
+	return c.list(key)
+}
+
+// Retrieves DNS records for a bucket.
+func (c *coreDNS) Get(bucket string) ([]SrvRecord, error) {
+	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
+	return c.list(key)
+}
+
+// Retrieves list of entries under the key passed.
+// Note that this method fetches entries upto only two levels deep.
+func (c *coreDNS) list(key string) ([]SrvRecord, error) {
+	kapi := etcd.NewKeysAPI(c.etcdClient)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	r, err := kapi.Get(ctx, key, nil)
+	r, err := kapi.Get(ctx, key, &etcd.GetOptions{Recursive: true})
 	cancel()
 	if err != nil {
 		return nil, err
@@ -54,48 +70,52 @@ func (c *coreDNS) List() ([]SrvRecord, error) {
 
 	var srvRecords []SrvRecord
 	for _, n := range r.Node.Nodes {
-		var srvRecord SrvRecord
-		if err = json.Unmarshal([]byte(n.Value), &srvRecord); err != nil {
-			return nil, err
+		if !n.Dir {
+			var srvRecord SrvRecord
+			if err = json.Unmarshal([]byte(n.Value), &srvRecord); err != nil {
+				return nil, err
+			}
+			srvRecord.Key = strings.TrimPrefix(n.Key, key)
+			srvRecords = append(srvRecords, srvRecord)
+		} else {
+			// As this is a directory, loop through all the nodes inside
+			for _, n1 := range n.Nodes {
+				var srvRecord SrvRecord
+				if err = json.Unmarshal([]byte(n1.Value), &srvRecord); err != nil {
+					return nil, err
+				}
+				srvRecord.Key = strings.TrimPrefix(n1.Key, key)
+				srvRecord.Key = strings.TrimSuffix(srvRecord.Key, srvRecord.Host)
+				srvRecords = append(srvRecords, srvRecord)
+			}
 		}
-		srvRecord.Key = strings.TrimPrefix(n.Key, key)
-		srvRecords = append(srvRecords, srvRecord)
 	}
-	sort.Slice(srvRecords, func(i int, j int) bool {
-		return srvRecords[i].Key < srvRecords[j].Key
-	})
+	if srvRecords != nil {
+		sort.Slice(srvRecords, func(i int, j int) bool {
+			return srvRecords[i].Key < srvRecords[j].Key
+		})
+	} else {
+		return nil, ErrNoEntriesFound
+	}
 	return srvRecords, nil
 }
 
-// Retrieves DNS record for a bucket.
-func (c *coreDNS) Get(bucket string) (SrvRecord, error) {
-	kapi := etcd.NewKeysAPI(c.etcdClient)
-	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	r, err := kapi.Get(ctx, key, nil)
-	cancel()
-	if err != nil {
-		return SrvRecord{}, err
-	}
-	var sr SrvRecord
-	if err = json.Unmarshal([]byte(r.Node.Value), &sr); err != nil {
-		return SrvRecord{}, err
-	}
-	sr.Key = strings.TrimPrefix(r.Node.Key, key)
-	return sr, nil
-}
-
-// Adds DNS entries into etcd endpoint in CoreDNS etcd messae format.
+// Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
 func (c *coreDNS) Put(bucket string) error {
-	bucketMsg, err := newCoreDNSMsg(bucket, c.domainIP, c.domainPort, defaultTTL)
-	if err != nil {
-		return err
+	var err error
+	for ip := range c.domainIPs {
+		var bucketMsg []byte
+		bucketMsg, err = newCoreDNSMsg(bucket, ip, c.domainPort, defaultTTL)
+		if err != nil {
+			return err
+		}
+		kapi := etcd.NewKeysAPI(c.etcdClient)
+		key := msg.Path(fmt.Sprintf("%s.%s", bucket, c.domainName), defaultPrefixPath)
+		key = key + "/" + ip
+		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+		_, err = kapi.Set(ctx, key, string(bucketMsg), nil)
+		cancel()
 	}
-	kapi := etcd.NewKeysAPI(c.etcdClient)
-	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	_, err = kapi.Set(ctx, key, string(bucketMsg), nil)
-	cancel()
 	return err
 }
 
@@ -111,18 +131,15 @@ func (c *coreDNS) Delete(bucket string) error {
 
 // CoreDNS - represents dns config for coredns server.
 type coreDNS struct {
-	domainName, domainIP string
-	domainPort           int
-	etcdClient           etcd.Client
+	domainName string
+	domainIPs  set.StringSet
+	domainPort int
+	etcdClient etcd.Client
 }
 
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(domainName, domainIP, domainPort string, etcdClient etcd.Client) (Config, error) {
-	if domainName == "" || domainIP == "" || etcdClient == nil {
-		return nil, errors.New("invalid argument")
-	}
-
-	if net.ParseIP(domainIP) == nil {
+func NewCoreDNS(domainName string, domainIPs set.StringSet, domainPort string, etcdClient etcd.Client) (Config, error) {
+	if domainName == "" || domainIPs.IsEmpty() || etcdClient == nil {
 		return nil, errors.New("invalid argument")
 	}
 
@@ -133,7 +150,7 @@ func NewCoreDNS(domainName, domainIP, domainPort string, etcdClient etcd.Client)
 
 	return &coreDNS{
 		domainName: domainName,
-		domainIP:   domainIP,
+		domainIPs:  domainIPs,
 		domainPort: port,
 		etcdClient: etcdClient,
 	}, nil

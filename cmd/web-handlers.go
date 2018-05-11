@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
@@ -138,7 +139,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
-			if etcd.IsKeyNotFound(err) {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(context.Background(), args.BucketName, globalServerConfig.GetRegion()); err != nil {
 					return toJSONError(err)

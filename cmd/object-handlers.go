@@ -536,13 +536,51 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Copy source object to destination, if source and destination
-	// object is same then only metadata is updated.
-	objInfo, err := objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo)
-	if err != nil {
-		pipeWriter.CloseWithError(err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
+	var objInfo ObjectInfo
+
+	// _, err = objectAPI.GetBucketInfo(ctx, dstBucket)
+	// if err == toObjectErr(errVolumeNotFound, dstBucket) && !cpSrcDstSame
+	if isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
+		if globalDNSConfig != nil {
+			if dstRecord, errEtcd := globalDNSConfig.Get(dstBucket); errEtcd == nil {
+				go func() {
+					if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+						pipeWriter.CloseWithError(gerr)
+						writeErrorResponse(w, ErrInternalError, r.URL)
+						return
+					}
+					// Close writer explicitly to indicate data has been written
+					defer srcInfo.Writer.Close()
+				}()
+				// Send PutObject request to appropriate instance (in federated deployment)
+				client, rerr := getRemoteInstanceClient(dstRecord[0])
+				if rerr != nil {
+					pipeWriter.CloseWithError(rerr)
+					writeErrorResponse(w, ErrInternalError, r.URL)
+					return
+				}
+				remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined)
+				if rerr != nil {
+					pipeWriter.CloseWithError(rerr)
+					writeErrorResponse(w, ErrInternalError, r.URL)
+					return
+				}
+				objInfo.ETag = remoteObjInfo.ETag
+				objInfo.ModTime = remoteObjInfo.LastModified
+			}
+		} else {
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			return
+		}
+	} else {
+		// Copy source object to destination, if source and destination
+		// object is same then only metadata is updated.
+		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo)
+		if err != nil {
+			pipeWriter.CloseWithError(err)
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	pipeReader.Close()

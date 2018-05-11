@@ -26,9 +26,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/pkg/set"
+
 	"github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/sys"
 	"github.com/rs/cors"
@@ -629,29 +632,37 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	bucket, object := urlPath2BucketObjectName(r.URL.Path)
-	// MakeBucket request
+	// MakeBucket requests should be handled at current endpoint
 	if r.Method == http.MethodPut && bucket != "" && object == "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
-	// ListBucket request
+	// ListBucket requests should be handled at current endpoint as
+	// all buckets data can be fetched from here.
 	if r.Method == http.MethodGet && bucket == "" && object == "" {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+	// CopyObject requests should be handled at current endpoint as path style
+	// requests have target bucket and object in URI and source details are in
+	// header fields
+	if r.Method == http.MethodPut && r.Header.Get("X-Amz-Copy-Source") != "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
-		if client.IsKeyNotFound(err) {
+		if client.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 		} else {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
 		return
 	}
-	if sr.Host != globalDomainIP {
-		backendURL := fmt.Sprintf("http://%s:%d", sr.Host, sr.Port)
+	if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+		backendURL := fmt.Sprintf("http://%s:%d", sr[0].Host, sr[0].Port)
 		if globalIsSSL {
-			backendURL = fmt.Sprintf("https://%s:%d", sr.Host, sr.Port)
+			backendURL = fmt.Sprintf("https://%s:%d", sr[0].Host, sr[0].Port)
 		}
 		r.URL, err = url.Parse(backendURL)
 		if err != nil {

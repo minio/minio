@@ -60,6 +60,6 @@ type SrvRecord struct {
 type Config interface {
 	Put(key string) error
 	List() ([]SrvRecord, error)
-	Get(key string) (SrvRecord, error)
+	Get(key string) ([]SrvRecord, error)
 	Delete(key string) error
 }

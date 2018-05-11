@@ -91,7 +91,7 @@ ENVIRONMENT VARIABLES:
 
   BUCKET-DNS:
      MINIO_DOMAIN:    To enable bucket DNS requests, set this value to Minio host domain name.
-     MINIO_PUBLIC_IP: To enable bucket DNS requests, set this value to Minio host public IP.
+     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of Minio host public IP(s) delimited by ",".
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
 
 EXAMPLES:

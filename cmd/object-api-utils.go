@@ -20,12 +20,16 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -275,6 +279,40 @@ func isMinioMetaBucket(bucketName string) bool {
 // Returns true if input bucket is a reserved minio bucket 'minio'.
 func isMinioReservedBucket(bucketName string) bool {
 	return bucketName == minioReservedBucket
+}
+
+// Returns a minio-go Client configured to access remote host described by destDNSRecord
+// Applicable only in a federated deployment
+func getRemoteInstanceClient(destDNSRecord dns.SrvRecord) (*miniogo.Core, error) {
+	// In a federated deployment, all the instances share config files and hence expected to have same
+	// credentials. So, access current instances creds and use it to create client for remote instance
+	client, err := miniogo.NewCore(net.JoinHostPort(destDNSRecord.Host, strconv.Itoa(destDNSRecord.Port)), globalServerConfig.Credential.AccessKey, globalServerConfig.Credential.SecretKey, globalIsSSL)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// Checks if a remote putobject call is needed for CopyObject operation
+// 1. If source and destination bucket names are same, it means no call needed to etcd to get destination info
+// 2. If destination bucket doesn't exist locally, only then a etcd call is needed
+func isRemoteCallRequired(ctx context.Context, src, dst string, objAPI ObjectLayer) bool {
+	if src == dst {
+		return false
+	}
+	if _, err := objAPI.GetBucketInfo(ctx, dst); err == toObjectErr(errVolumeNotFound, dst) {
+		return true
+	}
+	return false
+}
+
+// returns a slice of hosts by reading a slice of DNS records
+func getHostsSlice(records []dns.SrvRecord) []string {
+	var hosts []string
+	for _, r := range records {
+		hosts = append(hosts, r.Host)
+	}
+	return hosts
 }
 
 // byBucketName is a collection satisfying sort.Interface.

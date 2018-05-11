@@ -31,12 +31,17 @@ import (
 	"sync"
 
 	"github.com/coreos/etcd/client"
+
 	"github.com/gorilla/mux"
+
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -47,7 +52,6 @@ import (
 // -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
 // -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
 func initFederatorBackend(objLayer ObjectLayer) {
-	// List all buckets
 	b, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
 		logger.LogIf(context.Background(), err)
@@ -60,15 +64,14 @@ func initFederatorBackend(objLayer ObjectLayer) {
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
-				if client.IsKeyNotFound(gerr) {
-					// Make a new entry
+				if client.IsKeyNotFound(gerr) || gerr == dns.ErrNoEntriesFound {
 					return globalDNSConfig.Put(b[index].Name)
 				}
 				return gerr
 			}
-			if r.Host != globalDomainIP {
-				// Log error that entry already present for different host
-				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use %s to access the bucket, or rename it to a unique value", b[index].Name, globalDomainIP)
+			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				// There is already an entry for this bucket, with all IP addresses different. This indicates a bucket name collision. Log an error and continue.
+				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", b[index].Name, globalDomainIPs.ToSlice())
 			}
 			return nil
 		}, index)
@@ -418,7 +421,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(bucket); err != nil {
-			if client.IsKeyNotFound(err) {
+			if client.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
