@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	xtime "github.com/minio/minio/pkg/time"
 )
 
 // Attempt to retry only this many number of times before
@@ -178,37 +179,50 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
 	SetRPCAPIVersion(version semVersion)
 }, reply interface{}) (err error) {
+	var ticker *xtime.RandTicker
+	defer func() {
+		if ticker != nil {
+			ticker.Stop()
+		}
+	}()
 
-	// Done channel is used to close any lingering retry routine, as soon
-	// as this function returns.
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	for i := range newRetryTimer(authClient.config.retryUnit, authClient.config.retryCap, doneCh) {
-		if err = authClient.call(serviceMethod, args, reply); err == rpc.ErrShutdown {
-			// As connection at server side is closed, close the rpc client.
-			authClient.Close()
-
-			// Retry if reconnect is not disabled.
-			if !authClient.config.disableReconnect {
-				// Retry until threshold reaches.
-				if i < authClient.config.retryAttemptThreshold {
-					continue
-				}
-			}
+	i := 0
+	for {
+		if err = authClient.call(serviceMethod, args, reply); err == nil {
+			break
 		}
 
-		// gob doesn't provide any typed errors for us to reflect
-		// upon, this is the only way to return proper error.
-		if err != nil && strings.Contains(err.Error(), "gob: wrong type") {
+		if strings.Contains(err.Error(), "gob: wrong type") {
 			// Close the rpc client also when the servers have mismatching rpc versions.
 			authClient.Close()
 
 			err = errRPCAPIVersionUnsupported
+			break
 		}
 
-		break
+		if err == rpc.ErrShutdown {
+			// As connection at server side is closed, close the rpc client.
+			authClient.Close()
+
+			if authClient.config.disableReconnect {
+				break
+			}
+		}
+
+		i++
+
+		if i > authClient.config.retryAttemptThreshold {
+			break
+		}
+
+		if ticker == nil {
+			ticker = xtime.NewRandTicker(authClient.config.retryUnit, authClient.config.retryCap)
+		}
+
+		// Have random delay for next retry.
+		<-ticker.C
 	}
+
 	return err
 }
 

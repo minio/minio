@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	xtime "github.com/minio/minio/pkg/time"
 )
 
 var printEndpointError = func() func(Endpoint, error) {
@@ -203,25 +204,12 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 		return nil, err
 	}
 
-	// Done channel is used to close any lingering retry routine, as soon
-	// as this function returns.
-	doneCh := make(chan struct{})
-
-	// Indicate to our retry routine to exit cleanly, upon this function return.
-	defer close(doneCh)
-
-	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
-	// All times are rounded to avoid showing milli, micro and nano seconds
-	formatStartTime := time.Now().Round(time.Second)
-	getElapsedTime := func() string {
-		return time.Now().Round(time.Second).Sub(formatStartTime).String()
-	}
-
-	// Wait on the jitter retry loop.
-	retryTimerCh := newRetryTimerSimple(doneCh)
+	startTime := time.Now()
+	ticker := xtime.NewRandTicker(defaultRetryUnit, defaultRetryCap)
+	defer ticker.Stop()
 	for {
 		select {
-		case _ = <-retryTimerCh:
+		case elapsedTime := <-ticker.C:
 			format, err := connectLoadInitFormats(firstDisk, endpoints, setCount, disksPerSet)
 			if err != nil {
 				switch err {
@@ -235,7 +223,9 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 					continue
 				case errXLReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
+					// elapsed time is rounded to second to avoid showing milli, micro and nano seconds
+					elapsed := elapsedTime.Sub(startTime).Round(time.Second)
+					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, elapsed)
 					continue
 				case errXLV3ThisEmpty:
 					// need to wait for this error to be healed, so continue.

@@ -32,6 +32,13 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	xtime "github.com/minio/minio/pkg/time"
+)
+
+// Default retry constants.
+const (
+	defaultRetryUnit = 1 * time.Second
+	defaultRetryCap  = 30 * time.Second
 )
 
 // IPv4 addresses of local host.
@@ -80,14 +87,13 @@ func getHostIP4(host string) (ipList set.StringSet, err error) {
 			return ipList, err
 		}
 
-		// channel to indicate completion of host resolution
-		doneCh := make(chan struct{})
-		// Indicate retry routine to exit cleanly, upon this function return.
-		defer close(doneCh)
 		// Mark the starting time
 		startTime := time.Now()
-		// wait for hosts to resolve in exponentialbackoff manner
-		for range newRetryTimerSimple(doneCh) {
+
+		// Try to resolve host with random delay.
+		ticker := xtime.NewRandTicker(defaultRetryUnit, defaultRetryCap)
+		defer ticker.Stop()
+		for range ticker.C {
 			// Retry infinitely on Kubernetes and Docker swarm.
 			// This is needed as the remote hosts are sometime
 			// not available immediately.
