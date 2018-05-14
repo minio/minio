@@ -20,12 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -34,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/minio/pkg/quorum"
 )
 
 const (
@@ -92,15 +91,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Fetch server version
-	serverVersion := madmin.ServerVersion{
-		Version:  Version,
-		CommitID: CommitID,
-	}
-
-	// Fetch uptimes from all peers. This may fail to due to lack
-	// of read-quorum availability.
-	uptime, err := getPeerUptimes(globalAdminPeers)
+	uptime, err := globalAdminClients.GetLatestUptime()
 	if err != nil {
 		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		logger.LogIf(context.Background(), err)
@@ -109,20 +100,21 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 
 	// Create API response
 	serverStatus := madmin.ServiceStatus{
-		ServerVersion: serverVersion,
-		Uptime:        uptime,
+		Uptime: uptime,
+		ServerVersion: madmin.ServerVersion{
+			Version:  Version,
+			CommitID: CommitID,
+		},
 	}
 
-	// Marshal API response
-	jsonBytes, err := json.Marshal(serverStatus)
+	data, err := json.Marshal(serverStatus)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		logger.LogIf(context.Background(), err)
 		return
 	}
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
+
+	writeSuccessResponseJSON(w, data)
 }
 
 // ServiceStopNRestartHandler - POST /minio/admin/v1/service
@@ -145,22 +137,22 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	var serviceSig serviceSignal
+	var signal serviceSignal
 	switch sa.Action {
 	case madmin.ServiceActionValueRestart:
-		serviceSig = serviceRestart
+		signal = serviceRestart
 	case madmin.ServiceActionValueStop:
-		serviceSig = serviceStop
+		signal = serviceStop
 	default:
 		writeErrorResponseJSON(w, ErrMalformedPOSTRequest, r.URL)
-		logger.LogIf(context.Background(), errors.New("Invalid service action received"))
+		logger.LogIf(context.Background(), fmt.Errorf("invalid service action %v received", sa.Action))
 		return
 	}
 
-	// Reply to the client before restarting minio server.
+	// Reply to the client before stopping/restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 
-	sendServiceCmd(globalAdminPeers, serviceSig)
+	globalAdminClients.SendSignal(signal)
 }
 
 // ServerProperties holds some server information such as, version, region
@@ -229,48 +221,15 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Web service response
-	reply := make([]ServerInfo, len(globalAdminPeers))
-
-	var wg sync.WaitGroup
-
-	// Gather server information for all nodes
-	for i, p := range globalAdminPeers {
-		wg.Add(1)
-
-		// Gather information from a peer in a goroutine
-		go func(idx int, peer adminPeer) {
-			defer wg.Done()
-
-			// Initialize server info at index
-			reply[idx] = ServerInfo{Addr: peer.addr}
-
-			serverInfoData, err := peer.cmdRunner.ServerInfo()
-			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-				reply[idx].Error = err.Error()
-				return
-			}
-
-			reply[idx].Data = &serverInfoData
-		}(i, p)
-	}
-
-	wg.Wait()
-
-	// Marshal API response
-	jsonBytes, err := json.Marshal(reply)
+	reply := globalAdminClients.GetServerInfo()
+	data, err := json.Marshal(reply)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		logger.LogIf(context.Background(), err)
 		return
 	}
 
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
+	writeSuccessResponseJSON(w, data)
 }
 
 // validateLockQueryParams - Validates query params for list/clear
@@ -305,13 +264,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 	return bucket, prefix, duration, ErrNone
 }
 
-// ListLocksHandler - GET /minio/admin/v1/locks?bucket=mybucket&prefix=myprefix&older-than=10s
-// - bucket is a mandatory query parameter
-// - prefix and older-than are optional query parameters
-// ---------
-// Lists locks held on a given bucket, prefix and duration it was held for.
-func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
-
+func (a adminAPIHandlers) listClearLocks(w http.ResponseWriter, r *http.Request, clearLocks bool) {
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
@@ -325,27 +278,40 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Fetch lock information of locks matching bucket/prefix that
-	// are available for longer than duration.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
-		duration)
+	volLocks, err := globalAdminClients.ListLocks(bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		logger.LogIf(context.Background(), err)
 		return
 	}
 
-	// Marshal list of locks as json.
-	jsonBytes, err := json.Marshal(volLocks)
+	data, err := json.Marshal(volLocks)
 	if err != nil {
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		logger.LogIf(context.Background(), err)
 		return
 	}
 
-	// Reply with list of locks held on bucket, matching prefix
-	// held longer than duration supplied, as json.
-	writeSuccessResponseJSON(w, jsonBytes)
+	if clearLocks {
+		objLayer := newObjectLayerFn()
+		if objLayer == nil {
+			writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+			return
+		}
+
+		objLayer.ClearLocks(newContext(r, "ClearLocks"), volLocks)
+	}
+
+	writeSuccessResponseJSON(w, data)
+}
+
+// ListLocksHandler - GET /minio/admin/v1/locks?bucket=mybucket&prefix=myprefix&older-than=10s
+// - bucket is a mandatory query parameter
+// - prefix and older-than are optional query parameters
+// ---------
+// Lists locks held on a given bucket, prefix and duration it was held for.
+func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
+	a.listClearLocks(w, r, false)
 }
 
 // ClearLocksHandler - DELETE /minio/admin/v1/locks?bucket=mybucket&prefix=myprefix&duration=duration
@@ -354,50 +320,7 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ClearLocks")
-
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(w, adminAPIErr, r.URL)
-		return
-	}
-
-	vars := r.URL.Query()
-	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Fetch lock information of locks matching bucket/prefix that
-	// are held for longer than duration.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
-		duration)
-	if err != nil {
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		logger.LogIf(ctx, err)
-		return
-	}
-
-	// Marshal list of locks as json.
-	jsonBytes, err := json.Marshal(volLocks)
-	if err != nil {
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		logger.LogIf(ctx, err)
-		return
-	}
-
-	objLayer.ClearLocks(ctx, volLocks)
-
-	// Reply with list of locks cleared, as json.
-	writeSuccessResponseJSON(w, jsonBytes)
+	a.listClearLocks(w, r, true)
 }
 
 // extractHealInitParams - Validates params for heal init API.
@@ -585,16 +508,21 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 	defer configLock.RUnlock()
 
-	// Get config.json - in distributed mode, the configuration
-	// occurring on a quorum of the servers is returned.
-	configBytes, err := getPeerConfig(globalAdminPeers)
+	config, err := globalAdminClients.GetConfig()
 	if err != nil {
 		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 
-	writeSuccessResponseJSON(w, configBytes)
+	data, err := json.Marshal(config)
+	if err != nil {
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		logger.LogIf(context.Background(), err)
+		return
+	}
+
+	writeSuccessResponseJSON(w, data)
 }
 
 // toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
@@ -622,19 +550,14 @@ type setConfigResult struct {
 
 // writeSetConfigResponse - writes setConfigResult value as json
 // depending on the status.
-func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
-	errs []error, status bool, reqURL *url.URL) {
-
+func writeSetConfigResponse(w http.ResponseWriter, errs []*quorum.Error, status bool, reqURL *url.URL) {
 	var nodeResults []nodeSummary
-	// Build nodeResults based on error values received during
-	// set-config operation.
 	for i := range errs {
 		nodeResults = append(nodeResults, nodeSummary{
-			Name:   peers[i].addr,
-			ErrSet: errs[i] != nil,
+			Name:   errs[i].ID,
+			ErrSet: errs[i].Err != nil,
 			ErrMsg: fmt.Sprintf("%v", errs[i]),
 		})
-
 	}
 
 	result := setConfigResult{
@@ -660,14 +583,7 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 
 // SetConfigHandler - PUT /minio/admin/v1/config
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
-
 	ctx := context.Background()
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
-		return
-	}
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
@@ -719,44 +635,17 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// Write config received from request onto a temporary file on
-	// all nodes.
-	tmpFileName := fmt.Sprintf(minioConfigTmpFormat, mustGetUUID())
-	errs := writeTmpConfigPeers(globalAdminPeers, tmpFileName, configBytes)
-
-	// Check if the operation succeeded in quorum or more nodes.
-	rErr := reduceWriteQuorumErrs(ctx, errs, nil, len(globalAdminPeers)/2+1)
-	if rErr != nil {
-		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
+	errs, err := globalAdminClients.SetConfig(&config)
+	if errs == nil && err != nil {
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
-	// Take a lock on minio/config.json. NB minio is a reserved
-	// bucket name and wouldn't conflict with normal object
-	// operations.
-	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
-	if configLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponseJSON(w, ErrOperationTimedOut, r.URL)
-		return
-	}
-	defer configLock.Unlock()
-
-	// Rename the temporary config file to config.json
-	errs = commitConfigPeers(globalAdminPeers, tmpFileName)
-	rErr = reduceWriteQuorumErrs(ctx, errs, nil, len(globalAdminPeers)/2+1)
-	if rErr != nil {
-		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
-		return
-	}
-
-	// serverMux (cmd/server-mux.go) implements graceful shutdown,
-	// where all listeners are closed and process restart/shutdown
-	// happens after 5s or completion of all ongoing http
-	// requests, whichever is earlier.
-	writeSetConfigResponse(w, globalAdminPeers, errs, true, r.URL)
+	// Reply to the client before stopping/restarting minio server.
+	writeSetConfigResponse(w, errs, (err == nil), r.URL)
 
 	// Restart all node for the modified config to take effect.
-	sendServiceCmd(globalAdminPeers, serviceRestart)
+	globalAdminClients.SendSignal(serviceRestart)
 }
 
 // ConfigCredsHandler - POST /minio/admin/v1/config/credential
@@ -815,11 +704,9 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Notify all other Minio peers to update credentials
-	for host, err := range globalNotificationSys.SetCredentials(creds) {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", host.String())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
+	// Update credentials in other peers.
+	if err := globalNotificationSys.SetCredentials(creds); err != nil {
+		logger.LogIf(context.Background(), err)
 	}
 
 	// At this stage, the operation is successful, return 200 OK

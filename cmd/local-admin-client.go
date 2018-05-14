@@ -19,105 +19,102 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
-// localAdminClient - represents admin operation to be executed locally.
+var errUnsupportedSignal = errors.New("restart and stop signals are only supported")
+
+// localAdminClient - executes calls in local server.
 type localAdminClient struct{}
 
-// SignalService - sends a restart or stop signal to the local server
-func (lc localAdminClient) SignalService(s serviceSignal) error {
-	switch s {
-	case serviceRestart, serviceStop:
-		globalServiceSignalCh <- s
-	default:
-		return errUnsupportedSignal
-	}
-	return nil
+func (client *localAdminClient) String() string {
+	return GetLocalPeer(globalEndpoints)
 }
 
-// ReInitFormat - re-initialize disk format.
-func (lc localAdminClient) ReInitFormat(dryRun bool) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-	return objectAPI.ReloadFormat(context.Background(), dryRun)
-}
-
-// ListLocks - Fetches lock information from local lock instrumentation.
-func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return nil, errServerNotInitialized
+// SendSignal - sends restart or stop signal to service signal channel.
+func (client *localAdminClient) SendSignal(signal serviceSignal) error {
+	if signal == serviceRestart || signal == serviceStop {
+		globalServiceSignalCh <- signal
+		return nil
 	}
 
-	return objectAPI.ListLocks(context.Background(), bucket, prefix, duration)
+	return errUnsupportedSignal
 }
 
-// ServerInfo - Returns the server info of this server.
-func (lc localAdminClient) ServerInfo() (sid ServerInfoData, e error) {
-	if globalBootTime.IsZero() {
-		return sid, errServerNotInitialized
+// ReloadFormat - calls object layer to reload format.
+func (client *localAdminClient) ReloadFormat(dryRun bool) error {
+	if objectLayer := newObjectLayerFn(); objectLayer != nil {
+		return objectLayer.ReloadFormat(context.Background(), dryRun)
 	}
 
-	// Build storage info
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		return sid, errServerNotInitialized
-	}
-	storage := objLayer.StorageInfo(context.Background())
-
-	return ServerInfoData{
-		StorageInfo: storage,
-		ConnStats:   globalConnStats.toServerConnStats(),
-		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
-		Properties: ServerProperties{
-			Uptime:   UTCNow().Sub(globalBootTime),
-			Version:  Version,
-			CommitID: CommitID,
-			SQSARN:   globalNotificationSys.GetARNList(),
-			Region:   globalServerConfig.GetRegion(),
-		},
-	}, nil
+	return errServerNotInitialized
 }
 
-// GetConfig - returns config.json of the local server.
-func (lc localAdminClient) GetConfig() ([]byte, error) {
-	if globalServerConfig == nil {
-		return nil, fmt.Errorf("config not present")
+// ListLocks - returns all lock information matching bucket/prefix and are available for longer than duration.
+func (client *localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	if objectLayer := newObjectLayerFn(); objectLayer != nil {
+		return objectLayer.ListLocks(context.Background(), bucket, prefix, duration)
 	}
 
-	return json.Marshal(globalServerConfig)
+	return nil, errServerNotInitialized
 }
 
-// WriteTmpConfig - writes config file content to a temporary file on
-// the local server.
-func (lc localAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
-	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
-	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
-	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
-	logger.LogIf(ctx, err)
-	return err
+// GetServerInfo - returns server information.
+func (client *localAdminClient) GetServerInfo() (info ServerInfoData, err error) {
+	if objectLayer := newObjectLayerFn(); objectLayer != nil && !globalBootTime.IsZero() {
+		return ServerInfoData{
+			StorageInfo: objectLayer.StorageInfo(context.Background()),
+			ConnStats:   globalConnStats.toServerConnStats(),
+			HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+			Properties: ServerProperties{
+				Uptime:   UTCNow().Sub(globalBootTime),
+				Version:  Version,
+				CommitID: CommitID,
+				SQSARN:   globalNotificationSys.GetARNList(),
+				Region:   globalServerConfig.GetRegion(),
+			},
+		}, nil
+	}
+
+	return info, errServerNotInitialized
 }
 
-// CommitConfig - Move the new config in tmpFileName onto config.json
-// on a local node.
-func (lc localAdminClient) CommitConfig(tmpFileName string) error {
+// GetConfig - returns server configuration loaded currently.
+func (client *localAdminClient) GetConfig() (config serverConfig, err error) {
+	if globalServerConfig != nil {
+		// Return copy of globalServerConfig
+		return *globalServerConfig, nil
+	}
+
+	return config, errors.New("server config not found")
+}
+
+// SaveStageConfig - saves given configuration to given staging filename.
+func (client *localAdminClient) SaveStageConfig(stageFilename string, config serverConfig) error {
+	if stageFilename == minioConfigFile {
+		return errors.New("stage file name must not be minio configuration file")
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	tmpConfigFile := filepath.Join(getConfigDir(), stageFilename)
+	return ioutil.WriteFile(tmpConfigFile, data, 0660)
+}
+
+// CommitConfig - sets staged configuration file as active configuration file.
+func (client *localAdminClient) CommitConfig(stageFilename string) error {
+	if stageFilename == minioConfigFile {
+		return errors.New("stage file name must not be minio configuration file")
+	}
+
+	tmpConfigFile := filepath.Join(getConfigDir(), stageFilename)
 	configFile := getConfigFile()
-	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
-
-	err := os.Rename(tmpConfigFile, configFile)
-	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
-	reqInfo.AppendTags("configFile", configFile)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
-	logger.LogIf(ctx, err)
-	return err
+	return os.Rename(tmpConfigFile, configFile)
 }

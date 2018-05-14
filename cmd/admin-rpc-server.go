@@ -36,75 +36,73 @@ type adminRPCReceiver struct {
 	local *localAdminClient
 }
 
-// SignalServiceArgs - provides the signal argument to SignalService RPC
-type SignalServiceArgs struct {
+// SendSignalArgs - arguments for SendSignal RPC request.
+type SendSignalArgs struct {
 	AuthArgs
-	Sig serviceSignal
+	Signal serviceSignal
 }
 
-// SignalService - Send a restart or stop signal to the service
-func (receiver *adminRPCReceiver) SignalService(args *SignalServiceArgs, reply *VoidReply) error {
-	return receiver.local.SignalService(args.Sig)
+// SendSignal - handles SendSignal RPC request.
+func (receiver *adminRPCReceiver) SendSignal(args *SendSignalArgs, reply *VoidReply) error {
+	return receiver.local.SendSignal(args.Signal)
 }
 
-// ListLocksQuery - wraps ListLocks API's query values to send over RPC.
-type ListLocksQuery struct {
+// ReloadFormatArgs - arguments for ReloadFormat RPC request.
+type ReloadFormatArgs struct {
+	AuthArgs
+	DryRun bool
+}
+
+// ReloadFormat - handles ReloadFormat RPC request.
+func (receiver *adminRPCReceiver) ReloadFormat(args *ReloadFormatArgs, reply *VoidReply) error {
+	return receiver.local.ReloadFormat(args.DryRun)
+}
+
+// ListLocksArgs - arguments for ListLocks RPC request.
+type ListLocksArgs struct {
 	AuthArgs
 	Bucket   string
 	Prefix   string
 	Duration time.Duration
 }
 
-// ListLocks - lists locks held by requests handled by this server instance.
-func (receiver *adminRPCReceiver) ListLocks(args *ListLocksQuery, reply *[]VolumeLockInfo) (err error) {
+// ListLocks - handles ListLocks RPC request.
+func (receiver *adminRPCReceiver) ListLocks(args *ListLocksArgs, reply *[]VolumeLockInfo) (err error) {
 	*reply, err = receiver.local.ListLocks(args.Bucket, args.Prefix, args.Duration)
 	return err
 }
 
-// ServerInfo - returns the server info when object layer was initialized on this server.
-func (receiver *adminRPCReceiver) ServerInfo(args *AuthArgs, reply *ServerInfoData) (err error) {
-	*reply, err = receiver.local.ServerInfo()
+// GetServerInfo - handles GetServerInfo RPC request.
+func (receiver *adminRPCReceiver) GetServerInfo(args *AuthArgs, reply *ServerInfoData) (err error) {
+	*reply, err = receiver.local.GetServerInfo()
 	return err
 }
 
-// GetConfig - returns the config.json of this server.
-func (receiver *adminRPCReceiver) GetConfig(args *AuthArgs, reply *[]byte) (err error) {
+// GetConfig - handles GetConfig RPC request.
+func (receiver *adminRPCReceiver) GetConfig(args *AuthArgs, reply *serverConfig) (err error) {
 	*reply, err = receiver.local.GetConfig()
 	return err
 }
 
-// ReInitFormatArgs - provides dry-run information to re-initialize format.json
-type ReInitFormatArgs struct {
+// SaveStageConfigArgs - arguments for SaveStageConfig RPC request.
+type SaveStageConfigArgs struct {
 	AuthArgs
-	DryRun bool
+	Filename string
+	Config   serverConfig
 }
 
-// ReInitFormat - re-init 'format.json'
-func (receiver *adminRPCReceiver) ReInitFormat(args *ReInitFormatArgs, reply *VoidReply) error {
-	return receiver.local.ReInitFormat(args.DryRun)
+// SaveStageConfig - handles SaveStageConfig RPC request.
+func (receiver *adminRPCReceiver) SaveStageConfig(args *SaveStageConfigArgs, reply *VoidReply) error {
+	return receiver.local.SaveStageConfig(args.Filename, args.Config)
 }
 
-// WriteConfigArgs - wraps the bytes to be written and temporary file name.
-type WriteConfigArgs struct {
-	AuthArgs
-	TmpFileName string
-	Buf         []byte
-}
-
-// WriteTmpConfig - writes the supplied config contents onto the
-// supplied temporary file.
-func (receiver *adminRPCReceiver) WriteTmpConfig(args *WriteConfigArgs, reply *VoidReply) error {
-	return receiver.local.WriteTmpConfig(args.TmpFileName, args.Buf)
-}
-
-// CommitConfigArgs - wraps the config file name that needs to be
-// committed into config.json on this node.
+// CommitConfigArgs - arguments for CommitConfig RPC request.
 type CommitConfigArgs struct {
 	AuthArgs
 	FileName string
 }
 
-// CommitConfig - Renames the temporary file into config.json on this node.
+// CommitConfig - handles CommitConfig RPC request.
 func (receiver *adminRPCReceiver) CommitConfig(args *CommitConfigArgs, reply *VoidReply) error {
 	return receiver.local.CommitConfig(args.FileName)
 }

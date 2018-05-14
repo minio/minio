@@ -894,6 +894,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		return ErrAccessDenied // no access without correct key
 	}
 
+	if err == errOperationTimedOut {
+		return ErrOperationTimedOut
+	}
+
 	switch err.(type) {
 	case StorageFull:
 		apiErr = ErrStorageFull
