@@ -34,10 +34,6 @@ func toObjectErr(err error, params ...string) error {
 		if len(params) >= 1 {
 			err = BucketNotEmpty{Bucket: params[0]}
 		}
-	case errVolumeExists:
-		if len(params) >= 1 {
-			err = BucketExists{Bucket: params[0]}
-		}
 	case errDiskFull:
 		err = StorageFull{}
 	case errFileAccessDenied:
