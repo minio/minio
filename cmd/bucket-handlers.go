@@ -153,7 +153,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		listBuckets = api.CacheAPI().ListBuckets
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "", ""); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "probe-bucket-sign", ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}

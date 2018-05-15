@@ -227,7 +227,13 @@ func validateV2AuthHeader(v2Auth string, bucket string) (APIErrorCode, auth.Cred
 
 	// The access key had better match the master key or the bucket key.
 	if keySignFields[0] != cred.AccessKey {
-		cred = globalServerConfig.GetCredentialForBucket(bucket)
+		if bucket == "probe-bucket-sign" {
+			cred = globalServerConfig.GetCredentialForKey(keySignFields[0])
+
+		} else {
+			cred = globalServerConfig.GetCredentialForBucket(bucket)
+		}
+
 		if !cred.IsValid() || cred.AccessKey != keySignFields[0] {
 			return ErrInvalidAccessKeyID, cred
 		}

@@ -337,7 +337,13 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bu
 
 	// Verify if the access key id matches either the master key or the bucket key.
 	if signV4Values.Credential.accessKey != cred.AccessKey {
-		cred = globalServerConfig.GetCredentialForBucket(bucket)
+		if bucket == "probe-bucket-sign" {
+			cred = globalServerConfig.GetCredentialForKey(signV4Values.Credential.accessKey)
+
+		} else {
+			cred = globalServerConfig.GetCredentialForBucket(bucket)
+		}
+
 		if !cred.IsValid() || signV4Values.Credential.accessKey != cred.AccessKey {
 			return ErrInvalidAccessKeyID
 		}
