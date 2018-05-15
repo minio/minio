@@ -190,8 +190,6 @@ func (st *HTTPStats) updateStats(r *http.Request, w *httpResponseRecorder, durat
 			st.successDELETEs.Duration.Add(durationSecs)
 		}
 	}
-	// Increment the prometheus http request count with appropriate label
-	httpRequests.With(prometheus.Labels{"request_type": r.Method}).Inc()
 	// Increment the prometheus http request response histogram with appropriate label
 	httpRequestsDuration.With(prometheus.Labels{"request_type": r.Method}).Observe(durationSecs)
 }

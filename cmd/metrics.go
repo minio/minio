@@ -26,13 +26,6 @@ import (
 )
 
 var (
-	httpRequests = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "minio_http_requests_total",
-			Help: "Total number of requests served by current Minio server instance",
-		},
-		[]string{"request_type"},
-	)
 	httpRequestsDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "minio_http_requests_duration_seconds",
@@ -44,7 +37,6 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(httpRequests)
 	prometheus.MustRegister(httpRequestsDuration)
 	prometheus.MustRegister(newMinioCollector())
 }
@@ -107,6 +99,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		prometheus.CounterValue,
 		float64(globalConnStats.getTotalInputBytes()),
 	)
+
 	// Total/Free Storage Bytes
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -123,15 +116,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(s.Free),
-	)
-	// Set Server Start Time
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "server", "start_time_seconds"),
-			"Time when current Minio server instance started",
-			nil, nil),
-		prometheus.GaugeValue,
-		float64(globalBootTime.Unix()),
 	)
 
 	// Minio Total Disk/Offline Disk
@@ -156,10 +140,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 func metricsHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
-	err := registry.Register(httpRequests)
-	logger.LogIf(context.Background(), err)
-
-	err = registry.Register(httpRequestsDuration)
+	err := registry.Register(httpRequestsDuration)
 	logger.LogIf(context.Background(), err)
 
 	err = registry.Register(newMinioCollector())
