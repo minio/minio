@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -151,25 +150,18 @@ func handleCommonEnvVars() {
 		logger.FatalIf(err, "error opening file %s", traceFile)
 	}
 
-	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
-
 	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
 	if ok {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
 		var err error
 		globalEtcdClient, err = etcd.New(etcd.Config{
 			Endpoints: etcdEndpoints,
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSHandshakeTimeout: 10 * time.Second,
-			},
+			Transport: NewCustomHTTPTransport(),
 		})
 		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 	}
+
+	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
 
 	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
 	if ok {

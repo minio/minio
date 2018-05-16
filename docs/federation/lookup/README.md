@@ -1,13 +1,8 @@
 # Federation
-There are primarily two types of federation
+This document explains how to configure Minio with `Bucket lookup from DNS` style federation.
 
-- Bucket lookup from DNS
-- Bucket is shared across many clusters
-
-This document will explain about how to configure Minio to support `Bucket lookup from DNS` style federation.
-
-## Federation (Bucket Lookup)
-Bucket lookup federation requires two dependencies
+## Dependencies
+Bucket lookup from DNS federation requires two dependencies
 
 - etcd (for config, bucket SRV records)
 - coredns (for DNS management based on populated bucket SRV records)
@@ -16,16 +11,47 @@ Bucket lookup federation requires two dependencies
 
 ![bucket-lookup](./bucket-lookup.png)
 
+### Environment variables
+
+#### MINIO_ETCD_ENDPOINTS
+
+This is comma separated list of etcd servers that you want to use as the Minio federation back-end. This should
+be same across the federated deployment, i.e. all the Minio instances within a federated deployment should use same
+etcd back-end.
+
+#### MINIO_DOMAIN
+
+This is the top level domain name used for the federated setup. This domain name should ideally resolve to a load-balancer
+running in front of all the federated Minio instances. The domain name is used to create sub domain entries to etcd. For
+example, if the domain is set to `domain.com`, the buckets `bucket1`, `bucket2` will be accessible as `bucket1.domain.com`
+and `bucket2.domain.com`.
+
+#### MINIO_PUBLIC_IPS
+
+This is comma separated list of IP addresses to which buckets created on this Minio instance will resolve to. For example,
+a bucket `bucket1` created on current Minio instance will be accessible as `bucket1.domain.com`, and the DNS entry for
+`bucket1.domain.com` will point to IP address set in `MINIO_PUBLIC_IPS`.
+
+*Note*
+
+- This field is mandatory for standalone and erasure code Minio server deployments, to enable federated mode.
+- This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of
+hosts passed to the Minio server startup and use that to make DNS entries.
+
 ### Run Multiple Clusters
+
 > cluster1
-```
+
+```sh
 export MINIO_ETCD_ENDPOINTS="http://remote-etcd1:2379,http://remote-etcd2:4001"
 export MINIO_DOMAIN=domain.com
 export MINIO_PUBLIC_IPS=44.35.2.1,44.35.2.2,44.35.2.3,44.35.2.4
 minio server http://rack{1...4}.host{1...4}.domain.com/mnt/export{1...32}
 ```
+
 > cluster2
-```
+
+```sh
 export MINIO_ETCD_ENDPOINTS="http://remote-etcd1:2379,http://remote-etcd2:4001"
 export MINIO_DOMAIN=domain.com
 export MINIO_PUBLIC_IPS=44.35.1.1,44.35.1.2,44.35.1.3,44.35.1.4
@@ -41,10 +67,3 @@ points to the public IP address where each cluster might be accessible, this is 
 NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this is random and
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then
 it is randomized which cluster might provision the bucket.
-
-TODO: For now the control to create the bucket from a client to the right cluster using `region` parameter
-is not implemented yet.
-
-
-
-

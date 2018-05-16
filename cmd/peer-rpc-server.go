@@ -178,7 +178,7 @@ func (receiver *peerRPCReceiver) SetCredentials(args *SetCredentialsArgs, reply 
 	prevCred := globalServerConfig.SetCredential(args.Credentials)
 
 	// Save credentials to config file
-	if err := globalServerConfig.Save(); err != nil {
+	if err := globalServerConfig.Save(getConfigFile()); err != nil {
 		// As saving configurstion failed, restore previous credential in memory.
 		globalServerConfig.SetCredential(prevCred)
 
