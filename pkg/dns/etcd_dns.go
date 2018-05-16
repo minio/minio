@@ -78,7 +78,7 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 			srvRecord.Key = strings.TrimPrefix(n.Key, key)
 			srvRecords = append(srvRecords, srvRecord)
 		} else {
-			// As this is a directory, loop through all the nodes inside
+			// As this is a directory, loop through all the nodes inside (assuming all nodes are non-directories)
 			for _, n1 := range n.Nodes {
 				var srvRecord SrvRecord
 				if err = json.Unmarshal([]byte(n1.Value), &srvRecord); err != nil {
@@ -124,7 +124,7 @@ func (c *coreDNS) Delete(bucket string) error {
 	kapi := etcd.NewKeysAPI(c.etcdClient)
 	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	_, err := kapi.Delete(ctx, key, nil)
+	_, err := kapi.Delete(ctx, key, &etcd.DeleteOptions{Recursive: true})
 	cancel()
 	return err
 }

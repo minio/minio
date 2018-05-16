@@ -30,7 +30,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/client"
 
 	"github.com/gorilla/mux"
 
@@ -64,7 +64,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
-				if client.IsKeyNotFound(gerr) || gerr == dns.ErrNoEntriesFound {
+				if etcd.IsKeyNotFound(gerr) || gerr == dns.ErrNoEntriesFound {
 					return globalDNSConfig.Put(b[index].Name)
 				}
 				return gerr
@@ -211,15 +211,20 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil {
+		if err != nil && !etcd.IsKeyNotFound(err) && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
+		bucketSet := set.NewStringSet()
 		for _, dnsRecord := range dnsBuckets {
+			if bucketSet.Contains(dnsRecord.Key) {
+				continue
+			}
 			bucketsInfo = append(bucketsInfo, BucketInfo{
-				Name:    dnsRecord.Key,
+				Name:    strings.Trim(dnsRecord.Key, slashSeparator),
 				Created: dnsRecord.CreationDate,
 			})
+			bucketSet.Add(dnsRecord.Key)
 		}
 	} else {
 		// Invoke the list buckets.
@@ -421,7 +426,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(bucket); err != nil {
-			if client.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)

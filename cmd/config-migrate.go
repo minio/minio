@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/quick"
 )
 
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
@@ -1966,7 +1967,7 @@ func migrateV23ToV24() error {
 	configFile := getConfigFile()
 
 	cv23 := &serverConfigV23{}
-	_, err := quick.Load(configFile, cv23)
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv23)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -2067,7 +2068,7 @@ func migrateV23ToV24() error {
 	srvConfig.Cache.Exclude = cv23.Cache.Exclude
 	srvConfig.Cache.Expiry = cv23.Cache.Expiry
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv23.Version, srvConfig.Version, err)
 	}
 
@@ -2079,7 +2080,7 @@ func migrateV24ToV25() error {
 	configFile := getConfigFile()
 
 	cv24 := &serverConfigV24{}
-	_, err := quick.Load(configFile, cv24)
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv24)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -2185,7 +2186,7 @@ func migrateV24ToV25() error {
 	srvConfig.Cache.Exclude = cv24.Cache.Exclude
 	srvConfig.Cache.Expiry = cv24.Cache.Expiry
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv24.Version, srvConfig.Version, err)
 	}
 
