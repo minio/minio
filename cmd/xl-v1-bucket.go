@@ -231,6 +231,10 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	}
 	defer bucketLock.Unlock()
 
+	if _, err := xl.getBucketInfo(ctx, bucket); err != nil {
+		return toObjectErr(err, bucket)
+	}
+
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}
 	var dErrs = make([]error, len(xl.getDisks()))

@@ -40,3 +40,13 @@ func Mkdir(name string, perm os.FileMode) error {
 
 	return isDirWritable(name, info)
 }
+
+// Remove removes the named file or directory as similar as os.Remove() except
+// it ignores not exist error.
+func Remove(name string) error {
+	err := os.Remove(name)
+	if os.IsNotExist(err) {
+		err = nil
+	}
+	return err
+}

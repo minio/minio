@@ -33,6 +33,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	xos "github.com/minio/minio/pkg/os"
 )
 
 const (
@@ -443,19 +444,16 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove((volumeDir))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrNotEmpty(err) {
-			return errVolumeNotEmpty
-		} else if os.IsPermission(err) {
-			return errDiskAccessDenied
-		}
 
-		return err
+	err = xos.Remove((volumeDir))
+	if os.IsPermission(err) {
+		return errDiskAccessDenied
 	}
-	return nil
+	if isSysErrNotEmpty(err) {
+		return errVolumeNotEmpty
+	}
+
+	return err
 }
 
 // ListDir - return all the entries at the given directory path.

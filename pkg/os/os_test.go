@@ -97,3 +97,55 @@ func TestMkdir(t *testing.T) {
 		}
 	}
 }
+
+func TestRemove(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", ".TestRemove.")
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	case1Name := filepath.Join(tempDir, "name1")
+	if err := Mkdir(case1Name, os.ModePerm); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+
+	case2Name := filepath.Join(tempDir, "name2")
+	if err = ioutil.WriteFile(case2Name, []byte{}, os.ModePerm); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+
+	case3Name := filepath.Join(tempDir, "name3")
+	if err := Mkdir(case3Name, os.ModePerm); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if err = ioutil.WriteFile(filepath.Join(case3Name, "name3file"), []byte{}, os.ModePerm); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+
+	testCases := []struct {
+		name      string
+		expectErr bool
+	}{
+		{case1Name, false}, // remove directory.
+		{case1Name, false}, // success on previously removed name.
+		{case2Name, false}, // remove file.
+		{case2Name, false}, // success on previously removed name.
+		{case3Name, true},  // non-empty directory.
+	}
+
+	for i, testCase := range testCases {
+		err := Remove(testCase.name)
+		expectErr := (err != nil)
+
+		if expectErr != testCase.expectErr {
+			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+		}
+
+		if !expectErr {
+			if _, err = os.Stat(testCase.name); err == nil {
+				t.Fatalf("case %v: stat: expected: <error>, got: <nil>", i+1)
+			}
+		}
+	}
+}
