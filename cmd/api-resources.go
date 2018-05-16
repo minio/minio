@@ -36,7 +36,17 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 }
 
 // Parse bucket url queries for ListObjects V2.
-func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, fetchOwner bool, maxkeys int, encodingType string) {
+func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, fetchOwner bool, maxkeys int, encodingType string, errCode APIErrorCode) {
+	errCode = ErrNone
+
+	// The continuation-token cannot be empty.
+	if val, ok := values["continuation-token"]; ok {
+		if len(val[0]) == 0 {
+			errCode = ErrIncorrectContinuationToken
+			return
+		}
+	}
+
 	prefix = values.Get("prefix")
 	token = values.Get("continuation-token")
 	startAfter = values.Get("start-after")

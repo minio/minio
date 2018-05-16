@@ -70,8 +70,15 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
+	urlValues := r.URL.Query()
+
 	// Extract all the listObjectsV2 query params to their native values.
-	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
+	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _, errCode := getListObjectsV2Args(urlValues)
+
+	if errCode != ErrNone {
+		writeErrorResponse(w, errCode, r.URL)
+		return
+	}
 
 	// In ListObjectsV2 'continuation-token' is the marker.
 	marker := token
