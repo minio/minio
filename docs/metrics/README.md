@@ -9,7 +9,7 @@ Minio server has two healthcheck related endpoints, a liveness probe to indicate
 - Liveness probe available at `/minio/health/live`
 - Readiness probe available at `/minio/health/ready`
 
-Read more on how to use these endpoints in [Minio healthcheck guide](./healthcheck/README.md).
+Read more on how to use these endpoints in [Minio healthcheck guide](https://github.com/minio/minio/blob/master/docs/metrics/healthcheck/README.md).
 
 ### Prometheus Probe
 
