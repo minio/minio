@@ -441,7 +441,7 @@ func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket, locat
 	// IsValidBucketName has same restrictions as container names mentioned
 	// in azure documentation, so we will simply use the same function here.
 	// Ref - https://docs.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
-	if !minio.IsValidBucketName(bucket) {
+	if minio.ValidateBucketName(bucket) != nil {
 		logger.LogIf(ctx, minio.BucketNameInvalid{Bucket: bucket})
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}

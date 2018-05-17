@@ -182,7 +182,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 	nilReq, err := newTestSignedRequestV4("HEAD", getGetObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -455,7 +455,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 	nilReq, err := newTestSignedRequestV4("GET", getGetObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -1011,7 +1011,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -1095,7 +1095,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 		}
 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
-		req.Header.Set("X-Amz-Copy-Source", url.QueryEscape(pathJoin(bucketName, objectName)))
+		req.Header.Set("X-Amz-Copy-Source", url.QueryEscape(pathJoin("/", bucketName, objectName)))
 		req.Header.Set("X-Amz-Copy-Source-Range", fmt.Sprintf("bytes=%d-%d", a, b))
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
@@ -1434,6 +1434,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		apiRouter.ServeHTTP(recV2, reqV2)
 		if recV2.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+			t.Fatalf("[DEBUG] %v", string(recV2.Body.Bytes()))
 		}
 	}
 
@@ -1444,8 +1445,8 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 
-	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectPartURL("", nilBucket, nilObject, "0", "0"),
-		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectPartURL("", nilBucket, nilObject, uploadID, "1"),
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
@@ -1857,7 +1858,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	// Below is how CopyObjectHandler is registered.
 	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?")
@@ -2008,7 +2009,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("POST", getNewMultipartURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2420,7 +2421,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2583,7 +2584,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getAbortMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2744,7 +2745,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getDeleteObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -3214,8 +3215,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 
-	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectPartURL("", nilBucket, nilObject, "0", "0"),
-		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectPartURL("", nilBucket, nilObject, uploadID, "1"),
+		0, bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -3518,8 +3519,8 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("GET",
-		getListMultipartURLWithParams("", nilBucket, nilObject, "dummy-uploadID", "0", "0", ""),
-		0, nil, "", "")
+		getListMultipartURLWithParams("", nilBucket, nilObject, uploadID, "", "", ""),
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Errorf("Minio %s:Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}

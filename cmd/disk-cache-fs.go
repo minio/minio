@@ -344,10 +344,6 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
-		return ObjectInfo{}, err
-	}
-
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
 		return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
@@ -454,9 +450,6 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 		}
 	}
 	fs := cfs.FSObjects
-	if err := checkNewMultipartArgs(ctx, bucket, object, fs); err != nil {
-		return "", toObjectErr(err, bucket)
-	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return "", toObjectErr(err, bucket)

@@ -143,10 +143,6 @@ func commitXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcPre
 // towards simplification of multipart APIs.
 // The resulting ListMultipartsInfo structure is unmarshalled directly as XML.
 func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
-	if err := checkListMultipartArgs(ctx, bucket, object, keyMarker, uploadIDMarker, delimiter, xl); err != nil {
-		return result, err
-	}
-
 	result.MaxUploads = maxUploads
 	result.KeyMarker = keyMarker
 	result.Prefix = object
@@ -189,6 +185,12 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
 func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, object string, meta map[string]string) (string, error) {
+	// Its not required to take namespace lock here because new upload ID and related metadata
+	// are created in a temporary namespace with unique ID for each request.
+	//
+	// There is a possibility of succeeding this call when removal of bucket happens in parallel
+	// and this call creates new upload ID and related metadata. Because of this behavior,
+	// this call never returns `BucketNotFound` error.
 
 	dataBlocks, parityBlocks := getRedundancyCount(meta[amzStorageClass], len(xl.getDisks()))
 
@@ -242,9 +244,6 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 //
 // Implements S3 compatible initiate multipart API.
 func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string) (string, error) {
-	if err := checkNewMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return "", err
-	}
 	// No metadata is set, allocate a new one.
 	if meta == nil {
 		meta = make(map[string]string)
@@ -265,10 +264,6 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 		return pi, err
 	}
 	defer objectSRLock.RUnlock()
-
-	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, xl); err != nil {
-		return pi, err
-	}
 
 	go func() {
 		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
@@ -299,10 +294,6 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 //
 // Implements S3 compatible Upload Part API.
 func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
-	if err := checkPutObjectPartArgs(ctx, bucket, object, xl); err != nil {
-		return pi, err
-	}
-
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < 0 {
 		logger.LogIf(ctx, errInvalidArgument)
@@ -476,9 +467,6 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 // ListPartsInfo structure is marshalled directly into XML and
 // replied back to the client.
 func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
-	if err := checkListPartsArgs(ctx, bucket, object, xl); err != nil {
-		return result, err
-	}
 	// Hold lock so that there is no competing
 	// abort-multipart-upload or complete-multipart-upload.
 	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
@@ -559,9 +547,6 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 //
 // Implements S3 compatible Complete multipart API.
 func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
-	if err := checkCompleteMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return oi, err
-	}
 	// Hold write lock on the object.
 	destLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := destLock.GetLock(globalObjectTimeout); err != nil {
@@ -799,9 +784,6 @@ func (xl xlObjects) cleanupUploadedParts(ctx context.Context, uploadIDPath strin
 // that this is an atomic idempotent operation. Subsequent calls have
 // no affect and further requests to the same uploadID would not be honored.
 func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	if err := checkAbortMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return err
-	}
 	// Construct uploadIDPath.
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 	// Hold lock so that there is no competing

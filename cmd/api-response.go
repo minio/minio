@@ -29,7 +29,6 @@ import (
 const (
 	timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
 	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse.
-	maxUploadsList    = 1000                       // Limit number of uploads in a listUploadsResponse.
 	maxPartsList      = 1000                       // Limit number of parts in a listPartsResponse.
 )
 

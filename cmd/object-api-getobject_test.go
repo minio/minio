@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -97,16 +96,6 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		expectedData []byte
 		err          error
 	}{
-		// Test case 1-4.
-		// Cases with invalid bucket names.
-		{".test", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: .test")},
-		{"------", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: ------")},
-		{"$this-is-not-valid-too", "obj", 0, 0, nil, nil, false,
-			[]byte(""), fmt.Errorf("%s", "Bucket name invalid: $this-is-not-valid-too")},
-		{"a", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: a")},
-		// Test case - 5.
-		// Case with invalid object names.
-		{bucketName, "", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Object name invalid: "+bucketName+"#")},
 		//	Test case - 7.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[0], NewEOFWriter(buffers[0], 100), false, []byte{}, io.EOF},
 		// Test case with start offset set to 0 and length set to size of the object.
@@ -357,16 +346,6 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 		expectedData []byte
 		err          error
 	}{
-		// Test case 1-4.
-		// Cases with invalid bucket names.
-		{".test", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: .test")},
-		{"------", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: ------")},
-		{"$this-is-not-valid-too", "obj", 0, 0, nil, nil, false,
-			[]byte(""), fmt.Errorf("%s", "Bucket name invalid: $this-is-not-valid-too")},
-		{"a", "obj", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Bucket name invalid: a")},
-		// Test case - 5.
-		// Case with invalid object names.
-		{bucketName, "", 0, 0, nil, nil, false, []byte(""), fmt.Errorf("%s", "Object name invalid: "+bucketName+"#")},
 		//	Test case - 7.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[0], NewEOFWriter(buffers[0], 100), false, []byte{}, io.EOF},
 		// Test case with start offset set to 0 and length set to size of the object.

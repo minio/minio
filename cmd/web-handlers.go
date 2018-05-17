@@ -130,6 +130,10 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errAuthentication)
 	}
 
+	if err := ValidateBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName) {
 		return toJSONError(errInvalidBucketName)
@@ -156,6 +160,10 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	}
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
+	}
+
+	if err := validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	ctx := context.Background()
@@ -292,6 +300,19 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		reply.Writable = writable
 	}
 
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
+	}
+
+	if args.Prefix, err = getValidObjectKey(args.Prefix); err != nil {
+		return toJSONError(errInvalidArgument)
+	}
+
+	if args.Marker, err = getValidObjectKey(args.Marker); err != nil {
+		return toJSONError(errInvalidArgument)
+	}
+
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -310,6 +331,10 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		reply.Objects = append(reply.Objects, WebObjectInfo{
 			Key: prefix,
 		})
+	}
+
+	if len(reply.Objects) == 0 {
+		return &json2.Error{Message: "empty bucket"}
 	}
 
 	return nil
@@ -344,11 +369,21 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return toJSONError(errAuthentication)
 	}
 
-	if args.BucketName == "" || len(args.Objects) == 0 {
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
+	}
+
+	if len(args.Objects) == 0 {
 		return toJSONError(errInvalidArgument)
 	}
 
-	var err error
+	for i := range args.Objects {
+		if args.Objects[i], err = getValidObjectKey(args.Objects[i]); err != nil || args.Objects[i] == "" {
+			return toJSONError(errInvalidArgument)
+		}
+	}
+
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
@@ -562,6 +597,17 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	var err error
+	if err = validateCompatBucketName(bucket); err != nil {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
+	if object, err = getValidObjectKey(object); err != nil || object == "" {
+		writeWebErrorResponse(w, errInvalidArgument)
+		return
+	}
+
 	if authErr := webRequestAuthenticate(r); authErr != nil {
 		if authErr == errAuthentication {
 			writeWebErrorResponse(w, errAuthentication)
@@ -637,6 +683,17 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	token := r.URL.Query().Get("token")
 
+	var err error
+	if err = validateCompatBucketName(bucket); err != nil {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
+	if object, err = getValidObjectKey(object); err != nil || object == "" {
+		writeWebErrorResponse(w, errInvalidArgument)
+		return
+	}
+
 	if !isAuthTokenValid(token) {
 		// Check if anonymous (non-owner) has access to download objects.
 		if !globalPolicySys.IsAllowed(policy.Args{
@@ -696,6 +753,29 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	if decodeErr != nil {
 		writeWebErrorResponse(w, decodeErr)
 		return
+	}
+
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
+	if args.Prefix, err = getValidObjectKey(args.Prefix); err != nil {
+		writeWebErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	if len(args.Objects) == 0 {
+		writeWebErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	for i := range args.Objects {
+		if args.Objects[i], err = getValidObjectKey(args.Objects[i]); err != nil || args.Objects[i] == "" {
+			writeWebErrorResponse(w, errInvalidArgument)
+			return
+		}
 	}
 
 	token := r.URL.Query().Get("token")
@@ -796,6 +876,15 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
+	}
+
+	if args.Prefix, err = getValidObjectKey(args.Prefix); err != nil {
+		return toJSONError(errInvalidArgument)
+	}
+
 	bucketPolicy, err := objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
 	if err != nil {
 		if _, ok := err.(BucketPolicyNotFound); !ok {
@@ -891,6 +980,15 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
+	}
+
+	if args.Prefix, err = getValidObjectKey(args.Prefix); err != nil {
+		return toJSONError(errInvalidArgument)
+	}
+
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
 	if !policyType.IsValidBucketPolicy() {
 		return &json2.Error{
@@ -972,11 +1070,15 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return toJSONError(errAuthentication)
 	}
 
-	if args.BucketName == "" || args.ObjectName == "" {
-		return &json2.Error{
-			Message: "Bucket and Object are mandatory arguments.",
-		}
+	var err error
+	if err = validateCompatBucketName(args.BucketName); err != nil {
+		return toJSONError(errInvalidBucketName)
 	}
+
+	if args.ObjectName, err = getValidObjectKey(args.ObjectName); err != nil || args.ObjectName == "" {
+		return toJSONError(errInvalidArgument)
+	}
+
 	reply.UIVersion = browser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry)
 	return nil

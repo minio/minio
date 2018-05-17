@@ -283,11 +283,13 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 	olderThanStr := vars.Get(string(mgmtLockOlderThan))
 
 	// N B empty bucket name is invalid
-	if !IsValidBucketName(bucket) {
+	if err := ValidateBucketName(bucket); err != nil {
 		return "", "", time.Duration(0), ErrInvalidBucketName
 	}
+
 	// empty prefix is valid.
-	if !IsValidObjectPrefix(prefix) {
+	prefix, err := getValidObjectKey(prefix)
+	if err != nil {
 		return "", "", time.Duration(0), ErrInvalidObjectName
 	}
 
@@ -415,13 +417,13 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 			err = ErrHealMissingBucket
 			return
 		}
-	} else if !IsValidBucketName(bucket) {
+	} else if verr := ValidateBucketName(bucket); verr != nil {
 		err = ErrInvalidBucketName
 		return
 	}
 
-	// empty prefix is valid.
-	if !IsValidObjectPrefix(objPrefix) {
+	objPrefix, verr := getValidObjectKey(objPrefix)
+	if verr != nil {
 		err = ErrInvalidObjectName
 		return
 	}

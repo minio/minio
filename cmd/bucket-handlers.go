@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -28,7 +29,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
@@ -41,17 +41,23 @@ import (
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "GetBucketLocation")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketLocationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
@@ -95,12 +101,56 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ListMultipartUploads")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
+		return
+	}
+
+	prefix, err := args.Prefix()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	keyMarker, err := args.KeyMarker()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	// Verify if marker has prefix.
+	if keyMarker != "" && !strings.HasPrefix(keyMarker, prefix) {
+		logger.LogIf(ctx, fmt.Errorf("key-marker %v does not start with prefix %v", keyMarker, prefix))
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	uploadIDMarker := args.UploadIDMarker()
+	if uploadIDMarker != "" {
+		if strings.HasSuffix(keyMarker, "/") {
+			logger.LogIf(ctx, fmt.Errorf("key-marker %v ends with '/' for upload-id-marker %v", keyMarker, uploadIDMarker))
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
+			return
+		}
+	}
+
+	delimiter, err := args.Delimiter()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	maxUploads, err := args.MaxUploads()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
 		return
 	}
 
@@ -109,17 +159,15 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
-	if maxUploads < 0 {
-		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if keyMarker != "" {
-		// Marker not common with prefix is not implemented.
-		if !hasPrefix(keyMarker, prefix) {
-			writeErrorResponse(w, ErrNotImplemented, r.URL)
-			return
-		}
+
+	if _, err = objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
 	}
 
 	listMultipartsInfo, err := objectAPI.ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
@@ -142,20 +190,20 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ListBuckets")
 
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "", ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	listBuckets := objectAPI.ListBuckets
 
+	listBuckets := objectAPI.ListBuckets
 	if api.CacheAPI() != nil {
 		listBuckets = api.CacheAPI().ListBuckets
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "", ""); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
 	}
 
 	// Invoke the list buckets.
@@ -177,23 +225,13 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "DeleteMultipleObjects")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
-	}
-
-	var s3Error APIErrorCode
-	if s3Error = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, ""); s3Error != ErrNone {
-		// In the event access is denied, a 200 response should still be returned
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-		if s3Error != ErrAccessDenied {
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
 	}
 
 	// Content-Length is required and should be non-zero
@@ -210,11 +248,32 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	var s3Error APIErrorCode
+	if s3Error = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, ""); s3Error != ErrNone {
+		// In the event access is denied, a 200 response should still be returned
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+		if s3Error != ErrAccessDenied {
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	if _, err = objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
 	// Allocate incoming content length bytes.
 	deleteXMLBytes := make([]byte, r.ContentLength)
 
 	// Read incoming body XML bytes.
-	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
+	if _, err = io.ReadFull(r.Body, deleteXMLBytes); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -222,7 +281,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Unmarshal list of keys to be deleted.
 	deleteObjects := &DeleteObjectsRequest{}
-	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
+	if err = xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
@@ -325,17 +384,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "PutBucket")
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	args := newRequestArgs(r)
+
+	// For new bucket creation, do not use compatible bucket name.
+	bucket, err := args.BucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
@@ -354,14 +420,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+	if err = bucketLock.GetLock(globalObjectTimeout); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
-	err := objectAPI.MakeBucketWithLocation(ctx, bucket, location)
+	err = objectAPI.MakeBucketWithLocation(ctx, bucket, location)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -380,13 +446,20 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "PostPolicyBucket")
 
+	args := newRequestArgs(r)
+
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
+		return
+	}
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
-	bucket := mux.Vars(r)["bucket"]
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength
@@ -599,17 +672,23 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "HeadBucket")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponseHeadersOnly(w, s3Error)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
 		return
 	}
 
@@ -629,17 +708,23 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "DeleteBucket")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 

@@ -118,9 +118,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.Disable = true
 
 	// Validate if we have access, secret set through environment.
-	gatewayName := gw.Name()
+	globalGatewayName = gw.Name()
 	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
+		cli.ShowCommandHelpAndExit(ctx, globalGatewayName, 1)
 	}
 
 	// Get "json" flag from command line argument and
@@ -222,7 +222,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
-		mode := globalMinioModeGatewayPrefix + gatewayName
+		mode := globalMinioModeGatewayPrefix + globalGatewayName
 		// Check update mode.
 		checkUpdate(mode)
 
@@ -232,7 +232,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		}
 
 		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
+		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), globalGatewayName)
 	}
 
 	// Reenable logging

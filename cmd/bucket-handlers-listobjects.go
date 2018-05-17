@@ -17,33 +17,13 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/policy"
 )
-
-// Validate all the ListObjects query arguments, returns an APIErrorCode
-// if one of the args do not meet the required conditions.
-// Special conditions required by Minio server are as below
-// - delimiter if set should be equal to '/', otherwise the request is rejected.
-// - marker if set should have a common prefix with 'prefix' param, otherwise
-//   the request is rejected.
-func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIErrorCode {
-	// Max keys cannot be negative.
-	if maxKeys < 0 {
-		return ErrInvalidMaxKeys
-	}
-
-	/// Minio special conditions for ListObjects.
-
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != "/" {
-		return ErrNotImplemented
-	}
-	// Success.
-	return ErrNone
-}
 
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
 // --------------------------
@@ -56,13 +36,51 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ListObjectsV2")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
+	}
+
+	prefix, err := args.Prefix()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	startAfter, err := args.StartAfter()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	token := args.ContinuationToken()
+
+	delimiter, err := args.Delimiter()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	maxKeys, err := args.MaxKeys()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
+		return
+	}
+
+	fetchOwner := args.FetchOwner()
+
+	// Marker is continuation-token. When it is empty, take start-after as marker.
+	marker := token
+	if marker == "" {
+		marker = startAfter
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
@@ -70,23 +88,17 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Extract all the listObjectsV2 query params to their native values.
-	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
-
-	// In ListObjectsV2 'continuation-token' is the marker.
-	marker := token
-	// Check if 'continuation-token' is empty.
-	if token == "" {
-		// Then we need to use 'start-after' as marker instead.
-		marker = startAfter
-	}
-
-	// Validate the query params before beginning to serve the request.
-	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+
+	if _, err = objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 	if api.CacheAPI() != nil {
 		listObjectsV2 = api.CacheAPI().ListObjectsV2
@@ -126,12 +138,49 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ListObjectsV1")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
+		return
+	}
+
+	prefix, err := args.Prefix()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	marker, err := args.Marker()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
+		return
+	}
+
+	// Verify if marker has prefix only on S3 gateway.
+	if globalGatewayName != "s3" {
+		if marker != "" && !strings.HasPrefix(marker, prefix) {
+			logger.LogIf(ctx, fmt.Errorf("marker %v does not start with prefix %v", marker, prefix))
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
+			return
+		}
+	}
+
+	delimiter, err := args.Delimiter()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	maxKeys, err := args.MaxKeys()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
 		return
 	}
 
@@ -140,19 +189,17 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Extract all the litsObjectsV1 query params to their native values.
-	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
-
-	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
-	// does not throw an error.
-	if maxKeys < 0 {
-		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL)
-		return
-	} // Validate all the query params before beginning to serve the request.
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+
+	if _, err = objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
 	listObjects := objectAPI.ListObjects
 	if api.CacheAPI() != nil {
 		listObjects = api.CacheAPI().ListObjects

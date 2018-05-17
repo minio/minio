@@ -66,45 +66,6 @@ var supportedHeaders = []string{
 	// Add more supported headers here.
 }
 
-// isMetadataDirectiveValid - check if metadata-directive is valid.
-func isMetadataDirectiveValid(h http.Header) bool {
-	_, ok := h[http.CanonicalHeaderKey("X-Amz-Metadata-Directive")]
-	if ok {
-		// Check atleast set metadata-directive is valid.
-		return (isMetadataCopy(h) || isMetadataReplace(h))
-	}
-	// By default if x-amz-metadata-directive is not we
-	// treat it as 'COPY' this function returns true.
-	return true
-}
-
-// Check if the metadata COPY is requested.
-func isMetadataCopy(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "COPY"
-}
-
-// Check if the metadata REPLACE is requested.
-func isMetadataReplace(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "REPLACE"
-}
-
-// Splits an incoming path into bucket and object components.
-func path2BucketAndObject(path string) (bucket, object string) {
-	// Skip the first element if it is '/', split the rest.
-	path = strings.TrimPrefix(path, "/")
-	pathComponents := strings.SplitN(path, "/", 2)
-
-	// Save the bucket and object extracted from path.
-	switch len(pathComponents) {
-	case 1:
-		bucket = pathComponents[0]
-	case 2:
-		bucket = pathComponents[0]
-		object = pathComponents[1]
-	}
-	return bucket, object
-}
-
 // userMetadataKeyPrefixes contains the prefixes of used-defined metadata keys.
 // All values stored with a key starting with one of the following prefixes
 // must be extracted from the header.

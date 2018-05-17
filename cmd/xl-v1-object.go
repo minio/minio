@@ -180,11 +180,6 @@ func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startO
 
 // getObject wrapper for xl GetObject
 func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
-
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
 	// Start offset cannot be negative.
 	if startOffset < 0 {
 		logger.LogIf(ctx, errUnexpected)
@@ -354,10 +349,6 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (o
 	}
 	defer objectLock.RUnlock()
 
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return oi, err
-	}
-
 	if hasSuffix(object, slashSeparator) {
 		if !xl.isObjectDir(bucket, object) {
 			return oi, toObjectErr(errFileNotFound, bucket, object)
@@ -510,10 +501,6 @@ func renameObject(ctx context.Context, disks []StorageAPI, srcBucket, srcObject,
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
-		return ObjectInfo{}, err
-	}
 	// Lock the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -566,11 +553,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 
 		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
-	}
-
-	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
-		return ObjectInfo{}, err
 	}
 
 	// Validate input data size and it can never be less than zero.
@@ -818,10 +800,6 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return perr
 	}
 	defer objectLock.Unlock()
-
-	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
 
 	if hasSuffix(object, slashSeparator) {
 		// Delete the object on all disks.

@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
@@ -44,17 +43,12 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "GetBucketNotification")
 
-	vars := mux.Vars(r)
-	bucketName := vars["bucket"]
+	args := newRequestArgs(r)
 
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	if !objAPI.IsNotificationSupported() {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
+	bucketName, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
@@ -63,9 +57,19 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	_, err := objAPI.GetBucketInfo(ctx, bucketName)
-	if err != nil {
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	if _, err = objAPI.GetBucketInfo(ctx, bucketName); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if !objAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -96,34 +100,39 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "PutBucketNotification")
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
+	args := newRequestArgs(r)
 
-	if !objectAPI.IsNotificationSupported() {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
-	}
-
-	vars := mux.Vars(r)
-	bucketName := vars["bucket"]
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
-
-	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
+	bucketName, err := args.CompatBucketName()
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
 	// PutBucketNotification always needs a Content-Length.
 	if r.ContentLength <= 0 {
 		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	if _, err = objectAPI.GetBucketInfo(ctx, bucketName); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if !objectAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 
@@ -159,22 +168,12 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "ListenBucketNotification")
 
-	// Validate if bucket exists.
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-	if !objAPI.IsNotificationSupported() {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
-	}
+	args := newRequestArgs(r)
 
-	vars := mux.Vars(r)
-	bucketName := vars["bucket"]
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListenBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+	bucketName, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
@@ -219,8 +218,24 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		eventNames = append(eventNames, eventName)
 	}
 
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListenBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
 	if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if !objAPI.IsNotificationSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 

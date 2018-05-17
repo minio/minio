@@ -177,6 +177,8 @@ var (
 	globalIsEnvWORM   bool
 	globalWORMEnabled bool
 
+	globalGatewayName string
+
 	// Is Disk Caching set up
 	globalIsDiskCacheEnabled bool
 	// Disk cache drives

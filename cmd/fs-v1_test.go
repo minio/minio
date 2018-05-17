@@ -165,12 +165,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(context.Background(), "a", "")
-	if !isSameType(err, BucketNameInvalid{}) {
-		t.Fatal("BucketNameInvalid error not returned")
-	}
-
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,16 +275,8 @@ func TestFSDeleteObject(t *testing.T) {
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 
-	// Test with invalid bucket name
-	if err := fs.DeleteObject(context.Background(), "fo", objectName); !isSameType(err, BucketNameInvalid{}) {
-		t.Fatal("Unexpected error: ", err)
-	}
 	// Test with bucket does not exist
 	if err := fs.DeleteObject(context.Background(), "foobucket", "fooobject"); !isSameType(err, BucketNotFound{}) {
-		t.Fatal("Unexpected error: ", err)
-	}
-	// Test with invalid object name
-	if err := fs.DeleteObject(context.Background(), bucketName, "\\"); !isSameType(err, ObjectNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with object does not exist.
