@@ -42,6 +42,21 @@ const (
 	maxAllowedIOError = 5
 )
 
+// isValidVolname verifies a volname name in accordance with object
+// layer requirements.
+func isValidVolname(volname string) bool {
+	if len(volname) < 3 {
+		return false
+	}
+
+	if runtime.GOOS == "windows" {
+		// Volname shouldn't have reserved characters in Windows.
+		return !strings.ContainsAny(volname, `\:*?\"<>|`)
+	}
+
+	return true
+}
+
 // posix - implements StorageAPI interface.
 type posix struct {
 	// Disk usage metrics
