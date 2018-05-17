@@ -20,8 +20,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // Tree walk result carries results of tree walking.
@@ -147,7 +145,6 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 	if err != nil {
 		select {
 		case <-endWalkCh:
-			logger.LogIf(ctx, errWalkAbort)
 			return errWalkAbort
 		case resultCh <- treeWalkResult{err: err}:
 			return err
@@ -229,7 +226,6 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
-			logger.LogIf(ctx, errWalkAbort)
 			return errWalkAbort
 		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
