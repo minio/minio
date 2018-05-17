@@ -72,7 +72,7 @@ func checkPathLength(pathName string) error {
 	return nil
 }
 
-func checkPathValid(path string) (string, error) {
+func getValidPath(path string) (string, error) {
 	if path == "" {
 		return path, errInvalidArgument
 	}
@@ -144,7 +144,7 @@ func isDirEmpty(dirname string) bool {
 // Initialize a new storage disk.
 func newPosix(path string) (StorageAPI, error) {
 	var err error
-	if path, err = checkPathValid(path); err != nil {
+	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
 
