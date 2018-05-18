@@ -102,7 +102,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	var err error
-	if fsPath, err = checkPathValid(fsPath); err != nil {
+	if fsPath, err = getValidPath(fsPath); err != nil {
 		return nil, uiErrUnableToWriteInBackend(err)
 	}
 
