@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/minio/cli"
@@ -65,6 +66,9 @@ ENVIRONMENT VARIABLES:
      MINIO_ACCESS_KEY: Custom username or access key of minimum 3 characters in length.
      MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
 
+  ENDPOINTS:
+     MINIO_ENDPOINTS: List of all endpoints delimited by ' '.
+
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
@@ -73,12 +77,6 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 	
-  REGION:
-     MINIO_REGION: To set custom region. By default all regions are accepted.
-
-  UPDATE:
-     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
-
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
 
@@ -96,20 +94,31 @@ EXAMPLES:
       $ export MINIO_DOMAIN=mydomain.com
       $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
-  4. Start minio server on 64 disks server.
-      $ {{.HelpName}} /mnt/export{1...64}
+  4. Start minio server on 64 disks server with endpoints through environment variable.
+      $ export MINIO_ENDPOINTS=/mnt/export{1...64}
+      $ {{.HelpName}}
 
   5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
-	
+
   6. Start minio server with edge caching enabled.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
      $ {{.HelpName}} /home/shared
 `,
+}
+
+// Checks if endpoints are either available through environment
+// or command line, returns false if both fails.
+func endpointsPresent(ctx *cli.Context) bool {
+	_, ok := os.LookupEnv("MINIO_ENDPOINTS")
+	if !ok {
+		ok = ctx.Args().Present()
+	}
+	return ok
 }
 
 func serverHandleCmdArgs(ctx *cli.Context) {
@@ -124,11 +133,17 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var err error
 
 	if len(ctx.Args()) > serverCommandLineArgsMax {
-		uErr := uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments", len(ctx.Args())))
+		uErr := uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments",
+			len(ctx.Args())))
 		logger.FatalIf(uErr, "Unable to validate passed endpoints")
 	}
 
-	globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
+	endpoints := strings.Fields(os.Getenv("MINIO_ENDPOINTS"))
+	if len(endpoints) > 0 {
+		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, endpoints...)
+	} else {
+		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
+	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
@@ -164,7 +179,7 @@ func init() {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	if (!ctx.IsSet("sets") && !ctx.Args().Present()) || ctx.Args().First() == "help" {
+	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
