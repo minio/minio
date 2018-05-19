@@ -179,4 +179,4 @@ Minio can be configured to connect to other servers, whether Minio nodes or serv
 * [TLS Configuration for Minio server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
 * [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide)
 * [Generate Let's Encrypt Certificate](https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio)
-* [Setup Nginx Proxy with Minio Server](https://docs.minio.io/docs/setup-nginx-proxy-with-minio)
+* [Setup nginx Proxy with Minio Server](https://docs.minio.io/docs/setup-nginx-proxy-with-minio)
