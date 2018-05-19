@@ -301,13 +301,23 @@ func getObjectLocation(r *http.Request, domain, bucket, object string) string {
 
 // generates ListBucketsResponse from array of BucketInfo which can be
 // serialized to match XML and JSON API spec output.
-func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
+func generateListBucketsResponse(buckets []BucketInfo, accessKey string) ListBucketsResponse {
 	var listbuckets []Bucket
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
 
 	owner.ID = globalMinioDefaultOwnerID
+	masterKey := globalServerConfig.GetCredential().AccessKey
 	for _, bucket := range buckets {
+
+		// If this is not the master key, filter out any buckets that don't use this key.
+		if (accessKey != masterKey) {
+			cred := globalServerConfig.GetCredentialForBucket(bucket.Name)
+			if !cred.IsValid() || cred.AccessKey != accessKey {
+				continue
+			}
+		}
+
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
 		listbucket.CreationDate = bucket.Created.UTC().Format(timeFormatAMZLong)

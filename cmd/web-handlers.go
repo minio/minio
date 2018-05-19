@@ -204,8 +204,8 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		listBuckets = web.CacheAPI().ListBuckets
 	}
 
-	// Authenticate the request, and figure out if it corresponds to a specific bucket.
-	authErr, keyBucket := webRequestAuthenticateGetBucket(r)
+	// Authenticate the request, and get the key.
+	authErr, accessKey := webRequestAuthenticateAnyKey(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
@@ -213,10 +213,14 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if err != nil {
 		return toJSONError(err)
 	}
+	masterKey := globalServerConfig.GetCredential().AccessKey
 	for _, bucket := range buckets {
-		// If this key only has access to one bucket, skip all buckets but that one.
-		if keyBucket != "" && keyBucket != bucket.Name {
-			continue
+		// Filter out buckets that don't have this key if this is not the master key
+		if accessKey != masterKey {
+			cred := globalServerConfig.GetCredentialForBucket(bucket.Name)
+			if !cred.IsValid() || cred.AccessKey != accessKey {
+				continue
+			}
 		}
 
 		reply.Buckets = append(reply.Buckets, WebBucketInfo{

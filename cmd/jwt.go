@@ -193,18 +193,3 @@ func webRequestAuthenticate(req *http.Request, bucket string) error {
 	return nil
 }
 
-// Return the bucket name for this authentication request, or "" for global or invalid tokens.
-func webRequestAuthenticateGetBucket(req *http.Request) (error, string) {
-	var err, accessKey = webRequestAuthenticateAnyKey(req)
-
-	if err != nil {
-		return err, ""
-	}
-
-	bucket := globalServerConfig.GetBucketForKey(accessKey)
-	if bucket == "" {
-		return errInvalidAccessKeyID, ""
-	}
-
-	return nil, bucket
-}

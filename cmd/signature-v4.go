@@ -198,8 +198,8 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-// returns ErrNone if the signature matches.
-func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string, bucket string) APIErrorCode {
+// returns ErrNone if the signature matches, and the access key
+func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string, bucket string) (APIErrorCode, string) {
 
 	// Copy request
 	req := *r
@@ -207,7 +207,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	// Parse request query string.
 	pSignValues, err := parsePreSignV4(req.URL.Query(), region)
 	if err != ErrNone {
-		return err
+		return err, ""
 	}
 
 	// Access credentials.
@@ -217,14 +217,14 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	if pSignValues.Credential.accessKey != cred.AccessKey {
 		cred = globalServerConfig.GetCredentialForBucket(bucket)
 		if !cred.IsValid() || pSignValues.Credential.accessKey != cred.AccessKey {
-			return ErrInvalidAccessKeyID
+			return ErrInvalidAccessKeyID, ""
 		}
 	}
 
 	// Extract all the signed headers along with its values.
 	extractedSignedHeaders, errCode := extractSignedHeaders(pSignValues.SignedHeaders, r)
 	if errCode != ErrNone {
-		return errCode
+		return errCode, ""
 	}
 	// Construct new query.
 	query := make(url.Values)
@@ -237,11 +237,11 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
 	// request should still be allowed.
 	if pSignValues.Date.After(UTCNow().Add(globalMaxSkewTime)) {
-		return ErrRequestNotReadyYet
+		return ErrRequestNotReadyYet, ""
 	}
 
 	if UTCNow().Sub(pSignValues.Date) > pSignValues.Expires {
-		return ErrExpiredPresignRequest
+		return ErrExpiredPresignRequest, ""
 	}
 
 	// Save the date and expires.
@@ -267,24 +267,24 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Verify if date query is same.
 	if req.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
 	// Verify if expires query is same.
 	if req.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
 	// Verify if signed headers query is same.
 	if req.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
 	// Verify if credential query is same.
 	if req.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
 	// Verify if sha256 payload query is same.
 	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
 		if req.URL.Query().Get("X-Amz-Content-Sha256") != query.Get("X-Amz-Content-Sha256") {
-			return ErrContentSHA256Mismatch
+			return ErrContentSHA256Mismatch, ""
 		}
 	}
 
@@ -304,15 +304,15 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Verify signature.
 	if !compareSignatureV4(req.URL.Query().Get("X-Amz-Signature"), newSignature) {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
-	return ErrNone
+	return ErrNone, cred.AccessKey
 }
 
 // doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-// returns ErrNone if signature matches.
-func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bucket string) APIErrorCode {
+// returns ErrNone if signature matches, and the access key
+func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bucket string) (APIErrorCode, string) {
 
 	// Copy request.
 	req := *r
@@ -323,13 +323,13 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bu
 	// Parse signature version '4' header.
 	signV4Values, err := parseSignV4(v4Auth, region)
 	if err != ErrNone {
-		return err
+		return err, ""
 	}
 
 	// Extract all the signed headers along with its values.
 	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
-		return errCode
+		return errCode, ""
 	}
 
 	// Access credentials.
@@ -345,7 +345,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bu
 		}
 
 		if !cred.IsValid() || signV4Values.Credential.accessKey != cred.AccessKey {
-			return ErrInvalidAccessKeyID
+			return ErrInvalidAccessKeyID, ""
 		}
 	}
 
@@ -353,13 +353,13 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bu
 	var date string
 	if date = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
 		if date = r.Header.Get("Date"); date == "" {
-			return ErrMissingDateHeader
+			return ErrMissingDateHeader, ""
 		}
 	}
 	// Parse date header.
 	t, e := time.Parse(iso8601Format, date)
 	if e != nil {
-		return ErrMalformedDate
+		return ErrMalformedDate, ""
 	}
 
 	// Query string.
@@ -379,9 +379,9 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, bu
 
 	// Verify if signature match.
 	if !compareSignatureV4(newSignature, signV4Values.Signature) {
-		return ErrSignatureDoesNotMatch
+		return ErrSignatureDoesNotMatch, ""
 	}
 
 	// Return error none.
-	return ErrNone
+	return ErrNone, cred.AccessKey
 }
