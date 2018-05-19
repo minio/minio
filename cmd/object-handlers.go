@@ -687,7 +687,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		reader, s3Err = newSignV4ChunkedReader(r)
+		reader, s3Err = newSignV4ChunkedReader(r, bucket)
 		if s3Err != ErrNone {
 			writeErrorResponse(w, s3Err, r.URL)
 			return
@@ -1159,7 +1159,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		var s3Error APIErrorCode
-		reader, s3Error = newSignV4ChunkedReader(r)
+		reader, s3Error = newSignV4ChunkedReader(r, bucket)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
