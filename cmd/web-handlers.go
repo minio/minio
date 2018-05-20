@@ -439,6 +439,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 type SetAuthArgs struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
+	Bucket string `json:"bucket"`
 }
 
 // SetAuthReply - reply for SetAuth
@@ -472,12 +473,12 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	prevCred := globalServerConfig.SetCredential(creds)
+	prevCred := globalServerConfig.SetCredentialForBucket(args.Bucket, creds)
 
 	// Persist updated credentials.
 	if err = globalServerConfig.Save(); err != nil {
 		// Save the current creds when failed to update.
-		globalServerConfig.SetCredential(prevCred)
+		globalServerConfig.SetCredentialForBucket(args.Bucket, prevCred)
 
 		errsMap[globalMinioAddr] = err
 	}
@@ -499,23 +500,33 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(fmt.Errorf("unexpected error(s) occurred - please check minio server logs"))
 	}
 
-	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		// Did we have peer errors?
-		if len(errsMap) > 0 {
-			err = fmt.Errorf(
-				"we gave up due to: '%s', but there were more errors. Please check minio server logs",
-				err.Error(),
-			)
-		}
+	token := ""
+	// If the current token access key isn't the master, get a new token.
+	if getTokenAccessKey(r) != globalServerConfig.GetCredential().AccessKey {
+		var err error = nil
+		// As we have updated access/secret key, generate new auth token.
+		token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+		if err != nil {
+			// Did we have peer errors?
+			if len(errsMap) > 0 {
+				err = fmt.Errorf(
+					"we gave up due to: '%s', but there were more errors. Please check minio server logs",
+					err.Error(),
+				)
+			}
 
-		return toJSONError(err)
+			return toJSONError(err)
+		}
 	}
 
 	reply.Token = token
 	reply.UIVersion = browser.UIVersion
 	return nil
+}
+
+// GetAuthArgs - argument for GetAuth
+type GetAuthArgs struct {
+	Bucket string `json:"bucket"`
 }
 
 // GetAuthReply - Reply current credentials.
@@ -526,11 +537,11 @@ type GetAuthReply struct {
 }
 
 // GetAuth - return accessKey and secretKey credentials.
-func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
+func (web *webAPIHandlers) GetAuth(r *http.Request, args *GetAuthArgs, reply *GetAuthReply) error {
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	creds := globalServerConfig.GetCredential()
+	creds := globalServerConfig.GetCredentialForBucket(args.Bucket)
 	reply.AccessKey = creds.AccessKey
 	reply.SecretKey = creds.SecretKey
 	reply.UIVersion = browser.UIVersion

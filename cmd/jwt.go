@@ -113,6 +113,19 @@ func isHTTPRequestValid(req *http.Request) bool {
 	return webRequestAuthenticate(req) == nil
 }
 
+func getTokenAccessKey(req *http.Request) string {
+	var claims jwtgo.StandardClaims
+	_, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
+	if err != nil {
+		return ""
+	}
+	if err = claims.Valid(); err != nil {
+		return ""
+	}
+
+	return claims.Subject
+}
+
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
