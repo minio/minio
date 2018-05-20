@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/certs"
 )
 
 const (
@@ -176,17 +177,18 @@ var defaultCipherSuites = []uint16{
 var secureCurves = []tls.CurveID{tls.X25519, tls.CurveP256}
 
 // NewServer - creates new HTTP server using given arguments.
-func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificate) *Server {
+func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
 	var tlsConfig *tls.Config
-	if certificate != nil {
+	if getCert != nil {
 		tlsConfig = &tls.Config{
+			// TLS hardening
 			PreferServerCipherSuites: true,
 			CipherSuites:             defaultCipherSuites,
 			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
 			NextProtos:               []string{"http/1.1", "h2"},
 		}
-		tlsConfig.Certificates = append(tlsConfig.Certificates, *certificate)
+		tlsConfig.GetCertificate = getCert
 	}
 
 	httpServer := &Server{

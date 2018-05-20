@@ -58,7 +58,7 @@ spelling:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@go test $(GOFLAGS) ./...
+	@go test $(GOFLAGS) -tags kqueue ./...
 	@echo "Verifying build"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
@@ -69,7 +69,7 @@ coverage: build
 # Builds minio locally.
 build: checks
 	@echo "Building minio binary to './minio'"
-	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
+	@CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 pkg-add:
 	@echo "Adding new package $(PKG)"

@@ -45,6 +45,9 @@ func handleSignals() {
 			globalNotificationSys.RemoveAllRemoteTargets()
 		}
 
+		// Stop watching for any certificate changes.
+		globalTLSCerts.Stop()
+
 		err = globalHTTPServer.Shutdown()
 		logger.LogIf(context.Background(), err)
 
@@ -76,13 +79,11 @@ func handleSignals() {
 				// Ignore this at the moment.
 			case serviceRestart:
 				logger.Info("Restarting on service signal")
-				err := globalHTTPServer.Shutdown()
-				logger.LogIf(context.Background(), err)
 				stopHTTPTrace()
+				stop := stopProcess()
 				rerr := restartProcess()
 				logger.LogIf(context.Background(), rerr)
-
-				exit(err == nil && rerr == nil)
+				exit(stop && rerr == nil)
 			case serviceStop:
 				logger.Info("Stopping on service signal")
 				stopHTTPTrace()
