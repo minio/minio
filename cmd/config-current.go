@@ -39,9 +39,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "23"
+const serverConfigVersion = "24"
 
-type serverConfig = serverConfigV23
+type serverConfig = serverConfigV24
 
 var (
 	// globalServerConfig server config.
@@ -65,7 +65,7 @@ func (s *serverConfig) GetRegion() string {
 	return s.Region
 }
 
-// SetCredential sets new credential and returns the previous credential.
+// SetCredential sets new credentials and returns the previous credentials.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	// Save previous credential.
 	prevCred = s.Credential
@@ -77,9 +77,40 @@ func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Cred
 	return prevCred
 }
 
-// GetCredentials get current credentials.
+// GetCredentials gets current credentials.
 func (s *serverConfig) GetCredential() auth.Credentials {
 	return s.Credential
+}
+
+// SetCredentialForBucket sets new credentials for a bucket and returns the previous credentials.
+func (s *serverConfig) SetCredentialForBucket(bucket string, creds auth.Credentials) (prevCred auth.Credentials) {
+       if bucket == "" {
+               prevCred = s.Credential
+               s.Credential = creds
+               return prevCred
+       }
+
+       // Save previous credentials.
+       prevCred = s.Bucket[bucket]
+       if !prevCred.IsValid() {
+               prevCred = s.Credential
+       }
+
+       // Set updated credentials.
+       s.Bucket[bucket] = creds;
+
+       // Return previous credentials.
+       return prevCred
+}
+
+// GetCredentialForBucket get current credentials.
+func (s *serverConfig) GetCredentialForBucket(bucket string) auth.Credentials {
+       cred := s.Bucket[bucket]
+       if !cred.IsValid() {
+               cred = s.Credential
+       }
+
+       return cred
 }
 
 // SetBrowser set if browser is enabled.
@@ -159,6 +190,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "MySQL Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
 		return "MQTT Notification configuration differs"
+	case !reflect.DeepEqual(s.Bucket, t.Bucket):
+		return "Bucket credentials differ"
 	case reflect.DeepEqual(s, t):
 		return ""
 	default:
@@ -212,6 +245,7 @@ func newServerConfig() *serverConfig {
 	srvCfg.Cache.Drives = make([]string, 0)
 	srvCfg.Cache.Exclude = make([]string, 0)
 	srvCfg.Cache.Expiry = globalCacheExpiry
+	srvCfg.Bucket = make(map[string]auth.Credentials)
 	return srvCfg
 }
 
