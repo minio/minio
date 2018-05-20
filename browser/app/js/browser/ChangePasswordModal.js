@@ -39,7 +39,8 @@ export class ChangePasswordModal extends React.Component {
   }
   // When its shown, it loads the access key and secret key.
   componentWillMount() {
-    const { serverInfo } = this.props
+    const { serverInfo, currentBucket } = this.props
+    const bucket = currentBucket
 
     // Check environment variables first.
     if (serverInfo.info.isEnvCreds) {
@@ -49,7 +50,7 @@ export class ChangePasswordModal extends React.Component {
         keysReadOnly: true
       })
     } else {
-      web.GetAuth().then(data => {
+      web.GetAuth({bucket}).then(data => {
         this.setState({
           accessKey: data.accessKey,
           secretKey: data.secretKey
@@ -79,13 +80,16 @@ export class ChangePasswordModal extends React.Component {
 
   // Save the auth params and set them.
   setAuth(e) {
-    const { showAlert } = this.props
+    const { showAlert, currentBucket } = this.props
     const accessKey = this.state.accessKey
     const secretKey = this.state.secretKey
+    const bucket = currentBucket
+
     web
       .SetAuth({
         accessKey,
-        secretKey
+        secretKey,
+        bucket
       })
       .then(data => {
         showAlert({
@@ -112,10 +116,10 @@ export class ChangePasswordModal extends React.Component {
   }
 
   render() {
-    const { hideChangePassword } = this.props
+    const { hideChangePassword, currentBucket } = this.props
     return (
       <Modal bsSize="sm" animation={false} show={true}>
-        <ModalHeader>Change Password</ModalHeader>
+        <ModalHeader>Change Password { currentBucket ? "for " + currentBucket : "" }</ModalHeader>
         <ModalBody className="m-t-20">
           <InputGroup
             value={this.state.accessKey}
@@ -188,7 +192,8 @@ export class ChangePasswordModal extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    serverInfo: state.browser.serverInfo
+    serverInfo: state.browser.serverInfo,
+    currentBucket: state.buckets.currentBucket
   }
 }
 
