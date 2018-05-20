@@ -40,7 +40,7 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PATH:
-  path to NAS mount point.
+  Path to NAS mount point.
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -50,30 +50,27 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
-  UPDATE:
-     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
 EXAMPLES:
   1. Start minio gateway server for NAS backend.
-      $ export MINIO_ACCESS_KEY=accesskey
-      $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} /shared/nasvol
+     $ export MINIO_ACCESS_KEY=accesskey
+     $ export MINIO_SECRET_KEY=secretkey
+     $ {{.HelpName}} /shared/nasvol
  
   2. Start minio gateway server for NAS with edge caching enabled.
-      $ export MINIO_ACCESS_KEY=accesskey			
-      $ export MINIO_SECRET_KEY=secretkey
-      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-      $ export MINIO_CACHE_EXPIRY=40
-      $ {{.HelpName}} /shared/nasvol
+     $ export MINIO_ACCESS_KEY=accesskey
+     $ export MINIO_SECRET_KEY=secretkey
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+     $ export MINIO_CACHE_EXPIRY=40
+     $ {{.HelpName}} /shared/nasvol
 `
 
 	minio.RegisterGatewayCommand(cli.Command{

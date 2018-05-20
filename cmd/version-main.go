@@ -36,7 +36,7 @@ FLAGS:
   {{end}}{{end}}
 EXAMPLES:
    1. Prints server version:
-       $ {{.HelpName}}
+      $ {{.HelpName}}
 `,
 }
 
