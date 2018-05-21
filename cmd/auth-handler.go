@@ -194,7 +194,7 @@ func checkRequestAuthTypeGetKey(ctx context.Context, r *http.Request, action pol
 
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) APIErrorCode {
 	err, _ := checkRequestAuthTypeGetKey(ctx, r, action, bucketName, objectName)
-	return err;
+	return err
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -207,7 +207,7 @@ func isReqAuthenticatedV2GetKey(r *http.Request, bucket string) (APIErrorCode, s
 
 func isReqAuthenticatedV2(r *http.Request, bucket string) (s3Error APIErrorCode) {
 	err, _ := isReqAuthenticatedV2GetKey(r, bucket)
-	return err;
+	return err
 }
 
 func reqSignatureV4Verify(r *http.Request, region string, bucket string) (APIErrorCode, string) {

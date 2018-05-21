@@ -311,7 +311,7 @@ func generateListBucketsResponse(buckets []BucketInfo, accessKey string) ListBuc
 	for _, bucket := range buckets {
 
 		// If this is not the master key, filter out any buckets that don't use this key.
-		if (accessKey != masterKey) {
+		if accessKey != masterKey {
 			cred := globalServerConfig.GetCredentialForBucket(bucket.Name)
 			if !cred.IsValid() || cred.AccessKey != accessKey {
 				continue

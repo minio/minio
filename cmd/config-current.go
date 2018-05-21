@@ -104,7 +104,7 @@ func (s *serverConfig) SetCredentialForBucket(bucket string, creds auth.Credenti
 	}
 
 	// Set updated credentials officially and in the cache.
-	s.Bucket[bucket] = creds;
+	s.Bucket[bucket] = creds
 	globalServerCredCache[creds.AccessKey] = creds
 
 	// Return previous credentials.
@@ -113,12 +113,12 @@ func (s *serverConfig) SetCredentialForBucket(bucket string, creds auth.Credenti
 
 // GetCredentialForBucket get current credentials.
 func (s *serverConfig) GetCredentialForBucket(bucket string) auth.Credentials {
-       cred := s.Bucket[bucket]
-       if !cred.IsValid() {
-               cred = s.Credential
-       }
+	cred := s.Bucket[bucket]
+	if !cred.IsValid() {
+		cred = s.Credential
+	}
 
-       return cred
+	return cred
 }
 
 // GetBucketForKey returns the bucket name corresponding to a given access key,
@@ -141,7 +141,7 @@ func (s *serverConfig) GetBucketForKey(key string) string {
 
 // Attempt to find credentials for a given access key.
 func (s *serverConfig) GetCredentialForKey(key string) auth.Credentials {
-	var cred auth.Credentials = s.Credential
+	cred := s.Credential
 	if cred.AccessKey == key {
 		return cred
 	}
@@ -166,8 +166,8 @@ func (s *serverConfig) GetCredentialForKey(key string) auth.Credentials {
 // Delete the credentials for a bucket. Used when a bucket is deleted.
 func (s *serverConfig) DeleteCredentialsForBucket(bucket string) {
 	// Remove from the cache.
-	var cred auth.Credentials = s.Bucket[bucket]
-        if cred.IsValid() {
+	cred := s.Bucket[bucket]
+	if cred.IsValid() {
 		delete(globalServerCredCache, cred.AccessKey)
 	}
 

@@ -612,11 +612,11 @@ type serverConfigV24 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential auth.Credentials `json:"credential"`
-	Region     string           `json:"region"`
-	Browser    BrowserFlag      `json:"browser"`
-	Domain     string           `json:"domain"`
-	Bucket map[string]auth.Credentials `json:"bucket"`
+	Credential auth.Credentials            `json:"credential"`
+	Region     string                      `json:"region"`
+	Browser    BrowserFlag                 `json:"browser"`
+	Domain     string                      `json:"domain"`
+	Bucket     map[string]auth.Credentials `json:"bucket"`
 
 	// Storage class configuration
 	StorageClass storageClassConfig `json:"storageclass"`

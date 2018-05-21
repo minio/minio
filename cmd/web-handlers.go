@@ -205,7 +205,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	}
 
 	// Authenticate the request, and get the key.
-	authErr, accessKey := webRequestAuthenticateAnyKey(r)
+	accessKey, authErr := webRequestAuthenticateAnyKey(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
@@ -451,7 +451,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 type SetAuthArgs struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
-	Bucket string `json:"bucket"`
+	Bucket    string `json:"bucket"`
 }
 
 // SetAuthReply - reply for SetAuth
@@ -514,9 +514,9 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	token := ""
 	// If the current token access key isn't the master one, get a new token.
-	_, accessKey := webRequestAuthenticateAnyKey(r)
+	accessKey, _ := webRequestAuthenticateAnyKey(r)
 	if accessKey != globalServerConfig.GetCredential().AccessKey {
-		var err error = nil
+		var err error
 		// As we have updated access/secret key, generate new auth token.
 		token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
 		if err != nil {
@@ -569,7 +569,7 @@ type URLTokenReply struct {
 
 // CreateURLToken creates a URL token (short-lived) for GET requests.
 func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
-	err, key := webRequestAuthenticateAnyKey(r)
+	key, err := webRequestAuthenticateAnyKey(r)
 	if err != nil {
 		return toJSONError(errAuthentication)
 	}
@@ -1010,7 +1010,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	}
 
 	// Get the user's key for signing.
-	_, key := webRequestAuthenticateAnyKey(r)
+	key, _ := webRequestAuthenticateAnyKey(r)
 	reply.UIVersion = browser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, key, args.ObjectName, args.Expiry)
 	return nil

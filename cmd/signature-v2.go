@@ -22,12 +22,12 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"github.com/minio/minio/pkg/auth"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
-	"github.com/minio/minio/pkg/auth"
 )
 
 // Signature and API related constants.
@@ -275,7 +275,7 @@ func doesSignV2Match(r *http.Request, bucket string) (APIErrorCode, string) {
 	if !compareSignatureV2(v2Auth, expectedAuth) {
 		return ErrSignatureDoesNotMatch, ""
 	}
-	return ErrNone, cred.AccessKey;
+	return ErrNone, cred.AccessKey
 }
 
 func calculateSignatureV2(stringToSign string, secret string) string {

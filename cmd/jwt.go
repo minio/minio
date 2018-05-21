@@ -129,36 +129,36 @@ func isHTTPRequestValid(req *http.Request, bucket string) bool {
 }
 
 func isHTTPRequestValidAnyKey(req *http.Request) bool {
-	err, _ := webRequestAuthenticateAnyKey(req)
+	_, err := webRequestAuthenticateAnyKey(req)
 	return err == nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticateAnyKey(req *http.Request) (error, string) {
+func webRequestAuthenticateAnyKey(req *http.Request) (string, error) {
 	var claims jwtgo.StandardClaims
 	jwtToken, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return errNoAuthToken, ""
+			return "", errNoAuthToken
 		}
-		return errAuthentication, ""
+		return "", errAuthentication
 	}
 	if err = claims.Valid(); err != nil {
-		return errAuthentication, ""
+		return "", errAuthentication
 	}
 
 	if !jwtToken.Valid {
-		return errAuthentication, ""
+		return "", errAuthentication
 	}
 
 	serverCreds := globalServerConfig.GetCredentialForKey(claims.Subject)
 	if serverCreds.IsValid() && serverCreds.AccessKey == claims.Subject {
-		return nil, claims.Subject
+		return claims.Subject, nil
 	}
 
-	return errInvalidAccessKeyID, ""
+	return "", errInvalidAccessKeyID
 }
 
 // Check if the request is authenticated.
@@ -192,4 +192,3 @@ func webRequestAuthenticate(req *http.Request, bucket string) error {
 	}
 	return nil
 }
-
