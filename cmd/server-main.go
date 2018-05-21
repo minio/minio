@@ -31,6 +31,11 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+func init() {
+	logger.Init(GOPATH)
+	logger.RegisterUIError(fmtError)
+}
+
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
@@ -85,23 +90,23 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
-      $ {{.HelpName}} /home/shared
+     $ {{.HelpName}} /home/shared
 
   2. Start minio server bound to a specific ADDRESS:PORT.
-      $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
+     $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start minio server and enable virtual-host-style requests.
-      $ export MINIO_DOMAIN=mydomain.com
-      $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
+     $ export MINIO_DOMAIN=mydomain.com
+     $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
   4. Start minio server on 64 disks server with endpoints through environment variable.
-      $ export MINIO_ENDPOINTS=/mnt/export{1...64}
-      $ {{.HelpName}}
+     $ export MINIO_ENDPOINTS=/mnt/export{1...64}
+     $ {{.HelpName}}
 
   5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
-      $ export MINIO_ACCESS_KEY=minio
-      $ export MINIO_SECRET_KEY=miniostorage
-      $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
+     $ export MINIO_ACCESS_KEY=minio
+     $ export MINIO_SECRET_KEY=miniostorage
+     $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
 
   6. Start minio server with edge caching enabled.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
@@ -173,10 +178,6 @@ func serverHandleEnvVars() {
 
 }
 
-func init() {
-	logger.Init(GOPATH)
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
@@ -199,8 +200,6 @@ func serverMain(ctx *cli.Context) {
 	if quietFlag {
 		logger.EnableQuiet()
 	}
-
-	logger.RegisterUIError(fmtError)
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)

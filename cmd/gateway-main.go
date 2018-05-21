@@ -33,6 +33,11 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+func init() {
+	logger.Init(GOPATH)
+	logger.RegisterUIError(fmtError)
+}
+
 var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
@@ -100,10 +105,6 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 		}
 	}
 	return nil
-}
-
-func init() {
-	logger.Init(GOPATH)
 }
 
 // StartGateway - handler for 'minio gateway <name>'.

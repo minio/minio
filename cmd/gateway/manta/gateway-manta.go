@@ -81,28 +81,28 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for Manta Object Storage backend.
-      $ export MINIO_ACCESS_KEY=manta_account_name
-      $ export MINIO_SECRET_KEY=manta_key_id
-      $ {{.HelpName}}
+     $ export MINIO_ACCESS_KEY=manta_account_name
+     $ export MINIO_SECRET_KEY=manta_key_id
+     $ {{.HelpName}}
 
   2. Start minio gateway server for Manta Object Storage backend on custom endpoint.
-      $ export MINIO_ACCESS_KEY=manta_account_name
-      $ export MINIO_SECRET_KEY=manta_key_id
-      $ {{.HelpName}} https://us-west.manta.joyent.com
+     $ export MINIO_ACCESS_KEY=manta_account_name
+     $ export MINIO_SECRET_KEY=manta_key_id
+     $ {{.HelpName}} https://us-west.manta.joyent.com
 
   3. Start minio gateway server for Manta Object Storage backend without using SSH Agent.
-      $ export MINIO_ACCESS_KEY=manta_account_name
-      $ export MINIO_SECRET_KEY=manta_key_id
-      $ export MANTA_KEY_MATERIAL=~/.ssh/custom_rsa
-      $ {{.HelpName}}
+     $ export MINIO_ACCESS_KEY=manta_account_name
+     $ export MINIO_SECRET_KEY=manta_key_id
+     $ export MANTA_KEY_MATERIAL=~/.ssh/custom_rsa
+     $ {{.HelpName}}
 
   4. Start minio gateway server for Manta Object Storage backend with edge caching enabled.
-      $ export MINIO_ACCESS_KEY=manta_account_name
-      $ export MINIO_SECRET_KEY=manta_key_id
-      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-      $ export MINIO_CACHE_EXPIRY=40
-      $ {{.HelpName}}
+     $ export MINIO_ACCESS_KEY=manta_account_name
+     $ export MINIO_SECRET_KEY=manta_key_id
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+     $ export MINIO_CACHE_EXPIRY=40
+     $ {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
