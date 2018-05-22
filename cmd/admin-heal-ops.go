@@ -548,7 +548,8 @@ func (h *healSequence) healDiskFormat() error {
 	// Healing succeeded notify the peers to reload format and re-initialize disks.
 	// We will not notify peers only if healing succeeded.
 	if err == nil {
-		peersReInitFormat(globalAdminPeers, h.settings.DryRun)
+		rerr := globalAdminClients.ReloadFormat(h.settings.DryRun)
+		logger.FatalIf(rerr, "unable to load format after healing in some nodes")
 	}
 
 	// Push format heal result

@@ -34,27 +34,15 @@ func newCacheObjectsFn() CacheObjectLayer {
 }
 
 // Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(router *mux.Router, endpoints EndpointList) error {
+func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	// Register storage rpc router only if its a distributed setup.
-	err := registerStorageRPCRouters(router, endpoints)
-	if err != nil {
-		return err
-	}
+	registerStorageRPCRouters(router, endpoints)
 
 	// Register distributed namespace lock.
-	err = registerDistNSLockRouter(router, endpoints)
-	if err != nil {
-		return err
-	}
+	registerDistNSLockRouter(router)
 
 	// Register S3 peer communication router.
-	err = registerS3PeerRPCRouter(router)
-	if err != nil {
-		return err
-	}
-
-	// Register RPC router for web related calls.
-	return registerBrowserPeerRPCRouter(router)
+	registerPeerRPCRouter(router)
 }
 
 // List of some generic handlers which are applied for all incoming requests.
@@ -108,10 +96,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	}
 
 	// Add Admin RPC router
-	err := registerAdminRPCRouter(router)
-	if err != nil {
-		return nil, err
-	}
+	registerAdminRPCRouter(router)
 
 	// Add Admin router.
 	registerAdminRouter(router)

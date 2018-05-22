@@ -272,12 +272,9 @@ func serverMain(ctx *cli.Context) {
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
-	// Initialize Admin Peers inter-node communication only in distributed setup.
-	initGlobalAdminPeers(globalEndpoints)
+	globalAdminClients = NewAdminClients(globalEndpoints)
 
 	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
-	globalHTTPServer.ReadTimeout = globalConnReadTimeout
-	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {

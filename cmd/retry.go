@@ -127,13 +127,6 @@ const (
 	defaultRetryCap  = 30 * time.Second // 30 seconds.
 )
 
-// newRetryTimer creates a timer with exponentially increasing delays
-// until the maximum retry attempts are reached. - this function provides
-// resulting retry values to be of maximum jitter.
-func newRetryTimer(unit time.Duration, cap time.Duration, doneCh chan struct{}) <-chan int {
-	return newRetryTimerWithJitter(unit, cap, MaxJitter, doneCh)
-}
-
 // newRetryTimerSimple creates a timer with exponentially increasing delays
 // until the maximum retry attempts are reached. - this function is a
 // simpler version with all default values.
