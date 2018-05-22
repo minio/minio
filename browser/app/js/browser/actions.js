@@ -34,7 +34,7 @@ export const fetchStorageInfo = () => {
     return web.StorageInfo().then(res => {
       const storageInfo = {
         total: res.storageInfo.Total,
-        free: res.storageInfo.Free
+        used:  res.storageInfo.Used
       }
       dispatch(setStorageInfo(storageInfo))
     })

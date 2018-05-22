@@ -24,7 +24,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/disk"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
@@ -39,7 +38,7 @@ type storageServer struct {
 /// Storage operations handlers.
 
 // DiskInfoHandler - disk info handler is rpc wrapper for DiskInfo operation.
-func (s *storageServer) DiskInfoHandler(args *AuthRPCArgs, reply *disk.Info) error {
+func (s *storageServer) DiskInfoHandler(args *AuthRPCArgs, reply *DiskInfo) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}

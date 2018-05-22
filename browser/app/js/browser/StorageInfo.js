@@ -25,19 +25,18 @@ export class StorageInfo extends React.Component {
     fetchStorageInfo()
   }
   render() {
-    const { total, free } = this.props.storageInfo
-    const used = total - free
+    const { total, used } = this.props.storageInfo
     const usedPercent = used / total * 100 + "%"
-    const freePercent = free * 100 / total
+    const freePercent = (total - used) * 100 / total
     return (
-      <div className="feh-usage">
+      <div className="feh-used">
         <div className="fehu-chart">
           <div style={{ width: usedPercent }} />
         </div>
         <ul>
           <li>
             <span>Used: </span>
-            {humanize.filesize(total - free)}
+            {humanize.filesize(used)}
           </li>
           <li className="pull-right">
             <span>Free: </span>

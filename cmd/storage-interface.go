@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"io"
-
-	"github.com/minio/minio/pkg/disk"
 )
 
 // StorageAPI interface.
@@ -30,7 +28,7 @@ type StorageAPI interface {
 	// Storage operations.
 	IsOnline() bool // Returns true if disk is online.
 	Close() error
-	DiskInfo() (info disk.Info, err error)
+	DiskInfo() (info DiskInfo, err error)
 
 	// Volume operations.
 	MakeVol(volume string) (err error)

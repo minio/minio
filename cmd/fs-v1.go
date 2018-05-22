@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -63,6 +64,10 @@ type FSObjects struct {
 
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
+
+	// Disk usage metrics
+	totalUsed          uint64
+	usageCheckInterval time.Duration
 }
 
 // Represents the background append file.
@@ -129,9 +134,10 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
-		nsMutex:       newNSLock(false),
-		listPool:      newTreeWalkPool(globalLookupTimeout),
-		appendFileMap: make(map[string]*fsAppendFile),
+		nsMutex:            newNSLock(false),
+		listPool:           newTreeWalkPool(globalLookupTimeout),
+		appendFileMap:      make(map[string]*fsAppendFile),
+		usageCheckInterval: usageCheckInterval,
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -150,6 +156,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
 	}
 
+	go fs.diskUsage(globalServiceDoneCh)
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
@@ -164,14 +171,64 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
+// diskUsage returns du information for the posix path, in a continuous routine.
+func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
+	ticker := time.NewTicker(fs.usageCheckInterval)
+	defer ticker.Stop()
+
+	var usage uint64
+	usageFn := func(ctx context.Context, entry string) error {
+		if hasSuffix(entry, slashSeparator) {
+			return nil
+		}
+		fi, err := fsStatFile(ctx, entry)
+		if err != nil {
+			return err
+		}
+		usage = usage + uint64(fi.Size())
+		return nil
+	}
+
+	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+		return
+	}
+	atomic.StoreUint64(&fs.totalUsed, usage)
+
+	for {
+		select {
+		case <-doneCh:
+			return
+		case <-ticker.C:
+			usage = 0
+			usageFn = func(ctx context.Context, entry string) error {
+				if hasSuffix(entry, slashSeparator) {
+					return nil
+				}
+				fi, err := fsStatFile(ctx, entry)
+				if err != nil {
+					return err
+				}
+				usage = usage + uint64(fi.Size())
+				return nil
+			}
+			if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+				continue
+			}
+			atomic.StoreUint64(&fs.totalUsed, usage)
+		}
+	}
+}
+
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
-	info, err := getDiskInfo((fs.fsPath))
+	info, err := getDiskInfo(fs.fsPath)
 	logger.GetReqInfo(ctx).AppendTags("path", fs.fsPath)
 	logger.LogIf(ctx, err)
+
 	storageInfo := StorageInfo{
 		Total: info.Total,
 		Free:  info.Free,
+		Used:  atomic.LoadUint64(&fs.totalUsed),
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo

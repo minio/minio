@@ -777,7 +777,7 @@ func (c cacheObjects) StorageInfo(ctx context.Context) (storageInfo StorageInfo)
 		if cfs == nil {
 			continue
 		}
-		info, err := getDiskInfo((cfs.fsPath))
+		info, err := getDiskInfo(cfs.fsPath)
 		logger.GetReqInfo(ctx).AppendTags("cachePath", cfs.fsPath)
 		logger.LogIf(ctx, err)
 		total += info.Total

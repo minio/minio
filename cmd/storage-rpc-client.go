@@ -23,8 +23,6 @@ import (
 	"net/rpc"
 	"path"
 	"strings"
-
-	"github.com/minio/minio/pkg/disk"
 )
 
 type networkStorage struct {
@@ -164,10 +162,10 @@ func (n *networkStorage) call(handler string, args interface {
 }
 
 // DiskInfo - fetch disk information for a remote disk.
-func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
+func (n *networkStorage) DiskInfo() (info DiskInfo, err error) {
 	args := AuthRPCArgs{}
 	if err = n.call("Storage.DiskInfoHandler", &args, &info); err != nil {
-		return disk.Info{}, err
+		return DiskInfo{}, err
 	}
 	return info, nil
 }
