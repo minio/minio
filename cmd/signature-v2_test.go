@@ -135,7 +135,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			// Should be set since we are simulating a http server.
 			req.RequestURI = req.URL.RequestURI()
 			// Check if it matches!
-			errCode := doesPresignV2SignatureMatch(req)
+			errCode, _ := doesPresignV2SignatureMatch(req, "")
 			if errCode != testCase.expected {
 				t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(errCode))
 			}
@@ -146,7 +146,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			}
 			// Should be set since we are simulating a http server.
 			req.RequestURI = req.URL.RequestURI()
-			errCode := doesPresignV2SignatureMatch(req)
+			errCode, _ := doesPresignV2SignatureMatch(req, "")
 			if errCode != testCase.expected {
 				t.Errorf("(%d) expected to get success, instead got %s", i, niceError(errCode))
 			}
@@ -217,7 +217,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Case %d AuthStr \"%s\".", i+1, testCase.authString), func(t *testing.T) {
 
-			actualErrCode := validateV2AuthHeader(testCase.authString)
+			actualErrCode, _ := validateV2AuthHeader(testCase.authString, "")
 
 			if testCase.expectedError != actualErrCode {
 				t.Errorf("Expected the error code to be %v, got %v.", testCase.expectedError, actualErrCode)

@@ -39,14 +39,16 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "23"
+const serverConfigVersion = "24"
 
-type serverConfig = serverConfigV23
+type serverConfig = serverConfigV24
 
 var (
 	// globalServerConfig server config.
 	globalServerConfig   *serverConfig
 	globalServerConfigMu sync.RWMutex
+	// Cache of mappings from accessKey to credentials.
+	globalServerCredCache map[string]auth.Credentials
 )
 
 // GetVersion get current config version.
@@ -65,7 +67,7 @@ func (s *serverConfig) GetRegion() string {
 	return s.Region
 }
 
-// SetCredential sets new credential and returns the previous credential.
+// SetCredential sets new credentials and returns the previous credentials.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
 	// Save previous credential.
 	prevCred = s.Credential
@@ -77,9 +79,99 @@ func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Cred
 	return prevCred
 }
 
-// GetCredentials get current credentials.
+// GetCredentials gets current credentials.
 func (s *serverConfig) GetCredential() auth.Credentials {
 	return s.Credential
+}
+
+// SetCredentialForBucket sets new credentials for a bucket and returns the previous credentials.
+func (s *serverConfig) SetCredentialForBucket(bucket string, creds auth.Credentials) (prevCred auth.Credentials) {
+	if bucket == "" {
+		prevCred = s.Credential
+		s.Credential = creds
+		return prevCred
+	}
+
+	// Save previous credentials.
+	prevCred = s.Bucket[bucket]
+
+	// If the credentials were valid, remove them from the cache.
+	if prevCred.IsValid() {
+		delete(globalServerCredCache, prevCred.AccessKey)
+
+	} else {
+		prevCred = s.Credential
+	}
+
+	// Set updated credentials officially and in the cache.
+	s.Bucket[bucket] = creds
+	globalServerCredCache[creds.AccessKey] = creds
+
+	// Return previous credentials.
+	return prevCred
+}
+
+// GetCredentialForBucket get current credentials.
+func (s *serverConfig) GetCredentialForBucket(bucket string) auth.Credentials {
+	cred := s.Bucket[bucket]
+	if !cred.IsValid() {
+		cred = s.Credential
+	}
+
+	return cred
+}
+
+// GetBucketForKey returns the bucket name corresponding to a given access key,
+// or the empty string if not found.
+func (s *serverConfig) GetBucketForKey(key string) string {
+	// Don't bother iterating if it's the master key.
+	if key == s.Credential.AccessKey {
+		return ""
+	}
+
+	// Go hunting for the bucket.
+	for bucket, creds := range s.Bucket {
+		if creds.AccessKey == key {
+			return bucket
+		}
+	}
+
+	return ""
+}
+
+// Attempt to find credentials for a given access key.
+func (s *serverConfig) GetCredentialForKey(key string) auth.Credentials {
+	cred := s.Credential
+	if cred.AccessKey == key {
+		return cred
+	}
+
+	// Try the cache for fast access.
+	cred = globalServerCredCache[key]
+	if cred.IsValid() && cred.AccessKey == key {
+		return cred
+	}
+
+	// Go the slow way, looping through all the buckets.
+	for _, cred = range s.Bucket {
+		if cred.AccessKey == key {
+			globalServerCredCache[cred.AccessKey] = cred
+			return cred
+		}
+	}
+
+	return auth.Credentials{}
+}
+
+// Delete the credentials for a bucket. Used when a bucket is deleted.
+func (s *serverConfig) DeleteCredentialsForBucket(bucket string) {
+	// Remove from the cache.
+	cred := s.Bucket[bucket]
+	if cred.IsValid() {
+		delete(globalServerCredCache, cred.AccessKey)
+	}
+
+	delete(s.Bucket, bucket)
 }
 
 // SetBrowser set if browser is enabled.
@@ -159,6 +251,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "MySQL Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
 		return "MQTT Notification configuration differs"
+	case !reflect.DeepEqual(s.Bucket, t.Bucket):
+		return "Bucket credentials differ"
 	case reflect.DeepEqual(s, t):
 		return ""
 	default:
@@ -212,6 +306,7 @@ func newServerConfig() *serverConfig {
 	srvCfg.Cache.Drives = make([]string, 0)
 	srvCfg.Cache.Exclude = make([]string, 0)
 	srvCfg.Cache.Expiry = globalCacheExpiry
+	srvCfg.Bucket = make(map[string]auth.Credentials)
 	return srvCfg
 }
 
@@ -251,6 +346,7 @@ func newConfig() error {
 	// unlock the mutex.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg
+	globalServerCredCache = make(map[string]auth.Credentials)
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
@@ -317,6 +413,7 @@ func loadConfig() error {
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
+	globalServerCredCache = make(map[string]auth.Credentials)
 	globalServerConfig = srvCfg
 	if !globalIsEnvCreds {
 		globalActiveCred = globalServerConfig.GetCredential()
