@@ -221,12 +221,8 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
-	err = getTestWebRPCResponse(rec, &storageInfoReply)
-	if err != nil {
+	if err = getTestWebRPCResponse(rec, &storageInfoReply); err != nil {
 		t.Fatalf("Failed %v", err)
-	}
-	if storageInfoReply.StorageInfo.Total <= 0 {
-		t.Fatalf("Got a zero or negative total free space disk")
 	}
 }
 

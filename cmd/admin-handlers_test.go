@@ -929,9 +929,6 @@ func TestAdminServerInfo(t *testing.T) {
 		if serverInfo.Error != "" {
 			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
 		}
-		if serverInfo.Data.StorageInfo.Free == 0 {
-			t.Error("Expected StorageInfo.Free to be non empty")
-		}
 		if serverInfo.Data.Properties.Region != globalMinioDefaultRegion {
 			t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, serverInfo.Data.Properties.Region)
 		}

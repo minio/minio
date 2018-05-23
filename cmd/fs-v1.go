@@ -176,35 +176,39 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 	ticker := time.NewTicker(fs.usageCheckInterval)
 	defer ticker.Stop()
 
-	var usage uint64
 	usageFn := func(ctx context.Context, entry string) error {
+		var fi os.FileInfo
+		var err error
 		if hasSuffix(entry, slashSeparator) {
-			return nil
+			fi, err = fsStatDir(ctx, entry)
+		} else {
+			fi, err = fsStatFile(ctx, entry)
 		}
-		fi, err := fsStatFile(ctx, entry)
 		if err != nil {
 			return err
 		}
-		usage = usage + uint64(fi.Size())
+		atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
 		return nil
 	}
 
 	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
 		return
 	}
-	atomic.StoreUint64(&fs.totalUsed, usage)
 
 	for {
 		select {
 		case <-doneCh:
 			return
 		case <-ticker.C:
-			usage = 0
+			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
+				var fi os.FileInfo
+				var err error
 				if hasSuffix(entry, slashSeparator) {
-					return nil
+					fi, err = fsStatDir(ctx, entry)
+				} else {
+					fi, err = fsStatFile(ctx, entry)
 				}
-				fi, err := fsStatFile(ctx, entry)
 				if err != nil {
 					return err
 				}
@@ -221,14 +225,8 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
-	info, err := getDiskInfo(fs.fsPath)
-	logger.GetReqInfo(ctx).AppendTags("path", fs.fsPath)
-	logger.LogIf(ctx, err)
-
 	storageInfo := StorageInfo{
-		Total: info.Total,
-		Free:  info.Free,
-		Used:  atomic.LoadUint64(&fs.totalUsed),
+		Used: atomic.LoadUint64(&fs.totalUsed),
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo

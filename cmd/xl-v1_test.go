@@ -17,38 +17,9 @@
 package cmd
 
 import (
-	"context"
-	"os"
 	"reflect"
 	"testing"
 )
-
-// TestStorageInfo - tests storage info.
-func TestStorageInfo(t *testing.T) {
-	objLayer, fsDirs, err := prepareXL16()
-	if err != nil {
-		t.Fatalf("Unable to initialize 'XL' object layer.")
-	}
-
-	// Remove all dirs.
-	for _, dir := range fsDirs {
-		defer os.RemoveAll(dir)
-	}
-
-	// Get storage info first attempt.
-	disks16Info := objLayer.StorageInfo(context.Background())
-
-	// This test assumes homogenity between all disks,
-	// i.e if we loose one disk the effective storage
-	// usage values is assumed to decrease. If we have
-	// heterogenous environment this is not true all the time.
-	if disks16Info.Free <= 0 {
-		t.Fatalf("Diskinfo total free values should be greater 0")
-	}
-	if disks16Info.Total <= 0 {
-		t.Fatalf("Diskinfo total values should be greater 0")
-	}
-}
 
 // Sort valid disks info.
 func TestSortingValidDisks(t *testing.T) {
