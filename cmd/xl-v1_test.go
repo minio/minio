@@ -21,8 +21,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/minio/minio/pkg/disk"
 )
 
 // TestStorageInfo - tests storage info.
@@ -55,18 +53,18 @@ func TestStorageInfo(t *testing.T) {
 // Sort valid disks info.
 func TestSortingValidDisks(t *testing.T) {
 	testCases := []struct {
-		disksInfo      []disk.Info
-		validDisksInfo []disk.Info
+		disksInfo      []DiskInfo
+		validDisksInfo []DiskInfo
 	}{
 		// One of the disks is offline.
 		{
-			disksInfo: []disk.Info{
+			disksInfo: []DiskInfo{
 				{Total: 150, Free: 10},
 				{Total: 0, Free: 0},
 				{Total: 200, Free: 10},
 				{Total: 100, Free: 10},
 			},
-			validDisksInfo: []disk.Info{
+			validDisksInfo: []DiskInfo{
 				{Total: 100, Free: 10},
 				{Total: 150, Free: 10},
 				{Total: 200, Free: 10},
@@ -74,13 +72,13 @@ func TestSortingValidDisks(t *testing.T) {
 		},
 		// All disks are online.
 		{
-			disksInfo: []disk.Info{
+			disksInfo: []DiskInfo{
 				{Total: 150, Free: 10},
 				{Total: 200, Free: 10},
 				{Total: 100, Free: 10},
 				{Total: 115, Free: 10},
 			},
-			validDisksInfo: []disk.Info{
+			validDisksInfo: []DiskInfo{
 				{Total: 100, Free: 10},
 				{Total: 115, Free: 10},
 				{Total: 150, Free: 10},

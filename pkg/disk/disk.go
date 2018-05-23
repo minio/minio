@@ -28,4 +28,7 @@ type Info struct {
 	Files  uint64
 	Ffree  uint64
 	FSType string
+
+	// Usage is calculated per tenant.
+	Usage uint64
 }

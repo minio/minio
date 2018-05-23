@@ -80,7 +80,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	}
 
 	// Test with disk removed.
-	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	os.RemoveAll(disk)
 	if _, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)

@@ -19,8 +19,6 @@ package cmd
 import (
 	"os"
 	"testing"
-
-	"github.com/minio/minio/pkg/disk"
 )
 
 type testStorageRPCServer struct {
@@ -91,7 +89,7 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 		Vol:         "myvol",
 	}
 	// 1. DiskInfoHandler
-	diskInfoReply := &disk.Info{}
+	diskInfoReply := &DiskInfo{}
 	err = storageRPC.DiskInfoHandler(&badAuthRPCArgs, diskInfoReply)
 	errorIfInvalidToken(t, err)
 

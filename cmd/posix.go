@@ -29,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
@@ -47,6 +48,11 @@ type posix struct {
 	diskPath   string
 	pool       sync.Pool
 	connected  bool
+
+	// Disk usage metrics
+	stopUsageCh        chan struct{}
+	totalUsage         uint64
+	usageCheckInterval time.Duration
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -128,6 +134,7 @@ func isDirEmpty(dirname string) bool {
 		return false
 	}
 	defer f.Close()
+
 	// List one entry.
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
@@ -157,8 +164,13 @@ func newPosix(path string) (StorageAPI, error) {
 				return &b
 			},
 		},
+		stopUsageCh:        make(chan struct{}),
+		usageCheckInterval: usageCheckInterval,
 	}
+
 	st.connected = true
+
+	go st.diskUsage()
 
 	// Success.
 	return st, nil
@@ -242,6 +254,7 @@ func (s *posix) String() string {
 }
 
 func (s *posix) Close() error {
+	close(s.stopUsageCh)
 	s.connected = false
 	return nil
 }
@@ -250,10 +263,26 @@ func (s *posix) IsOnline() bool {
 	return s.connected
 }
 
+// DiskInfo is an extended type which returns current
+// disk usage per path.
+type DiskInfo struct {
+	Total uint64
+	Free  uint64
+	Used  uint64
+}
+
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *posix) DiskInfo() (info disk.Info, err error) {
-	return getDiskInfo((s.diskPath))
+func (s *posix) DiskInfo() (info DiskInfo, err error) {
+	di, err := getDiskInfo(s.diskPath)
+	if err != nil {
+		return info, err
+	}
+	return DiskInfo{
+		Total: di.Total,
+		Free:  di.Free,
+		Used:  atomic.LoadUint64(&s.totalUsage),
+	}, nil
 }
 
 // getVolDir - will convert incoming volume names to
@@ -283,6 +312,66 @@ func (s *posix) checkDiskFound() (err error) {
 		}
 	}
 	return err
+}
+
+// diskUsage returns du information for the posix path, in a continuous routine.
+func (s *posix) diskUsage() {
+	ticker := time.NewTicker(s.usageCheckInterval)
+	defer ticker.Stop()
+
+	var usage uint64
+	usageFn := func(ctx context.Context, entry string) error {
+		select {
+		case <-s.stopUsageCh:
+			return errWalkAbort
+		default:
+			if hasSuffix(entry, slashSeparator) {
+				return nil
+			}
+			fi, err := os.Stat(entry)
+			if err != nil {
+				return err
+			}
+			usage = usage + uint64(fi.Size())
+			return nil
+		}
+	}
+
+	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
+		return
+	}
+	atomic.StoreUint64(&s.totalUsage, usage)
+
+	for {
+		select {
+		case <-s.stopUsageCh:
+			return
+		case <-globalServiceDoneCh:
+			return
+		case <-ticker.C:
+			usage = 0
+			usageFn = func(ctx context.Context, entry string) error {
+				select {
+				case <-s.stopUsageCh:
+					return errWalkAbort
+				default:
+					if hasSuffix(entry, slashSeparator) {
+						return nil
+					}
+					fi, err := os.Stat(entry)
+					if err != nil {
+						return err
+					}
+					usage = usage + uint64(fi.Size())
+					return nil
+				}
+			}
+			if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
+				continue
+			}
+			atomic.StoreUint64(&s.totalUsage, usage)
+		}
+	}
 }
 
 // Make a volume entry.
