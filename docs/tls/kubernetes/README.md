@@ -10,6 +10,10 @@ This document explains how to configure Minio server with TLS certificates on Ku
 
 - Acquire TLS certificates, either from a CA or [create self-signed certificates](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
+For a [distributed Minio setup](https://docs.minio.io/docs/distributed-minio-quickstart-guide), where there are multiple pods with different domain names expected to run, you will either need wildcard certificates valid for all the domains or have specific certificates for each domain. If you are going to use specific certificates, make sure to create Kubernetes secrets accordingly.
+
+For testing purposes, here is [how to create self-signed certificates](https://github.com/minio/minio/tree/master/docs/tls#3-generate-self-signed-certificates).
+
 ## 2. Create Kubernetes secret
 
 [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret) are intended to hold sensitive information. 
