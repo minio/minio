@@ -319,20 +319,16 @@ func (s *posix) diskUsage() {
 	ticker := time.NewTicker(s.usageCheckInterval)
 	defer ticker.Stop()
 
-	var usage uint64
 	usageFn := func(ctx context.Context, entry string) error {
 		select {
 		case <-s.stopUsageCh:
 			return errWalkAbort
 		default:
-			if hasSuffix(entry, slashSeparator) {
-				return nil
-			}
 			fi, err := os.Stat(entry)
 			if err != nil {
 				return err
 			}
-			usage = usage + uint64(fi.Size())
+			atomic.AddUint64(&s.totalUsage, uint64(fi.Size()))
 			return nil
 		}
 	}
@@ -340,7 +336,6 @@ func (s *posix) diskUsage() {
 	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
 		return
 	}
-	atomic.StoreUint64(&s.totalUsage, usage)
 
 	for {
 		select {
@@ -349,15 +344,12 @@ func (s *posix) diskUsage() {
 		case <-globalServiceDoneCh:
 			return
 		case <-ticker.C:
-			usage = 0
+			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
 				select {
 				case <-s.stopUsageCh:
 					return errWalkAbort
 				default:
-					if hasSuffix(entry, slashSeparator) {
-						return nil
-					}
 					fi, err := os.Stat(entry)
 					if err != nil {
 						return err

@@ -173,10 +173,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	validDisksInfo := sortValidDisksInfo(disksInfo)
 	// If there are no valid disks, set total and free disks to 0
 	if len(validDisksInfo) == 0 {
-		return StorageInfo{
-			Total: 0,
-			Free:  0,
-		}
+		return StorageInfo{}
 	}
 
 	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
@@ -192,13 +189,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		availableDataDisks = uint64(onlineDisks)
 	}
 
-	// Return calculated storage info, choose the lowest Total and
-	// Free as the total aggregated values. Total capacity is always
-	// the multiple of smallest disk among the disk list.
-	storageInfo := StorageInfo{
-		Total: validDisksInfo[0].Total * availableDataDisks,
-		Free:  validDisksInfo[0].Free * availableDataDisks,
-	}
+	storageInfo := StorageInfo{}
 
 	// Combine all disks to get total usage.
 	var used uint64
