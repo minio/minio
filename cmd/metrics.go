@@ -84,6 +84,28 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(globalConnStats.getTotalInputBytes()),
 	)
 
+	// Expose cache stats only if available
+	cacheObjLayer := newCacheObjectsFn()
+	if cacheObjLayer != nil {
+		cs := cacheObjLayer.StorageInfo(context.Background())
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("minio", "disk", "cache_storage_bytes"),
+				"Total cache capacity on current Minio server instance",
+				nil, nil),
+			prometheus.GaugeValue,
+			float64(cs.Total),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("minio", "disk", "cache_storage_free_bytes"),
+				"Total cache available on current Minio server instance",
+				nil, nil),
+			prometheus.GaugeValue,
+			float64(cs.Free),
+		)
+	}
+
 	// Expose disk stats only if applicable
 
 	// Fetch disk space info
@@ -92,7 +114,9 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	if objLayer == nil {
 		return
 	}
+
 	s := objLayer.StorageInfo(context.Background())
+
 	// Gateways don't provide disk info
 	if s.Backend.Type == Unknown {
 		return
@@ -108,22 +132,14 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		totalDisks = s.Backend.OfflineDisks + s.Backend.OnlineDisks
 	}
 
-	// Total/Free Storage Bytes
+	// Total disk usage by current Minio server instance
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disk", "storage_bytes"),
-			"Total disk storage available to current Minio server instance",
+			prometheus.BuildFQName("minio", "disk", "storage_used_bytes"),
+			"Total disk storage used by current Minio server instance",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(s.Total),
-	)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disk", "storage_free_bytes"),
-			"Total free disk storage available to current Minio server instance",
-			nil, nil),
-		prometheus.GaugeValue,
-		float64(s.Free),
+		float64(s.Used),
 	)
 
 	// Minio Total Disk/Offline Disk
