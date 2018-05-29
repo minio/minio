@@ -25,7 +25,7 @@ import (
 type CacheConfig struct {
 	Drives  []string `json:"drives"`
 	Expiry  int      `json:"expiry"`
-	MaxUse int       `json:"maxuse"`
+	MaxUse  int      `json:"maxuse"`
 	Exclude []string `json:"exclude"`
 }
 
