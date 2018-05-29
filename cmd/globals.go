@@ -186,6 +186,8 @@ var (
 	globalCacheExcludes []string
 	// Disk cache expiry
 	globalCacheExpiry = 90
+	// Max allowed disk cache percentage 
+	globalCacheMaxUse = 100
 	// Add new variable global values here.
 
 )
