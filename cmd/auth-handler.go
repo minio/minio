@@ -114,7 +114,7 @@ func getRequestAuthType(r *http.Request) authType {
 // It does not accept presigned or JWT or anonymous requests.
 func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 	s3Err := ErrAccessDenied
-	if getRequestAuthType(r) == authTypeSigned { // we only support V4 (no presign)
+	if _, ok := r.Header["X-Amz-Content-Sha256"]; ok && getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) { // we only support V4 (no presign) with auth. body
 		s3Err = isReqAuthenticated(r, region)
 	}
 	if s3Err != ErrNone {
