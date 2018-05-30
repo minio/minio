@@ -64,23 +64,7 @@ func (c *minioCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 
-	// Fetch disk space info
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
-		return
-	}
-	s := objLayer.StorageInfo(context.Background())
-
-	var totalDisks, offlineDisks int
-	// Setting totalDisks to 1 and offlineDisks to 0 in FS mode
-	if s.Backend.Type == FS {
-		totalDisks = 1
-		offlineDisks = 0
-	} else {
-		offlineDisks = s.Backend.OfflineDisks
-		totalDisks = s.Backend.OfflineDisks + s.Backend.OnlineDisks
-	}
+	// Always expose network stats
 
 	// Network Sent/Received Bytes
 	ch <- prometheus.MustNewConstMetric(
@@ -99,6 +83,30 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		prometheus.CounterValue,
 		float64(globalConnStats.getTotalInputBytes()),
 	)
+
+	// Expose disk stats only if applicable
+
+	// Fetch disk space info
+	objLayer := newObjectLayerFn()
+	// Service not initialized yet
+	if objLayer == nil {
+		return
+	}
+	s := objLayer.StorageInfo(context.Background())
+	// Gateways don't provide disk info
+	if s.Backend.Type == Unknown {
+		return
+	}
+
+	var totalDisks, offlineDisks int
+	// Setting totalDisks to 1 and offlineDisks to 0 in FS mode
+	if s.Backend.Type == FS {
+		totalDisks = 1
+		offlineDisks = 0
+	} else {
+		offlineDisks = s.Backend.OfflineDisks
+		totalDisks = s.Backend.OfflineDisks + s.Backend.OnlineDisks
+	}
 
 	// Total/Free Storage Bytes
 	ch <- prometheus.MustNewConstMetric(

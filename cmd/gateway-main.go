@@ -187,6 +187,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
 
+	// Add server metrics router
+	registerMetricsRouter(router)
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
@@ -196,6 +199,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerAPIRouter(router)
 
 	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
+	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
+	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
