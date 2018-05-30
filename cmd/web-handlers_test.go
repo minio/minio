@@ -1786,10 +1786,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed %v", err)
 	}
-	// if Total size is 0 it indicates faulty disk.
-	if storageInfoReply.StorageInfo.Total != 0 {
-		t.Fatalf("Should get zero Total size since disks are faulty ")
-	}
 
 	// Test authorization of Web.Download
 	req, err = http.NewRequest("GET", "/minio/download/bucket/object?token="+authorization, nil)

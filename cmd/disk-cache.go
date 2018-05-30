@@ -77,6 +77,13 @@ type cacheObjects struct {
 	DeleteBucketFn            func(ctx context.Context, bucket string) error
 }
 
+// CacheStorageInfo - represents total, free capacity of
+// underlying cache storage.
+type CacheStorageInfo struct {
+	Total uint64 // Total cache disk space.
+	Free  uint64 // Free cache available space.
+}
+
 // CacheObjectLayer implements primitives for cache object API layer.
 type CacheObjectLayer interface {
 	// Bucket operations.
@@ -98,7 +105,7 @@ type CacheObjectLayer interface {
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Storage operations.
-	StorageInfo(ctx context.Context) StorageInfo
+	StorageInfo(ctx context.Context) CacheStorageInfo
 }
 
 // backendDownError returns true if err is due to backend failure or faulty disk if in server mode
@@ -771,7 +778,7 @@ func (c cacheObjects) CompleteMultipartUpload(ctx context.Context, bucket, objec
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (c cacheObjects) StorageInfo(ctx context.Context) (storageInfo StorageInfo) {
+func (c cacheObjects) StorageInfo(ctx context.Context) (cInfo CacheStorageInfo) {
 	var total, free uint64
 	for _, cfs := range c.cache.cfs {
 		if cfs == nil {
@@ -783,12 +790,10 @@ func (c cacheObjects) StorageInfo(ctx context.Context) (storageInfo StorageInfo)
 		total += info.Total
 		free += info.Free
 	}
-	storageInfo = StorageInfo{
+	return CacheStorageInfo{
 		Total: total,
 		Free:  free,
 	}
-	storageInfo.Backend.Type = FS
-	return storageInfo
 }
 
 // DeleteBucket - marks bucket to be deleted from cache if bucket is deleted from backend.
