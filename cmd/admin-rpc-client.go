@@ -256,7 +256,9 @@ type adminPeers []adminPeer
 func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 	thisPeer := globalMinioAddr
 	if globalMinioHost == "" {
-		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
+		// When host is not explicitly provided simply
+		// use the first IPv4.
+		thisPeer = net.JoinHostPort(sortIPs(localIP4.ToSlice())[0], globalMinioPort)
 	}
 	adminPeerList = append(adminPeerList, adminPeer{
 		thisPeer,
