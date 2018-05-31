@@ -191,6 +191,8 @@ func TestFSGetBucketInfo(t *testing.T) {
 		t.Fatal("BucketNotFound error not returned")
 	}
 
+	globalServiceDoneCh <- struct{}{}
+
 	// Check for buckets and should get disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 
@@ -301,6 +303,8 @@ func TestFSDeleteObject(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	globalServiceDoneCh <- struct{}{}
+
 	// Delete object should err disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err := fs.DeleteObject(context.Background(), bucketName, objectName); err != nil {
@@ -342,6 +346,8 @@ func TestFSDeleteBucket(t *testing.T) {
 
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 
+	globalServiceDoneCh <- struct{}{}
+
 	// Delete bucket should get error disk not found.
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
@@ -364,6 +370,8 @@ func TestFSListBuckets(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
+
+	globalServiceDoneCh <- struct{}{}
 
 	// Create a bucket with invalid name
 	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
