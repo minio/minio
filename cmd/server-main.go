@@ -29,6 +29,7 @@ import (
 	"github.com/minio/dsync"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/certs"
 )
 
 func init() {
@@ -215,7 +216,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
@@ -275,7 +276,12 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	var getCert certs.GetCertificateFunc
+	if globalTLSCerts != nil {
+		getCert = globalTLSCerts.GetCertificate
+	}
+
+	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, getCert)
 	globalHTTPServer.ReadTimeout = globalConnReadTimeout
 	globalHTTPServer.WriteTimeout = globalConnWriteTimeout
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
@@ -288,6 +294,9 @@ func serverMain(ctx *cli.Context) {
 
 	newObject, err := newObjectLayer(globalEndpoints)
 	if err != nil {
+		// Stop watching for any certificate changes.
+		globalTLSCerts.Stop()
+
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize backend")
 	}

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"os"
 	"runtime"
@@ -27,6 +26,7 @@ import (
 	"github.com/fatih/color"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/certs"
 )
 
 // minio configuration related constants.
@@ -131,7 +131,7 @@ var (
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
 
-	globalTLSCertificate *tls.Certificate
+	globalTLSCerts *certs.Certs
 
 	globalHTTPServer        *xhttp.Server
 	globalHTTPServerErrorCh = make(chan error)
