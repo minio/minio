@@ -82,7 +82,9 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	acl := &accessControlPolicy{}
 	acl.AccessControlList.Grants = append(acl.AccessControlList.Grants, grant{
 		Grantee: grantee{
-			Type: "CanonicalUser",
+			XMLNS:  "http://www.w3.org/2001/XMLSchema-instance",
+			XMLXSI: "CanonicalUser",
+			Type:   "CanonicalUser",
 		},
 		Permission: "FULL_CONTROL",
 	})
@@ -128,7 +130,9 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	acl := &accessControlPolicy{}
 	acl.AccessControlList.Grants = append(acl.AccessControlList.Grants, grant{
 		Grantee: grantee{
-			Type: "CanonicalUser",
+			XMLNS:  "http://www.w3.org/2001/XMLSchema-instance",
+			XMLXSI: "CanonicalUser",
+			Type:   "CanonicalUser",
 		},
 		Permission: "FULL_CONTROL",
 	})
