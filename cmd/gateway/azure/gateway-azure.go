@@ -160,6 +160,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	if err != nil {
 		return &azureObjects{}, err
 	}
+	c.AddToUserAgent(fmt.Sprintf("APN/1.0 Minio/1.0 Minio/%s", minio.Version))
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
 	return &azureObjects{
