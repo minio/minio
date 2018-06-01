@@ -54,6 +54,12 @@ var (
 Secret key should be in between 8 and 40 characters.`,
 	)
 
+	uiErrEnvCredentialsMissing = newUIErrFn(
+		"Credentials missing",
+		"Please provide correct credentials",
+		`Access key and Secret key should be specified in Gateway mode from environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
+	)
+
 	uiErrInvalidErasureEndpoints = newUIErrFn(
 		"Invalid endpoint(s) in erasure mode",
 		"Please provide correct combination of local/remote paths",

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -151,10 +150,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("gatewayName", gatewayName)
-		contxt := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(contxt, errors.New("Access and Secret keys should be set through ENVs for backend"))
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
+		logger.Fatal(uiErrEnvCredentialsMissing(nil), "Unable to start gateway")
 	}
 
 	// Create certs path.
