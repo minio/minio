@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path"
 	"strings"
 
 	pkgerrors "github.com/pkg/errors"
@@ -64,18 +63,16 @@ func NewSSHAgentSigner(input SSHAgentSignerInput) (*SSHAgentSigner, error) {
 		agent:          ag,
 	}
 
+	if input.Username != "" {
+		signer.userName = input.Username
+	}
+
 	matchingKey, err := signer.MatchKey()
 	if err != nil {
 		return nil, err
 	}
 	signer.key = matchingKey
 	signer.formattedKeyFingerprint = formatPublicKeyFingerprint(signer.key, true)
-	if input.Username != "" {
-		signer.userName = input.Username
-		signer.keyIdentifier = path.Join("/", signer.accountName, "users", input.Username, "keys", signer.formattedKeyFingerprint)
-	} else {
-		signer.keyIdentifier = path.Join("/", signer.accountName, "keys", signer.formattedKeyFingerprint)
-	}
 
 	_, algorithm, err := signer.SignRaw("HelloWorld")
 	if err != nil {
@@ -118,7 +115,7 @@ func (s *SSHAgentSigner) MatchKey() (ssh.PublicKey, error) {
 	return matchingKey, nil
 }
 
-func (s *SSHAgentSigner) Sign(dateHeader string) (string, error) {
+func (s *SSHAgentSigner) Sign(dateHeader string, isManta bool) (string, error) {
 	const headerName = "date"
 
 	signature, err := s.agent.Sign(s.key, []byte(fmt.Sprintf("%s: %s", headerName, dateHeader)))
@@ -129,6 +126,13 @@ func (s *SSHAgentSigner) Sign(dateHeader string) (string, error) {
 	keyFormat, err := keyFormatToKeyType(signature.Format)
 	if err != nil {
 		return "", pkgerrors.Wrap(err, "unable to format signature")
+	}
+
+	key := &KeyID{
+		UserName:    s.userName,
+		AccountName: s.accountName,
+		Fingerprint: s.formattedKeyFingerprint,
+		IsManta:     isManta,
 	}
 
 	var authSignature httpAuthSignature
@@ -147,7 +151,7 @@ func (s *SSHAgentSigner) Sign(dateHeader string) (string, error) {
 		return "", fmt.Errorf("Unsupported algorithm from SSH agent: %s", signature.Format)
 	}
 
-	return fmt.Sprintf(authorizationHeaderFormat, s.keyIdentifier,
+	return fmt.Sprintf(authorizationHeaderFormat, key.generate(),
 		authSignature.SignatureType(), headerName, authSignature.String()), nil
 }
 

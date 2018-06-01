@@ -102,7 +102,7 @@ type PutDirectoryInput struct {
 	DirectoryName string
 }
 
-// Put puts a directoy into the Triton Object Storage service is an idempotent
+// Put puts a director into the Triton Object Storage service is an idempotent
 // create-or-update operation. Your private namespace starts at /:login, and you
 // can create any nested set of directories or objects within it.
 func (s *DirectoryClient) Put(ctx context.Context, input *PutDirectoryInput) error {

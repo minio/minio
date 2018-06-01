@@ -45,6 +45,7 @@ const (
 	mantaBackend     = "manta"
 	defaultMantaRoot = "/stor"
 	defaultMantaURL  = "https://us-east.manta.joyent.com"
+  mantaMinioMultipartPathV1 = minio.GatewayMinioSysTmp +"%s/multipart/v1/%s.%s/manta.json"
 )
 
 var mantaRoot = defaultMantaRoot
@@ -138,15 +139,21 @@ func (g *Manta) Name() string {
 func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
 	var signer authentication.Signer
+  var secure = true
 	var endpoint = defaultMantaURL
 	ctx := context.Background()
 
 	if g.host != "" {
-		endpoint, _, err = minio.ParseGatewayEndpoint(g.host)
+		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
 	}
+  if secure {
+    endpoint = fmt.Sprintf("%s%s", "https://", endpoint)
+  } else {
+    endpoint = fmt.Sprintf("%s%s", "http://", endpoint)
+  }
 
 	if overrideRoot, ok := os.LookupEnv("MANTA_ROOT"); ok {
 		mantaRoot = overrideRoot
@@ -205,16 +212,20 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 			logger.LogIf(ctx, err)
 			return nil, err
 		}
-	}
+  }
 
-	tc, err := storage.NewClient(&triton.ClientConfig{
-		MantaURL:    endpoint,
-		AccountName: creds.AccessKey,
-		Signers:     []authentication.Signer{signer},
-	})
-	if err != nil {
-		return nil, err
-	}
+  config := &triton.ClientConfig{
+    MantaURL:     endpoint,
+    AccountName:  creds.AccessKey,
+    Signers:      []authentication.Signer{signer},
+  }
+  if userName, ok := os.LookupEnv("MANTA_SUBUSER"); ok {
+    config.Username = userName
+  }
+  tc, err := storage.NewClient(config)
+  if err != nil {
+    return nil, err
+  }
 
 	tc.Client.HTTPClient = &http.Client{
 		Transport: minio.NewCustomHTTPTransport(),
@@ -222,6 +233,7 @@ func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	return &tritonObjects{
 		client: tc,
+    ctx: ctx,
 	}, nil
 }
 
@@ -234,6 +246,7 @@ func (g *Manta) Production() bool {
 type tritonObjects struct {
 	minio.GatewayUnsupported
 	client *storage.StorageClient
+  ctx context.Context
 }
 
 // Shutdown - save any gateway metadata to disk
@@ -575,6 +588,31 @@ func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, da
 	return t.GetObjectInfo(ctx, bucket, object)
 }
 
+// MultiPartUpload
+//
+//
+type mantaMultipartMetaV1 struct {
+  Name  string                  `json:"object"`
+  Metadata map[string]string    `json:"metadata"`
+}
+
+func (t *tritonObjects) MultiUploadURL(ctx context.Context, bucket, location string) error {
+  err := t.client.Dir().Put(ctx, &storage.PutDirectoryInput{
+    DirectoryName: path.Join(mantaRoot, "uploads"),
+  })
+  if err != nil {
+    return err
+  }
+  return nil
+}
+
+func (t *tritonObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader) (info minio.PartInfo, err error) {
+  info.PartNumber = partID
+  info.LastModified = minio.UTCNow()
+  return info, nil
+}
+
+
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Manta Snaplinks API.
 //
@@ -595,12 +633,11 @@ func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, de
 //
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
 func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string) error {
-	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
+	if err := t.client.Objects().Delete(t.ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
-
 	return nil
 }
