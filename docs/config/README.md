@@ -99,6 +99,18 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 |``exclude`` | _[]string_ | List of wildcard patterns for prefixes to exclude from cache |
 |``expiry`` | _int_ | Days to cache expiry |
 
+### Usage
+|Field|Type|Description|
+|:---|:---|:---|
+|``interval``| _string_ | Valid usage check interval duration string is a signed sequence of decimal numbers, each with optional fraction and a unit suffix, such as "2h45m". Valid time units are "ns", "us", "ms", "s", "m", "h". Minimum supported value is '2h'.|
+
+Example: Run usage check every 4 hours 3 minutes 10 seconds.
+
+```sh
+export MINIO_USAGE_CHECK_INTERVAL="4h3m10s"
+minio server /data
+```
+
 #### Notify
 |Field|Type|Description|
 |:---|:---|:---|

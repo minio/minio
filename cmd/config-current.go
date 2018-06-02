@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 
@@ -39,9 +40,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "23"
+const serverConfigVersion = "24"
 
-type serverConfig = serverConfigV23
+type serverConfig = serverConfigV24
 
 var (
 	// globalServerConfig server config.
@@ -104,6 +105,17 @@ func (s *serverConfig) GetBrowser() bool {
 	return bool(s.Browser)
 }
 
+// Set new usage configuration, currently only supports configuring
+// usage check interval.
+func (s *serverConfig) SetUsageConfig(checkUsageInterval time.Duration) {
+	s.Usage = usageConfig{checkUsageInterval}
+}
+
+// Get current usage configuration.
+func (s *serverConfig) GetUsageConfig() usageConfig {
+	return s.Usage
+}
+
 // SetCacheConfig sets the current cache config
 func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int) {
 	s.Cache.Drives = drives
@@ -141,6 +153,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "StorageClass configuration differs"
 	case !reflect.DeepEqual(s.Cache, t.Cache):
 		return "Cache configuration differs"
+	case !reflect.DeepEqual(s.Usage, t.Usage):
+		return "Usage configuration differs"
 	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
@@ -186,6 +200,7 @@ func newServerConfig() *serverConfig {
 			Exclude: []string{},
 			Expiry:  globalCacheExpiry,
 		},
+		Usage:  usageConfig{globalDefaultUsageCheckInterval},
 		Notify: notifier{},
 	}
 
@@ -244,6 +259,10 @@ func newConfig() error {
 
 	if globalIsDiskCacheEnabled {
 		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+	}
+
+	if globalIsEnvUsageCheck {
+		srvCfg.SetUsageConfig(globalUsageCheckInterval)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -338,6 +357,9 @@ func loadConfig() error {
 		globalCacheDrives = cacheConf.Drives
 		globalCacheExcludes = cacheConf.Exclude
 		globalCacheExpiry = cacheConf.Expiry
+	}
+	if !globalIsEnvUsageCheck {
+		globalUsageCheckInterval = globalServerConfig.GetUsageConfig().UsageCheckInterval
 	}
 	globalServerConfigMu.Unlock()
 

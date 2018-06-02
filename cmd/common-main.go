@@ -153,6 +153,15 @@ func handleCommonEnvVars() {
 		globalCacheExpiry = expiry
 	}
 
+	if intervalStr := os.Getenv("MINIO_USAGE_CHECK_INTERVAL"); intervalStr != "" {
+		interval, err := parseDuration(intervalStr)
+		if err != nil {
+			logger.Fatal(uiErrInvalidUsageCheckIntervalValue(err), "Invalid MINIO_USAGE_CHECK_INTERVAL value (`%s`)", intervalStr)
+		}
+		globalUsageCheckInterval = interval
+		globalIsEnvUsageCheck = true
+	}
+
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.

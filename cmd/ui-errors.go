@@ -47,6 +47,15 @@ var (
 		"MINIO_CACHE_EXPIRY: Valid cache expiry duration is in days.",
 	)
 
+	uiErrInvalidUsageCheckIntervalValue = newUIErrFn(
+		"Invalid usage check interval value",
+		"Please check the passed value",
+		`MINIO_USAGE_CHECK_INTERVAL: Valid usage check interval duration string is a signed sequence of decimal numbers,
+  each with optional fraction and a unit suffix, such as "2h45m". Valid time units are "ns", "us", "ms", "s", "m", "h".
+  Minimum supported value is '2h'.
+`,
+	)
+
 	uiErrInvalidCredentials = newUIErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",
