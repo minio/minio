@@ -55,6 +55,10 @@ func isSysErrIsDir(err error) bool {
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
+	if err == nil {
+		return false
+	}
+
 	if pathErr, ok := err.(*os.PathError); ok {
 		switch pathErr.Err {
 		case syscall.ENOTDIR:
@@ -95,6 +99,10 @@ func isSysErrNotEmpty(err error) bool {
 
 // Check if the given error corresponds to the specific ERROR_PATH_NOT_FOUND for windows
 func isSysErrPathNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+
 	if runtime.GOOS != globalWindowsOSName {
 		return false
 	}

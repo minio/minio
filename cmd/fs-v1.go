@@ -300,6 +300,12 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 		logger.LogIf(ctx, err)
 		return err
 	}
+
+	_, err := fs.statBucketDir(ctx, bucket)
+	if err == nil {
+		return BucketExists{Bucket: bucket}
+	}
+
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)

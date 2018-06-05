@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
+	xos "github.com/minio/minio/pkg/os"
 )
 
 // Removes only the file at given path does not remove
@@ -120,10 +121,8 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 		return err
 	}
 
-	if err = os.Mkdir((dirPath), 0777); err != nil {
-		if os.IsExist(err) {
-			return errVolumeExists
-		} else if os.IsPermission(err) {
+	if err = xos.Mkdir(dirPath, 0777); err != nil {
+		if os.IsPermission(err) {
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
 		} else if isSysErrNotDir(err) {

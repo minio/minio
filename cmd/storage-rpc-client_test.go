@@ -146,10 +146,6 @@ func TestStorageErr(t *testing.T) {
 			err:         fmt.Errorf("%s", errVolumeNotFound.Error()),
 		},
 		{
-			expectedErr: errVolumeExists,
-			err:         fmt.Errorf("%s", errVolumeExists.Error()),
-		},
-		{
 			expectedErr: errFileNotFound,
 			err:         fmt.Errorf("%s", errFileNotFound.Error()),
 		},

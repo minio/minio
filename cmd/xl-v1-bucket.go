@@ -41,6 +41,12 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
+	if _, err := xl.getBucketInfo(ctx, bucket); err == nil {
+		return BucketExists{Bucket: bucket}
+	} else if err != errVolumeNotFound {
+		return toObjectErr(err, bucket)
+	}
+
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -60,9 +66,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 			defer wg.Done()
 			err := disk.MakeVol(bucket)
 			if err != nil {
-				if err != errVolumeExists {
-					logger.LogIf(ctx, err)
-				}
+				logger.LogIf(ctx, err)
 				dErrs[index] = err
 			}
 		}(index, disk)
