@@ -54,6 +54,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
@@ -749,7 +750,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 
 	// Get canonical URI.
-	canonicalURI := getURLEncodedName(req.URL.Path)
+	canonicalURI := s3utils.EncodePath(req.URL.Path)
 
 	// Get canonical request.
 	// canonicalRequest =
@@ -1104,7 +1105,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 
 	// Get canonical URI.
-	canonicalURI := getURLEncodedName(req.URL.Path)
+	canonicalURI := s3utils.EncodePath(req.URL.Path)
 
 	// Get canonical request.
 	// canonicalRequest =
@@ -1455,7 +1456,7 @@ func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.
 		urlStr = urlStr + bucketName + "/"
 	}
 	if objectName != "" {
-		urlStr = urlStr + getURLEncodedName(objectName)
+		urlStr = urlStr + s3utils.EncodePath(objectName)
 	}
 	if len(queryValues) > 0 {
 		urlStr = urlStr + "?" + queryValues.Encode()
