@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -34,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -1005,26 +1007,27 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	if expiry < 604800 && expiry > 0 {
 		expiryStr = strconv.FormatInt(expiry, 10)
 	}
-	query := strings.Join([]string{
-		"X-Amz-Algorithm=" + signV4Algorithm,
-		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
-		"X-Amz-Date=" + dateStr,
-		"X-Amz-Expires=" + expiryStr,
-		"X-Amz-SignedHeaders=host",
-	}, "&")
+
+	query := url.Values{}
+	query.Set("X-Amz-Algorithm", signV4Algorithm)
+	query.Set("X-Amz-Credential", credential)
+	query.Set("X-Amz-Date", dateStr)
+	query.Set("X-Amz-Expires", expiryStr)
+	query.Set("X-Amz-SignedHeaders", "host")
+	queryStr := s3utils.QueryEncode(query)
 
 	path := "/" + path.Join(bucket, object)
 
 	// "host" is the only header required to be signed for Presigned URLs.
 	extractedSignedHeaders := make(http.Header)
 	extractedSignedHeaders.Set("host", host)
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET")
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
