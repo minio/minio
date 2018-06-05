@@ -51,9 +51,6 @@ var errFileNotFound = errors.New("file not found")
 // errFileNameTooLong - given file name is too long than supported length.
 var errFileNameTooLong = errors.New("file name too long")
 
-// errVolumeExists - cannot create same volume again.
-var errVolumeExists = errors.New("volume already exists")
-
 // errIsNotRegular - not of regular file type.
 var errIsNotRegular = errors.New("not of regular file type")
 

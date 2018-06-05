@@ -648,24 +648,22 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disk
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create `.minio.sys`.
 	if err := disk.MakeVol(minioMetaBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, baseIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaTmpBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, baseIgnoredErrs...) {
 			return err
 		}
 	}
 	if err := disk.MakeVol(minioMetaMultipartBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+		if !IsErrIgnored(err, baseIgnoredErrs...) {
 			return err
 		}
 	}
 	return nil
 }
-
-var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
 
 // Initializes meta volume on all input storage disks.
 func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {

@@ -343,13 +343,7 @@ func TestPosixMakeVol(t *testing.T) {
 		{
 			volName:     "vol-as-file",
 			ioErrCount:  0,
-			expectedErr: errVolumeExists,
-		},
-		// TestPosix case - 3.
-		{
-			volName:     "existing-vol",
-			ioErrCount:  0,
-			expectedErr: errVolumeExists,
+			expectedErr: errDiskAccessDenied,
 		},
 		// TestPosix case - 4.
 		// IO error > maxAllowedIOError, should fail with errFaultyDisk.

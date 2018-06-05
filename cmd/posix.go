@@ -34,6 +34,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	xos "github.com/minio/minio/pkg/os"
 )
 
 const (
@@ -411,20 +412,13 @@ func (s *posix) MakeVol(volume string) (err error) {
 		return err
 	}
 
-	if _, err := os.Stat(volumeDir); err != nil {
-		// Volume does not exist we proceed to create.
-		if os.IsNotExist(err) {
-			// Make a volume entry, with mode 0777 mkdir honors system umask.
-			err = os.MkdirAll(volumeDir, 0777)
-		}
-		if os.IsPermission(err) {
-			return errDiskAccessDenied
-		}
-		return err
+	// Make a volume entry, with mode 0777 mkdir honors system umask.
+	err = os.MkdirAll(volumeDir, 0777)
+	if os.IsPermission(err) || isSysErrNotDir(err) || isSysErrPathNotFound(err) {
+		return errDiskAccessDenied
 	}
 
-	// Stat succeeds we return errVolumeExists.
-	return errVolumeExists
+	return err
 }
 
 // ListVols - list volumes.
@@ -551,19 +545,16 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove((volumeDir))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrNotEmpty(err) {
-			return errVolumeNotEmpty
-		} else if os.IsPermission(err) {
-			return errDiskAccessDenied
-		}
 
-		return err
+	err = xos.Remove((volumeDir))
+	if os.IsPermission(err) {
+		return errDiskAccessDenied
 	}
-	return nil
+	if isSysErrNotEmpty(err) {
+		return errVolumeNotEmpty
+	}
+
+	return err
 }
 
 // ListDir - return all the entries at the given directory path.

@@ -82,7 +82,7 @@ func TestFSStats(t *testing.T) {
 	// Seek back.
 	reader.Seek(0, 0)
 
-	if err = fsMkdir(context.Background(), pathJoin(path, "success-vol", "success-file")); err != errVolumeExists {
+	if err = fsMkdir(context.Background(), pathJoin(path, "success-vol", "success-file")); err != errDiskAccessDenied {
 		t.Fatal("Unexpected error", err)
 	}
 

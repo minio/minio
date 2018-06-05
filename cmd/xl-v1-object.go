@@ -46,7 +46,7 @@ func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, wri
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil && err != errVolumeExists {
+			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil {
 				errs[index] = err
 			}
 		}(index, disk)

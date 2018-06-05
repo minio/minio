@@ -582,7 +582,7 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 		})
 
 		if !dryRun {
-			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil && err != errVolumeExists {
+			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil {
 				return hr, toObjectErr(err, bucket, object)
 			}
 
