@@ -28,6 +28,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio/cmd/format"
 )
 
 // Tests http.Header clone.
@@ -374,16 +376,16 @@ func TestContains(t *testing.T) {
 
 // Test jsonLoad.
 func TestJSONLoad(t *testing.T) {
-	format := newFormatFSV1()
-	b, err := json.Marshal(format)
+	f := format.NewFSV2()
+	b, err := json.Marshal(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var gotFormat formatFSV1
+	var gotFormat format.FSV2
 	if err = jsonLoad(bytes.NewReader(b), &gotFormat); err != nil {
 		t.Fatal(err)
 	}
-	if *format != gotFormat {
+	if *f != gotFormat {
 		t.Fatal("jsonLoad() failed to decode json")
 	}
 }
@@ -397,15 +399,15 @@ func TestJSONSave(t *testing.T) {
 	defer os.Remove(f.Name())
 
 	// Test to make sure formatFSSave overwrites and does not append.
-	format := newFormatFSV1()
-	if err = jsonSave(f, format); err != nil {
+	format2 := format.NewFSV2()
+	if err = jsonSave(f, format2); err != nil {
 		t.Fatal(err)
 	}
 	fi1, err := f.Stat()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = jsonSave(f, format); err != nil {
+	if err = jsonSave(f, format2); err != nil {
 		t.Fatal(err)
 	}
 	fi2, err := f.Stat()
