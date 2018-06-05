@@ -36,10 +36,10 @@ func registerHealthCheckRouter(router *mux.Router) {
 	healthRouter := router.PathPrefix(healthCheckPathPrefix).Subrouter()
 
 	// Liveness handler
-	healthRouter.Methods(http.MethodGet).Path(healthCheckLivenessPath).HandlerFunc(LivenessCheckHandler)
-	healthRouter.Methods(http.MethodHead).Path(healthCheckLivenessPath).HandlerFunc(LivenessCheckHandler)
+	healthRouter.Methods(http.MethodGet).Path(healthCheckLivenessPath).HandlerFunc(httpTraceAll(LivenessCheckHandler))
+	healthRouter.Methods(http.MethodHead).Path(healthCheckLivenessPath).HandlerFunc(httpTraceAll(LivenessCheckHandler))
 
 	// Readiness handler
-	healthRouter.Methods(http.MethodGet).Path(healthCheckReadinessPath).HandlerFunc(ReadinessCheckHandler)
-	healthRouter.Methods(http.MethodHead).Path(healthCheckReadinessPath).HandlerFunc(ReadinessCheckHandler)
+	healthRouter.Methods(http.MethodGet).Path(healthCheckReadinessPath).HandlerFunc(httpTraceAll(ReadinessCheckHandler))
+	healthRouter.Methods(http.MethodHead).Path(healthCheckReadinessPath).HandlerFunc(httpTraceAll(ReadinessCheckHandler))
 }
