@@ -18,12 +18,55 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
-const (
-	usageCheckInterval = 12 * time.Hour // 12 hours
-)
+// Captures configurable parameters of usage check.
+type usageConfig struct {
+	UsageCheckInterval time.Duration
+}
+
+// MarshalJSON - encodes to JSON data.
+func (u usageConfig) MarshalJSON() ([]byte, error) {
+	type _usageConfig struct {
+		UsageCheckInterval string `json:"interval"`
+	}
+	return json.Marshal(_usageConfig{u.UsageCheckInterval.String()})
+}
+
+// parseDuration - parse duration string
+func parseDuration(dStr string) (time.Duration, error) {
+	d, err := time.ParseDuration(dStr)
+	if err != nil {
+		return d, err
+	}
+	if d < globalMinimumUsageCheckInterval {
+		return d, fmt.Errorf("interval %s is not allowed, minimum required value is %s",
+			d, globalMinimumUsageCheckInterval)
+	}
+	return d, nil
+}
+
+// UnmarshalJSON - decodes JSON data.
+func (u *usageConfig) UnmarshalJSON(data []byte) error {
+	type _usageConfig struct {
+		UsageCheckInterval string `json:"interval"`
+	}
+	var u1 = _usageConfig{}
+	if err := json.Unmarshal(data, &u1); err != nil {
+		return err
+	}
+	if !globalIsEnvUsageCheck {
+		d, err := parseDuration(u1.UsageCheckInterval)
+		if err != nil {
+			return err
+		}
+		u.UsageCheckInterval = d
+	}
+	return nil
+}
 
 // getDiskUsage walks the file tree rooted at root, calling usageFn
 // for each file or directory in the tree, including root.

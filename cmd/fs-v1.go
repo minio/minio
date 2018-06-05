@@ -42,6 +42,11 @@ var defaultEtag = "00000000000000000000000000000000-1"
 
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
+	// Disk usage metrics
+	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	// Disk usage running routine
+	usageRunning int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+
 	// Path to be exported over S3 API.
 	fsPath string
 	// meta json filename, varies by fs / cache backend.
@@ -64,10 +69,6 @@ type FSObjects struct {
 
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
-
-	// Disk usage metrics
-	totalUsed          uint64
-	usageCheckInterval time.Duration
 }
 
 // Represents the background append file.
@@ -134,10 +135,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
-		nsMutex:            newNSLock(false),
-		listPool:           newTreeWalkPool(globalLookupTimeout),
-		appendFileMap:      make(map[string]*fsAppendFile),
-		usageCheckInterval: usageCheckInterval,
+		nsMutex:       newNSLock(false),
+		listPool:      newTreeWalkPool(globalLookupTimeout),
+		appendFileMap: make(map[string]*fsAppendFile),
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -173,7 +173,7 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 
 // diskUsage returns du information for the posix path, in a continuous routine.
 func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
-	ticker := time.NewTicker(fs.usageCheckInterval)
+	ticker := time.NewTicker(globalUsageCheckInterval)
 	defer ticker.Stop()
 
 	usageFn := func(ctx context.Context, entry string) error {
@@ -191,6 +191,13 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 		return nil
 	}
 
+	// Check if disk usage routine is running, if yes then return.
+	if atomic.LoadInt32(&fs.usageRunning) == 1 {
+		return
+	}
+	atomic.StoreInt32(&fs.usageRunning, 1)
+	defer atomic.StoreInt32(&fs.usageRunning, 0)
+
 	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
 		return
 	}
@@ -200,6 +207,12 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 		case <-doneCh:
 			return
 		case <-ticker.C:
+			// Check if disk usage routine is running, if yes let it finish.
+			if atomic.LoadInt32(&fs.usageRunning) == 1 {
+				continue
+			}
+			atomic.StoreInt32(&fs.usageRunning, 1)
+
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
 				var fi os.FileInfo
@@ -215,9 +228,13 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 				usage = usage + uint64(fi.Size())
 				return nil
 			}
+
 			if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+				atomic.StoreInt32(&fs.usageRunning, 0)
 				continue
 			}
+
+			atomic.StoreInt32(&fs.usageRunning, 0)
 			atomic.StoreUint64(&fs.totalUsed, usage)
 		}
 	}

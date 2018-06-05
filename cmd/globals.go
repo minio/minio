@@ -188,6 +188,14 @@ var (
 	globalCacheExpiry = 90
 	// Add new variable global values here.
 
+	// Minimum required usage check interval value.
+	globalMinimumUsageCheckInterval = 2 * time.Hour // 2 hours
+	// Default usage check interval value.
+	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
+	// Usage check interval value.
+	globalUsageCheckInterval = globalDefaultUsageCheckInterval
+	// Is env usage check interval set.
+	globalIsEnvUsageCheck bool
 )
 
 // global colors.
