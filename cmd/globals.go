@@ -68,10 +68,6 @@ const (
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
-	// Default Read/Write timeouts for each connection.
-	globalConnReadTimeout  = 15 * time.Minute // Timeout after 15 minutes of no data sent by the client.
-	globalConnWriteTimeout = 15 * time.Minute // Timeout after 15 minutes if no data received by the client.
-
 	// Expiry duration after which the multipart uploads are deemed stale.
 	globalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
 	// Cleanup interval when the stale multipart cleanup is initiated.
@@ -186,6 +182,13 @@ var (
 	globalCacheExcludes []string
 	// Disk cache expiry
 	globalCacheExpiry = 90
+
+	// RPC V1 - Initial version
+	// RPC V2 - format.json XL version changed to 2
+	// RPC V3 - format.json XL version changed to 3
+	// Current RPC version
+	globalRPCAPIVersion = RPCVersion{3, 0, 0}
+
 	// Add new variable global values here.
 
 	// Default usage check interval value.

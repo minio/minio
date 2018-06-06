@@ -479,7 +479,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// need API layer to send requests, etc.
 	registerAPIRouter(router)
 	// module being tested is Peer RPCs router.
-	registerS3PeerRPCRouter(router)
+	registerPeerRPCRouter(router)
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(router)
@@ -2265,35 +2265,6 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	return muxRouter
 }
 
-// Initialize browser RPC endpoint.
-func initTestBrowserPeerRPCEndPoint() http.Handler {
-	// Initialize router.
-	muxRouter := mux.NewRouter().SkipClean(true)
-	registerBrowserPeerRPCRouter(muxRouter)
-	return muxRouter
-}
-
-func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestServer {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// Create an instance of TestServer.
-	testRPCServer := TestServer{}
-
-	// Fetch credentials for the test server.
-	credentials := globalServerConfig.GetCredential()
-
-	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKey
-	testRPCServer.SecretKey = credentials.SecretKey
-
-	// Initialize and run the TestServer.
-	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
-	return testRPCServer
-}
-
 func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
@@ -2323,10 +2294,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 
 	// Register router on a new mux
 	muxRouter := mux.NewRouter().SkipClean(true)
-	err = registerS3PeerRPCRouter(muxRouter)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
+	registerPeerRPCRouter(muxRouter)
 
 	// Initialize and run the TestServer.
 	testRPCServer.Server = httptest.NewServer(muxRouter)

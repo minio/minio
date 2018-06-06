@@ -20,225 +20,212 @@ import (
 	"context"
 	"io"
 	"path"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
+	xrpc "github.com/minio/minio/cmd/rpc"
 )
 
-// Storage server implements rpc primitives to facilitate exporting a
-// disk over a network.
-type storageServer struct {
-	AuthRPCServer
-	storage   StorageAPI
-	path      string
-	timestamp time.Time
+const storageServiceName = "Storage"
+const storageServiceSubPath = "/storage"
+
+var storageServicePath = path.Join(minioReservedBucketPath, storageServiceSubPath)
+
+// storageRPCReceiver - Storage RPC receiver for storage RPC server
+type storageRPCReceiver struct {
+	local *posix
+}
+
+// VolArgs - generic volume args.
+type VolArgs struct {
+	AuthArgs
+	Vol string
 }
 
 /// Storage operations handlers.
 
-// DiskInfoHandler - disk info handler is rpc wrapper for DiskInfo operation.
-func (s *storageServer) DiskInfoHandler(args *AuthRPCArgs, reply *DiskInfo) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
+// Connect - authenticates remote connection.
+func (receiver *storageRPCReceiver) Connect(args *AuthArgs, reply *VoidReply) (err error) {
+	return args.Authenticate()
+}
 
-	info, err := s.storage.DiskInfo()
-	*reply = info
+// DiskInfo - disk info handler is rpc wrapper for DiskInfo operation.
+func (receiver *storageRPCReceiver) DiskInfo(args *AuthArgs, reply *DiskInfo) (err error) {
+	*reply, err = receiver.local.DiskInfo()
 	return err
 }
 
 /// Volume operations handlers.
 
-// MakeVolHandler - make vol handler is rpc wrapper for MakeVol operation.
-func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.MakeVol(args.Vol)
+// MakeVol - make vol handler is rpc wrapper for MakeVol operation.
+func (receiver *storageRPCReceiver) MakeVol(args *VolArgs, reply *VoidReply) error {
+	return receiver.local.MakeVol(args.Vol)
 }
 
-// ListVolsHandler - list vols handler is rpc wrapper for ListVols operation.
-func (s *storageServer) ListVolsHandler(args *AuthRPCArgs, reply *ListVolsReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	vols, err := s.storage.ListVols()
-	if err != nil {
-		return err
-	}
-	reply.Vols = vols
-	return nil
+// ListVols - list vols handler is rpc wrapper for ListVols operation.
+func (receiver *storageRPCReceiver) ListVols(args *AuthArgs, reply *[]VolInfo) (err error) {
+	*reply, err = receiver.local.ListVols()
+	return err
 }
 
-// StatVolHandler - stat vol handler is a rpc wrapper for StatVol operation.
-func (s *storageServer) StatVolHandler(args *GenericVolArgs, reply *VolInfo) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	volInfo, err := s.storage.StatVol(args.Vol)
-	if err != nil {
-		return err
-	}
-	*reply = volInfo
-	return nil
+// StatVol - stat vol handler is a rpc wrapper for StatVol operation.
+func (receiver *storageRPCReceiver) StatVol(args *VolArgs, reply *VolInfo) (err error) {
+	*reply, err = receiver.local.StatVol(args.Vol)
+	return err
 }
 
-// DeleteVolHandler - delete vol handler is a rpc wrapper for
+// DeleteVol - delete vol handler is a rpc wrapper for
 // DeleteVol operation.
-func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.DeleteVol(args.Vol)
+func (receiver *storageRPCReceiver) DeleteVol(args *VolArgs, reply *VoidReply) error {
+	return receiver.local.DeleteVol(args.Vol)
 }
 
 /// File operations
 
-// StatFileHandler - stat file handler is rpc wrapper to stat file.
-func (s *storageServer) StatFileHandler(args *StatFileArgs, reply *FileInfo) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	fileInfo, err := s.storage.StatFile(args.Vol, args.Path)
-	if err != nil {
-		return err
-	}
-	*reply = fileInfo
-	return nil
+// StatFileArgs represents stat file RPC arguments.
+type StatFileArgs struct {
+	AuthArgs
+	Vol  string
+	Path string
 }
 
-// ListDirHandler - list directory handler is rpc wrapper to list dir.
-func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	entries, err := s.storage.ListDir(args.Vol, args.Path, args.Count)
-	if err != nil {
-		return err
-	}
-	*reply = entries
-	return nil
+// StatFile - stat file handler is rpc wrapper to stat file.
+func (receiver *storageRPCReceiver) StatFile(args *StatFileArgs, reply *FileInfo) (err error) {
+	*reply, err = receiver.local.StatFile(args.Vol, args.Path)
+	return err
 }
 
-// ReadAllHandler - read all handler is rpc wrapper to read all storage API.
-func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	buf, err := s.storage.ReadAll(args.Vol, args.Path)
-	if err != nil {
-		return err
-	}
-	*reply = buf
-	return nil
+// ListDirArgs represents list contents RPC arguments.
+type ListDirArgs struct {
+	AuthArgs
+	Vol   string
+	Path  string
+	Count int
 }
 
-// ReadFileHandler - read file handler is rpc wrapper to read file.
-func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err error) {
-	if err = args.IsAuthenticated(); err != nil {
-		return err
-	}
+// ListDir - list directory handler is rpc wrapper to list dir.
+func (receiver *storageRPCReceiver) ListDir(args *ListDirArgs, reply *[]string) (err error) {
+	*reply, err = receiver.local.ListDir(args.Vol, args.Path, args.Count)
+	return err
+}
+
+// ReadAllArgs represents read all RPC arguments.
+type ReadAllArgs struct {
+	AuthArgs
+	Vol  string
+	Path string
+}
+
+// ReadAll - read all handler is rpc wrapper to read all storage API.
+func (receiver *storageRPCReceiver) ReadAll(args *ReadAllArgs, reply *[]byte) (err error) {
+	*reply, err = receiver.local.ReadAll(args.Vol, args.Path)
+	return err
+}
+
+// ReadFileArgs represents read file RPC arguments.
+type ReadFileArgs struct {
+	AuthArgs
+	Vol          string
+	Path         string
+	Offset       int64
+	Buffer       []byte
+	Algo         BitrotAlgorithm
+	ExpectedHash []byte
+	Verified     bool
+}
+
+// ReadFile - read file handler is rpc wrapper to read file.
+func (receiver *storageRPCReceiver) ReadFile(args *ReadFileArgs, reply *[]byte) error {
 	var verifier *BitrotVerifier
 	if !args.Verified {
 		verifier = NewBitrotVerifier(args.Algo, args.ExpectedHash)
 	}
 
-	var n int64
-	n, err = s.storage.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer, verifier)
-	// Sending an error over the rpc layer, would cause unmarshalling to fail. In situations
-	// when we have short read i.e `io.ErrUnexpectedEOF` treat it as good condition and copy
-	// the buffer properly.
+	n, err := receiver.local.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer, verifier)
+	// Ignore io.ErrEnexpectedEOF for short reads i.e. less content available than requested.
 	if err == io.ErrUnexpectedEOF {
-		// Reset to nil as good condition.
 		err = nil
 	}
+
 	*reply = args.Buffer[0:n]
 	return err
 }
 
-// PrepareFileHandler - prepare file handler is rpc wrapper to prepare file.
-func (s *storageServer) PrepareFileHandler(args *PrepareFileArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.PrepareFile(args.Vol, args.Path, args.Size)
+// PrepareFileArgs represents append file RPC arguments.
+type PrepareFileArgs struct {
+	AuthArgs
+	Vol  string
+	Path string
+	Size int64
 }
 
-// AppendFileHandler - append file handler is rpc wrapper to append file.
-func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.AppendFile(args.Vol, args.Path, args.Buffer)
+// PrepareFile - prepare file handler is rpc wrapper to prepare file.
+func (receiver *storageRPCReceiver) PrepareFile(args *PrepareFileArgs, reply *VoidReply) error {
+	return receiver.local.PrepareFile(args.Vol, args.Path, args.Size)
 }
 
-// DeleteFileHandler - delete file handler is rpc wrapper to delete file.
-func (s *storageServer) DeleteFileHandler(args *DeleteFileArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.DeleteFile(args.Vol, args.Path)
+// AppendFileArgs represents append file RPC arguments.
+type AppendFileArgs struct {
+	AuthArgs
+	Vol    string
+	Path   string
+	Buffer []byte
 }
 
-// RenameFileHandler - rename file handler is rpc wrapper to rename file.
-func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	return s.storage.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
+// AppendFile - append file handler is rpc wrapper to append file.
+func (receiver *storageRPCReceiver) AppendFile(args *AppendFileArgs, reply *VoidReply) error {
+	return receiver.local.AppendFile(args.Vol, args.Path, args.Buffer)
 }
 
-// Initialize new storage rpc.
-func newStorageRPCServer(endpoints EndpointList) (servers []*storageServer, err error) {
-	for _, endpoint := range endpoints {
-		if endpoint.IsLocal {
-			storage, err := newPosix(endpoint.Path)
-			if err != nil && err != errDiskNotFound {
-				return nil, err
-			}
+// DeleteFileArgs represents delete file RPC arguments.
+type DeleteFileArgs struct {
+	AuthArgs
+	Vol  string
+	Path string
+}
 
-			servers = append(servers, &storageServer{
-				storage: storage,
-				path:    endpoint.Path,
-			})
-		}
+// DeleteFile - delete file handler is rpc wrapper to delete file.
+func (receiver *storageRPCReceiver) DeleteFile(args *DeleteFileArgs, reply *VoidReply) error {
+	return receiver.local.DeleteFile(args.Vol, args.Path)
+}
+
+// RenameFileArgs represents rename file RPC arguments.
+type RenameFileArgs struct {
+	AuthArgs
+	SrcVol  string
+	SrcPath string
+	DstVol  string
+	DstPath string
+}
+
+// RenameFile - rename file handler is rpc wrapper to rename file.
+func (receiver *storageRPCReceiver) RenameFile(args *RenameFileArgs, reply *VoidReply) error {
+	return receiver.local.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
+}
+
+// NewStorageRPCServer - returns new storage RPC server.
+func NewStorageRPCServer(endpointPath string) (*xrpc.Server, error) {
+	storage, err := newPosix(endpointPath)
+	if err != nil {
+		return nil, err
 	}
 
-	return servers, nil
+	rpcServer := xrpc.NewServer()
+	if err = rpcServer.RegisterName(storageServiceName, &storageRPCReceiver{storage}); err != nil {
+		return nil, err
+	}
+
+	return rpcServer, nil
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouters(router *mux.Router, endpoints EndpointList) error {
-	// Initialize storage rpc servers for every disk that is hosted on this node.
-	storageRPCs, err := newStorageRPCServer(endpoints)
-	if err != nil {
-		logger.LogIf(context.Background(), err)
-		return err
-	}
-
-	// Create a unique route for each disk exported from this node.
-	for _, stServer := range storageRPCs {
-		storageRPCServer := newRPCServer()
-		err = storageRPCServer.RegisterName("Storage", stServer)
-		if err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
+func registerStorageRPCRouters(router *mux.Router, endpoints EndpointList) {
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			rpcServer, err := NewStorageRPCServer(endpoint.Path)
+			logger.CriticalIf(context.Background(), err)
+			subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
+			subrouter.Path(path.Join(storageServiceSubPath, endpoint.Path)).Handler(rpcServer)
 		}
-		// Add minio storage routes.
-		storageRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-		storageRouter.Path(path.Join(storageRPCPath, stServer.path)).Handler(storageRPCServer)
 	}
-	return nil
 }

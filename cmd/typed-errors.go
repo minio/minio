@@ -26,9 +26,6 @@ var errInvalidArgument = errors.New("Invalid arguments specified")
 // errSignatureMismatch means signature did not match.
 var errSignatureMismatch = errors.New("Signature does not match")
 
-// used when token used for authentication by the MinioBrowser has expired
-var errInvalidToken = errors.New("Invalid token")
-
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")
 

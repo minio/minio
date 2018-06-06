@@ -102,7 +102,7 @@ type StorageInfoRep struct {
 }
 
 // StorageInfo - web call to gather storage usage statistics.
-func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply *StorageInfoRep) error {
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
@@ -470,53 +470,29 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(creds)
-
-	// Update local credentials
+	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(creds)
 
-	// Persist updated credentials.
-	if err = globalServerConfig.Save(); err != nil {
-		// Save the current creds when failed to update.
+	// Save credentials to config file
+	if err := globalServerConfig.Save(); err != nil {
+		// As saving configurstion failed, restore previous credential in memory.
 		globalServerConfig.SetCredential(prevCred)
-
-		errsMap[globalMinioAddr] = err
-	}
-
-	// Log all the peer related error messages, and populate the
-	// PeerErrMsgs map.
-	reply.PeerErrMsgs = make(map[string]string)
-	for svr, errVal := range errsMap {
-		tErr := fmt.Errorf("Unable to change credentials on %s: %v", svr, errVal)
-		logger.LogIf(context.Background(), tErr)
-		reply.PeerErrMsgs[svr] = errVal.Error()
-	}
-
-	// If we were unable to update locally, we return an error to the user/browser.
-	if errsMap[globalMinioAddr] != nil {
-		// Since the error message may be very long to display
-		// on the browser, we tell the user to check the
-		// server logs.
-		return toJSONError(fmt.Errorf("unexpected error(s) occurred - please check minio server logs"))
-	}
-
-	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		// Did we have peer errors?
-		if len(errsMap) > 0 {
-			err = fmt.Errorf(
-				"we gave up due to: '%s', but there were more errors. Please check minio server logs",
-				err.Error(),
-			)
-		}
-
+		logger.LogIf(context.Background(), err)
 		return toJSONError(err)
 	}
 
-	reply.Token = token
-	reply.UIVersion = browser.UIVersion
+	if errs := globalNotificationSys.SetCredentials(creds); len(errs) != 0 {
+		reply.PeerErrMsgs = make(map[string]string)
+		for host, err := range errs {
+			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)
+			logger.LogIf(context.Background(), err)
+			reply.PeerErrMsgs[host.String()] = err.Error()
+		}
+	} else {
+		reply.Token = newAuthToken()
+		reply.UIVersion = browser.UIVersion
+	}
+
 	return nil
 }
 

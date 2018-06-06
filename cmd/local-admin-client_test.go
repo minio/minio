@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,40 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 )
 
-// TestListLocksInfo - Test for listLocksInfo.
+func TestLocalAdminClientSignalService(t *testing.T) {
+	testAdminCmdRunnerSignalService(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientReInitFormat(t *testing.T) {
+	testAdminCmdRunnerReInitFormat(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientListLocks(t *testing.T) {
+	testAdminCmdRunnerListLocks(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientServerInfo(t *testing.T) {
+	testAdminCmdRunnerServerInfo(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientGetConfig(t *testing.T) {
+	testAdminCmdRunnerGetConfig(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientWriteTmpConfig(t *testing.T) {
+	testAdminCmdRunnerWriteTmpConfig(t, &localAdminClient{})
+}
+
+func TestLocalAdminClientCommitConfig(t *testing.T) {
+	testAdminCmdRunnerCommitConfig(t, &localAdminClient{})
+}
+
 func TestListLocksInfo(t *testing.T) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
@@ -70,6 +96,8 @@ func TestListLocksInfo(t *testing.T) {
 		}
 	}
 
+	client := &localAdminClient{}
+
 	testCases := []struct {
 		bucket   string
 		prefix   string
@@ -100,9 +128,9 @@ func TestListLocksInfo(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		actual, err := objAPI.ListLocks(context.Background(), test.bucket, test.prefix, test.duration)
+		actual, err := client.ListLocks(test.bucket, test.prefix, test.duration)
 		if err != nil {
-			t.Errorf("Test %d - Expected success, got %s", i+1, err)
+			t.Fatalf("unexpected error %v", err)
 		}
 		if len(actual) != test.numLocks {
 			t.Errorf("Test %d - Expected %d locks but observed %d locks",

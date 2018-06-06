@@ -31,13 +31,14 @@ import (
 	"github.com/minio/lsync"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Global name space lock.
 var globalNSMutex *nsLockMap
 
 // Global lock server one per server.
-var globalLockServer *lockServer
+var globalLockServer *lockRPCReceiver
 
 // Instance of dsync for distributed clients.
 var globalDsync *dsync.Dsync
@@ -61,7 +62,6 @@ type RWLockerSync interface {
 // Initialize distributed locking only in case of distributed setup.
 // Returns lock clients and the node index for the current server.
 func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int) {
-	cred := globalServerConfig.GetCredential()
 	myNode = -1
 	seenHosts := set.NewStringSet()
 	for _, endpoint := range endpoints {
@@ -69,35 +69,29 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 			continue
 		}
 		seenHosts.Add(endpoint.Host)
-		if !endpoint.IsLocal {
-			// For a remote endpoints setup a lock RPC client.
-			clnts = append(clnts, newLockRPCClient(authConfig{
-				accessKey:       cred.AccessKey,
-				secretKey:       cred.SecretKey,
-				serverAddr:      endpoint.Host,
-				secureConn:      globalIsSSL,
-				serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath),
-				serviceName:     lockServiceName,
-			}))
-			continue
+
+		var locker dsync.NetLocker
+		if endpoint.IsLocal {
+			myNode = len(clnts)
+
+			receiver := &lockRPCReceiver{
+				ll: localLocker{
+					serverAddr:      endpoint.Host,
+					serviceEndpoint: lockServicePath,
+					lockMap:         make(map[string][]lockRequesterInfo),
+				},
+			}
+
+			globalLockServer = receiver
+			locker = &(receiver.ll)
+		} else {
+			host, err := xnet.ParseHost(endpoint.Host)
+			logger.CriticalIf(context.Background(), err)
+			locker, err = NewLockRPCClient(host)
+			logger.CriticalIf(context.Background(), err)
 		}
 
-		// Local endpoint
-		myNode = len(clnts)
-
-		// For a local endpoint, setup a local lock server to
-		// avoid network requests.
-		localLockServer := lockServer{
-			AuthRPCServer: AuthRPCServer{},
-			ll: localLocker{
-				serverAddr:      endpoint.Host,
-				serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath),
-				lockMap:         make(map[string][]lockRequesterInfo),
-			},
-		}
-
-		globalLockServer = &localLockServer
-		clnts = append(clnts, &(localLockServer.ll))
+		clnts = append(clnts, locker)
 	}
 
 	return clnts, myNode
