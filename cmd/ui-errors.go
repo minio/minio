@@ -29,6 +29,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	uiErrInvalidWormValue = newUIErrFn(
+		"Invalid WORM value",
+		"Please check the passed value",
+		"WORM can only accept `on` and `off` values. To enable WORM, set this value to `on`",
+	)
+
 	uiErrInvalidCacheDrivesValue = newUIErrFn(
 		"Invalid cache drive value",
 		"Please check the value in this ENV variable",

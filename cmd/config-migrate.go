@@ -177,6 +177,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "24":
+		if err = migrateV24ToV25(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -2067,5 +2072,123 @@ func migrateV23ToV24() error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv23.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV24ToV25() error {
+	configFile := getConfigFile()
+
+	cv24 := &serverConfigV24{}
+	_, err := quick.Load(configFile, cv24)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘24’. %v", err)
+	}
+	if cv24.Version != "24" {
+		return nil
+	}
+
+	// Copy over fields from V24 into V25 config struct
+	srvConfig := &serverConfigV25{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "25"
+	srvConfig.Credential = cv24.Credential
+	srvConfig.Region = cv24.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv24.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv24.Notify.AMQP
+	}
+	if len(cv24.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv24.Notify.Elasticsearch
+	}
+	if len(cv24.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv24.Notify.Redis
+	}
+	if len(cv24.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv24.Notify.PostgreSQL
+	}
+	if len(cv24.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		srvConfig.Notify.Kafka = cv24.Notify.Kafka
+	}
+	if len(cv24.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv24.Notify.NATS
+	}
+	if len(cv24.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv24.Notify.Webhook
+	}
+	if len(cv24.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv24.Notify.MySQL
+	}
+
+	if len(cv24.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv24.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv24.Browser
+
+	// New field should be turned-off by default.
+	srvConfig.Worm = false // cv25.Worm should be used here
+	// for the next migration from v25 to v26 to persist
+	// local config value.
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv24.Domain
+
+	// Load storage class config from existing storage class config in the file.
+	srvConfig.StorageClass.RRS = cv24.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv24.StorageClass.Standard
+
+	// Load cache config from existing cache config in the file.
+	srvConfig.Cache.Drives = cv24.Cache.Drives
+	srvConfig.Cache.Exclude = cv24.Cache.Exclude
+	srvConfig.Cache.Expiry = cv24.Cache.Expiry
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv24.Version, srvConfig.Version, err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, cv24.Version, srvConfig.Version)
 	return nil
 }

@@ -21,17 +21,17 @@ import (
 	"testing"
 )
 
-// Test BrowserFlag.String()
-func TestBrowserFlagString(t *testing.T) {
-	var bf BrowserFlag
+// Test BoolFlag.String()
+func TestBoolFlagString(t *testing.T) {
+	var bf BoolFlag
 
 	testCases := []struct {
-		flag           BrowserFlag
+		flag           BoolFlag
 		expectedResult string
 	}{
 		{bf, "off"},
-		{BrowserFlag(true), "on"},
-		{BrowserFlag(false), "off"},
+		{BoolFlag(true), "on"},
+		{BoolFlag(false), "off"},
 	}
 
 	for _, testCase := range testCases {
@@ -42,17 +42,17 @@ func TestBrowserFlagString(t *testing.T) {
 	}
 }
 
-// Test BrowserFlag.MarshalJSON()
-func TestBrowserFlagMarshalJSON(t *testing.T) {
-	var bf BrowserFlag
+// Test BoolFlag.MarshalJSON()
+func TestBoolFlagMarshalJSON(t *testing.T) {
+	var bf BoolFlag
 
 	testCases := []struct {
-		flag           BrowserFlag
+		flag           BoolFlag
 		expectedResult string
 	}{
 		{bf, `"off"`},
-		{BrowserFlag(true), `"on"`},
-		{BrowserFlag(false), `"off"`},
+		{BoolFlag(true), `"on"`},
+		{BoolFlag(false), `"off"`},
 	}
 
 	for _, testCase := range testCases {
@@ -63,27 +63,27 @@ func TestBrowserFlagMarshalJSON(t *testing.T) {
 	}
 }
 
-// Test BrowserFlag.UnmarshalJSON()
-func TestBrowserFlagUnmarshalJSON(t *testing.T) {
+// Test BoolFlag.UnmarshalJSON()
+func TestBoolFlagUnmarshalJSON(t *testing.T) {
 	testCases := []struct {
 		data           []byte
-		expectedResult BrowserFlag
+		expectedResult BoolFlag
 		expectedErr    error
 	}{
-		{[]byte(`{}`), BrowserFlag(false), errors.New("json: cannot unmarshal object into Go value of type string")},
-		{[]byte(`["on"]`), BrowserFlag(false), errors.New("json: cannot unmarshal array into Go value of type string")},
-		{[]byte(`"junk"`), BrowserFlag(false), errors.New("invalid value ‘junk’ for BrowserFlag")},
-		{[]byte(`"true"`), BrowserFlag(false), errors.New("invalid value ‘true’ for BrowserFlag")},
-		{[]byte(`"false"`), BrowserFlag(false), errors.New("invalid value ‘false’ for BrowserFlag")},
-		{[]byte(`"ON"`), BrowserFlag(false), errors.New("invalid value ‘ON’ for BrowserFlag")},
-		{[]byte(`"OFF"`), BrowserFlag(false), errors.New("invalid value ‘OFF’ for BrowserFlag")},
-		{[]byte(`""`), BrowserFlag(true), nil},
-		{[]byte(`"on"`), BrowserFlag(true), nil},
-		{[]byte(`"off"`), BrowserFlag(false), nil},
+		{[]byte(`{}`), BoolFlag(false), errors.New("json: cannot unmarshal object into Go value of type string")},
+		{[]byte(`["on"]`), BoolFlag(false), errors.New("json: cannot unmarshal array into Go value of type string")},
+		{[]byte(`"junk"`), BoolFlag(false), errors.New("invalid value ‘junk’ for BoolFlag")},
+		{[]byte(`"true"`), BoolFlag(false), errors.New("invalid value ‘true’ for BoolFlag")},
+		{[]byte(`"false"`), BoolFlag(false), errors.New("invalid value ‘false’ for BoolFlag")},
+		{[]byte(`"ON"`), BoolFlag(false), errors.New("invalid value ‘ON’ for BoolFlag")},
+		{[]byte(`"OFF"`), BoolFlag(false), errors.New("invalid value ‘OFF’ for BoolFlag")},
+		{[]byte(`""`), BoolFlag(true), nil},
+		{[]byte(`"on"`), BoolFlag(true), nil},
+		{[]byte(`"off"`), BoolFlag(false), nil},
 	}
 
 	for _, testCase := range testCases {
-		var flag BrowserFlag
+		var flag BoolFlag
 		err := (&flag).UnmarshalJSON(testCase.data)
 		if testCase.expectedErr == nil {
 			if err != nil {
@@ -101,25 +101,25 @@ func TestBrowserFlagUnmarshalJSON(t *testing.T) {
 	}
 }
 
-// Test ParseBrowserFlag()
-func TestParseBrowserFlag(t *testing.T) {
+// Test ParseBoolFlag()
+func TestParseBoolFlag(t *testing.T) {
 	testCases := []struct {
 		flagStr        string
-		expectedResult BrowserFlag
+		expectedResult BoolFlag
 		expectedErr    error
 	}{
-		{"", BrowserFlag(false), errors.New("invalid value ‘’ for BrowserFlag")},
-		{"junk", BrowserFlag(false), errors.New("invalid value ‘junk’ for BrowserFlag")},
-		{"true", BrowserFlag(false), errors.New("invalid value ‘true’ for BrowserFlag")},
-		{"false", BrowserFlag(false), errors.New("invalid value ‘false’ for BrowserFlag")},
-		{"ON", BrowserFlag(false), errors.New("invalid value ‘ON’ for BrowserFlag")},
-		{"OFF", BrowserFlag(false), errors.New("invalid value ‘OFF’ for BrowserFlag")},
-		{"on", BrowserFlag(true), nil},
-		{"off", BrowserFlag(false), nil},
+		{"", BoolFlag(false), errors.New("invalid value ‘’ for BoolFlag")},
+		{"junk", BoolFlag(false), errors.New("invalid value ‘junk’ for BoolFlag")},
+		{"true", BoolFlag(false), errors.New("invalid value ‘true’ for BoolFlag")},
+		{"false", BoolFlag(false), errors.New("invalid value ‘false’ for BoolFlag")},
+		{"ON", BoolFlag(false), errors.New("invalid value ‘ON’ for BoolFlag")},
+		{"OFF", BoolFlag(false), errors.New("invalid value ‘OFF’ for BoolFlag")},
+		{"on", BoolFlag(true), nil},
+		{"off", BoolFlag(false), nil},
 	}
 
 	for _, testCase := range testCases {
-		bf, err := ParseBrowserFlag(testCase.flagStr)
+		bf, err := ParseBoolFlag(testCase.flagStr)
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)

@@ -39,9 +39,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "24"
+const serverConfigVersion = "25"
 
-type serverConfig = serverConfigV24
+type serverConfig = serverConfigV25
 
 var (
 	// globalServerConfig server config.
@@ -85,7 +85,13 @@ func (s *serverConfig) GetCredential() auth.Credentials {
 // SetBrowser set if browser is enabled.
 func (s *serverConfig) SetBrowser(b bool) {
 	// Set the new value.
-	s.Browser = BrowserFlag(b)
+	s.Browser = BoolFlag(b)
+}
+
+// SetWorm set if worm is enabled.
+func (s *serverConfig) SetWorm(b bool) {
+	// Set the new value.
+	s.Worm = BoolFlag(b)
 }
 
 func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
@@ -99,9 +105,14 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 	return s.StorageClass.Standard, s.StorageClass.RRS
 }
 
-// GetCredentials get current credentials.
+// GetBrowser get current credentials.
 func (s *serverConfig) GetBrowser() bool {
 	return bool(s.Browser)
+}
+
+// GetWorm get current credentials.
+func (s *serverConfig) GetWorm() bool {
+	return bool(s.Worm)
 }
 
 // SetCacheConfig sets the current cache config
@@ -230,6 +241,10 @@ func newConfig() error {
 		srvCfg.SetBrowser(globalIsBrowserEnabled)
 	}
 
+	if globalIsEnvWORM {
+		srvCfg.SetWorm(globalWORMEnabled)
+	}
+
 	if globalIsEnvRegion {
 		srvCfg.SetRegion(globalServerRegion)
 	}
@@ -323,6 +338,9 @@ func loadConfig() error {
 	}
 	if !globalIsEnvBrowser {
 		globalIsBrowserEnabled = globalServerConfig.GetBrowser()
+	}
+	if !globalIsEnvWORM {
+		globalWORMEnabled = globalServerConfig.GetWorm()
 	}
 	if !globalIsEnvRegion {
 		globalServerRegion = globalServerConfig.GetRegion()

@@ -42,7 +42,7 @@ export class ChangePasswordModal extends React.Component {
     const { serverInfo } = this.props
 
     // Check environment variables first.
-    if (serverInfo.info.isEnvCreds) {
+    if (serverInfo.info.isEnvCreds || serverInfo.info.isWorm) {
       this.setState({
         accessKey: "xxxxxxxxx",
         secretKey: "xxxxxxxxx",
