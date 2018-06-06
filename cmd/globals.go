@@ -72,6 +72,8 @@ const (
 	globalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
 	// Cleanup interval when the stale multipart cleanup is initiated.
 	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
+	// Refresh interval to update in-memory bucket policy cache.
+	globalRefreshBucketPolicyInterval = 5 * time.Minute
 
 	// Limit of location constraint XML for unauthenticted PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
