@@ -2062,10 +2062,6 @@ func migrateV23ToV24() error {
 	srvConfig.Cache.Exclude = cv23.Cache.Exclude
 	srvConfig.Cache.Expiry = cv23.Cache.Expiry
 
-	// Init usage config. For future migration, usage config needs
-	// to be copied over from previous version.
-	srvConfig.Usage = usageConfig{globalDefaultUsageCheckInterval}
-
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv23.Version, srvConfig.Version, err)
 	}

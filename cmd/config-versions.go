@@ -603,8 +603,8 @@ type serverConfigV23 struct {
 	Notify notifier `json:"notify"`
 }
 
-// serverConfigV24 is just like version '23' with addition of usage interval
-// field.
+// serverConfigV24 is just like version '23', we had to revert
+// the changes which were made in 6fb06045028b7a57c37c60a612c8e50735279ab4
 //
 // IMPORTANT NOTE: When updating this struct make sure that
 // serverConfig.ConfigDiff() is updated as necessary.
@@ -622,9 +622,6 @@ type serverConfigV24 struct {
 
 	// Cache configuration
 	Cache CacheConfig `json:"cache"`
-
-	// Usage configuration
-	Usage usageConfig `json:"usage"`
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
