@@ -38,41 +38,41 @@ func registerAdminRouter(router *mux.Router) {
 	adminRouter := router.PathPrefix(adminAPIPathPrefix).Subrouter()
 
 	// Version handler
-	adminRouter.Methods(http.MethodGet).Path("/version").HandlerFunc(adminAPI.VersionHandler)
+	adminRouter.Methods(http.MethodGet).Path("/version").HandlerFunc(httpTraceAll(adminAPI.VersionHandler))
 
 	adminV1Router := adminRouter.PathPrefix("/v1").Subrouter()
 
 	/// Service operations
 
 	// Service status
-	adminV1Router.Methods(http.MethodGet).Path("/service").HandlerFunc(adminAPI.ServiceStatusHandler)
+	adminV1Router.Methods(http.MethodGet).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceStatusHandler))
 
 	// Service restart and stop - TODO
-	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(adminAPI.ServiceStopNRestartHandler)
+	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceStopNRestartHandler))
 
 	// Info operations
-	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(adminAPI.ServerInfoHandler)
+	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
 
 	/// Lock operations
 
 	// List Locks
-	adminV1Router.Methods(http.MethodGet).Path("/locks").HandlerFunc(adminAPI.ListLocksHandler)
+	adminV1Router.Methods(http.MethodGet).Path("/locks").HandlerFunc(httpTraceAll(adminAPI.ListLocksHandler))
 	// Clear locks
-	adminV1Router.Methods(http.MethodDelete).Path("/locks").HandlerFunc(adminAPI.ClearLocksHandler)
+	adminV1Router.Methods(http.MethodDelete).Path("/locks").HandlerFunc(httpTraceAll(adminAPI.ClearLocksHandler))
 
 	/// Heal operations
 
 	// Heal processing endpoint.
-	adminV1Router.Methods(http.MethodPost).Path("/heal/").HandlerFunc(adminAPI.HealHandler)
-	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(adminAPI.HealHandler)
-	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(adminAPI.HealHandler)
+	adminV1Router.Methods(http.MethodPost).Path("/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 
 	/// Config operations
 
 	// Update credentials
-	adminV1Router.Methods(http.MethodPut).Path("/config/credential").HandlerFunc(adminAPI.UpdateCredentialsHandler)
+	adminV1Router.Methods(http.MethodPut).Path("/config/credential").HandlerFunc(httpTraceAll(adminAPI.UpdateCredentialsHandler))
 	// Get config
-	adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(adminAPI.GetConfigHandler)
+	adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceAll(adminAPI.GetConfigHandler))
 	// Set config
-	adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(adminAPI.SetConfigHandler)
+	adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceAll(adminAPI.SetConfigHandler))
 }
