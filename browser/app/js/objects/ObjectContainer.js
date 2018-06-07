@@ -37,7 +37,7 @@ export const ObjectContainer = ({
   if (checkedObjectsCount == 0) {
     props.actionButtons = <ObjectActions object={object} />
   }
-  return <ObjectItem {...props} />
+  return <ObjectItem {...props} onClick={() => downloadObject(object.name)} />
 }
 
 const mapStateToProps = state => {
@@ -46,4 +46,10 @@ const mapStateToProps = state => {
   }
 }
 
-export default connect(mapStateToProps)(ObjectContainer)
+const mapDispatchToProps = dispatch => {
+  return {
+    downloadObject: object => dispatch(actionsObjects.downloadObject(object))
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(ObjectContainer)
