@@ -353,6 +353,13 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
+			// Deny if WORM is enabled
+			if globalWORMEnabled {
+				if _, err = objectAPI.GetObjectInfo(context.Background(), args.BucketName, objectName); err == nil {
+					return toJSONError(errMethodNotAllowed)
+				}
+			}
+
 			if err = deleteObject(nil, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
 				break next
 			}
@@ -457,7 +464,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds {
+	if globalIsEnvCreds || globalWORMEnabled {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
@@ -592,6 +599,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object); err == nil {
+			writeWebErrorResponse(w, errMethodNotAllowed)
+			return
+		}
 	}
 
 	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata)
@@ -1103,7 +1118,10 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	} else if err == errMethodNotAllowed {
+		return getAPIError(ErrMethodNotAllowed)
 	}
+
 	// Convert error type to api error code.
 	switch err.(type) {
 	case StorageFull:

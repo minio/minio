@@ -174,6 +174,7 @@ var (
 	// Set to store standard storage class
 	globalStandardStorageClass storageClass
 
+	globalIsEnvWORM   bool
 	globalWORMEnabled bool
 
 	// Is Disk Caching set up
@@ -217,6 +218,7 @@ func getGlobalInfo() (globalInfo map[string]interface{}) {
 		"isDistXL":         globalIsDistXL,
 		"isXL":             globalIsXL,
 		"isBrowserEnabled": globalIsBrowserEnabled,
+		"isWorm":           globalWORMEnabled,
 		"isEnvBrowser":     globalIsEnvBrowser,
 		"isEnvCreds":       globalIsEnvCreds,
 		"isEnvRegion":      globalIsEnvRegion,

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"io"
 	"path"
 
@@ -223,7 +222,9 @@ func registerStorageRPCRouters(router *mux.Router, endpoints EndpointList) {
 	for _, endpoint := range endpoints {
 		if endpoint.IsLocal {
 			rpcServer, err := NewStorageRPCServer(endpoint.Path)
-			logger.CriticalIf(context.Background(), err)
+			if err != nil {
+				logger.Fatal(uiErrUnableToWriteInBackend(err), "Unable to configure one of server's RPC services")
+			}
 			subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 			subrouter.Path(path.Join(storageServiceSubPath, endpoint.Path)).Handler(rpcServer)
 		}

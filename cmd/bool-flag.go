@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ import (
 	"fmt"
 )
 
-// BrowserFlag - wrapper bool type.
-type BrowserFlag bool
+// BoolFlag - wrapper bool type.
+type BoolFlag bool
 
-// String - returns string of BrowserFlag.
-func (bf BrowserFlag) String() string {
+// String - returns string of BoolFlag.
+func (bf BoolFlag) String() string {
 	if bf {
 		return "on"
 	}
@@ -33,20 +33,20 @@ func (bf BrowserFlag) String() string {
 	return "off"
 }
 
-// MarshalJSON - converts BrowserFlag into JSON data.
-func (bf BrowserFlag) MarshalJSON() ([]byte, error) {
+// MarshalJSON - converts BoolFlag into JSON data.
+func (bf BoolFlag) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bf.String())
 }
 
-// UnmarshalJSON - parses given data into BrowserFlag.
-func (bf *BrowserFlag) UnmarshalJSON(data []byte) (err error) {
+// UnmarshalJSON - parses given data into BoolFlag.
+func (bf *BoolFlag) UnmarshalJSON(data []byte) (err error) {
 	var s string
 	if err = json.Unmarshal(data, &s); err == nil {
-		b := BrowserFlag(true)
+		b := BoolFlag(true)
 		if s == "" {
 			// Empty string is treated as valid.
 			*bf = b
-		} else if b, err = ParseBrowserFlag(s); err == nil {
+		} else if b, err = ParseBoolFlag(s); err == nil {
 			*bf = b
 		}
 	}
@@ -54,14 +54,14 @@ func (bf *BrowserFlag) UnmarshalJSON(data []byte) (err error) {
 	return err
 }
 
-// ParseBrowserFlag - parses string into BrowserFlag.
-func ParseBrowserFlag(s string) (bf BrowserFlag, err error) {
+// ParseBoolFlag - parses string into BoolFlag.
+func ParseBoolFlag(s string) (bf BoolFlag, err error) {
 	if s == "on" {
 		bf = true
 	} else if s == "off" {
 		bf = false
 	} else {
-		err = fmt.Errorf("invalid value ‘%s’ for BrowserFlag", s)
+		err = fmt.Errorf("invalid value ‘%s’ for BoolFlag", s)
 	}
 
 	return bf, err
