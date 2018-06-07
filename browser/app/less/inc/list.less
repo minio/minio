@@ -74,7 +74,7 @@ div.fesl-row {
     border-bottom: 1px solid transparent;
     cursor: default;
     .transition(background-color);
-    .transition-duration(300ms);
+    .transition-duration(500ms);
 
     @media (max-width: (@screen-xs-max - 100px)) {
         padding: 5px 20px;
@@ -87,8 +87,16 @@ div.fesl-row {
     }
 
     &:hover {
-        &:not(.fesl-row-selected) {
-            background: lighten(@text-muted-color, 22%);
+        .fis-icon {
+            &:before {
+                .opacity(0)
+            }
+        }
+
+        .fis-helper {
+            &:before {
+                .opacity(1);
+            }
         }
     }
 
@@ -129,14 +137,6 @@ div.fesl-row {
 .fesl-row-selected {
     background-color: @list-row-selected-bg;
 
-    &:nth-child(even) {
-        background-color: @list-row-selected-even-bg;
-    }
-
-    &:hover {
-        background: @list-row-selected-hover;
-    }
-
     &, .fesl-item a {
         color: darken(@text-color, 10%);
     }
@@ -161,6 +161,27 @@ div.fesl-row {
         height: 35px;
         z-index: 8;
         opacity: 0;
+        cursor: pointer;
+
+        &:checked {
+            & ~ .fis-icon {
+                background-color: #32393F;
+
+                &:before {
+                    opacity: 0;
+                }
+            }
+
+            & ~ .fis-helper {
+                &:before {
+                    .scale(0);
+                }
+
+                &:after {
+                    .scale(1);
+                }
+            }
+        }
     }
 }
 
@@ -188,6 +209,38 @@ div.fesl-row {
         font-style: normal;
     }
 }
+
+.fis-helper {
+    &:before,
+    &:after {
+        position: absolute;
+        .transition(all);
+        .transition-duration(250ms);
+    }
+
+    &:before {
+        content: '';
+        width: 15px;
+        height: 15px;
+        border: 2px solid @white;
+        z-index: 7;
+        border-radius: 2px;
+        top: 10px;
+        left: 10px;
+        opacity: 0;
+    }
+
+    &:after {
+        font-family: @font-family-icon;
+        content: '\f00c';
+        top: 8px;
+        left: 9px;
+        color: @white;
+        font-size: 14px;
+        .scale(0);
+    }
+}
+
 
 /*--------------------------
     Files and Folders

@@ -28,15 +28,6 @@ export class ObjectsBulkActions extends React.Component {
       showDeleteConfirmation: false
     }
   }
-  handleDownload() {
-    const { checkedObjects, resetCheckedList, downloadChecked, downloadObject } = this.props
-    if (checkedObjects.length === 1) {
-      downloadObject(checkedObjects[0])
-      resetCheckedList()
-    } else {
-      downloadChecked()
-    }
-  }
   deleteChecked() {
     const { deleteChecked } = this.props
     deleteChecked()
@@ -48,28 +39,24 @@ export class ObjectsBulkActions extends React.Component {
     })
   }
   render() {
-    const { checkedObjects, clearChecked } = this.props
+    const { checkedObjectsCount, downloadChecked, clearChecked } = this.props
     return (
       <div
         className={
           "list-actions" +
           classNames({
-            " list-actions-toggled": checkedObjects.length > 0
+            " list-actions-toggled": checkedObjectsCount > 0
           })
         }
       >
         <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjects.length} 
-          {checkedObjects.length === 1 ? " Object " : " Objects "}
+          <i className="fa fa-check-circle" /> {checkedObjectsCount} Objects
           selected
         </span>
         <span className="la-actions pull-right">
-          <button 
-            id="download-checked" 
-            onClick={this.handleDownload.bind(this)}
-          >
+          <button id="download-checked" onClick={downloadChecked}>
             {" "}
-            Download {checkedObjects.length === 1 ? "object" : "all as zip"}{" "}
+            Download all as zip{" "}
           </button>
         </span>
         <span className="la-actions pull-right">
@@ -99,15 +86,13 @@ export class ObjectsBulkActions extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    checkedObjects: getCheckedList(state)
+    checkedObjectsCount: getCheckedList(state).length
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
-    downloadObject: object => dispatch(actions.downloadObject(object)),
-    resetCheckedList: () => dispatch(actions.resetCheckedList()),
     clearChecked: () => dispatch(actions.resetCheckedList()),
     deleteChecked: () => dispatch(actions.deleteCheckedObjects())
   }
