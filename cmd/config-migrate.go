@@ -2291,7 +2291,7 @@ func migrateV25ToV26() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv25.Browser
 
-	// New field should be turned-off by default.
+	// Load worm config from existing config in the file.
 	srvConfig.Worm = cv25.Worm
 
 	// Load domain config from existing config in the file.

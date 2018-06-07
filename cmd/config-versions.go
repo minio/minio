@@ -657,7 +657,7 @@ type serverConfigV25 struct {
 //
 // IMPORTANT NOTE: When updating this struct make sure that
 // serverConfig.ConfigDiff() is updated as necessary.
-type serverConfigV25 struct {
+type serverConfigV26 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
