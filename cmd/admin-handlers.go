@@ -66,7 +66,7 @@ var (
 // -----------
 // Returns Administration API version
 func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -86,7 +86,7 @@ func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request)
 // ----------
 // Returns server version and uptime.
 func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -131,7 +131,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 // Restarts/Stops minio server gracefully. In a distributed setup,
 // restarts all the servers in the cluster.
 func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -223,7 +223,9 @@ type ServerInfo struct {
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+
+	// Setting the region as empty so as the mc server info command is irrespective to the region.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -312,7 +314,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 // Lists locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -363,7 +365,7 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -569,7 +571,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -676,7 +678,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -773,7 +775,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	r *http.Request) {
 
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
