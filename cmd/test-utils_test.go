@@ -54,6 +54,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/s3signer"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
@@ -478,7 +479,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// need API layer to send requests, etc.
 	registerAPIRouter(router)
 	// module being tested is Peer RPCs router.
-	registerS3PeerRPCRouter(router)
+	registerPeerRPCRouter(router)
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(router)
@@ -749,7 +750,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 
 	// Get canonical URI.
-	canonicalURI := getURLEncodedName(req.URL.Path)
+	canonicalURI := s3utils.EncodePath(req.URL.Path)
 
 	// Get canonical request.
 	// canonicalRequest =
@@ -1104,7 +1105,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 
 	// Get canonical URI.
-	canonicalURI := getURLEncodedName(req.URL.Path)
+	canonicalURI := s3utils.EncodePath(req.URL.Path)
 
 	// Get canonical request.
 	// canonicalRequest =
@@ -1455,7 +1456,7 @@ func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.
 		urlStr = urlStr + bucketName + "/"
 	}
 	if objectName != "" {
-		urlStr = urlStr + getURLEncodedName(objectName)
+		urlStr = urlStr + s3utils.EncodePath(objectName)
 	}
 	if len(queryValues) > 0 {
 		urlStr = urlStr + "?" + queryValues.Encode()
@@ -2264,35 +2265,6 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	return muxRouter
 }
 
-// Initialize browser RPC endpoint.
-func initTestBrowserPeerRPCEndPoint() http.Handler {
-	// Initialize router.
-	muxRouter := mux.NewRouter().SkipClean(true)
-	registerBrowserPeerRPCRouter(muxRouter)
-	return muxRouter
-}
-
-func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestServer {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// Create an instance of TestServer.
-	testRPCServer := TestServer{}
-
-	// Fetch credentials for the test server.
-	credentials := globalServerConfig.GetCredential()
-
-	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKey
-	testRPCServer.SecretKey = credentials.SecretKey
-
-	// Initialize and run the TestServer.
-	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
-	return testRPCServer
-}
-
 func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
@@ -2322,10 +2294,7 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 
 	// Register router on a new mux
 	muxRouter := mux.NewRouter().SkipClean(true)
-	err = registerS3PeerRPCRouter(muxRouter)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
+	registerPeerRPCRouter(muxRouter)
 
 	// Initialize and run the TestServer.
 	testRPCServer.Server = httptest.NewServer(muxRouter)

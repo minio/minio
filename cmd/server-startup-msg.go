@@ -173,22 +173,22 @@ func printObjectAPIMsg() {
 
 // Get formatted disk/storage info message.
 func getStorageInfoMsg(storageInfo StorageInfo) string {
-	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Drive Capacity:"),
-		humanize.IBytes(uint64(storageInfo.Free)),
-		humanize.IBytes(uint64(storageInfo.Total)))
+	var msg string
 	if storageInfo.Backend.Type == Erasure {
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
-		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
+		msg += colorBlue("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}
 	return msg
 }
 
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
-	logger.StartupMessage(getStorageInfoMsg(storageInfo) + "\n")
+	if msg := getStorageInfoMsg(storageInfo); msg != "" {
+		logger.StartupMessage(msg)
+	}
 }
 
-func printCacheStorageInfo(storageInfo StorageInfo) {
+func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Cache Capacity:"),
 		humanize.IBytes(uint64(storageInfo.Free)),
 		humanize.IBytes(uint64(storageInfo.Total)))

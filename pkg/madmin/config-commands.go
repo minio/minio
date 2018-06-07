@@ -18,7 +18,6 @@
 package madmin
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,8 +65,7 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 
 // SetConfig - set config supplied as config.json for the setup.
 func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
-	// No TLS?
-	if !adm.secure {
+	if !adm.secure { // No TLS?
 		return r, fmt.Errorf("credentials/configuration cannot be updated over an insecure connection")
 	}
 
@@ -78,10 +76,8 @@ func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err erro
 	}
 
 	reqData := requestData{
-		relPath:            "/v1/config",
-		contentBody:        bytes.NewReader(configBytes),
-		contentMD5Bytes:    sumMD5(configBytes),
-		contentSHA256Bytes: sum256(configBytes),
+		relPath: "/v1/config",
+		content: configBytes,
 	}
 
 	// Execute PUT on /minio/admin/v1/config to set config.

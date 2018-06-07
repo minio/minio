@@ -68,7 +68,7 @@ var (
 func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -245,7 +245,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			// Initialize server info at index
 			reply[idx] = ServerInfo{Addr: peer.addr}
 
-			serverInfoData, err := peer.cmdRunner.ServerInfoData()
+			serverInfoData, err := peer.cmdRunner.ServerInfo()
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
@@ -669,6 +669,12 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
@@ -681,12 +687,12 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	n, err := io.ReadFull(r.Body, configBuf)
 	if err == nil {
 		// More than maxConfigSize bytes were available
-		writeErrorResponse(w, ErrAdminConfigTooLarge, r.URL)
+		writeErrorResponseJSON(w, ErrAdminConfigTooLarge, r.URL)
 		return
 	}
 	if err != io.ErrUnexpectedEOF {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -696,7 +702,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// client has not sent JSON objects with duplicate keys.
 	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
+		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
 
@@ -704,7 +710,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -769,14 +775,14 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	// Authenticate request
 	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Avoid setting new credentials when they are already passed
-	// by the environment.
-	if globalIsEnvCreds {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+	// by the environment. Deny if WORM is enabled.
+	if globalIsEnvCreds || globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
@@ -791,7 +797,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -808,19 +814,18 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(creds)
-	for peer, err := range updateErrs {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
 	if err = globalServerConfig.Save(); err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		return
+	}
+
+	// Notify all other Minio peers to update credentials
+	for host, err := range globalNotificationSys.SetCredentials(creds) {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", host.String())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	// At this stage, the operation is successful, return 200 OK

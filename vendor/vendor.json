@@ -595,6 +595,12 @@
 			"revisionTime": "2018-04-08T09:29:02Z"
 		},
 		{
+			"checksumSHA1": "T2BgxGcsgrldYNFPQcmw46/K4qM=",
+			"path": "github.com/rjeczalik/notify",
+			"revision": "d152f3ce359a5464dc41e84a8919fc67e55bbbf0",
+			"revisionTime": "2018-03-12T21:30:58Z"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
 			"revisionTime": "2016-06-18T04:49:35+05:30"

@@ -18,39 +18,128 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
-	"path"
-	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
-const (
-	// Admin service names
-	signalServiceRPC  = "Admin.SignalService"
-	reInitFormatRPC   = "Admin.ReInitFormat"
-	listLocksRPC      = "Admin.ListLocks"
-	serverInfoDataRPC = "Admin.ServerInfoData"
-	getConfigRPC      = "Admin.GetConfig"
-	writeTmpConfigRPC = "Admin.WriteTmpConfig"
-	commitConfigRPC   = "Admin.CommitConfig"
-)
+var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
 
-// localAdminClient - represents admin operation to be executed locally.
-type localAdminClient struct {
+// AdminRPCClient - admin RPC client talks to admin RPC server.
+type AdminRPCClient struct {
+	*RPCClient
 }
 
-// remoteAdminClient - represents admin operation to be executed
-// remotely, via RPC.
-type remoteAdminClient struct {
-	*AuthRPCClient
+// SignalService - calls SignalService RPC.
+func (rpcClient *AdminRPCClient) SignalService(signal serviceSignal) (err error) {
+	args := SignalServiceArgs{Sig: signal}
+	reply := VoidReply{}
+
+	return rpcClient.Call(adminServiceName+".SignalService", &args, &reply)
+}
+
+// ReInitFormat - re-initialize disk format, remotely.
+func (rpcClient *AdminRPCClient) ReInitFormat(dryRun bool) error {
+	args := ReInitFormatArgs{DryRun: dryRun}
+	reply := VoidReply{}
+
+	return rpcClient.Call(adminServiceName+".ReInitFormat", &args, &reply)
+}
+
+// ListLocks - Sends list locks command to remote server via RPC.
+func (rpcClient *AdminRPCClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	args := ListLocksQuery{
+		Bucket:   bucket,
+		Prefix:   prefix,
+		Duration: duration,
+	}
+	var reply []VolumeLockInfo
+
+	err := rpcClient.Call(adminServiceName+".ListLocks", &args, &reply)
+	return reply, err
+}
+
+// ServerInfo - returns the server info of the server to which the RPC call is made.
+func (rpcClient *AdminRPCClient) ServerInfo() (sid ServerInfoData, err error) {
+	err = rpcClient.Call(adminServiceName+".ServerInfo", &AuthArgs{}, &sid)
+	return sid, err
+}
+
+// GetConfig - returns config.json of the remote server.
+func (rpcClient *AdminRPCClient) GetConfig() ([]byte, error) {
+	args := AuthArgs{}
+	var reply []byte
+
+	err := rpcClient.Call(adminServiceName+".GetConfig", &args, &reply)
+	return reply, err
+}
+
+// WriteTmpConfig - writes config file content to a temporary file on a remote node.
+func (rpcClient *AdminRPCClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
+	args := WriteConfigArgs{
+		TmpFileName: tmpFileName,
+		Buf:         configBytes,
+	}
+	reply := VoidReply{}
+
+	err := rpcClient.Call(adminServiceName+".WriteTmpConfig", &args, &reply)
+	logger.LogIf(context.Background(), err)
+	return err
+}
+
+// CommitConfig - Move the new config in tmpFileName onto config.json on a remote node.
+func (rpcClient *AdminRPCClient) CommitConfig(tmpFileName string) error {
+	args := CommitConfigArgs{FileName: tmpFileName}
+	reply := VoidReply{}
+
+	err := rpcClient.Call(adminServiceName+".CommitConfig", &args, &reply)
+	logger.LogIf(context.Background(), err)
+	return err
+}
+
+// NewAdminRPCClient - returns new admin RPC client.
+func NewAdminRPCClient(host *xnet.Host) (*AdminRPCClient, error) {
+	scheme := "http"
+	if globalIsSSL {
+		scheme = "https"
+	}
+
+	serviceURL := &xnet.URL{
+		Scheme: scheme,
+		Host:   host.String(),
+		Path:   adminServicePath,
+	}
+
+	var tlsConfig *tls.Config
+	if globalIsSSL {
+		tlsConfig = &tls.Config{
+			ServerName: host.Name,
+			RootCAs:    globalRootCAs,
+		}
+	}
+
+	rpcClient, err := NewRPCClient(
+		RPCClientArgs{
+			NewAuthTokenFunc: newAuthToken,
+			RPCVersion:       globalRPCAPIVersion,
+			ServiceName:      adminServiceName,
+			ServiceURL:       serviceURL,
+			TLSConfig:        tlsConfig,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AdminRPCClient{rpcClient}, nil
 }
 
 // adminCmdRunner - abstracts local and remote execution of admin
@@ -59,187 +148,10 @@ type adminCmdRunner interface {
 	SignalService(s serviceSignal) error
 	ReInitFormat(dryRun bool) error
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-	ServerInfoData() (ServerInfoData, error)
+	ServerInfo() (ServerInfoData, error)
 	GetConfig() ([]byte, error)
 	WriteTmpConfig(tmpFileName string, configBytes []byte) error
 	CommitConfig(tmpFileName string) error
-}
-
-var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
-
-// SignalService - sends a restart or stop signal to the local server
-func (lc localAdminClient) SignalService(s serviceSignal) error {
-	switch s {
-	case serviceRestart, serviceStop:
-		globalServiceSignalCh <- s
-	default:
-		return errUnsupportedSignal
-	}
-	return nil
-}
-
-// ReInitFormat - re-initialize disk format.
-func (lc localAdminClient) ReInitFormat(dryRun bool) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-	return objectAPI.ReloadFormat(context.Background(), dryRun)
-}
-
-// ListLocks - Fetches lock information from local lock instrumentation.
-func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	// check if objectLayer is initialized, if not return.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return nil, errServerNotInitialized
-	}
-	return objectAPI.ListLocks(context.Background(), bucket, prefix, duration)
-}
-
-func (rc remoteAdminClient) SignalService(s serviceSignal) (err error) {
-	switch s {
-	case serviceRestart, serviceStop:
-		reply := AuthRPCReply{}
-		err = rc.Call(signalServiceRPC, &SignalServiceArgs{Sig: s},
-			&reply)
-	default:
-		err = errUnsupportedSignal
-	}
-	return err
-}
-
-// ReInitFormat - re-initialize disk format, remotely.
-func (rc remoteAdminClient) ReInitFormat(dryRun bool) error {
-	reply := AuthRPCReply{}
-	return rc.Call(reInitFormatRPC, &ReInitFormatArgs{
-		DryRun: dryRun,
-	}, &reply)
-}
-
-// ListLocks - Sends list locks command to remote server via RPC.
-func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	listArgs := ListLocksQuery{
-		Bucket:   bucket,
-		Prefix:   prefix,
-		Duration: duration,
-	}
-	var reply ListLocksReply
-	if err := rc.Call(listLocksRPC, &listArgs, &reply); err != nil {
-		return nil, err
-	}
-	return reply.VolLocks, nil
-}
-
-// ServerInfoData - Returns the server info of this server.
-func (lc localAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
-	if globalBootTime.IsZero() {
-		return sid, errServerNotInitialized
-	}
-
-	// Build storage info
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		return sid, errServerNotInitialized
-	}
-	storage := objLayer.StorageInfo(context.Background())
-
-	return ServerInfoData{
-		StorageInfo: storage,
-		ConnStats:   globalConnStats.toServerConnStats(),
-		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
-		Properties: ServerProperties{
-			Uptime:   UTCNow().Sub(globalBootTime),
-			Version:  Version,
-			CommitID: CommitID,
-			SQSARN:   globalNotificationSys.GetARNList(),
-			Region:   globalServerConfig.GetRegion(),
-		},
-	}, nil
-}
-
-// ServerInfo - returns the server info of the server to which the RPC call is made.
-func (rc remoteAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
-	args := AuthRPCArgs{}
-	reply := ServerInfoDataReply{}
-	err := rc.Call(serverInfoDataRPC, &args, &reply)
-	if err != nil {
-		return sid, err
-	}
-
-	return reply.ServerInfoData, nil
-}
-
-// GetConfig - returns config.json of the local server.
-func (lc localAdminClient) GetConfig() ([]byte, error) {
-	if globalServerConfig == nil {
-		return nil, fmt.Errorf("config not present")
-	}
-
-	return json.Marshal(globalServerConfig)
-}
-
-// GetConfig - returns config.json of the remote server.
-func (rc remoteAdminClient) GetConfig() ([]byte, error) {
-	args := AuthRPCArgs{}
-	reply := ConfigReply{}
-	if err := rc.Call(getConfigRPC, &args, &reply); err != nil {
-		return nil, err
-	}
-	return reply.Config, nil
-}
-
-// WriteTmpConfig - writes config file content to a temporary file on
-// the local server.
-func (lc localAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
-	return writeTmpConfigCommon(tmpFileName, configBytes)
-}
-
-// WriteTmpConfig - writes config file content to a temporary file on
-// a remote node.
-func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
-	wArgs := WriteConfigArgs{
-		TmpFileName: tmpFileName,
-		Buf:         configBytes,
-	}
-
-	err := rc.Call(writeTmpConfigRPC, &wArgs, &WriteConfigReply{})
-	if err != nil {
-		logger.LogIf(context.Background(), err)
-		return err
-	}
-
-	return nil
-}
-
-// CommitConfig - Move the new config in tmpFileName onto config.json
-// on a local node.
-func (lc localAdminClient) CommitConfig(tmpFileName string) error {
-	configFile := getConfigFile()
-	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
-
-	err := os.Rename(tmpConfigFile, configFile)
-	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
-	reqInfo.AppendTags("configFile", configFile)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
-	logger.LogIf(ctx, err)
-	return err
-}
-
-// CommitConfig - Move the new config in tmpFileName onto config.json
-// on a remote node.
-func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
-	cArgs := CommitConfigArgs{
-		FileName: tmpFileName,
-	}
-	cReply := CommitConfigReply{}
-	err := rc.Call(commitConfigRPC, &cArgs, &cReply)
-	if err != nil {
-		logger.LogIf(context.Background(), err)
-		return err
-	}
-
-	return nil
 }
 
 // adminPeer - represents an entity that implements admin API RPCs.
@@ -254,34 +166,25 @@ type adminPeers []adminPeer
 
 // makeAdminPeers - helper function to construct a collection of adminPeer.
 func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
-	thisPeer := globalMinioAddr
-	if globalMinioHost == "" {
-		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
+	localAddr := GetLocalPeer(endpoints)
+	if strings.HasPrefix(localAddr, "127.0.0.1:") {
+		// Use first IPv4 instead of loopback address.
+		localAddr = net.JoinHostPort(sortIPs(localIP4.ToSlice())[0], globalMinioPort)
 	}
 	adminPeerList = append(adminPeerList, adminPeer{
-		thisPeer,
-		localAdminClient{},
-		true,
+		addr:      localAddr,
+		cmdRunner: localAdminClient{},
+		isLocal:   true,
 	})
 
-	hostSet := set.CreateStringSet(globalMinioAddr)
-	cred := globalServerConfig.GetCredential()
-	serviceEndpoint := path.Join(minioReservedBucketPath, adminPath)
-	for _, host := range GetRemotePeers(endpoints) {
-		if hostSet.Contains(host) {
-			continue
-		}
-		hostSet.Add(host)
+	for _, hostStr := range GetRemotePeers(endpoints) {
+		host, err := xnet.ParseHost(hostStr)
+		logger.CriticalIf(context.Background(), err)
+		rpcClient, err := NewAdminRPCClient(host)
+		logger.CriticalIf(context.Background(), err)
 		adminPeerList = append(adminPeerList, adminPeer{
-			addr: host,
-			cmdRunner: &remoteAdminClient{newAuthRPCClient(authConfig{
-				accessKey:       cred.AccessKey,
-				secretKey:       cred.SecretKey,
-				serverAddr:      host,
-				serviceEndpoint: serviceEndpoint,
-				secureConn:      globalIsSSL,
-				serviceName:     "Admin",
-			})},
+			addr:      hostStr,
+			cmdRunner: rpcClient,
 		})
 	}
 
@@ -427,7 +330,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 		wg.Add(1)
 		go func(idx int, peer adminPeer) {
 			defer wg.Done()
-			serverInfoData, rpcErr := peer.cmdRunner.ServerInfoData()
+			serverInfoData, rpcErr := peer.cmdRunner.ServerInfo()
 			uptimes[idx].uptime, uptimes[idx].err = serverInfoData.Properties.Uptime, rpcErr
 		}(i, peer)
 	}

@@ -23,7 +23,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -130,25 +129,7 @@ func TestWriteWebErrorResponse(t *testing.T) {
 
 // Authenticate and get JWT token - will be called before every webrpc handler invocation
 func getWebRPCToken(apiRouter http.Handler, accessKey, secretKey string) (token string, err error) {
-	rec := httptest.NewRecorder()
-	request := LoginArgs{Username: accessKey, Password: secretKey}
-	reply := &LoginRep{}
-	req, err := newTestWebRPCRequest("Web"+loginMethodName, "", request)
-	if err != nil {
-		return "", err
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		return "", errors.New("Auth failed")
-	}
-	err = getTestWebRPCResponse(rec, &reply)
-	if err != nil {
-		return "", err
-	}
-	if reply.Token == "" {
-		return "", errors.New("Auth failed")
-	}
-	return reply.Token, nil
+	return authenticateWeb(accessKey, secretKey)
 }
 
 // Wrapper for calling Login Web Handler
@@ -209,8 +190,8 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	storageInfoRequest := AuthRPCArgs{
-		Version: globalRPCAPIVersion,
+	storageInfoRequest := AuthArgs{
+		RPCVersion: globalRPCAPIVersion,
 	}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
@@ -221,12 +202,8 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
-	err = getTestWebRPCResponse(rec, &storageInfoReply)
-	if err != nil {
+	if err = getTestWebRPCResponse(rec, &storageInfoReply); err != nil {
 		t.Fatalf("Failed %v", err)
-	}
-	if storageInfoReply.StorageInfo.Total <= 0 {
-		t.Fatalf("Got a zero or negative total free space disk")
 	}
 }
 
@@ -248,8 +225,8 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	rec := httptest.NewRecorder()
 
-	serverInfoRequest := AuthRPCArgs{
-		Version: globalRPCAPIVersion,
+	serverInfoRequest := AuthArgs{
+		RPCVersion: globalRPCAPIVersion,
 	}
 	serverInfoReply := &ServerInfoRep{}
 	req, err := newTestWebRPCRequest("Web.ServerInfo", authorization, serverInfoRequest)
@@ -1549,8 +1526,8 @@ func TestWebCheckAuthorization(t *testing.T) {
 		"PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{
-			Version: globalRPCAPIVersion,
+		args := &AuthArgs{
+			RPCVersion: globalRPCAPIVersion,
 		}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
@@ -1635,8 +1612,8 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{
-			Version: globalRPCAPIVersion,
+		args := &AuthArgs{
+			RPCVersion: globalRPCAPIVersion,
 		}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
@@ -1750,7 +1727,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		RepArgs    interface{}
 	}{
 		{"MakeBucket", MakeBucketArgs{BucketName: bucketName}, WebGenericRep{}},
-		{"ListBuckets", AuthRPCArgs{Version: globalRPCAPIVersion}, ListBucketsRep{}},
+		{"ListBuckets", AuthArgs{RPCVersion: globalRPCAPIVersion}, ListBucketsRep{}},
 		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
 		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
 		{"SetBucketPolicy", SetBucketPolicyWebArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
@@ -1774,8 +1751,8 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Test Web.StorageInfo
-	storageInfoRequest := AuthRPCArgs{
-		Version: globalRPCAPIVersion,
+	storageInfoRequest := AuthArgs{
+		RPCVersion: globalRPCAPIVersion,
 	}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
@@ -1789,10 +1766,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	err = getTestWebRPCResponse(rec, &storageInfoReply)
 	if err != nil {
 		t.Fatalf("Failed %v", err)
-	}
-	// if Total size is 0 it indicates faulty disk.
-	if storageInfoReply.StorageInfo.Total != 0 {
-		t.Fatalf("Should get zero Total size since disks are faulty ")
 	}
 
 	// Test authorization of Web.Download

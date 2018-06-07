@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -41,6 +42,11 @@ var defaultEtag = "00000000000000000000000000000000-1"
 
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
+	// Disk usage metrics
+	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	// Disk usage running routine
+	usageRunning int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+
 	// Path to be exported over S3 API.
 	fsPath string
 	// meta json filename, varies by fs / cache backend.
@@ -150,6 +156,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
 	}
 
+	go fs.diskUsage(globalServiceDoneCh)
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
@@ -164,14 +171,79 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
+// diskUsage returns du information for the posix path, in a continuous routine.
+func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
+	ticker := time.NewTicker(globalUsageCheckInterval)
+	defer ticker.Stop()
+
+	usageFn := func(ctx context.Context, entry string) error {
+		var fi os.FileInfo
+		var err error
+		if hasSuffix(entry, slashSeparator) {
+			fi, err = fsStatDir(ctx, entry)
+		} else {
+			fi, err = fsStatFile(ctx, entry)
+		}
+		if err != nil {
+			return err
+		}
+		atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
+		return nil
+	}
+
+	// Check if disk usage routine is running, if yes then return.
+	if atomic.LoadInt32(&fs.usageRunning) == 1 {
+		return
+	}
+	atomic.StoreInt32(&fs.usageRunning, 1)
+	defer atomic.StoreInt32(&fs.usageRunning, 0)
+
+	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+		return
+	}
+
+	for {
+		select {
+		case <-doneCh:
+			return
+		case <-ticker.C:
+			// Check if disk usage routine is running, if yes let it finish.
+			if atomic.LoadInt32(&fs.usageRunning) == 1 {
+				continue
+			}
+			atomic.StoreInt32(&fs.usageRunning, 1)
+
+			var usage uint64
+			usageFn = func(ctx context.Context, entry string) error {
+				var fi os.FileInfo
+				var err error
+				if hasSuffix(entry, slashSeparator) {
+					fi, err = fsStatDir(ctx, entry)
+				} else {
+					fi, err = fsStatFile(ctx, entry)
+				}
+				if err != nil {
+					return err
+				}
+				usage = usage + uint64(fi.Size())
+				return nil
+			}
+
+			if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+				atomic.StoreInt32(&fs.usageRunning, 0)
+				continue
+			}
+
+			atomic.StoreInt32(&fs.usageRunning, 0)
+			atomic.StoreUint64(&fs.totalUsed, usage)
+		}
+	}
+}
+
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
-	info, err := getDiskInfo((fs.fsPath))
-	logger.GetReqInfo(ctx).AppendTags("path", fs.fsPath)
-	logger.LogIf(ctx, err)
 	storageInfo := StorageInfo{
-		Total: info.Total,
-		Free:  info.Free,
+		Used: atomic.LoadUint64(&fs.totalUsed),
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo

@@ -18,7 +18,6 @@
 package madmin
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -87,9 +86,8 @@ func (adm *AdminClient) ServiceSendAction(action ServiceActionValue) error {
 
 	// Request API to Restart server
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:            "/v1/service",
-		contentBody:        bytes.NewReader(body),
-		contentSHA256Bytes: sum256(body),
+		relPath: "/v1/service",
+		content: body,
 	})
 	defer closeResponse(resp)
 	if err != nil {

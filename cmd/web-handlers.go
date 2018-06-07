@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -34,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -100,7 +102,7 @@ type StorageInfoRep struct {
 }
 
 // StorageInfo - web call to gather storage usage statistics.
-func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply *StorageInfoRep) error {
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
@@ -351,6 +353,13 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
+			// Deny if WORM is enabled
+			if globalWORMEnabled {
+				if _, err = objectAPI.GetObjectInfo(context.Background(), args.BucketName, objectName); err == nil {
+					return toJSONError(errMethodNotAllowed)
+				}
+			}
+
 			if err = deleteObject(nil, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
 				break next
 			}
@@ -455,7 +464,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds {
+	if globalIsEnvCreds || globalWORMEnabled {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
@@ -468,53 +477,29 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(creds)
-
-	// Update local credentials
+	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(creds)
 
-	// Persist updated credentials.
-	if err = globalServerConfig.Save(); err != nil {
-		// Save the current creds when failed to update.
+	// Save credentials to config file
+	if err := globalServerConfig.Save(); err != nil {
+		// As saving configurstion failed, restore previous credential in memory.
 		globalServerConfig.SetCredential(prevCred)
-
-		errsMap[globalMinioAddr] = err
-	}
-
-	// Log all the peer related error messages, and populate the
-	// PeerErrMsgs map.
-	reply.PeerErrMsgs = make(map[string]string)
-	for svr, errVal := range errsMap {
-		tErr := fmt.Errorf("Unable to change credentials on %s: %v", svr, errVal)
-		logger.LogIf(context.Background(), tErr)
-		reply.PeerErrMsgs[svr] = errVal.Error()
-	}
-
-	// If we were unable to update locally, we return an error to the user/browser.
-	if errsMap[globalMinioAddr] != nil {
-		// Since the error message may be very long to display
-		// on the browser, we tell the user to check the
-		// server logs.
-		return toJSONError(fmt.Errorf("unexpected error(s) occurred - please check minio server logs"))
-	}
-
-	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		// Did we have peer errors?
-		if len(errsMap) > 0 {
-			err = fmt.Errorf(
-				"we gave up due to: '%s', but there were more errors. Please check minio server logs",
-				err.Error(),
-			)
-		}
-
+		logger.LogIf(context.Background(), err)
 		return toJSONError(err)
 	}
 
-	reply.Token = token
-	reply.UIVersion = browser.UIVersion
+	if errs := globalNotificationSys.SetCredentials(creds); len(errs) != 0 {
+		reply.PeerErrMsgs = make(map[string]string)
+		for host, err := range errs {
+			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)
+			logger.LogIf(context.Background(), err)
+			reply.PeerErrMsgs[host.String()] = err.Error()
+		}
+	} else {
+		reply.Token = newAuthToken()
+		reply.UIVersion = browser.UIVersion
+	}
+
 	return nil
 }
 
@@ -614,6 +599,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object); err == nil {
+			writeWebErrorResponse(w, errMethodNotAllowed)
+			return
+		}
 	}
 
 	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata)
@@ -1005,26 +998,27 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	if expiry < 604800 && expiry > 0 {
 		expiryStr = strconv.FormatInt(expiry, 10)
 	}
-	query := strings.Join([]string{
-		"X-Amz-Algorithm=" + signV4Algorithm,
-		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
-		"X-Amz-Date=" + dateStr,
-		"X-Amz-Expires=" + expiryStr,
-		"X-Amz-SignedHeaders=host",
-	}, "&")
+
+	query := url.Values{}
+	query.Set("X-Amz-Algorithm", signV4Algorithm)
+	query.Set("X-Amz-Credential", credential)
+	query.Set("X-Amz-Date", dateStr)
+	query.Set("X-Amz-Expires", expiryStr)
+	query.Set("X-Amz-SignedHeaders", "host")
+	queryStr := s3utils.QueryEncode(query)
 
 	path := "/" + path.Join(bucket, object)
 
 	// "host" is the only header required to be signed for Presigned URLs.
 	extractedSignedHeaders := make(http.Header)
 	extractedSignedHeaders.Set("host", host)
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET")
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
@@ -1124,7 +1118,10 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	} else if err == errMethodNotAllowed {
+		return getAPIError(ErrMethodNotAllowed)
 	}
+
 	// Convert error type to api error code.
 	switch err.(type) {
 	case StorageFull:

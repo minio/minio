@@ -18,7 +18,6 @@
 package madmin
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,11 +45,8 @@ func (adm *AdminClient) SetCredentials(access, secret string) error {
 
 	// Setup new request
 	reqData := requestData{
-		relPath:            "/v1/config/credential",
-		contentBody:        bytes.NewReader(body),
-		contentLength:      int64(len(body)),
-		contentMD5Bytes:    sumMD5(body),
-		contentSHA256Bytes: sum256(body),
+		relPath: "/v1/config/credential",
+		content: body,
 	}
 
 	// Execute GET on bucket to list objects.

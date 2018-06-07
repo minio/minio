@@ -25,6 +25,8 @@ import (
 	"encoding/pem"
 	"io/ioutil"
 	"os"
+
+	"github.com/minio/minio/pkg/certs"
 )
 
 // TLSPrivateKeyPassword is the environment variable which contains the password used
@@ -135,10 +137,19 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg(err.Error())
 	}
+	// Ensure that the private key is not a P-384 or P-521 EC key.
+	// The Go TLS stack does not provide constant-time implementations of P-384 and P-521.
+	if priv, ok := cert.PrivateKey.(crypto.Signer); ok {
+		if pub, ok := priv.Public().(*ecdsa.PublicKey); ok {
+			if name := pub.Params().Name; name == "P-384" || name == "P-521" { // unfortunately there is no cleaner way to check
+				return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg("tls: the ECDSA curve '%s' is not supported", name)
+			}
+		}
+	}
 	return cert, nil
 }
 
-func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
+func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, c *certs.Certs, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, nil, false, nil
 	}
@@ -147,27 +158,15 @@ func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsC
 		return nil, nil, nil, false, err
 	}
 
-	var cert tls.Certificate
-	if cert, err = loadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
+	c, err = certs.New(getPublicCertFile(), getPrivateKeyFile(), loadX509KeyPair)
+	if err != nil {
 		return nil, nil, nil, false, err
 	}
-	// Ensure that the private key is not a P-384 or P-521 EC key.
-	// The Go TLS stack does not provide constant-time implementations of P-384 and P-521.
-	if priv, ok := cert.PrivateKey.(crypto.Signer); ok {
-		if pub, ok := priv.Public().(*ecdsa.PublicKey); ok {
-			if name := pub.Params().Name; name == "P-384" || name == "P-521" { // unfortunately there is no cleaner way to check
-				return nil, nil, nil, false, uiErrSSLUnexpectedData(nil).Msg("tls: the ECDSA curve '%s' is not supported", name)
-			}
-		}
-
-	}
-
-	tlsCert = &cert
 
 	if rootCAs, err = getRootCAs(getCADir()); err != nil {
 		return nil, nil, nil, false, err
 	}
 
 	secureConn = true
-	return x509Certs, rootCAs, tlsCert, secureConn, nil
+	return x509Certs, rootCAs, c, secureConn, nil
 }

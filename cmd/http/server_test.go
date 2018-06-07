@@ -23,33 +23,31 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/certs"
 )
 
 func TestNewServer(t *testing.T) {
 	nonLoopBackIP := getNonLoopBackIP(t)
-	certificate, err := getTLSCert()
-	if err != nil {
-		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
-	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, world")
 	})
 
 	testCases := []struct {
-		addrs       []string
-		handler     http.Handler
-		certificate *tls.Certificate
+		addrs   []string
+		handler http.Handler
+		certFn  certs.GetCertificateFunc
 	}{
 		{[]string{"127.0.0.1:9000"}, handler, nil},
 		{[]string{nonLoopBackIP + ":9000"}, handler, nil},
 		{[]string{"127.0.0.1:9000", nonLoopBackIP + ":9000"}, handler, nil},
-		{[]string{"127.0.0.1:9000"}, handler, &certificate},
-		{[]string{nonLoopBackIP + ":9000"}, handler, &certificate},
-		{[]string{"127.0.0.1:9000", nonLoopBackIP + ":9000"}, handler, &certificate},
+		{[]string{"127.0.0.1:9000"}, handler, getCert},
+		{[]string{nonLoopBackIP + ":9000"}, handler, getCert},
+		{[]string{"127.0.0.1:9000", nonLoopBackIP + ":9000"}, handler, getCert},
 	}
 
 	for i, testCase := range testCases {
-		server := NewServer(testCase.addrs, testCase.handler, testCase.certificate)
+		server := NewServer(testCase.addrs, testCase.handler, testCase.certFn)
 		if server == nil {
 			t.Fatalf("Case %v: server: expected: <non-nil>, got: <nil>", (i + 1))
 		}
@@ -63,7 +61,7 @@ func TestNewServer(t *testing.T) {
 		// 	t.Fatalf("Case %v: server.Handler: expected: %v, got: %v", (i + 1), testCase.handler, server.Handler)
 		// }
 
-		if testCase.certificate == nil {
+		if testCase.certFn == nil {
 			if server.TLSConfig != nil {
 				t.Fatalf("Case %v: server.TLSConfig: expected: <nil>, got: %v", (i + 1), server.TLSConfig)
 			}
@@ -122,11 +120,6 @@ func TestServerTLSCiphers(t *testing.T) {
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // Disabled because of RSA-PKCS1-v1.5 - AES-GCM is considered secure.
 	}
 
-	certificate, err := getTLSCert()
-	if err != nil {
-		t.Fatalf("Unable to parse private/certificate data. %v\n", err)
-	}
-
 	testCases := []struct {
 		ciphers            []uint16
 		resetServerCiphers bool
@@ -145,8 +138,7 @@ func TestServerTLSCiphers(t *testing.T) {
 			server := NewServer([]string{addr},
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintf(w, "Hello, world")
-				}),
-				&certificate)
+				}), getCert)
 			if testCase.resetServerCiphers {
 				// Use Go default ciphers.
 				server.TLSConfig.CipherSuites = nil

@@ -222,7 +222,7 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	return req.Method == http.MethodConnect && req.Proto == "HTTP/1.0"
+	return req.Method == http.MethodPost
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -661,7 +661,7 @@ func addSecurityHeaders(h http.Handler) http.Handler {
 
 func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
-	header.Set("X-XSS-Protection", "\"1; mode=block\"")              // Prevents against XSS attacks
+	header.Set("X-XSS-Protection", "1; mode=block")                  // Prevents against XSS attacks
 	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
 	s.handler.ServeHTTP(w, r)
 }

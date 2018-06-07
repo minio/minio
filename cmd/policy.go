@@ -22,17 +22,37 @@ import (
 	"net/http"
 	"path"
 	"sync"
+	"time"
 
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/policy"
 )
 
-// PolicySys - policy system.
+// PolicySys - policy subsystem.
 type PolicySys struct {
 	sync.RWMutex
 	bucketPolicyMap map[string]policy.Policy
+}
+
+// removeDeletedBuckets - to handle a corner case where we have cached the policy for a deleted
+// bucket. i.e if we miss a delete-bucket notification we should delete the corresponding
+// bucket policy during sys.refresh()
+func (sys *PolicySys) removeDeletedBuckets(bucketInfos []BucketInfo) {
+	buckets := set.NewStringSet()
+	for _, info := range bucketInfos {
+		buckets.Add(info.Name)
+	}
+	sys.Lock()
+	defer sys.Unlock()
+
+	for bucket := range sys.bucketPolicyMap {
+		if !buckets.Contains(bucket) {
+			delete(sys.bucketPolicyMap, bucket)
+		}
+	}
 }
 
 // Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
@@ -70,42 +90,65 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 	return args.IsOwner
 }
 
+// Refresh PolicySys.
+func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
+	buckets, err := objAPI.ListBuckets(context.Background())
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return err
+	}
+	sys.removeDeletedBuckets(buckets)
+	for _, bucket := range buckets {
+		config, err := GetPolicyConfig(objAPI, bucket.Name)
+		if err != nil {
+			if _, ok := err.(BucketPolicyNotFound); ok {
+				sys.Remove(bucket.Name)
+			}
+			continue
+		}
+		// This part is specifically written to handle migration
+		// when the Version string is empty, this was allowed
+		// in all previous minio releases but we need to migrate
+		// those policies by properly setting the Version string
+		// from now on.
+		if config.Version == "" {
+			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
+			config.Version = policy.DefaultVersion
+
+			if err = savePolicyConfig(objAPI, bucket.Name, config); err != nil {
+				logger.LogIf(context.Background(), err)
+				return err
+			}
+		}
+		sys.Set(bucket.Name, *config)
+	}
+	return nil
+}
+
 // Init - initializes policy system from policy.json of all buckets.
 func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
+	// Load PolicySys once during boot.
+	if err := sys.refresh(objAPI); err != nil {
 		return err
 	}
 
-	for _, bucket := range buckets {
-		config, err := GetPolicyConfig(objAPI, bucket.Name)
-		if err != nil {
-			if _, ok := err.(BucketPolicyNotFound); !ok {
-				return err
+	// Refresh PolicySys in background.
+	go func() {
+		ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-globalServiceDoneCh:
+				return
+			case <-ticker.C:
+				sys.refresh(objAPI)
 			}
-		} else {
-			// This part is specifically written to handle migration
-			// when the Version string is empty, this was allowed
-			// in all previous minio releases but we need to migrate
-			// those policies by properly setting the Version string
-			// from now on.
-			if config.Version == "" {
-				logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
-				config.Version = policy.DefaultVersion
-
-				if err = savePolicyConfig(objAPI, bucket.Name, config); err != nil {
-					return err
-				}
-			}
-
-			sys.Set(bucket.Name, *config)
 		}
-	}
-
+	}()
 	return nil
 }
 

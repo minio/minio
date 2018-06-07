@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"sync"
-
-	"github.com/minio/minio/pkg/disk"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -74,7 +72,7 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
-func (d *naughtyDisk) DiskInfo() (info disk.Info, err error) {
+func (d *naughtyDisk) DiskInfo() (info DiskInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return info, err
 	}

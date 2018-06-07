@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/disk"
 )
 
 // XL constants.
@@ -118,7 +117,7 @@ func (xl xlObjects) ClearLocks(ctx context.Context, volLocks []VolumeLockInfo) e
 }
 
 // byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []disk.Info
+type byDiskTotal []DiskInfo
 
 func (d byDiskTotal) Len() int      { return len(d) }
 func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
@@ -127,8 +126,8 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, offlineDisks int) {
-	disksInfo = make([]disk.Info, len(disks))
+func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, offlineDisks int) {
+	disksInfo = make([]DiskInfo, len(disks))
 	for i, storageDisk := range disks {
 		if storageDisk == nil {
 			// Storage disk is empty, perhaps ignored disk or not available.
@@ -154,8 +153,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 // returns sorted disksInfo slice which has only valid entries.
 // i.e the entries where the total size of the disk is not stated
 // as 0Bytes, this means that the disk is not online or ignored.
-func sortValidDisksInfo(disksInfo []disk.Info) []disk.Info {
-	var validDisksInfo []disk.Info
+func sortValidDisksInfo(disksInfo []DiskInfo) []DiskInfo {
+	var validDisksInfo []DiskInfo
 	for _, diskInfo := range disksInfo {
 		if diskInfo.Total == 0 {
 			continue
@@ -174,10 +173,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	validDisksInfo := sortValidDisksInfo(disksInfo)
 	// If there are no valid disks, set total and free disks to 0
 	if len(validDisksInfo) == 0 {
-		return StorageInfo{
-			Total: 0,
-			Free:  0,
-		}
+		return StorageInfo{}
 	}
 
 	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
@@ -193,13 +189,14 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		availableDataDisks = uint64(onlineDisks)
 	}
 
-	// Return calculated storage info, choose the lowest Total and
-	// Free as the total aggregated values. Total capacity is always
-	// the multiple of smallest disk among the disk list.
-	storageInfo := StorageInfo{
-		Total: validDisksInfo[0].Total * availableDataDisks,
-		Free:  validDisksInfo[0].Free * availableDataDisks,
+	storageInfo := StorageInfo{}
+
+	// Combine all disks to get total usage.
+	var used uint64
+	for _, di := range validDisksInfo {
+		used = used + di.Used
 	}
+	storageInfo.Used = used
 
 	storageInfo.Backend.Type = Erasure
 	storageInfo.Backend.OnlineDisks = onlineDisks

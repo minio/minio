@@ -44,10 +44,8 @@ type DriveInfo HealDriveInfo
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	// Total disk space.
-	Total int64
-	// Free available disk space.
-	Free int64
+	Used uint64 // Total used spaced per tenant.
+
 	// Backend type.
 	Backend struct {
 		// Represents various backend types, currently on FS and Erasure.

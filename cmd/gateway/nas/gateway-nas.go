@@ -63,7 +63,7 @@ EXAMPLES:
      $ export MINIO_ACCESS_KEY=accesskey
      $ export MINIO_SECRET_KEY=secretkey
      $ {{.HelpName}} /shared/nasvol
- 
+
   2. Start minio gateway server for NAS with edge caching enabled.
      $ export MINIO_ACCESS_KEY=accesskey
      $ export MINIO_SECRET_KEY=secretkey
@@ -85,17 +85,16 @@ EXAMPLES:
 // Handler for 'minio gateway nas' command line.
 func nasGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
-	host := ctx.Args().First()
-	if host == "help" {
+	if !ctx.Args().Present() || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, nasBackend, 1)
 	}
-	// Validate gateway arguments.
-	minio.StartGateway(ctx, &NAS{host})
+
+	minio.StartGateway(ctx, &NAS{ctx.Args().First()})
 }
 
 // NAS implements Gateway.
 type NAS struct {
-	host string
+	path string
 }
 
 // Name implements Gateway interface.
@@ -106,7 +105,7 @@ func (g *NAS) Name() string {
 // NewGatewayLayer returns nas gatewaylayer.
 func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
-	newObject, err := minio.NewFSObjectLayer(g.host)
+	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
 	}

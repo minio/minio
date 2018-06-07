@@ -136,3 +136,10 @@ func webRequestAuthenticate(req *http.Request) error {
 	}
 	return nil
 }
+
+func newAuthToken() string {
+	cred := globalServerConfig.GetCredential()
+	token, err := authenticateNode(cred.AccessKey, cred.SecretKey)
+	logger.CriticalIf(context.Background(), err)
+	return token
+}

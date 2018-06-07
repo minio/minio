@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016,2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,8 +54,7 @@ func checkGoVersion(goVersionStr string) error {
 	}
 
 	if !constraint.Check(goVersion) {
-		return fmt.Errorf("Minio is not compiled by Go %s.  Please recompile accordingly",
-			goVersionConstraint)
+		return fmt.Errorf("Minio is not compiled by go %s. Minimum required version is %s, go %s release is known to have security issues. Please recompile accordingly", goVersionConstraint, minGoVersion, runtime.Version()[2:])
 	}
 
 	return nil
@@ -65,7 +64,7 @@ func main() {
 	// When `go get` is used minimum Go version check is not triggered but it would have compiled it successfully.
 	// However such binary will fail at runtime, hence we also check Go version at runtime.
 	if err := checkGoVersion(runtime.Version()[2:]); err != nil {
-		console.Fatalln("Go runtime version check failed.", err)
+		console.Errorln(err)
 	}
 
 	minio.Main(os.Args)

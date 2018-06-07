@@ -95,7 +95,7 @@ connection = pika.BlockingConnection(pika.ConnectionParameters(
 channel = connection.channel()
 
 channel.exchange_declare(exchange='bucketevents',
-                         type='fanout')
+                         exchange_type='fanout')
 
 result = channel.queue_declare(exclusive=False)
 queue_name = result.method.queue

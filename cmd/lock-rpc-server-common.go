@@ -24,6 +24,12 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+// nameLockRequesterInfoPair is a helper type for lock maintenance
+type nameLockRequesterInfoPair struct {
+	name string
+	lri  lockRequesterInfo
+}
+
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
 func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)

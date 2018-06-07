@@ -18,7 +18,6 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -177,14 +176,8 @@ func (c *AdminClient) TraceOff() {
 type requestData struct {
 	customHeaders http.Header
 	queryValues   url.Values
-
-	// Url path relative to admin API base endpoint
-	relPath string
-
-	contentBody        io.Reader
-	contentLength      int64
-	contentSHA256Bytes []byte
-	contentMD5Bytes    []byte
+	relPath       string // Url path relative to admin API base endpoint
+	content       []byte
 }
 
 // Filter out signature value from Authorization header.
@@ -404,43 +397,17 @@ func (c AdminClient) newRequest(method string, reqData requestData) (req *http.R
 		return nil, err
 	}
 
-	// Set content body if available.
-	if reqData.contentBody != nil {
-		req.Body = ioutil.NopCloser(reqData.contentBody)
-	}
-
-	// Set 'User-Agent' header for the request.
 	c.setUserAgent(req)
-
-	// Set all headers.
 	for k, v := range reqData.customHeaders {
 		req.Header.Set(k, v[0])
 	}
-
-	// set incoming content-length.
-	if reqData.contentLength > 0 {
-		req.ContentLength = reqData.contentLength
+	if length := len(reqData.content); length > 0 {
+		req.ContentLength = int64(length)
 	}
+	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
+	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
-	shaHeader := unsignedPayload
-	if !c.secure {
-		if reqData.contentSHA256Bytes == nil {
-			shaHeader = hex.EncodeToString(sum256([]byte{}))
-		} else {
-			shaHeader = hex.EncodeToString(reqData.contentSHA256Bytes)
-		}
-	}
-	req.Header.Set("X-Amz-Content-Sha256", shaHeader)
-
-	// set md5Sum for content protection.
-	if reqData.contentMD5Bytes != nil {
-		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(reqData.contentMD5Bytes))
-	}
-
-	// Add signature version '4' authorization header.
 	req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, "", location)
-
-	// Return request.
 	return req, nil
 }
 
