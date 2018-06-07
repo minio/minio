@@ -20,7 +20,7 @@ import { ObjectsBulkActions } from "../ObjectsBulkActions"
 
 describe("ObjectsBulkActions", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsBulkActions checkedObjects={0} />)
+    shallow(<ObjectsBulkActions checkedObjects={[]} />)
   })
 
   it("should show actions when checkObjectsCount is more than 0", () => {
@@ -28,21 +28,33 @@ describe("ObjectsBulkActions", () => {
     expect(wrapper.hasClass("list-actions-toggled")).toBeTruthy()
   })
 
-  it("should call downloadObject for single object when download button is clicked", () => {
+  it("should call downloadObject when single object is selected and download button is clicked", () => {
     const downloadObject = jest.fn()
-    const resetCheckedList = jest.fn()
+    const clearChecked = jest.fn()
     const wrapper = shallow(
       <ObjectsBulkActions
-        checkedObjects={["test1"]}
+        checkedObjects={["test"]}
         downloadObject={downloadObject}
-        resetCheckedList={resetCheckedList}
+        clearChecked={clearChecked}
       />
     )
     wrapper.find("#download-checked").simulate("click")
     expect(downloadObject).toHaveBeenCalled()
   })
 
-  it("should call downloadChecked for multiple objects when download button is clicked", () => {
+  it("should call downloadChecked when a folder is selected and download button is clicked", () => {
+    const downloadChecked = jest.fn()
+    const wrapper = shallow(
+      <ObjectsBulkActions
+        checkedObjects={["test/"]}
+        downloadChecked={downloadChecked}
+      />
+    )
+    wrapper.find("#download-checked").simulate("click")
+    expect(downloadChecked).toHaveBeenCalled()
+  })
+
+  it("should call downloadChecked when multiple objects are selected and download button is clicked", () => {
     const downloadChecked = jest.fn()
     const wrapper = shallow(
       <ObjectsBulkActions
