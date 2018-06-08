@@ -149,10 +149,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV26ToV27(); err != nil {
 		t.Fatal("migrate v26 to v27 should succeed when no config file is found")
 	}
+	if err := migrateV27ToV28(); err != nil {
+		t.Fatal("migrate v27 to v28 should succeed when no config file is found")
+	}
 }
 
 // Test if a config migration from v2 to v27 is successfully done
-func TestServerConfigMigrateV2toV27(t *testing.T) {
+func TestServerConfigMigrateV2toV28(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -298,6 +301,9 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV26ToV27(); err == nil {
 		t.Fatal("migrateConfigV26ToV27() should fail with a corrupted json")
+	}
+	if err := migrateV27ToV28(); err == nil {
+		t.Fatal("migrateConfigV27ToV28() should fail with a corrupted json")
 	}
 }
 

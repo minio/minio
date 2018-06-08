@@ -41,9 +41,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "27"
+const serverConfigVersion = "28"
 
-type serverConfig = serverConfigV27
+type serverConfig = serverConfigV28
 
 var (
 	// globalServerConfig server config.
@@ -205,7 +205,36 @@ func (s *serverConfig) Validate() error {
 		}
 	}
 
+	if cErr := s.ValidateCompressionConfig(); cErr != nil {
+		return cErr
+	}
+
 	return nil
+}
+
+// ValidateCompressionConfig validates the exclude/include compression config.
+func (s *serverConfig) ValidateCompressionConfig() error {
+	if hasCommonEntry(s.Compression.Exclude.Names, s.Compression.Include.Names) || hasCommonEntry(s.Compression.Exclude.Types, s.Compression.Include.Types) {
+		return errors.New("Compression: Exclusion and Inclusion configuration list cannot share a common name/type")
+	}
+	return nil
+}
+
+// SetCompressExclusionConfig sets the current exclusion config
+func (s *serverConfig) SetCompressExclusionConfig(extensions []string, contentTypes []string) {
+	s.Compression.Exclude.Names = extensions
+	s.Compression.Exclude.Types = contentTypes
+}
+
+// SetCompressInclusionConfig sets the current inclusion config
+func (s *serverConfig) SetCompressInclusionConfig(extensions []string, contentTypes []string) {
+	s.Compression.Include.Names = extensions
+	s.Compression.Include.Types = contentTypes
+}
+
+// GetCompressionConfig gets the current compression config
+func (s *serverConfig) GetCompressionConfig() CompressionConfig {
+	return s.Compression
 }
 
 // Save config file to corresponding backend
@@ -242,6 +271,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "StorageClass configuration differs"
 	case !reflect.DeepEqual(s.Cache, t.Cache):
 		return "Cache configuration differs"
+	case !reflect.DeepEqual(s.Compression, t.Compression):
+		return "Compression configuration differs"
 	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
@@ -291,6 +322,16 @@ func newServerConfig() *serverConfig {
 			MaxUse:  globalCacheMaxUse,
 		},
 		Notify: notifier{},
+		Compression: CompressionConfig{
+			Exclude: compressExcludeConfig{
+				Types: []string{},
+				Names: []string{},
+			},
+			Include: compressIncludeConfig{
+				Types: []string{},
+				Names: []string{},
+			},
+		},
 	}
 
 	// Make sure to initialize notification configs.
@@ -363,6 +404,14 @@ func newConfig() error {
 
 	if globalIsDiskCacheEnabled {
 		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
+	}
+
+	if globalIsEnvCompressionExclude {
+		srvCfg.SetCompressExclusionConfig(globalExcludeCompressExtensions, globalExcludeCompressContentTypes)
+	}
+
+	if globalIsEnvCompressionInclude {
+		srvCfg.SetCompressInclusionConfig(globalIncludeCompressExtensions, globalIncludeCompressContentTypes)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -446,6 +495,14 @@ func loadConfig() error {
 		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
+	if globalIsEnvCompressionExclude {
+		srvCfg.SetCompressExclusionConfig(globalExcludeCompressExtensions, globalExcludeCompressContentTypes)
+	}
+
+	if globalIsEnvCompressionInclude {
+		srvCfg.SetCompressInclusionConfig(globalIncludeCompressExtensions, globalIncludeCompressContentTypes)
+	}
+
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg
@@ -473,6 +530,17 @@ func loadConfig() error {
 		globalCacheExcludes = cacheConf.Exclude
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
+	}
+	if !globalIsEnvCompressionExclude || !globalIsEnvCompressionInclude {
+		compressionConf := globalServerConfig.GetCompressionConfig()
+		if !globalIsEnvCompressionExclude {
+			globalExcludeCompressExtensions = compressionConf.Exclude.Names
+			globalExcludeCompressContentTypes = compressionConf.Exclude.Types
+		}
+		if !globalIsEnvCompressionInclude {
+			globalIncludeCompressExtensions = compressionConf.Include.Names
+			globalIncludeCompressContentTypes = compressionConf.Include.Types
+		}
 	}
 	globalServerConfigMu.Unlock()
 

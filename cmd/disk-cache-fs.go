@@ -354,7 +354,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, errInvalidArgument
 	}

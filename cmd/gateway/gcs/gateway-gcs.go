@@ -1257,3 +1257,8 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 
 	return nil
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *gcsGateway) IsCompressionSupported() bool {
+	return false
+}

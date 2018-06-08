@@ -625,3 +625,8 @@ func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string)
 
 	return nil
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (t *tritonObjects) IsCompressionSupported() bool {
+	return false
+}

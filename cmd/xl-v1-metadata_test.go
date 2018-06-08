@@ -29,6 +29,8 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
+const ActualSize = 1000
+
 // Tests for reading XL object info.
 func TestXLReadStat(t *testing.T) {
 	ExecObjectLayerDiskAlteredTest(t, testXLReadStat)
@@ -213,7 +215,7 @@ func TestAddObjectPart(t *testing.T) {
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
 			partNumString := strconv.Itoa(testCase.partNum)
-			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
+			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
 		}
 
 		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -245,7 +247,7 @@ func TestObjectPartIndex(t *testing.T) {
 	// Add some parts for testing.
 	for _, testCase := range testCases {
 		partNumString := strconv.Itoa(testCase.partNum)
-		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
+		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
 	}
 
 	// Add failure test case.
@@ -274,7 +276,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
 		partNumString := strconv.Itoa(partNum)
-		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte))
+		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize)
 	}
 
 	testCases := []struct {

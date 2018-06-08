@@ -530,7 +530,7 @@ func sendEvent(args eventArgs) {
 }
 
 func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data))
+	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
 	if err != nil {
 		return err
 	}

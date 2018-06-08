@@ -129,7 +129,48 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	setConfigDir(configDirAbs)
 }
 
+// Parses the given compression exclude list `extensions` or `content-types`.
+func parseCompressExcludes(excludes []string) ([]string, error) {
+	for _, e := range excludes {
+		if len(e) == 0 {
+			return nil, uiErrInvalidCompressionExcludesValue(nil).Msg("extension/content-type (%s) cannot be empty", e)
+		}
+	}
+	return excludes, nil
+}
+
+// Parses the given compression include list `extensions` or `content-types`.
+func parseCompressIncludes(includes []string) ([]string, error) {
+	for _, e := range includes {
+		if len(e) == 0 {
+			return nil, uiErrInvalidCompressionIncludesValue(nil).Msg("extension/content-type (%s) cannot be empty", e)
+		}
+	}
+	return includes, nil
+}
+
+// Utility which returns if a string is present in the list.
+func hasStringInSlice(str string, list []string) bool {
+	for _, v := range list {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
+// Utility to check whether the slice has a common entry.
+func hasCommonEntry(aList []string, bList []string) bool {
+	for _, v := range aList {
+		if hasStringInSlice(v, bList) {
+			return true
+		}
+	}
+	return false
+}
+
 func handleCommonEnvVars() {
+	compressEnvDelimiter := ","
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
 		globalProfiler = startProfiler(profiler)
@@ -279,5 +320,43 @@ func handleCommonEnvVars() {
 		// if worm is turned off or on.
 		globalIsEnvWORM = true
 		globalWORMEnabled = bool(wormFlag)
+	}
+	excludeCompressExtensions := os.Getenv("MINIO_COMPRESS_EXCLUDE_EXTENSIONS")
+	excludeCompressContentTypes := os.Getenv("MINIO_COMPRESS_EXCLUDE_CONTENTTYPES")
+	if excludeCompressExtensions != "" || excludeCompressContentTypes != "" {
+		globalIsEnvCompressionExclude = true
+		if excludeCompressExtensions != "" {
+			extensions, err := parseCompressExcludes(strings.Split(excludeCompressExtensions, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_SKIP_EXTENSIONS value (`%s`)", extensions)
+			}
+			globalExcludeCompressExtensions = extensions
+		}
+		if excludeCompressContentTypes != "" {
+			contenttypes, err := parseCompressExcludes(strings.Split(excludeCompressContentTypes, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_SKIP_CONTENTTYPES value (`%s`)", contenttypes)
+			}
+			globalExcludeCompressContentTypes = contenttypes
+		}
+	}
+	includeCompressExtensions := os.Getenv("MINIO_COMPRESS_INCLUDE_EXTENSIONS")
+	includeCompressContentTypes := os.Getenv("MINIO_COMPRESS_INCLUDE_CONTENTTYPES")
+	if includeCompressExtensions != "" || includeCompressContentTypes != "" {
+		globalIsEnvCompressionInclude = true
+		if includeCompressExtensions != "" {
+			extensions, err := parseCompressIncludes(strings.Split(includeCompressExtensions, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_INCLUDE_EXTENSIONS value (`%s`)", extensions)
+			}
+			globalIncludeCompressExtensions = extensions
+		}
+		if includeCompressContentTypes != "" {
+			contenttypes, err := parseCompressIncludes(strings.Split(includeCompressContentTypes, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_INCLUDE_CONTENTTYPES value (`%s`)", contenttypes)
+			}
+			globalIncludeCompressContentTypes = contenttypes
+		}
 	}
 }

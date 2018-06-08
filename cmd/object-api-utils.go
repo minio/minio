@@ -21,14 +21,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/wildcard"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -294,6 +297,88 @@ func getRandomHostPort(records []dns.SrvRecord) (string, int) {
 	rand.Seed(time.Now().Unix())
 	srvRecord := records[rand.Intn(len(records))]
 	return srvRecord.Host, srvRecord.Port
+}
+
+// IsCompressed returns true if the object is marked as compressed.
+func (o *ObjectInfo) IsCompressed() bool {
+	_, ok := o.UserDefined[ReservedMetadataPrefix+"compression"]
+	return ok
+}
+
+// GetActualSize - read the decompressed size from the meta json.
+func (o *ObjectInfo) GetActualSize() int64 {
+	metadata := o.UserDefined
+	sizeStr, ok := metadata[ReservedMetadataPrefix+"actual-size"]
+	if ok {
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err == nil {
+			return size
+		}
+	} else {
+		var totalPartSize int64
+		for _, part := range o.Parts {
+			totalPartSize += part.ActualSize
+		}
+		return totalPartSize
+	}
+	return 0
+}
+
+// Disabling compression for encrypted enabled requests.
+// Using compression and encryption together enables room for side channel attacks.
+// Eliminate non-compressible objects by extensions/content-types.
+func isCompressible(header http.Header, bucket string, object string) bool {
+	if hasSSECustomerHeader(header) || excludeForCompression(bucket, object, header) {
+		return false
+	}
+	return true
+}
+
+// Eliminate the non-compressible objects.
+func excludeForCompression(bucket string, object string, header http.Header) bool {
+	objStr := fmt.Sprintf("%s/%s", bucket, object)
+	contentType := header.Get("Content-Type")
+	// Filter compression includes.
+	if len(globalIncludeCompressExtensions) > 0 || len(globalIncludeCompressContentTypes) > 0 {
+		// We strictly disable compression for standard extensions/content-types (`compressed`).
+		if hasPattern(standardExcludeCompressExtensions, objStr) || hasPattern(standardExcludeCompressContentTypes, contentType) {
+			return true
+		}
+		includedExtensions := globalIncludeCompressExtensions
+		includedContentTypes := globalExcludeCompressContentTypes
+		if hasPattern(includedExtensions, objStr) || hasPattern(includedContentTypes, contentType) {
+			return false
+		}
+		return true
+	}
+	// Filter compression excludes.
+	// Append global and standard patterns.
+	excludedExtensions := append(globalExcludeCompressExtensions, standardExcludeCompressExtensions...)
+	excludedContentTypes := append(globalExcludeCompressContentTypes, standardExcludeCompressContentTypes...)
+	if hasPattern(excludedExtensions, objStr) || hasPattern(excludedContentTypes, contentType) {
+		return true
+	}
+	return false
+}
+
+// Returns true if any of the given wildcard patterns match the matchStr.
+func hasPattern(patterns []string, matchStr string) bool {
+	for _, pattern := range patterns {
+		if ok := wildcard.MatchSimple(pattern, matchStr); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns the part file name which matches the partNumber and etag.
+func getPartFile(entries []string, partNumber int, etag string) string {
+	for _, entry := range entries {
+		if strings.HasPrefix(entry, fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
+			return entry
+		}
+	}
+	return ""
 }
 
 // byBucketName is a collection satisfying sort.Interface.

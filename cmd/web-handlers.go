@@ -634,7 +634,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashReader, err := hash.NewReader(r.Body, size, "", "")
+	hashReader, err := hash.NewReader(r.Body, size, "", "", size)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return

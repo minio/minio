@@ -1168,3 +1168,8 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 	logger.LogIf(ctx, err)
 	return azureToObjectError(err)
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (a *azureObjects) IsCompressionSupported() bool {
+	return false
+}

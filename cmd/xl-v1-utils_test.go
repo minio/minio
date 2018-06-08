@@ -379,7 +379,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 		// partIndex is 0, returns error.
 		{10, 1, 0, errPartSizeIndex},
 		// Total size is -1, returns error.
-		{-1, 10, 1, errInvalidArgument},
+		{-2, 10, 1, errInvalidArgument},
 	}
 
 	for i, testCaseFailure := range testCasesFailure {

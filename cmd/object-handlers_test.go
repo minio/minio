@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/golang/snappy"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -764,11 +765,17 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				t.Fatalf("Test %d: %s: ContentEncoding is set to \"%s\" which is unexpected, expected \"%s\"", i+1, instanceType, objInfo.ContentEncoding, expectedContentEncoding)
 			}
 			buffer := new(bytes.Buffer)
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer, objInfo.ETag)
+			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, objInfo.Size, buffer, objInfo.ETag)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
-			if !bytes.Equal(testCase.data, buffer.Bytes()) {
+			var actualData []byte
+			decompressReader := snappy.NewReader(bytes.NewReader(buffer.Bytes()))
+			actualData, err = ioutil.ReadAll(decompressReader)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the compressed data: <ERROR> %s", i+1, instanceType, err)
+			}
+			if !bytes.Equal(actualData, testCase.data) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
 			buffer.Reset()
@@ -934,13 +941,23 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
-
+			var objInfo ObjectInfo
+			objInfo, err = obj.GetObjectInfo(context.Background(), testCase.bucketName, testCase.objectName)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the object's info: <ERROR> %s", i+1, instanceType, err)
+			}
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer, "")
+			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, objInfo.Size, buffer, "")
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
-			if !bytes.Equal(bytesData, buffer.Bytes()) {
+			var actualData []byte
+			decompressReader := snappy.NewReader(bytes.NewReader(buffer.Bytes()))
+			actualData, err = ioutil.ReadAll(decompressReader)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the compressed data: <ERROR> %s", i+1, instanceType, err)
+			}
+			if !bytes.Equal(bytesData, actualData) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
 			buffer.Reset()
@@ -978,12 +995,23 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
+			var objInfo ObjectInfo
+			objInfo, err = obj.GetObjectInfo(context.Background(), testCase.bucketName, testCase.objectName)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object's info: <ERROR> %s", i+1, instanceType, err)
+			}
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer, "")
+			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, objInfo.Size, buffer, "")
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
-			if !bytes.Equal(bytesData, buffer.Bytes()) {
+			var actualData []byte
+			decompressReader := snappy.NewReader(bytes.NewReader(buffer.Bytes()))
+			actualData, err = ioutil.ReadAll(decompressReader)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the compressed data: <ERROR> %s", i+1, instanceType, err)
+			}
+			if !bytes.Equal(bytesData, actualData) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
 			buffer.Reset()
@@ -1080,7 +1108,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	}
 
 	a := 0
-	b := globalMinPartSize - 1
+	b := globalMinPartSize
 	var parts []CompletePart
 	for partNumber := 1; partNumber <= 2; partNumber++ {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
@@ -1100,7 +1128,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, `func (api objectAPIHandlers) CopyObjectHandler` handles the request.
-		a = globalMinPartSize
+		a = globalMinPartSize + 1
 		b = len(bytesData[0].byteData) - 1
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
