@@ -186,7 +186,7 @@ var (
 	// Disk cache expiry
 	globalCacheExpiry = 90
 	// Max allowed disk cache percentage
-	globalCacheMaxUse = 100
+	globalCacheMaxUse = 80
 
 	// RPC V1 - Initial version
 	// RPC V2 - format.json XL version changed to 2
