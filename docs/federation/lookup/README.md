@@ -1,11 +1,16 @@
-# Federation
+# Federation Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 This document explains how to configure Minio with `Bucket lookup from DNS` style federation.
 
-## Dependencies
+## Get started
+
+### 1. Prerequisites
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+
+### 2. Run Minio in federated mode
 Bucket lookup from DNS federation requires two dependencies
 
 - etcd (for config, bucket SRV records)
-- coredns (for DNS management based on populated bucket SRV records)
+- coredns (for DNS management based on populated bucket SRV records, optional)
 
 ## Architecture
 
@@ -36,7 +41,7 @@ a bucket `bucket1` created on current Minio instance will be accessible as `buck
 
 - This field is mandatory for standalone and erasure code Minio server deployments, to enable federated mode.
 - This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of
-hosts passed to the Minio server startup and use that to make DNS entries.
+hosts passed to the Minio server startup and use them for DNS entries.
 
 ### Run Multiple Clusters
 
@@ -67,3 +72,13 @@ points to the public IP address where each cluster might be accessible, this is 
 NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this is random and
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then
 it is randomized which cluster might provision the bucket.
+
+### 3. Test your setup
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the Minio endpoints.
+
+# Explore Further
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
+- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [The Minio documentation website](https://docs.minio.io)
