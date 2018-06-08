@@ -28,22 +28,40 @@ describe("ObjectItem", () => {
     expect(wrapper.prop("data-type")).toBe("image")
   })
 
-  it("should call checkObject when the object is selected", () => {
-    const checkObject = jest.fn()
-    const wrapper = shallow(<ObjectItem name={"test"} checked={false} checkObject={checkObject} />)
+  it("shouldn't call onClick when the object isclicked", () => {
+    const onClick = jest.fn()
+    const wrapper = shallow(<ObjectItem name={"test"} />)
     wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it("should call onClick when the folder isclicked", () => {
+    const onClick = jest.fn()
+    const wrapper = shallow(<ObjectItem name={"test/"} onClick={onClick} />)
+    wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    expect(onClick).toHaveBeenCalled()
+  })
+
+  it("should call checkObject when the object/prefix is checked", () => {
+    const checkObject = jest.fn()
+    const wrapper = shallow(
+      <ObjectItem name={"test"} checked={false} checkObject={checkObject} />
+    )
+    wrapper.find("input[type='checkbox']").simulate("change")
     expect(checkObject).toHaveBeenCalledWith("test")
   })
 
-  it("should render highlighted row when object is selected", () => {
+  it("should render checked checkbox", () => {
     const wrapper = shallow(<ObjectItem name={"test"} checked={true} />)
-    expect(wrapper.find(".fesl-row").hasClass("fesl-row-selected")).toBeTruthy()
+    expect(wrapper.find("input[type='checkbox']").prop("checked")).toBeTruthy()
   })
 
-  it("should call uncheckObject when the object is deselected", () => {
+  it("should call uncheckObject when the object/prefix is unchecked", () => {
     const uncheckObject = jest.fn()
-    const wrapper = shallow(<ObjectItem name={"test"} checked={true} uncheckObject={uncheckObject} />)
-    wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    const wrapper = shallow(
+      <ObjectItem name={"test"} checked={true} uncheckObject={uncheckObject} />
+    )
+    wrapper.find("input[type='checkbox']").simulate("change")
     expect(uncheckObject).toHaveBeenCalledWith("test")
   })
 })

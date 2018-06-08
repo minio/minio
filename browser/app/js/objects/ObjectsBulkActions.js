@@ -29,10 +29,10 @@ export class ObjectsBulkActions extends React.Component {
     }
   }
   handleDownload() {
-    const { checkedObjects, resetCheckedList, downloadChecked, downloadObject } = this.props
-    if (checkedObjects.length === 1) {
+    const { checkedObjects, clearChecked, downloadChecked, downloadObject } = this.props
+    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) {
       downloadObject(checkedObjects[0])
-      resetCheckedList()
+      clearChecked()
     } else {
       downloadChecked()
     }
@@ -59,17 +59,16 @@ export class ObjectsBulkActions extends React.Component {
         }
       >
         <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjects.length} 
+          <i className="fa fa-check-circle" /> {checkedObjects.length}
           {checkedObjects.length === 1 ? " Object " : " Objects "}
           selected
         </span>
         <span className="la-actions pull-right">
-          <button 
-            id="download-checked" 
-            onClick={this.handleDownload.bind(this)}
-          >
+          <button id="download-checked" onClick={this.handleDownload.bind(this)}>
             {" "}
-            Download {checkedObjects.length === 1 ? "object" : "all as zip"}{" "}
+            Download
+            {(checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) ? 
+            " object" : " all as zip" }{" "}
           </button>
         </span>
         <span className="la-actions pull-right">
@@ -105,6 +104,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
+    downloadObject: object => dispatch(actions.downloadObject(object)),
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
     downloadObject: object => dispatch(actions.downloadObject(object)),
     resetCheckedList: () => dispatch(actions.resetCheckedList()),

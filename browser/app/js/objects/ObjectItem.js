@@ -15,7 +15,6 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
 import humanize from "humanize"
 import Moment from "moment"
@@ -35,22 +34,19 @@ export const ObjectItem = ({
   onClick
 }) => {
   return (
-    <div 
-      className={
-        "fesl-row " + 
-        classNames({
-          "fesl-row-selected": checked
-        })
-      }
-      data-type={getDataType(name, contentType)}
-    >
+    <div className={"fesl-row"} data-type={getDataType(name, contentType)}>
       <div className="fesl-item fesl-item-icon">
         <div className="fi-select">
           <input
             type="checkbox"
             name={name}
+            checked={checked}
+            onChange={() => {
+              checked ? uncheckObject(name) : checkObject(name)
+            }}
           />
           <i className="fis-icon" />
+          <i className="fis-helper" />
         </div>
       </div>
       <div className="fesl-item fesl-item-name">
@@ -58,7 +54,9 @@ export const ObjectItem = ({
           href="#"
           onClick={e => {
             e.preventDefault()
-            checked ? uncheckObject(name) : checkObject(name)
+            if (onClick) {
+              onClick()
+            }
           }}
         >
           {name}
