@@ -86,10 +86,6 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 			BucketNotFound{Bucket: "$this-is-not-valid-too"}},
 		{"a", "obj", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: "a"}},
 
-		// Test case - 5.
-		// Case with invalid object names.
-		{bucket, "", []byte(""), nil, "", 0, "", ObjectNameInvalid{Bucket: bucket, Object: ""}},
-
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
 		{"abc", "def", []byte(""), nil, "", 0, "", BucketNotFound{Bucket: "abc"}},

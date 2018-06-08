@@ -294,12 +294,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 		return err
 	}
 	defer bucketLock.Unlock()
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		err := BucketNameInvalid{Bucket: bucket}
-		logger.LogIf(ctx, err)
-		return err
-	}
+
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -501,10 +496,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
 	// Lock the object before reading.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
@@ -690,10 +681,6 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 	}
 	defer objectLock.RUnlock()
 
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return oi, err
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return oi, toObjectErr(err, bucket)
 	}
@@ -751,9 +738,6 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
 func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
-	if err := checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
-		return ObjectInfo{}, err
-	}
 	// Lock the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -799,10 +783,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
-	}
-
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
-		return ObjectInfo{}, err
 	}
 
 	// Check if an object is present as one of the parent dir.
@@ -909,10 +889,6 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 		return err
 	}
 	defer objectLock.Unlock()
-
-	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return toObjectErr(err, bucket)
@@ -1044,9 +1020,6 @@ func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lo
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, fs); err != nil {
-		return loi, err
-	}
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented.Send an empty response
@@ -1055,7 +1028,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		}
 	}
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return loi, err
+		return loi, toObjectErr(err, bucket)
 	}
 
 	// With max keys of zero we have reached eof, return right here.

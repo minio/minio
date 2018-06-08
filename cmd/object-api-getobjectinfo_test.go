@@ -53,17 +53,9 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", ObjectInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
-		{"Test", "", ObjectInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
-		{"---", "", ObjectInfo{}, BucketNameInvalid{Bucket: "---"}, false},
-		{"ad", "", ObjectInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases with valid but non-existing bucket names (Test number 5-6).
 		{"abcdefgh", "abc", ObjectInfo{}, BucketNotFound{Bucket: "abcdefgh"}, false},
 		{"ijklmnop", "efg", ObjectInfo{}, BucketNotFound{Bucket: "ijklmnop"}, false},
-		// Test cases with valid but non-existing bucket names and invalid object name (Test number 7-8).
-		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
-		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
 		// Test cases with non-existing object name with existing bucket (Test number 9-11).
 		{"test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},

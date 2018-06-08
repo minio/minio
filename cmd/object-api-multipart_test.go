@@ -39,31 +39,11 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	bucket := "minio-bucket"
 	object := "minio-object"
 
-	_, err := obj.NewMultipartUpload(context.Background(), "--", object, nil)
-	if err == nil {
-		t.Fatalf("%s: Expected to fail since bucket name is invalid.", instanceType)
-	}
-
-	errMsg := "Bucket not found: minio-bucket"
-	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, nil)
-	if err == nil {
-		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
-	}
-	if errMsg != err.Error() {
-		t.Errorf("%s, Expected to fail with Error \"%s\", but instead found \"%s\".", instanceType, errMsg, err.Error())
-	}
-
 	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, "\\", nil)
-	if err == nil {
-		t.Fatalf("%s: Expected to fail since object name is invalid.", instanceType)
 	}
 
 	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil)
@@ -111,9 +91,6 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		uploadID        string
 		expectedErrType error
 	}{
-		{"--", object, uploadID, BucketNotFound{}},
-		{bucket, "\\", uploadID, ObjectNameInvalid{}},
-		{"foo", object, uploadID, BucketNotFound{}},
 		{bucket, object, "foo-foo", InvalidUploadID{}},
 		{bucket, object, uploadID, nil},
 	}
@@ -291,19 +268,6 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		expectedMd5   string
 		expectedError error
 	}{
-		// Test case  1-4.
-		// Cases with invalid bucket name.
-		{".test", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: .test")},
-		{"------", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: ------")},
-		{"$this-is-not-valid-too", "obj", "", 1, "", "", "", 0, false, "",
-			fmt.Errorf("%s", "Bucket not found: $this-is-not-valid-too")},
-		{"a", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: a")},
-		// Test case - 5.
-		// Case with invalid object names.
-		{bucket, "", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket#")},
-		// Test case - 6.
-		// Valid object and bucket names but non-existent bucket.
-		{"abc", "def", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},
 		// Test Case - 7.
 		// Existing bucket, but using a bucket on which NewMultipartUpload is not Initiated.
 		{"unused-bucket", "def", "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
@@ -1102,29 +1066,6 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
-		// Valid, existing bucket, but sending invalid delimeter values (Test number 8-9).
-		// Empty string < "" > and forward slash < / > are the ony two valid arguments for delimeter.
-		{bucketNames[0], "", "", "", "*", 0, ListMultipartsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
-		{bucketNames[0], "", "", "", "-", 0, ListMultipartsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
-		// Testing for failure cases with both perfix and marker (Test number 10).
-		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
-		{bucketNames[0], "asia", "europe-object", "", "", 0, ListMultipartsInfo{},
-			fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
-		// Setting an invalid combination of uploadIDMarker and Marker (Test number 11-12).
-		{bucketNames[0], "asia", "asia/europe/", "abc", "", 0, ListMultipartsInfo{},
-			fmt.Errorf("Invalid combination of uploadID marker '%s' and marker '%s'", "abc", "asia/europe/"), false},
-		{bucketNames[0], "asia", "asia/europe", "abc", "", 0, ListMultipartsInfo{},
-			fmt.Errorf("unknown UUID string %s", "abc"), false},
-
 		// Setting up valid case of ListMultiPartUploads.
 		// Test case with multiple parts for a single uploadID (Test number 13).
 		{bucketNames[0], "", "", "", "", 100, listMultipartResults[0], nil, true},
@@ -1403,18 +1344,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
-		// Test case for Asserting for invalid objectName (Test number 8).
-		{bucketNames[0], "", "", 0, 0, ListPartsInfo{}, ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", 0, 0, ListPartsInfo{}, InvalidUploadID{UploadID: "abc"}, false},
 		// Test case for uploadID with multiple parts (Test number 12).
@@ -1641,18 +1570,6 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
-		// Test case for Asserting for invalid objectName (Test number 8).
-		{bucketNames[0], "", "", 0, 0, ListPartsInfo{}, ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", 0, 0, ListPartsInfo{}, InvalidUploadID{UploadID: "abc"}, false},
 		// Test case for uploadID with multiple parts (Test number 12).
@@ -1862,18 +1779,6 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
-		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", []CompletePart{}, "", BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "ad"}, false},
-		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
-		// Test case for Asserting for invalid objectName (Test number 8).
-		{bucketNames[0], "", "", []CompletePart{}, "", ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", []CompletePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
 		// Test case with invalid Part Etag (Test number 10-11).

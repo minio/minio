@@ -163,7 +163,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
 	nilBucket := "dummy-bucket"
-	nilReq, err := newTestRequest("GET", getBucketLocationURL("", nilBucket), 0, nil)
+	nilReq, err := newTestSignedRequestV4("GET", getBucketLocationURL("", nilBucket), 0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -268,7 +268,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
 	nilBucket := "dummy-bucket"
-	nilReq, err := newTestRequest("HEAD", getHEADBucketURL("", nilBucket), 0, nil)
+	nilReq, err := newTestSignedRequestV4("HEAD", getHEADBucketURL("", nilBucket), 0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -313,7 +313,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 			maxUploads:         "0",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 			shouldPass:         false,
 		},
 		// Test case - 2.
@@ -505,7 +505,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	url = getListMultipartUploadsURLWithParams("", nilBucket, "dummy-prefix", testCases[6].keyMarker,
 		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
 
-	nilReq, err := newTestRequest("GET", url, 0, nil)
+	nilReq, err := newTestSignedRequestV4("GET", url, 0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -599,7 +599,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
-	nilReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+	nilReq, err := newTestSignedRequestV4("GET", getListBucketURL(""), 0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -785,7 +785,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	nilBucket := "dummy-bucket"
 	nilObject := ""
 
-	nilReq, err := newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", nilBucket), 0, nil, "", "")
+	nilReq, err := newTestRequest("POST", getDeleteMultipleObjectsURL("", nilBucket), int64(len(successRequest0)), bytes.NewReader(successRequest0))
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}

@@ -333,11 +333,11 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// Empty string = no error
 		expect string
 	}{
-		{"", false, token, "The specified bucket  does not exist."},
+		{"", false, token, "The specified bucket is not valid"},
 		{".", false, "auth", "Authentication failed"},
-		{".", false, token, "The specified bucket . does not exist."},
-		{"..", false, token, "The specified bucket .. does not exist."},
-		{"ab", false, token, "The specified bucket ab does not exist."},
+		{".", false, token, "The specified bucket is not valid"},
+		{"..", false, token, "The specified bucket is not valid"},
+		{"ab", false, token, "The specified bucket is not valid"},
 		{"minio", false, "false token", "Authentication failed"},
 		{"minio", false, token, "specified bucket minio does not exist"},
 		{bucketName, false, token, ""},
@@ -1244,8 +1244,8 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err == nil {
 		t.Fatalf("Failed, %v", err)
 	}
-	if err.Error() != "Bucket and Object are mandatory arguments." {
-		t.Fatalf("Unexpected, expected `Bucket and Object are mandatory arguments`, got %s", err)
+	if err.Error() != "The specified bucket is not valid" {
+		t.Fatalf("Unexpected, expected `The specified bucket is not valid`, got %s", err)
 	}
 }
 

@@ -146,11 +146,6 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
 func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
 }

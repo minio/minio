@@ -703,11 +703,6 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 // value through the walk channel receives the data properly lexically sorted.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var result ListObjectsInfo
-	// validate all the inputs for listObjects
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
-		return result, err
-	}
-
 	var objInfos []ObjectInfo
 	var eof bool
 	var nextMarker string
@@ -1418,10 +1413,6 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 
 // This is not implemented yet, will be implemented later to comply with Admin API refactor.
 func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
-		return loi, err
-	}
-
 	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
 		return loi, nil

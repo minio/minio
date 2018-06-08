@@ -20,7 +20,7 @@ import (
 	"encoding/xml"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -56,12 +56,11 @@ type accessControlPolicy struct {
 func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "GetBucketACL")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	args := newRequestArgs(r)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
 		return
 	}
 
@@ -72,9 +71,14 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
-	if err != nil {
+	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -103,13 +107,19 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, "GetObjectACL")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
+	args := newRequestArgs(r)
 
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+	bucket, err := args.CompatBucketName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidBucketName, r.URL)
+		return
+	}
+
+	object, err := args.ObjectName()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInvalidObjectName, r.URL)
 		return
 	}
 
@@ -120,9 +130,20 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Before proceeding validate if bucket exists.
+	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
 	// Before proceeding validate if object exists.
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object)
-	if err != nil {
+	if _, err := objAPI.GetObjectInfo(ctx, bucket, object); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

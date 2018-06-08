@@ -71,9 +71,6 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		object      string
 		expectedErr error
 	}{
-		{".test", "obj", BucketNameInvalid{Bucket: ".test"}},
-		{"----", "obj", BucketNameInvalid{Bucket: "----"}},
-		{"bucket", "", ObjectNameInvalid{Bucket: "bucket", Object: ""}},
 		{"bucket", "doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "doesnotexist"}},
 		{"bucket", "obj", nil},
 	}

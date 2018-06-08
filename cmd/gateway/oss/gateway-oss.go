@@ -347,7 +347,7 @@ func ossIsValidBucketName(bucket string) bool {
 	if strings.Contains(bucket, ".") {
 		return false
 	}
-	if !minio.IsValidBucketName(bucket) {
+	if minio.ValidateBucketName(bucket) != nil {
 		return false
 	}
 	return true

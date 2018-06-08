@@ -35,12 +35,6 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
-		return BucketNameInvalid{Bucket: bucket}
-	}
-
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 

@@ -127,10 +127,6 @@ func (fs *FSObjects) backgroundAppend(ctx context.Context, bucket, object, uploa
 // ListMultipartUploads - lists all the uploadIDs for the specified object.
 // We do not support prefix based listing.
 func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
-	if err := checkListMultipartArgs(ctx, bucket, object, keyMarker, uploadIDMarker, delimiter, fs); err != nil {
-		return result, toObjectErr(err)
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return result, toObjectErr(err, bucket)
 	}
@@ -210,10 +206,6 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 //
 // Implements S3 compatible initiate multipart API.
 func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string) (string, error) {
-	if err := checkNewMultipartArgs(ctx, bucket, object, fs); err != nil {
-		return "", toObjectErr(err, bucket)
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
@@ -250,11 +242,6 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
-
-	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, fs); err != nil {
-		return pi, toObjectErr(err)
-	}
-
 	// Initialize pipe.
 	go func() {
 		if gerr := fs.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
@@ -284,10 +271,6 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
 func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
-	if err := checkPutObjectPartArgs(ctx, bucket, object, fs); err != nil {
-		return pi, toObjectErr(err, bucket)
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return pi, toObjectErr(err, bucket)
 	}
@@ -366,9 +349,6 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 // ListPartsInfo structure is unmarshalled directly into XML and
 // replied back to the client.
 func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
-	if err := checkListPartsArgs(ctx, bucket, object, fs); err != nil {
-		return result, toObjectErr(err)
-	}
 	result.Bucket = bucket
 	result.Object = object
 	result.UploadID = uploadID
@@ -480,10 +460,6 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 //
 // Implements S3 compatible Complete multipart API.
 func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
-	if err := checkCompleteMultipartArgs(ctx, bucket, object, fs); err != nil {
-		return oi, toObjectErr(err)
-	}
-
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(ctx, bucket, pathutil.Dir(object)) {
 		return oi, toObjectErr(errFileAccessDenied, bucket, object)
@@ -681,10 +657,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 // no affect and further requests to the same uploadID would not be
 // honored.
 func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	if err := checkAbortMultipartArgs(ctx, bucket, object, fs); err != nil {
-		return err
-	}
-
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return toObjectErr(err, bucket)
 	}

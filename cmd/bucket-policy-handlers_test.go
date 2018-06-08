@@ -230,7 +230,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 10.
 		// Existent bucket with policy with Version field empty.
@@ -302,10 +302,9 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 	nilBucket := "dummy-bucket"
-
+	policyData := []byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))
 	nilReq, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", nilBucket),
-		0, nil, "", "")
-
+		int64(len(policyData)), bytes.NewReader(policyData), credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
@@ -406,7 +405,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: "",
-			expectedRespStatus:   http.StatusNotFound,
+			expectedRespStatus:   http.StatusBadRequest,
 		},
 	}
 	// Iterating over the cases, fetching the policy and validating the response.
@@ -509,8 +508,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	nilBucket := "dummy-bucket"
 
 	nilReq, err := newTestSignedRequestV4("GET", getGetPolicyURL("", nilBucket),
-		0, nil, "", "")
-
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
@@ -630,7 +628,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 			bucketName:         ".invalid-bucket-name",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 	// Iterating over the cases and deleting the bucket policy and then asserting response.
@@ -712,8 +710,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 	nilBucket := "dummy-bucket"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getDeletePolicyURL("", nilBucket),
-		0, nil, "", "")
-
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
