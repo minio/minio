@@ -26,7 +26,7 @@ import (
 
 // Tests functions like Size(), MD5*(), SHA256*()
 func TestHashReaderHelperMethods(t *testing.T) {
-	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
+	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +45,9 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	}
 	if r.Size() != 4 {
 		t.Errorf("Expected size 4, got %d", r.Size())
+	}
+	if r.ActualSize() != 4 {
+		t.Errorf("Expected size 4, got %d", r.ActualSize())
 	}
 	expectedMD5, err := hex.DecodeString("e2fc714c4727ee9395f324cd2e7f331f")
 	if err != nil {
@@ -67,19 +70,22 @@ func TestHashReaderVerification(t *testing.T) {
 	testCases := []struct {
 		src               io.Reader
 		size              int64
+		actualSize        int64
 		md5hex, sha256hex string
 		err               error
 	}{
 		// Success, no checksum verification provided.
 		{
-			src:  bytes.NewReader([]byte("abcd")),
-			size: 4,
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
 		},
 		// Failure md5 mismatch.
 		{
-			src:    bytes.NewReader([]byte("abcd")),
-			size:   4,
-			md5hex: "d41d8cd98f00b204e9800998ecf8427f",
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
+			md5hex:     "d41d8cd98f00b204e9800998ecf8427f",
 			err: BadDigest{
 				"d41d8cd98f00b204e9800998ecf8427f",
 				"e2fc714c4727ee9395f324cd2e7f331f",
@@ -87,9 +93,10 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 		// Failure sha256 mismatch.
 		{
-			src:       bytes.NewReader([]byte("abcd")),
-			size:      4,
-			sha256hex: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
+			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
 			err: SHA256Mismatch{
 				"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
 				"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
@@ -97,7 +104,7 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex)
+		r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 		if err != nil {
 			t.Fatalf("Test %d: Initializing reader failed %s", i+1, err)
 		}
@@ -115,6 +122,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 	testCases := []struct {
 		src               io.Reader
 		size              int64
+		actualSize        int64
 		md5hex, sha256hex string
 		success           bool
 		expectedErr       error
@@ -123,6 +131,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		{
 			src:         bytes.NewReader([]byte("abcd")),
 			size:        4,
+			actualSize:  4,
 			md5hex:      "invalid-md5",
 			success:     false,
 			expectedErr: BadDigest{},
@@ -131,6 +140,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		{
 			src:         bytes.NewReader([]byte("abcd")),
 			size:        4,
+			actualSize:  4,
 			sha256hex:   "invalid-sha256",
 			success:     false,
 			expectedErr: SHA256Mismatch{},
@@ -139,19 +149,21 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		{
 			src:         &Reader{src: bytes.NewReader([]byte("abcd"))},
 			size:        4,
+			actualSize:  4,
 			success:     false,
 			expectedErr: errNestedReader,
 		},
 		// Expected inputs, NewReader() will succeed.
 		{
-			src:     bytes.NewReader([]byte("abcd")),
-			size:    4,
-			success: true,
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
+			success:    true,
 		},
 	}
 
 	for i, testCase := range testCases {
-		_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex)
+		_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success, but got error %s instead", i+1, err)
 		}

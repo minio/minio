@@ -755,8 +755,16 @@ type serverConfigV28 struct {
 	Logger loggerConfig `json:"logger"`
 }
 
-// serverConfigV29 is just like version '28', browser and domain are deprecated.
-type serverConfigV29 struct {
+// compressionConfig represents the compression settings.
+type compressionConfig struct {
+	Enabled    bool     `json:"enabled"`
+	Extensions []string `json:"extensions"`
+	MimeTypes  []string `json:"mime-types"`
+}
+
+// serverConfigV30 is just like version '29', stores additionally
+// extensions and mimetypes fields for compression.
+type serverConfigV30 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
 	Version string `json:"version"`
@@ -780,4 +788,7 @@ type serverConfigV29 struct {
 
 	// Logger configuration
 	Logger loggerConfig `json:"logger"`
+
+	// Compression configuration
+	Compression compressionConfig `json:"compress"`
 }

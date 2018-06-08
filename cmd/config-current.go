@@ -40,9 +40,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "29"
+const serverConfigVersion = "30"
 
-type serverConfig = serverConfigV29
+type serverConfig = serverConfigV30
 
 var (
 	// globalServerConfig server config.
@@ -228,6 +228,18 @@ func (s *serverConfig) Validate() error {
 	return nil
 }
 
+// SetCompressionConfig sets the current compression config
+func (s *serverConfig) SetCompressionConfig(extensions []string, mimeTypes []string) {
+	s.Compression.Extensions = extensions
+	s.Compression.MimeTypes = mimeTypes
+	s.Compression.Enabled = globalIsCompressionEnabled
+}
+
+// GetCompressionConfig gets the current compression config
+func (s *serverConfig) GetCompressionConfig() compressionConfig {
+	return s.Compression
+}
+
 func (s *serverConfig) loadFromEnvs() {
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
@@ -252,6 +264,10 @@ func (s *serverConfig) loadFromEnvs() {
 
 	if globalKMS != nil {
 		s.KMS = globalKMSConfig
+	}
+
+	if globalIsEnvCompression {
+		s.SetCompressionConfig(globalCompressExtensions, globalCompressMimeTypes)
 	}
 }
 
@@ -366,6 +382,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "StorageClass configuration differs"
 	case !reflect.DeepEqual(s.Cache, t.Cache):
 		return "Cache configuration differs"
+	case !reflect.DeepEqual(s.Compression, t.Compression):
+		return "Compression configuration differs"
 	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
@@ -417,6 +435,11 @@ func newServerConfig() *serverConfig {
 		},
 		KMS:    crypto.KMSConfig{},
 		Notify: notifier{},
+		Compression: compressionConfig{
+			Enabled:    false,
+			Extensions: globalCompressExtensions,
+			MimeTypes:  globalCompressMimeTypes,
+		},
 	}
 
 	// Make sure to initialize notification configs.
@@ -479,6 +502,12 @@ func (s *serverConfig) loadToCachedConfigs() {
 			globalKMS = kms
 			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
 		}
+	}
+	if !globalIsCompressionEnabled {
+		compressionConf := s.GetCompressionConfig()
+		globalCompressExtensions = compressionConf.Extensions
+		globalCompressMimeTypes = compressionConf.MimeTypes
+		globalIsCompressionEnabled = compressionConf.Enabled
 	}
 }
 
