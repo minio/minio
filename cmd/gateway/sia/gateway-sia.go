@@ -626,3 +626,8 @@ func (s *siaObjects) deleteTempFileWhenUploadCompletes(ctx context.Context, temp
 
 	os.Remove(tempFile)
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (s *siaObjects) IsCompressionSupported() bool {
+	return false
+}

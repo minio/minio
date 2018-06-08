@@ -1123,3 +1123,8 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 	err := container.SetPermissions(perm, nil)
 	return azureToObjectError(err)
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (a *azureObjects) IsCompressionSupported() bool {
+	return false
+}

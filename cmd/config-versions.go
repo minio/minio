@@ -756,3 +756,46 @@ type serverConfigV28 struct {
 	// Logger configuration
 	Logger loggerConfig `json:"logger"`
 }
+
+// CompressionConfig represents the compression settings.
+type CompressionConfig struct {
+	Enabled    bool     `json:"enabled"`
+	Extensions []string `json:"extensions"`
+	MimeTypes  []string `json:"mime-types"`
+}
+
+// serverConfigV29 is just like version '28', stores additionally
+// inclusion and exclusion fields for compression.
+//
+// IMPORTANT NOTE: When updating this struct make sure that
+// serverConfig.ConfigDiff() is updated as necessary.
+type serverConfigV29 struct {
+	quick.Config `json:"-"` // ignore interfaces
+
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Browser    BoolFlag         `json:"browser"`
+	Worm       BoolFlag         `json:"worm"`
+	Domain     string           `json:"domain"`
+
+	// Storage class configuration
+	StorageClass storageClassConfig `json:"storageclass"`
+
+	// Cache configuration
+	Cache CacheConfig `json:"cache"`
+
+	// KMS configuration
+	KMS crypto.KMSConfig `json:"kms"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Logger configuration
+	Logger loggerConfig `json:"logger"`
+
+	// Compression configuration
+	Compression CompressionConfig `json:"compress"`
+}

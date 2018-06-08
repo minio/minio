@@ -225,7 +225,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	}
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, objInfo.Size, "", "")
+	hashReader, err := hash.NewReader(pipeReader, objInfo.Size, "", "", objInfo.Size)
 	if err != nil {
 		return err
 	}
@@ -582,13 +582,13 @@ func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r *h
 	objInfo = ObjectInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, r.MD5HexString(), r.SHA256HexString())
+	hashReader, err := hash.NewReader(pipeReader, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, r.MD5HexString(), r.SHA256HexString())
+	cHashReader, err := hash.NewReader(rPipe, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -675,13 +675,13 @@ func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadI
 	info = PartInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, data.MD5HexString(), data.SHA256HexString())
+	hashReader, err := hash.NewReader(pipeReader, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
 	if err != nil {
 		return
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, data.MD5HexString(), data.SHA256HexString())
+	cHashReader, err := hash.NewReader(rPipe, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
 	if err != nil {
 		return
 	}

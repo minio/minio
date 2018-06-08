@@ -290,6 +290,7 @@ const (
 	ErrEvaluatorBindingDoesNotExist
 	ErrInvalidColumnIndex
 	ErrMissingHeaders
+	ErrInvalidDecompressedSize
 )
 
 // error code to APIError structure, these fields carry respective
@@ -1389,6 +1390,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrMissingHeaders: {
 		Code:           "MissingHeaders",
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidDecompressedSize: {
+		Code:           "XMinioInvalidDecompressedSize",
+		Description:    "The data provided is unfit for decompression",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
