@@ -474,7 +474,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
