@@ -282,7 +282,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	// Allocate incoming content length bytes.
-	deleteXMLBytes := make([]byte, r.ContentLength)
+	var deleteXMLBytes []byte
+	const maxBodySize = 2 * 1000 * 1024 // The max. XML contains 1000 object names (each at most 1024 bytes long) + XML overhead
+	if r.ContentLength > maxBodySize {  // Only allocated memory for at most 1000 objects
+		deleteXMLBytes = make([]byte, maxBodySize)
+	} else {
+		deleteXMLBytes = make([]byte, r.ContentLength)
+	}
 
 	// Read incoming body XML bytes.
 	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
