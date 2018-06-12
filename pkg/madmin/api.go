@@ -382,8 +382,8 @@ func (c AdminClient) newRequest(method string, reqData requestData) (req *http.R
 		method = "POST"
 	}
 
-	// Default all requests to "us-east-1"
-	location := "us-east-1"
+	// Default all requests to ""
+	location := ""
 
 	// Construct a new target URL.
 	targetURL, err := c.makeTargetURL(reqData)

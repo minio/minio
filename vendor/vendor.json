@@ -98,6 +98,54 @@
 			"revisionTime": "2016-07-13T13:44:25+03:00"
 		},
 		{
+			"checksumSHA1": "wsnl1XpGXxzqm+T4ri3HL/UrAOQ=",
+			"path": "github.com/coredns/coredns/plugin/etcd/msg",
+			"revision": "d4bf076ccf4e2466cbf381cea3ce469832a82d4d",
+			"revisionTime": "2018-01-21T19:28:21Z"
+		},
+		{
+			"checksumSHA1": "dx2RZOGlNL5UG0/CNo4tfg4JJqw=",
+			"path": "github.com/coredns/coredns/plugin/pkg/dnsutil",
+			"revision": "d4bf076ccf4e2466cbf381cea3ce469832a82d4d",
+			"revisionTime": "2018-01-21T19:28:21Z"
+		},
+		{
+			"checksumSHA1": "rsbg85vM+0ZtvdtcFDNpzPEpcQQ=",
+			"path": "github.com/coreos/etcd/client",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "mKIXx1kDwmVmdIpZ3pJtRBuUKso=",
+			"path": "github.com/coreos/etcd/pkg/pathutil",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "in4X4M2FFl6+eAXgxdxxSOZi1Vw=",
+			"path": "github.com/coreos/etcd/pkg/srv",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "gx1gJIMU6T0UNQ0bPZ/drQ8cpCI=",
+			"path": "github.com/coreos/etcd/pkg/types",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "UrMcbYhN7QooiDzkH8GyOCgCdAA=",
+			"path": "github.com/coreos/etcd/version",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "97BsbXOiZ8+Kr+LIuZkQFtSj7H4=",
+			"path": "github.com/coreos/go-semver/semver",
+			"revision": "e214231b295a8ea9479f11b70b35d5acf3556d9b",
+			"revisionTime": "2018-01-08T23:09:05Z"
+		},
+		{
 			"checksumSHA1": "/5cvgU+J4l7EhMXTK76KaCAfOuU=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
@@ -366,7 +414,13 @@
 			"checksumSHA1": "bKMZjd2wPw13VwoE7mBeSv5djFA=",
 			"path": "github.com/matttproud/golang_protobuf_extensions/pbutil",
 			"revision": "c12348ce28de40eed0136aa2b644d0ee0650e56c",
-			"revisionTime": "2016-04-24T11:30:07Z"
+		        "revisionTime": "2016-04-24T11:30:07Z"
+                },
+                {
+			"checksumSHA1": "OUZ1FFXyKs+Cfg9M9rmXqqweQck=",
+			"path": "github.com/miekg/dns",
+			"revision": "db96a2b759cdef4f11a34506a42eb8d1290c598e",
+			"revisionTime": "2016-07-26T03:20:27Z"
 		},
 		{
 			"checksumSHA1": "uTShVxdYNwW+3WI6SfJwOc/LQgo=",
@@ -645,6 +699,12 @@
 			"path": "github.com/tidwall/match",
 			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
 			"revisionTime": "2016-08-30T17:39:30Z"
+		},
+		{
+			"checksumSHA1": "MWqyOvDMkW+XYe2RJ5mplvut+aE=",
+			"path": "github.com/ugorji/go/codec",
+			"revision": "ded73eae5db7e7a0ef6f55aace87a2873c5d2b74",
+			"revisionTime": "2017-01-07T13:32:03Z"
 		},
 		{
 			"checksumSHA1": "6NS7FWJl1FobB+Xfe4SzBGD+75g=",

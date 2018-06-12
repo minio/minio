@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
@@ -39,6 +40,7 @@ import (
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
@@ -135,6 +137,26 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errInvalidBucketName)
 	}
 
+	if globalDNSConfig != nil {
+		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+				// Proceed to creating a bucket.
+				if err = objectAPI.MakeBucketWithLocation(context.Background(), args.BucketName, globalServerConfig.GetRegion()); err != nil {
+					return toJSONError(err)
+				}
+				if err = globalDNSConfig.Put(args.BucketName); err != nil {
+					objectAPI.DeleteBucket(context.Background(), args.BucketName)
+					return toJSONError(err)
+				}
+
+				reply.UIVersion = browser.UIVersion
+				return nil
+			}
+			return toJSONError(err)
+		}
+		return toJSONError(errBucketAlreadyExists)
+	}
+
 	if err := objectAPI.MakeBucketWithLocation(context.Background(), args.BucketName, globalServerConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
@@ -176,6 +198,14 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		logger.LogIf(ctx, nerr.Err)
 	}
 
+	if globalDNSConfig != nil {
+		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
+			// Deleting DNS entry failed, attempt to create the bucket again.
+			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "")
+			return toJSONError(err)
+		}
+	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -208,16 +238,32 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	buckets, err := listBuckets(context.Background())
-	if err != nil {
-		return toJSONError(err)
+	// If etcd, dns federation configured list buckets from etcd.
+	if globalDNSConfig != nil {
+		dnsBuckets, err := globalDNSConfig.List()
+		if err != nil {
+			return toJSONError(err)
+		}
+		for _, dnsRecord := range dnsBuckets {
+			bucketName := strings.Trim(dnsRecord.Key, "/")
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
+				Name:         bucketName,
+				CreationDate: dnsRecord.CreationDate,
+			})
+		}
+	} else {
+		buckets, err := listBuckets(context.Background())
+		if err != nil {
+			return toJSONError(err)
+		}
+		for _, bucket := range buckets {
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
+				Name:         bucket.Name,
+				CreationDate: bucket.Created,
+			})
+		}
 	}
-	for _, bucket := range buckets {
-		reply.Buckets = append(reply.Buckets, WebBucketInfo{
-			Name:         bucket.Name,
-			CreationDate: bucket.Created,
-		})
-	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -480,9 +526,9 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(creds)
 
-	// Save credentials to config file
-	if err := globalServerConfig.Save(); err != nil {
-		// As saving configurstion failed, restore previous credential in memory.
+	// Persist updated credentials.
+	if err = globalServerConfig.Save(getConfigFile()); err != nil {
+		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
 		logger.LogIf(context.Background(), err)
 		return toJSONError(err)

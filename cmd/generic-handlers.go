@@ -19,13 +19,19 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/pkg/set"
+
+	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/sys"
 	"github.com/rs/cors"
 	"golang.org/x/time/rate"
@@ -609,6 +615,73 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+// To forward the path style requests on a bucket to the right
+// configured server, bucket to IP configuration is obtained
+// from centralized etcd configuration service.
+type bucketForwardingHandler struct {
+	fwd     *handlers.Forwarder
+	handler http.Handler
+}
+
+func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if globalDNSConfig == nil || globalDomainName == "" || guessIsBrowserReq(r) || guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || guessIsRPCReq(r) {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+	bucket, object := urlPath2BucketObjectName(r.URL.Path)
+	// ListBucket requests should be handled at current endpoint as
+	// all buckets data can be fetched from here.
+	if r.Method == http.MethodGet && bucket == "" && object == "" {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+
+	// MakeBucket requests should be handled at current endpoint
+	if r.Method == http.MethodPut && bucket != "" && object == "" {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+
+	// CopyObject requests should be handled at current endpoint as path style
+	// requests have target bucket and object in URI and source details are in
+	// header fields
+	if r.Method == http.MethodPut && r.Header.Get("X-Amz-Copy-Source") != "" {
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+	sr, err := globalDNSConfig.Get(bucket)
+	if err != nil {
+		if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+		} else {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		}
+		return
+	}
+	if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+		host, port := getRandomHostPort(sr)
+		r.URL.Scheme = "http"
+		if globalIsSSL {
+			r.URL.Scheme = "https"
+		}
+		r.URL.Host = fmt.Sprintf("%s:%d", host, port)
+		f.fwd.ServeHTTP(w, r)
+		return
+	}
+	f.handler.ServeHTTP(w, r)
+}
+
+// setBucketForwardingHandler middleware forwards the path style requests
+// on a bucket to the right bucket location, bucket to IP configuration
+// is obtained from centralized etcd configuration service.
+func setBucketForwardingHandler(h http.Handler) http.Handler {
+	fwd := handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: NewCustomHTTPTransport(),
+	})
+	return bucketForwardingHandler{fwd, h}
 }
 
 // setRateLimitHandler middleware limits the throughput to h using a

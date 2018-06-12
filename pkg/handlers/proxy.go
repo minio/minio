@@ -26,8 +26,11 @@ import (
 var (
 	// De-facto standard header keys.
 	xForwardedFor    = http.CanonicalHeaderKey("X-Forwarded-For")
+	xForwardedHost   = http.CanonicalHeaderKey("X-Forwarded-Host")
+	xForwardedPort   = http.CanonicalHeaderKey("X-Forwarded-Port")
 	xForwardedProto  = http.CanonicalHeaderKey("X-Forwarded-Proto")
 	xForwardedScheme = http.CanonicalHeaderKey("X-Forwarded-Scheme")
+	xForwardedServer = http.CanonicalHeaderKey("X-Forwarded-Server")
 	xRealIP          = http.CanonicalHeaderKey("X-Real-IP")
 )
 

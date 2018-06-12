@@ -90,6 +90,11 @@ ENVIRONMENT VARIABLES:
   WORM:
      MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
 
+  BUCKET-DNS:
+     MINIO_DOMAIN:    To enable bucket DNS requests, set this value to Minio host domain name.
+     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of Minio host public IP(s) delimited by ",".
+     MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      $ {{.HelpName}} /home/shared
@@ -304,6 +309,11 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
+
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(newObject)
+	}
 
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(globalMinioAddr)

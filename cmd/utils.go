@@ -258,7 +258,7 @@ func ToS3ETag(etag string) string {
 // used while communicating with the cloud backends.
 // This sets the value for MaxIdleConnsPerHost from 2 (go default)
 // to 100.
-func NewCustomHTTPTransport() http.RoundTripper {
+func NewCustomHTTPTransport() *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{

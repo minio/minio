@@ -128,10 +128,19 @@ func (s *serverConfig) GetCacheConfig() CacheConfig {
 	return s.Cache
 }
 
-// Save config.
-func (s *serverConfig) Save() error {
-	// Save config file.
-	return quick.Save(getConfigFile(), s)
+// Save config file to corresponding backend
+func Save(configFile string, data interface{}) error {
+	return quick.SaveConfig(data, configFile, globalEtcdClient)
+}
+
+// Load config from backend
+func Load(configFile string, data interface{}) (quick.Config, error) {
+	return quick.LoadConfig(configFile, globalEtcdClient, data)
+}
+
+// GetVersion gets config version from backend
+func GetVersion(configFile string) (string, error) {
+	return quick.GetVersion(configFile, globalEtcdClient)
 }
 
 // Returns the string describing a difference with the given
@@ -233,7 +242,10 @@ func newServerConfig() *serverConfig {
 // found, otherwise use default parameters
 func newConfig() error {
 	// Initialize server config.
-	srvCfg := newServerConfig()
+	srvCfg, err := newQuickConfig(newServerConfig())
+	if err != nil {
+		return err
+	}
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
@@ -272,7 +284,19 @@ func newConfig() error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return globalServerConfig.Save()
+	return Save(getConfigFile(), globalServerConfig)
+}
+
+// newQuickConfig - initialize a new server config, with an allocated
+// quick.Config interface.
+func newQuickConfig(srvCfg *serverConfig) (*serverConfig, error) {
+	qcfg, err := quick.NewConfig(srvCfg, globalEtcdClient)
+	if err != nil {
+		return nil, err
+	}
+
+	srvCfg.Config = qcfg
+	return srvCfg, nil
 }
 
 // getValidConfig - returns valid server configuration
@@ -282,7 +306,14 @@ func getValidConfig() (*serverConfig, error) {
 		Browser: true,
 	}
 
-	if _, err := quick.Load(getConfigFile(), srvCfg); err != nil {
+	var err error
+	srvCfg, err = newQuickConfig(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	configFile := getConfigFile()
+	if err = srvCfg.Load(configFile); err != nil {
 		return nil, err
 	}
 

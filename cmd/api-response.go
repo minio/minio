@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/pkg/handlers"
@@ -293,8 +294,10 @@ func getObjectLocation(r *http.Request, domain, bucket, object string) string {
 	}
 	// If domain is set then we need to use bucket DNS style.
 	if domain != "" {
-		u.Host = bucket + "." + domain
-		u.Path = path.Join(slashSeparator, object)
+		if strings.Contains(r.Host, domain) {
+			u.Host = bucket + "." + r.Host
+			u.Path = path.Join(slashSeparator, object)
+		}
 	}
 	return u.String()
 }

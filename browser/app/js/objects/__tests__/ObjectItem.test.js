@@ -28,9 +28,16 @@ describe("ObjectItem", () => {
     expect(wrapper.prop("data-type")).toBe("image")
   })
 
-  it("should call onClick when the object isclicked", () => {
+  it("shouldn't call onClick when the object isclicked", () => {
     const onClick = jest.fn()
-    const wrapper = shallow(<ObjectItem name={"test"} onClick={onClick} />)
+    const wrapper = shallow(<ObjectItem name={"test"} />)
+    wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it("should call onClick when the folder isclicked", () => {
+    const onClick = jest.fn()
+    const wrapper = shallow(<ObjectItem name={"test/"} onClick={onClick} />)
     wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
     expect(onClick).toHaveBeenCalled()
   })

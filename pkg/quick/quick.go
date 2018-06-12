@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"sync"
 
+	etcd "github.com/coreos/etcd/client"
 	"github.com/fatih/structs"
 	"github.com/minio/minio/pkg/safe"
 )
@@ -44,6 +45,7 @@ type Config interface {
 // config - implements quick.Config interface
 type config struct {
 	data interface{}
+	clnt etcd.Client
 	lock *sync.RWMutex
 }
 
@@ -66,6 +68,10 @@ func (d config) String() string {
 func (d config) Save(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+
+	if d.clnt != nil {
+		return saveFileConfigEtcd(filename, d.clnt, d.data)
+	}
 
 	// Backup if given file exists
 	oldData, err := ioutil.ReadFile(filename)
@@ -92,6 +98,9 @@ func (d config) Save(filename string) error {
 func (d config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+	if d.clnt != nil {
+		return loadFileConfigEtcd(filename, d.clnt, d.data)
+	}
 	return loadFileConfig(filename, d.data)
 }
 
@@ -100,7 +109,7 @@ func (d config) Data() interface{} {
 	return d.data
 }
 
-//Diff  - list fields that are in A but not in B
+// Diff  - list fields that are in A but not in B
 func (d config) Diff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 
@@ -179,43 +188,50 @@ func writeFile(filename string, data []byte) error {
 	return safeFile.Close()
 }
 
-// New - instantiate a new config
-func New(data interface{}) (Config, error) {
+// GetVersion - extracts the version information.
+func GetVersion(filename string, clnt etcd.Client) (version string, err error) {
+	var qc Config
+	qc, err = LoadConfig(filename, clnt, &struct {
+		Version string
+	}{})
+	if err != nil {
+		return "", err
+	}
+	return qc.Version(), nil
+}
+
+// LoadConfig - loads json config from filename for the a given struct data
+func LoadConfig(filename string, clnt etcd.Client, data interface{}) (qc Config, err error) {
+	qc, err = NewConfig(data, clnt)
+	if err != nil {
+		return nil, err
+	}
+	return qc, qc.Load(filename)
+}
+
+// SaveConfig - saves given configuration data into given file as JSON.
+func SaveConfig(data interface{}, filename string, clnt etcd.Client) (err error) {
+	if err = checkData(data); err != nil {
+		return err
+	}
+	var qc Config
+	qc, err = NewConfig(data, clnt)
+	if err != nil {
+		return err
+	}
+	return qc.Save(filename)
+}
+
+// NewConfig loads config from etcd client if provided, otherwise loads from a local filename.
+// fails when all else fails.
+func NewConfig(data interface{}, clnt etcd.Client) (cfg Config, err error) {
 	if err := checkData(data); err != nil {
 		return nil, err
 	}
 
 	d := new(config)
 	d.data = data
+	d.clnt = clnt
 	d.lock = new(sync.RWMutex)
 	return d, nil
-}
-
-// GetVersion - extracts the version information.
-func GetVersion(filename string) (version string, err error) {
-	var qc Config
-	if qc, err = Load(filename, &struct {
-		Version string
-	}{}); err != nil {
-		return "", err
-	}
-	return qc.Version(), err
-}
-
-// Load - loads json config from filename for the a given struct data
-func Load(filename string, data interface{}) (qc Config, err error) {
-	if qc, err = New(data); err == nil {
-		err = qc.Load(filename)
-	}
-	return qc, err
-}
-
-// Save - saves given configuration data into given file as JSON.
-func Save(filename string, data interface{}) (err error) {
-	var qc Config
-	if qc, err = New(data); err == nil {
-		err = qc.Save(filename)
-	}
-
-	return err
 }

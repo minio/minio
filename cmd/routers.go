@@ -49,6 +49,8 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 var globalHandlers = []HandlerFunc{
 	// set HTTP security headers such as Content-Security-Policy.
 	addSecurityHeaders,
+	// Forward path style requests to actual host in a bucket federated setup.
+	setBucketForwardingHandler,
 	// Ratelimit the incoming requests using a token bucket algorithm
 	setRateLimitHandler,
 	// Validate all the incoming paths.
