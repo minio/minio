@@ -2203,7 +2203,7 @@ func migrateV25ToV26() error {
 	configFile := getConfigFile()
 
 	cv25 := &serverConfigV25{}
-	_, err := quick.Load(configFile, cv25)
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv25)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -2310,7 +2310,7 @@ func migrateV25ToV26() error {
 	// Add predefined value to new server config.
 	srvConfig.Cache.MaxUse = globalCacheMaxUse
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv25.Version, srvConfig.Version, err)
 	}
 
