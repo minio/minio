@@ -2305,6 +2305,8 @@ func migrateV25ToV26() error {
 	srvConfig.Cache.Drives = cv25.Cache.Drives
 	srvConfig.Cache.Exclude = cv25.Cache.Exclude
 	srvConfig.Cache.Expiry = cv25.Cache.Expiry
+
+	// Add predefined value to new server config.
 	srvConfig.Cache.MaxUse = globalCacheMaxUse
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
