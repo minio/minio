@@ -27,6 +27,7 @@ The cache settings may also be set through environment variables. When set, envi
 export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3"
 export MINIO_CACHE_EXPIRY=90
 export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
+export MINIO_CACHE_MAXUSE=80
 minio server /export{1...24}
 ```
 
