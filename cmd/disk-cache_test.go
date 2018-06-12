@@ -284,41 +284,48 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !cache.Exists(ctx, bucketName, objectName) {
-		t.Fatal("Expected object to exist on cache")
-	}
-	if cachedObjInfo.ETag != objInfo.ETag {
-		t.Fatal("Expected ETag to match")
-	}
-	if cachedObjInfo.Size != objInfo.Size {
-		t.Fatal("Size mismatch")
-	}
-	if cachedObjInfo.ContentType != objInfo.ContentType {
-		t.Fatal("Cached content-type does not match")
-	}
-	writer := bytes.NewBuffer(nil)
-	err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ccontent := writer.Bytes(); !bytes.Equal([]byte(content), ccontent) {
-		t.Errorf("wrong cached file content")
-	}
-	err = cache.Delete(ctx, bucketName, objectName)
-	if err != nil {
-		t.Errorf("object missing from cache")
-	}
-	online := cache.IsOnline()
-	if !online {
-		t.Errorf("expected cache drive to be online")
+	if !cache.diskAvailable(int64(size)) {
+		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
+		if err == nil {
+			t.Fatal("Object added despite reaching max-use limit")
+		}
+	} else {
+		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cache.Exists(ctx, bucketName, objectName) {
+			t.Fatal("Expected object to exist on cache")
+		}
+		if cachedObjInfo.ETag != objInfo.ETag {
+			t.Fatal("Expected ETag to match")
+		}
+		if cachedObjInfo.Size != objInfo.Size {
+			t.Fatal("Size mismatch")
+		}
+		if cachedObjInfo.ContentType != objInfo.ContentType {
+			t.Fatal("Cached content-type does not match")
+		}
+		writer := bytes.NewBuffer(nil)
+		err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ccontent := writer.Bytes(); !bytes.Equal([]byte(content), ccontent) {
+			t.Errorf("wrong cached file content")
+		}
+		err = cache.Delete(ctx, bucketName, objectName)
+		if err != nil {
+			t.Errorf("object missing from cache")
+		}
+		online := cache.IsOnline()
+		if !online {
+			t.Errorf("expected cache drive to be online")
+		}
 	}
 }
 
