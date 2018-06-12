@@ -286,8 +286,8 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	}
 	if !cache.diskAvailable(int64(size)) {
 		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
-		if err == nil {
-			t.Fatal("Object added despite reaching max-use limit")
+		if err != errDiskFull {
+			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
 		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
