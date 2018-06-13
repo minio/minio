@@ -124,7 +124,10 @@ func (l *lockRPCReceiver) lockMaintenance(interval time.Duration) {
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.
 		host, err := xnet.ParseHost(nlrip.lri.node)
-		logger.CriticalIf(context.Background(), err)
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			continue
+		}
 		c, err := NewLockRPCClient(host)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
@@ -183,7 +186,7 @@ func NewLockRPCServer() (*xrpc.Server, error) {
 // Register distributed NS lock handlers.
 func registerDistNSLockRouter(router *mux.Router) {
 	rpcServer, err := NewLockRPCServer()
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to initialize Lock RPC Server", context.Background())
 
 	// Start lock maintenance from all lock servers.
 	go startLockMaintenance(globalLockServer)

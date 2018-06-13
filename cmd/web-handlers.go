@@ -483,7 +483,9 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(errAuthentication)
 	}
 	cred, err := auth.GetNewCredentials()
-	logger.CriticalIf(context.Background(), err)
+	if err != nil {
+		return toJSONError(err)
+	}
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = browser.UIVersion

@@ -691,7 +691,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 // cancelled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to get maximum open file limit", context.Background())
 	// Burst value is set to 1 to allow only maxOpenFileLimit
 	// requests to happen at once.
 	l := rate.NewLimiter(rate.Limit(maxLimit), 1)

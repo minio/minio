@@ -179,9 +179,9 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 
 	for _, hostStr := range GetRemotePeers(endpoints) {
 		host, err := xnet.ParseHost(hostStr)
-		logger.CriticalIf(context.Background(), err)
+		logger.FatalIf(err, "Unable to parse Admin RPC Host", context.Background())
 		rpcClient, err := NewAdminRPCClient(host)
-		logger.CriticalIf(context.Background(), err)
+		logger.FatalIf(err, "Unable to initialize Admin RPC Client", context.Background())
 		adminPeerList = append(adminPeerList, adminPeer{
 			addr:      hostStr,
 			cmdRunner: rpcClient,

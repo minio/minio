@@ -224,11 +224,17 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	host, e := xnet.ParseHost(r.RemoteAddr)
-	logger.CriticalIf(ctx, e)
+	host, err := xnet.ParseHost(r.RemoteAddr)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
-	target, e := target.NewHTTPClientTarget(*host, w)
-	logger.CriticalIf(ctx, e)
+	target, err := target.NewHTTPClientTarget(*host, w)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
 
@@ -241,10 +247,13 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
 	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
 
-	thisAddr, e := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	logger.CriticalIf(ctx, e)
+	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
-	if err := SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
+	if err = SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -259,7 +268,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	<-target.DoneCh
 
-	if err := RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
+	if err = RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

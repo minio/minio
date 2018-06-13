@@ -166,9 +166,9 @@ func makeRemoteRPCClients(endpoints EndpointList) map[xnet.Host]*PeerRPCClient {
 	peerRPCClientMap := make(map[xnet.Host]*PeerRPCClient)
 	for _, hostStr := range GetRemotePeers(endpoints) {
 		host, err := xnet.ParseHost(hostStr)
-		logger.CriticalIf(context.Background(), err)
+		logger.FatalIf(err, "Unable to parse peer RPC Host", context.Background())
 		rpcClient, err := NewPeerRPCClient(host)
-		logger.CriticalIf(context.Background(), err)
+		logger.FatalIf(err, "Unable to parse peer RPC Client", context.Background())
 		peerRPCClientMap[*host] = rpcClient
 	}
 
