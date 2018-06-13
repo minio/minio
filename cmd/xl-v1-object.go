@@ -611,8 +611,17 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
-	buffer := xl.bp.Get()
-	defer xl.bp.Put(buffer)
+	var buffer []byte
+	switch size := data.Size(); {
+	case size == 0:
+		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size < blockSizeV1:
+		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
+		buffer = make([]byte, size, 2*size)
+	default:
+		buffer = xl.bp.Get()
+		defer xl.bp.Put(buffer)
+	}
 
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
