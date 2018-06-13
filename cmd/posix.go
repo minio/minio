@@ -135,10 +135,10 @@ func getValidPath(path string) (string, error) {
 	if err != nil {
 		return path, err
 	}
+	defer os.Remove(pathJoin(path, ".writable-check.tmp"))
 	file.Close()
 
-	err = os.Remove(pathJoin(path, ".writable-check.tmp"))
-	return path, err
+	return path, nil
 }
 
 // isDirEmpty - returns whether given directory is empty or not.
