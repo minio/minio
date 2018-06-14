@@ -121,7 +121,7 @@ func NewAdminRPCServer() (*xrpc.Server, error) {
 // registerAdminRPCRouter - creates and registers Admin RPC server and its router.
 func registerAdminRPCRouter(router *mux.Router) {
 	rpcServer, err := NewAdminRPCServer()
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to initialize Lock RPC Server", context.Background())
 	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	subrouter.Path(adminServiceSubPath).Handler(rpcServer)
 }

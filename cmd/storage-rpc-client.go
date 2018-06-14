@@ -316,9 +316,9 @@ func NewStorageRPCClient(host *xnet.Host, endpointPath string) (*StorageRPCClien
 // Initialize new storage rpc client.
 func newStorageRPC(endpoint Endpoint) *StorageRPCClient {
 	host, err := xnet.ParseHost(endpoint.Host)
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to parse storage RPC Host", context.Background())
 	rpcClient, err := NewStorageRPCClient(host, endpoint.Path)
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to initialize storage RPC client", context.Background())
 	rpcClient.connected = rpcClient.Call(storageServiceName+".Connect", &AuthArgs{}, &VoidReply{}) == nil
 	return rpcClient
 }
