@@ -131,6 +131,7 @@ var retryableS3Codes = map[string]struct{}{
 	"InternalError":         {},
 	"ExpiredToken":          {},
 	"ExpiredTokenException": {},
+	"SlowDown":              {},
 	// Add more AWS S3 codes here.
 }
 

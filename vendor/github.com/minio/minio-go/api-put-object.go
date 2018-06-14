@@ -28,21 +28,22 @@ import (
 
 	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio-go/pkg/s3utils"
-	"golang.org/x/net/lex/httplex"
+	"golang.org/x/net/http/httpguts"
 )
 
 // PutObjectOptions represents options specified by user for PutObject call
 type PutObjectOptions struct {
-	UserMetadata         map[string]string
-	Progress             io.Reader
-	ContentType          string
-	ContentEncoding      string
-	ContentDisposition   string
-	ContentLanguage      string
-	CacheControl         string
-	ServerSideEncryption encrypt.ServerSide
-	NumThreads           uint
-	StorageClass         string
+	UserMetadata            map[string]string
+	Progress                io.Reader
+	ContentType             string
+	ContentEncoding         string
+	ContentDisposition      string
+	ContentLanguage         string
+	CacheControl            string
+	ServerSideEncryption    encrypt.ServerSide
+	NumThreads              uint
+	StorageClass            string
+	WebsiteRedirectLocation string
 }
 
 // getNumThreads - gets the number of threads to be used in the multipart
@@ -84,6 +85,9 @@ func (opts PutObjectOptions) Header() (header http.Header) {
 	if opts.StorageClass != "" {
 		header[amzStorageClass] = []string{opts.StorageClass}
 	}
+	if opts.WebsiteRedirectLocation != "" {
+		header[amzWebsiteRedirectLocation] = []string{opts.WebsiteRedirectLocation}
+	}
 	for k, v := range opts.UserMetadata {
 		if !isAmzHeader(k) && !isStandardHeader(k) && !isStorageClassHeader(k) {
 			header["X-Amz-Meta-"+k] = []string{v}
@@ -97,10 +101,10 @@ func (opts PutObjectOptions) Header() (header http.Header) {
 // validate() checks if the UserMetadata map has standard headers or and raises an error if so.
 func (opts PutObjectOptions) validate() (err error) {
 	for k, v := range opts.UserMetadata {
-		if !httplex.ValidHeaderFieldName(k) || isStandardHeader(k) || isSSEHeader(k) || isStorageClassHeader(k) {
+		if !httpguts.ValidHeaderFieldName(k) || isStandardHeader(k) || isSSEHeader(k) || isStorageClassHeader(k) {
 			return ErrInvalidArgument(k + " unsupported user defined metadata name")
 		}
-		if !httplex.ValidHeaderFieldValue(v) {
+		if !httpguts.ValidHeaderFieldValue(v) {
 			return ErrInvalidArgument(v + " unsupported user defined metadata value")
 		}
 	}

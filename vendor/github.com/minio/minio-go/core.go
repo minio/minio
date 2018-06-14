@@ -48,9 +48,9 @@ func (c Core) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int)
 }
 
 // ListObjectsV2 - Lists all the objects at a prefix, similar to ListObjects() but uses
-// continuationToken instead of marker to further filter the results.
-func (c Core) ListObjectsV2(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
-	return c.listObjectsV2Query(bucketName, objectPrefix, continuationToken, fetchOwner, delimiter, maxkeys)
+// continuationToken instead of marker to support iteration over the results.
+func (c Core) ListObjectsV2(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int, startAfter string) (ListBucketV2Result, error) {
+	return c.listObjectsV2Query(bucketName, objectPrefix, continuationToken, fetchOwner, delimiter, maxkeys, startAfter)
 }
 
 // CopyObject - copies an object from source object to destination object on server side.
@@ -82,6 +82,8 @@ func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Ba
 			opts.ContentType = v
 		} else if strings.ToLower(k) == "cache-control" {
 			opts.CacheControl = v
+		} else if strings.ToLower(k) == strings.ToLower(amzWebsiteRedirectLocation) {
+			opts.WebsiteRedirectLocation = v
 		} else {
 			m[k] = metadata[k]
 		}
