@@ -66,6 +66,9 @@ var defaultFilterKeys = []string{
 	"x-amz-bucket-region",
 	"x-amz-request-id",
 	"x-amz-id-2",
+	"Content-Security-Policy",
+	"X-Xss-Protection",
+
 	// Add new headers to be ignored.
 }
 

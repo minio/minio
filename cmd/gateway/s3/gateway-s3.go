@@ -255,7 +255,7 @@ func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, e error) {
-	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
+	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return loi, minio.ErrorRespToObjectError(err, bucket)
