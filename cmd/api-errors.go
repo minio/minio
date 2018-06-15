@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/s3select"
 )
 
 // APIError structure
@@ -190,6 +191,7 @@ const (
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
+
 	ErrHealNotImplemented
 	ErrHealNoSuchProcess
 	ErrHealInvalidClientToken
@@ -197,6 +199,93 @@ const (
 	ErrHealAlreadyRunning
 	ErrHealOverlappingPaths
 	ErrIncorrectContinuationToken
+
+	//S3 Select Errors
+	ErrEmptyRequestBody
+	ErrUnsupportedFunction
+	ErrInvalidExpressionType
+	ErrBusy
+	ErrUnauthorizedAccess
+	ErrExpressionTooLong
+	ErrIllegalSQLFunctionArgument
+	ErrInvalidKeyPath
+	ErrInvalidCompressionFormat
+	ErrInvalidFileHeaderInfo
+	ErrInvalidJSONType
+	ErrInvalidQuoteFields
+	ErrInvalidRequestParameter
+	ErrInvalidDataType
+	ErrInvalidTextEncoding
+	ErrInvalidDataSource
+	ErrInvalidTableAlias
+	ErrMissingRequiredParameter
+	ErrObjectSerializationConflict
+	ErrUnsupportedSQLOperation
+	ErrUnsupportedSQLStructure
+	ErrUnsupportedSyntax
+	ErrUnsupportedRangeHeader
+	ErrLexerInvalidChar
+	ErrLexerInvalidOperator
+	ErrLexerInvalidLiteral
+	ErrLexerInvalidIONLiteral
+	ErrParseExpectedDatePart
+	ErrParseExpectedKeyword
+	ErrParseExpectedTokenType
+	ErrParseExpected2TokenTypes
+	ErrParseExpectedNumber
+	ErrParseExpectedRightParenBuiltinFunctionCall
+	ErrParseExpectedTypeName
+	ErrParseExpectedWhenClause
+	ErrParseUnsupportedToken
+	ErrParseUnsupportedLiteralsGroupBy
+	ErrParseExpectedMember
+	ErrParseUnsupportedSelect
+	ErrParseUnsupportedCase
+	ErrParseUnsupportedCaseClause
+	ErrParseUnsupportedAlias
+	ErrParseUnsupportedSyntax
+	ErrParseUnknownOperator
+	ErrParseInvalidPathComponent
+	ErrParseMissingIdentAfterAt
+	ErrParseUnexpectedOperator
+	ErrParseUnexpectedTerm
+	ErrParseUnexpectedToken
+	ErrParseUnexpectedKeyword
+	ErrParseExpectedExpression
+	ErrParseExpectedLeftParenAfterCast
+	ErrParseExpectedLeftParenValueConstructor
+	ErrParseExpectedLeftParenBuiltinFunctionCall
+	ErrParseExpectedArgumentDelimiter
+	ErrParseCastArity
+	ErrParseInvalidTypeParam
+	ErrParseEmptySelect
+	ErrParseSelectMissingFrom
+	ErrParseExpectedIdentForGroupName
+	ErrParseExpectedIdentForAlias
+	ErrParseUnsupportedCallWithStar
+	ErrParseNonUnaryAgregateFunctionCall
+	ErrParseMalformedJoin
+	ErrParseExpectedIdentForAt
+	ErrParseAsteriskIsNotAloneInSelectList
+	ErrParseCannotMixSqbAndWildcardInSelectList
+	ErrParseInvalidContextForWildcardInSelectList
+	ErrIncorrectSQLFunctionArgumentType
+	ErrValueParseFailure
+	ErrEvaluatorInvalidArguments
+	ErrIntegerOverflow
+	ErrLikeInvalidInputs
+	ErrCastFailed
+	ErrInvalidCast
+	ErrEvaluatorInvalidTimestampFormatPattern
+	ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing
+	ErrEvaluatorTimestampFormatPatternDuplicateFields
+	ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch
+	ErrEvaluatorUnterminatedTimestampFormatPatternToken
+	ErrEvaluatorInvalidTimestampFormatPatternToken
+	ErrEvaluatorInvalidTimestampFormatPatternSymbol
+	ErrEvaluatorBindingDoesNotExist
+	ErrInvalidColumnIndex
+	ErrMissingHeaders
 )
 
 // error code to APIError structure, these fields carry respective
@@ -803,6 +892,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+
 	// Generic Invalid-Request error. Should be used for response errors only for unlikely
 	// corner case errors for which introducing new APIErrorCode is not worth it. LogIf()
 	// should be used to log the error at the source of the error for debugging purposes.
@@ -849,6 +939,432 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrIncorrectContinuationToken: {
 		Code:           "InvalidArgument",
 		Description:    "The continuation token provided is incorrect",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	//S3 Select API Errors
+	ErrEmptyRequestBody: {
+		Code:           "EmptyRequestBody",
+		Description:    "Request body cannot be empty.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedFunction: {
+		Code:           "UnsupportedFunction",
+		Description:    "Encountered an unsupported SQL function.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidDataSource: {
+		Code:           "InvalidDataSource",
+		Description:    "Invalid data source type. Only CSV and JSON are supported at this time.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidExpressionType: {
+		Code:           "InvalidExpressionType",
+		Description:    "The ExpressionType is invalid. Only SQL expressions are supported at this time.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBusy: {
+		Code:           "Busy",
+		Description:    "The service is unavailable. Please retry.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrUnauthorizedAccess: {
+		Code:           "UnauthorizedAccess",
+		Description:    "You are not authorized to perform this operation",
+		HTTPStatusCode: http.StatusUnauthorized,
+	},
+	ErrExpressionTooLong: {
+		Code:           "ExpressionTooLong",
+		Description:    "The SQL expression is too long: The maximum byte-length for the SQL expression is 256 KB.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrIllegalSQLFunctionArgument: {
+		Code:           "IllegalSqlFunctionArgument",
+		Description:    "Illegal argument was used in the SQL function.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidKeyPath: {
+		Code:           "InvalidKeyPath",
+		Description:    "Key path in the SQL expression is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidCompressionFormat: {
+		Code:           "InvalidCompressionFormat",
+		Description:    "The file is not in a supported compression format. Only GZIP is supported at this time.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidFileHeaderInfo: {
+		Code:           "InvalidFileHeaderInfo",
+		Description:    "The FileHeaderInfo is invalid. Only NONE, USE, and IGNORE are supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidJSONType: {
+		Code:           "InvalidJsonType",
+		Description:    "The JsonType is invalid. Only DOCUMENT and LINES are supported at this time.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidQuoteFields: {
+		Code:           "InvalidQuoteFields",
+		Description:    "The QuoteFields is invalid. Only ALWAYS and ASNEEDED are supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidRequestParameter: {
+		Code:           "InvalidRequestParameter",
+		Description:    "The value of a parameter in SelectRequest element is invalid. Check the service API documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidDataType: {
+		Code:           "InvalidDataType",
+		Description:    "The SQL expression contains an invalid data type.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTextEncoding: {
+		Code:           "InvalidTextEncoding",
+		Description:    "Invalid encoding type. Only UTF-8 encoding is supported at this time.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTableAlias: {
+		Code:           "InvalidTableAlias",
+		Description:    "The SQL expression contains an invalid table alias.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingRequiredParameter: {
+		Code:           "MissingRequiredParameter",
+		Description:    "The SelectRequest entity is missing a required parameter. Check the service documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectSerializationConflict: {
+		Code:           "ObjectSerializationConflict",
+		Description:    "The SelectRequest entity can only contain one of CSV or JSON. Check the service documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedSQLOperation: {
+		Code:           "UnsupportedSqlOperation",
+		Description:    "Encountered an unsupported SQL operation.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedSQLStructure: {
+		Code:           "UnsupportedSqlStructure",
+		Description:    "Encountered an unsupported SQL structure. Check the SQL Reference.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedSyntax: {
+		Code:           "UnsupportedSyntax",
+		Description:    "Encountered invalid syntax.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedRangeHeader: {
+		Code:           "UnsupportedRangeHeader",
+		Description:    "Range header is not supported for this operation.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLexerInvalidChar: {
+		Code:           "LexerInvalidChar",
+		Description:    "The SQL expression contains an invalid character.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLexerInvalidOperator: {
+		Code:           "LexerInvalidOperator",
+		Description:    "The SQL expression contains an invalid literal.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLexerInvalidLiteral: {
+		Code:           "LexerInvalidLiteral",
+		Description:    "The SQL expression contains an invalid operator.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLexerInvalidIONLiteral: {
+		Code:           "LexerInvalidIONLiteral",
+		Description:    "The SQL expression contains an invalid operator.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedDatePart: {
+		Code:           "ParseExpectedDatePart",
+		Description:    "Did not find the expected date part in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedKeyword: {
+		Code:           "ParseExpectedKeyword",
+		Description:    "Did not find the expected keyword in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedTokenType: {
+		Code:           "ParseExpectedTokenType",
+		Description:    "Did not find the expected token in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpected2TokenTypes: {
+		Code:           "ParseExpected2TokenTypes",
+		Description:    "Did not find the expected token in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedNumber: {
+		Code:           "ParseExpectedNumber",
+		Description:    "Did not find the expected number in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedRightParenBuiltinFunctionCall: {
+		Code:           "ParseExpectedRightParenBuiltinFunctionCall",
+		Description:    "Did not find the expected right parenthesis character in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedTypeName: {
+		Code:           "ParseExpectedTypeName",
+		Description:    "Did not find the expected type name in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedWhenClause: {
+		Code:           "ParseExpectedWhenClause",
+		Description:    "Did not find the expected WHEN clause in the SQL expression. CASE is not supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedToken: {
+		Code:           "ParseUnsupportedToken",
+		Description:    "The SQL expression contains an unsupported token.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedLiteralsGroupBy: {
+		Code:           "ParseUnsupportedLiteralsGroupBy",
+		Description:    "The SQL expression contains an unsupported use of GROUP BY.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedMember: {
+		Code:           "ParseExpectedMember",
+		Description:    "The SQL expression contains an unsupported use of MEMBER.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedSelect: {
+		Code:           "ParseUnsupportedSelect",
+		Description:    "The SQL expression contains an unsupported use of SELECT.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedCase: {
+		Code:           "ParseUnsupportedCase",
+		Description:    "The SQL expression contains an unsupported use of CASE.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedCaseClause: {
+		Code:           "ParseUnsupportedCaseClause",
+		Description:    "The SQL expression contains an unsupported use of CASE.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedAlias: {
+		Code:           "ParseUnsupportedAlias",
+		Description:    "The SQL expression contains an unsupported use of ALIAS.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedSyntax: {
+		Code:           "ParseUnsupportedSyntax",
+		Description:    "The SQL expression contains unsupported syntax.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnknownOperator: {
+		Code:           "ParseUnknownOperator",
+		Description:    "The SQL expression contains an invalid operator.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseInvalidPathComponent: {
+		Code:           "ParseInvalidPathComponent",
+		Description:    "The SQL expression contains an invalid path component.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseMissingIdentAfterAt: {
+		Code:           "ParseMissingIdentAfterAt",
+		Description:    "Did not find the expected identifier after the @ symbol in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnexpectedOperator: {
+		Code:           "ParseUnexpectedOperator",
+		Description:    "The SQL expression contains an unexpected operator.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnexpectedTerm: {
+		Code:           "ParseUnexpectedTerm",
+		Description:    "The SQL expression contains an unexpected term.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnexpectedToken: {
+		Code:           "ParseUnexpectedToken",
+		Description:    "The SQL expression contains an unexpected token.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnexpectedKeyword: {
+		Code:           "ParseUnexpectedKeyword",
+		Description:    "The SQL expression contains an unexpected keyword.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedExpression: {
+		Code:           "ParseExpectedExpression",
+		Description:    "Did not find the expected SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedLeftParenAfterCast: {
+		Code:           "ParseExpectedLeftParenAfterCast",
+		Description:    "Did not find expected the left parenthesis in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedLeftParenValueConstructor: {
+		Code:           "ParseExpectedLeftParenValueConstructor",
+		Description:    "Did not find expected the left parenthesis in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedLeftParenBuiltinFunctionCall: {
+		Code:           "ParseExpectedLeftParenBuiltinFunctionCall",
+		Description:    "Did not find the expected left parenthesis in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedArgumentDelimiter: {
+		Code:           "ParseExpectedArgumentDelimiter",
+		Description:    "Did not find the expected argument delimiter in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseCastArity: {
+		Code:           "ParseCastArity",
+		Description:    "The SQL expression CAST has incorrect arity.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseInvalidTypeParam: {
+		Code:           "ParseInvalidTypeParam",
+		Description:    "The SQL expression contains an invalid parameter value.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseEmptySelect: {
+		Code:           "ParseEmptySelect",
+		Description:    "The SQL expression contains an empty SELECT.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseSelectMissingFrom: {
+		Code:           "ParseSelectMissingFrom",
+		Description:    "GROUP is not supported in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedIdentForGroupName: {
+		Code:           "ParseExpectedIdentForGroupName",
+		Description:    "GROUP is not supported in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedIdentForAlias: {
+		Code:           "ParseExpectedIdentForAlias",
+		Description:    "Did not find the expected identifier for the alias in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseUnsupportedCallWithStar: {
+		Code:           "ParseUnsupportedCallWithStar",
+		Description:    "Only COUNT with (*) as a parameter is supported in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseNonUnaryAgregateFunctionCall: {
+		Code:           "ParseNonUnaryAgregateFunctionCall",
+		Description:    "Only one argument is supported for aggregate functions in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseMalformedJoin: {
+		Code:           "ParseMalformedJoin",
+		Description:    "JOIN is not supported in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseExpectedIdentForAt: {
+		Code:           "ParseExpectedIdentForAt",
+		Description:    "Did not find the expected identifier for AT name in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseAsteriskIsNotAloneInSelectList: {
+		Code:           "ParseAsteriskIsNotAloneInSelectList",
+		Description:    "Other expressions are not allowed in the SELECT list when '*' is used without dot notation in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseCannotMixSqbAndWildcardInSelectList: {
+		Code:           "ParseCannotMixSqbAndWildcardInSelectList",
+		Description:    "Cannot mix [] and * in the same expression in a SELECT list in SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrParseInvalidContextForWildcardInSelectList: {
+		Code:           "ParseInvalidContextForWildcardInSelectList",
+		Description:    "Invalid use of * in SELECT list in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrIncorrectSQLFunctionArgumentType: {
+		Code:           "IncorrectSqlFunctionArgumentType",
+		Description:    "Incorrect type of arguments in function call in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrValueParseFailure: {
+		Code:           "ValueParseFailure",
+		Description:    "Time stamp parse failure in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorInvalidArguments: {
+		Code:           "EvaluatorInvalidArguments",
+		Description:    "Incorrect number of arguments in the function call in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrIntegerOverflow: {
+		Code:           "IntegerOverflow",
+		Description:    "Int overflow or underflow in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLikeInvalidInputs: {
+		Code:           "LikeInvalidInputs",
+		Description:    "Invalid argument given to the LIKE clause in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCastFailed: {
+		Code:           "CastFailed",
+		Description:    "Attempt to convert from one data type to another using CAST failed in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidCast: {
+		Code:           "InvalidCast",
+		Description:    "Attempt to convert from one data type to another using CAST failed in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorInvalidTimestampFormatPattern: {
+		Code:           "EvaluatorInvalidTimestampFormatPattern",
+		Description:    "Time stamp format pattern requires additional fields in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing: {
+		Code:           "EvaluatorInvalidTimestampFormatPatternSymbolForParsing",
+		Description:    "Time stamp format pattern contains a valid format symbol that cannot be applied to time stamp parsing in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorTimestampFormatPatternDuplicateFields: {
+		Code:           "EvaluatorTimestampFormatPatternDuplicateFields",
+		Description:    "Time stamp format pattern contains multiple format specifiers representing the time stamp field in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch: {
+		Code:           "EvaluatorUnterminatedTimestampFormatPatternToken",
+		Description:    "Time stamp format pattern contains unterminated token in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorUnterminatedTimestampFormatPatternToken: {
+		Code:           "EvaluatorInvalidTimestampFormatPatternToken",
+		Description:    "Time stamp format pattern contains an invalid token in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorInvalidTimestampFormatPatternToken: {
+		Code:           "EvaluatorInvalidTimestampFormatPatternToken",
+		Description:    "Time stamp format pattern contains an invalid token in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorInvalidTimestampFormatPatternSymbol: {
+		Code:           "EvaluatorInvalidTimestampFormatPatternSymbol",
+		Description:    "Time stamp format pattern contains an invalid symbol in the SQL expression.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidColumnIndex: {
+		Code:           "InvalidColumnIndex",
+		Description:    "Column index in the SQL expression is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrEvaluatorBindingDoesNotExist: {
+		Code:           "ErrEvaluatorBindingDoesNotExist",
+		Description:    "A column name or a path provided does not exist in the SQL expression",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingHeaders: {
+		Code:           "MissingHeaders",
+		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
@@ -899,6 +1415,169 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrAccessDenied // no access without correct key
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
+	}
+	switch err {
+	case s3select.ErrBusy:
+		apiErr = ErrBusy
+	case s3select.ErrUnauthorizedAccess:
+		apiErr = ErrUnauthorizedAccess
+	case s3select.ErrExpressionTooLong:
+		apiErr = ErrExpressionTooLong
+	case s3select.ErrIllegalSQLFunctionArgument:
+		apiErr = ErrIllegalSQLFunctionArgument
+	case s3select.ErrInvalidKeyPath:
+		apiErr = ErrInvalidKeyPath
+	case s3select.ErrInvalidCompressionFormat:
+		apiErr = ErrInvalidCompressionFormat
+	case s3select.ErrInvalidFileHeaderInfo:
+		apiErr = ErrInvalidFileHeaderInfo
+	case s3select.ErrInvalidJSONType:
+		apiErr = ErrInvalidJSONType
+	case s3select.ErrInvalidQuoteFields:
+		apiErr = ErrInvalidQuoteFields
+	case s3select.ErrInvalidRequestParameter:
+		apiErr = ErrInvalidRequestParameter
+	case s3select.ErrInvalidDataType:
+		apiErr = ErrInvalidDataType
+	case s3select.ErrInvalidTextEncoding:
+		apiErr = ErrInvalidTextEncoding
+	case s3select.ErrInvalidTableAlias:
+		apiErr = ErrInvalidTableAlias
+	case s3select.ErrMissingRequiredParameter:
+		apiErr = ErrMissingRequiredParameter
+	case s3select.ErrObjectSerializationConflict:
+		apiErr = ErrObjectSerializationConflict
+	case s3select.ErrUnsupportedSQLOperation:
+		apiErr = ErrUnsupportedSQLOperation
+	case s3select.ErrUnsupportedSQLStructure:
+		apiErr = ErrUnsupportedSQLStructure
+	case s3select.ErrUnsupportedSyntax:
+		apiErr = ErrUnsupportedSyntax
+	case s3select.ErrUnsupportedRangeHeader:
+		apiErr = ErrUnsupportedRangeHeader
+	case s3select.ErrLexerInvalidChar:
+		apiErr = ErrLexerInvalidChar
+	case s3select.ErrLexerInvalidOperator:
+		apiErr = ErrLexerInvalidOperator
+	case s3select.ErrLexerInvalidLiteral:
+		apiErr = ErrLexerInvalidLiteral
+	case s3select.ErrLexerInvalidIONLiteral:
+		apiErr = ErrLexerInvalidIONLiteral
+	case s3select.ErrParseExpectedDatePart:
+		apiErr = ErrParseExpectedDatePart
+	case s3select.ErrParseExpectedKeyword:
+		apiErr = ErrParseExpectedKeyword
+	case s3select.ErrParseExpectedTokenType:
+		apiErr = ErrParseExpectedTokenType
+	case s3select.ErrParseExpected2TokenTypes:
+		apiErr = ErrParseExpected2TokenTypes
+	case s3select.ErrParseExpectedNumber:
+		apiErr = ErrParseExpectedNumber
+	case s3select.ErrParseExpectedRightParenBuiltinFunctionCall:
+		apiErr = ErrParseExpectedRightParenBuiltinFunctionCall
+	case s3select.ErrParseExpectedTypeName:
+		apiErr = ErrParseExpectedTypeName
+	case s3select.ErrParseExpectedWhenClause:
+		apiErr = ErrParseExpectedWhenClause
+	case s3select.ErrParseUnsupportedToken:
+		apiErr = ErrParseUnsupportedToken
+	case s3select.ErrParseUnsupportedLiteralsGroupBy:
+		apiErr = ErrParseUnsupportedLiteralsGroupBy
+	case s3select.ErrParseExpectedMember:
+		apiErr = ErrParseExpectedMember
+	case s3select.ErrParseUnsupportedSelect:
+		apiErr = ErrParseUnsupportedSelect
+	case s3select.ErrParseUnsupportedCase:
+		apiErr = ErrParseUnsupportedCase
+	case s3select.ErrParseUnsupportedCaseClause:
+		apiErr = ErrParseUnsupportedCaseClause
+	case s3select.ErrParseUnsupportedAlias:
+		apiErr = ErrParseUnsupportedAlias
+	case s3select.ErrParseUnsupportedSyntax:
+		apiErr = ErrParseUnsupportedSyntax
+	case s3select.ErrParseUnknownOperator:
+		apiErr = ErrParseUnknownOperator
+	case s3select.ErrParseInvalidPathComponent:
+		apiErr = ErrParseInvalidPathComponent
+	case s3select.ErrParseMissingIdentAfterAt:
+		apiErr = ErrParseMissingIdentAfterAt
+	case s3select.ErrParseUnexpectedOperator:
+		apiErr = ErrParseUnexpectedOperator
+	case s3select.ErrParseUnexpectedTerm:
+		apiErr = ErrParseUnexpectedTerm
+	case s3select.ErrParseUnexpectedToken:
+		apiErr = ErrParseUnexpectedToken
+	case s3select.ErrParseUnexpectedKeyword:
+		apiErr = ErrParseUnexpectedKeyword
+	case s3select.ErrParseExpectedExpression:
+		apiErr = ErrParseExpectedExpression
+	case s3select.ErrParseExpectedLeftParenAfterCast:
+		apiErr = ErrParseExpectedLeftParenAfterCast
+	case s3select.ErrParseExpectedLeftParenValueConstructor:
+		apiErr = ErrParseExpectedLeftParenValueConstructor
+	case s3select.ErrParseExpectedLeftParenBuiltinFunctionCall:
+		apiErr = ErrParseExpectedLeftParenBuiltinFunctionCall
+	case s3select.ErrParseExpectedArgumentDelimiter:
+		apiErr = ErrParseExpectedArgumentDelimiter
+	case s3select.ErrParseCastArity:
+		apiErr = ErrParseCastArity
+	case s3select.ErrParseInvalidTypeParam:
+		apiErr = ErrParseInvalidTypeParam
+	case s3select.ErrParseEmptySelect:
+		apiErr = ErrParseEmptySelect
+	case s3select.ErrParseSelectMissingFrom:
+		apiErr = ErrParseSelectMissingFrom
+	case s3select.ErrParseExpectedIdentForGroupName:
+		apiErr = ErrParseExpectedIdentForGroupName
+	case s3select.ErrParseExpectedIdentForAlias:
+		apiErr = ErrParseExpectedIdentForAlias
+	case s3select.ErrParseUnsupportedCallWithStar:
+		apiErr = ErrParseUnsupportedCallWithStar
+	case s3select.ErrParseNonUnaryAgregateFunctionCall:
+		apiErr = ErrParseNonUnaryAgregateFunctionCall
+	case s3select.ErrParseMalformedJoin:
+		apiErr = ErrParseMalformedJoin
+	case s3select.ErrParseExpectedIdentForAt:
+		apiErr = ErrParseExpectedIdentForAt
+	case s3select.ErrParseAsteriskIsNotAloneInSelectList:
+		apiErr = ErrParseAsteriskIsNotAloneInSelectList
+	case s3select.ErrParseCannotMixSqbAndWildcardInSelectList:
+		apiErr = ErrParseCannotMixSqbAndWildcardInSelectList
+	case s3select.ErrParseInvalidContextForWildcardInSelectList:
+		apiErr = ErrParseInvalidContextForWildcardInSelectList
+	case s3select.ErrIncorrectSQLFunctionArgumentType:
+		apiErr = ErrIncorrectSQLFunctionArgumentType
+	case s3select.ErrValueParseFailure:
+		apiErr = ErrValueParseFailure
+	case s3select.ErrIntegerOverflow:
+		apiErr = ErrIntegerOverflow
+	case s3select.ErrLikeInvalidInputs:
+		apiErr = ErrLikeInvalidInputs
+	case s3select.ErrCastFailed:
+		apiErr = ErrCastFailed
+	case s3select.ErrInvalidCast:
+		apiErr = ErrInvalidCast
+	case s3select.ErrEvaluatorInvalidTimestampFormatPattern:
+		apiErr = ErrEvaluatorInvalidTimestampFormatPattern
+	case s3select.ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing:
+		apiErr = ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing
+	case s3select.ErrEvaluatorTimestampFormatPatternDuplicateFields:
+		apiErr = ErrEvaluatorTimestampFormatPatternDuplicateFields
+	case s3select.ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch:
+		apiErr = ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch
+	case s3select.ErrEvaluatorUnterminatedTimestampFormatPatternToken:
+		apiErr = ErrEvaluatorUnterminatedTimestampFormatPatternToken
+	case s3select.ErrEvaluatorInvalidTimestampFormatPatternToken:
+		apiErr = ErrEvaluatorInvalidTimestampFormatPatternToken
+	case s3select.ErrEvaluatorInvalidTimestampFormatPatternSymbol:
+		apiErr = ErrEvaluatorInvalidTimestampFormatPatternSymbol
+	case s3select.ErrInvalidColumnIndex:
+		apiErr = ErrInvalidColumnIndex
+	case s3select.ErrEvaluatorBindingDoesNotExist:
+		apiErr = ErrEvaluatorBindingDoesNotExist
+	case s3select.ErrMissingHeaders:
+		apiErr = ErrMissingHeaders
+
 	}
 
 	if apiErr != ErrNone {
