@@ -375,8 +375,17 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
-	buffer := xl.bp.Get()
-	defer xl.bp.Put(buffer)
+	var buffer []byte
+	switch size := data.Size(); {
+	case size == 0:
+		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size < blockSizeV1:
+		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
+		buffer = make([]byte, size, 2*size)
+	default:
+		buffer = xl.bp.Get()
+		defer xl.bp.Put(buffer)
+	}
 
 	file, err := storage.CreateFile(ctx, data, minioMetaTmpBucket, tmpPartPath, buffer, DefaultBitrotAlgorithm, writeQuorum)
 	if err != nil {
