@@ -102,10 +102,8 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 
 // Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
 func (c *coreDNS) Put(bucket string) error {
-	var err error
 	for ip := range c.domainIPs {
-		var bucketMsg []byte
-		bucketMsg, err = newCoreDNSMsg(bucket, ip, c.domainPort, defaultTTL)
+		bucketMsg, err := newCoreDNSMsg(bucket, ip, c.domainPort, defaultTTL)
 		if err != nil {
 			return err
 		}
@@ -115,8 +113,14 @@ func (c *coreDNS) Put(bucket string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 		_, err = kapi.Set(ctx, key, string(bucketMsg), nil)
 		cancel()
+		if err != nil {
+			ctx, cancel = context.WithTimeout(context.Background(), defaultContextTimeout)
+			kapi.Delete(ctx, key, &etcd.DeleteOptions{Recursive: true})
+			cancel()
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // Removes DNS entries added in Put().
