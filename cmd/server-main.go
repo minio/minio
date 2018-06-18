@@ -33,7 +33,7 @@ import (
 )
 
 func init() {
-	logger.Init(GOPATH)
+	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
 }
 
