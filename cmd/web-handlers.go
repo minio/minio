@@ -458,11 +458,6 @@ type LoginRep struct {
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
-		// Make sure to log errors related to browser login,
-		// for security and auditing reasons.
-		reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", r.RemoteAddr)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 		return toJSONError(err)
 	}
 
