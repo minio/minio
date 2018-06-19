@@ -86,10 +86,11 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 		return nil, nil
 	}
 
-	rootCAs, err := x509.SystemCertPool()
-	if err != nil {
-		// In some systems like Windows, system cert pool is not supported.
-		// Hence we create a new cert pool.
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		// In some systems (like Windows) system cert pool is
+		// not supported or no certificates are present on the
+		// system - so we create a new cert pool.
 		rootCAs = x509.NewCertPool()
 	}
 
