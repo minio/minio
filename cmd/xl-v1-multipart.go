@@ -103,7 +103,6 @@ func commitXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcPre
 	// Rename `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			mErrs[index] = errDiskNotFound
 			continue
 		}
@@ -791,7 +790,6 @@ func (xl xlObjects) cleanupUploadedParts(ctx context.Context, uploadIDPath strin
 	// Cleanup uploadID for all disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			errs[index] = errDiskNotFound
 			continue
 		}
