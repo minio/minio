@@ -71,6 +71,9 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
      MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
+  NOTIFY:
+     MINIO_GATEWAY_NOTIFY: JSON config for adding notification targets to gateway
+
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
      $ export MINIO_ACCESS_KEY=accesskey
@@ -82,7 +85,14 @@ EXAMPLES:
      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
      $ {{.HelpName}} https://play.minio.io:9000
 
-  3. Start minio gateway server for AWS S3 backend with edge caching enabled.
+  3. Start minio gateway server for S3 backend on custom endpoint with notification
+     targets
+     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     $ export MINIO_GATEWAY_NOTIFY='{"notify":{"webhook":{"1":{"enable": true,"endpoint":"http://localhost:8000/"}}}}'
+     $ {{.HelpName}} https://play.minio.io:9000
+
+  4. Start minio gateway server for AWS S3 backend with edge caching enabled.
      $ export MINIO_ACCESS_KEY=accesskey
      $ export MINIO_SECRET_KEY=secretkey
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
@@ -401,6 +411,9 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+	// On success, populate the key & metadata so they are present in the notification
+	oi.Key = object
+	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(metadata)
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
 }
