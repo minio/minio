@@ -238,6 +238,8 @@ func s3MetaToAzureProperties(ctx context.Context, s3Metadata map[string]string) 
 			props.ContentMD5 = v
 		case k == "Content-Type":
 			props.ContentType = v
+		case k == "Content-Language":
+			props.ContentLanguage = v
 		}
 	}
 	return blobMeta, props, nil
@@ -291,6 +293,9 @@ func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProper
 	}
 	if props.ContentType != "" {
 		s3Metadata["Content-Type"] = props.ContentType
+	}
+	if props.ContentLanguage != "" {
+		s3Metadata["Content-Language"] = props.ContentLanguage
 	}
 	return s3Metadata
 }
