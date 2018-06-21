@@ -19,6 +19,7 @@ package madmin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -63,6 +64,8 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+var configMap map[string]interface{}
+
 // SetConfig - set config supplied as config.json for the setup.
 func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
 	if !adm.secure { // No TLS?
@@ -73,6 +76,17 @@ func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err erro
 	configBytes, err := ioutil.ReadAll(config)
 	if err != nil {
 		return r, err
+	}
+
+	// Check if read configBtyes is in json format
+	err = json.Unmarshal(configBytes, &configMap)
+	if err != nil {
+		return r, errors.New("Invalid JSON format: " + err.Error())
+	}
+
+	// Make sure "version" key exists
+	if _, ok := configMap["version"]; !ok {
+		return r, errors.New("Missing \"version\" key in json file")
 	}
 
 	reqData := requestData{
