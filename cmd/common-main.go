@@ -49,10 +49,17 @@ func checkUpdate(mode string) {
 
 // Load logger targets based on user's configuration
 func loadLoggers() {
+	if endpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT"); ok {
+		// Enable http logging through ENV, this is specifically added gateway audit logging.
+		logger.AddTarget(logger.NewHTTP(endpoint, NewCustomHTTPTransport()))
+		return
+	}
+
 	if globalServerConfig.Logger.Console.Enabled {
 		// Enable console logging
 		logger.AddTarget(logger.NewConsole())
 	}
+
 	for _, l := range globalServerConfig.Logger.HTTP {
 		if l.Enabled {
 			// Enable http logging

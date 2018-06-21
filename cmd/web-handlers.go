@@ -640,6 +640,10 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 
 // Upload - file upload handler.
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "WebUpload")
+
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -741,13 +745,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	opts := ObjectOptions{}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object, opts); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeWebErrorResponse(w, errMethodNotAllowed)
 			return
 		}
 	}
 
-	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata, opts)
+	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -769,10 +773,20 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "WebDownload")
+
+	defer logger.AuditLog(ctx, r)
+
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -827,7 +841,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 		getObject = web.CacheAPI().GetObject
 	}
-	objInfo, err := getObjectInfo(context.Background(), bucket, object, opts)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -897,7 +911,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, "", opts); err != nil {
+	if err = getObject(ctx, bucket, object, 0, -1, httpWriter, "", opts); err != nil {
 		httpWriter.Close()
 		if objInfo.IsCompressed() {
 			wg.Wait()
@@ -933,6 +947,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		Host:         host,
 		Port:         port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -951,6 +971,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		host, port = "", ""
 	}
+
+	ctx := newContext(r, w, "WebDownloadZip")
+
+	defer logger.AuditLog(ctx, r)
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1030,7 +1054,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := getObjectInfo(context.Background(), args.BucketName, objectName, opts)
+			info, err := getObjectInfo(ctx, args.BucketName, objectName, opts)
 			if err != nil {
 				return err
 			}
@@ -1103,7 +1127,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
+			if err = getObject(ctx, args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
 				httpWriter.Close()
 				if info.IsCompressed() {
 					// Wait for decompression go-routine to retire.

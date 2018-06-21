@@ -78,6 +78,8 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SelectObject")
 
+	defer logger.AuditLog(ctx, r)
+
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -273,6 +275,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			logger.LogIf(ctx, err)
 		}
 	}
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // GetObjectHandler - GET Object
@@ -281,6 +289,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 // you must have READ access to the object.
 func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -437,6 +447,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:         host,
 		Port:         port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // HeadObjectHandler - HEAD Object
@@ -444,6 +460,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 // The HEAD operation retrieves metadata from an object without returning the object itself.
 func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -578,6 +596,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		Host:         host,
 		Port:         port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // Extract metadata relevant for an CopyObject operation based on conditional
@@ -617,6 +641,8 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 //   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -951,6 +977,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // PutObjectHandler - PUT Object
@@ -963,6 +995,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 //   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1203,6 +1237,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 /// Multipart objectAPIHandlers
@@ -1215,6 +1255,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 //   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NewMultipartUpload")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1307,6 +1349,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 // CopyObjectPartHandler - uploads a part by copying data from an existing object as data source.
 func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObjectPart")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1529,6 +1573,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 // PutObjectPartHandler - uploads an incoming part for an ongoing multipart operation.
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectPart")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1770,6 +1816,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AbortMultipartUpload")
 
+	defer logger.AuditLog(ctx, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -1808,6 +1856,8 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 // ListObjectPartsHandler - List object parts
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectParts")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1848,6 +1898,8 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 // CompleteMultipartUploadHandler - Complete multipart upload.
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CompleteMultipartUpload")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1955,6 +2007,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 /// Delete objectAPIHandlers
@@ -1962,6 +2020,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 // DeleteObjectHandler - delete an object
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
