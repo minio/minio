@@ -4,7 +4,7 @@ This document explains how to configure Minio with `Bucket lookup from DNS` styl
 ## Get started
 
 ### 1. Prerequisites
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ### 2. Run Minio in federated mode
 Bucket lookup from DNS federation requires two dependencies

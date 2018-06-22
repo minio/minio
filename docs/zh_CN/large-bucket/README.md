@@ -8,7 +8,7 @@ Minio的纠删码功能限制了最多只能使用16块磁盘。这就限制了�
 安装和部署方式和分布式Minio一样。只不过是在输入参数的语法上，用`...`来做为磁盘参数的简写。分布式设置中的远程磁盘被编码为HTTP（s）URI，它也可以被同样的缩写。
 
 ### 1. 前提条件
-安装Minio - [Minio快速入门](https://docs.minio.io/docs/minio)。
+安装Minio - [Minio快速入门](https://docs.minio.io/docs/minio-quickstart-guide)。
 
 ### 2. 在多个磁盘上运行Minio
 我们将在下面的章节中看到如何做到这一点的例子。

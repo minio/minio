@@ -18,7 +18,7 @@ If you're aware of stand-alone Minio set up, the installation and running remain
 
 ## 1. Prerequisites
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ## 2. Run Minio on Shared Backend
 
