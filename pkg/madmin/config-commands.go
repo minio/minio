@@ -64,10 +64,10 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-var configMap map[string]interface{}
-
 // SetConfig - set config supplied as config.json for the setup.
 func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
+	var configMap map[string]interface{}
+
 	if !adm.secure { // No TLS?
 		return r, fmt.Errorf("credentials/configuration cannot be updated over an insecure connection")
 	}
