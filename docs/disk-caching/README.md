@@ -8,7 +8,7 @@ Disk caching feature here refers to the use of caching disks to store content cl
 ## Get started
 
 ### 1. Prerequisites
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ### 2. Run Minio with cache
 Disk caching can be enabled by updating the `cache` config settings for Minio server. Config `cache` settings takes the mounted drive(s) or directory paths, cache expiry duration (in days) and any wildcard patterns to exclude from being cached.
