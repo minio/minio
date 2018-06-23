@@ -39,9 +39,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "23"
+const serverConfigVersion = "25"
 
-type serverConfig = serverConfigV23
+type serverConfig = serverConfigV25
 
 var (
 	// globalServerConfig server config.
@@ -85,7 +85,13 @@ func (s *serverConfig) GetCredential() auth.Credentials {
 // SetBrowser set if browser is enabled.
 func (s *serverConfig) SetBrowser(b bool) {
 	// Set the new value.
-	s.Browser = BrowserFlag(b)
+	s.Browser = BoolFlag(b)
+}
+
+// SetWorm set if worm is enabled.
+func (s *serverConfig) SetWorm(b bool) {
+	// Set the new value.
+	s.Worm = BoolFlag(b)
 }
 
 func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
@@ -99,9 +105,14 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 	return s.StorageClass.Standard, s.StorageClass.RRS
 }
 
-// GetCredentials get current credentials.
+// GetBrowser get current credentials.
 func (s *serverConfig) GetBrowser() bool {
 	return bool(s.Browser)
+}
+
+// GetWorm get current credentials.
+func (s *serverConfig) GetWorm() bool {
+	return bool(s.Worm)
 }
 
 // SetCacheConfig sets the current cache config
@@ -116,10 +127,19 @@ func (s *serverConfig) GetCacheConfig() CacheConfig {
 	return s.Cache
 }
 
-// Save config.
-func (s *serverConfig) Save() error {
-	// Save config file.
-	return quick.Save(getConfigFile(), s)
+// Save config file to corresponding backend
+func Save(configFile string, data interface{}) error {
+	return quick.SaveConfig(data, configFile, globalEtcdClient)
+}
+
+// Load config from backend
+func Load(configFile string, data interface{}) (quick.Config, error) {
+	return quick.LoadConfig(configFile, globalEtcdClient, data)
+}
+
+// GetVersion gets config version from backend
+func GetVersion(configFile string) (string, error) {
+	return quick.GetVersion(configFile, globalEtcdClient)
 }
 
 // Returns the string describing a difference with the given
@@ -219,7 +239,10 @@ func newServerConfig() *serverConfig {
 // found, otherwise use default parameters
 func newConfig() error {
 	// Initialize server config.
-	srvCfg := newServerConfig()
+	srvCfg, err := newQuickConfig(newServerConfig())
+	if err != nil {
+		return err
+	}
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
@@ -228,6 +251,10 @@ func newConfig() error {
 
 	if globalIsEnvBrowser {
 		srvCfg.SetBrowser(globalIsBrowserEnabled)
+	}
+
+	if globalIsEnvWORM {
+		srvCfg.SetWorm(globalWORMEnabled)
 	}
 
 	if globalIsEnvRegion {
@@ -254,7 +281,19 @@ func newConfig() error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return globalServerConfig.Save()
+	return Save(getConfigFile(), globalServerConfig)
+}
+
+// newQuickConfig - initialize a new server config, with an allocated
+// quick.Config interface.
+func newQuickConfig(srvCfg *serverConfig) (*serverConfig, error) {
+	qcfg, err := quick.NewConfig(srvCfg, globalEtcdClient)
+	if err != nil {
+		return nil, err
+	}
+
+	srvCfg.Config = qcfg
+	return srvCfg, nil
 }
 
 // getValidConfig - returns valid server configuration
@@ -264,7 +303,14 @@ func getValidConfig() (*serverConfig, error) {
 		Browser: true,
 	}
 
-	if _, err := quick.Load(getConfigFile(), srvCfg); err != nil {
+	var err error
+	srvCfg, err = newQuickConfig(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	configFile := getConfigFile()
+	if err = srvCfg.Load(configFile); err != nil {
 		return nil, err
 	}
 
@@ -323,6 +369,9 @@ func loadConfig() error {
 	}
 	if !globalIsEnvBrowser {
 		globalIsBrowserEnabled = globalServerConfig.GetBrowser()
+	}
+	if !globalIsEnvWORM {
+		globalWORMEnabled = globalServerConfig.GetWorm()
 	}
 	if !globalIsEnvRegion {
 		globalServerRegion = globalServerConfig.GetRegion()

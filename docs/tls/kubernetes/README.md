@@ -10,6 +10,10 @@ This document explains how to configure Minio server with TLS certificates on Ku
 
 - Acquire TLS certificates, either from a CA or [create self-signed certificates](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
+For a [distributed Minio setup](https://docs.minio.io/docs/distributed-minio-quickstart-guide), where there are multiple pods with different domain names expected to run, you will either need wildcard certificates valid for all the domains or have specific certificates for each domain. If you are going to use specific certificates, make sure to create Kubernetes secrets accordingly.
+
+For testing purposes, here is [how to create self-signed certificates](https://github.com/minio/minio/tree/master/docs/tls#3-generate-self-signed-certificates).
+
 ## 2. Create Kubernetes secret
 
 [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret) are intended to hold sensitive information. 
@@ -43,9 +47,9 @@ If you're using certificates provided by a CA, add the below section in your yam
           secretName: tls-ssl-minio
           items:
           - key: public.crt
-            path: .minio/certs/public.crt
+            path: public.crt
           - key: private.key
-            path: .minio/certs/private.key
+            path: private.key
 ```
 
 In case you are using a self signed certificate, Minio server will not trust it by default. To add the certificate as a 
@@ -58,11 +62,11 @@ trusted certificate, add the `public.crt` to the `.minio/certs/CAs` directory as
           secretName: tls-ssl-minio
           items:
           - key: public.crt
-            path: .minio/certs/public.crt
+            path: public.crt
           - key: private.key
-            path: .minio/certs/private.key
+            path: private.key
           - key: public.crt
-            path: .minio/certs/CAs/public.crt
+            path: CAs/public.crt
 ```
 
 Note that the `secretName` should be same as the secret name created in previous step. Then add the below section under
@@ -71,10 +75,10 @@ Note that the `secretName` should be same as the secret name created in previous
 ```yaml
     volumeMounts:
         - name: secret-volume
-          mountPath: /<user-running-minio>/
+          mountPath: /<user-running-minio>/.minio/certs
 ```
 
-Here the name of `volumeMount` should match the name of `volume` created previously. Also `mountPath` is the path of 
-Minio server's config directory, (used to store the certificates). By default the location is 
-`/user-running-minio/.minio/certs`. Update the `mountPath` to appropriate parent directory for Minio server config 
-directory. (Tip: In default Kubernetes configuration this will be `/root`).
+Here the name of `volumeMount` should match the name of `volume` created previously. Also `mountPath` must be set to the path of
+the Minio server's config sub-directory that is used to store certificates. By default, the location is
+`/user-running-minio/.minio/certs`. Tip: In a standard Kubernetes configuration, this will be `/root/.minio/certs`.
+Kubernetes will mount the secrets volume read-only, so avoid setting `mountPath` to a path that Minio server expects to write to.

@@ -64,23 +64,7 @@ func (c *minioCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 
-	// Fetch disk space info
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
-		return
-	}
-	s := objLayer.StorageInfo(context.Background())
-
-	var totalDisks, offlineDisks int
-	// Setting totalDisks to 1 and offlineDisks to 0 in FS mode
-	if s.Backend.Type == FS {
-		totalDisks = 1
-		offlineDisks = 0
-	} else {
-		offlineDisks = s.Backend.OfflineDisks
-		totalDisks = s.Backend.OfflineDisks + s.Backend.OnlineDisks
-	}
+	// Always expose network stats
 
 	// Network Sent/Received Bytes
 	ch <- prometheus.MustNewConstMetric(
@@ -100,22 +84,62 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(globalConnStats.getTotalInputBytes()),
 	)
 
-	// Total/Free Storage Bytes
+	// Expose cache stats only if available
+	cacheObjLayer := newCacheObjectsFn()
+	if cacheObjLayer != nil {
+		cs := cacheObjLayer.StorageInfo(context.Background())
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("minio", "disk", "cache_storage_bytes"),
+				"Total cache capacity on current Minio server instance",
+				nil, nil),
+			prometheus.GaugeValue,
+			float64(cs.Total),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("minio", "disk", "cache_storage_free_bytes"),
+				"Total cache available on current Minio server instance",
+				nil, nil),
+			prometheus.GaugeValue,
+			float64(cs.Free),
+		)
+	}
+
+	// Expose disk stats only if applicable
+
+	// Fetch disk space info
+	objLayer := newObjectLayerFn()
+	// Service not initialized yet
+	if objLayer == nil {
+		return
+	}
+
+	s := objLayer.StorageInfo(context.Background())
+
+	// Gateways don't provide disk info
+	if s.Backend.Type == Unknown {
+		return
+	}
+
+	var totalDisks, offlineDisks int
+	// Setting totalDisks to 1 and offlineDisks to 0 in FS mode
+	if s.Backend.Type == FS {
+		totalDisks = 1
+		offlineDisks = 0
+	} else {
+		offlineDisks = s.Backend.OfflineDisks
+		totalDisks = s.Backend.OfflineDisks + s.Backend.OnlineDisks
+	}
+
+	// Total disk usage by current Minio server instance
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disk", "storage_bytes"),
-			"Total disk storage available to current Minio server instance",
+			prometheus.BuildFQName("minio", "disk", "storage_used_bytes"),
+			"Total disk storage used by current Minio server instance",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(s.Total),
-	)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disk", "storage_free_bytes"),
-			"Total free disk storage available to current Minio server instance",
-			nil, nil),
-		prometheus.GaugeValue,
-		float64(s.Free),
+		float64(s.Used),
 	)
 
 	// Minio Total Disk/Offline Disk

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -30,13 +31,16 @@ import (
 	"strings"
 	"time"
 
+	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
@@ -100,7 +104,7 @@ type StorageInfoRep struct {
 }
 
 // StorageInfo - web call to gather storage usage statistics.
-func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply *StorageInfoRep) error {
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
@@ -131,6 +135,26 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName) {
 		return toJSONError(errInvalidBucketName)
+	}
+
+	if globalDNSConfig != nil {
+		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+				// Proceed to creating a bucket.
+				if err = objectAPI.MakeBucketWithLocation(context.Background(), args.BucketName, globalServerConfig.GetRegion()); err != nil {
+					return toJSONError(err)
+				}
+				if err = globalDNSConfig.Put(args.BucketName); err != nil {
+					objectAPI.DeleteBucket(context.Background(), args.BucketName)
+					return toJSONError(err)
+				}
+
+				reply.UIVersion = browser.UIVersion
+				return nil
+			}
+			return toJSONError(err)
+		}
+		return toJSONError(errBucketAlreadyExists)
 	}
 
 	if err := objectAPI.MakeBucketWithLocation(context.Background(), args.BucketName, globalServerConfig.GetRegion()); err != nil {
@@ -174,6 +198,14 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		logger.LogIf(ctx, nerr.Err)
 	}
 
+	if globalDNSConfig != nil {
+		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
+			// Deleting DNS entry failed, attempt to create the bucket again.
+			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "")
+			return toJSONError(err)
+		}
+	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -206,16 +238,32 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	buckets, err := listBuckets(context.Background())
-	if err != nil {
-		return toJSONError(err)
+	// If etcd, dns federation configured list buckets from etcd.
+	if globalDNSConfig != nil {
+		dnsBuckets, err := globalDNSConfig.List()
+		if err != nil {
+			return toJSONError(err)
+		}
+		for _, dnsRecord := range dnsBuckets {
+			bucketName := strings.Trim(dnsRecord.Key, "/")
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
+				Name:         bucketName,
+				CreationDate: dnsRecord.CreationDate,
+			})
+		}
+	} else {
+		buckets, err := listBuckets(context.Background())
+		if err != nil {
+			return toJSONError(err)
+		}
+		for _, bucket := range buckets {
+			reply.Buckets = append(reply.Buckets, WebBucketInfo{
+				Name:         bucket.Name,
+				CreationDate: bucket.Created,
+			})
+		}
 	}
-	for _, bucket := range buckets {
-		reply.Buckets = append(reply.Buckets, WebBucketInfo{
-			Name:         bucket.Name,
-			CreationDate: bucket.Created,
-		})
-	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -351,6 +399,13 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
+			// Deny if WORM is enabled
+			if globalWORMEnabled {
+				if _, err = objectAPI.GetObjectInfo(context.Background(), args.BucketName, objectName); err == nil {
+					return toJSONError(errMethodNotAllowed)
+				}
+			}
+
 			if err = deleteObject(nil, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
 				break next
 			}
@@ -403,11 +458,6 @@ type LoginRep struct {
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
-		// Make sure to log errors related to browser login,
-		// for security and auditing reasons.
-		reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", r.RemoteAddr)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 		return toJSONError(err)
 	}
 
@@ -428,7 +478,9 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(errAuthentication)
 	}
 	cred, err := auth.GetNewCredentials()
-	logger.CriticalIf(context.Background(), err)
+	if err != nil {
+		return toJSONError(err)
+	}
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = browser.UIVersion
@@ -455,7 +507,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds {
+	if globalIsEnvCreds || globalWORMEnabled {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
@@ -468,53 +520,29 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(creds)
-
-	// Update local credentials
+	// Update credentials in memory
 	prevCred := globalServerConfig.SetCredential(creds)
 
 	// Persist updated credentials.
-	if err = globalServerConfig.Save(); err != nil {
+	if err = globalServerConfig.Save(getConfigFile()); err != nil {
 		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
-
-		errsMap[globalMinioAddr] = err
-	}
-
-	// Log all the peer related error messages, and populate the
-	// PeerErrMsgs map.
-	reply.PeerErrMsgs = make(map[string]string)
-	for svr, errVal := range errsMap {
-		tErr := fmt.Errorf("Unable to change credentials on %s: %v", svr, errVal)
-		logger.LogIf(context.Background(), tErr)
-		reply.PeerErrMsgs[svr] = errVal.Error()
-	}
-
-	// If we were unable to update locally, we return an error to the user/browser.
-	if errsMap[globalMinioAddr] != nil {
-		// Since the error message may be very long to display
-		// on the browser, we tell the user to check the
-		// server logs.
-		return toJSONError(fmt.Errorf("unexpected error(s) occurred - please check minio server logs"))
-	}
-
-	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		// Did we have peer errors?
-		if len(errsMap) > 0 {
-			err = fmt.Errorf(
-				"we gave up due to: '%s', but there were more errors. Please check minio server logs",
-				err.Error(),
-			)
-		}
-
+		logger.LogIf(context.Background(), err)
 		return toJSONError(err)
 	}
 
-	reply.Token = token
-	reply.UIVersion = browser.UIVersion
+	if errs := globalNotificationSys.SetCredentials(creds); len(errs) != 0 {
+		reply.PeerErrMsgs = make(map[string]string)
+		for host, err := range errs {
+			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)
+			logger.LogIf(context.Background(), err)
+			reply.PeerErrMsgs[host.String()] = err.Error()
+		}
+	} else {
+		reply.Token = newAuthToken()
+		reply.UIVersion = browser.UIVersion
+	}
+
 	return nil
 }
 
@@ -614,6 +642,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object); err == nil {
+			writeWebErrorResponse(w, errMethodNotAllowed)
+			return
+		}
 	}
 
 	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata)
@@ -1005,26 +1041,27 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	if expiry < 604800 && expiry > 0 {
 		expiryStr = strconv.FormatInt(expiry, 10)
 	}
-	query := strings.Join([]string{
-		"X-Amz-Algorithm=" + signV4Algorithm,
-		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
-		"X-Amz-Date=" + dateStr,
-		"X-Amz-Expires=" + expiryStr,
-		"X-Amz-SignedHeaders=host",
-	}, "&")
+
+	query := url.Values{}
+	query.Set("X-Amz-Algorithm", signV4Algorithm)
+	query.Set("X-Amz-Credential", credential)
+	query.Set("X-Amz-Date", dateStr)
+	query.Set("X-Amz-Expires", expiryStr)
+	query.Set("X-Amz-SignedHeaders", "host")
+	queryStr := s3utils.QueryEncode(query)
 
 	path := "/" + path.Join(bucket, object)
 
 	// "host" is the only header required to be signed for Presigned URLs.
 	extractedSignedHeaders := make(http.Header)
 	extractedSignedHeaders.Set("host", host)
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET")
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
@@ -1124,7 +1161,10 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	} else if err == errMethodNotAllowed {
+		return getAPIError(ErrMethodNotAllowed)
 	}
+
 	// Convert error type to api error code.
 	switch err.(type) {
 	case StorageFull:

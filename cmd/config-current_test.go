@@ -50,7 +50,7 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Attempt to save.
-	if err := globalServerConfig.Save(); err != nil {
+	if err := globalServerConfig.Save(getConfigFile()); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 

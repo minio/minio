@@ -20,6 +20,7 @@ package quick
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,7 +28,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	etcd "github.com/coreos/etcd/client"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -120,6 +123,58 @@ func saveFileConfig(filename string, v interface{}) error {
 	// Save data.
 	return writeFile(filename, dataBytes)
 
+}
+
+func saveFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error {
+	// Fetch filename's extension
+	ext := filepath.Ext(filename)
+	// Marshal data
+	dataBytes, err := toMarshaller(ext)(v)
+	if err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		dataBytes = []byte(strings.Replace(string(dataBytes), "\n", "\r\n", -1))
+	}
+
+	kapi := etcd.NewKeysAPI(clnt)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	_, err = kapi.Update(ctx, filename, string(dataBytes))
+	if etcd.IsKeyNotFound(err) {
+		_, err = kapi.Create(ctx, filename, string(dataBytes))
+	}
+	cancel()
+	return err
+}
+
+func loadFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error {
+	kapi := etcd.NewKeysAPI(clnt)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	resp, err := kapi.Get(ctx, filename, nil)
+	cancel()
+	if err != nil {
+		return err
+	}
+
+	var ev *etcd.Node
+	switch {
+	case resp.Node.Dir:
+		for _, ev = range resp.Node.Nodes {
+			if string(ev.Key) == filename {
+				break
+			}
+		}
+	default:
+		ev = resp.Node
+	}
+
+	fileData := ev.Value
+	if runtime.GOOS == "windows" {
+		fileData = strings.Replace(ev.Value, "\r\n", "\n", -1)
+	}
+
+	// Unmarshal file's content
+	return toUnmarshaller(filepath.Ext(filename))([]byte(fileData), v)
 }
 
 // loadFileConfig unmarshals the file's content with the right

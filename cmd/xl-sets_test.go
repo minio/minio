@@ -98,46 +98,6 @@ func TestNewXLSets(t *testing.T) {
 	}
 }
 
-// TestStorageInfoSets - tests storage info for erasure coded sets of disks.
-func TestStorageInfoSets(t *testing.T) {
-	var nDisks = 16 // Maximum disks.
-	var erasureDisks []string
-	for i := 0; i < nDisks; i++ {
-		// Do not attempt to create this path, the test validates
-		// so that newXLSets initializes non existing paths
-		// and successfully returns initialized object layer.
-		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-		erasureDisks = append(erasureDisks, disk)
-		defer os.RemoveAll(disk)
-	}
-
-	endpoints := mustGetNewEndpointList(erasureDisks...)
-	// Initializes all erasure disks
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
-	if err != nil {
-		t.Fatalf("Unable to format disks for erasure, %s", err)
-	}
-
-	objLayer, err := newXLSets(endpoints, format, 1, 16)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Get storage info first attempt.
-	disks16Info := objLayer.StorageInfo(context.Background())
-
-	// This test assumes homogeneity between all disks,
-	// i.e if we loose one disk the effective storage
-	// usage values is assumed to decrease. If we have
-	// heterogenous environment this is not true all the time.
-	if disks16Info.Free <= 0 {
-		t.Fatalf("Diskinfo total free values should be greater 0")
-	}
-	if disks16Info.Total <= 0 {
-		t.Fatalf("Diskinfo total values should be greater 0")
-	}
-}
-
 // TestHashedLayer - tests the hashed layer which will be returned
 // consistently for a given object name.
 func TestHashedLayer(t *testing.T) {

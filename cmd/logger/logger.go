@@ -52,6 +52,25 @@ var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
 	"cmd.StartGateway",
+	"cmd.(*webAPIHandlers).ListBuckets",
+	"cmd.(*webAPIHandlers).MakeBucket",
+	"cmd.(*webAPIHandlers).DeleteBucket",
+	"cmd.(*webAPIHandlers).ListObjects",
+	"cmd.(*webAPIHandlers).RemoveObject",
+	"cmd.(*webAPIHandlers).Login",
+	"cmd.(*webAPIHandlers).GenerateAuth",
+	"cmd.(*webAPIHandlers).SetAuth",
+	"cmd.(*webAPIHandlers).GetAuth",
+	"cmd.(*webAPIHandlers).CreateURLToken",
+	"cmd.(*webAPIHandlers).Upload",
+	"cmd.(*webAPIHandlers).Download",
+	"cmd.(*webAPIHandlers).DownloadZip",
+	"cmd.(*webAPIHandlers).GetBucketPolicy",
+	"cmd.(*webAPIHandlers).ListAllBucketPolicies",
+	"cmd.(*webAPIHandlers).SetBucketPolicy",
+	"cmd.(*webAPIHandlers).PresignedGet",
+	"cmd.(*webAPIHandlers).ServerInfo",
+	"cmd.(*webAPIHandlers).StorageInfo",
 	// add more here ..
 }
 
@@ -142,21 +161,23 @@ func RegisterUIError(f func(string, error, bool) string) {
 // and GOROOT directories. Also append github.com/minio/minio
 // This is done to clean up the filename, when stack trace is
 // displayed when an error happens.
-func Init(goPath string) {
+func Init(goPath string, goRoot string) {
 
 	var goPathList []string
+	var goRootList []string
 	var defaultgoPathList []string
+	var defaultgoRootList []string
+	pathSeperator := ":"
 	// Add all possible GOPATH paths into trimStrings
 	// Split GOPATH depending on the OS type
 	if runtime.GOOS == "windows" {
-		goPathList = strings.Split(goPath, ";")
-		defaultgoPathList = strings.Split(build.Default.GOPATH, ";")
-	} else {
-		// All other types of OSs
-		goPathList = strings.Split(goPath, ":")
-		defaultgoPathList = strings.Split(build.Default.GOPATH, ":")
-
+		pathSeperator = ";"
 	}
+
+	goPathList = strings.Split(goPath, pathSeperator)
+	goRootList = strings.Split(goRoot, pathSeperator)
+	defaultgoPathList = strings.Split(build.Default.GOPATH, pathSeperator)
+	defaultgoRootList = strings.Split(build.Default.GOROOT, pathSeperator)
 
 	// Add trim string "{GOROOT}/src/" into trimStrings
 	trimStrings = []string{filepath.Join(runtime.GOROOT(), "src") + string(filepath.Separator)}
@@ -167,9 +188,20 @@ func Init(goPath string) {
 		trimStrings = append(trimStrings, filepath.Join(goPathString, "src")+string(filepath.Separator))
 	}
 
+	for _, goRootString := range goRootList {
+		trimStrings = append(trimStrings, filepath.Join(goRootString, "src")+string(filepath.Separator))
+	}
+
 	for _, defaultgoPathString := range defaultgoPathList {
 		trimStrings = append(trimStrings, filepath.Join(defaultgoPathString, "src")+string(filepath.Separator))
 	}
+
+	for _, defaultgoRootString := range defaultgoRootList {
+		trimStrings = append(trimStrings, filepath.Join(defaultgoRootString, "src")+string(filepath.Separator))
+	}
+
+	// Remove duplicate entries.
+	trimStrings = uniqueEntries(trimStrings)
 
 	// Add "github.com/minio/minio" as the last to cover
 	// paths like "{GOROOT}/src/github.com/minio/minio"
@@ -200,7 +232,7 @@ func getTrace(traceLevel int) []string {
 	var trace []string
 	pc, file, lineNumber, ok := runtime.Caller(traceLevel)
 
-	for ok {
+	for ok && file != "" {
 		// Clean up the common prefixes
 		file = trimTrace(file)
 		// Get the function name

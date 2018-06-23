@@ -50,3 +50,16 @@ func ansiSaveAttributes() {
 func ansiRestoreAttributes() {
 	ansiEscape("8")
 }
+
+func uniqueEntries(paths []string) []string {
+	found := map[string]bool{}
+	unqiue := []string{}
+
+	for v := range paths {
+		if _, ok := found[paths[v]]; !ok {
+			found[paths[v]] = true
+			unqiue = append(unqiue, paths[v])
+		}
+	}
+	return unqiue
+}

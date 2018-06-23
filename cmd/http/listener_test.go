@@ -49,6 +49,14 @@ func getNextPort() string {
 	return strconv.Itoa(int(atomic.AddUint32(&serverPort, 1)))
 }
 
+var getCert = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	certificate, err := getTLSCert()
+	if err != nil {
+		return nil, err
+	}
+	return &certificate, nil
+}
+
 func getTLSCert() (tls.Certificate, error) {
 	keyPEMBlock := []byte(`-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEApEkbPrT6wzcWK1W5atQiGptvuBsRdf8MCg4u6SN10QbslA5k

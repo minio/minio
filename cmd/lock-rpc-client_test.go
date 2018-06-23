@@ -17,25 +17,25 @@
 package cmd
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/minio/dsync"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Tests lock rpc client.
 func TestLockRPCClient(t *testing.T) {
-	lkClient := newLockRPCClient(authConfig{
-		accessKey:       "abcd",
-		secretKey:       "abcd123",
-		serverAddr:      fmt.Sprintf("%X", UTCNow().UnixNano()),
-		serviceEndpoint: pathJoin(lockServicePath, "/test/1"),
-		secureConn:      false,
-		serviceName:     lockServiceName,
-	})
+	host, err := xnet.ParseHost("localhost:9000")
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	lkClient, err := NewLockRPCClient(host)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 
 	// Attempt all calls.
-	_, err := lkClient.RLock(dsync.LockArgs{})
+	_, err = lkClient.RLock(dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for Rlock to fail")
 	}

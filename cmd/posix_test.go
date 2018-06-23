@@ -33,6 +33,60 @@ import (
 	"github.com/minio/minio/pkg/disk"
 )
 
+// Tests validate volume name.
+func TestIsValidVolname(t *testing.T) {
+	testCases := []struct {
+		volName    string
+		shouldPass bool
+	}{
+		// Cases which should pass the test.
+		// passing in valid bucket names.
+		{"lol", true},
+		{"1-this-is-valid", true},
+		{"1-this-too-is-valid-1", true},
+		{"this.works.too.1", true},
+		{"1234567", true},
+		{"123", true},
+		{"s3-eu-west-1.amazonaws.com", true},
+		{"ideas-are-more-powerful-than-guns", true},
+		{"testbucket", true},
+		{"1bucket", true},
+		{"bucket1", true},
+		{"$this-is-not-valid-too", true},
+		{"contains-$-dollar", true},
+		{"contains-^-carrot", true},
+		{"contains-$-dollar", true},
+		{"contains-$-dollar", true},
+		{".starts-with-a-dot", true},
+		{"ends-with-a-dot.", true},
+		{"ends-with-a-dash-", true},
+		{"-starts-with-a-dash", true},
+		{"THIS-BEINGS-WITH-UPPERCASe", true},
+		{"tHIS-ENDS-WITH-UPPERCASE", true},
+		{"ThisBeginsAndEndsWithUpperCase", true},
+		{"una ñina", true},
+		{"lalalallalallalalalallalallalala-theString-size-is-greater-than-64", true},
+		// cases for which test should fail.
+		// passing invalid bucket names.
+		{"", false},
+		{"/", false},
+		{"a", false},
+		{"ab", false},
+		{"ab/", true},
+		{"......", true},
+	}
+
+	for i, testCase := range testCases {
+		isValidVolname := isValidVolname(testCase.volName)
+		if testCase.shouldPass && !isValidVolname {
+			t.Errorf("Test case %d: Expected \"%s\" to be a valid bucket name", i+1, testCase.volName)
+		}
+		if !testCase.shouldPass && isValidVolname {
+			t.Errorf("Test case %d: Expected bucket name \"%s\" to be invalid", i+1, testCase.volName)
+		}
+	}
+}
+
 // creates a temp dir and sets up posix layer.
 // returns posix layer, temp dir path to be used for the purpose of tests.
 func newPosixTestSetup() (StorageAPI, string, error) {

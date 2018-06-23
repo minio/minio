@@ -18,12 +18,9 @@ package cmd
 
 import (
 	"crypto/hmac"
-	"encoding/hex"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/minio/sha256-simd"
 )
@@ -42,6 +39,9 @@ func skipContentSha256Cksum(r *http.Request) bool {
 
 	if isRequestPresignedSignatureV4(r) {
 		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		if !ok {
+			v, ok = r.Header["X-Amz-Content-Sha256"]
+		}
 	} else {
 		v, ok = r.Header["X-Amz-Content-Sha256"]
 	}
@@ -65,6 +65,9 @@ func getContentSha256Cksum(r *http.Request) string {
 		// will default to 'UNSIGNED-PAYLOAD'.
 		defaultSha256Cksum = unsignedPayload
 		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		if !ok {
+			v, ok = r.Header["X-Amz-Content-Sha256"]
+		}
 	} else {
 		// X-Amz-Content-Sha256, if not set in signed requests, checksum
 		// will default to sha256([]byte("")).
@@ -102,46 +105,6 @@ func sumHMAC(key []byte, data []byte) []byte {
 	hash := hmac.New(sha256.New, key)
 	hash.Write(data)
 	return hash.Sum(nil)
-}
-
-// Reserved string regexp.
-var reservedNames = regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
-
-// getURLEncodedName encode the strings from UTF-8 byte representations to HTML hex escape sequences
-//
-// This is necessary since regular url.Parse() and url.Encode() functions do not support UTF-8
-// non english characters cannot be parsed due to the nature in which url.Encode() is written
-//
-// This function on the other hand is a direct replacement for url.Encode() technique to support
-// pretty much every UTF-8 character.
-func getURLEncodedName(name string) string {
-	// if object matches reserved string, no need to encode them
-	if reservedNames.MatchString(name) {
-		return name
-	}
-	var encodedName string
-	for _, s := range name {
-		if 'A' <= s && s <= 'Z' || 'a' <= s && s <= 'z' || '0' <= s && s <= '9' { // §2.3 Unreserved characters (mark)
-			encodedName = encodedName + string(s)
-			continue
-		}
-		switch s {
-		case '-', '_', '.', '~', '/': // §2.3 Unreserved characters (mark)
-			encodedName = encodedName + string(s)
-			continue
-		default:
-			len := utf8.RuneLen(s)
-			if len > 0 {
-				u := make([]byte, len)
-				utf8.EncodeRune(u, s)
-				for _, r := range u {
-					hex := hex.EncodeToString([]byte{r})
-					encodedName = encodedName + "%" + strings.ToUpper(hex)
-				}
-			}
-		}
-	}
-	return encodedName
 }
 
 // extractSignedHeaders extract signed headers from Authorization header

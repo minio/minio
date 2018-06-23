@@ -8,7 +8,7 @@ We call it large-bucket as it allows a single Minio bucket to expand over multip
 If you're aware of distributed Minio setup, the installation and configuration remains the same. Only new addition to the input syntax is `...` convention to abbreviate the drive arguments. Remote drives in a distributed setup are encoded as HTTP(s) URIs which can be similarly abbreviated as well.
 
 ### 1. Prerequisites
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ### 2. Run Minio on many drives
 We'll see examples on how to do this in the following sections.

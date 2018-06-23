@@ -75,36 +75,32 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
-  UPDATE:
-     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
-      $ export MINIO_ACCESS_KEY=azureaccountname
-      $ export MINIO_SECRET_KEY=azureaccountkey
-      $ {{.HelpName}}
+     $ export MINIO_ACCESS_KEY=azureaccountname
+     $ export MINIO_SECRET_KEY=azureaccountkey
+     $ {{.HelpName}}
 
   2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
-      $ export MINIO_ACCESS_KEY=azureaccountname
-      $ export MINIO_SECRET_KEY=azureaccountkey
-      $ {{.HelpName}} https://azure.example.com
+     $ export MINIO_ACCESS_KEY=azureaccountname
+     $ export MINIO_SECRET_KEY=azureaccountkey
+     $ {{.HelpName}} https://azure.example.com
 
   3. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
-      $ export MINIO_ACCESS_KEY=azureaccountname
-      $ export MINIO_SECRET_KEY=azureaccountkey
-      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-      $ export MINIO_CACHE_EXPIRY=40
-      $ {{.HelpName}}
-
+     $ export MINIO_ACCESS_KEY=azureaccountname
+     $ export MINIO_SECRET_KEY=azureaccountkey
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+     $ export MINIO_CACHE_EXPIRY=40
+     $ {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -164,6 +160,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	if err != nil {
 		return &azureObjects{}, err
 	}
+	c.AddToUserAgent(fmt.Sprintf("APN/1.0 Minio/1.0 Minio/%s", minio.Version))
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
 	return &azureObjects{
@@ -241,6 +238,8 @@ func s3MetaToAzureProperties(ctx context.Context, s3Metadata map[string]string) 
 			props.ContentMD5 = v
 		case k == "Content-Type":
 			props.ContentType = v
+		case k == "Content-Language":
+			props.ContentLanguage = v
 		}
 	}
 	return blobMeta, props, nil
@@ -294,6 +293,9 @@ func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProper
 	}
 	if props.ContentType != "" {
 		s3Metadata["Content-Type"] = props.ContentType
+	}
+	if props.ContentLanguage != "" {
+		s3Metadata["Content-Language"] = props.ContentLanguage
 	}
 	return s3Metadata
 }

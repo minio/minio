@@ -54,7 +54,9 @@ export const ObjectItem = ({
           href="#"
           onClick={e => {
             e.preventDefault()
-            onClick()
+            if (onClick) {
+              onClick()
+            }
           }}
         >
           {name}

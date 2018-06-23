@@ -29,26 +29,26 @@ const ResourceARNPrefix = "arn:aws:s3:::"
 
 // Resource - resource in policy statement.
 type Resource struct {
-	bucketName string
-	pattern    string
+	BucketName string
+	Pattern    string
 }
 
 func (r Resource) isBucketPattern() bool {
-	return !strings.Contains(r.pattern, "/")
+	return !strings.Contains(r.Pattern, "/")
 }
 
 func (r Resource) isObjectPattern() bool {
-	return strings.Contains(r.pattern, "/") || strings.Contains(r.bucketName, "*")
+	return strings.Contains(r.Pattern, "/") || strings.Contains(r.BucketName, "*")
 }
 
 // IsValid - checks whether Resource is valid or not.
 func (r Resource) IsValid() bool {
-	return r.bucketName != "" && r.pattern != ""
+	return r.BucketName != "" && r.Pattern != ""
 }
 
 // Match - matches object name with resource pattern.
 func (r Resource) Match(resource string) bool {
-	return wildcard.Match(r.pattern, resource)
+	return wildcard.Match(r.Pattern, resource)
 }
 
 // MarshalJSON - encodes Resource to JSON data.
@@ -61,7 +61,7 @@ func (r Resource) MarshalJSON() ([]byte, error) {
 }
 
 func (r Resource) String() string {
-	return ResourceARNPrefix + r.pattern
+	return ResourceARNPrefix + r.Pattern
 }
 
 // UnmarshalJSON - decodes JSON data to Resource.
@@ -87,7 +87,7 @@ func (r Resource) Validate(bucketName string) error {
 		return fmt.Errorf("invalid resource")
 	}
 
-	if !wildcard.Match(r.bucketName, bucketName) {
+	if !wildcard.Match(r.BucketName, bucketName) {
 		return fmt.Errorf("bucket name does not match")
 	}
 
@@ -108,8 +108,8 @@ func parseResource(s string) (Resource, error) {
 	}
 
 	return Resource{
-		bucketName: bucketName,
-		pattern:    pattern,
+		BucketName: bucketName,
+		Pattern:    pattern,
 	}, nil
 }
 
@@ -125,7 +125,7 @@ func NewResource(bucketName, keyName string) Resource {
 	}
 
 	return Resource{
-		bucketName: bucketName,
-		pattern:    pattern,
+		BucketName: bucketName,
+		Pattern:    pattern,
 	}
 }

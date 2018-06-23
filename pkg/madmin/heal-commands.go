@@ -18,10 +18,8 @@
 package madmin
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -194,23 +192,18 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 
 	// execute POST request to heal api
 	queryVals := make(url.Values)
-	var contentBody io.Reader
 	if clientToken != "" {
 		queryVals.Set("clientToken", clientToken)
 		body = []byte{}
-	} else {
-		// Set a body only if clientToken is not given
-		contentBody = bytes.NewReader(body)
 	}
 	if forceStart {
 		queryVals.Set("forceStart", "true")
 	}
 
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:            path,
-		contentBody:        contentBody,
-		contentSHA256Bytes: sum256(body),
-		queryValues:        queryVals,
+		relPath:     path,
+		content:     body,
+		queryValues: queryVals,
 	})
 	defer closeResponse(resp)
 	if err != nil {

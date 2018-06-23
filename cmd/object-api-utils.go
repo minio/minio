@@ -20,12 +20,15 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"path"
 	"runtime"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -275,6 +278,22 @@ func isMinioMetaBucket(bucketName string) bool {
 // Returns true if input bucket is a reserved minio bucket 'minio'.
 func isMinioReservedBucket(bucketName string) bool {
 	return bucketName == minioReservedBucket
+}
+
+// returns a slice of hosts by reading a slice of DNS records
+func getHostsSlice(records []dns.SrvRecord) []string {
+	var hosts []string
+	for _, r := range records {
+		hosts = append(hosts, r.Host)
+	}
+	return hosts
+}
+
+// returns a random host (and corresponding port) from a slice of DNS records
+func getRandomHostPort(records []dns.SrvRecord) (string, int) {
+	rand.Seed(time.Now().Unix())
+	srvRecord := records[rand.Intn(len(records))]
+	return srvRecord.Host, srvRecord.Port
 }
 
 // byBucketName is a collection satisfying sort.Interface.

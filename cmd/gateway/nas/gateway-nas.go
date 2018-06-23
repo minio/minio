@@ -40,7 +40,7 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PATH:
-  path to NAS mount point.
+  Path to NAS mount point.
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -50,30 +50,27 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  DOMAIN:
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
 
-  UPDATE:
-     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
 EXAMPLES:
   1. Start minio gateway server for NAS backend.
-      $ export MINIO_ACCESS_KEY=accesskey
-      $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} /shared/nasvol
- 
+     $ export MINIO_ACCESS_KEY=accesskey
+     $ export MINIO_SECRET_KEY=secretkey
+     $ {{.HelpName}} /shared/nasvol
+
   2. Start minio gateway server for NAS with edge caching enabled.
-      $ export MINIO_ACCESS_KEY=accesskey			
-      $ export MINIO_SECRET_KEY=secretkey
-      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-      $ export MINIO_CACHE_EXPIRY=40
-      $ {{.HelpName}} /shared/nasvol
+     $ export MINIO_ACCESS_KEY=accesskey
+     $ export MINIO_SECRET_KEY=secretkey
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
+     $ export MINIO_CACHE_EXPIRY=40
+     $ {{.HelpName}} /shared/nasvol
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -88,17 +85,16 @@ EXAMPLES:
 // Handler for 'minio gateway nas' command line.
 func nasGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
-	host := ctx.Args().First()
-	if host == "help" {
+	if !ctx.Args().Present() || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, nasBackend, 1)
 	}
-	// Validate gateway arguments.
-	minio.StartGateway(ctx, &NAS{host})
+
+	minio.StartGateway(ctx, &NAS{ctx.Args().First()})
 }
 
 // NAS implements Gateway.
 type NAS struct {
-	host string
+	path string
 }
 
 // Name implements Gateway interface.
@@ -109,7 +105,7 @@ func (g *NAS) Name() string {
 // NewGatewayLayer returns nas gatewaylayer.
 func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
-	newObject, err := minio.NewFSObjectLayer(g.host)
+	newObject, err := minio.NewFSObjectLayer(g.path)
 	if err != nil {
 		return nil, err
 	}

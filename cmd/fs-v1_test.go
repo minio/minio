@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -192,11 +191,12 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 
 	// Check for buckets and should get disk not found.
-	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	os.RemoveAll(disk)
 
-	_, err = fs.GetBucketInfo(context.Background(), bucketName)
-	if !isSameType(err, BucketNotFound{}) {
-		t.Fatal("BucketNotFound error not returned")
+	if _, err = fs.GetBucketInfo(context.Background(), bucketName); err != nil {
+		if !isSameType(err, BucketNotFound{}) {
+			t.Fatal("BucketNotFound error not returned")
+		}
 	}
 }
 
@@ -302,7 +302,7 @@ func TestFSDeleteObject(t *testing.T) {
 	}
 
 	// Delete object should err disk not found.
-	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	os.RemoveAll(disk)
 	if err := fs.DeleteObject(context.Background(), bucketName, objectName); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
@@ -343,7 +343,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 
 	// Delete bucket should get error disk not found.
-	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	os.RemoveAll(disk)
 	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
@@ -365,6 +365,8 @@ func TestFSListBuckets(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	globalServiceDoneCh <- struct{}{}
+
 	// Create a bucket with invalid name
 	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
 		t.Fatal("Unexpected error: ", err)
@@ -385,18 +387,9 @@ func TestFSListBuckets(t *testing.T) {
 	}
 
 	// Test ListBuckets with disk not found.
-	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-
+	os.RemoveAll(disk)
 	if _, err := fs.ListBuckets(context.Background()); err != nil {
 		if err != errDiskNotFound {
-			t.Fatal("Unexpected error: ", err)
-		}
-	}
-
-	longPath := fmt.Sprintf("%0256d", 1)
-	fs.fsPath = longPath
-	if _, err := fs.ListBuckets(context.Background()); err != nil {
-		if err != errFileNameTooLong {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}

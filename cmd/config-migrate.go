@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	etcd "github.com/coreos/etcd/client"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
@@ -42,7 +43,7 @@ func migrateConfig() error {
 	}
 
 	// Load only config version information.
-	version, err := quick.GetVersion(getConfigFile())
+	version, err := GetVersion(getConfigFile())
 	if err != nil {
 		return err
 	}
@@ -172,6 +173,16 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "23":
+		if err = migrateV23ToV24(); err != nil {
+			return err
+		}
+		fallthrough
+	case "24":
+		if err = migrateV24ToV25(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -184,8 +195,8 @@ func purgeV1() error {
 	configFile := filepath.Join(getConfigDir(), "fsUsers.json")
 
 	cv1 := &configV1{}
-	_, err := quick.Load(configFile, cv1)
-	if os.IsNotExist(err) {
+	_, err := Load(configFile, cv1)
+	if os.IsNotExist(err) || etcd.IsKeyNotFound(err) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config version ‘1’. %v", err)
@@ -205,7 +216,7 @@ func migrateV2ToV3() error {
 	configFile := getConfigFile()
 
 	cv2 := &configV2{}
-	_, err := quick.Load(configFile, cv2)
+	_, err := Load(configFile, cv2)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -249,7 +260,7 @@ func migrateV2ToV3() error {
 	}
 	srvConfig.Logger.Syslog = slogger
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv2.Version, srvConfig.Version, err)
 	}
 
@@ -264,7 +275,7 @@ func migrateV3ToV4() error {
 	configFile := getConfigFile()
 
 	cv3 := &configV3{}
-	_, err := quick.Load(configFile, cv3)
+	_, err := Load(configFile, cv3)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -287,7 +298,7 @@ func migrateV3ToV4() error {
 	srvConfig.Logger.File = cv3.Logger.File
 	srvConfig.Logger.Syslog = cv3.Logger.Syslog
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv3.Version, srvConfig.Version, err)
 	}
 
@@ -302,7 +313,7 @@ func migrateV4ToV5() error {
 	configFile := getConfigFile()
 
 	cv4 := &configV4{}
-	_, err := quick.Load(configFile, cv4)
+	_, err := Load(configFile, cv4)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -328,7 +339,7 @@ func migrateV4ToV5() error {
 	srvConfig.Logger.ElasticSearch.Enable = false
 	srvConfig.Logger.Redis.Enable = false
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv4.Version, srvConfig.Version, err)
 	}
 
@@ -343,7 +354,7 @@ func migrateV5ToV6() error {
 	configFile := getConfigFile()
 
 	cv5 := &configV5{}
-	_, err := quick.Load(configFile, cv5)
+	_, err := Load(configFile, cv5)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -417,7 +428,7 @@ func migrateV5ToV6() error {
 		}
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv5.Version, srvConfig.Version, err)
 	}
 
@@ -432,7 +443,7 @@ func migrateV6ToV7() error {
 	configFile := getConfigFile()
 
 	cv6 := &configV6{}
-	_, err := quick.Load(configFile, cv6)
+	_, err := Load(configFile, cv6)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -473,7 +484,7 @@ func migrateV6ToV7() error {
 		srvConfig.Notify.Redis = cv6.Notify.Redis
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv6.Version, srvConfig.Version, err)
 	}
 
@@ -488,7 +499,7 @@ func migrateV7ToV8() error {
 	configFile := getConfigFile()
 
 	cv7 := &serverConfigV7{}
-	_, err := quick.Load(configFile, cv7)
+	_, err := Load(configFile, cv7)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -536,7 +547,7 @@ func migrateV7ToV8() error {
 		srvConfig.Notify.Redis = cv7.Notify.Redis
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv7.Version, srvConfig.Version, err)
 	}
 
@@ -550,7 +561,7 @@ func migrateV8ToV9() error {
 	configFile := getConfigFile()
 
 	cv8 := &serverConfigV8{}
-	_, err := quick.Load(configFile, cv8)
+	_, err := Load(configFile, cv8)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -606,7 +617,7 @@ func migrateV8ToV9() error {
 		srvConfig.Notify.PostgreSQL = cv8.Notify.PostgreSQL
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv8.Version, srvConfig.Version, err)
 	}
 
@@ -620,7 +631,7 @@ func migrateV9ToV10() error {
 	configFile := getConfigFile()
 
 	cv9 := &serverConfigV9{}
-	_, err := quick.Load(configFile, cv9)
+	_, err := Load(configFile, cv9)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -674,7 +685,7 @@ func migrateV9ToV10() error {
 		srvConfig.Notify.PostgreSQL = cv9.Notify.PostgreSQL
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv9.Version, srvConfig.Version, err)
 	}
 
@@ -688,7 +699,7 @@ func migrateV10ToV11() error {
 	configFile := getConfigFile()
 
 	cv10 := &serverConfigV10{}
-	_, err := quick.Load(configFile, cv10)
+	_, err := Load(configFile, cv10)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -745,7 +756,7 @@ func migrateV10ToV11() error {
 	srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
 	srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv10.Version, srvConfig.Version, err)
 	}
 
@@ -759,7 +770,7 @@ func migrateV11ToV12() error {
 	configFile := getConfigFile()
 
 	cv11 := &serverConfigV11{}
-	_, err := quick.Load(configFile, cv11)
+	_, err := Load(configFile, cv11)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -843,7 +854,7 @@ func migrateV11ToV12() error {
 		}
 	}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv11.Version, srvConfig.Version, err)
 	}
 
@@ -856,7 +867,7 @@ func migrateV12ToV13() error {
 	configFile := getConfigFile()
 
 	cv12 := &serverConfigV12{}
-	_, err := quick.Load(configFile, cv12)
+	_, err := Load(configFile, cv12)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -923,7 +934,7 @@ func migrateV12ToV13() error {
 	srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
 	srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv12.Version, srvConfig.Version, err)
 	}
 
@@ -936,7 +947,7 @@ func migrateV13ToV14() error {
 	configFile := getConfigFile()
 
 	cv13 := &serverConfigV13{}
-	_, err := quick.Load(configFile, cv13)
+	_, err := Load(configFile, cv13)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1008,7 +1019,7 @@ func migrateV13ToV14() error {
 	// Set the new browser parameter to true by default
 	srvConfig.Browser = true
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv13.Version, srvConfig.Version, err)
 	}
 
@@ -1021,7 +1032,7 @@ func migrateV14ToV15() error {
 	configFile := getConfigFile()
 
 	cv14 := &serverConfigV14{}
-	_, err := quick.Load(configFile, cv14)
+	_, err := Load(configFile, cv14)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1097,7 +1108,7 @@ func migrateV14ToV15() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv14.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv14.Version, srvConfig.Version, err)
 	}
 
@@ -1111,7 +1122,7 @@ func migrateV15ToV16() error {
 	configFile := getConfigFile()
 
 	cv15 := &serverConfigV15{}
-	_, err := quick.Load(configFile, cv15)
+	_, err := Load(configFile, cv15)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1187,7 +1198,7 @@ func migrateV15ToV16() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv15.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
 	}
 
@@ -1201,7 +1212,7 @@ func migrateV16ToV17() error {
 	configFile := getConfigFile()
 
 	cv16 := &serverConfigV16{}
-	_, err := quick.Load(configFile, cv16)
+	_, err := Load(configFile, cv16)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1308,7 +1319,7 @@ func migrateV16ToV17() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv16.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv16.Version, srvConfig.Version, err)
 	}
 
@@ -1322,7 +1333,7 @@ func migrateV17ToV18() error {
 	configFile := getConfigFile()
 
 	cv17 := &serverConfigV17{}
-	_, err := quick.Load(configFile, cv17)
+	_, err := Load(configFile, cv17)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1412,7 +1423,7 @@ func migrateV17ToV18() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv17.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv17.Version, srvConfig.Version, err)
 	}
 
@@ -1424,7 +1435,7 @@ func migrateV18ToV19() error {
 	configFile := getConfigFile()
 
 	cv18 := &serverConfigV18{}
-	_, err := quick.Load(configFile, cv18)
+	_, err := Load(configFile, cv18)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1518,7 +1529,7 @@ func migrateV18ToV19() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv18.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv18.Version, srvConfig.Version, err)
 	}
 
@@ -1530,7 +1541,7 @@ func migrateV19ToV20() error {
 	configFile := getConfigFile()
 
 	cv19 := &serverConfigV19{}
-	_, err := quick.Load(configFile, cv19)
+	_, err := Load(configFile, cv19)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1623,7 +1634,7 @@ func migrateV19ToV20() error {
 	// Load browser config from existing config in the file.
 	srvConfig.Browser = cv19.Browser
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv19.Version, srvConfig.Version, err)
 	}
 
@@ -1635,7 +1646,7 @@ func migrateV20ToV21() error {
 	configFile := getConfigFile()
 
 	cv20 := &serverConfigV20{}
-	_, err := quick.Load(configFile, cv20)
+	_, err := Load(configFile, cv20)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1727,7 +1738,7 @@ func migrateV20ToV21() error {
 	// Load domain config from existing config in the file.
 	srvConfig.Domain = cv20.Domain
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv20.Version, srvConfig.Version, err)
 	}
 
@@ -1739,7 +1750,7 @@ func migrateV21ToV22() error {
 	configFile := getConfigFile()
 
 	cv21 := &serverConfigV21{}
-	_, err := quick.Load(configFile, cv21)
+	_, err := Load(configFile, cv21)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1831,7 +1842,7 @@ func migrateV21ToV22() error {
 	// Load domain config from existing config in the file.
 	srvConfig.Domain = cv21.Domain
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv21.Version, srvConfig.Version, err)
 	}
 
@@ -1843,7 +1854,7 @@ func migrateV22ToV23() error {
 	configFile := getConfigFile()
 
 	cv22 := &serverConfigV22{}
-	_, err := quick.Load(configFile, cv22)
+	_, err := Load(configFile, cv22)
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
@@ -1944,10 +1955,241 @@ func migrateV22ToV23() error {
 	srvConfig.Cache.Exclude = []string{}
 	srvConfig.Cache.Expiry = globalCacheExpiry
 
-	if err = quick.Save(configFile, srvConfig); err != nil {
+	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv22.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv22.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV23ToV24() error {
+	configFile := getConfigFile()
+
+	cv23 := &serverConfigV23{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv23)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘23’. %v", err)
+	}
+	if cv23.Version != "23" {
+		return nil
+	}
+
+	// Copy over fields from V23 into V24 config struct
+	srvConfig := &serverConfigV24{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "24"
+	srvConfig.Credential = cv23.Credential
+	srvConfig.Region = cv23.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv23.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv23.Notify.AMQP
+	}
+	if len(cv23.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv23.Notify.Elasticsearch
+	}
+	if len(cv23.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv23.Notify.Redis
+	}
+	if len(cv23.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv23.Notify.PostgreSQL
+	}
+	if len(cv23.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		srvConfig.Notify.Kafka = cv23.Notify.Kafka
+	}
+	if len(cv23.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv23.Notify.NATS
+	}
+	if len(cv23.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv23.Notify.Webhook
+	}
+	if len(cv23.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv23.Notify.MySQL
+	}
+
+	if len(cv23.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv23.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv23.Browser
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv23.Domain
+
+	// Load storage class config from existing storage class config in the file.
+	srvConfig.StorageClass.RRS = cv23.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv23.StorageClass.Standard
+
+	// Load cache config from existing cache config in the file.
+	srvConfig.Cache.Drives = cv23.Cache.Drives
+	srvConfig.Cache.Exclude = cv23.Cache.Exclude
+	srvConfig.Cache.Expiry = cv23.Cache.Expiry
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv23.Version, srvConfig.Version, err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, cv23.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV24ToV25() error {
+	configFile := getConfigFile()
+
+	cv24 := &serverConfigV24{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv24)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘24’. %v", err)
+	}
+	if cv24.Version != "24" {
+		return nil
+	}
+
+	// Copy over fields from V24 into V25 config struct
+	srvConfig := &serverConfigV25{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "25"
+	srvConfig.Credential = cv24.Credential
+	srvConfig.Region = cv24.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv24.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv24.Notify.AMQP
+	}
+	if len(cv24.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv24.Notify.Elasticsearch
+	}
+	if len(cv24.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv24.Notify.Redis
+	}
+	if len(cv24.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv24.Notify.PostgreSQL
+	}
+	if len(cv24.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		srvConfig.Notify.Kafka = cv24.Notify.Kafka
+	}
+	if len(cv24.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv24.Notify.NATS
+	}
+	if len(cv24.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv24.Notify.Webhook
+	}
+	if len(cv24.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv24.Notify.MySQL
+	}
+
+	if len(cv24.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv24.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv24.Browser
+
+	// New field should be turned-off by default.
+	srvConfig.Worm = false // cv25.Worm should be used here
+	// for the next migration from v25 to v26 to persist
+	// local config value.
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv24.Domain
+
+	// Load storage class config from existing storage class config in the file.
+	srvConfig.StorageClass.RRS = cv24.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv24.StorageClass.Standard
+
+	// Load cache config from existing cache config in the file.
+	srvConfig.Cache.Drives = cv24.Cache.Drives
+	srvConfig.Cache.Exclude = cv24.Cache.Exclude
+	srvConfig.Cache.Expiry = cv24.Cache.Expiry
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv24.Version, srvConfig.Version, err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, cv24.Version, srvConfig.Version)
 	return nil
 }

@@ -17,16 +17,23 @@
 package cmd
 
 import (
+	"context"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	etcd "github.com/coreos/etcd/client"
+
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Check for updates and print a notification message
@@ -41,12 +48,32 @@ func checkUpdate(mode string) {
 	}
 }
 
+// Initialize and load config from remote etcd or local config directory
 func initConfig() {
-	// Config file does not exist, we create it fresh and return upon success.
+	if globalEtcdClient != nil {
+		kapi := etcd.NewKeysAPI(globalEtcdClient)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_, err := kapi.Get(ctx, getConfigFile(), nil)
+		cancel()
+		if err == nil {
+			logger.FatalIf(migrateConfig(), "Config migration failed.")
+			logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
+		} else {
+			if etcd.IsKeyNotFound(err) {
+				logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+				logger.Info("Created minio configuration file successfully at %v", globalEtcdClient.Endpoints())
+			} else {
+				logger.FatalIf(err, "Unable to load config version: '%s'.", serverConfigVersion)
+			}
+		}
+		return
+	}
+
 	if isFile(getConfigFile()) {
 		logger.FatalIf(migrateConfig(), "Config migration failed")
 		logger.FatalIf(loadConfig(), "Unable to load the configuration file")
 	} else {
+		// Config file does not exist, we create it fresh and return upon success.
 		logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time")
 		logger.Info("Created minio configuration file successfully at " + getConfigDir())
 	}
@@ -105,7 +132,7 @@ func handleCommonEnvVars() {
 	}
 
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBrowserFlag(browser)
+		browserFlag, err := ParseBoolFlag(browser)
 		if err != nil {
 			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Unable to validate MINIO_BROWSER environment variable")
 		}
@@ -123,9 +150,34 @@ func handleCommonEnvVars() {
 		logger.FatalIf(err, "error opening file %s", traceFile)
 	}
 
-	globalDomainName = os.Getenv("MINIO_DOMAIN")
-	if globalDomainName != "" {
-		globalIsEnvDomainName = true
+	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
+	if ok {
+		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
+		var err error
+		globalEtcdClient, err = etcd.New(etcd.Config{
+			Endpoints: etcdEndpoints,
+			Transport: NewCustomHTTPTransport(),
+		})
+		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
+	}
+
+	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
+
+	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
+	if ok {
+		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
+		globalDomainIPs = set.NewStringSet()
+		for i, ip := range minioEndpoints {
+			if net.ParseIP(ip) == nil {
+				logger.FatalIf(errInvalidArgument, "Unable to initialize Minio server with invalid MINIO_PUBLIC_IPS[%d]: %s", i, ip)
+			}
+			globalDomainIPs.Add(ip)
+		}
+	}
+	if globalDomainName != "" && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+		var err error
+		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIPs, globalMinioPort, globalEtcdClient)
+		logger.FatalIf(err, "Unable to initialize DNS config for %s.", globalDomainName)
 	}
 
 	if drives := os.Getenv("MINIO_CACHE_DRIVES"); drives != "" {
@@ -189,5 +241,15 @@ func handleCommonEnvVars() {
 	}
 
 	// Get WORM environment variable.
-	globalWORMEnabled = strings.EqualFold(os.Getenv("MINIO_WORM"), "on")
+	if worm := os.Getenv("MINIO_WORM"); worm != "" {
+		wormFlag, err := ParseBoolFlag(worm)
+		if err != nil {
+			logger.Fatal(uiErrInvalidWormValue(nil).Msg("Unknown value `%s`", worm), "Unable to validate MINIO_WORM environment variable")
+		}
+
+		// worm Envs are set globally, this does not represent
+		// if worm is turned off or on.
+		globalIsEnvWORM = true
+		globalWORMEnabled = bool(wormFlag)
+	}
 }

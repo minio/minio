@@ -178,7 +178,6 @@ func fsStatVolume(ctx context.Context, volume string) (os.FileInfo, error) {
 	}
 
 	if !fi.IsDir() {
-		logger.LogIf(ctx, errVolumeAccessDenied)
 		return nil, errVolumeAccessDenied
 	}
 

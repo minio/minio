@@ -98,6 +98,54 @@
 			"revisionTime": "2016-07-13T13:44:25+03:00"
 		},
 		{
+			"checksumSHA1": "wsnl1XpGXxzqm+T4ri3HL/UrAOQ=",
+			"path": "github.com/coredns/coredns/plugin/etcd/msg",
+			"revision": "d4bf076ccf4e2466cbf381cea3ce469832a82d4d",
+			"revisionTime": "2018-01-21T19:28:21Z"
+		},
+		{
+			"checksumSHA1": "dx2RZOGlNL5UG0/CNo4tfg4JJqw=",
+			"path": "github.com/coredns/coredns/plugin/pkg/dnsutil",
+			"revision": "d4bf076ccf4e2466cbf381cea3ce469832a82d4d",
+			"revisionTime": "2018-01-21T19:28:21Z"
+		},
+		{
+			"checksumSHA1": "rsbg85vM+0ZtvdtcFDNpzPEpcQQ=",
+			"path": "github.com/coreos/etcd/client",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "mKIXx1kDwmVmdIpZ3pJtRBuUKso=",
+			"path": "github.com/coreos/etcd/pkg/pathutil",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "in4X4M2FFl6+eAXgxdxxSOZi1Vw=",
+			"path": "github.com/coreos/etcd/pkg/srv",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "gx1gJIMU6T0UNQ0bPZ/drQ8cpCI=",
+			"path": "github.com/coreos/etcd/pkg/types",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "UrMcbYhN7QooiDzkH8GyOCgCdAA=",
+			"path": "github.com/coreos/etcd/version",
+			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
+			"revisionTime": "2017-10-06T15:58:06Z"
+		},
+		{
+			"checksumSHA1": "97BsbXOiZ8+Kr+LIuZkQFtSj7H4=",
+			"path": "github.com/coreos/go-semver/semver",
+			"revision": "e214231b295a8ea9479f11b70b35d5acf3556d9b",
+			"revisionTime": "2018-01-08T23:09:05Z"
+		},
+		{
 			"checksumSHA1": "/5cvgU+J4l7EhMXTK76KaCAfOuU=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
@@ -369,6 +417,12 @@
 			"revisionTime": "2016-04-24T11:30:07Z"
 		},
 		{
+			"checksumSHA1": "OUZ1FFXyKs+Cfg9M9rmXqqweQck=",
+			"path": "github.com/miekg/dns",
+			"revision": "db96a2b759cdef4f11a34506a42eb8d1290c598e",
+			"revisionTime": "2016-07-26T03:20:27Z"
+		},
+		{
 			"checksumSHA1": "uTShVxdYNwW+3WI6SfJwOc/LQgo=",
 			"path": "github.com/minio/blazer/base",
 			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
@@ -416,10 +470,10 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "w7jIUKw0cR7Z34JykcQXGJEPEmI=",
+			"checksumSHA1": "hdWmWbGpljSQMBOcpcwhAnP2aaQ=",
 			"path": "github.com/minio/minio-go",
-			"revision": "a2238f0e60facba1c2ccff86ddc624e23fae4f23",
-			"revisionTime": "2018-04-13T18:58:16Z"
+			"revision": "10531abd0af1579a12dc1977d67c0fec2b348679",
+			"revisionTime": "2018-06-13T23:01:28Z"
 		},
 		{
 			"checksumSHA1": "Qsj+6JPmJ8R5rFNQSHqRb8xAwOw=",
@@ -595,6 +649,12 @@
 			"revisionTime": "2018-04-08T09:29:02Z"
 		},
 		{
+			"checksumSHA1": "T2BgxGcsgrldYNFPQcmw46/K4qM=",
+			"path": "github.com/rjeczalik/notify",
+			"revision": "d152f3ce359a5464dc41e84a8919fc67e55bbbf0",
+			"revisionTime": "2018-03-12T21:30:58Z"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
 			"revisionTime": "2016-06-18T04:49:35+05:30"
@@ -639,6 +699,12 @@
 			"path": "github.com/tidwall/match",
 			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
 			"revisionTime": "2016-08-30T17:39:30Z"
+		},
+		{
+			"checksumSHA1": "MWqyOvDMkW+XYe2RJ5mplvut+aE=",
+			"path": "github.com/ugorji/go/codec",
+			"revision": "ded73eae5db7e7a0ef6f55aace87a2873c5d2b74",
+			"revisionTime": "2017-01-07T13:32:03Z"
 		},
 		{
 			"checksumSHA1": "6NS7FWJl1FobB+Xfe4SzBGD+75g=",
@@ -716,6 +782,12 @@
 			"path": "golang.org/x/net/context/ctxhttp",
 			"revision": "f2499483f923065a842d38eb4c7f1927e6fc6e6d",
 			"revisionTime": "2017-01-14T04:22:49Z"
+		},
+		{
+			"checksumSHA1": "c3H2wB/3tGrw6VqCnlye+kSdoXU=",
+			"path": "golang.org/x/net/http/httpguts",
+			"revision": "1e491301e022f8f977054da4c2d852decd59571f",
+			"revisionTime": "2018-05-30T06:29:46Z"
 		},
 		{
 			"checksumSHA1": "Zh++JEDfXo0DKQtoKVfScwVdvww=",

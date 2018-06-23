@@ -61,11 +61,13 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string) (*Reader, er
 	if len(sha256sum) != 0 {
 		sha256Hash = sha256.New()
 	}
-
+	if size >= 0 {
+		src = io.LimitReader(src, size)
+	}
 	return &Reader{
 		md5sum:     md5sum,
 		sha256sum:  sha256sum,
-		src:        io.LimitReader(src, size),
+		src:        src,
 		size:       size,
 		md5Hash:    md5.New(),
 		sha256Hash: sha256Hash,

@@ -1,5 +1,5 @@
 {
-    "version": "22",
+    "version": "24",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
@@ -16,6 +16,9 @@
         "expiry": 90,
         "exclude": []
     },
+    "usage": {
+        "interval": "3h"
+    }
     "notify": {
         "amqp": {
             "1": {

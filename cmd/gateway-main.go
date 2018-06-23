@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -31,7 +30,13 @@ import (
 	"github.com/minio/cli"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/certs"
 )
+
+func init() {
+	logger.Init(GOPATH, GOROOT)
+	logger.RegisterUIError(fmtError)
+}
 
 var (
 	gatewayCmd = cli.Command{
@@ -102,10 +107,6 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 	return nil
 }
 
-func init() {
-	logger.Init(GOPATH)
-}
-
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
 	if gw == nil {
@@ -149,10 +150,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("gatewayName", gatewayName)
-		contxt := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(contxt, errors.New("Access and Secret keys should be set through ENVs for backend"))
-		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
+		logger.Fatal(uiErrEnvCredentialsMissing(nil), "Unable to start gateway")
 	}
 
 	// Create certs path.
@@ -163,7 +161,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
 	logger.FatalIf(err, "Invalid SSL certificate file")
 
 	// Set system resources to maximum.
@@ -178,13 +176,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
-	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
-	logger.FatalIf(err, "Unable to initialize gateway layer")
-
 	router := mux.NewRouter().SkipClean(true)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
+
+	// Add server metrics router
+	registerMetricsRouter(router)
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
@@ -194,14 +192,28 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
-	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), globalTLSCertificate)
+	var getCert certs.GetCertificateFunc
+	if globalTLSCerts != nil {
+		getCert = globalTLSCerts.GetCertificate
+	}
 
-	// Start server, automatically configures TLS if certs are available.
+	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), getCert)
+	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
+	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+
+	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
+	if err != nil {
+		// Stop watching for any certificate changes.
+		globalTLSCerts.Stop()
+
+		globalHTTPServer.Shutdown()
+		logger.FatalIf(err, "Unable to initialize gateway backend")
+	}
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()

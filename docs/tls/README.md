@@ -70,8 +70,16 @@ openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out privat
 
 **Generate the self-signed certificate**:
 
+Generate self-signed certificate using the below command (remember to replace `<domain.com>` with your actual domain name)
+
 ```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=domain"
+openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<domain.com>"
+```
+
+Generate self-signed wildcard certificate using the below command. This certificate will be valid for all the sub-domains under `domain.com`. Wildcard certificates come in handy while deploying distributed Minio instances where there may be multiple sub-domains under a single domain, with each one running a separate Minio instance.
+
+```sh
+openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
 ```
 
 ### Using OpenSSL (with IP address)
@@ -179,4 +187,4 @@ Minio can be configured to connect to other servers, whether Minio nodes or serv
 * [TLS Configuration for Minio server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
 * [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide)
 * [Generate Let's Encrypt Certificate](https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio)
-* [Setup Nginx Proxy with Minio Server](https://docs.minio.io/docs/setup-nginx-proxy-with-minio)
+* [Setup nginx Proxy with Minio Server](https://docs.minio.io/docs/setup-nginx-proxy-with-minio)

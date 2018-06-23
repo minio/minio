@@ -25,20 +25,16 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	humanize "github.com/dustin/go-humanize"
 )
 
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{}
-	infoStorage.Total = 10 * humanize.GiByte
-	infoStorage.Free = 2 * humanize.GiByte
 	infoStorage.Backend.Type = Erasure
 	infoStorage.Backend.OnlineDisks = 7
 	infoStorage.Backend.OfflineDisks = 1
 
-	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "2.0 GiB Free, 10 GiB Total") || !strings.Contains(msg, "7 Online, 1 Offline") {
+	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)
 	}
 }

@@ -5,7 +5,7 @@ This quickstart guide will show you how to install the Minio Admin client SDK, c
 
 This document assumes that you have a working [Golang setup](https://docs.minio.io/docs/how-to-install-golang).
 
-## Download from Github
+## Download from GitHub
 
 ```sh
 

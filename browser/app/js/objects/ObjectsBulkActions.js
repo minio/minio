@@ -28,6 +28,15 @@ export class ObjectsBulkActions extends React.Component {
       showDeleteConfirmation: false
     }
   }
+  handleDownload() {
+    const { checkedObjects, clearChecked, downloadChecked, downloadObject } = this.props
+    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) {
+      downloadObject(checkedObjects[0])
+      clearChecked()
+    } else {
+      downloadChecked()
+    }
+  }
   deleteChecked() {
     const { deleteChecked } = this.props
     deleteChecked()
@@ -39,24 +48,27 @@ export class ObjectsBulkActions extends React.Component {
     })
   }
   render() {
-    const { checkedObjectsCount, downloadChecked, clearChecked } = this.props
+    const { checkedObjects, clearChecked } = this.props
     return (
       <div
         className={
           "list-actions" +
           classNames({
-            " list-actions-toggled": checkedObjectsCount > 0
+            " list-actions-toggled": checkedObjects.length > 0
           })
         }
       >
         <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjectsCount} Objects
+          <i className="fa fa-check-circle" /> {checkedObjects.length}
+          {checkedObjects.length === 1 ? " Object " : " Objects "}
           selected
         </span>
         <span className="la-actions pull-right">
-          <button id="download-checked" onClick={downloadChecked}>
+          <button id="download-checked" onClick={this.handleDownload.bind(this)}>
             {" "}
-            Download all as zip{" "}
+            Download
+            {(checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) ? 
+            " object" : " all as zip" }{" "}
           </button>
         </span>
         <span className="la-actions pull-right">
@@ -86,13 +98,16 @@ export class ObjectsBulkActions extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    checkedObjectsCount: getCheckedList(state).length
+    checkedObjects: getCheckedList(state)
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
+    downloadObject: object => dispatch(actions.downloadObject(object)),
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
+    downloadObject: object => dispatch(actions.downloadObject(object)),
+    resetCheckedList: () => dispatch(actions.resetCheckedList()),
     clearChecked: () => dispatch(actions.resetCheckedList()),
     deleteChecked: () => dispatch(actions.deleteCheckedObjects())
   }

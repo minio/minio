@@ -66,9 +66,9 @@ var (
 // -----------
 // Returns Administration API version
 func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -86,7 +86,7 @@ func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request)
 // ----------
 // Returns server version and uptime.
 func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -131,7 +131,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 // Restarts/Stops minio server gracefully. In a distributed setup,
 // restarts all the servers in the cluster.
 func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -223,7 +223,9 @@ type ServerInfo struct {
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+
+	// Setting the region as empty so as the mc server info command is irrespective to the region.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -245,7 +247,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			// Initialize server info at index
 			reply[idx] = ServerInfo{Addr: peer.addr}
 
-			serverInfoData, err := peer.cmdRunner.ServerInfoData()
+			serverInfoData, err := peer.cmdRunner.ServerInfo()
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
@@ -312,7 +314,7 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 // Lists locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -363,7 +365,7 @@ func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -472,7 +474,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -569,7 +571,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -669,8 +671,14 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
@@ -681,12 +689,12 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	n, err := io.ReadFull(r.Body, configBuf)
 	if err == nil {
 		// More than maxConfigSize bytes were available
-		writeErrorResponse(w, ErrAdminConfigTooLarge, r.URL)
+		writeErrorResponseJSON(w, ErrAdminConfigTooLarge, r.URL)
 		return
 	}
 	if err != io.ErrUnexpectedEOF {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -696,7 +704,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// client has not sent JSON objects with duplicate keys.
 	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, ErrAdminConfigBadJSON, r.URL)
+		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
 
@@ -704,7 +712,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -767,16 +775,16 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	r *http.Request) {
 
 	// Authenticate request
-	adminAPIErr := checkAdminRequestAuthType(r, globalServerConfig.GetRegion())
+	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Avoid setting new credentials when they are already passed
-	// by the environment.
-	if globalIsEnvCreds {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+	// by the environment. Deny if WORM is enabled.
+	if globalIsEnvCreds || globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
@@ -791,7 +799,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -808,19 +816,18 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 
-	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(creds)
-	for peer, err := range updateErrs {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
-	if err = globalServerConfig.Save(); err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+	if err = globalServerConfig.Save(getConfigFile()); err != nil {
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		return
+	}
+
+	// Notify all other Minio peers to update credentials
+	for host, err := range globalNotificationSys.SetCredentials(creds) {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", host.String())
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
 	}
 
 	// At this stage, the operation is successful, return 200 OK

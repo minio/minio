@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/pkg/s3utils"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -92,7 +93,7 @@ func getSignedHeaders(signedHeaders http.Header) string {
 //
 func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method string) string {
 	rawQuery := strings.Replace(queryStr, "+", "%20", -1)
-	encodedPath := getURLEncodedName(urlPath)
+	encodedPath := s3utils.EncodePath(urlPath)
 	canonicalRequest := strings.Join([]string{
 		method,
 		encodedPath,

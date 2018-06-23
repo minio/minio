@@ -69,6 +69,18 @@ export MINIO_BROWSER=off
 minio server /data
 ```
 
+#### Worm
+|Field|Type|Description|
+|:---|:---|:---|
+|``worm``| _string_ | Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. You may override this field with ``MINIO_WORM`` environment variable.|
+
+Example:
+
+```sh
+export MINIO_WORM=on
+minio server /data
+```
+
 ### Domain
 |Field|Type|Description|
 |:---|:---|:---|

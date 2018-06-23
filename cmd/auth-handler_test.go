@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -361,8 +362,6 @@ func TestIsReqAuthenticated(t *testing.T) {
 		req     *http.Request
 		s3Error APIErrorCode
 	}{
-		// When request is nil, internal error is returned.
-		{nil, ErrInternalError},
 		// When request is unsigned, access denied is returned.
 		{mustNewRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrAccessDenied},
 		// Empty Content-Md5 header.
@@ -376,9 +375,11 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 
 	// Validates all testcases.
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		if s3Error := isReqAuthenticated(testCase.req, globalServerConfig.GetRegion()); s3Error != testCase.s3Error {
-			t.Fatalf("Unexpected s3error returned wanted %d, got %d", testCase.s3Error, s3Error)
+			if _, err := ioutil.ReadAll(testCase.req.Body); toAPIErrorCode(err) != testCase.s3Error {
+				t.Fatalf("Test %d: Unexpected S3 error: want %d - got %d (got after reading request %d)", i, testCase.s3Error, s3Error, toAPIErrorCode(err))
+			}
 		}
 	}
 }

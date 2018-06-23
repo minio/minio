@@ -29,6 +29,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	uiErrInvalidWormValue = newUIErrFn(
+		"Invalid WORM value",
+		"Please check the passed value",
+		"WORM can only accept `on` and `off` values. To enable WORM, set this value to `on`",
+	)
+
 	uiErrInvalidCacheDrivesValue = newUIErrFn(
 		"Invalid cache drive value",
 		"Please check the value in this ENV variable",
@@ -52,6 +58,12 @@ var (
 		"Please provide correct credentials",
 		`Access key length should be between minimum 3 characters in length.
 Secret key should be in between 8 and 40 characters.`,
+	)
+
+	uiErrEnvCredentialsMissing = newUIErrFn(
+		"Credentials missing",
+		"Please provide correct credentials",
+		`Access key and Secret key should be specified in Gateway mode from environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
 	)
 
 	uiErrInvalidErasureEndpoints = newUIErrFn(
