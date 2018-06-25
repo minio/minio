@@ -201,6 +201,7 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
 		return
 	}
+	atomic.StoreInt32(&fs.usageRunning, 0)
 
 	for {
 		select {
