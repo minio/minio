@@ -53,6 +53,12 @@ var (
 		"MINIO_CACHE_EXPIRY: Valid cache expiry duration is in days.",
 	)
 
+	uiErrInvalidCacheMaxUse = newUIErrFn(
+		"Invalid cache max-use value",
+		"Please check the passed value",
+		"MINIO_CACHE_MAXUSE: Valid cache max-use value between 0-100.",
+	)
+
 	uiErrInvalidCredentials = newUIErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",

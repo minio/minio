@@ -44,7 +44,6 @@ const (
 	// disk cache needs to have cacheSizeMultiplier * object size space free for a cache entry to be created.
 	cacheSizeMultiplier  = 100
 	cacheTrashDir        = "trash"
-	cacheMaxDiskUsagePct = 80 // in %
 	cacheCleanupInterval = 10 // in minutes
 )
 
@@ -839,7 +838,7 @@ func newCache(config CacheConfig) (*diskCache, error) {
 		if err := checkAtimeSupport(dir); err != nil {
 			return nil, errors.New("Atime support required for disk caching")
 		}
-		cache, err := newCacheFSObjects(dir, config.Expiry, cacheMaxDiskUsagePct)
+		cache, err := newCacheFSObjects(dir, config.Expiry, config.MaxUse)
 		if err != nil {
 			return nil, err
 		}
