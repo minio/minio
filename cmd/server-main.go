@@ -288,7 +288,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, getCert)
+	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {

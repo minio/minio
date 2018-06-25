@@ -738,3 +738,20 @@ func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
 	s.handler.ServeHTTP(w, r)
 }
+
+// criticalErrorHandler handles critical server failures caused by
+// `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
+//
+// It should be always the first / highest HTTP handler.
+type criticalErrorHandler struct{ handler http.Handler }
+
+func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if err := recover(); err == logger.ErrCritical { // handle
+			writeErrorResponse(w, ErrInternalError, r.URL)
+		} else if err != nil {
+			panic(err) // forward other panic calls
+		}
+	}()
+	h.handler.ServeHTTP(w, r)
+}

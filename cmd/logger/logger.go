@@ -362,13 +362,15 @@ func LogIf(ctx context.Context, err error) {
 	fmt.Println(output)
 }
 
-// CriticalIf :
-// Like LogIf with exit
-// It'll be called for fatal error conditions during run-time
+// ErrCritical is the value panic'd whenever CriticalIf is called.
+var ErrCritical struct{}
+
+// CriticalIf logs the provided error on the console. It fails the
+// current go-routine by causing a `panic(ErrCritical)`.
 func CriticalIf(ctx context.Context, err error) {
 	if err != nil {
 		LogIf(ctx, err)
-		os.Exit(1)
+		panic(ErrCritical)
 	}
 }
 
