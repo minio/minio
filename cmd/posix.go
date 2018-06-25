@@ -359,6 +359,7 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
 		return
 	}
+	atomic.StoreInt32(&s.usageRunning, 0)
 
 	for {
 		select {
