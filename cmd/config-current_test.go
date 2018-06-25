@@ -319,6 +319,18 @@ func TestConfigDiff(t *testing.T) {
 			&serverConfig{Notify: notifier{MQTT: map[string]target.MQTTArgs{"1": {Enable: false}}}},
 			"MQTT Notification configuration differs",
 		},
+		// 16
+		{
+			&serverConfig{Logger: loggerConfig{
+				Console: loggerConsole{Enabled: true},
+				HTTP:    map[string]loggerHTTP{"1": {Endpoint: "http://address1"}},
+			}},
+			&serverConfig{Logger: loggerConfig{
+				Console: loggerConsole{Enabled: true},
+				HTTP:    map[string]loggerHTTP{"1": {Endpoint: "http://address2"}},
+			}},
+			"Logger configuration differs",
+		},
 	}
 
 	for i, testCase := range testCases {

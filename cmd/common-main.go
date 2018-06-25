@@ -81,6 +81,20 @@ func initConfig() {
 	}
 }
 
+// Load logger targets based on user's configuration
+func loadLoggers() {
+	if globalServerConfig.Logger.Console.Enabled {
+		// Enable console logging
+		logger.AddTarget(logger.NewConsole())
+	}
+	for _, l := range globalServerConfig.Logger.HTTP {
+		if l.Enabled {
+			// Enable http logging
+			logger.AddTarget(logger.NewHTTP(l.Endpoint, NewCustomHTTPTransport()))
+		}
+	}
+}
+
 func handleCommonCmdArgs(ctx *cli.Context) {
 
 	var configDir string

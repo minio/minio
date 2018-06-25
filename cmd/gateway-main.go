@@ -159,6 +159,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize gateway config.
 	initConfig()
 
+	// Load logger subsystem
+	loadLoggers()
+
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()

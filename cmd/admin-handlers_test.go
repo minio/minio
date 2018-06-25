@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "26",
+	"version": "27",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
@@ -162,8 +162,20 @@ var (
 				"endpoint": ""
 			}
 		}
-	}
-}`)
+	    },
+	    "logger": {
+		"console": {
+		    "enabled": true
+		},
+		"http": {
+		    "1": {
+			"enabled": false,
+			"endpoint": "http://user:example@localhost:9001/api/endpoint"
+		    }
+		}
+	    }
+
+	}`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for

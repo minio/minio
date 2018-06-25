@@ -41,9 +41,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "26"
+const serverConfigVersion = "27"
 
-type serverConfig = serverConfigV26
+type serverConfig = serverConfigV27
 
 var (
 	// globalServerConfig server config.
@@ -260,6 +260,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "MySQL Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
 		return "MQTT Notification configuration differs"
+	case !reflect.DeepEqual(s.Logger, t.Logger):
+		return "Logger configuration differs"
 	case reflect.DeepEqual(s, t):
 		return ""
 	default:
@@ -315,6 +317,13 @@ func newServerConfig() *serverConfig {
 	srvCfg.Cache.Exclude = make([]string, 0)
 	srvCfg.Cache.Expiry = globalCacheExpiry
 	srvCfg.Cache.MaxUse = globalCacheMaxUse
+
+	// Console logging is on by default
+	srvCfg.Logger.Console.Enabled = true
+	// Create an example of HTTP logger
+	srvCfg.Logger.HTTP = make(map[string]loggerHTTP)
+	srvCfg.Logger.HTTP["target1"] = loggerHTTP{Endpoint: "https://username:password@example.com/api"}
+
 	return srvCfg
 }
 

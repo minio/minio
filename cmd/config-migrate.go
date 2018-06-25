@@ -188,6 +188,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "26":
+		if err = migrateV26ToV27(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -2315,5 +2320,38 @@ func migrateV25ToV26() error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv25.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV26ToV27() error {
+	configFile := getConfigFile()
+
+	// config V27 is backward compatible with V26, load the old
+	// config file in serverConfigV27 struct and put some examples
+	// in the new `logger` field
+	srvConfig := &serverConfigV27{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+
+	if srvConfig.Version != "26" {
+		return nil
+	}
+
+	srvConfig.Version = "27"
+	// Enable console logging by default to avoid breaking users
+	// current deployments
+	srvConfig.Logger.Console.Enabled = true
+	srvConfig.Logger.HTTP = make(map[string]loggerHTTP)
+	srvConfig.Logger.HTTP["1"] = loggerHTTP{}
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "26", "27")
 	return nil
 }
