@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"time"
 
@@ -40,6 +41,23 @@ type MQTTArgs struct {
 	MaxReconnectInterval time.Duration  `json:"reconnectInterval"`
 	KeepAlive            time.Duration  `json:"keepAliveInterval"`
 	RootCAs              *x509.CertPool `json:"-"`
+}
+
+// Validate MQTTArgs fields
+func (m MQTTArgs) Validate() error {
+	if !m.Enable {
+		return nil
+	}
+	u, err := xnet.ParseURL(m.Broker.String())
+	if err != nil {
+		return err
+	}
+	switch u.Scheme {
+	case "ws", "wss", "tcp", "ssl", "tls", "tcps":
+	default:
+		return errors.New("unknown protocol in broker address")
+	}
+	return nil
 }
 
 // MQTTTarget - MQTT target.

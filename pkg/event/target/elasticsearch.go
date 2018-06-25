@@ -18,8 +18,10 @@ package target
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/pkg/event"
@@ -34,6 +36,26 @@ type ElasticsearchArgs struct {
 	Format string   `json:"format"`
 	URL    xnet.URL `json:"url"`
 	Index  string   `json:"index"`
+}
+
+// Validate ElasticsearchArgs fields
+func (a ElasticsearchArgs) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if a.URL.IsEmpty() {
+		return errors.New("empty URL")
+	}
+	if a.Format != "" {
+		f := strings.ToLower(a.Format)
+		if f != event.NamespaceFormat && f != event.AccessFormat {
+			return errors.New("format value unrecognized")
+		}
+	}
+	if a.Index == "" {
+		return errors.New("empty index value")
+	}
+	return nil
 }
 
 // ElasticsearchTarget - Elasticsearch target.

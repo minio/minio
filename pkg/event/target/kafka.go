@@ -18,6 +18,7 @@ package target
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 
 	"github.com/minio/minio/pkg/event"
@@ -31,6 +32,22 @@ type KafkaArgs struct {
 	Enable  bool        `json:"enable"`
 	Brokers []xnet.Host `json:"brokers"`
 	Topic   string      `json:"topic"`
+}
+
+// Validate KafkaArgs fields
+func (k KafkaArgs) Validate() error {
+	if !k.Enable {
+		return nil
+	}
+	if len(k.Brokers) == 0 {
+		return errors.New("no broker address found")
+	}
+	for _, b := range k.Brokers {
+		if _, err := xnet.ParseHost(b.String()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // KafkaTarget - Kafka target.

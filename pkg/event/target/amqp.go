@@ -43,6 +43,17 @@ type AMQPArgs struct {
 	AutoDeleted  bool     `json:"autoDeleted"`
 }
 
+// Validate AMQP arguments
+func (a *AMQPArgs) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if _, err := amqp.ParseURI(a.URL.String()); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
 	id        event.TargetID

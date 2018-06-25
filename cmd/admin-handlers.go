@@ -712,7 +712,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
 		return
 	}
 
@@ -725,6 +725,11 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 			writeErrorResponseJSON(w, ErrAdminCredentialsMismatch, r.URL)
 			return
 		}
+	}
+
+	if err := config.Validate(); err != nil {
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
+		return
 	}
 
 	// Write config received from request onto a temporary file on

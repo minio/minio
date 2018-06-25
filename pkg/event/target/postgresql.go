@@ -58,10 +58,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq" // Register postgres driver
+	"github.com/lib/pq" // Register postgres driver
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -87,6 +88,41 @@ type PostgreSQLArgs struct {
 	User             string   `json:"user"`     // default: user running minio
 	Password         string   `json:"password"` // default: no password
 	Database         string   `json:"database"` // default: same as user
+}
+
+// Validate PostgreSQLArgs fields
+func (p PostgreSQLArgs) Validate() error {
+	if !p.Enable {
+		return nil
+	}
+	if p.Table == "" {
+		return fmt.Errorf("empty table name")
+	}
+	if p.Format != "" {
+		f := strings.ToLower(p.Format)
+		if f != event.NamespaceFormat && f != event.AccessFormat {
+			return fmt.Errorf("unrecognized format value")
+		}
+	}
+
+	if p.ConnectionString != "" {
+		if _, err := pq.ParseURL(p.ConnectionString); err != nil {
+			return err
+		}
+	} else {
+		// Some fields need to be specified when ConnectionString is unspecified
+		if p.Port == "" {
+			return fmt.Errorf("unspecified port")
+		}
+		if _, err := strconv.Atoi(p.Port); err != nil {
+			return fmt.Errorf("invalid port")
+		}
+		if p.Database == "" {
+			return fmt.Errorf("database unspecified")
+		}
+	}
+
+	return nil
 }
 
 // PostgreSQLTarget - PostgreSQL target.
