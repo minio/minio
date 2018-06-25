@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -174,18 +176,71 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
 
-	if globalPolicySys.IsAllowed(policy.Args{
+	policyArgs := policy.Args{
 		AccountName:     accountName,
 		Action:          action,
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, locationConstraint),
 		IsOwner:         isOwner,
 		ObjectName:      objectName,
-	}) {
-		return ErrNone
+	}
+
+	globalPolicySysResult := globalPolicySys.IsAllowed(policyArgs)
+
+	// Ask OPA for a policy decision
+	if globalIsOPAEnabled {
+		if globalOpaURL == "" {
+			errMsg := errors.New("OPA URL not provided")
+			logger.LogIf(ctx, errMsg)
+			return ErrOpaPolicyDecision
+		}
+
+		opaPolicyDecision, err := getOpaPolicyDecision(policyArgs, globalOpaURL)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return ErrOpaPolicyDecision
+		}
+
+		if globalPolicySysResult && opaPolicyDecision {
+			return ErrNone
+		}
+	} else {
+		if globalPolicySysResult {
+			return ErrNone
+		}
 	}
 
 	return ErrAccessDenied
+}
+
+func getOpaPolicyDecision(policyArgs policy.Args, opaServerURL string) (bool, error) {
+
+	// OPA input
+	body := make(map[string]interface{})
+	body["input"] = policyArgs
+
+	inputBytes, oerr := json.Marshal(body)
+	if oerr != nil {
+		return false, fmt.Errorf("JSON Encoding error %v", oerr)
+	}
+
+	resp, oerr := http.Post(opaServerURL, "application/json", bytes.NewBuffer(inputBytes))
+	if oerr != nil {
+		return false, fmt.Errorf("OPA HTTP request error %v", oerr)
+	}
+
+	// handle OPA response
+	var result map[string]interface{}
+	oerr = json.NewDecoder(resp.Body).Decode(&result)
+	if oerr != nil {
+		return false, fmt.Errorf("JSON Decoding error %v", oerr)
+	}
+
+	policyResult, ok := result["result"].(bool)
+	if !ok {
+		return false, fmt.Errorf("Type assertion error")
+	}
+	return policyResult, nil
 }
 
 // Verify if request has valid AWS Signature Version '2'.

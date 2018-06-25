@@ -95,6 +95,10 @@ ENVIRONMENT VARIABLES:
      MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of Minio host public IP(s) delimited by ",".
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
 
+  OPA
+     ENABLE_OPA: To enable OPA, set this value to "on".
+     OPA_URL: URL for OPA server
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      $ {{.HelpName}} /home/shared
@@ -121,6 +125,11 @@ EXAMPLES:
      $ export MINIO_CACHE_EXPIRY=40
      $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}} /home/shared
+
+  7. Start minio server with OPA server.
+     $ export ENABLE_OPA=on
+     $ export OPA_URL=http://localhost:8181/v1/data/minio/authz/allow
+     $ {{.HelpName}}
 `,
 }
 
@@ -184,6 +193,10 @@ func serverHandleEnvVars() {
 		globalServerRegion = serverRegion
 	}
 
+	if enableOPA := os.Getenv("ENABLE_OPA"); enableOPA == "on" {
+		globalIsOPAEnabled = true
+		globalOpaURL = os.Getenv("OPA_URL")
+	}
 }
 
 // serverMain handler called for 'minio server' command.
