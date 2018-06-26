@@ -243,31 +243,40 @@ __Example__
 Start a heal sequence that scans data under given (possible empty)
 `bucket` and `prefix`. The `recursive` bool turns on recursive
 traversal under the given path. `dryRun` does not mutate on-disk data,
-but performs data validation. `incomplete` enables healing of
-multipart uploads that are in progress. `removeBadFiles` removes
-unrecoverable files. `statisticsOnly` turns off detailed
-heal-operations reporting in the status call.
+but performs data validation.
 
 Two heal sequences on overlapping paths may not be initiated.
 
-The progress of a heal should be followed using the `HealStatus`
+The progress of a heal should be followed using the same API `Heal`
+by providing the `clientToken` previously obtained from a `Heal`
 API. The server accumulates results of the heal traversal and waits
 for the client to receive and acknowledge them using the status
-API. When the statistics-only option is set, the server only maintains
-aggregates statistics - in this case, no acknowledgement of results is
-required.
+request by providing `clientToken`.
 
 __Example__
 
 ``` go
 
-    healPath, err := madmClnt.HealStart("", "", true, false, true, false, false)
+    opts := madmin.HealOpts{
+            Recursive: true,
+            DryRun:    false,
+    }
+    forceStart := false
+    healPath, err := madmClnt.Heal("", "", opts, "", forceStart)
     if err != nil {
         log.Fatalln(err)
     }
     log.Printf("Heal sequence started at %s", healPath)
 
 ```
+
+#### HealStartSuccess structure
+
+| Param | Type | Description |
+|----|--------|--------|
+| s.ClientToken | _string_ | A unique token for a successfully started heal operation, this token is used to request realtime progress of the heal operation. |
+| s.ClientAddress | _string_ | Address of the client which initiated the heal operation, the client address has the form "host:port".|
+| s.StartTime | _time.Time_ | Time when heal was initially started.|
 
 #### HealTaskStatus structure
 
@@ -277,7 +286,6 @@ __Example__
 | s.FailureDetail | _string_ | Error message in case of heal sequence failure |
 | s.HealSettings | _HealOpts_ | Contains the booleans set in the `HealStart` call |
 | s.Items | _[]HealResultItem_ | Heal records for actions performed by server |
-| s.Statistics | _HealStatistics_ | Aggregate of heal records from beginning |
 
 #### HealResultItem structure
 
@@ -290,38 +298,6 @@ __Example__
 | Detail | _string_ | Details about heal operation |
 | DiskInfo.AvailableOn | _[]int_ | List of disks on which the healed entity is present and healthy |
 | DiskInfo.HealedOn | _[]int_ | List of disks on which the healed entity was restored |
-
-#### HealStatistics structure
-
-Most parameters represent the aggregation of heal operations since the
-start of the heal sequence.
-
-| Param | Type | Description |
-|-------|-----|----------|
-| NumDisks | _int_ | Number of disks configured in the backend |
-| NumBucketsScanned | _int64_ | Number of buckets scanned |
-| BucketsMissingByDisk | _map[int]int64_ | Map of disk to number of buckets missing |
-| BucketsAvailableByDisk | _map[int]int64_ | Map of disk to number of buckets available |
-| BucketsHealedByDisk | _map[int]int64_ | Map of disk to number of buckets healed on |
-| NumObjectsScanned | _int64_ | Number of objects scanned |
-| NumUploadsScanned | _int64_ | Number of uploads scanned |
-| ObjectsByAvailablePC | _map[int64]_ | Map of available part counts (after heal) to number of objects |
-| ObjectsByHealedPC | _map[int64]_ | Map of healed part counts to number of objects |
-| ObjectsMissingByDisk | _map[int64]_ | Map of disk number to number of objects with parts missing on that disk |
-| ObjectsAvailableByDisk | _map[int64]_ | Map of disk number to number of objects available on that disk |
-| ObjectsHealedByDisk | _map[int64]_ | Map of disk number to number of objects healed on that disk |
-
-__Example__
-
-``` go
-
-    res, err := madmClnt.HealStatus("", "")
-    if err != nil {
-        log.Fatalln(err)
-    }
-    log.Printf("Heal sequence status data %#v", res)
-
-```
 
 ## 7. Config operations
 
