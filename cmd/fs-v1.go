@@ -1215,7 +1215,7 @@ func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy 
 
 // GetBucketPolicy will get policy on bucket
 func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return GetPolicyConfig(fs, bucket)
+	return getPolicyConfig(fs, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
