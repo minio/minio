@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 
+	etcd "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/logger"
@@ -1537,6 +1538,27 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		// DeleteObject is always successful irrespective of object existence.
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
+	}
+
+	if globalDNSConfig != nil {
+		_, err := globalDNSConfig.Get(bucket)
+		if err != nil {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+				writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			} else {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			}
+			return
+		}
+	} else {
+		getBucketInfo := objectAPI.GetBucketInfo
+		if api.CacheAPI() != nil {
+			getBucketInfo = api.CacheAPI().GetBucketInfo
+		}
+		if _, err := getBucketInfo(ctx, bucket); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
