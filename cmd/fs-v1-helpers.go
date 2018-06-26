@@ -199,7 +199,7 @@ func osErrToFSFileErr(err error) error {
 		return errFileAccessDenied
 	}
 	if isSysErrNotDir(err) {
-		return errFileAccessDenied
+		return errFileNotFound
 	}
 	if isSysErrPathNotFound(err) {
 		return errFileNotFound
@@ -218,8 +218,7 @@ func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 		return nil, err
 	}
 	if !fi.IsDir() {
-		logger.LogIf(ctx, errFileAccessDenied)
-		return nil, errFileAccessDenied
+		return nil, errFileNotFound
 	}
 	return fi, nil
 }
@@ -244,8 +243,7 @@ func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
 		return nil, err
 	}
 	if fi.IsDir() {
-		logger.LogIf(ctx, errFileAccessDenied)
-		return nil, errFileAccessDenied
+		return nil, errFileNotFound
 	}
 	return fi, nil
 }

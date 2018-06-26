@@ -696,7 +696,7 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return oi, toObjectErr(err, bucket)
+		return oi, err
 	}
 
 	if strings.HasSuffix(object, slashSeparator) && !fs.isObjectDir(bucket, object) {

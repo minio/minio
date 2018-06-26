@@ -136,7 +136,7 @@ func TestFSStats(t *testing.T) {
 			srcFSPath:   path,
 			srcVol:      "success-vol",
 			srcPath:     "path",
-			expectedErr: errFileAccessDenied,
+			expectedErr: errFileNotFound,
 		},
 		// Test case - 6.
 		// Test case with src path segment > 255.
