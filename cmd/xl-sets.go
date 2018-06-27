@@ -476,7 +476,7 @@ func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *pol
 
 // GetBucketPolicy will return a policy on a bucket
 func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return GetPolicyConfig(s, bucket)
+	return getPolicyConfig(s, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket

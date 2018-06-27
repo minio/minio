@@ -17,12 +17,9 @@
 package nas
 
 import (
-	"context"
-
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/policy"
 )
 
 const (
@@ -127,9 +124,4 @@ type nasObjects struct {
 // IsNotificationSupported returns whether notifications are applicable for this layer.
 func (l *nasObjects) IsNotificationSupported() bool {
 	return false
-}
-
-// GetBucketPolicy will get policy on bucket
-func (l *nasObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return minio.GetPolicyConfig(l, bucket)
 }
