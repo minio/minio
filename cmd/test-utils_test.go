@@ -188,7 +188,7 @@ func prepareXL32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 2, 16)
+	format, err := waitForInitXL(context.Background(), true, endpoints, 2, 16)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -1694,7 +1694,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	_, err = waitForFormatXL(context.Background(), endpoints[0].IsLocal, endpoints, 1, 16)
+	_, err = waitForInitXL(context.Background(), endpoints[0].IsLocal, endpoints, 1, 16)
 	if err != nil {
 		return nil, err
 	}

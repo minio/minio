@@ -120,15 +120,18 @@ var errXLV3ThisEmpty = fmt.Errorf("XL format version 3 has This field empty")
 // connect to list of endpoints and load all XL disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, drivesPerSet int) (*formatXLV3, error) {
+func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, drivesPerSet int) (*formatXLV3, *sysInfoConfig, error) {
 	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer closeStorageDisks(storageDisks)
 
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatXLAll(storageDisks)
+
+	// Attempt to load `sysinfo.json` from all disks.
+	sysInfoConfigs, sysInfoErrs := loadSysInfoXLAll(storageDisks)
 
 	// Pre-emptively check if one of the formatted disks
 	// is invalid. This function returns success for the
@@ -136,30 +139,65 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 	// with expected XL format. For example if a user is
 	// trying to pool FS backend into an XL set.
 	if err = checkFormatXLValues(formatConfigs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
-			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
+			return nil, nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
 		}
 	}
+	for i, sErr := range sysInfoErrs {
+		if _, ok := formatCriticalErrors[sErr]; ok {
+			return nil, nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
+		}
+	}
+	var sysinfo *sysInfoConfig
+
+	var format *formatXLV3
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitXLDisks(sErrs) && firstDisk {
-		return initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
+		format, err = initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
+	if firstDisk && shouldCreateSysInfoConfig(sysInfoErrs) {
+		sysinfo, err = initSysInfoXL(context.Background(), storageDisks, setCount, drivesPerSet)
+		if format != nil {
+			return format, sysinfo, err
+		}
+	}
+
+	if shouldWaitonCreateSysInfoConfig(sysInfoConfigs) {
+		if firstDisk {
+			return nil, nil, errFirstDiskWait
+		}
+		return nil, nil, errNotFirstDisk
+	}
 	// Return error when quorum unformatted disks - indicating we are
 	// waiting for first server to be online.
 	if quorumUnformattedDisks(sErrs) && !firstDisk {
-		return nil, errNotFirstDisk
+		return nil, nil, errNotFirstDisk
 	}
 
 	// Return error when quorum unformatted disks but waiting for rest
 	// of the servers to be online.
 	if quorumUnformattedDisks(sErrs) && firstDisk {
-		return nil, errFirstDiskWait
+		return nil, nil, errFirstDiskWait
+	}
+
+	// Return error when quorum unformatted disks - indicating we are
+	// waiting for first server to be online.
+	if quorumUnformattedDisks(sysInfoErrs) && !firstDisk {
+		return nil, nil, errNotFirstDisk
+	}
+
+	// Return error when quorum unformatted disks but waiting for rest
+	// of the servers to be online.
+	if quorumUnformattedDisks(sysInfoErrs) && firstDisk {
+		return nil, nil, errFirstDiskWait
 	}
 
 	// Following function is added to fix a regressions which was introduced
@@ -168,29 +206,34 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 	// the disk UUID association. Below function is called to handle and fix
 	// this regression, for more info refer https://github.com/minio/minio/issues/5667
 	if err = fixFormatXLV3(storageDisks, endpoints, formatConfigs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// If any of the .This field is still empty, we return error.
 	if formatXLV3ThisEmpty(formatConfigs) {
-		return nil, errXLV3ThisEmpty
+		return nil, nil, errXLV3ThisEmpty
 	}
 
-	format, err := getFormatXLInQuorum(formatConfigs)
+	format, err = getFormatXLInQuorum(formatConfigs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	sysinfo, err = getSysInfoXLInQuorum(sysInfoConfigs)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Validate all format configs with reference format.
 	if err = validateXLFormats(format, formatConfigs, endpoints, setCount, drivesPerSet); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return format, nil
+	return format, sysinfo, nil
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func waitForInitXL(ctx context.Context, firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
 		return nil, errInvalidArgument
 	}
@@ -222,7 +265,7 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 	for {
 		select {
 		case _ = <-retryTimerCh:
-			format, err := connectLoadInitFormats(firstDisk, endpoints, setCount, disksPerSet)
+			format, _, err := connectLoadInitFormats(firstDisk, endpoints, setCount, disksPerSet)
 			if err != nil {
 				switch err {
 				case errNotFirstDisk:

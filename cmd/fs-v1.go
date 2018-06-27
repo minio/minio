@@ -58,6 +58,9 @@ type FSObjects struct {
 	// This value shouldn't be touched, once initialized.
 	fsFormatRlk *lock.RLockedFile // Is a read lock on `format.json`.
 
+	// This value shouldn't be touched, once initialized.
+	fsSysInfoRlk *lock.RLockedFile // Is a read lock on `sysinfo.json`.
+
 	// FS rw pool.
 	rwPool *fsIOPool
 
@@ -127,6 +130,12 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
+	// Initialize `sysinfo.json`, this function also returns.
+	sysInfoRlk, err := initSysInfoFS(ctx, fsPath)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize fs objects.
 	fs := &FSObjects{
 		fsPath:       fsPath,
@@ -145,6 +154,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// shared backend mode for FS, remote servers do not migrate
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
+	fs.fsSysInfoRlk = sysInfoRlk
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(fs); err != nil {
@@ -166,6 +176,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 // Shutdown - should be called when process shuts down.
 func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	fs.fsFormatRlk.Close()
+	fs.fsSysInfoRlk.Close()
 
 	// Cleanup and delete tmp uuid.
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))

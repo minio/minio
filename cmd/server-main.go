@@ -338,7 +338,7 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	format, err := waitForFormatXL(context.Background(), endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
+	format, err := waitForInitXL(context.Background(), endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
 	if err != nil {
 		return nil, err
 	}

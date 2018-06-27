@@ -70,6 +70,13 @@ type RemoveBucketPolicyArgs struct {
 	BucketName string
 }
 
+// GetSysInfo - Gets system info of the individual node.
+func (receiver *peerRPCReceiver) GetSysInfo(args *AuthArgs, sysinfo *ServerSystemInfoData) error {
+	systeminfo, err := localServerSystemInfo()
+	*sysinfo = systeminfo
+	return err
+}
+
 // RemoveBucketPolicy - handles delete bucket policy RPC call which removes bucket policy to globalPolicySys.
 func (receiver *peerRPCReceiver) RemoveBucketPolicy(args *RemoveBucketPolicyArgs, reply *VoidReply) error {
 	globalPolicySys.Remove(args.BucketName)
