@@ -83,4 +83,4 @@ docker volume rm volume_name
 - [Docker Swarm mode概述](https://docs.docker.com/engine/swarm/)
 - [Minio Docker快速入门](https://docs.minio.io/docs/zh_CN/minio-docker-quickstart-guide)
 - [使用Docker Compose部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-compose)
-- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+- [Minio纠删码快速入门](https://github.com/ibyte2011/minio/tree/master/docs/zh_CN/erasure)
