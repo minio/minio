@@ -25,14 +25,35 @@ import web from "../web"
 import { Redirect } from "react-router-dom"
 
 export class Login extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      accessKey: "",
+      secretKey: ""
+    }
+  }
+
+  // Handle field changes
+  accessKeyChange(e) {
+    this.setState({
+      accessKey: e.target.value
+    })
+  }
+
+  secretKeyChange(e) {
+    this.setState({
+      secretKey: e.target.value
+    })
+  }
+
   handleSubmit(event) {
     event.preventDefault()
     const { showAlert, history } = this.props
     let message = ""
-    if (!document.getElementById("accessKey").value) {
+    if (this.state.accessKey === "") {
       message = "Access Key cannot be empty"
     }
-    if (!document.getElementById("secretKey").value) {
+    if (this.state.secretKey === "") {
       message = "Secret Key cannot be empty"
     }
     if (message) {
@@ -41,8 +62,8 @@ export class Login extends React.Component {
     }
     web
       .Login({
-        username: document.getElementById("accessKey").value,
-        password: document.getElementById("secretKey").value
+        username: this.state.accessKey,
+        password: this.state.secretKey
       })
       .then(res => {
         history.push("/")
@@ -77,6 +98,8 @@ export class Login extends React.Component {
         <div className="l-wrap">
           <form onSubmit={this.handleSubmit.bind(this)}>
             <InputGroup
+              value={this.state.accessKey}
+              onChange={this.accessKeyChange.bind(this)}
               className="ig-dark"
               label="Access Key"
               id="accessKey"
@@ -87,6 +110,8 @@ export class Login extends React.Component {
               autoComplete="username"
             />
             <InputGroup
+              value={this.state.secretKey}
+              onChange={this.secretKeyChange.bind(this)}
               className="ig-dark"
               label="Secret Key"
               id="secretKey"
