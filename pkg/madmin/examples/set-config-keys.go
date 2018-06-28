@@ -20,14 +20,16 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func main() {
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
+	// dummy values, please replace them with original values.
+
 	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
 	// dummy values, please replace them with original values.
 
@@ -38,17 +40,14 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	configBytes, err := madmClnt.GetConfig()
+	err = madmClnt.SetConfigKeys(map[string]string{
+		"domain":           "example.com",
+		"notify.webhook.1": "{\"enable\": true, \"endpoint\": \"http://example.com/api/object-notifications\"}",
+	})
+
 	if err != nil {
-		log.Fatalf("failed due to: %v", err)
+		log.Fatalln(err)
 	}
 
-	// Pretty-print config received as json.
-	var buf bytes.Buffer
-	err = json.Indent(&buf, configBytes, "", "\t")
-	if err != nil {
-		log.Fatalf("failed due to: %v", err)
-	}
-
-	log.Println("config received successfully: ", string(buf.Bytes()))
+	fmt.Println("Setting new configuration successfully executed.")
 }
