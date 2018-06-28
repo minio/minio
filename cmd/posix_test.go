@@ -1948,7 +1948,7 @@ func TestCheckDiskTotalMin(t *testing.T) {
 				FSType: "XFS",
 				Files:  9999,
 			},
-			err: errDiskFull,
+			err: errMinDiskSize,
 		},
 	}
 
