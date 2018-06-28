@@ -226,7 +226,7 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	select {
 	case <-ch:
-		// Signalled so all is fine.
+		// Signaled so all is fine.
 		break
 
 	case <-time.After(100 * time.Millisecond):

@@ -238,7 +238,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 			pipeWriter.CloseWithError(err)
 			return
 		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 	err = dcache.Put(ctx, bucket, object, hashReader, c.getMetadata(objInfo))
 	if err != nil {

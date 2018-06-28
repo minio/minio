@@ -463,7 +463,7 @@ func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string
 		logger.LogIf(ctx, err)
 		return err
 	}
-	// Persist marshalled data.
+	// Persist marshaled data.
 	err = disk.AppendFile(bucket, jsonFile, metadataBytes)
 	logger.LogIf(ctx, err)
 	return err

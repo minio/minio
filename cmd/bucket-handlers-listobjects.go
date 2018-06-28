@@ -100,7 +100,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
-	// marshalled into S3 compatible XML header.
+	// marshaled into S3 compatible XML header.
 	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, marker, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -166,7 +166,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
-	// marshalled into S3 compatible XML header.
+	// marshaled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

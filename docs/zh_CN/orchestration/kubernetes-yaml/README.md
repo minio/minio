@@ -202,7 +202,7 @@ kubectl delete deployment minio-deployment \
 
 ## Minio分布式服务部署
 
-以下文档介绍了在Kubernetes上部署[分布式Minio](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide)服务器的过程。 本示例使用Docker Hub的[官方Minio Docker镜像](https://hub.docker.com/r/minio/minio/~/dockerfile/)。
+以下文档介绍了在Kubernetes上部署[分布式Minio](https://docs.minio.io/cn/distributed-minio-quickstart-guide)服务器的过程。 本示例使用Docker Hub的[官方Minio Docker镜像](https://hub.docker.com/r/minio/minio/~/dockerfile/)。
 
 此示例使用以下Kubernetes的核心组件：
 

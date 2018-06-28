@@ -36,19 +36,19 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 #### List of Amazon S3 Bucket API's not supported on Minio
 
-- BucketACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- BucketACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
 - BucketLifecycle (Not required for Minio erasure coded backend)
-- BucketReplication (Use [`mc mirror`](http://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
+- BucketReplication (Use [`mc mirror`](https://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
 - BucketVersions, BucketVersioning (Use [`s3git`](https://github.com/s3git/s3git))
 - BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](http://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
+- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment
 - BucketTagging
 
 #### List of Amazon S3 Object API's not supported on Minio
 
-- ObjectACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- ObjectACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent
 - ObjectVersions
 

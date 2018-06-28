@@ -142,7 +142,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 
 	hashReader, err := hash.NewReader(pipeReader, length, "", "")
