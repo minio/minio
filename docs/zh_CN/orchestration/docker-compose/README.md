@@ -46,4 +46,4 @@ docker-compose.exe up
 - [Docker Compose概述](https://docs.docker.com/compose/overview/)
 - [Minio Docker快速入门](https://docs.minio.io/docs/zh_CN/minio-docker-quickstart-guide)
 - [使用Docker Swarm部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)
-- [Minio纠删码快速入门](https://github.com/ibyte2011/minio/tree/master/docs/zh_CN/erasure)
+- [Minio纠删码快速入门](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure)
