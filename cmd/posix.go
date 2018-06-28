@@ -61,10 +61,8 @@ func isValidVolname(volname string) bool {
 // posix - implements StorageAPI interface.
 type posix struct {
 	// Disk usage metrics
-	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	// Disk usage running routine
-	usageRunning int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	ioErrCount   int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	totalUsed  uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	ioErrCount int32  // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
 	diskPath  string
 	pool      sync.Pool
@@ -347,8 +345,12 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 
 	usageFn := func(ctx context.Context, entry string) error {
 		if globalHTTPServer != nil {
+			// Wait at max 1 minute for an inprogress request
+			// before proceeding to count the usage.
+			waitCount := 60
 			// Any requests in progress, delay the usage.
-			for globalHTTPServer.GetRequestCount() > 0 {
+			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+				waitCount--
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -368,17 +370,11 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 		}
 	}
 
-	// Check if disk usage routine is running, if yes then return.
-	if atomic.LoadInt32(&s.usageRunning) == 1 {
+	// Return this routine upon errWalkAbort, continue for any other error on purpose
+	// so that we can start the routine freshly in another 12 hours.
+	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err == errWalkAbort {
 		return
 	}
-	atomic.StoreInt32(&s.usageRunning, 1)
-	defer atomic.StoreInt32(&s.usageRunning, 0)
-
-	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
-		return
-	}
-	atomic.StoreInt32(&s.usageRunning, 0)
 
 	for {
 		select {
@@ -386,19 +382,16 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 			return
 		case <-doneCh:
 			return
-		case <-ticker.C:
-			// Check if disk usage routine is running, if yes let it
-			// finish, before starting a new one.
-			if atomic.LoadInt32(&s.usageRunning) == 1 {
-				continue
-			}
-			atomic.StoreInt32(&s.usageRunning, 1)
-
+		case <-time.After(globalUsageCheckInterval):
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
 				if globalHTTPServer != nil {
+					// Wait at max 1 minute for an inprogress request
+					// before proceeding to count the usage.
+					waitCount := 60
 					// Any requests in progress, delay the usage.
-					for globalHTTPServer.GetRequestCount() > 0 {
+					for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+						waitCount--
 						time.Sleep(1 * time.Second)
 					}
 				}
@@ -417,11 +410,9 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 			}
 
 			if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
-				atomic.StoreInt32(&s.usageRunning, 0)
 				continue
 			}
 
-			atomic.StoreInt32(&s.usageRunning, 0)
 			atomic.StoreUint64(&s.totalUsed, usage)
 		}
 	}
