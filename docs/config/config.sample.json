@@ -6,6 +6,7 @@
     },
     "region": "us-east-1",
     "browser": "on",
+    "worm": "off",
     "domain": "",
     "storageclass": {
         "standard": "",
@@ -18,7 +19,7 @@
     },
     "usage": {
         "interval": "3h"
-    }
+    },
     "notify": {
         "amqp": {
             "1": {
