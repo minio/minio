@@ -224,7 +224,7 @@ func checkDiskMinTotal(di disk.Info) (err error) {
 	// used for journalling, inodes etc.
 	totalDiskSpace := float64(di.Total) * 0.95
 	if int64(totalDiskSpace) <= diskMinTotalSpace {
-		return errDiskFull
+		return errMinDiskSize
 	}
 	return nil
 }

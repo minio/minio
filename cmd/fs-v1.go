@@ -112,6 +112,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	var err error
 	if fsPath, err = getValidPath(fsPath); err != nil {
+		if err == errMinDiskSize {
+			return nil, err
+		}
 		return nil, uiErrUnableToWriteInBackend(err)
 	}
 
