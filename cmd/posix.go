@@ -34,6 +34,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mountinfo"
 )
 
 const (
@@ -68,6 +69,8 @@ type posix struct {
 	diskPath  string
 	pool      sync.Pool
 	connected bool
+
+	diskMount bool // indicates if the path is an actual mount.
 
 	// Disk usage metrics
 	stopUsageCh chan struct{}
@@ -183,9 +186,12 @@ func newPosix(path string) (*posix, error) {
 			},
 		},
 		stopUsageCh: make(chan struct{}),
+		diskMount:   mountinfo.IsLikelyMountPoint(path),
 	}
 
-	go p.diskUsage(globalServiceDoneCh)
+	if !p.diskMount {
+		go p.diskUsage(globalServiceDoneCh)
+	}
 
 	// Success.
 	return p, nil
@@ -293,10 +299,14 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
+	used := di.Total - di.Free
+	if !s.diskMount {
+		used = atomic.LoadUint64(&s.totalUsed)
+	}
 	return DiskInfo{
 		Total: di.Total,
 		Free:  di.Free,
-		Used:  atomic.LoadUint64(&s.totalUsed),
+		Used:  used,
 	}, nil
 
 }
@@ -336,7 +346,16 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 	defer ticker.Stop()
 
 	usageFn := func(ctx context.Context, entry string) error {
+		if globalHTTPServer != nil {
+			// Any requests in progress, delay the usage.
+			for globalHTTPServer.GetRequestCount() > 0 {
+				time.Sleep(1 * time.Second)
+			}
+		}
+
 		select {
+		case <-doneCh:
+			return errWalkAbort
 		case <-s.stopUsageCh:
 			return errWalkAbort
 		default:
@@ -377,6 +396,13 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
+				if globalHTTPServer != nil {
+					// Any requests in progress, delay the usage.
+					for globalHTTPServer.GetRequestCount() > 0 {
+						time.Sleep(1 * time.Second)
+					}
+				}
+
 				select {
 				case <-s.stopUsageCh:
 					return errWalkAbort

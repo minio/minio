@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/mountinfo"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -63,6 +64,8 @@ type FSObjects struct {
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
+
+	diskMount bool
 
 	appendFileMap   map[string]*fsAppendFile
 	appendFileMapMu sync.Mutex
@@ -138,6 +141,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		nsMutex:       newNSLock(false),
 		listPool:      newTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
+		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -156,7 +160,10 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
 	}
 
-	go fs.diskUsage(globalServiceDoneCh)
+	if !fs.diskMount {
+		go fs.diskUsage(globalServiceDoneCh)
+	}
+
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
@@ -177,17 +184,29 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 	defer ticker.Stop()
 
 	usageFn := func(ctx context.Context, entry string) error {
-		var fi os.FileInfo
-		var err error
-		if hasSuffix(entry, slashSeparator) {
-			fi, err = fsStatDir(ctx, entry)
-		} else {
-			fi, err = fsStatFile(ctx, entry)
+		if globalHTTPServer != nil {
+			// Any requests in progress, delay the usage.
+			for globalHTTPServer.GetRequestCount() > 0 {
+				time.Sleep(1 * time.Second)
+			}
 		}
-		if err != nil {
-			return err
+
+		select {
+		case <-doneCh:
+			return errWalkAbort
+		default:
+			var fi os.FileInfo
+			var err error
+			if hasSuffix(entry, slashSeparator) {
+				fi, err = fsStatDir(ctx, entry)
+			} else {
+				fi, err = fsStatFile(ctx, entry)
+			}
+			if err != nil {
+				return err
+			}
+			atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
 		}
-		atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
 		return nil
 	}
 
@@ -216,6 +235,13 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
+				if globalHTTPServer != nil {
+					// Any requests in progress, delay the usage.
+					for globalHTTPServer.GetRequestCount() > 0 {
+						time.Sleep(1 * time.Second)
+					}
+				}
+
 				var fi os.FileInfo
 				var err error
 				if hasSuffix(entry, slashSeparator) {
@@ -243,8 +269,16 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
+	di, err := getDiskInfo(fs.fsPath)
+	if err != nil {
+		return StorageInfo{}
+	}
+	used := di.Total - di.Free
+	if !fs.diskMount {
+		used = atomic.LoadUint64(&fs.totalUsed)
+	}
 	storageInfo := StorageInfo{
-		Used: atomic.LoadUint64(&fs.totalUsed),
+		Used: used,
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo
