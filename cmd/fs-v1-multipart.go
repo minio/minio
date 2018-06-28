@@ -264,7 +264,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 			}
 			return
 		}
-		// Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signaling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
 			logger.LogIf(ctx, gerr)
 			return

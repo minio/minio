@@ -50,9 +50,11 @@ deadcode:
 	@${GOPATH}/bin/deadcode -test $(shell go list ./...) || true
 
 spelling:
-	@${GOPATH}/bin/misspell -error `find cmd/`
-	@${GOPATH}/bin/misspell -error `find pkg/`
-	@${GOPATH}/bin/misspell -error `find docs/`
+	@${GOPATH}/bin/misspell -locale US -error `find cmd/`
+	@${GOPATH}/bin/misspell -locale US -error `find pkg/`
+	@${GOPATH}/bin/misspell -locale US -error `find docs/`
+	@${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
+	@${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
 
 # Builds minio, runs the verifiers then runs the tests.
 check: test

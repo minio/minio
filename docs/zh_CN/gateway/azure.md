@@ -41,7 +41,7 @@ mc ls myazure
 [限制](https://github.com/minio/minio/blob/master/docs/gateway/azure-limitations.md)
 
 ## 了解更多
-- [`mc` 命令行接口](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)
-- [`aws` 命令行接口](https://docs.minio.io/docs/zh_CN/aws-cli-with-minio)
-- [`minfs` 文件系统接口](http://docs.minio.io/docs/zh_CN/minfs-quickstart-guide)
-- [`minio-go` Go SDK](https://docs.minio.io/docs/zh_CN/golang-client-quickstart-guide)
+- [`mc` 命令行接口](https://docs.minio.io/cn/minio-client-quickstart-guide)
+- [`aws` 命令行接口](https://docs.minio.io/cn/aws-cli-with-minio)
+- [`minfs` 文件系统接口](https://docs.minio.io/cn/minfs-quickstart-guide)
+- [`minio-go` Go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)

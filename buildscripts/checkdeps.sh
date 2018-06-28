@@ -34,7 +34,7 @@ _init() {
 
 ## FIXME:
 ## In OSX, 'readlink -f' option does not exist, hence
-## we have our own readlink -f behaviour here.
+## we have our own readlink -f behavior here.
 ## Once OSX has the option, below function is good enough.
 ## 
 ## readlink() {

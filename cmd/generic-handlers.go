@@ -688,7 +688,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 // rate.Limiter token bucket configured with maxOpenFileLimit and
 // burst set to 1. The request will idle for up to 1*time.Second.
 // If the limiter detects the deadline will be exceeded, the request is
-// cancelled immediately.
+// canceled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
 	logger.FatalIf(err, "Unable to get maximum open file limit", context.Background())

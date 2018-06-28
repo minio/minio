@@ -57,7 +57,7 @@ const (
 var (
 	errHealIdleTimeout      = fmt.Errorf("healing results were not consumed for too long")
 	errHealPushStopNDiscard = fmt.Errorf("heal push stopped due to heal stop signal")
-	errHealStopSignalled    = fmt.Errorf("heal stop signalled")
+	errHealStopSignalled    = fmt.Errorf("heal stop signaled")
 
 	errFnHealFromAPIErr = func(err error) error {
 		errCode := toAPIErrorCode(err)
@@ -301,7 +301,7 @@ type healSequence struct {
 	// current accumulated status of the heal sequence
 	currentStatus healSequenceStatus
 
-	// channel signalled by background routine when traversal has
+	// channel signaled by background routine when traversal has
 	// completed
 	traverseAndHealDoneCh chan error
 
@@ -441,7 +441,7 @@ func (h *healSequence) pushHealResultItem(r madmin.HealResultItem) error {
 	h.currentStatus.updateLock.Unlock()
 
 	// This is a "safe" point for the heal sequence to quit if
-	// signalled externally.
+	// signaled externally.
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}

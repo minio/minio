@@ -59,7 +59,7 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	// Return the JSON marshalled bytes to user.
+	// Return the JSON marshaled bytes to user.
 	return ioutil.ReadAll(resp.Body)
 }
 
