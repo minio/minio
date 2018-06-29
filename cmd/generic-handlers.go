@@ -688,7 +688,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 // rate.Limiter token bucket configured with maxOpenFileLimit and
 // burst set to 1. The request will idle for up to 1*time.Second.
 // If the limiter detects the deadline will be exceeded, the request is
-// cancelled immediately.
+// canceled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
 	logger.FatalIf(err, "Unable to get maximum open file limit", context.Background())
@@ -737,4 +737,21 @@ func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	header.Set("X-XSS-Protection", "1; mode=block")                  // Prevents against XSS attacks
 	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
 	s.handler.ServeHTTP(w, r)
+}
+
+// criticalErrorHandler handles critical server failures caused by
+// `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
+//
+// It should be always the first / highest HTTP handler.
+type criticalErrorHandler struct{ handler http.Handler }
+
+func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if err := recover(); err == logger.ErrCritical { // handle
+			writeErrorResponse(w, ErrInternalError, r.URL)
+		} else if err != nil {
+			panic(err) // forward other panic calls
+		}
+	}()
+	h.handler.ServeHTTP(w, r)
 }

@@ -20,7 +20,7 @@ Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬
 
 ### 1. 前提条件:
 
-安装Minio- [Minio快速入门](https://docs.minio.io/docs/zh_CN/minio-quickstart-guide)
+安装Minio- [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide)
 
 ### 2. 以纠删码模式运行Minio
 

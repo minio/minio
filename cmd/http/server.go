@@ -59,7 +59,12 @@ type Server struct {
 	listenerMutex          *sync.Mutex   // to guard 'listener' field.
 	listener               *httpListener // HTTP listener for all 'Addrs' field.
 	inShutdown             uint32        // indicates whether the server is in shutdown or not
-	requestCount           int32         // counter holds no. of request in process.
+	requestCount           int32         // counter holds no. of request in progress.
+}
+
+// GetRequestCount - returns number of request in progress.
+func (srv *Server) GetRequestCount() int32 {
+	return atomic.LoadInt32(&srv.requestCount)
 }
 
 // Start - start HTTP server

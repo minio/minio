@@ -277,7 +277,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 			}
 			return
 		}
-		// Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signaling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
 			logger.LogIf(ctx, gerr)
 			return
@@ -482,7 +482,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 // to indicate where the listing should begin from.
 //
 // Implements S3 compatible ListObjectParts API. The resulting
-// ListPartsInfo structure is marshalled directly into XML and
+// ListPartsInfo structure is marshaled directly into XML and
 // replied back to the client.
 func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
 	if err := checkListPartsArgs(ctx, bucket, object, xl); err != nil {

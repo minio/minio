@@ -10,7 +10,7 @@ minio server --config-dir /etc/minio /data
 ```
 
 ### Certificate Directory
-TLS certificates are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](http://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS certificates are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
 Following is the directory structure for Minio server with TLS certificates.
 
@@ -115,15 +115,15 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 |Field|Type|Description|
 |:---|:---|:---|
 |``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
-|``notify.amqp``| |[Configure to publish Minio events via AMQP target.](http://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
-|``notify.nats``| |[Configure to publish Minio events via NATS target.](http://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
-|``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
-|``notify.redis``| |[Configure to publish Minio events via Redis target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
-|``notify.postgresql``| |[Configure to publish Minio events via PostgreSQL target.](http://docs.minio.io/docs/minio-bucket-notification-guide#PostgreSQL)|
-|``notify.kafka``| |[Configure to publish Minio events via Apache Kafka target.](http://docs.minio.io/docs/minio-bucket-notification-guide#apache-kafka)|
-|``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](http://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
+|``notify.amqp``| |[Configure to publish Minio events via AMQP target.](https://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
+|``notify.nats``| |[Configure to publish Minio events via NATS target.](https://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
+|``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](https://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
+|``notify.redis``| |[Configure to publish Minio events via Redis target.](https://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
+|``notify.postgresql``| |[Configure to publish Minio events via PostgreSQL target.](https://docs.minio.io/docs/minio-bucket-notification-guide#PostgreSQL)|
+|``notify.kafka``| |[Configure to publish Minio events via Apache Kafka target.](https://docs.minio.io/docs/minio-bucket-notification-guide#apache-kafka)|
+|``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](https://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
 |``notify.mysql``| |[Configure to publish Minio events via MySql target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MySQL)|
-|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](http://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
+|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
 
 ## Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)

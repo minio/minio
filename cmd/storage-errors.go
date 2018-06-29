@@ -76,6 +76,9 @@ var errBitrotHashAlgoInvalid = errors.New("bit-rot hash algorithm is invalid")
 // errCrossDeviceLink - rename across devices not allowed.
 var errCrossDeviceLink = errors.New("Rename across devices not allowed, please fix your backend configuration")
 
+// errMinDiskSize - cannot create volume or files when disk size is less than threshold.
+var errMinDiskSize = errors.New("The disk size is less than the minimum threshold")
+
 // hashMisMatchError - represents a bit-rot hash verification failure
 // error.
 type hashMismatchError struct {

@@ -82,6 +82,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
@@ -118,6 +119,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}} /home/shared
 `,
 }
@@ -286,7 +288,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, getCert)
+	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {

@@ -205,6 +205,16 @@ func handleCommonEnvVars() {
 		globalCacheExpiry = expiry
 	}
 
+	if maxUseStr := os.Getenv("MINIO_CACHE_MAXUSE"); maxUseStr != "" {
+		maxUse, err := strconv.Atoi(maxUseStr)
+		if err != nil {
+			logger.Fatal(uiErrInvalidCacheMaxUse(err), "Unable to parse MINIO_CACHE_MAXUSE value (`%s`)", maxUseStr)
+		}
+		// maxUse should be a valid percentage.
+		if maxUse > 0 && maxUse <= 100 {
+			globalCacheMaxUse = maxUse
+		}
+	}
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.

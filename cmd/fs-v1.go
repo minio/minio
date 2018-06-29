@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/mountinfo"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -44,8 +45,6 @@ var defaultEtag = "00000000000000000000000000000000-1"
 type FSObjects struct {
 	// Disk usage metrics
 	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	// Disk usage running routine
-	usageRunning int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
 	// Path to be exported over S3 API.
 	fsPath string
@@ -63,6 +62,8 @@ type FSObjects struct {
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
+
+	diskMount bool
 
 	appendFileMap   map[string]*fsAppendFile
 	appendFileMapMu sync.Mutex
@@ -109,6 +110,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	var err error
 	if fsPath, err = getValidPath(fsPath); err != nil {
+		if err == errMinDiskSize {
+			return nil, err
+		}
 		return nil, uiErrUnableToWriteInBackend(err)
 	}
 
@@ -138,6 +142,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		nsMutex:       newNSLock(false),
 		listPool:      newTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
+		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -156,7 +161,10 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
 	}
 
-	go fs.diskUsage(globalServiceDoneCh)
+	if !fs.diskMount {
+		go fs.diskUsage(globalServiceDoneCh)
+	}
+
 	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
@@ -173,32 +181,40 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 
 // diskUsage returns du information for the posix path, in a continuous routine.
 func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
-	ticker := time.NewTicker(globalUsageCheckInterval)
-	defer ticker.Stop()
-
 	usageFn := func(ctx context.Context, entry string) error {
-		var fi os.FileInfo
-		var err error
-		if hasSuffix(entry, slashSeparator) {
-			fi, err = fsStatDir(ctx, entry)
-		} else {
-			fi, err = fsStatFile(ctx, entry)
+		if globalHTTPServer != nil {
+			// Wait at max 1 minute for an inprogress request
+			// before proceeding to count the usage.
+			waitCount := 60
+			// Any requests in progress, delay the usage.
+			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
 		}
-		if err != nil {
-			return err
+
+		select {
+		case <-doneCh:
+			return errWalkAbort
+		default:
+			var fi os.FileInfo
+			var err error
+			if hasSuffix(entry, slashSeparator) {
+				fi, err = fsStatDir(ctx, entry)
+			} else {
+				fi, err = fsStatFile(ctx, entry)
+			}
+			if err != nil {
+				return err
+			}
+			atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
 		}
-		atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
 		return nil
 	}
 
-	// Check if disk usage routine is running, if yes then return.
-	if atomic.LoadInt32(&fs.usageRunning) == 1 {
-		return
-	}
-	atomic.StoreInt32(&fs.usageRunning, 1)
-	defer atomic.StoreInt32(&fs.usageRunning, 0)
-
-	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
+	// Return this routine upon errWalkAbort, continue for any other error on purpose
+	// so that we can start the routine freshly in another 12 hours.
+	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err == errWalkAbort {
 		return
 	}
 
@@ -206,15 +222,20 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 		select {
 		case <-doneCh:
 			return
-		case <-ticker.C:
-			// Check if disk usage routine is running, if yes let it finish.
-			if atomic.LoadInt32(&fs.usageRunning) == 1 {
-				continue
-			}
-			atomic.StoreInt32(&fs.usageRunning, 1)
-
+		case <-time.After(globalUsageCheckInterval):
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
+				if globalHTTPServer != nil {
+					// Wait at max 1 minute for an inprogress request
+					// before proceeding to count the usage.
+					waitCount := 60
+					// Any requests in progress, delay the usage.
+					for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+						waitCount--
+						time.Sleep(1 * time.Second)
+					}
+				}
+
 				var fi os.FileInfo
 				var err error
 				if hasSuffix(entry, slashSeparator) {
@@ -230,11 +251,8 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 			}
 
 			if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
-				atomic.StoreInt32(&fs.usageRunning, 0)
 				continue
 			}
-
-			atomic.StoreInt32(&fs.usageRunning, 0)
 			atomic.StoreUint64(&fs.totalUsed, usage)
 		}
 	}
@@ -242,8 +260,16 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
+	di, err := getDiskInfo(fs.fsPath)
+	if err != nil {
+		return StorageInfo{}
+	}
+	used := di.Total - di.Free
+	if !fs.diskMount {
+		used = atomic.LoadUint64(&fs.totalUsed)
+	}
 	storageInfo := StorageInfo{
-		Used: atomic.LoadUint64(&fs.totalUsed),
+		Used: used,
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo
@@ -479,7 +505,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			}
 			return
 		}
-		// Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signaling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
 			logger.LogIf(ctx, gerr)
 			return
@@ -695,7 +721,7 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return oi, toObjectErr(err, bucket)
+		return oi, err
 	}
 
 	if strings.HasSuffix(object, slashSeparator) && !fs.isObjectDir(bucket, object) {
@@ -1214,7 +1240,7 @@ func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy 
 
 // GetBucketPolicy will get policy on bucket
 func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return GetPolicyConfig(fs, bucket)
+	return getPolicyConfig(fs, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket

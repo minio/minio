@@ -50,6 +50,6 @@ minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/te
 ![示例3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)
 
 ## 云端可伸缩部署
-对于大型多租户Minio部署，我们建议使用一个流行的容器编排平台，比如Kubernetes、DC/OS，或者是Docker Swarm.参考 [这个文档](https://docs.minio.io/docs/zh_CN/minio-deployment-quickstart-guide) ,学习如何在编排平台中使用Minio。
+对于大型多租户Minio部署，我们建议使用一个流行的容器编排平台，比如Kubernetes、DC/OS，或者是Docker Swarm.参考 [这个文档](https://docs.minio.io/cn/minio-deployment-quickstart-guide) ,学习如何在编排平台中使用Minio。
 
 

@@ -1,7 +1,7 @@
 // +build linux
 
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -34,6 +35,27 @@ const (
 	// Location of the mount file to use
 	procMountsPath = "/proc/mounts"
 )
+
+// IsLikelyMountPoint determines if a directory is a mountpoint.
+// It is fast but not necessarily ALWAYS correct. If the path is in fact
+// a bind mount from one part of a mount to another it will not be detected.
+// mkdir /tmp/a /tmp/b; mount --bin /tmp/a /tmp/b; IsLikelyMountPoint("/tmp/b")
+// will return false. When in fact /tmp/b is a mount point. If this situation
+// if of interest to you, don't use this function...
+func IsLikelyMountPoint(file string) bool {
+	stat, err := os.Stat(file)
+	if err != nil {
+		return false
+	}
+
+	rootStat, err := os.Lstat(filepath.Dir(strings.TrimSuffix(file, "/")))
+	if err != nil {
+		return false
+	}
+
+	// If the directory has a different device as parent, then it is a mountpoint.
+	return stat.Sys().(*syscall.Stat_t).Dev != rootStat.Sys().(*syscall.Stat_t).Dev
+}
 
 // CheckCrossDevice - check if any list of paths has any sub-mounts at /proc/mounts.
 func CheckCrossDevice(absPaths []string) error {

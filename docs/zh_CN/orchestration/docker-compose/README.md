@@ -38,12 +38,12 @@ docker-compose.exe up
   * 更新每个服务中的命令部分。
   * 更新要为新服务公开的端口号。 另外，请确保分配给新服务的端口尚未使用。
 
-  关于分布式Minio的更多资料，请访问[这里](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide).
+  关于分布式Minio的更多资料，请访问[这里](https://docs.minio.io/cn/distributed-minio-quickstart-guide).
 
 * Docker compose file中的Minio服务使用的端口是9001到9004，这允许多个服务在主机上运行。
 
 ### 了解更多
 - [Docker Compose概述](https://docs.docker.com/compose/overview/)
-- [Minio Docker快速入门](https://docs.minio.io/docs/zh_CN/minio-docker-quickstart-guide)
-- [使用Docker Swarm部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)
-- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+- [Minio Docker快速入门](https://docs.minio.io/cn/minio-docker-quickstart-guide)
+- [使用Docker Swarm部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-swarm)
+- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)

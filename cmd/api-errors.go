@@ -193,6 +193,7 @@ const (
 	ErrHealMissingBucket
 	ErrHealAlreadyRunning
 	ErrHealOverlappingPaths
+	ErrIncorrectContinuationToken
 )
 
 // error code to APIError structure, these fields carry respective
@@ -842,7 +843,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Object storage backend is unreachable",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
-
+	ErrIncorrectContinuationToken: {
+		Code:           "InvalidArgument",
+		Description:    "The continuation token provided is incorrect",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 

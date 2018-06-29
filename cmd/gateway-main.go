@@ -197,7 +197,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), getCert)
+	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
@@ -213,6 +213,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
+	}
+
+	if gw.Name() != "nas" {
+		// Initialize policy sys for all gateways. NAS gateway already
+		// initializes policy sys internally, avoid double initialization.
+		// Additionally also don't block the initialization of gateway.
+		go globalPolicySys.Init(newObject)
 	}
 
 	// Once endpoints are finalized, initialize the new object api.

@@ -11,8 +11,8 @@ saving the object in specific number of data and parity disks.
 
 ## Storage usage
 
-The selection of varying data and parity drives has a direct impact on the drive space usage. With storage class, you can optimise for high
-redundancy or better drive space utilisation.
+The selection of varying data and parity drives has a direct impact on the drive space usage. With storage class, you can optimize for high
+redundancy or better drive space utilization.
 
 To get an idea of how various combinations of data and parity drives affect the storage usage, let’s take an example of a 100 MiB file stored
 on 16 drive Minio deployment. If you use eight data and eight parity drives, the file space usage will be approximately twice, i.e. 100 MiB

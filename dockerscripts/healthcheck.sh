@@ -48,7 +48,7 @@ healthcheck_main () {
             http_response=$(curl -s -k -o /dev/null -w "%{http_code}" ${scheme}${address}${resource})
         fi
 
-        # If http_repsonse is 200 - server is up.
+        # If http_response is 200 - server is up.
         [ "$http_response" = "200" ]
     fi
 }

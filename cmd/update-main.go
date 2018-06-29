@@ -458,7 +458,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 
 func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (successMsg string, err error) {
 	if !ok {
-		successMsg = greenColorSprintf("Minio update to version RELEASE.%s cancelled.",
+		successMsg = greenColorSprintf("Minio update to version RELEASE.%s canceled.",
 			latestReleaseTime.Format(minioReleaseTagTimeLayout))
 		return successMsg, nil
 	}
