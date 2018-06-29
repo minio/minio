@@ -1018,7 +1018,6 @@ func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 	switch result.ACL {
 	case string(oss.ACLPrivate):
 		// By default, all buckets starts with a "private" policy.
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
 		return nil, ossToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	case string(oss.ACLPublicRead):
 		readOnly = true

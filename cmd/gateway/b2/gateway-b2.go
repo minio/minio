@@ -772,7 +772,6 @@ func (l *b2Objects) GetBucketPolicy(ctx context.Context, bucket string) (*policy
 	// just return back as policy not found for all cases.
 	// CreateBucket always sets the value to allPrivate by default.
 	if bkt.Type != bucketTypeReadOnly {
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{Bucket: bucket})
 		return nil, minio.BucketPolicyNotFound{Bucket: bucket}
 	}
 

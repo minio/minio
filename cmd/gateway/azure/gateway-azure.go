@@ -1131,7 +1131,6 @@ func (a *azureObjects) GetBucketPolicy(ctx context.Context, bucket string) (*pol
 	}
 
 	if perm.AccessType == storage.ContainerAccessTypePrivate {
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{Bucket: bucket})
 		return nil, minio.BucketPolicyNotFound{Bucket: bucket}
 	} else if perm.AccessType != storage.ContainerAccessTypeContainer {
 		logger.LogIf(ctx, minio.NotImplemented{})

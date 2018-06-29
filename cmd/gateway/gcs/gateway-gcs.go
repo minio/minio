@@ -1136,7 +1136,6 @@ func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string,
 func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
 	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
 	if err != nil {
-		// This should not happen.
 		logger.LogIf(ctx, err)
 		return gcsToObjectError(err, bucket)
 	}
@@ -1192,7 +1191,6 @@ func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, bucketP
 func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, gcsToObjectError(err, bucket)
 	}
 
@@ -1227,7 +1225,6 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 
 	// Return NoSuchBucketPolicy error, when policy is not set
 	if len(actionSet) == 0 {
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
 		return nil, gcsToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	}
 
@@ -1252,7 +1249,6 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	// This only removes the storage.AllUsers policies
 	if err := l.client.Bucket(bucket).ACL().Delete(l.ctx, storage.AllUsers); err != nil {
-		logger.LogIf(ctx, err)
 		return gcsToObjectError(err, bucket)
 	}
 
