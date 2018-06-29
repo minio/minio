@@ -464,7 +464,6 @@ func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, bucketPo
 func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	data, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, minio.ErrorRespToObjectError(err, bucket)
 	}
 
