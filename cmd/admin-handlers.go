@@ -19,12 +19,17 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -658,6 +663,161 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 
 	writeSuccessResponseJSON(w, resultBuf.Bytes())
 	return
+}
+
+type wso2AccessTokenDecompose struct {
+	Active    bool    `json:"active"`
+	TokenType string  `json:"token_type"`
+	Exp       float64 `json:"exp"`
+	Iat       float64 `json:"iat"`
+	ClientID  string  `json:"client_id"`
+	username  string  `json:"active"`
+}
+
+func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request) {
+
+	err := r.ParseForm()
+	if err != nil {
+		fmt.Println("GetMinioToken:ParseForm(): %v", err)
+		http.Error(w, "Parse Error", 400)
+	}
+
+	//Read the AccessToken from the request form
+	token := r.FormValue("AccessToken")
+	fmt.Printf("GetPostRequestHandlerServerSide: %s\n", token)
+
+	//Validate the token just read
+	// ok, expTime, err := validateAccessToken(token)
+	// if !ok {
+	// 	fmt.Println("GetPostRequestHandler:ValidateToken(): %v", err)
+	// 	http.Error(w, "Authentication Failed", 401)
+	// }
+
+	decomp, err := validateAccessToken(token)
+	if !decomp.Active {
+		fmt.Println("GetPostRequestHandler:ValidateToken(): %v", err)
+		http.Error(w, "Authentication Failed", 401)
+	}
+	//Read the credentials from the Minio json file
+	//cred, err := parseConfig(expTime)
+	cred, err := parseConfig(decomp.Exp)
+	if err != nil {
+		fmt.Println("GetPostRequestHandler:ParseConfig(): %v", err)
+	}
+
+	//Marshal the credentials back to the client as JSON
+	b, _ := json.Marshal(cred)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+
+}
+
+type credentialSts struct {
+	AccessKey    string  `json:"accessKey"`
+	SecretKey    string  `json:"secretKey"`
+	ExpTime      float64 `json:"expTime"`
+	SessionToken string  `json:"sessionToken"`
+}
+
+var globalCreds []credentialSts
+
+func parseConfig(timeValid float64) (*credentialSts, error) {
+	cred, err := auth.GetNewCredentials()
+	if err != nil {
+		fmt.Printf("err = %v\n", err)
+	}
+	authcred := &credentialSts{
+		AccessKey: cred.AccessKey,
+		SecretKey: cred.SecretKey,
+		ExpTime:   timeValid,
+	}
+	fmt.Printf("AccessKey: %s SecretKey: %s ExpirationTime: %f\n", authcred.AccessKey, authcred.SecretKey, authcred.ExpTime)
+	globalCreds = append(globalCreds, *authcred)
+	// Write AuthCred into keys.json
+	b, err := json.MarshalIndent(globalCreds, "", "    ")
+	if err != nil {
+		fmt.Printf("Error is %v\n", err)
+	}
+
+	//keysWrite := ioutil.WriteFile("/Users/sanatmouli/.minio/keys.json", b, 0644)
+	keysWrite := ioutil.WriteFile(filepath.Join(getDefaultConfigDir(), keysFile), b, 0644)
+	if keysWrite != nil {
+		fmt.Printf("Error is %v\n", err)
+	}
+
+	// For demo purpose, read out the existing minio access/secret keys
+	//content, _ := ioutil.ReadFile("/Users/sanatmouli/.minio/config.json")
+	content, _ := ioutil.ReadFile(getConfigFile())
+
+	var result map[string]interface{}
+	json.Unmarshal(content, &result)
+	cred1 := result["credential"].(map[string]interface{})
+	credmap := make(map[string]string, 2)
+	for key, value := range cred1 {
+		credmap[key] = value.(string)
+	}
+	authdemo := &credentialSts{
+		AccessKey: credmap["accessKey"],
+		SecretKey: credmap["secretKey"],
+		ExpTime:   timeValid,
+	}
+	return authdemo, nil
+}
+func validateAccessToken(accessToken string) (*wso2AccessTokenDecompose, error) {
+	minioTokenUrl := "https://localhost:9443"
+	resource := "/oauth2/introspect"
+	u, err := url.ParseRequestURI(minioTokenUrl)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+	u.Path = resource
+	urlStr := u.String()
+	data := url.Values{}
+	data.Add("token", accessToken)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	if err != nil {
+		log.Fatalln(err)
+		//return false, -1, err
+		return nil, err
+	}
+
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	//r.Header.Add("Authorization", "Basic YWRtaW46YWRtaW4=")
+	r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
+
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	resp, err := client.Do(r)
+	if err != nil {
+		log.Fatalln(err)
+		//return false, 0, err
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+		//return false, -1, err
+		return nil, err
+	}
+
+	// var validator map[string]interface{}
+	// json.Unmarshal(body, &validator)
+	// ok := validator["active"]
+	// timeValid := validator["exp"].(float64)
+	// return ok.(bool), timeValid, err
+
+	retval := &wso2AccessTokenDecompose{}
+	json.Unmarshal(body, &retval)
+	return retval, err
+
 }
 
 // SetConfigHandler - PUT /minio/admin/v1/config

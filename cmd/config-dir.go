@@ -42,6 +42,9 @@ const (
 
 	// Private key file for HTTPS.
 	privateKeyFile = "private.key"
+
+	//Minio Keys configuration file
+	keysFile = "keys.json"
 )
 
 // ConfigDir - configuration directory with locking.
