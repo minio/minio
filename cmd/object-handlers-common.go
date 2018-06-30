@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 )
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
@@ -243,7 +244,7 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 	}
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, _ := net.SplitHostPort(r.RemoteAddr)
+	host, port, _ := net.SplitHostPort(handlers.GetSourceIP(r))
 
 	// Notify object deleted event.
 	sendEvent(eventArgs{

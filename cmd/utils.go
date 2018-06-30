@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -335,7 +336,13 @@ func newContext(r *http.Request, api string) context.Context {
 	if prefix != "" {
 		object = prefix
 	}
-	reqInfo := &logger.ReqInfo{RemoteHost: r.RemoteAddr, UserAgent: r.Header.Get("user-agent"), API: api, BucketName: bucket, ObjectName: object}
+	reqInfo := &logger.ReqInfo{
+		RemoteHost: handlers.GetSourceIP(r),
+		UserAgent:  r.Header.Get("user-agent"),
+		API:        api,
+		BucketName: bucket,
+		ObjectName: object,
+	}
 	return logger.SetReqInfo(context.Background(), reqInfo)
 }
 
