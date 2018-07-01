@@ -1250,7 +1250,12 @@ func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
 func (fs *FSObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	loi, err := fs.ListObjects(ctx, bucket, prefix, continuationToken, delimiter, maxKeys)
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	loi, err := fs.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return result, err
 	}

@@ -355,12 +355,20 @@ func (l *b2Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 // ListObjectsV2 lists all objects in B2 bucket filtered by prefix, returns upto max 1000 entries at a time.
 func (l *b2Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int,
 	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
-	// fetchOwner, startAfter are not supported and unused.
+	// fetchOwner is not supported and unused.
+	marker := continuationToken
+	if marker == "" {
+		// B2's continuation token is an object name to "start at" rather than "start after"
+		// startAfter plus the lowest character B2 supports is used so that the startAfter
+		// object isn't included in the results
+		marker = startAfter + " "
+	}
+
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return loi, err
 	}
-	files, next, lerr := bkt.ListFileNames(l.ctx, maxKeys, continuationToken, prefix, delimiter)
+	files, next, lerr := bkt.ListFileNames(l.ctx, maxKeys, marker, prefix, delimiter)
 	if lerr != nil {
 		logger.LogIf(ctx, lerr)
 		return loi, b2ToObjectError(lerr, bucket)

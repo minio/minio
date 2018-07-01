@@ -855,7 +855,12 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
 func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	loi, err := xl.ListObjects(ctx, bucket, prefix, continuationToken, delimiter, maxKeys)
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	loi, err := xl.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return result, err
 	}

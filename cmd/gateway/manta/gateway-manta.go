@@ -347,6 +347,13 @@ func (t *tritonObjects) ListObjects(ctx context.Context, bucket, prefix, marker,
 		dirName = path.Join(mantaRoot, bucket, pathDir)
 	}
 
+	if marker != "" {
+		// Manta uses the marker as the key to start at rather than start after
+		// A space is appended to the marker so that the corresponding object is not
+		// included in the results
+		marker += " "
+	}
+
 	input = &storage.ListDirectoryInput{
 		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
@@ -419,6 +426,18 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 		pathBase = path.Base(prefix)
 	)
 
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	if marker != "" {
+		// Manta uses the marker as the key to start at rather than start after.
+		// A space is appended to the marker so that the corresponding object is not
+		// included in the results
+		marker += " "
+	}
+
 	if pathDir := path.Dir(prefix); pathDir == "." {
 		dirName = path.Join(mantaRoot, bucket)
 	} else {
@@ -428,7 +447,7 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 	input = &storage.ListDirectoryInput{
 		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
-		Marker:        continuationToken,
+		Marker:        marker,
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {

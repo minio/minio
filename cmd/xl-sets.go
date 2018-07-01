@@ -454,7 +454,12 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 
 // ListObjectsV2 lists all objects in bucket filtered by prefix
 func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	loi, err := s.ListObjects(ctx, bucket, prefix, continuationToken, delimiter, maxKeys)
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	loi, err := s.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return result, err
 	}

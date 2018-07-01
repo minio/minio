@@ -658,6 +658,10 @@ func (l *gcsGateway) ListObjects(ctx context.Context, bucket string, prefix stri
 
 // ListObjectsV2 - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (minio.ListObjectsV2Info, error) {
+	if continuationToken == "" && startAfter != "" {
+		continuationToken = toGCSPageToken(startAfter)
+	}
+
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{
 		Delimiter: delimiter,
 		Prefix:    prefix,
