@@ -27,6 +27,7 @@ import (
 
 //load save add getCredbyAccessToken getCredbyAccessKey
 
+//
 var globalCreds map[string]credentialSts = make(map[string]credentialSts)
 
 func loadCredentialMap() error {
