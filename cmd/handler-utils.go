@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 	httptracer "github.com/minio/minio/pkg/handlers"
 )
 
@@ -167,7 +168,7 @@ func extractReqParams(r *http.Request) map[string]string {
 
 	// Success.
 	return map[string]string{
-		"sourceIPAddress": r.RemoteAddr,
+		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
 }

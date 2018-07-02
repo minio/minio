@@ -34,14 +34,14 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
-
-	"github.com/minio/minio-go/pkg/set"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -375,7 +375,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Get host and port from Request.RemoteAddr failing which
 	// fill them with empty strings.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -648,7 +648,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header().Set("Location", location)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
