@@ -28,7 +28,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -693,14 +692,14 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 	// 	http.Error(w, "Authentication Failed", 401)
 	// }
 
-	decomp, err := validateAccessToken(token)
+	parsedToken, err := validateAccessToken(token)
 	if !decomp.Active {
 		fmt.Println("GetPostRequestHandler:ValidateToken(): %v", err)
 		http.Error(w, "Authentication Failed", 401)
 	}
 	//Read the credentials from the Minio json file
 	//cred, err := parseConfig(expTime)
-	cred, err := parseConfig(decomp.Exp)
+	cred, err := issueCredentials(parsedToken)
 	if err != nil {
 		fmt.Println("GetPostRequestHandler:ParseConfig(): %v", err)
 	}
@@ -712,54 +711,68 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 
 }
 
-type credentialSts struct {
-	AccessKey    string  `json:"accessKey"`
-	SecretKey    string  `json:"secretKey"`
-	ExpTime      float64 `json:"expTime"`
-	SessionToken string  `json:"sessionToken"`
-}
+// type credentialSts struct {
+// 	AccessKey    string  `json:"accessKey"`
+// 	SecretKey    string  `json:"secretKey"`
+// 	ExpTime      float64 `json:"expTime"`
+// 	SessionToken string  `json:"sessionToken"`
+// }
 
-var globalCreds []credentialSts
+//var globalCreds map[string]credentialSts = make(map[string]credentialSts)
 
-func parseConfig(timeValid float64) (*credentialSts, error) {
+func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
 	cred, err := auth.GetNewCredentials()
 	if err != nil {
 		fmt.Printf("err = %v\n", err)
 	}
-	authcred := &credentialSts{
-		AccessKey: cred.AccessKey,
-		SecretKey: cred.SecretKey,
-		ExpTime:   timeValid,
+	// authcred := &credentialSts{
+	// 	AccessKey: cred.AccessKey,
+	// 	SecretKey: cred.SecretKey,
+	// 	ExpTime:   timeValid,
+	// }
+	// fmt.Printf("AccessKey: %s SecretKey: %s ExpirationTime: %f\n", authcred.AccessKey, authcred.SecretKey, authcred.ExpTime)
+	// globalCreds[cred.AccessKey] = *authcred
+	if err := addToCredentialMap(cred, wso2.Exp); err != nil {
+		fmt.Printf("err = %v\n", err)
 	}
-	fmt.Printf("AccessKey: %s SecretKey: %s ExpirationTime: %f\n", authcred.AccessKey, authcred.SecretKey, authcred.ExpTime)
-	globalCreds = append(globalCreds, *authcred)
+
 	// Write AuthCred into keys.json
-	b, err := json.MarshalIndent(globalCreds, "", "    ")
-	if err != nil {
-		fmt.Printf("Error is %v\n", err)
-	}
+	// b, err := json.MarshalIndent(globalCreds, "", "    ")
+	// if err != nil {
+	// 	fmt.Printf("Error is %v\n", err)
+	// }
 
 	//keysWrite := ioutil.WriteFile("/Users/sanatmouli/.minio/keys.json", b, 0644)
-	keysWrite := ioutil.WriteFile(filepath.Join(getDefaultConfigDir(), keysFile), b, 0644)
-	if keysWrite != nil {
-		fmt.Printf("Error is %v\n", err)
-	}
+	// keysWrite := ioutil.WriteFile(filepath.Join(getDefaultConfigDir(), keysFile), b, 0644)
+	// if keysWrite != nil {
+	// 	fmt.Printf("Error is %v\n", err)
+	// }
 
+	err = saveCredentialMap()
+	if err != nil {
+		fmt.Printf("err = %v\n", err)
+	}
 	// For demo purpose, read out the existing minio access/secret keys
 	//content, _ := ioutil.ReadFile("/Users/sanatmouli/.minio/config.json")
-	content, _ := ioutil.ReadFile(getConfigFile())
+	// content, _ := ioutil.ReadFile(getConfigFile())
+	// var result map[string]credentialSts
+	// json.Unmarshal(content, &result)
+	// cred1 := result["credential"].(map[string]interface{})
+	// credmap := make(map[string]string, 2)
+	// for key, value := range result {
+	// 	credmap[key] = value.(string)
+	// }
+	// authdemo := &credentialSts{
+	// 	AccessKey: credmap["accessKey"],
+	// 	SecretKey: credmap["secretKey"],
+	// 	ExpTime:   timeValid,
+	// }
+	creds := globalServerConfig.GetCredential()
 
-	var result map[string]interface{}
-	json.Unmarshal(content, &result)
-	cred1 := result["credential"].(map[string]interface{})
-	credmap := make(map[string]string, 2)
-	for key, value := range cred1 {
-		credmap[key] = value.(string)
-	}
 	authdemo := &credentialSts{
-		AccessKey: credmap["accessKey"],
-		SecretKey: credmap["secretKey"],
-		ExpTime:   timeValid,
+		AccessKey: creds.AccessKey,
+		SecretKey: creds.SecretKey,
+		ExpTime:   wso2.Exp,
 	}
 	return authdemo, nil
 }
