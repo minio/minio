@@ -686,9 +686,8 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 	fmt.Printf("GetPostRequestHandlerServerSide: %s\n", token)
 
 	// Read the Introspection Endpoint URL
-	// To be done
 	endpoint := r.FormValue("Endpoint")
-	fmt.Printf("ENDPOint at get is", endpoint)
+
 	// Load existing keys from keys.json file
 	if err := loadCredentialMap(); err != nil {
 		fmt.Println("Existing Keys failed to load: %v", err)
@@ -746,24 +745,16 @@ func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
 }
 
 func validateAccessToken(accessToken string, endpoint string) (*wso2AccessTokenDecompose, error) {
-	// minioTokenUrl := "https://localhost:9443"
-	// resource := "/oauth2/introspect"
-	// u, err := url.ParseRequestURI(minioTokenUrl)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// 	return nil, err
-	// }
-	// u.Path = resource
-	// urlStr := u.String()
-
+	//Post Request to "endpoint"
 	u, err := url.ParseRequestURI(endpoint)
 	urlStr := u.String()
 	data := url.Values{}
 	data.Add("token", accessToken)
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
+
+	//Temporary disable of TLS to support Non-HTTPS connection
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	client := &http.Client{}
 	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
 	if err != nil {
 		log.Fatalln(err)
@@ -773,8 +764,6 @@ func validateAccessToken(accessToken string, endpoint string) (*wso2AccessTokenD
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	//r.Header.Add("Authorization", "Basic YWRtaW46YWRtaW4=")
 	r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
-
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	resp, err := client.Do(r)
 	if err != nil {
@@ -787,7 +776,6 @@ func validateAccessToken(accessToken string, endpoint string) (*wso2AccessTokenD
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalln(err)
-		//return false, -1, err
 		return nil, err
 	}
 

@@ -20,38 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 
 	"github.com/minio/minio/pkg/auth"
 )
 
 //load save add getCredbyAccessToken getCredbyAccessKey
 
-//
+//Global Map of credentialSts vars stored in keys.json
 var globalCreds map[string]credentialSts = make(map[string]credentialSts)
-
-func loadCredentialMap() error {
-	content, err := ioutil.ReadFile(filepath.Join(getDefaultConfigDir(), keysFile))
-	if err != nil {
-		return err
-	}
-	json.Unmarshal(content, &globalCreds)
-	return nil
-}
-
-func saveCredentialMap() error {
-	b, err := json.MarshalIndent(globalCreds, "", "    ")
-	if err != nil {
-		fmt.Printf("Error is %v\n", err)
-	}
-
-	//keysWrite := ioutil.WriteFile("/Users/sanatmouli/.minio/keys.json", b, 0644)
-	keysWrite := ioutil.WriteFile(filepath.Join(getDefaultConfigDir(), keysFile), b, 0644)
-	if keysWrite != nil {
-		fmt.Printf("Error is %v\n", err)
-	}
-	return nil
-}
 
 type credentialSts struct {
 	AccessKey    string  `json:"accessKey"`
@@ -60,6 +36,32 @@ type credentialSts struct {
 	SessionToken string  `json:"sessionToken"`
 }
 
+// Read file from keys.json stored in ~/.minio into globalCreds map
+func loadCredentialMap() error {
+	content, err := ioutil.ReadFile(getKeysFile())
+	if err != nil {
+		return err
+	}
+	json.Unmarshal(content, &globalCreds)
+	return nil
+}
+
+// Write globalCreds map into keys.json
+func saveCredentialMap() error {
+	b, err := json.MarshalIndent(globalCreds, "", "    ")
+	if err != nil {
+		fmt.Printf("Error is %v\n", err)
+	}
+
+	//keysWrite := ioutil.WriteFile("/Users/sanatmouli/.minio/keys.json", b, 0644)
+	keysWrite := ioutil.WriteFile(getKeysFile(), b, 0644)
+	if keysWrite != nil {
+		fmt.Printf("Error is %v\n", err)
+	}
+	return nil
+}
+
+// Add a new credential to the globalCreds Map
 func addToCredentialMap(cred auth.Credentials, timeValid float64) error {
 	authcred := &credentialSts{
 		AccessKey:    cred.AccessKey,
