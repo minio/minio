@@ -227,7 +227,6 @@ func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.
 		}, nil
 	}
 
-	logger.LogIf(ctx, minio.BucketNotFound{Bucket: bucket})
 	return bi, minio.BucketNotFound{Bucket: bucket}
 }
 
