@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/shirou/gopsutil/disk"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -368,4 +369,32 @@ func isNetworkOrHostDown(err error) bool {
 		}
 	}
 	return false
+}
+
+// getMacAddr returns all the available mac addresses
+// on the system
+func getMacAddr() (addr []string) {
+	interfaces, err := net.Interfaces()
+	if err == nil {
+		for _, i := range interfaces {
+			if i.Flags&net.FlagUp != 0 && bytes.Compare(i.HardwareAddr, nil) != 0 {
+				// Don't use random as we have a real address
+				addr = append(addr, i.HardwareAddr.String())
+			}
+		}
+	}
+	return
+}
+
+// Return the partition size of the given partition
+func partitionSize(partition string, stats []disk.PartitionStat) uint64 {
+	for _, stat := range stats {
+		if stat.Device != stat.Fstype {
+			if strings.HasSuffix(stat.Device, partition) {
+				v1, _ := disk.Usage(stat.Mountpoint)
+				return v1.Total
+			}
+		}
+	}
+	return 0
 }

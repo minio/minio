@@ -314,6 +314,22 @@ func shouldInitXLDisks(errs []error) bool {
 	return countErrs(errs, errUnformattedDisk) == len(errs)
 }
 
+// Should wait to create sysinfo config
+func shouldWaitonCreateSysInfoConfig(sysInfoConfigs []*sysInfoConfig) bool {
+	count := 0
+	for _, config := range sysInfoConfigs {
+		if config == nil {
+			count++
+		}
+	}
+	return count == len(sysInfoConfigs)
+}
+
+// Does all errors indicate we need to initialize all disks?.
+func shouldCreateSysInfoConfig(errs []error) bool {
+	return countErrs(errs, errFileNotFound)+countErrs(errs, errUnformattedDisk) == len(errs)
+}
+
 // Check if unformatted disks are equal to write quorum.
 func quorumUnformattedDisks(errs []error) bool {
 	return countErrs(errs, errUnformattedDisk) >= (len(errs)/2)+1

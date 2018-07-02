@@ -58,6 +58,14 @@ func (rpcClient *PeerRPCClient) RemoveBucketPolicy(bucketName string) error {
 	return rpcClient.Call(peerServiceName+".RemoveBucketPolicy", &args, &reply)
 }
 
+// GetSysInfo - calls get sys info RPC.
+func (rpcClient *PeerRPCClient) GetSysInfo() (ServerSystemInfoData, error) {
+	args := AuthArgs{}
+	reply := ServerSystemInfoData{}
+	err := rpcClient.Call(peerServiceName+".GetSysInfo", &args, &reply)
+	return reply, err
+}
+
 // PutBucketNotification - calls put bukcet notification RPC.
 func (rpcClient *PeerRPCClient) PutBucketNotification(bucketName string, rulesMap event.RulesMap) error {
 	args := PutBucketNotificationArgs{

@@ -77,18 +77,18 @@ func TestNewXLSets(t *testing.T) {
 	}
 
 	endpoints := mustGetNewEndpointList(erasureDisks...)
-	_, err := waitForFormatXL(context.Background(), true, endpoints, 0, 16)
+	_, err := waitForInitXL(context.Background(), true, endpoints, 0, 16)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
-	_, err = waitForFormatXL(context.Background(), true, nil, 1, 16)
+	_, err = waitForInitXL(context.Background(), true, nil, 1, 16)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
+	format, err := waitForInitXL(context.Background(), true, endpoints, 1, 16)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
