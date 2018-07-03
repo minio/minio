@@ -766,8 +766,8 @@ func validateAccessToken(accessToken string) (*wso2AccessTokenDecompose, error) 
 
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	//r.Header.Add("Authorization", "Basic YWRtaW46YWRtaW4=")
-	//r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
-	r.Header.Add("Authorization", "YWFydXNoaTphYXJ1c2hpDQo=")
+	r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
+	//r.Header.Add("Authorization", "YWFydXNoaTphYXJ1c2hpDQo=")
 
 	resp, err := client.Do(r)
 	if err != nil {
