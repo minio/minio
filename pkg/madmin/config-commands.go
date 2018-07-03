@@ -19,10 +19,13 @@ package madmin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/minio/minio/pkg/quick"
 )
 
 // NodeSummary - represents the result of an operation part of
@@ -65,14 +68,40 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 
 // SetConfig - set config supplied as config.json for the setup.
 func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
+	const maxConfigJSONSize = 256 * 1024 // 256KiB
+
 	if !adm.secure { // No TLS?
 		return r, fmt.Errorf("credentials/configuration cannot be updated over an insecure connection")
 	}
 
-	// Read config bytes to calculate MD5, SHA256 and content length.
-	configBytes, err := ioutil.ReadAll(config)
-	if err != nil {
+	// Read configuration bytes
+	configBuf := make([]byte, maxConfigJSONSize+1)
+	n, err := io.ReadFull(config, configBuf)
+	if err == nil {
+		return r, fmt.Errorf("too large file")
+	}
+	if err != io.ErrUnexpectedEOF {
 		return r, err
+	}
+	configBytes := configBuf[:n]
+
+	type configVersion struct {
+		Version string `json:"version,omitempty"`
+	}
+	var cfg configVersion
+
+	// Check if read data is in json format
+	if err = json.Unmarshal(configBytes, &cfg); err != nil {
+		return r, errors.New("Invalid JSON format: " + err.Error())
+	}
+
+	// Check if the provided json file has "version" key set
+	if cfg.Version == "" {
+		return r, errors.New("Missing or unset \"version\" key in json file")
+	}
+	// Validate there are no duplicate keys in the JSON
+	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
+		return r, errors.New("Duplicate key in json file: " + err.Error())
 	}
 
 	reqData := requestData{
