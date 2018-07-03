@@ -68,28 +68,21 @@ type NotificationPeerErr struct {
 }
 
 // DeleteBucket - calls DeleteBucket RPC call on all peers.
-func (sys *NotificationSys) DeleteBucket(bucketName string) <-chan NotificationPeerErr {
-	errCh := make(chan NotificationPeerErr)
+func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
 	go func() {
-		defer close(errCh)
-
 		var wg sync.WaitGroup
 		for addr, client := range sys.peerRPCClientMap {
 			wg.Add(1)
 			go func(addr xnet.Host, client *PeerRPCClient) {
 				defer wg.Done()
 				if err := client.DeleteBucket(bucketName); err != nil {
-					errCh <- NotificationPeerErr{
-						Host: addr,
-						Err:  err,
-					}
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.LogIf(ctx, err)
 				}
 			}(addr, client)
 		}
 		wg.Wait()
 	}()
-
-	return errCh
 }
 
 // SetCredentials - calls SetCredentials RPC call on all peers.
@@ -120,104 +113,76 @@ func (sys *NotificationSys) SetCredentials(credentials auth.Credentials) map[xne
 }
 
 // SetBucketPolicy - calls SetBucketPolicy RPC call on all peers.
-func (sys *NotificationSys) SetBucketPolicy(bucketName string, bucketPolicy *policy.Policy) <-chan NotificationPeerErr {
-	errCh := make(chan NotificationPeerErr)
+func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName string, bucketPolicy *policy.Policy) {
 	go func() {
-		defer close(errCh)
-
 		var wg sync.WaitGroup
 		for addr, client := range sys.peerRPCClientMap {
 			wg.Add(1)
 			go func(addr xnet.Host, client *PeerRPCClient) {
 				defer wg.Done()
 				if err := client.SetBucketPolicy(bucketName, bucketPolicy); err != nil {
-					errCh <- NotificationPeerErr{
-						Host: addr,
-						Err:  err,
-					}
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.LogIf(ctx, err)
 				}
 			}(addr, client)
 		}
 		wg.Wait()
 	}()
-
-	return errCh
 }
 
 // RemoveBucketPolicy - calls RemoveBucketPolicy RPC call on all peers.
-func (sys *NotificationSys) RemoveBucketPolicy(bucketName string) <-chan NotificationPeerErr {
-	errCh := make(chan NotificationPeerErr)
+func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName string) {
 	go func() {
-		defer close(errCh)
-
 		var wg sync.WaitGroup
 		for addr, client := range sys.peerRPCClientMap {
 			wg.Add(1)
 			go func(addr xnet.Host, client *PeerRPCClient) {
 				defer wg.Done()
 				if err := client.RemoveBucketPolicy(bucketName); err != nil {
-					errCh <- NotificationPeerErr{
-						Host: addr,
-						Err:  err,
-					}
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.LogIf(ctx, err)
 				}
 			}(addr, client)
 		}
 		wg.Wait()
 	}()
-
-	return errCh
 }
 
 // PutBucketNotification - calls PutBucketNotification RPC call on all peers.
-func (sys *NotificationSys) PutBucketNotification(bucketName string, rulesMap event.RulesMap) <-chan NotificationPeerErr {
-	errCh := make(chan NotificationPeerErr)
+func (sys *NotificationSys) PutBucketNotification(ctx context.Context, bucketName string, rulesMap event.RulesMap) {
 	go func() {
-		defer close(errCh)
-
 		var wg sync.WaitGroup
 		for addr, client := range sys.peerRPCClientMap {
 			wg.Add(1)
 			go func(addr xnet.Host, client *PeerRPCClient, rulesMap event.RulesMap) {
 				defer wg.Done()
 				if err := client.PutBucketNotification(bucketName, rulesMap); err != nil {
-					errCh <- NotificationPeerErr{
-						Host: addr,
-						Err:  err,
-					}
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.LogIf(ctx, err)
 				}
 			}(addr, client, rulesMap.Clone())
 		}
 		wg.Wait()
 	}()
-
-	return errCh
 }
 
 // ListenBucketNotification - calls ListenBucketNotification RPC call on all peers.
-func (sys *NotificationSys) ListenBucketNotification(bucketName string, eventNames []event.Name, pattern string,
-	targetID event.TargetID, localPeer xnet.Host) <-chan NotificationPeerErr {
-	errCh := make(chan NotificationPeerErr)
+func (sys *NotificationSys) ListenBucketNotification(ctx context.Context, bucketName string, eventNames []event.Name, pattern string,
+	targetID event.TargetID, localPeer xnet.Host) {
 	go func() {
-		defer close(errCh)
-
 		var wg sync.WaitGroup
 		for addr, client := range sys.peerRPCClientMap {
 			wg.Add(1)
 			go func(addr xnet.Host, client *PeerRPCClient) {
 				defer wg.Done()
 				if err := client.ListenBucketNotification(bucketName, eventNames, pattern, targetID, localPeer); err != nil {
-					errCh <- NotificationPeerErr{
-						Host: addr,
-						Err:  err,
-					}
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.LogIf(ctx, err)
 				}
 			}(addr, client)
 		}
 		wg.Wait()
 	}()
-
-	return errCh
 }
 
 // AddRemoteTarget - adds event rules map, HTTP/PeerRPC client target to bucket name.
@@ -556,13 +521,16 @@ func sendEvent(args eventArgs) {
 		return
 	}
 
-	for _, err := range globalNotificationSys.Send(args) {
-		reqInfo := &logger.ReqInfo{BucketName: args.BucketName, ObjectName: args.Object.Name}
-		reqInfo.AppendTags("EventName", args.EventName.String())
-		reqInfo.AppendTags("targetID", err.ID.Name)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogOnceIf(ctx, err.Err, err.ID)
-	}
+	notifyCh := globalNotificationSys.Send(args)
+	go func() {
+		for _, err := range notifyCh {
+			reqInfo := &logger.ReqInfo{BucketName: args.BucketName, ObjectName: args.Object.Name}
+			reqInfo.AppendTags("EventName", args.EventName.String())
+			reqInfo.AppendTags("targetID", err.ID.Name)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogOnceIf(ctx, err.Err, err.ID)
+		}
+	}()
 }
 
 func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
