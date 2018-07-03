@@ -19,7 +19,7 @@ set -x
 
 _init () {
     scheme="http://"
-    address="$(netstat -nplt 2>/dev/null | awk ' /(.*\/minio)/ { gsub(":::","127.0.0.1:",$4); print $4}')"
+    address="$(netstat -nplt 2>/dev/null | awk ' NR==3 { gsub(":::","127.0.0.1:",$4); print $4}')"
     resource="/minio/health/live"
     start=$(stat -c "%Y" /proc/1)
 }
