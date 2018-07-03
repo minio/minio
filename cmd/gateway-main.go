@@ -41,14 +41,14 @@ var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "start object storage gateway",
-		Flags:           append(serverFlags, globalFlags...),
+		Flags:           append(ServerFlags, GlobalFlags...),
 		HideHelpCommand: true,
 	}
 )
 
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
-	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, serverFlags...)...), globalFlags...)
+	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, ServerFlags...)...), GlobalFlags...)
 	gatewayCmd.Subcommands = append(gatewayCmd.Subcommands, cmd)
 	return nil
 }

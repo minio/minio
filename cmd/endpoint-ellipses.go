@@ -213,12 +213,12 @@ func parseEndpointSet(args ...string) (ep endpointSet, err error) {
 	return ep, nil
 }
 
-// Parses all ellipses input arguments, expands them into corresponding
-// list of endpoints chunked evenly in accordance with a specific
-// set size.
+// GetAllSets - parses all ellipses input arguments, expands them into
+// corresponding list of endpoints chunked evenly in accordance with a
+// specific set size.
 // For example: {1...64} is divided into 4 sets each of size 16.
 // This applies to even distributed setup syntax as well.
-func getAllSets(args ...string) ([][]string, error) {
+func GetAllSets(args ...string) ([][]string, error) {
 	if len(args) == 0 {
 		return nil, errInvalidArgument
 	}
@@ -266,7 +266,7 @@ func getAllSets(args ...string) ([][]string, error) {
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
 func createServerEndpoints(serverAddr string, args ...string) (string, EndpointList, SetupType, int, int, error) {
-	setArgs, err := getAllSets(args...)
+	setArgs, err := GetAllSets(args...)
 	if err != nil {
 		return serverAddr, nil, -1, 0, 0, err
 	}

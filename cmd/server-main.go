@@ -38,7 +38,8 @@ func init() {
 	logger.RegisterUIError(fmtError)
 }
 
-var serverFlags = []cli.Flag{
+// ServerFlags - server command specific flags
+var ServerFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":" + globalMinioDefaultPort,
@@ -49,7 +50,7 @@ var serverFlags = []cli.Flag{
 var serverCmd = cli.Command{
 	Name:   "server",
 	Usage:  "start object storage server",
-	Flags:  append(serverFlags, globalFlags...),
+	Flags:  append(ServerFlags, GlobalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   {{.HelpName}} - {{.Usage}}
