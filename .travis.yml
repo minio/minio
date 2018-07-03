@@ -8,27 +8,35 @@ dist: trusty
 
 language: go
 
-os:
-- linux
-
-env:
-- ARCH=x86_64
+matrix:
+  include:
+    - os: linux
+      env:
+        - ARCH=x86_64
+      go: 1.10.1
+      script:
+        - make
+        - diff -au <(gofmt -s -d cmd) <(printf "")
+        - diff -au <(gofmt -s -d pkg) <(printf "")
+        - make test GOFLAGS="-timeout 15m -race -v"
+        - make coverage
+        - node --version
+        - cd browser && yarn && yarn test && cd ..
+    - os: linux-ppc64le
+      env:
+        - ARCH=ppc64le
+      go: 1.10.1
+      script:
+        - make
+        - diff -au <(gofmt -s -d cmd) <(printf "")
+        - diff -au <(gofmt -s -d pkg) <(printf "")
+        - make test GOFLAGS="-timeout 15m -v"
+        - make coverage
+        - node --version
+        - cd browser && yarn && yarn test && cd ..
 
 before_install:
 - nvm install stable
 
-script:
-## Run all the tests
-- make
-- diff -au <(gofmt -s -d cmd) <(printf "")
-- diff -au <(gofmt -s -d pkg) <(printf "")
-- make test GOFLAGS="-timeout 15m -race -v"
-- make coverage
-- node --version
-- cd browser && yarn && yarn test && cd ..
-
 after_success:
 - bash <(curl -s https://codecov.io/bash)
-
-go:
-- '1.10.1'

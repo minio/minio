@@ -483,7 +483,6 @@ func (a *azureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 			} // else continue
 		}
 	}
-	logger.LogIf(ctx, minio.BucketNotFound{Bucket: bucket})
 	return bi, minio.BucketNotFound{Bucket: bucket}
 }
 

@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
@@ -197,7 +198,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -293,7 +294,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -617,7 +618,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -823,7 +824,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -1494,7 +1495,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
