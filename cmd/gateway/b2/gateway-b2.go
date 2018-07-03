@@ -278,7 +278,6 @@ func (l *b2Objects) Bucket(ctx context.Context, bucket string) (*b2.Bucket, erro
 			return bkt, nil
 		}
 	}
-	logger.LogIf(ctx, minio.BucketNotFound{Bucket: bucket})
 	return nil, minio.BucketNotFound{Bucket: bucket}
 }
 
