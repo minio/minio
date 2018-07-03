@@ -2420,7 +2420,7 @@ func (s *TestSuiteCommon) TestBucketMultipartList(c *check) {
 	// unmarshalling works from a client perspective, specifically
 	// while unmarshalling time.Time type for 'Initiated' field.
 	// time.Time does not honor xml marshaler, it means that we need
-	// to encode/format it before giving it to xml marshalling.
+	// to encode/format it before giving it to xml marshaling.
 
 	// This below check adds client side verification to see if its
 	// truly parseable.

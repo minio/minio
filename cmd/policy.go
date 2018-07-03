@@ -99,7 +99,7 @@ func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 	}
 	sys.removeDeletedBuckets(buckets)
 	for _, bucket := range buckets {
-		config, err := GetPolicyConfig(objAPI, bucket.Name)
+		config, err := objAPI.GetBucketPolicy(context.Background(), bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				sys.Remove(bucket.Name)
@@ -187,8 +187,8 @@ func getConditionValues(request *http.Request, locationConstraint string) map[st
 	return args
 }
 
-// GetPolicyConfig - get policy config for given bucket name.
-func GetPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, error) {
+// getPolicyConfig - get policy config for given bucket name.
+func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, error) {
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 

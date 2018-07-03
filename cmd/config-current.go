@@ -39,9 +39,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "25"
+const serverConfigVersion = "26"
 
-type serverConfig = serverConfigV25
+type serverConfig = serverConfigV26
 
 var (
 	// globalServerConfig server config.
@@ -116,10 +116,11 @@ func (s *serverConfig) GetWorm() bool {
 }
 
 // SetCacheConfig sets the current cache config
-func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int) {
+func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int, maxuse int) {
 	s.Cache.Drives = drives
 	s.Cache.Exclude = exclude
 	s.Cache.Expiry = expiry
+	s.Cache.MaxUse = maxuse
 }
 
 // GetCacheConfig gets the current cache config
@@ -205,6 +206,7 @@ func newServerConfig() *serverConfig {
 			Drives:  []string{},
 			Exclude: []string{},
 			Expiry:  globalCacheExpiry,
+			MaxUse:  globalCacheMaxUse,
 		},
 		Notify: notifier{},
 	}
@@ -232,6 +234,7 @@ func newServerConfig() *serverConfig {
 	srvCfg.Cache.Drives = make([]string, 0)
 	srvCfg.Cache.Exclude = make([]string, 0)
 	srvCfg.Cache.Expiry = globalCacheExpiry
+	srvCfg.Cache.MaxUse = globalCacheMaxUse
 	return srvCfg
 }
 
@@ -270,7 +273,7 @@ func newConfig() error {
 	}
 
 	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -358,7 +361,7 @@ func loadConfig() error {
 	}
 
 	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -387,6 +390,7 @@ func loadConfig() error {
 		globalCacheDrives = cacheConf.Drives
 		globalCacheExcludes = cacheConf.Exclude
 		globalCacheExpiry = cacheConf.Expiry
+		globalCacheMaxUse = cacheConf.MaxUse
 	}
 	globalServerConfigMu.Unlock()
 

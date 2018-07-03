@@ -470,7 +470,7 @@ func TestPosixMakeVol(t *testing.T) {
 	}
 }
 
-// TestPosixDeleteVol - Validates the expected behaviour of posix.DeleteVol for various cases.
+// TestPosixDeleteVol - Validates the expected behavior of posix.DeleteVol for various cases.
 func TestPosixDeleteVol(t *testing.T) {
 	// create posix test setup
 	posixStorage, path, err := newPosixTestSetup()
@@ -1948,7 +1948,7 @@ func TestCheckDiskTotalMin(t *testing.T) {
 				FSType: "XFS",
 				Files:  9999,
 			},
-			err: errDiskFull,
+			err: errMinDiskSize,
 		},
 	}
 

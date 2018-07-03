@@ -17,7 +17,7 @@ Minio共享模式是为了解决在真实场景中存在的一些问题，而且
 
 ## 1. 前提条件
 
-安装Minio - [Minio快速入门](https://docs.minio.io/docs/zh_CN/minio).
+安装Minio - [Minio快速入门](https://docs.minio.io/cn/minio).
 
 ## 2. 在共享后端存储上运行Minio
 
@@ -61,11 +61,11 @@ minio.exe gateway nas M:\export
 
 ## 3. 验证
 
-为了验证部署是否成功，可能通过浏览器或者[`mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)访问Minio。你应该可以从各个Minio节点访问上传的文件。
+为了验证部署是否成功，可能通过浏览器或者[`mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)访问Minio。你应该可以从各个Minio节点访问上传的文件。
 
 ## 了解更多
-- [使用`mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)
-- [使用`aws-cli`](https://docs.minio.io/docs/zh_CN/aws-cli-with-minio)
-- [使用`s3cmd`](https://docs.minio.io/docs/zh_CN/s3cmd-with-minio)
-- [使用`minio-go` SDK](https://docs.minio.io/docs/zh_CN/golang-client-quickstart-guide)
+- [使用`mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)
+- [使用`aws-cli`](https://docs.minio.io/cn/aws-cli-with-minio)
+- [使用`s3cmd`](https://docs.minio.io/cn/s3cmd-with-minio)
+- [使用`minio-go` SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
 - [Minio文档](https://docs.minio.io)

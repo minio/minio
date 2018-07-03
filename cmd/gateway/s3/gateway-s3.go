@@ -65,6 +65,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
@@ -83,6 +84,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}}
 `
 
@@ -462,7 +464,6 @@ func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, bucketPo
 func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	data, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, minio.ErrorRespToObjectError(err, bucket)
 	}
 

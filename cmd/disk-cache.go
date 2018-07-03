@@ -44,7 +44,6 @@ const (
 	// disk cache needs to have cacheSizeMultiplier * object size space free for a cache entry to be created.
 	cacheSizeMultiplier  = 100
 	cacheTrashDir        = "trash"
-	cacheMaxDiskUsagePct = 80 // in %
 	cacheCleanupInterval = 10 // in minutes
 )
 
@@ -239,7 +238,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 			pipeWriter.CloseWithError(err)
 			return
 		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 	err = dcache.Put(ctx, bucket, object, hashReader, c.getMetadata(objInfo))
 	if err != nil {
@@ -839,7 +838,7 @@ func newCache(config CacheConfig) (*diskCache, error) {
 		if err := checkAtimeSupport(dir); err != nil {
 			return nil, errors.New("Atime support required for disk caching")
 		}
-		cache, err := newCacheFSObjects(dir, config.Expiry, cacheMaxDiskUsagePct)
+		cache, err := newCacheFSObjects(dir, config.Expiry, config.MaxUse)
 		if err != nil {
 			return nil, err
 		}

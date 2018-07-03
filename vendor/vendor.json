@@ -689,10 +689,10 @@
 			"revisionTime": "2016-03-11T21:55:03Z"
 		},
 		{
-			"checksumSHA1": "k/Xh0p5L7+tBCXAL2dOCwUf9J3Y=",
+			"checksumSHA1": "d+4iuDj/qQ+2LiWEbQ+AWjxEJOc=",
 			"path": "github.com/tidwall/gjson",
-			"revision": "09d1c5c5bc64e094394dfe2150220d906c55ac37",
-			"revisionTime": "2017-02-05T16:10:42Z"
+			"revision": "f123b340873a0084cb27267eddd8ff615115fbff",
+			"revisionTime": "2018-06-21T18:09:58Z"
 		},
 		{
 			"checksumSHA1": "qmePMXEDYGwkAfT9QvtMC58JN/E=",

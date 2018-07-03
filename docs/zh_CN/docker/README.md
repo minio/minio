@@ -29,7 +29,7 @@ docker run -p 9000:9000 --name minio1 \
 ```
 
 ## 在Docker中运行Minio分布式模式
-分布式Minio可以通过 [Docker Compose](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-compose) 或者 [Swarm mode](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)进行部署。这两者之间的主要区别是Docker Compose创建了单个主机，多容器部署，而Swarm模式创建了一个多主机，多容器部署。
+分布式Minio可以通过 [Docker Compose](https://docs.minio.io/cn/deploy-minio-on-docker-compose) 或者 [Swarm mode](https://docs.minio.io/cn/deploy-minio-on-docker-swarm)进行部署。这两者之间的主要区别是Docker Compose创建了单个主机，多容器部署，而Swarm模式创建了一个多主机，多容器部署。
 
 这意味着Docker Compose可以让你快速的在你的机器上快速使用分布式Minio-非常适合开发，测试环境；而Swarm模式提供了更健壮，生产级别的部署。
 
@@ -110,7 +110,7 @@ docker stats <container_id>
 
 ## 了解更多
 
-* [在Docker Compose上部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-compose)
-* [在Docker Swarm上部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)
-* [分布式Minio快速入门](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide)
-* [Minio纠删码模式快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+* [在Docker Compose上部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-compose)
+* [在Docker Swarm上部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-swarm)
+* [分布式Minio快速入门](https://docs.minio.io/cn/distributed-minio-quickstart-guide)
+* [Minio纠删码模式快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)

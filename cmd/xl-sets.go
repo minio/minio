@@ -454,7 +454,12 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 
 // ListObjectsV2 lists all objects in bucket filtered by prefix
 func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	loi, err := s.ListObjects(ctx, bucket, prefix, continuationToken, delimiter, maxKeys)
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	loi, err := s.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return result, err
 	}
@@ -476,7 +481,7 @@ func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *pol
 
 // GetBucketPolicy will return a policy on a bucket
 func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return GetPolicyConfig(s, bucket)
+	return getPolicyConfig(s, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
@@ -614,7 +619,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 			}
 			return
 		}
-		// Close writer explicitly signalling we wrote all data.
+		// Close writer explicitly signaling we wrote all data.
 		if gerr := srcInfo.Writer.Close(); gerr != nil {
 			logger.LogIf(ctx, gerr)
 			return

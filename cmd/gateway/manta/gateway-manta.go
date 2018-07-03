@@ -78,6 +78,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
   1. Start minio gateway server for Manta Object Storage backend.
@@ -102,6 +103,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}}
 `
 
@@ -345,6 +347,13 @@ func (t *tritonObjects) ListObjects(ctx context.Context, bucket, prefix, marker,
 		dirName = path.Join(mantaRoot, bucket, pathDir)
 	}
 
+	if marker != "" {
+		// Manta uses the marker as the key to start at rather than start after
+		// A space is appended to the marker so that the corresponding object is not
+		// included in the results
+		marker += " "
+	}
+
 	input = &storage.ListDirectoryInput{
 		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
@@ -417,6 +426,18 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 		pathBase = path.Base(prefix)
 	)
 
+	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
+
+	if marker != "" {
+		// Manta uses the marker as the key to start at rather than start after.
+		// A space is appended to the marker so that the corresponding object is not
+		// included in the results
+		marker += " "
+	}
+
 	if pathDir := path.Dir(prefix); pathDir == "." {
 		dirName = path.Join(mantaRoot, bucket)
 	} else {
@@ -426,7 +447,7 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 	input = &storage.ListDirectoryInput{
 		DirectoryName: dirName,
 		Limit:         uint64(maxKeys),
-		Marker:        continuationToken,
+		Marker:        marker,
 	}
 	objs, err = t.client.Dir().List(ctx, input)
 	if err != nil {

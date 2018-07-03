@@ -60,20 +60,25 @@ describe("Login", () => {
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
-      />,
-      { attachTo: document.body }
+      />
     )
     // case where both keys are empty - displays the second warning
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith("danger", "Secret Key cannot be empty")
 
     // case where access key is empty
-    document.getElementById("secretKey").value = "secretKey"
+    wrapper.setState({
+      accessKey: "",
+      secretKey: "secretKey"
+    })
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith("danger", "Access Key cannot be empty")
 
     // case where secret key is empty
-    document.getElementById("accessKey").value = "accessKey"
+    wrapper.setState({
+      accessKey: "accessKey",
+      secretKey: ""
+    })
     wrapper.find("form").simulate("submit")
     expect(showAlertMock).toHaveBeenCalledWith("danger", "Secret Key cannot be empty")
   })
@@ -85,11 +90,12 @@ describe("Login", () => {
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
-      />,
-      { attachTo: document.body }
+      />
     )
-    document.getElementById("accessKey").value = "accessKey"
-    document.getElementById("secretKey").value = "secretKey"
+    wrapper.setState({
+      accessKey: "accessKey",
+      secretKey: "secretKey"
+    })
     wrapper.find("form").simulate("submit")
     expect(web.Login).toHaveBeenCalledWith({
       "username": "accessKey", 

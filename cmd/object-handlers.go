@@ -31,11 +31,13 @@ import (
 	"sort"
 	"strconv"
 
+	etcd "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
@@ -196,7 +198,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -292,7 +294,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -616,7 +618,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -822,7 +824,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -1493,7 +1495,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -1537,6 +1539,27 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		// DeleteObject is always successful irrespective of object existence.
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
+	}
+
+	if globalDNSConfig != nil {
+		_, err := globalDNSConfig.Get(bucket)
+		if err != nil {
+			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+				writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			} else {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			}
+			return
+		}
+	} else {
+		getBucketInfo := objectAPI.GetBucketInfo
+		if api.CacheAPI() != nil {
+			getBucketInfo = api.CacheAPI().GetBucketInfo
+		}
+		if _, err := getBucketInfo(ctx, bucket); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html

@@ -64,7 +64,7 @@ $ helm install --name my-release -f values.yaml stable/minio
 
 ### 分布式Minio
 
-默认情况下，此图表以独立模式提供Minio服务器。 要在[分布式模式](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide)中配置Minio服务器，请将`mode`字段设置为`distributed`,
+默认情况下，此图表以独立模式提供Minio服务器。 要在[分布式模式](https://docs.minio.io/cn/distributed-minio-quickstart-guide)中配置Minio服务器，请将`mode`字段设置为`distributed`,
 
 ```bash
 $ helm install --set mode=distributed stable/minio
@@ -150,6 +150,6 @@ $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
 ```
 
 ### 了解更多
-- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
 - [Kubernetes文档](https://kubernetes.io/docs/home/)
 - [Helm package manager for kubernetes](https://helm.sh/)

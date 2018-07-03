@@ -70,20 +70,19 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Extract all the listObjectsV2 query params to their native values.
-	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
+	urlValues := r.URL.Query()
 
-	// In ListObjectsV2 'continuation-token' is the marker.
-	marker := token
-	// Check if 'continuation-token' is empty.
-	if token == "" {
-		// Then we need to use 'start-after' as marker instead.
-		marker = startAfter
+	// Extract all the listObjectsV2 query params to their native values.
+	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _, errCode := getListObjectsV2Args(urlValues)
+
+	if errCode != ErrNone {
+		writeErrorResponse(w, errCode, r.URL)
+		return
 	}
 
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateListObjectsArgs(prefix, token, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -93,8 +92,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
-	// marshalled into S3 compatible XML header.
-	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, marker, delimiter, maxKeys, fetchOwner, startAfter)
+	// marshaled into S3 compatible XML header.
+	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -159,7 +158,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
-	// marshalled into S3 compatible XML header.
+	// marshaled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

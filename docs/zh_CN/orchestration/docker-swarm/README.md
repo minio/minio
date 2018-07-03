@@ -42,7 +42,7 @@ docker stack deploy --compose-file=docker-compose-secrets.yaml minio_stack
 
 这将把Compose file里描述的服务部署为Docker stack`minio_stack`。 更多 `docker stack` [命令参考](https://docs.docker.com/engine/reference/commandline/stack/)。
 
-在stack成功部署之后，你可以通过[Minio Client](https://docs.minio.io/docs/zh_CN/minio-client-complete-guide) `mc` 或者浏览器访问http://[Node_Public_IP_Address]:[Expose_Port_on_Host]来访问你的Minio server。
+在stack成功部署之后，你可以通过[Minio Client](https://docs.minio.io/cn/minio-client-complete-guide) `mc` 或者浏览器访问http://[Node_Public_IP_Address]:[Expose_Port_on_Host]来访问你的Minio server。
 
 ## 4. 删除分布式Minio services
 
@@ -71,7 +71,7 @@ docker volume rm volume_name
   * 更新每个服务中的命令部分。
   * 更新要为新服务公开的端口号。 另外，请确保分配给新服务的端口尚未使用。
 
-  关于分布式Minio的更多资料，请访问[这里](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide).
+  关于分布式Minio的更多资料，请访问[这里](https://docs.minio.io/cn/distributed-minio-quickstart-guide).
 
 * 默认情况下，Minio服务使用的是`local` volume driver. 更多配置选项，请访问[Docker documentation](https://docs.docker.com/compose/compose-file/#/volume-configuration-reference) 。
 
@@ -81,6 +81,6 @@ docker volume rm volume_name
 
 ### 了解更多
 - [Docker Swarm mode概述](https://docs.docker.com/engine/swarm/)
-- [Minio Docker快速入门](https://docs.minio.io/docs/zh_CN/minio-docker-quickstart-guide)
-- [使用Docker Compose部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-compose)
-- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+- [Minio Docker快速入门](https://docs.minio.io/cn/minio-docker-quickstart-guide)
+- [使用Docker Compose部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-compose)
+- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
