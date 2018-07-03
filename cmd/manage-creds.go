@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/minio/minio/pkg/auth"
 )
@@ -80,9 +81,9 @@ func addToCredentialMap(cred auth.Credentials, timeValid float64) error {
 
 }
 
-// func deleteFromCredentialMap() error {
-
-// }
+func deleteFromCredentialMap(accessKey string) {
+	delete(globalCreds, accessKey)
+}
 
 // func getCredentialByAccessToken() error {
 
@@ -91,3 +92,17 @@ func addToCredentialMap(cred auth.Credentials, timeValid float64) error {
 // func getCredentialByAccessKey() error {
 
 // }
+
+func purgeExpiredKeys() {
+	for {
+		loadCredentialMap()
+		for k := range globalCreds {
+			fmt.Println("KEY IS ", k)
+			if globalCreds[k].ExpTime < float64(time.Now().Unix()) {
+				delete(globalCreds, k)
+			}
+		}
+		time.Sleep(10000 * time.Millisecond)
+		saveCredentialMap()
+	}
+}

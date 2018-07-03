@@ -686,15 +686,18 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 	fmt.Printf("GetPostRequestHandlerServerSide: %s\n", token)
 
 	// Read the Introspection Endpoint URL
-	endpoint := r.FormValue("Endpoint")
+	//endpoint := r.FormValue("Endpoint")
 
 	// Load existing keys from keys.json file
 	if err := loadCredentialMap(); err != nil {
 		fmt.Println("Existing Keys failed to load: %v", err)
 	}
 
+	// Remove existing keys from the map before validating a new token
+	go purgeExpiredKeys()
+
 	// Validate Access Token with Access Token and Introspection endpoint
-	parsedToken, err := validateAccessToken(token, endpoint)
+	parsedToken, err := validateAccessToken(token)
 
 	if !parsedToken.Active {
 		fmt.Println("GetPostRequestHandler:ValidateToken(): %v", err)
@@ -744,9 +747,9 @@ func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
 	return authdemo, nil
 }
 
-func validateAccessToken(accessToken string, endpoint string) (*wso2AccessTokenDecompose, error) {
+func validateAccessToken(accessToken string) (*wso2AccessTokenDecompose, error) {
 	//Post Request to "endpoint"
-	u, err := url.ParseRequestURI(endpoint)
+	u, err := url.ParseRequestURI("https://localhost:9443/oauth2/introspect")
 	urlStr := u.String()
 	data := url.Values{}
 	data.Add("token", accessToken)
@@ -763,7 +766,8 @@ func validateAccessToken(accessToken string, endpoint string) (*wso2AccessTokenD
 
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	//r.Header.Add("Authorization", "Basic YWRtaW46YWRtaW4=")
-	r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
+	//r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
+	r.Header.Add("Authorization", "YWFydXNoaTphYXJ1c2hpDQo=")
 
 	resp, err := client.Do(r)
 	if err != nil {
