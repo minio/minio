@@ -110,6 +110,7 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 |``drives``| _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled|
 |``exclude`` | _[]string_ | List of wildcard patterns for prefixes to exclude from cache |
 |``expiry`` | _int_ | Days to cache expiry |
+|``maxuse`` | _int_ | Percentage of disk available to cache |
 
 #### Notify
 |Field|Type|Description|

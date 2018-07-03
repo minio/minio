@@ -41,12 +41,32 @@ func TestParseCacheDrives(t *testing.T) {
 			expectedPatterns []string
 			success          bool
 		}{"C:/home/drive1;C:/home/drive2;C:/home/drive3", []string{"C:/home/drive1", "C:/home/drive2", "C:/home/drive3"}, true})
+		testCases = append(testCases, struct {
+			driveStr         string
+			expectedPatterns []string
+			success          bool
+		}{"C:/home/drive{1...3}", []string{"C:/home/drive1", "C:/home/drive2", "C:/home/drive3"}, true})
+		testCases = append(testCases, struct {
+			driveStr         string
+			expectedPatterns []string
+			success          bool
+		}{"C:/home/drive{1..3}", []string{}, false})
 	} else {
 		testCases = append(testCases, struct {
 			driveStr         string
 			expectedPatterns []string
 			success          bool
 		}{"/home/drive1;/home/drive2;/home/drive3", []string{"/home/drive1", "/home/drive2", "/home/drive3"}, true})
+		testCases = append(testCases, struct {
+			driveStr         string
+			expectedPatterns []string
+			success          bool
+		}{"/home/drive{1...3}", []string{"/home/drive1", "/home/drive2", "/home/drive3"}, true})
+		testCases = append(testCases, struct {
+			driveStr         string
+			expectedPatterns []string
+			success          bool
+		}{"/home/drive{1..3}", []string{}, false})
 	}
 	for i, testCase := range testCases {
 		drives, err := parseCacheDrives(strings.Split(testCase.driveStr, cacheEnvDelimiter))

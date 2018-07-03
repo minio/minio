@@ -1,11 +1,12 @@
 {
-    "version": "24",
+    "version": "26",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
     },
     "region": "us-east-1",
     "browser": "on",
+    "worm": "off",
     "domain": "",
     "storageclass": {
         "standard": "",
@@ -14,11 +15,12 @@
     "cache": {
         "drives": [],
         "expiry": 90,
-        "exclude": []
+        "exclude": [],
+        "maxuse": 80
     },
     "usage": {
         "interval": "3h"
-    }
+    },
     "notify": {
         "amqp": {
             "1": {
@@ -124,3 +126,4 @@
         }
     }
 }
+
