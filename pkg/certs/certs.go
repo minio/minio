@@ -18,6 +18,7 @@ package certs
 
 import (
 	"crypto/tls"
+	"path/filepath"
 	"sync"
 
 	"github.com/rjeczalik/notify"
@@ -74,11 +75,14 @@ func (c *Certs) watch() (err error) {
 		}
 	}()
 
-	if err = notify.Watch(c.certFile, c.e, eventWrite...); err != nil {
+	// Windows doesn't allow for watching file changes but instead allows
+	// for directory changes only, while we can still watch for changes
+	// on files on other platforms. Watch parent directory on all platforms
+	// for simplicity.
+	if err = notify.Watch(filepath.Dir(c.certFile), c.e, eventWrite...); err != nil {
 		return err
 	}
-
-	if err = notify.Watch(c.keyFile, c.e, eventWrite...); err != nil {
+	if err = notify.Watch(filepath.Dir(c.keyFile), c.e, eventWrite...); err != nil {
 		return err
 	}
 	c.Lock()
@@ -93,16 +97,21 @@ func (c *Certs) watch() (err error) {
 
 func (c *Certs) run() {
 	for event := range c.e {
+		base := filepath.Base(event.Path())
 		if isWriteEvent(event.Event()) {
-			cert, err := c.loadCert(c.certFile, c.keyFile)
-			if err != nil {
-				// ignore the error continue to use
-				// old certificates.
-				continue
+			certChanged := base == filepath.Base(c.certFile)
+			keyChanged := base == filepath.Base(c.keyFile)
+			if certChanged || keyChanged {
+				cert, err := c.loadCert(c.certFile, c.keyFile)
+				if err != nil {
+					// ignore the error continue to use
+					// old certificates.
+					continue
+				}
+				c.Lock()
+				c.cert = cert
+				c.Unlock()
 			}
-			c.Lock()
-			c.cert = cert
-			c.Unlock()
 		}
 	}
 }
