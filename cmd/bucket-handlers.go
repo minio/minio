@@ -623,7 +623,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
-			reader, err = newEncryptReader(hashReader, key, metadata)
+			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
