@@ -176,10 +176,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Init global heal state
 	initAllHealState(globalIsXL)
 
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if err != nil {
-		return nil, err
-	}
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

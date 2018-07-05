@@ -263,16 +263,6 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 	// Connect disks right away.
 	s.connectDisks()
 
-	// Initialize notification system.
-	if err := globalNotificationSys.Init(s); err != nil {
-		return nil, fmt.Errorf("Unable to initialize notification system. %v", err)
-	}
-
-	// Initialize policy system.
-	if err := globalPolicySys.Init(s); err != nil {
-		return nil, fmt.Errorf("Unable to initialize policy system. %v", err)
-	}
-
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
 

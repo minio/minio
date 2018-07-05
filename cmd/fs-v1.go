@@ -151,16 +151,6 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
 
-	// Initialize notification system.
-	if err = globalNotificationSys.Init(fs); err != nil {
-		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize notification system")
-	}
-
-	// Initialize policy system.
-	if err = globalPolicySys.Init(fs); err != nil {
-		return nil, uiErrUnableToReadFromBackend(err).Msg("Unable to initialize policy system")
-	}
-
 	if !fs.diskMount {
 		go fs.diskUsage(globalServiceDoneCh)
 	}

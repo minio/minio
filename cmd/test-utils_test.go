@@ -353,10 +353,8 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioHost = host
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, testServer.Disks)
-	if err != nil {
-		t.Fatalf("Unable to create new notification system. %v", err)
-	}
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
@@ -1720,9 +1718,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	}
 
 	// Create new notification system.
-	if globalNotificationSys, err = NewNotificationSys(globalServerConfig, endpoints); err != nil {
-		return nil, err
-	}
+	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
