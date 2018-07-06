@@ -218,8 +218,14 @@ func serverMain(ctx *cli.Context) {
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
 
+	//MODIFICATION initCredsManager
+	initCredsManager()
+
 	// Initialize server config.
 	initConfig()
+
+	//  Added this to test changes in signature V4
+	addToCredentialMap(globalServerConfig.GetCredential(), 0.0, "")
 
 	// Check and load SSL certificates.
 	var err error

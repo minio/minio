@@ -64,8 +64,11 @@ func isSecretKeyValid(secretKey string) bool {
 
 // Credentials holds access and secret keys.
 type Credentials struct {
-	AccessKey string `json:"accessKey,omitempty"`
-	SecretKey string `json:"secretKey,omitempty"`
+	AccessKey    string  `json:"accessKey,omitempty"`
+	SecretKey    string  `json:"secretKey,omitempty"`
+	ExpTime      float64 `json:"expTime"`
+	SessionToken string  `json:"sessionToken"`
+	AccessToken  string  `json:"accessToken"`
 }
 
 // IsValid - returns whether credential is valid or not.

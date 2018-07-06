@@ -42,6 +42,9 @@ const (
 
 	// Private key file for HTTPS.
 	privateKeyFile = "private.key"
+
+	//Minio Keys configuration file
+	keysFile = "keys.json"
 )
 
 // ConfigDir - configuration directory with locking.
@@ -95,6 +98,11 @@ func (config *ConfigDir) GetPrivateKeyFile() string {
 	return filepath.Join(config.getCertsDir(), privateKeyFile)
 }
 
+// GetKeysFile - returns absolute path of keys.json file.
+func (config *ConfigDir) GetKeysFile() string {
+	return filepath.Join(getDefaultConfigDir(), keysFile)
+}
+
 func getDefaultConfigDir() string {
 	homeDir, err := homedir.Dir()
 	if err != nil {
@@ -132,4 +140,8 @@ func getPublicCertFile() string {
 
 func getPrivateKeyFile() string {
 	return configDir.GetPrivateKeyFile()
+}
+
+func getKeysFile() string {
+	return configDir.GetKeysFile()
 }

@@ -82,6 +82,10 @@ func (s *serverConfig) GetCredential() auth.Credentials {
 	return s.Credential
 }
 
+// func (s *serverConfig) GetCredentialByAccessKey(accessKey string) auth.Credentials {
+// 	return globalCreds[accessKey]
+// }
+
 // SetBrowser set if browser is enabled.
 func (s *serverConfig) SetBrowser(b bool) {
 	// Set the new value.

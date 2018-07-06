@@ -19,12 +19,16 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -658,6 +662,147 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 
 	writeSuccessResponseJSON(w, resultBuf.Bytes())
 	return
+}
+
+type wso2AccessTokenDecompose struct {
+	Active    bool    `json:"active"`
+	TokenType string  `json:"token_type"`
+	Exp       float64 `json:"exp"`
+	Iat       float64 `json:"iat"`
+	ClientID  string  `json:"client_id"`
+	username  string  `json:"active"`
+}
+
+func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request) {
+	// Parse Request
+	err := r.ParseForm()
+	if err != nil {
+		fmt.Println("GetMinioToken:ParseForm(): %v", err)
+		http.Error(w, "Parse Error", 400)
+	}
+
+	//Read the AccessToken from the request form
+	token := r.FormValue("AccessToken")
+	fmt.Printf("GetPostRequestHandlerServerSide: %s\n", token)
+
+	// Read the Introspection Endpoint URL
+	//endpoint := r.FormValue("Endpoint")
+
+	// Load existing keys from keys.json file
+	if err := loadCredentialMap(); err != nil {
+		fmt.Println("Existing Keys failed to load: %v", err)
+	}
+
+	// Remove existing keys from the map before validating a new token
+	//go purgeExpiredKeys()
+
+	// Validate Access Token with Access Token and Introspection endpoint
+	parsedToken, err := validateAccessToken(token)
+
+	if !parsedToken.Active {
+		fmt.Println("GetPostRequestHandler:ValidateToken(): %v", err)
+		http.Error(w, "Authentication Failed", 401)
+	}
+
+	var retCred *auth.Credentials
+	//check if access token exists already in database
+	//token = "888212ae-05fa-3509-8e65-9a833ea41372"
+	loadCredentialMap()
+	cred, ok := getCredentialByAccessToken(token)
+	if ok {
+		addToCredentialMap(cred, parsedToken.Exp, token)
+		retCred = &cred
+	} else {
+		//If Valid, Issue new credentials
+		retCred, err = issueCredentials(parsedToken, token)
+		if err != nil {
+			fmt.Println("GetPostRequestHandler:ParseConfig(): %v", err)
+		}
+	}
+
+	//Marshal the credentials back to the client as JSON
+	b, _ := json.Marshal(retCred)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+
+}
+
+func issueCredentials(wso2 *wso2AccessTokenDecompose, accessToken string) (*auth.Credentials, error) {
+
+	// If creds already exist in map
+	// Get New Credentials
+	cred, err := auth.GetNewCredentials()
+	if err != nil {
+		fmt.Printf("err = %v\n", err)
+	}
+
+	// Add Credentials to a map
+	if err := addToCredentialMap(cred, wso2.Exp, accessToken); err != nil {
+		fmt.Printf("err = %v\n", err)
+	}
+
+	// Save Credentials into the map
+	err = saveCredentialMap()
+	if err != nil {
+		fmt.Printf("err = %v\n", err)
+	}
+
+	// For demo purpose, read out the existing minio access/secret keys
+	//creds := globalServerConfig.GetCredential()
+
+	// authdemo := &credentialSts{
+	// 	AccessKey: creds.AccessKey,
+	// 	SecretKey: creds.SecretKey,
+	// 	ExpTime:   wso2.Exp,
+	// }
+	authdemo := &auth.Credentials{
+		AccessKey: cred.AccessKey,
+		SecretKey: cred.SecretKey,
+		ExpTime:   wso2.Exp,
+	}
+	return authdemo, nil
+}
+
+func validateAccessToken(accessToken string) (*wso2AccessTokenDecompose, error) {
+	//Post Request to "endpoint"
+	u, err := url.ParseRequestURI("https://localhost:9443/oauth2/introspect")
+	urlStr := u.String()
+	data := url.Values{}
+	data.Add("token", accessToken)
+
+	//Temporary disable of TLS to support Non-HTTPS connection
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	client := &http.Client{}
+	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	//r.Header.Add("Authorization", "Basic YWRtaW46YWRtaW4=")
+	r.Header.Add("Authorization", "Basic c21vdWxpOlNwYXJ0YTI1MDI=")
+	//r.Header.Add("Authorization", "YWFydXNoaTphYXJ1c2hpDQo=")
+
+	resp, err := client.Do(r)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+
+	retval := &wso2AccessTokenDecompose{}
+	json.Unmarshal(body, &retval)
+	return retval, err
+
 }
 
 // SetConfigHandler - PUT /minio/admin/v1/config

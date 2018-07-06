@@ -162,7 +162,7 @@ func compareSignatureV4(sig1, sig2 string) bool {
 // returns ErrNone if the signature matches.
 func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+	//cred := globalServerConfig.GetCredential()
 
 	// Server region.
 	region := globalServerConfig.GetRegion()
@@ -174,7 +174,11 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	}
 
 	// Verify if the access key id matches.
-	if credHeader.accessKey != cred.AccessKey {
+	// if credHeader.accessKey != cred.AccessKey {
+	// 	return ErrInvalidAccessKeyID
+	// }
+	cred, ok := getCredentialByAccessKey(credHeader.accessKey)
+	if !ok {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -198,7 +202,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 // returns ErrNone if the signature matches.
 func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+	//cred := globalServerConfig.GetCredential()
 
 	// Copy request
 	req := *r
@@ -210,7 +214,11 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	}
 
 	// Verify if the access key id matches.
-	if pSignValues.Credential.accessKey != cred.AccessKey {
+	// if pSignValues.Credential.accessKey != cred.AccessKey {
+	// 	return ErrInvalidAccessKeyID
+	// }
+	cred, ok := getCredentialByAccessKey(pSignValues.Credential.accessKey)
+	if !ok {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -307,7 +315,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 // returns ErrNone if signature matches.
 func doesSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+	//cred := globalServerConfig.GetCredential()
 
 	// Copy request.
 	req := *r
@@ -328,7 +336,11 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	}
 
 	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKey {
+	// if signV4Values.Credential.accessKey != cred.AccessKey {
+	// 	return ErrInvalidAccessKeyID
+	// }
+	cred, ok := getCredentialByAccessKey(signV4Values.Credential.accessKey)
+	if !ok {
 		return ErrInvalidAccessKeyID
 	}
 
