@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
@@ -28,13 +29,20 @@ import (
 //load save add getCredbyAccessToken getCredbyAccessKey
 
 //Global Map of credentialSts vars stored in keys.json
-var globalCreds map[string]credentialSts = make(map[string]credentialSts)
+type credentialsManager struct {
+	sync.RWMutex `json:"-"`
+	Version      string                      `json:"version"`
+	credMap      map[string]auth.Credentials `json:"creds"`
+}
 
-type credentialSts struct {
-	AccessKey    string  `json:"accessKey"`
-	SecretKey    string  `json:"secretKey"`
-	ExpTime      float64 `json:"expTime"`
-	SessionToken string  `json:"sessionToken"`
+var globalCreds *credentialsManager
+
+func initCredsManager() {
+	c := &credentialsManager{
+		Version: "1",
+		credMap: make(map[string]auth.Credentials),
+	}
+	globalCreds = c
 }
 
 // Read file from keys.json stored in ~/.minio into globalCreds map
@@ -43,13 +51,15 @@ func loadCredentialMap() error {
 	if err != nil {
 		return err
 	}
-	json.Unmarshal(content, &globalCreds)
+	json.Unmarshal(content, &globalCreds.credMap)
 	return nil
 }
 
+//streaming signature v4
+
 // Write globalCreds map into keys.json
 func saveCredentialMap() error {
-	b, err := json.MarshalIndent(globalCreds, "", "    ")
+	b, err := json.MarshalIndent(globalCreds.credMap, "", "    ")
 	if err != nil {
 		fmt.Printf("Error is %v\n", err)
 	}
@@ -63,43 +73,55 @@ func saveCredentialMap() error {
 }
 
 // Add a new credential to the globalCreds Map
-func addToCredentialMap(cred auth.Credentials, timeValid float64) error {
-	authcred := &credentialSts{
+func addToCredentialMap(cred auth.Credentials, timeValid float64, accessToken string) error {
+	authcred := &auth.Credentials{
 		AccessKey:    cred.AccessKey,
 		SecretKey:    cred.SecretKey,
 		ExpTime:      timeValid,
 		SessionToken: "",
+		AccessToken:  accessToken,
 	}
 	fmt.Printf("AccessKey: %s SecretKey: %s ExpirationTime: %f\n", authcred.AccessKey, authcred.SecretKey, authcred.ExpTime)
-	globalCreds[cred.AccessKey] = *authcred
+	globalCreds.credMap[cred.AccessKey] = *authcred
 	err := saveCredentialMap()
 	if err != nil {
 		fmt.Printf("Error is %v\n", err)
 	}
 
 	return nil
-
 }
+
+// Add a new credential to the globalCreds Map with unlimited expiry
 
 func deleteFromCredentialMap(accessKey string) {
-	delete(globalCreds, accessKey)
+	delete(globalCreds.credMap, accessKey)
 }
 
-// func getCredentialByAccessToken() error {
+func getCredentialByAccessToken(accessToken string) (auth.Credentials, bool) {
+	var val auth.Credentials
+	var ok bool
 
-// }
+	for k := range globalCreds.credMap {
+		if globalCreds.credMap[k].AccessToken == accessToken {
+			val, ok = globalCreds.credMap[k]
 
-// func getCredentialByAccessKey() error {
+		}
+	}
 
-// }
+	return val, ok
+}
+
+func getCredentialByAccessKey(accessKey string) (auth.Credentials, bool) {
+	val, ok := globalCreds.credMap[accessKey]
+	return val, ok
+}
 
 func purgeExpiredKeys() {
 	for {
 		loadCredentialMap()
-		for k := range globalCreds {
-			fmt.Println("KEY IS ", k)
-			if globalCreds[k].ExpTime < float64(time.Now().Unix()) {
-				delete(globalCreds, k)
+		for k := range globalCreds.credMap {
+			if globalCreds.credMap[k].ExpTime < float64(time.Now().Unix()) {
+				delete(globalCreds.credMap, k)
 			}
 		}
 		time.Sleep(10000 * time.Millisecond)

@@ -694,7 +694,7 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Remove existing keys from the map before validating a new token
-	go purgeExpiredKeys()
+	//go purgeExpiredKeys()
 
 	// Validate Access Token with Access Token and Introspection endpoint
 	parsedToken, err := validateAccessToken(token)
@@ -704,21 +704,32 @@ func (a adminAPIHandlers) GetCredentials(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Authentication Failed", 401)
 	}
 
-	//If Valid, Issue new credentials
-	cred, err := issueCredentials(parsedToken)
-	if err != nil {
-		fmt.Println("GetPostRequestHandler:ParseConfig(): %v", err)
+	var retCred *auth.Credentials
+	//check if access token exists already in database
+	//token = "888212ae-05fa-3509-8e65-9a833ea41372"
+	loadCredentialMap()
+	cred, ok := getCredentialByAccessToken(token)
+	if ok {
+		addToCredentialMap(cred, parsedToken.Exp, token)
+		retCred = &cred
+	} else {
+		//If Valid, Issue new credentials
+		retCred, err = issueCredentials(parsedToken, token)
+		if err != nil {
+			fmt.Println("GetPostRequestHandler:ParseConfig(): %v", err)
+		}
 	}
 
 	//Marshal the credentials back to the client as JSON
-	b, _ := json.Marshal(cred)
+	b, _ := json.Marshal(retCred)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
 
 }
 
-func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
+func issueCredentials(wso2 *wso2AccessTokenDecompose, accessToken string) (*auth.Credentials, error) {
 
+	// If creds already exist in map
 	// Get New Credentials
 	cred, err := auth.GetNewCredentials()
 	if err != nil {
@@ -726,7 +737,7 @@ func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
 	}
 
 	// Add Credentials to a map
-	if err := addToCredentialMap(cred, wso2.Exp); err != nil {
+	if err := addToCredentialMap(cred, wso2.Exp, accessToken); err != nil {
 		fmt.Printf("err = %v\n", err)
 	}
 
@@ -737,11 +748,16 @@ func issueCredentials(wso2 *wso2AccessTokenDecompose) (*credentialSts, error) {
 	}
 
 	// For demo purpose, read out the existing minio access/secret keys
-	creds := globalServerConfig.GetCredential()
+	//creds := globalServerConfig.GetCredential()
 
-	authdemo := &credentialSts{
-		AccessKey: creds.AccessKey,
-		SecretKey: creds.SecretKey,
+	// authdemo := &credentialSts{
+	// 	AccessKey: creds.AccessKey,
+	// 	SecretKey: creds.SecretKey,
+	// 	ExpTime:   wso2.Exp,
+	// }
+	authdemo := &auth.Credentials{
+		AccessKey: cred.AccessKey,
+		SecretKey: cred.SecretKey,
 		ExpTime:   wso2.Exp,
 	}
 	return authdemo, nil
