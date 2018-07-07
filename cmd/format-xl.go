@@ -86,10 +86,11 @@ type formatXLV1 struct {
 // Represents the V2 backend disk structure version
 // under `.minio.sys` and actual data namespace.
 // formatXLV2 - structure holds format config version '2'.
+// The V2 format to support "large bucket" support where a bucket
+// can span multiple erasure sets.
 type formatXLV2 struct {
-	Version string `json:"version"`
-	Format  string `json:"format"`
-	XL      struct {
+	formatMetaV1
+	XL struct {
 		Version string `json:"version"` // Version of 'xl' format.
 		This    string `json:"this"`    // This field carries assigned disk uuid.
 		// Sets field carries the input disk order generated the first
@@ -107,9 +108,8 @@ type formatXLV2 struct {
 // In .minio.sys/multipart we have:
 // sha256(bucket/object)/uploadID/[xl.json, part.1, part.2 ....]
 type formatXLV3 struct {
-	Version string `json:"version"`
-	Format  string `json:"format"`
-	XL      struct {
+	formatMetaV1
+	XL struct {
 		Version string `json:"version"` // Version of 'xl' format.
 		This    string `json:"this"`    // This field carries assigned disk uuid.
 		// Sets field carries the input disk order generated the first
