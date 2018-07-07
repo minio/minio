@@ -1015,12 +1015,8 @@ func (l *gcsGateway) AbortMultipartUpload(ctx context.Context, bucket string, ke
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 // Note that there is a limit (currently 32) to the number of components that can
-// be composed in a single operation. There is a limit (currently 1024) to the total
-// number of components for a given composite object. This means you can append to
-// each object at most 1023 times. There is a per-project rate limit (currently 200)
-// to the number of components you can compose per second. This rate counts both the
-// components being appended to a composite object as well as the components being
-// copied when the composite object of which they are a part is copied.
+// be composed in a single operation. There is a per-project rate limit (currently 200)
+// to the number of source objects you can compose per second.
 func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string, key string, uploadID string, uploadedParts []minio.CompletePart) (minio.ObjectInfo, error) {
 	meta := gcsMultipartMetaName(uploadID)
 	object := l.client.Bucket(bucket).Object(meta)
