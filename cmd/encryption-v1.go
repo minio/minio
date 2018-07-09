@@ -284,28 +284,22 @@ func rotateKey(oldKey []byte, newKey []byte, metadata map[string]string) error {
 		return nil // we don't need to rotate keys if newKey == oldKey
 	}
 
-	nonce := make([]byte, 32) // generate random values for key derivation
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return err
-	}
-
-	niv := sha256.Sum256(nonce[:]) // derive key encryption key
 	sha = sha256.New()
 	sha.Write(newKey)
-	sha.Write(niv[:])
+	sha.Write(iv[:])
 	keyEncryptionKey = sha.Sum(nil)
 
-	sealedKeyW := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
-	n, err = sio.Encrypt(sealedKeyW, bytes.NewReader(objectEncryptionKey.Bytes()), sio.Config{
+	newSealedKey := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
+	n, err = sio.Encrypt(newSealedKey, bytes.NewReader(objectEncryptionKey.Bytes()), sio.Config{
 		Key: keyEncryptionKey,
 	})
 	if n != 64 || err != nil {
-		return errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
+		logger.CriticalIf(context.Background(), errors.New("failed to seal object encryption key"))
 	}
 
-	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(niv[:])
+	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
 	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareSha256
-	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKeyW.Bytes())
+	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(newSealedKey.Bytes())
 	return nil
 }
 
