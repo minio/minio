@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -402,17 +403,19 @@ func loadConfig() error {
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
+func getNotificationTargets(config *serverConfig) *event.TargetList {
 	targetList := event.NewTargetList()
 
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
 			newTarget, err := target.NewAMQPTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -421,10 +424,14 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewElasticsearchTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
+
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
+
 			}
 		}
 	}
@@ -433,10 +440,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewKafkaTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -445,10 +454,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewMQTTTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -457,10 +468,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewMySQLTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -469,10 +482,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewNATSTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -481,10 +496,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewPostgreSQLTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -493,10 +510,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewRedisTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -505,10 +524,11 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget := target.NewWebhookTarget(id, args)
 			if err := targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
 
-	return targetList, nil
+	return targetList
 }

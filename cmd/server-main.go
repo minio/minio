@@ -271,15 +271,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
 
-	// Create new notification system.
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize the notification system")
-	}
-
-	// Create new policy system.
-	globalPolicySys = NewPolicySys()
-
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
@@ -315,15 +306,31 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
+	// Re-enable logging
+	logger.Disable = false
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
+
+	// Initialize policy system.
+	if err := globalPolicySys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize policy system")
+	}
+
+	// Create new notification system.
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+
+	// Initialize notification system.
+	if err := globalNotificationSys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize notification system")
+	}
+
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(globalMinioAddr)
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
-
-	// Re-enable logging
-	logger.Disable = false
 
 	handleSignals()
 }

@@ -429,12 +429,8 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 }
 
 // NewNotificationSys - creates new notification system object.
-func NewNotificationSys(config *serverConfig, endpoints EndpointList) (*NotificationSys, error) {
-	targetList, err := getNotificationTargets(config)
-	if err != nil {
-		return nil, err
-	}
-
+func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
+	targetList := getNotificationTargets(config)
 	peerRPCClientMap := makeRemoteRPCClients(endpoints)
 
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
@@ -443,7 +439,7 @@ func NewNotificationSys(config *serverConfig, endpoints EndpointList) (*Notifica
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
 		peerRPCClientMap:           peerRPCClientMap,
-	}, nil
+	}
 }
 
 type eventArgs struct {

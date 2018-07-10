@@ -139,10 +139,8 @@ func testAdminCmdRunnerServerInfo(t *testing.T, client adminCmdRunner) {
 	}()
 
 	endpoints := new(EndpointList)
-	notificationSys, err := NewNotificationSys(globalServerConfig, *endpoints)
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
+
+	notificationSys := NewNotificationSys(globalServerConfig, *endpoints)
 
 	testCases := []struct {
 		bootTime        time.Time
