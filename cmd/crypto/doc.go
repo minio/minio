@@ -32,7 +32,7 @@
 //       Input: ClientKey, bucket, object, metadata, object_data
 //       -              IV := Random({0,1}²⁵⁶)
 //       -       ObjectKey := SHA256(ClientKey || Random({0,1}²⁵⁶))
-//       -       KeyEncKey := HMAC-SHA256(ClientKey, IV || bucket || object)
+//       -       KeyEncKey := HMAC-SHA256(ClientKey, IV || 'SSE-C' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -       SealedKey := DAREv2_Enc(KeyEncKey, ObjectKey)
 //       - enc_object_data := DAREv2_Enc(ObjectKey, object_data)
 //       -        metadata <- IV
@@ -43,7 +43,7 @@
 //       Input: ClientKey, bucket, object, metadata, enc_object_data
 //       -          IV <- metadata
 //       -   SealedKey <- metadata
-//       -   KeyEncKey := HMAC-SHA256(ClientKey, IV || bucket || object)
+//       -   KeyEncKey := HMAC-SHA256(ClientKey, IV || 'SSE-C' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -   ObjectKey := DAREv2_Dec(KeyEncKey, SealedKey)
 //       - object_data := DAREv2_Dec(ObjectKey, enc_object_data)
 //       Output: object_data
@@ -64,7 +64,7 @@
 //       Input: MasterKey, bucket, object, metadata, object_data
 //       -              IV := Random({0,1}²⁵⁶)
 //       -       ObjectKey := SHA256(MasterKey || Random({0,1}²⁵⁶))
-//       -       KeyEncKey := HMAC-SHA256(MasterKey, IV || bucket || object)
+//       -       KeyEncKey := HMAC-SHA256(MasterKey, IV || 'SSE-S3' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -       SealedKey := DAREv2_Enc(KeyEncKey, ObjectKey)
 //       - enc_object_data := DAREv2_Enc(ObjectKey, object_data)
 //       -        metadata <- IV
@@ -75,7 +75,7 @@
 //       Input: MasterKey, bucket, object, metadata, enc_object_data
 //       -          IV <- metadata
 //       -   SealedKey <- metadata
-//       -   KeyEncKey := HMAC-SHA256(MasterKey, IV || bucket || object)
+//       -   KeyEncKey := HMAC-SHA256(MasterKey, IV || 'SSE-S3' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -   ObjectKey := DAREv2_Dec(KeyEncKey, SealedKey)
 //       - object_data := DAREv2_Dec(ObjectKey, enc_object_data)
 //       Output: object_data
@@ -92,7 +92,7 @@
 //       -     Key, EncKey := Generate(KeyID)
 //       -              IV := Random({0,1}²⁵⁶)
 //       -       ObjectKey := SHA256(Key, Random({0,1}²⁵⁶))
-//       -       KeyEncKey := HMAC-SHA256(Key, IV || bucket || object)
+//       -       KeyEncKey := HMAC-SHA256(Key, IV || 'SSE-S3' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -       SealedKey := DAREv2_Enc(KeyEncKey, ObjectKey)
 //       - enc_object_data := DAREv2_Enc(ObjectKey, object_data)
 //       -        metadata <- IV
@@ -108,7 +108,7 @@
 //       -          IV <- metadata
 //       -   SealedKey <- metadata
 //       -         Key := Unseal(KeyID, EncKey)
-//       -   KeyEncKey := HMAC-SHA256(Key, IV || bucket || object)
+//       -   KeyEncKey := HMAC-SHA256(Key, IV || 'SSE-S3' || 'DAREv2-HMAC-SHA256' || bucket || '/' || object)
 //       -   ObjectKey := DAREv2_Dec(KeyEncKey, SealedKey)
 //       - object_data := DAREv2_Dec(ObjectKey, enc_object_data)
 //       Output: object_data

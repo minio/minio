@@ -161,7 +161,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
 
-			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, startOffset, length, objInfo, false)
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, bucket, object, startOffset, length, objInfo, false)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -270,7 +270,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, apiErr, r.URL)
 			return
 		} else if encrypted {
-			if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
+			if _, err = DecryptRequest(w, r, bucket, object, objInfo.UserDefined); err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -463,7 +463,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
-			if err = rotateKey(oldKey, newKey, encMetadata); err != nil {
+			if err = rotateKey(oldKey, newKey, srcBucket, srcObject, encMetadata); err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -475,7 +475,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if sseCopyC {
 				// Source is encrypted make sure to save the encrypted size.
 				writer = ioutil.LimitedWriter(writer, 0, srcInfo.Size)
-				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcInfo)
+				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcBucket, srcObject, srcInfo)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -490,7 +490,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				}
 			}
 			if sseC {
-				reader, err = newEncryptReader(pipeReader, newKey, encMetadata)
+				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -789,7 +789,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsEncryptionSupported() {
 		if hasSSECustomerHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
-			reader, err = EncryptRequest(hashReader, r, metadata)
+			reader, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -888,7 +888,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
-			_, err = newEncryptMetadata(key, encMetadata)
+			_, err = newEncryptMetadata(key, bucket, object, encMetadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1056,7 +1056,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-			writer, startOffset, length, err = DecryptBlocksRequest(pipeWriter, r, startOffset, length, srcInfo, true)
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, srcBucket, srcObject, startOffset, length, srcInfo, true)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1078,14 +1078,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 			// Calculating object encryption key
 			var objectEncryptionKey []byte
-			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 
-			reader, err = sio.EncryptReader(pipeReader, sio.Config{Key: objectEncryptionKey})
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: objectEncryptionKey})
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1281,7 +1281,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 			// Calculating object encryption key
 			var objectEncryptionKey []byte
-			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
