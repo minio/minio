@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	diskMinFreeSpace  = 1 * humanize.GiByte // Min 1GiB free space.
-	diskMinTotalSpace = diskMinFreeSpace    // Min 1GiB total space.
+	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
+	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError = 5
 )
 
