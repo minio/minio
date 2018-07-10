@@ -21,9 +21,9 @@ import (
 	"os"
 	"path/filepath"
 
-	etcd "github.com/coreos/etcd/client"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
@@ -201,7 +201,7 @@ func purgeV1() error {
 
 	cv1 := &configV1{}
 	_, err := Load(configFile, cv1)
-	if os.IsNotExist(err) || etcd.IsKeyNotFound(err) {
+	if os.IsNotExist(err) || err == dns.ErrNoEntriesFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config version ‘1’. %v", err)

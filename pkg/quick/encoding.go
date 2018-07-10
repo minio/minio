@@ -30,7 +30,8 @@ import (
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/clientv3"
+	dns "github.com/minio/minio/pkg/dns"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -125,7 +126,7 @@ func saveFileConfig(filename string, v interface{}) error {
 
 }
 
-func saveFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error {
+func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
 	// Fetch filename's extension
 	ext := filepath.Ext(filename)
 	// Marshal data
@@ -137,44 +138,34 @@ func saveFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error 
 		dataBytes = []byte(strings.Replace(string(dataBytes), "\n", "\r\n", -1))
 	}
 
-	kapi := etcd.NewKeysAPI(clnt)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	_, err = kapi.Update(ctx, filename, string(dataBytes))
-	if etcd.IsKeyNotFound(err) {
-		_, err = kapi.Create(ctx, filename, string(dataBytes))
-	}
-	cancel()
+	_, err = clnt.Put(ctx, filename, string(dataBytes))
+	defer cancel()
 	return err
 }
 
-func loadFileConfigEtcd(filename string, clnt etcd.Client, v interface{}) error {
-	kapi := etcd.NewKeysAPI(clnt)
+func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	resp, err := kapi.Get(ctx, filename, nil)
-	cancel()
+	resp, err := clnt.Get(ctx, filename)
+	defer cancel()
 	if err != nil {
 		return err
 	}
+	if resp.Count == 0 {
+		return dns.ErrNoEntriesFound
+	}
 
-	var ev *etcd.Node
-	switch {
-	case resp.Node.Dir:
-		for _, ev = range resp.Node.Nodes {
-			if string(ev.Key) == filename {
-				break
+	for _, ev := range resp.Kvs {
+		if string(ev.Key) == filename {
+			fileData := ev.Value
+			if runtime.GOOS == "windows" {
+				fileData = bytes.Replace(fileData, []byte("\r\n"), []byte("\n"), -1)
 			}
+			// Unmarshal file's content
+			return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 		}
-	default:
-		ev = resp.Node
 	}
-
-	fileData := ev.Value
-	if runtime.GOOS == "windows" {
-		fileData = strings.Replace(ev.Value, "\r\n", "\n", -1)
-	}
-
-	// Unmarshal file's content
-	return toUnmarshaller(filepath.Ext(filename))([]byte(fileData), v)
+	return dns.ErrNoEntriesFound
 }
 
 // loadFileConfig unmarshals the file's content with the right

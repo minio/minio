@@ -30,8 +30,6 @@ import (
 	"strings"
 	"sync"
 
-	etcd "github.com/coreos/etcd/client"
-
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -64,7 +62,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
-				if etcd.IsKeyNotFound(gerr) || gerr == dns.ErrNoEntriesFound {
+				if gerr == dns.ErrNoEntriesFound {
 					return globalDNSConfig.Put(b[index].Name)
 				}
 				return gerr
@@ -211,7 +209,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && !etcd.IsKeyNotFound(err) && err != dns.ErrNoEntriesFound {
+		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -432,7 +430,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(bucket); err != nil {
-			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)

@@ -26,7 +26,7 @@ import (
 	"reflect"
 	"sync"
 
-	etcd "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/fatih/structs"
 	"github.com/minio/minio/pkg/safe"
 )
@@ -45,7 +45,7 @@ type Config interface {
 // config - implements quick.Config interface
 type config struct {
 	data interface{}
-	clnt etcd.Client
+	clnt *etcd.Client
 	lock *sync.RWMutex
 }
 
@@ -189,7 +189,7 @@ func writeFile(filename string, data []byte) error {
 }
 
 // GetVersion - extracts the version information.
-func GetVersion(filename string, clnt etcd.Client) (version string, err error) {
+func GetVersion(filename string, clnt *etcd.Client) (version string, err error) {
 	var qc Config
 	qc, err = LoadConfig(filename, clnt, &struct {
 		Version string
@@ -201,7 +201,7 @@ func GetVersion(filename string, clnt etcd.Client) (version string, err error) {
 }
 
 // LoadConfig - loads json config from filename for the a given struct data
-func LoadConfig(filename string, clnt etcd.Client, data interface{}) (qc Config, err error) {
+func LoadConfig(filename string, clnt *etcd.Client, data interface{}) (qc Config, err error) {
 	qc, err = NewConfig(data, clnt)
 	if err != nil {
 		return nil, err
@@ -210,7 +210,7 @@ func LoadConfig(filename string, clnt etcd.Client, data interface{}) (qc Config,
 }
 
 // SaveConfig - saves given configuration data into given file as JSON.
-func SaveConfig(data interface{}, filename string, clnt etcd.Client) (err error) {
+func SaveConfig(data interface{}, filename string, clnt *etcd.Client) (err error) {
 	if err = checkData(data); err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func SaveConfig(data interface{}, filename string, clnt etcd.Client) (err error)
 
 // NewConfig loads config from etcd client if provided, otherwise loads from a local filename.
 // fails when all else fails.
-func NewConfig(data interface{}, clnt etcd.Client) (cfg Config, err error) {
+func NewConfig(data interface{}, clnt *etcd.Client) (cfg Config, err error) {
 	if err := checkData(data); err != nil {
 		return nil, err
 	}

@@ -142,6 +142,10 @@ const (
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
+
+	// Default values used while communicating with the cloud backends
+	defaultDialTimeout   = 30 * time.Second
+	defaultDialKeepAlive = 30 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -263,8 +267,8 @@ func NewCustomHTTPTransport() *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   defaultDialTimeout,
+			KeepAlive: defaultDialKeepAlive,
 		}).DialContext,
 		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,

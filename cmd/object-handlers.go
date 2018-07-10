@@ -31,7 +31,6 @@ import (
 	"sort"
 	"strconv"
 
-	etcd "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/logger"
@@ -1545,7 +1544,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
 		if err != nil {
-			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+			if err == dns.ErrNoEntriesFound {
 				writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 			} else {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)

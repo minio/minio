@@ -27,7 +27,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 
-	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -653,7 +652,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
-		if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+		if err == dns.ErrNoEntriesFound {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 		} else {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)

@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/coreos/etcd/client"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -903,10 +903,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 	// etcd specific errors, a key is always a bucket for us return
 	// ErrNoSuchBucket in such a case.
-	if e, ok := err.(*client.Error); ok {
-		if e.Code == client.ErrorCodeKeyNotFound {
-			return ErrNoSuchBucket
-		}
+	if err == dns.ErrNoEntriesFound {
+		return ErrNoSuchBucket
 	}
 
 	switch err.(type) {

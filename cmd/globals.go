@@ -24,7 +24,7 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 
-	etcd "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -204,7 +204,7 @@ var (
 	globalRPCAPIVersion = RPCVersion{3, 0, 0}
 
 	// Allocated etcd endpoint for config and bucket DNS.
-	globalEtcdClient etcd.Client
+	globalEtcdClient *etcd.Client
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig dns.Config
