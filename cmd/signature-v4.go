@@ -249,6 +249,12 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
+
+		// Handle the metadata in presigned put query string
+		if strings.Contains(strings.ToLower(k), "x-amz-meta-") {
+			query.Set(k, v[0])
+		}
+
 		if strings.HasPrefix(strings.ToLower(k), "x-amz") {
 			continue
 		}
