@@ -786,11 +786,23 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !o.IsEncrypted() {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	size, err := sio.DecryptedSize(uint64(o.Size))
-	if err != nil {
-		err = errObjectTampered // assign correct error type
+	if len(o.Parts) == 0 {
+		size, err := sio.DecryptedSize(uint64(o.Size))
+		if err != nil {
+			err = errObjectTampered // assign correct error type
+		}
+		return int64(size), err
 	}
-	return int64(size), err
+
+	var size int64
+	for _, part := range o.Parts {
+		partSize, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return 0, errObjectTampered
+		}
+		size += int64(partSize)
+	}
+	return size, nil
 }
 
 // EncryptedSize returns the size of the object after encryption.

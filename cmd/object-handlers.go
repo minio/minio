@@ -1077,7 +1077,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 
-			// Calculating object encryption key
 			var objectEncryptionKey []byte
 			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
@@ -1086,7 +1085,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 
-			reader, err = sio.EncryptReader(reader, sio.Config{Key: objectEncryptionKey})
+			var partIDbin [4]byte
+			binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
+
+			mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+			mac.Write(partIDbin[:])
+			partEncryptionKey := mac.Sum(nil)
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
