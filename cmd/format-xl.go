@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"sync"
 
 	"encoding/hex"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -127,6 +129,7 @@ func newFormatXLV3(numSets int, setLen int) *formatXLV3 {
 	format := &formatXLV3{}
 	format.Version = formatMetaVersionV1
 	format.Format = formatBackendXL
+	format.ID = mustGetUUID()
 	format.XL.Version = formatXLVersionV3
 	format.XL.DistributionAlgo = formatXLVersionV2DistributionAlgo
 	format.XL.Sets = make([][]string, numSets)
@@ -438,6 +441,112 @@ func checkFormatXLValues(formats []*formatXLV3) error {
 		if len(formats) != len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]) {
 			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
 				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]))
+		}
+	}
+	return nil
+}
+
+// Get Deployment ID for the XL sets from format.json.
+// This need not be in quorum. Even if one of the format.json
+// file has this value, we assume it is valid.
+// If more than one format.json's have different id, it is considered a corrupt
+// backend format.
+func formatXLGetDeploymentID(refFormat *formatXLV3, formats []*formatXLV3) (string, error) {
+	var deploymentID string
+	for _, format := range formats {
+		if format == nil || format.ID == "" {
+			continue
+		}
+		if reflect.DeepEqual(format.XL.Sets, refFormat.XL.Sets) {
+			// Found an ID in one of the format.json file
+			// Set deploymentID for the first time.
+			if deploymentID == "" {
+				deploymentID = format.ID
+			} else if deploymentID != format.ID {
+				// DeploymentID found earlier doesn't match with the
+				// current format.json's ID.
+				return "", errCorruptedFormat
+			}
+		}
+	}
+	return deploymentID, nil
+}
+
+// formatXLFixDeploymentID - Add deployment id if it is not present.
+func formatXLFixDeploymentID(ctx context.Context, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
+	// Acquire lock on format.json
+	mutex := newNSLock(globalIsDistXL)
+	formatLock := mutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
+		return err
+	}
+	defer formatLock.Unlock()
+
+	// Attempt to load all `format.json` from all disks.
+	var sErrs []error
+	formats, sErrs := loadFormatXLAll(storageDisks)
+	for i, sErr := range sErrs {
+		if _, ok := formatCriticalErrors[sErr]; ok {
+			return fmt.Errorf("Disk %s: %s", globalEndpoints[i], sErr)
+		}
+	}
+
+	for index := range formats {
+		// If the XL sets do not match, set those formats to nil,
+		// We do not have to update the ID on those format.json file.
+		if formats[index] != nil && !reflect.DeepEqual(formats[index].XL.Sets, refFormat.XL.Sets) {
+			formats[index] = nil
+		}
+	}
+	refFormat.ID, err = formatXLGetDeploymentID(refFormat, formats)
+	if err != nil {
+		return err
+	}
+
+	// If ID is set, then some other node got the lock
+	// before this node could and generated an ID
+	// for the deployment. No need to generate one.
+	if refFormat.ID != "" {
+		return nil
+	}
+
+	// ID is generated for the first time,
+	// We set the ID in all the formats and update.
+	refFormat.ID = mustGetUUID()
+	for _, format := range formats {
+		if format != nil {
+			format.ID = refFormat.ID
+		}
+	}
+	// Deployment ID needs to be set on all the disks.
+	// Save `format.json` across all disks.
+	return saveFormatXLAll(ctx, storageDisks, formats)
+
+}
+
+// Update only the valid local disks which have not been updated before.
+func formatXLFixLocalDeploymentID(ctx context.Context, storageDisks []StorageAPI, refFormat *formatXLV3) error {
+	// If this server was down when the deploymentID was updated
+	// then we make sure that we update the local disks with the deploymentID.
+	for index, storageDisk := range storageDisks {
+		if globalEndpoints[index].IsLocal && storageDisk != nil && storageDisk.IsOnline() {
+			format, err := loadFormatXL(storageDisk)
+			if err != nil {
+				// Disk can be offline etc.
+				// ignore the errors seen here.
+				continue
+			}
+			if format.ID != "" {
+				continue
+			}
+			if !reflect.DeepEqual(format.XL.Sets, refFormat.XL.Sets) {
+				continue
+			}
+			format.ID = refFormat.ID
+			if err := saveFormatXL(storageDisk, format); err != nil {
+				logger.LogIf(ctx, err)
+				return fmt.Errorf("Unable to save format.json, %s", err)
+			}
 		}
 	}
 	return nil

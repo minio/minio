@@ -122,14 +122,15 @@ type api struct {
 }
 
 type logEntry struct {
-	Level      string      `json:"level"`
-	Time       string      `json:"time"`
-	API        *api        `json:"api,omitempty"`
-	RemoteHost string      `json:"remotehost,omitempty"`
-	RequestID  string      `json:"requestID,omitempty"`
-	UserAgent  string      `json:"userAgent,omitempty"`
-	Message    string      `json:"message,omitempty"`
-	Trace      *traceEntry `json:"error,omitempty"`
+	DeploymentID string      `json:"deploymentid,omitempty"`
+	Level        string      `json:"level"`
+	Time         string      `json:"time"`
+	API          *api        `json:"api,omitempty"`
+	RemoteHost   string      `json:"remotehost,omitempty"`
+	RequestID    string      `json:"requestID,omitempty"`
+	UserAgent    string      `json:"userAgent,omitempty"`
+	Message      string      `json:"message,omitempty"`
+	Trace        *traceEntry `json:"error,omitempty"`
 }
 
 // quiet: Hide startup messages if enabled
@@ -138,7 +139,14 @@ var (
 	quiet, jsonFlag bool
 	// Custom function to format error
 	errorFmtFunc func(string, error, bool) string
+
+	deploymentID string
 )
+
+// SetDeploymentID - Used to set the deployment ID, in XL and FS mode
+func SetDeploymentID(id string) {
+	deploymentID = id
+}
 
 // EnableQuiet - turns quiet option on.
 func EnableQuiet() {
