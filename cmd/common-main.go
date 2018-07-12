@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/client"
+	etcd "github.com/coreos/etcd/clientv3"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
@@ -51,17 +51,19 @@ func checkUpdate(mode string) {
 // Initialize and load config from remote etcd or local config directory
 func initConfig() {
 	if globalEtcdClient != nil {
-		kapi := etcd.NewKeysAPI(globalEtcdClient)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		_, err := kapi.Get(ctx, getConfigFile(), nil)
+		resp, err := globalEtcdClient.Get(ctx, getConfigFile())
 		cancel()
-		if err == nil {
-			logger.FatalIf(migrateConfig(), "Config migration failed.")
-			logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
+		// This means there are no entries in etcd with config file
+		// So create a new config
+		if err == nil && resp.Count == 0 {
+			logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+			logger.Info("Created minio configuration file successfully at %v", globalEtcdClient.Endpoints())
 		} else {
-			if etcd.IsKeyNotFound(err) {
-				logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-				logger.Info("Created minio configuration file successfully at %v", globalEtcdClient.Endpoints())
+			// This means there is an entry in etcd, update it if required and proceed
+			if err == nil && resp.Count > 0 {
+				logger.FatalIf(migrateConfig(), "Config migration failed.")
+				logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
 			} else {
 				logger.FatalIf(err, "Unable to load config version: '%s'.", serverConfigVersion)
 			}
@@ -155,8 +157,9 @@ func handleCommonEnvVars() {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
 		var err error
 		globalEtcdClient, err = etcd.New(etcd.Config{
-			Endpoints: etcdEndpoints,
-			Transport: NewCustomHTTPTransport(),
+			Endpoints:         etcdEndpoints,
+			DialTimeout:       defaultDialTimeout,
+			DialKeepAliveTime: defaultDialKeepAlive,
 		})
 		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 	}

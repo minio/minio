@@ -10,7 +10,7 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quicks
 Bucket lookup from DNS federation requires two dependencies
 
 - etcd (for config, bucket SRV records)
-- coredns (for DNS management based on populated bucket SRV records, optional)
+- CoreDNS (for DNS management based on populated bucket SRV records, optional)
 
 ## Architecture
 
@@ -73,10 +73,22 @@ NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then
 it is randomized which cluster might provision the bucket.
 
-### 3. Test your setup
+### 3. Upgrading to `etcdv3` API
+
+Users running Minio federation from release `RELEASE.2018-06-09T03-43-35Z` to `RELEASE.2018-07-10T01-42-11Z`, should migrate the existing bucket data on etcd server to `etcdv3` API, and update CoreDNS version to `1.2.0` before updating their Minio server to the latest version.
+
+Here is some background on why this is needed - Minio server release `RELEASE.2018-06-09T03-43-35Z` to `RELEASE.2018-07-10T01-42-11Z` used etcdv2 API to store bucket data to etcd server. This was due to `etcdv3` support not available for CoreDNS server. So, even if Minio used `etcdv3` API to store bucket data, CoreDNS wouldn't be able to read and serve it as DNS records.
+
+Now that CoreDNS [supports etcdv3](https://coredns.io/2018/07/11/coredns-1.2.0-release/), Minio server uses `etcdv3` API to store bucket data to etcd server. As `etcdv2` and `etcdv3` APIs are not compatible, data stored using `etcdv2` API is not visible to the `etcdv3` API. So, bucket data stored by previous Minio version will not be visible to current Minio version, until a migration is done.
+
+CoreOS team has documented the steps required to migrate existing data from `etcdv2` to `etcdv3` in [this blog post](https://coreos.com/blog/migrating-applications-etcd-v3.html). Please refer the post and migrate etcd data to `etcdv3` API.
+
+### 4. Test your setup
+
 To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the Minio endpoints.
 
 # Explore Further
+
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
 - [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
