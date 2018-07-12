@@ -640,15 +640,12 @@ func DecryptAllBlocksCopyRequest(client io.Writer, r *http.Request, bucket, obje
 // DecryptBlocksRequest - setup a struct which can decrypt many concatenated encrypted data
 // parts information helps to know the boundaries of each encrypted data block.
 func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object string, startOffset, length int64, objInfo ObjectInfo, copySource bool) (io.WriteCloser, int64, int64, error) {
-	seqNumber, encStartOffset, encLength := getEncryptedStartOffset(startOffset, length)
-
-	// Encryption length cannot be bigger than the file size, if it is
-	// which is allowed in AWS S3, we simply default to EncryptedSize().
-	if encLength+encStartOffset > objInfo.EncryptedSize() {
-		encLength = objInfo.EncryptedSize() - encStartOffset
-	}
+	var seqNumber uint32
+	var encStartOffset, encLength int64
 
 	if len(objInfo.Parts) == 0 || !objInfo.IsEncryptedMultipart() {
+		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
+
 		var writer io.WriteCloser
 		var err error
 		if copySource {
@@ -662,6 +659,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		return writer, encStartOffset, encLength, nil
 	}
 
+	seqNumber, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
 	var partStartIndex int
 	var partStartOffset = startOffset
 	// Skip parts until final offset maps to a particular part offset.
@@ -716,15 +714,62 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		w.customerKeyHeader = r.Header.Get(SSECopyCustomerKey)
 	}
 
-	if err := w.buildDecrypter(partStartIndex + 1); err != nil {
+	if err := w.buildDecrypter(w.parts[w.partIndex].Number); err != nil {
 		return nil, 0, 0, err
 	}
 
 	return w, encStartOffset, encLength, nil
 }
 
-// getEncryptedStartOffset - fetch sequence number, encrypted start offset and encrypted length.
-func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset int64, encLength int64) {
+// getEncryptedMultipartsOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
+func getEncryptedMultipartsOffsetLength(offset, length int64, obj ObjectInfo) (uint32, int64, int64) {
+
+	// Calculate encrypted offset of a multipart object
+	computeEncOffset := func(off int64, obj ObjectInfo) (seqNumber uint32, encryptedOffset int64, err error) {
+		var curPartEndOffset uint64
+		var prevPartsEncSize int64
+		for _, p := range obj.Parts {
+			size, decErr := sio.DecryptedSize(uint64(p.Size))
+			if decErr != nil {
+				err = errObjectTampered // assign correct error type
+				return
+			}
+			if off < int64(curPartEndOffset+size) {
+				seqNumber, encryptedOffset, _ = getEncryptedSinglePartOffsetLength(off-int64(curPartEndOffset), 1, obj)
+				encryptedOffset += int64(prevPartsEncSize)
+				break
+			}
+			curPartEndOffset += size
+			prevPartsEncSize += p.Size
+		}
+		return
+	}
+
+	// Calculate the encrypted start offset corresponding to the plain offset
+	seqNumber, encStartOffset, _ := computeEncOffset(offset, obj)
+	// Calculate also the encrypted end offset corresponding to plain offset + plain length
+	_, encEndOffset, _ := computeEncOffset(offset+length-1, obj)
+
+	// encLength is the diff between encrypted end offset and encrypted start offset + one package size
+	// to ensure all encrypted data are covered
+	encLength := encEndOffset - encStartOffset + (64*1024 + 32)
+
+	// Calculate total size of all parts
+	var totalPartsLength int64
+	for _, p := range obj.Parts {
+		totalPartsLength += p.Size
+	}
+
+	// Set encLength to maximum possible value if it exceeded total parts size
+	if encLength+encStartOffset > totalPartsLength {
+		encLength = totalPartsLength - encStartOffset
+	}
+
+	return seqNumber, encStartOffset, encLength
+}
+
+// getEncryptedSinglePartOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
+func getEncryptedSinglePartOffsetLength(offset, length int64, objInfo ObjectInfo) (seqNumber uint32, encOffset int64, encLength int64) {
 	onePkgSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
 
 	seqNumber = uint32(offset / sseDAREPackageBlockSize)
@@ -742,6 +787,9 @@ func getEncryptedStartOffset(offset, length int64) (seqNumber uint32, encOffset 
 		encLength += onePkgSize
 	}
 
+	if encLength+encOffset > objInfo.EncryptedSize() {
+		encLength = objInfo.EncryptedSize() - encOffset
+	}
 	return seqNumber, encOffset, encLength
 }
 
@@ -786,7 +834,7 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !o.IsEncrypted() {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	if len(o.Parts) == 0 {
+	if len(o.Parts) == 0 || !o.IsEncryptedMultipart() {
 		size, err := sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered // assign correct error type
