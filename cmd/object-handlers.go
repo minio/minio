@@ -1038,6 +1038,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	var writer io.WriteCloser = pipeWriter
 	var reader io.Reader = pipeReader
+	var getLength = length
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "")
 	if err != nil {
 		pipeWriter.CloseWithError(err)
@@ -1057,7 +1058,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, srcBucket, srcObject, startOffset, length, srcInfo, true)
+			writer, startOffset, getLength, err = DecryptBlocksRequest(writer, r, srcBucket, srcObject, startOffset, length, srcInfo, true)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1098,12 +1099,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 
-			size := length
-			if !sseCopyC {
-				info := ObjectInfo{Size: length}
-				size = info.EncryptedSize()
-			}
-
+			info := ObjectInfo{Size: length}
+			size := info.EncryptedSize()
 			srcInfo.Reader, err = hash.NewReader(reader, size, "", "")
 			if err != nil {
 				pipeWriter.CloseWithError(err)
@@ -1117,7 +1114,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, length, srcInfo)
+		dstObject, uploadID, partID, startOffset, getLength, srcInfo)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
