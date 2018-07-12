@@ -156,7 +156,7 @@ func extractMetadataFromMap(ctx context.Context, v map[string][]string, m map[st
 			}
 			value, ok := v[key]
 			if ok {
-				m[key] = value[0]
+				m[key] = strings.Join(value, ",")
 				break
 			}
 		}
