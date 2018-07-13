@@ -669,7 +669,6 @@ func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	})
 
 	isTruncated := false
-	it.PageInfo().MaxSize = maxKeys
 
 	if continuationToken != "" {
 		// If client sends continuationToken, set it
@@ -687,7 +686,7 @@ func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	var prefixes []string
 	var objects []minio.ObjectInfo
 
-	for {
+	for keyCount := 0; keyCount < maxKeys; keyCount++ {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
