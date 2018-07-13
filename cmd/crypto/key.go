@@ -21,8 +21,9 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
-	"path/filepath"
+	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
@@ -51,33 +52,69 @@ func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 	return
 }
 
-// Seal encrypts the ObjectKey using the 256 bit external key and IV. The sealed
-// key is also cryptographically bound to the object's path (bucket/object).
-func (key ObjectKey) Seal(extKey, iv [32]byte, bucket, object string) []byte {
-	var sealedKey bytes.Buffer
-	mac := hmac.New(sha256.New, extKey[:])
-	mac.Write(iv[:])
-	mac.Write([]byte(filepath.Join(bucket, object)))
-
-	if n, err := sio.Encrypt(&sealedKey, bytes.NewReader(key[:]), sio.Config{Key: mac.Sum(nil)}); n != 64 || err != nil {
-		logger.CriticalIf(context.Background(), errors.New("Unable to generate sealed key"))
-	}
-	return sealedKey.Bytes()
+// SealedKey represents a sealed object key. It can be stored
+// at an untrusted location.
+type SealedKey struct {
+	Key       [64]byte // The encrypted and authenticted object-key.
+	IV        [32]byte // The random IV used to encrypt the object-key.
+	Algorithm string   // The sealing algorithm used to encrypt the object key.
 }
 
-// Unseal decrypts a sealed key using the 256 bit external key and IV. Since the sealed key
-// is cryptographically bound to the object's path the same bucket/object as during sealing
-// must be provided. On success the ObjectKey contains the decrypted sealed key.
-func (key *ObjectKey) Unseal(sealedKey []byte, extKey, iv [32]byte, bucket, object string) error {
-	var unsealedKey bytes.Buffer
+// Seal encrypts the ObjectKey using the 256 bit external key and IV. The sealed
+// key is also cryptographically bound to the object's path (bucket/object) and the
+// domain (SSE-C or SSE-S3).
+func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) SealedKey {
+	var (
+		sealingKey   [32]byte
+		encryptedKey bytes.Buffer
+	)
 	mac := hmac.New(sha256.New, extKey[:])
 	mac.Write(iv[:])
-	mac.Write([]byte(filepath.Join(bucket, object)))
+	mac.Write([]byte(domain))
+	mac.Write([]byte(SealAlgorithm))
+	mac.Write([]byte(path.Join(bucket, object))) // use path.Join for canonical 'bucket/object'
+	mac.Sum(sealingKey[:0])
 
-	if n, err := sio.Decrypt(&unsealedKey, bytes.NewReader(sealedKey), sio.Config{Key: mac.Sum(nil)}); n != 32 || err != nil {
+	if n, err := sio.Encrypt(&encryptedKey, bytes.NewReader(key[:]), sio.Config{Key: sealingKey[:]}); n != 64 || err != nil {
+		logger.CriticalIf(context.Background(), errors.New("Unable to generate sealed key"))
+	}
+	sealedKey := SealedKey{
+		IV:        iv,
+		Algorithm: SealAlgorithm,
+	}
+	copy(sealedKey.Key[:], encryptedKey.Bytes())
+	return sealedKey
+}
+
+// Unseal decrypts a sealed key using the 256 bit external key. Since the sealed key
+// may be cryptographically bound to the object's path the same bucket/object as during sealing
+// must be provided. On success the ObjectKey contains the decrypted sealed key.
+func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucket, object string) error {
+	var (
+		unsealConfig sio.Config
+		decryptedKey bytes.Buffer
+	)
+	switch sealedKey.Algorithm {
+	default:
+		return Error{fmt.Sprintf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm)}
+	case SealAlgorithm:
+		mac := hmac.New(sha256.New, extKey[:])
+		mac.Write(sealedKey.IV[:])
+		mac.Write([]byte(domain))
+		mac.Write([]byte(SealAlgorithm))
+		mac.Write([]byte(path.Join(bucket, object))) // use path.Join for canonical 'bucket/object'
+		unsealConfig = sio.Config{MinVersion: sio.Version20, Key: mac.Sum(nil)}
+	case InsecureSealAlgorithm:
+		sha := sha256.New()
+		sha.Write(extKey[:])
+		sha.Write(sealedKey.IV[:])
+		unsealConfig = sio.Config{MinVersion: sio.Version10, Key: sha.Sum(nil)}
+	}
+
+	if n, err := sio.Decrypt(&decryptedKey, bytes.NewReader(sealedKey.Key[:]), unsealConfig); n != 32 || err != nil {
 		return err // TODO(aead): upgrade sio to use sio.Error
 	}
-	copy(key[:], unsealedKey.Bytes())
+	copy(key[:], decryptedKey.Bytes())
 	return nil
 }
 
