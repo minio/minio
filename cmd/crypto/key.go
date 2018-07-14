@@ -43,13 +43,13 @@ func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 	}
 	var nonce [32]byte
 	if _, err := io.ReadFull(random, nonce[:]); err != nil {
-		logger.CriticalIf(context.Background(), errors.New("Unable to read enough randomness from the system"))
+		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
 	sha := sha256.New()
 	sha.Write(extKey[:])
 	sha.Write(nonce[:])
 	sha.Sum(key[:0])
-	return
+	return key
 }
 
 // SealedKey represents a sealed object key. It can be stored
@@ -126,5 +126,5 @@ func (key ObjectKey) DerivePartKey(id uint32) (partKey [32]byte) {
 	mac := hmac.New(sha256.New, key[:])
 	mac.Write(bin[:])
 	mac.Sum(partKey[:0])
-	return
+	return partKey
 }
