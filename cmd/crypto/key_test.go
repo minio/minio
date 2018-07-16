@@ -20,6 +20,8 @@ import (
 	"encoding/hex"
 	"io"
 	"testing"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 var shortRandom = func(limit int64) io.Reader { return io.LimitReader(rand.Reader, limit) }
@@ -37,14 +39,18 @@ var generateKeyTests = []struct {
 	Random     io.Reader
 	ShouldPass bool
 }{
-	{ExtKey: [32]byte{}, Random: nil, ShouldPass: true},             // 0
-	{ExtKey: [32]byte{}, Random: rand.Reader, ShouldPass: true},     // 1
-	{ExtKey: [32]byte{}, Random: shortRandom(32), ShouldPass: true}, // 2
-	// {ExtKey: [32]byte{}, Random: shortRandom(31), ShouldPass: false}, // 3 See: https://github.com/minio/minio/issues/6064
+	{ExtKey: [32]byte{}, Random: nil, ShouldPass: true},              // 0
+	{ExtKey: [32]byte{}, Random: rand.Reader, ShouldPass: true},      // 1
+	{ExtKey: [32]byte{}, Random: shortRandom(32), ShouldPass: true},  // 2
+	{ExtKey: [32]byte{}, Random: shortRandom(31), ShouldPass: false}, // 3
 }
 
 func TestGenerateKey(t *testing.T) {
+	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
+	logger.Disable = true
+
 	for i, test := range generateKeyTests {
+		i, test := i, test
 		func() {
 			defer recoverTest(i, test.ShouldPass, t)
 			key := GenerateKey(test.ExtKey, test.Random)
@@ -56,37 +62,37 @@ func TestGenerateKey(t *testing.T) {
 }
 
 var sealUnsealKeyTests = []struct {
-	SealExtKey, SealIV     [32]byte
-	SealBucket, SealObject string
+	SealExtKey, SealIV                 [32]byte
+	SealDomain, SealBucket, SealObject string
 
-	UnsealExtKey, UnsealIV     [32]byte
-	UnsealBucket, UnsealObject string
+	UnsealExtKey                             [32]byte
+	UnsealDomain, UnsealBucket, UnsealObject string
 
 	ShouldPass bool
 }{
 	{
-		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealBucket: "bucket", SealObject: "object",
-		UnsealExtKey: [32]byte{}, UnsealIV: [32]byte{}, UnsealBucket: "bucket", UnsealObject: "object",
+		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealDomain: "SSE-C", SealBucket: "bucket", SealObject: "object",
+		UnsealExtKey: [32]byte{}, UnsealDomain: "SSE-C", UnsealBucket: "bucket", UnsealObject: "object",
 		ShouldPass: true,
 	}, // 0
 	{
-		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealBucket: "bucket", SealObject: "object",
-		UnsealExtKey: [32]byte{1}, UnsealIV: [32]byte{0}, UnsealBucket: "bucket", UnsealObject: "object",
+		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealDomain: "SSE-C", SealBucket: "bucket", SealObject: "object",
+		UnsealExtKey: [32]byte{1}, UnsealDomain: "SSE-C", UnsealBucket: "bucket", UnsealObject: "object", // different ext-key
 		ShouldPass: false,
 	}, // 1
 	{
-		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealBucket: "bucket", SealObject: "object",
-		UnsealExtKey: [32]byte{}, UnsealIV: [32]byte{1}, UnsealBucket: "bucket", UnsealObject: "object",
+		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealDomain: "SSE-S3", SealBucket: "bucket", SealObject: "object",
+		UnsealExtKey: [32]byte{}, UnsealDomain: "SSE-C", UnsealBucket: "bucket", UnsealObject: "object", // different domain
 		ShouldPass: false,
 	}, // 2
 	{
-		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealBucket: "bucket", SealObject: "object",
-		UnsealExtKey: [32]byte{}, UnsealIV: [32]byte{}, UnsealBucket: "Bucket", UnsealObject: "object",
+		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealDomain: "SSE-C", SealBucket: "bucket", SealObject: "object",
+		UnsealExtKey: [32]byte{}, UnsealDomain: "SSE-C", UnsealBucket: "Bucket", UnsealObject: "object", // different bucket
 		ShouldPass: false,
 	}, // 3
 	{
-		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealBucket: "bucket", SealObject: "object",
-		UnsealExtKey: [32]byte{}, UnsealIV: [32]byte{}, UnsealBucket: "bucket", UnsealObject: "Object",
+		SealExtKey: [32]byte{}, SealIV: [32]byte{}, SealDomain: "SSE-C", SealBucket: "bucket", SealObject: "object",
+		UnsealExtKey: [32]byte{}, UnsealDomain: "SSE-C", UnsealBucket: "bucket", UnsealObject: "Object", // different object
 		ShouldPass: false,
 	}, // 4
 }
@@ -94,12 +100,21 @@ var sealUnsealKeyTests = []struct {
 func TestSealUnsealKey(t *testing.T) {
 	for i, test := range sealUnsealKeyTests {
 		key := GenerateKey(test.SealExtKey, rand.Reader)
-		sealedKey := key.Seal(test.SealExtKey, test.SealIV, test.SealBucket, test.SealObject)
-		if err := key.Unseal(sealedKey, test.UnsealExtKey, test.UnsealIV, test.UnsealBucket, test.UnsealObject); err == nil && !test.ShouldPass {
+		sealedKey := key.Seal(test.SealExtKey, test.SealIV, test.SealDomain, test.SealBucket, test.SealObject)
+		if err := key.Unseal(test.UnsealExtKey, sealedKey, test.UnsealDomain, test.UnsealBucket, test.UnsealObject); err == nil && !test.ShouldPass {
 			t.Errorf("Test %d should fail but passed successfully", i)
 		} else if err != nil && test.ShouldPass {
 			t.Errorf("Test %d should pass put failed: %v", i, err)
 		}
+	}
+
+	// Test legacy InsecureSealAlgorithm
+	var extKey, iv [32]byte
+	key := GenerateKey(extKey, rand.Reader)
+	sealedKey := key.Seal(extKey, iv, "SSE-S3", "bucket", "object")
+	sealedKey.Algorithm = InsecureSealAlgorithm
+	if err := key.Unseal(extKey, sealedKey, "SSE-S3", "bucket", "object"); err == nil {
+		t.Errorf("'%s' test succeeded but it should fail because the legacy algorithm was used", sealedKey.Algorithm)
 	}
 }
 

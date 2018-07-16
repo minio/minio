@@ -35,6 +35,18 @@ const (
 	S3KMSSealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 )
 
+const (
+	// SealAlgorithm is the encryption/sealing algorithm used to derive & seal
+	// the key-encryption-key and to en/decrypt the object data.
+	SealAlgorithm = "DAREv2-HMAC-SHA256"
+
+	// InsecureSealAlgorithm is the legacy encryption/sealing algorithm used
+	// to derive & seal the key-encryption-key and to en/decrypt the object data.
+	// This algorithm should not be used for new objects because its key derivation
+	// is not optimal. See: https://github.com/minio/minio/pull/6121
+	InsecureSealAlgorithm = "DARE-SHA256"
+)
+
 // EncryptSinglePart encrypts an io.Reader which must be the
 // the body of a single-part PUT request.
 func EncryptSinglePart(r io.Reader, key ObjectKey) io.Reader {

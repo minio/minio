@@ -16,6 +16,13 @@ package crypto
 
 import "errors"
 
+// Error is the generic type for any error happening during decrypting
+// an object. It indicates that the object itself or its metadata was
+// modified accidentally or maliciously.
+type Error struct{ msg string }
+
+func (e Error) Error() string { return e.msg }
+
 var (
 	// ErrInvalidEncryptionMethod indicates that the specified SSE encryption method
 	// is not supported.
