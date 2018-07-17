@@ -345,8 +345,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format version "2".
 		{
 			&formatXLV3{
-				Version: "2",
-				Format:  "XL",
+				formatMetaV1: formatMetaV1{
+					Version: "2",
+					Format:  "XL",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
@@ -361,8 +363,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format "Unknown".
 		{
 			&formatXLV3{
-				Version: "1",
-				Format:  "Unknown",
+				formatMetaV1: formatMetaV1{
+					Version: "1",
+					Format:  "Unknown",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
@@ -377,8 +381,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format version "0".
 		{
 			&formatXLV3{
-				Version: "1",
-				Format:  "XL",
+				formatMetaV1: formatMetaV1{
+					Version: "1",
+					Format:  "XL",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
