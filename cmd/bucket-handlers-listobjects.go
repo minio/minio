@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/crypto"
+
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -100,7 +102,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsV2Info.Objects {
-		if listObjectsV2Info.Objects[i].IsEncrypted() {
+		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -166,7 +168,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsInfo.Objects {
-		if listObjectsInfo.Objects[i].IsEncrypted() {
+		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)

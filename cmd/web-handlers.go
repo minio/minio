@@ -37,11 +37,13 @@ import (
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -337,6 +339,14 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
+	}
+	for i := range lo.Objects {
+		if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
+			lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
+			if err != nil {
+				return toJSONError(err)
+			}
+		}
 	}
 	reply.NextMarker = lo.NextMarker
 	reply.IsTruncated = lo.IsTruncated
@@ -694,12 +704,52 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	if web.CacheAPI() != nil {
 		getObject = web.CacheAPI().GetObject
 	}
+	getObjectInfo := objectAPI.GetObjectInfo
+	if web.CacheAPI() != nil {
+		getObjectInfo = web.CacheAPI().GetObjectInfo
+	}
+	objInfo, err := getObjectInfo(context.Background(), bucket, object)
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
+
+	if objectAPI.IsEncryptionSupported() {
+		if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
+			return
+		}
+	}
+	var startOffset int64
+	length := objInfo.Size
+	var writer io.Writer
+	writer = w
+	if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(objInfo.UserDefined) {
+		// Response writer should be limited early on for decryption upto required length,
+		// additionally also skipping mod(offset)64KiB boundaries.
+		writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+
+		writer, startOffset, length, err = DecryptBlocksRequest(writer, r, bucket, object, startOffset, length, objInfo, false)
+		if err != nil {
+			writeWebErrorResponse(w, err)
+			return
+		}
+		w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
+	httpWriter := ioutil.WriteOnClose(writer)
+
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err := getObject(context.Background(), bucket, object, 0, -1, w, ""); err != nil {
+	if err := getObject(context.Background(), bucket, object, 0, -1, httpWriter, ""); err != nil {
 		/// No need to print error, response writer already written to.
 		return
+	}
+	if err = httpWriter.Close(); err != nil {
+		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+			writeWebErrorResponse(w, err)
+			return
+		}
 	}
 }
 
@@ -767,18 +817,48 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
+			if objectAPI.IsEncryptionSupported() {
+				if apiErr, _ := DecryptObjectInfo(&info, r.Header); apiErr != ErrNone {
+					writeErrorResponse(w, apiErr, r.URL)
+					return err
+				}
+			}
 			header := &zip.FileHeader{
 				Name:               strings.TrimPrefix(objectName, args.Prefix),
 				Method:             zip.Deflate,
 				UncompressedSize64: uint64(info.Size),
 				UncompressedSize:   uint32(info.Size),
 			}
-			writer, err := archive.CreateHeader(header)
+			wr, err := archive.CreateHeader(header)
 			if err != nil {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			return getObject(context.Background(), args.BucketName, objectName, 0, info.Size, writer, "")
+			var startOffset int64
+			length := info.Size
+			var writer io.Writer
+			writer = wr
+			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {
+				// Response writer should be limited early on for decryption upto required length,
+				// additionally also skipping mod(offset)64KiB boundaries.
+				writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+				writer, startOffset, length, err = DecryptBlocksRequest(writer, r, args.BucketName, objectName, startOffset, length, info, false)
+				if err != nil {
+					writeWebErrorResponse(w, err)
+					return err
+				}
+			}
+			httpWriter := ioutil.WriteOnClose(writer)
+			if err := getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, ""); err != nil {
+				return err
+			}
+			if err = httpWriter.Close(); err != nil {
+				if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+					writeWebErrorResponse(w, err)
+					return err
+				}
+			}
+			return nil
 		}
 
 		if !hasSuffix(object, slashSeparator) {

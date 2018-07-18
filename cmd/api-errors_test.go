@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -52,11 +53,11 @@ var toAPIErrorCodeTests = []struct {
 
 	// SSE-C errors
 	{err: errInsecureSSERequest, errCode: ErrInsecureSSECustomerRequest},
-	{err: errInvalidSSEAlgorithm, errCode: ErrInvalidSSECustomerAlgorithm},
-	{err: errMissingSSEKey, errCode: ErrMissingSSECustomerKey},
-	{err: errInvalidSSEKey, errCode: ErrInvalidSSECustomerKey},
-	{err: errMissingSSEKeyMD5, errCode: ErrMissingSSECustomerKeyMD5},
-	{err: errSSEKeyMD5Mismatch, errCode: ErrSSECustomerKeyMD5Mismatch},
+	{err: crypto.ErrInvalidCustomerAlgorithm, errCode: ErrInvalidSSECustomerAlgorithm},
+	{err: crypto.ErrMissingCustomerKey, errCode: ErrMissingSSECustomerKey},
+	{err: crypto.ErrInvalidCustomerKey, errCode: ErrInvalidSSECustomerKey},
+	{err: crypto.ErrMissingCustomerKeyMD5, errCode: ErrMissingSSECustomerKeyMD5},
+	{err: crypto.ErrCustomerKeyMD5Mismatch, errCode: ErrSSECustomerKeyMD5Mismatch},
 	{err: errObjectTampered, errCode: ErrObjectTampered},
 
 	{err: nil, errCode: ErrNone},

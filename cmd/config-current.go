@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/miekg/dns"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 
 	"github.com/minio/minio/pkg/auth"
@@ -40,9 +41,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "27"
+const serverConfigVersion = "28"
 
-type serverConfig = serverConfigV27
+type serverConfig = serverConfigV28
 
 var (
 	// globalServerConfig server config.
@@ -243,6 +244,9 @@ func (s *serverConfig) loadFromEnvs() {
 	if globalIsDiskCacheEnabled {
 		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
+	if globalKMS != nil {
+		s.KMS = globalKMSConfig
+	}
 }
 
 // Returns the string describing a difference with the given
@@ -284,6 +288,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "MQTT Notification configuration differs"
 	case !reflect.DeepEqual(s.Logger, t.Logger):
 		return "Logger configuration differs"
+	case !reflect.DeepEqual(s.KMS, t.KMS):
+		return "KMS configuration differs"
 	case reflect.DeepEqual(s, t):
 		return ""
 	default:
@@ -312,6 +318,7 @@ func newServerConfig() *serverConfig {
 			Expiry:  globalCacheExpiry,
 			MaxUse:  globalCacheMaxUse,
 		},
+		KMS:    crypto.KMSConfig{},
 		Notify: notifier{},
 	}
 
@@ -375,6 +382,13 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
+	if globalKMS == nil {
+		globalKMSConfig = globalServerConfig.KMS
+		if kms, err := crypto.NewVault(globalKMSConfig); err == nil {
+			globalKMS = kms
+			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
+		}
+	}
 }
 
 // newConfig - initialize a new server config, saves env parameters if
@@ -389,6 +403,9 @@ func newConfig(objAPI ObjectLayer) error {
 	// Load values to cached global values.
 	srvCfg.loadToCachedConfigs()
 
+	if globalKMS != nil {
+		srvCfg.KMS = globalKMSConfig
+	}
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg

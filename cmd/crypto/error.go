@@ -47,6 +47,9 @@ var (
 	// computed MD5 sum. This means that the client provided either the wrong key for
 	// a certain MD5 checksum or the wrong MD5 for a certain key.
 	ErrCustomerKeyMD5Mismatch = errors.New("The provided SSE-C key MD5 does not match the computed MD5 of the SSE-C key")
+	// ErrIncompatibleEncryptionMethod indicates that both SSE-C headers and SSE-S3 headers were specified, and are incompatible
+	// The client needs to remove the SSE-S3 header or the SSE-C headers
+	ErrIncompatibleEncryptionMethod = errors.New("Server side encryption specified with both SSE-C and SSE-S3 headers")
 )
 
 var (
