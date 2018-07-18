@@ -607,6 +607,8 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 		return "", err
 	}
 
+	initIAMConfigs()
+
 	// Return root path.
 	return rootPath, nil
 }

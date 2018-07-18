@@ -1,0 +1,67 @@
+{
+    "read-only": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Stmt1530559274230",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                "Effect": "Allow",
+                "Resource": "arn:aws:s3:::*"
+            }
+        ]
+    },
+    "write-only": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Stmt1530559274230",
+                "Action": [
+                    "s3:PutObject"
+                ],
+                "Effect": "Allow",
+                "Resource": "arn:aws:s3:::*"
+            }
+        ]
+    },
+    "read-write": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Stmt1530559274230",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject"
+                ],
+                "Effect": "Allow",
+                "Resource": "arn:aws:s3:::*"
+            }
+        ]
+    },
+    "guest": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Stmt1530559274230",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject"
+                ],
+                "Effect": "Allow",
+                "Resource": [ "arn:aws:s3:::upload", "arn:aws:s3:::upload/*" ]
+            },
+            {
+                "Sid": "Stmt1530559274230",
+                "Action": [
+                    "s3:PutObject"
+                ],
+                "Effect": "Allow",
+                "Resource": "arn:aws:s3:::download/*"
+            }
+        ]
+    }
+}

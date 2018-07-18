@@ -21,6 +21,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"time"
 )
 
 const (
@@ -62,15 +63,27 @@ func isSecretKeyValid(secretKey string) bool {
 	return len(secretKey) >= secretKeyMinLen
 }
 
+var timeSentinel = time.Unix(0, 0).UTC()
+
 // Credentials holds access and secret keys.
 type Credentials struct {
-	AccessKey string `json:"accessKey,omitempty"`
-	SecretKey string `json:"secretKey,omitempty"`
+	AccessKey  string    `json:"accessKey,omitempty"`
+	SecretKey  string    `json:"secretKey,omitempty"`
+	Expiration time.Time `json:"expiration,omitempty"`
 }
 
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
-	return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey)
+	return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
+}
+
+// IsExpired - returns if the credentials has expired or not.
+func (cred Credentials) IsExpired() bool {
+	if cred.Expiration.IsZero() || cred.Expiration == timeSentinel {
+		return false
+	}
+
+	return cred.Expiration.Before(time.Now().UTC())
 }
 
 // Equal - returns whether two credentials are equal or not.
@@ -79,6 +92,11 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 		return false
 	}
 	return cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1
+}
+
+// EqualAccessKey - returns whether two access keys are equal or not.
+func (cred Credentials) EqualAccessKey(accessKey string) bool {
+	return cred.AccessKey == accessKey
 }
 
 // GetNewCredentials generates and returns new credential.
@@ -110,6 +128,7 @@ func GetNewCredentials() (cred Credentials, err error) {
 		return cred, err
 	}
 	cred.SecretKey = string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+	cred.Expiration = timeSentinel
 
 	return cred, nil
 }
@@ -126,5 +145,6 @@ func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error
 
 	cred.AccessKey = accessKey
 	cred.SecretKey = secretKey
+	cred.Expiration = timeSentinel
 	return cred, nil
 }

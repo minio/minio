@@ -159,6 +159,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize gateway config.
 	initConfig()
 
+	// Initialize IAM configs.
+	initIAMConfigs()
+
 	// Load logger subsystem
 	loadLoggers()
 

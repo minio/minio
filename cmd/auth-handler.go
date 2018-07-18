@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/policy/iam"
 )
 
 // Verify if request has JWT.
@@ -110,11 +111,24 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
+// checkAdminRequestAuthType checks whether the request is a valid signature
+// V4 request. It does not accept presigned or JWT or anonymous requests.
 func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 	s3Err := ErrAccessDenied
-	if _, ok := r.Header["X-Amz-Content-Sha256"]; ok && getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) { // we only support V4 (no presign) with auth. body
+	if _, ok := r.Header["X-Amz-Content-Sha256"]; ok &&
+		getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) {
+		// We only support admin credentials to access admin APIs.
+		var accessKey string
+		accessKey, s3Err = getReqAccessKey(r, region)
+		if s3Err != ErrNone {
+			return s3Err
+		}
+		s3Err = ErrAccessDenied
+		if globalServerConfig.GetCredential().AccessKey != accessKey {
+			return s3Err
+		}
+
+		// we only support V4 (no presign) with auth body
 		s3Err = isReqAuthenticated(r, region)
 	}
 	if s3Err != ErrNone {
@@ -125,27 +139,32 @@ func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 	return s3Err
 }
 
-func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) APIErrorCode {
-	isOwner := true
-	accountName := globalServerConfig.GetCredential().AccessKey
-
+func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
+	var accountName string
+	var isOwner bool
 	switch getRequestAuthType(r) {
 	case authTypeUnknown:
 		return ErrAccessDenied
 	case authTypePresignedV2, authTypeSignedV2:
-		if errorCode := isReqAuthenticatedV2(r); errorCode != ErrNone {
-			return errorCode
+		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
+			return s3Err
 		}
+		isOwner = true
+		accountName = globalServerConfig.GetCredential().AccessKey
 	case authTypeSigned, authTypePresigned:
 		region := globalServerConfig.GetRegion()
 		switch action {
 		case policy.GetBucketLocationAction, policy.ListAllMyBucketsAction:
 			region = ""
 		}
-
-		if errorCode := isReqAuthenticated(r, region); errorCode != ErrNone {
-			return errorCode
+		if s3Err = isReqAuthenticated(r, region); s3Err != ErrNone {
+			return s3Err
 		}
+		accountName, s3Err = getReqAccessKey(r, region)
+		if s3Err != ErrNone {
+			return s3Err
+		}
+		isOwner = globalServerConfig.GetCredential().AccessKey == accountName
 	default:
 		isOwner = false
 		accountName = ""
@@ -174,17 +193,78 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
 
+	if accountName != "" {
+		plc := globalPolicyStore.Get(globalUsersStore.GetPolicy(accountName))
+		if !plc.IsAllowed(iam.Args{
+			AccountName:     accountName,
+			Action:          iam.Action(action),
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, locationConstraint),
+			IsOwner:         isOwner,
+			ObjectName:      objectName,
+		}) {
+			return ErrAccessDenied
+		}
+	}
 	if globalPolicySys.IsAllowed(policy.Args{
 		AccountName:     accountName,
 		Action:          action,
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, locationConstraint),
-		IsOwner:         isOwner,
+		IsOwner:         accountName != "",
 		ObjectName:      objectName,
 	}) {
 		return ErrNone
 	}
 
+	return ErrAccessDenied
+}
+
+// isPutAllowed - check if PUT operation is allowed on the resource, this
+// call verifies bucket policies and IAM policies, supports multi user
+// checks etc.
+func isPutAllowed(atype authType, bucket, object string, r *http.Request) APIErrorCode {
+	switch atype {
+	case authTypeAnonymous:
+		if globalPolicySys.IsAllowed(policy.Args{
+			Action:          policy.PutObjectAction,
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, ""),
+			IsOwner:         false,
+			ObjectName:      object,
+		}) {
+			return ErrNone
+		}
+	case authTypeSignedV2, authTypePresignedV2:
+		return ErrNone
+	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
+		region := globalServerConfig.GetRegion()
+		accountName, s3Err := getReqAccessKey(r, region)
+		if s3Err != ErrNone {
+			return s3Err
+		}
+		isOwner := globalServerConfig.GetCredential().AccessKey == accountName
+		plc := globalPolicyStore.Get(globalUsersStore.GetPolicy(accountName))
+		if plc.IsAllowed(iam.Args{
+			AccountName:     accountName,
+			Action:          iam.PutObjectAction,
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, ""),
+			IsOwner:         isOwner,
+			ObjectName:      object,
+		}) {
+			if globalPolicySys.IsAllowed(policy.Args{
+				AccountName:     accountName,
+				Action:          policy.PutObjectAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         accountName != "",
+				ObjectName:      object,
+			}) {
+				return ErrNone
+			}
+		}
+	}
 	return ErrAccessDenied
 }
 

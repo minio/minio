@@ -217,6 +217,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize server config.
 	initConfig()
 
+	// Initialize IAM configs.
+	initIAMConfigs()
+
 	// Load logger subsystem
 	loadLoggers()
 
