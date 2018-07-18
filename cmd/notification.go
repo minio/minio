@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -246,15 +247,14 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	}
 	defer objLock.RUnlock()
 
-	reader, e := readConfig(ctx, objAPI, configFile)
+	configData, e := readConfig(ctx, objAPI, configFile)
 	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
 		return e
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		err := json.NewDecoder(reader).Decode(&listenerList)
-		if err != nil {
+	if configData != nil {
+		if err := json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -565,7 +565,7 @@ func sendEvent(args eventArgs) {
 func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) (*event.Config, error) {
 	// Construct path to notification.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = errNoSuchNotifications
@@ -574,19 +574,19 @@ func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName 
 		return nil, err
 	}
 
-	config, err := event.ParseConfig(reader, globalServerConfig.GetRegion(), globalNotificationSys.targetList)
+	config, err := event.ParseConfig(bytes.NewReader(configData), globalServerConfig.GetRegion(), globalNotificationSys.targetList)
 	logger.LogIf(ctx, err)
 	return config, err
 }
 
-func saveNotificationConfig(objAPI ObjectLayer, bucketName string, config *event.Config) error {
+func saveNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, config *event.Config) error {
 	data, err := xml.Marshal(config)
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 // SaveListener - saves HTTP client currently listening for events to listener.json.
@@ -611,14 +611,14 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		if err = json.NewDecoder(reader).Decode(&listenerList); err != nil {
+	if configData != nil {
+		if err = json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -637,7 +637,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 // RemoveListener - removes HTTP client currently listening for events from listener.json.
@@ -662,14 +662,14 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		if err = json.NewDecoder(reader).Decode(&listenerList); err != nil {
+	if configData != nil {
+		if err = json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -696,5 +696,5 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }

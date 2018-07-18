@@ -499,7 +499,7 @@ func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuation
 
 // SetBucketPolicy persist the new policy on the bucket.
 func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(s, bucket, policy)
+	return savePolicyConfig(ctx, s, bucket, policy)
 }
 
 // GetBucketPolicy will return a policy on a bucket

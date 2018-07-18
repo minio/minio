@@ -277,7 +277,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 // SetBucketPolicy sets policy on bucket
 func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(xl, bucket, policy)
+	return savePolicyConfig(ctx, xl, bucket, policy)
 }
 
 // GetBucketPolicy will get policy on bucket

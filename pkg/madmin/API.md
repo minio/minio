@@ -36,10 +36,10 @@ func main() {
 
 ```
 
-| Service operations         | Info operations  | Healing operations                    | Config operations         | Misc                                |
-|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
-| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`StartProfiling`](#StartProfiling) |
+| Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
+|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
+| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser()`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
+| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`AddUserPolicy`](#AddUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) |                                     |
 
@@ -273,7 +273,7 @@ __Example__
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
-Get config.json of a minio setup.
+Get current `config.json` of a Minio server.
 
 __Example__
 
@@ -295,37 +295,17 @@ __Example__
 
 
 <a name="SetConfig"></a>
-### SetConfig(config io.Reader) (SetConfigResult, error)
-Set config.json of a minio setup and restart setup for configuration
-change to take effect.
-
-
-| Param  | Type  | Description  |
-|---|---|---|
-|`st.Status`            | _bool_  | true if set-config succeeded, false otherwise. |
-|`st.NodeSummary.Name`  | _string_  | Network address of the node. |
-|`st.NodeSummary.ErrSet`   | _bool_ | Bool representation indicating if an error is encountered with the node.|
-|`st.NodeSummary.ErrMsg`   | _string_ | String representation of the error (if any) on the node.|
-
+### SetConfig(config io.Reader) error
+Set a new `config.json` for a Minio server.
 
 __Example__
 
 ``` go
     config := bytes.NewReader([]byte(`config.json contents go here`))
-    result, err := madmClnt.SetConfig(config)
-    if err != nil {
+    if err := madmClnt.SetConfig(config); err != nil {
         log.Fatalf("failed due to: %v", err)
     }
-
-    var buf bytes.Buffer
-    enc := json.NewEncoder(&buf)
-    enc.SetEscapeHTML(false)
-    enc.SetIndent("", "\t")
-    err = enc.Encode(result)
-    if err != nil {
-        log.Fatalln(err)
-    }
-    log.Println("SetConfig: ", string(buf.Bytes()))
+    log.Println("SetConfig was successful")
 ```
 
 <a name="GetConfigKeys"></a>
@@ -367,18 +347,44 @@ __Example__
     log.Println("New configuration successfully set")
 ```
 
+## 8. IAM operations
 
+<a name="AddUser"></a>
+### AddUser(user string, secret string) error
+Add a new user on a Minio server.
 
-## 8. Misc operations
+__Example__
 
-<a name="SetCredentials"></a>
-### SetCredentials() error
+``` go
+	if err = madmClnt.AddUser("newuser", "newstrongpassword"); err != nil {
+		log.Fatalln(err)
+	}
+```
+
+<a name="AddUserPolicy"></a>
+### AddUserPolicy(user string, policy string) error
+Set a new policy for a given user on Minio server.
+
+__Example__
+
+``` go
+	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
+
+	if err = madmClnt.AddUserPolicy("newuser", policy); err != nil {
+		log.Fatalln(err)
+	}
+```
+
+## 9. Misc operations
+
+<a name="SetAdminCredentials"></a>
+### SetAdminCredentials() error
 Set new credentials of a Minio setup.
 
 __Example__
 
 ``` go
-    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
+    err = madmClnt.SetAdminCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
     if err != nil {
             log.Fatalln(err)
     }
