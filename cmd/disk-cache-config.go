@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 
@@ -44,6 +45,15 @@ func (cfg *CacheConfig) UnmarshalJSON(data []byte) (err error) {
 	if err = json.Unmarshal(data, _cfg); err != nil {
 		return err
 	}
+
+	if _cfg.Expiry < 0 {
+		return errors.New("config expiry value should not be negative")
+	}
+
+	if _cfg.MaxUse < 0 {
+		return errors.New("config max use value should not be null or negative")
+	}
+
 	if _, err = parseCacheDrives(_cfg.Drives); err != nil {
 		return err
 	}

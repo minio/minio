@@ -18,6 +18,7 @@ package target
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 
 	"github.com/minio/minio/pkg/event"
@@ -43,6 +44,32 @@ type NATSArgs struct {
 		Async              bool   `json:"async"`
 		MaxPubAcksInflight int    `json:"maxPubAcksInflight"`
 	} `json:"streaming"`
+}
+
+// Validate NATSArgs fields
+func (n NATSArgs) Validate() error {
+	if !n.Enable {
+		return nil
+	}
+
+	if n.Address.IsEmpty() {
+		return errors.New("empty address")
+	}
+
+	if n.Subject == "" {
+		return errors.New("empty subject")
+	}
+
+	if n.Streaming.Enable {
+		if n.Streaming.ClusterID == "" {
+			return errors.New("empty cluster id")
+		}
+		if n.Streaming.ClientID == "" {
+			return errors.New("empty client id")
+		}
+	}
+
+	return nil
 }
 
 // NATSTarget - NATS target.

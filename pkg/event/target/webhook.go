@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,6 +37,17 @@ type WebhookArgs struct {
 	Enable   bool           `json:"enable"`
 	Endpoint xnet.URL       `json:"endpoint"`
 	RootCAs  *x509.CertPool `json:"-"`
+}
+
+// Validate WebhookArgs fields
+func (w WebhookArgs) Validate() error {
+	if !w.Enable {
+		return nil
+	}
+	if w.Endpoint.IsEmpty() {
+		return errors.New("endpoint empty")
+	}
+	return nil
 }
 
 // WebhookTarget - Webhook target.

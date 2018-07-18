@@ -38,22 +38,24 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "13",
+	"version": "26",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
 	},
-	"region": "us-west-1",
-	"logger": {
-		"console": {
-			"enable": true,
-			"level": "fatal"
-		},
-		"file": {
-			"enable": false,
-			"fileName": "",
-			"level": ""
-		}
+	"region": "",
+	"browser": "on",
+	"worm": "off",
+	"domain": "",
+	"storageclass": {
+		"standard": "",
+		"rrs": ""
+	},
+	"cache": {
+		"drives": [],
+		"expiry": 90,
+		"maxuse": 80,
+		"exclude": []
 	},
 	"notify": {
 		"amqp": {
@@ -63,12 +65,54 @@ var (
 				"exchange": "",
 				"routingKey": "",
 				"exchangeType": "",
+				"deliveryMode": 0,
 				"mandatory": false,
 				"immediate": false,
 				"durable": false,
 				"internal": false,
 				"noWait": false,
 				"autoDeleted": false
+			}
+		},
+		"elasticsearch": {
+			"1": {
+				"enable": false,
+				"format": "",
+				"url": "",
+				"index": ""
+			}
+		},
+		"kafka": {
+			"1": {
+				"enable": false,
+				"brokers": null,
+				"topic": ""
+			}
+		},
+		"mqtt": {
+			"1": {
+				"enable": false,
+				"broker": "",
+				"topic": "",
+				"qos": 0,
+				"clientId": "",
+				"username": "",
+				"password": "",
+				"reconnectInterval": 0,
+				"keepAliveInterval": 0
+			}
+		},
+		"mysql": {
+			"1": {
+				"enable": false,
+				"format": "",
+				"dsnString": "",
+				"table": "",
+				"host": "",
+				"port": "",
+				"user": "",
+				"password": "",
+				"database": ""
 			}
 		},
 		"nats": {
@@ -90,24 +134,10 @@ var (
 				}
 			}
 		},
-		"elasticsearch": {
-			"1": {
-				"enable": false,
-				"url": "",
-				"index": ""
-			}
-		},
-		"redis": {
-			"1": {
-				"enable": false,
-				"address": "",
-				"password": "",
-				"key": ""
-			}
-		},
 		"postgresql": {
 			"1": {
 				"enable": false,
+				"format": "",
 				"connectionString": "",
 				"table": "",
 				"host": "",
@@ -117,11 +147,13 @@ var (
 				"database": ""
 			}
 		},
-		"kafka": {
+		"redis": {
 			"1": {
 				"enable": false,
-				"brokers": null,
-				"topic": ""
+				"format": "",
+				"address": "",
+				"password": "",
+				"key": ""
 			}
 		},
 		"webhook": {
