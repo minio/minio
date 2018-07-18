@@ -25,11 +25,24 @@ import (
 )
 
 const (
+	// SSEIV is the metadata key referencing the random initialization
+	// vector (IV) used for SSE-S3 and SSE-C key derivation.
+	SSEIV = "X-Minio-Internal-Server-Side-Encryption-Iv"
+
+	// SSESealAlgorithm is the metadata key referencing the algorithm
+	// used by SSE-C and SSE-S3 to encrypt the object.
+	SSESealAlgorithm = "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm"
+
+	// SSECSealKey is the metadata key referencing the sealed object-key for SSE-C.
+	SSECSealKey = "X-Minio-Internal-Server-Side-Encryption-Sealed-Key"
+
 	// S3SealedKey is the metadata key referencing the sealed object-key for SSE-S3.
 	S3SealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key"
+
 	// S3KMSKeyID is the metadata key referencing the KMS key-id used to
 	// generate/decrypt the S3-KMS-Sealed-Key. It is only used for SSE-S3 + KMS.
 	S3KMSKeyID = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id"
+
 	// S3KMSSealedKey is the metadata key referencing the encrypted key generated
 	// by KMS. It is only used for SSE-S3 + KMS.
 	S3KMSSealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
@@ -55,6 +68,14 @@ func EncryptSinglePart(r io.Reader, key ObjectKey) io.Reader {
 		logger.CriticalIf(context.Background(), errors.New("Unable to encrypt io.Reader using object key"))
 	}
 	return r
+}
+
+// EncryptMultiPart encrypts an io.Reader which must be the body of
+// multi-part PUT request. It derives an unique encryption key from
+// the partID and the object key.
+func EncryptMultiPart(r io.Reader, partID int, key ObjectKey) io.Reader {
+	partKey := key.DerivePartKey(uint32(partID))
+	return EncryptSinglePart(r, ObjectKey(partKey))
 }
 
 // DecryptSinglePart decrypts an io.Writer which must an object

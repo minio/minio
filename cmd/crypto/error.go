@@ -27,6 +27,26 @@ var (
 	// ErrInvalidEncryptionMethod indicates that the specified SSE encryption method
 	// is not supported.
 	ErrInvalidEncryptionMethod = errors.New("The encryption method is not supported")
+
+	// ErrInvalidCustomerAlgorithm indicates that the specified SSE-C algorithm
+	// is not supported.
+	ErrInvalidCustomerAlgorithm = errors.New("The SSE-C algorithm is not supported")
+
+	// ErrMissingCustomerKey indicates that the HTTP headers contains no SSE-C client key.
+	ErrMissingCustomerKey = errors.New("The SSE-C request is missing the customer key")
+
+	// ErrMissingCustomerKeyMD5 indicates that the HTTP headers contains no SSE-C client key
+	// MD5 checksum.
+	ErrMissingCustomerKeyMD5 = errors.New("The SSE-C request is missing the customer key MD5")
+
+	// ErrInvalidCustomerKey indicates that the SSE-C client key is not valid - e.g. not a
+	// base64-encoded string or not 256 bits long.
+	ErrInvalidCustomerKey = errors.New("The SSE-C client key is invalid")
+
+	// ErrCustomerKeyMD5Mismatch indicates that the SSE-C key MD5 does not match the
+	// computed MD5 sum. This means that the client provided either the wrong key for
+	// a certain MD5 checksum or the wrong MD5 for a certain key.
+	ErrCustomerKeyMD5Mismatch = errors.New("The provided SSE-C key MD5 does not match the computed MD5 of the SSE-C key")
 )
 
 var (
