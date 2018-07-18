@@ -80,12 +80,12 @@ type KMS interface {
 	// The context is cryptographically bound to the
 	// generated key. The same context must be provided
 	// again to unseal the generated key.
-	GenerateKey(keyID string, context Context) (key, sealedKey []byte, err error)
+	GenerateKey(keyID string, context Context) (key [32]byte, sealedKey []byte, err error)
 
 	// UnsealKey unseals the sealedKey using the master key
 	// referenced by the keyID. The provided context must
 	// match the context used to generate the sealed key.
-	UnsealKey(keyID string, sealedKey []byte, context Context) (key []byte, err error)
+	UnsealKey(keyID string, sealedKey []byte, context Context) (key [32]byte, err error)
 }
 
 type masterKeyKMS struct {
@@ -98,9 +98,8 @@ type masterKeyKMS struct {
 // to the generated keys.
 func NewKMS(key [32]byte) KMS { return &masterKeyKMS{masterKey: key} }
 
-func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key, sealedKey []byte, err error) {
-	key = make([]byte, 32)
-	if _, err = io.ReadFull(rand.Reader, key); err != nil {
+func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
+	if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
 
@@ -108,22 +107,22 @@ func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key, sealedKey 
 		buffer     bytes.Buffer
 		derivedKey = kms.deriveKey(keyID, ctx)
 	)
-	if n, err := sio.Encrypt(&buffer, bytes.NewReader(key), sio.Config{Key: derivedKey[:]}); err != nil || n != 64 {
+	if n, err := sio.Encrypt(&buffer, bytes.NewReader(key[:]), sio.Config{Key: derivedKey[:]}); err != nil || n != 64 {
 		logger.CriticalIf(context.Background(), errors.New("KMS: unable to encrypt data key"))
 	}
 	sealedKey = buffer.Bytes()
 	return key, sealedKey, nil
 }
 
-func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key []byte, err error) {
+func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
 	var (
 		buffer     bytes.Buffer
 		derivedKey = kms.deriveKey(keyID, ctx)
 	)
 	if n, err := sio.Decrypt(&buffer, bytes.NewReader(sealedKey), sio.Config{Key: derivedKey[:]}); err != nil || n != 32 {
-		return nil, err // TODO(aead): upgrade sio to use sio.Error
+		return key, err // TODO(aead): upgrade sio to use sio.Error
 	}
-	key = buffer.Bytes()
+	copy(key[:], buffer.Bytes())
 	return key, nil
 }
 
