@@ -1855,7 +1855,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	}
 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrAccessDenied), getGetObjectURL("", bucketName, objectName)))
+	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrAccessDenied), getGetObjectURL("", bucketName, objectName), ""))
 
 	// HEAD HTTTP request doesn't contain response body.
 	if anonReq.Method != "HEAD" {
@@ -1958,7 +1958,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	}
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
 	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized),
-		getGetObjectURL("", bucketName, objectName)))
+		getGetObjectURL("", bucketName, objectName), ""))
 
 	// HEAD HTTP Request doesn't contain body in its response,
 	// for other type of HTTP requests compare the response body content with the expected one.

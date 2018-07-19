@@ -54,7 +54,7 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 // NOTE: It is recommended that this API to be used for application development.
 // Minio continues to support ListObjectsV1 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListObjectsV2")
+	ctx := newContext(r, w, "ListObjectsV2")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -123,7 +123,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 // criteria to return a subset of the objects in a bucket.
 //
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListObjectsV1")
+	ctx := newContext(r, w, "ListObjectsV1")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

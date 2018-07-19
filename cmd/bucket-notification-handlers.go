@@ -42,7 +42,7 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 // as per http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 // It returns empty configuration if its not set.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketNotification")
+	ctx := newContext(r, w, "GetBucketNotification")
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
@@ -94,7 +94,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // PutBucketNotificationHandler - This HTTP handler stores given notification configuration as per
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutBucketNotification")
+	ctx := newContext(r, w, "PutBucketNotification")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -154,7 +154,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 // ListenBucketNotificationHandler - This HTTP handler sends events to the connected HTTP client.
 // Client should send prefix/suffix object name to match and events to watch as query parameters.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListenBucketNotification")
+	ctx := newContext(r, w, "ListenBucketNotification")
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
@@ -235,7 +235,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
 
-	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
+	if err = globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

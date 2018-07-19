@@ -331,7 +331,7 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 }
 
 // Returns context with ReqInfo details set in the context.
-func newContext(r *http.Request, api string) context.Context {
+func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -341,6 +341,7 @@ func newContext(r *http.Request, api string) context.Context {
 		object = prefix
 	}
 	reqInfo := &logger.ReqInfo{
+		RequestID:  w.Header().Get(responseRequestIDKey),
 		RemoteHost: handlers.GetSourceIP(r),
 		UserAgent:  r.Header.Get("user-agent"),
 		API:        api,

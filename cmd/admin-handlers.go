@@ -356,7 +356,7 @@ func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Reques
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
 func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ClearLocks")
+	ctx := newContext(r, w, "ClearLocks")
 
 	// Get object layer instance.
 	objLayer := newObjectLayerFn()
@@ -464,7 +464,7 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 // sequence. However, if the force-start flag is provided, the server
 // aborts the running heal sequence and starts a new one.
 func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "Heal")
+	ctx := newContext(r, w, "Heal")
 
 	// Get object layer instance.
 	objLayer := newObjectLayerFn()
