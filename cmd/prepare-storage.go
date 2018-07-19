@@ -186,6 +186,23 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 		return nil, err
 	}
 
+	// Get the deploymentID if set.
+	format.ID, err = formatXLGetDeploymentID(format, formatConfigs)
+	if err != nil {
+		return nil, err
+	}
+
+	if format.ID == "" {
+		if err = formatXLFixDeploymentID(context.Background(), storageDisks, format); err != nil {
+			return nil, err
+		}
+	}
+
+	logger.SetDeploymentID(format.ID)
+
+	if err = formatXLFixLocalDeploymentID(context.Background(), storageDisks, format); err != nil {
+		return nil, err
+	}
 	return format, nil
 }
 
