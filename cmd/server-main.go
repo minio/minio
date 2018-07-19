@@ -221,6 +221,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize server config.
 	initConfig()
 
+	// Load logger subsystem
+	loadLoggers()
+
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
