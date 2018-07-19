@@ -32,6 +32,21 @@ type KafkaArgs struct {
 	Enable  bool        `json:"enable"`
 	Brokers []xnet.Host `json:"brokers"`
 	Topic   string      `json:"topic"`
+	Net struct {
+		SASL struct {
+			User      string `json:"username"`
+			Password  string `json:"password"`
+			Handshake bool   `json:"handshake"`
+			Enable    bool   `json:"enable"`
+		} `json:"sasl"`
+		TLS struct {
+			Enable bool  `json:"enable"`
+			Config struct {
+				InsecureSkipVerify bool `json:"insecureskipverify"`
+				ClientAuth         int  `json:"clientauth"`
+			} `json:"tlsconfig"`
+		} `json:"tls"`
+	} `json:"net"`
 }
 
 // Validate KafkaArgs fields
@@ -94,15 +109,15 @@ func (target *KafkaTarget) Close() error {
 func NewKafkaTarget(id string, args KafkaArgs) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
-        config.Net.SASL.User = "<username>"
-        config.Net.SASL.Password = "<password>"
-        config.Net.SASL.Handshake = true
-        config.Net.SASL.Enable = true
+        config.Net.SASL.User = KafkaArgs.Net.SASL.User
+        config.Net.SASL.Password = KafkaArgs.Net.SASL.Password
+        config.Net.SASL.Handshake = KafkaArgs.Net.SASL.Handshake
+        config.Net.SASL.Enable = KafkaArgs.Net.SASL.Enable
 
-        config.Net.TLS.Enable = true
+        config.Net.TLS.Enable = KafkaArgs.Net.TLS.Enable
         tlsConfig := &tls.Config{
-                InsecureSkipVerify: true,
-                ClientAuth: 0,
+                InsecureSkipVerify: KafkaArgs.Net.TLS.Config.InsecureSkipVerify,
+                ClientAuth: KafkaArgs.Net.TLS.Config.ClientAuth,
         }
         config.Net.TLS.Config = tlsConfig
 
