@@ -90,9 +90,22 @@ func (target *KafkaTarget) Close() error {
 	return target.producer.Close()
 }
 
-// NewKafkaTarget - creates new Kafka target.
+// NewKafkaTarget - creates new Kafka target with auth credentials.
 func NewKafkaTarget(id string, args KafkaArgs) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
+
+        config.Net.SASL.User = "<username>"
+        config.Net.SASL.Password = "<password>"
+        config.Net.SASL.Handshake = true
+        config.Net.SASL.Enable = true
+
+        config.Net.TLS.Enable = true
+        tlsConfig := &tls.Config{
+                InsecureSkipVerify: true,
+                ClientAuth: 0,
+        }
+        config.Net.TLS.Config = tlsConfig
+
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
