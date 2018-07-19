@@ -172,8 +172,20 @@ var (
 				"endpoint": ""
 			}
 		}
-	}
-}`)
+	    },
+	    "logger": {
+		"console": {
+		    "enabled": true
+		},
+		"http": {
+		    "1": {
+			"enabled": false,
+			"endpoint": "http://user:example@localhost:9001/api/endpoint"
+		    }
+		}
+	    }
+
+	}`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
