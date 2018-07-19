@@ -28,7 +28,6 @@ import (
 	"time"
 
 	c "github.com/minio/mc/pkg/console"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // Disable disables all logging, false by default. (used for "go test")
@@ -441,13 +440,6 @@ var (
 func (f fatalMsg) pretty(msg string, args ...interface{}) {
 	// Build the passed error message
 	errMsg := fmt.Sprintf(msg, args...)
-	// Check terminal width
-	termWidth, _, err := terminal.GetSize(0)
-	if err != nil || termWidth < minimumWidth {
-		termWidth = minimumWidth
-	}
-	// Calculate available widht without the banner
-	width := termWidth - bannerWidth
 
 	tagPrinted := false
 
@@ -478,13 +470,8 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 			ansiRestoreAttributes()
 			ansiMoveRight(bannerWidth)
 			// Continue  error message printing
-			if len(line) > width {
-				fmt.Println(line[:width])
-				line = line[width:]
-			} else {
-				fmt.Println(line)
-				break
-			}
+			fmt.Println(line)
+			break
 		}
 	}
 
