@@ -19,8 +19,8 @@ package cmd
 var (
 	uiErrInvalidConfig = newUIErrFn(
 		"Invalid value found in the configuration file",
-		"Please ensure a valid value in the configuration file, for more details refer https://docs.minio.io/docs/minio-server-configuration-guide",
-		"",
+		"Please ensure a valid value in the configuration file",
+		"For more details, refer to https://docs.minio.io/docs/minio-server-configuration-guide",
 	)
 
 	uiErrInvalidBrowserValue = newUIErrFn(
