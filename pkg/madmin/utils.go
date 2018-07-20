@@ -17,7 +17,6 @@
 package madmin
 
 import (
-	"crypto/md5"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -34,13 +33,6 @@ import (
 // sum256 calculate sha256 sum for an input byte array.
 func sum256(data []byte) []byte {
 	hash := sha256.New()
-	hash.Write(data)
-	return hash.Sum(nil)
-}
-
-// sumMD5 calculate sumMD5 sum for an input byte array.
-func sumMD5(data []byte) []byte {
-	hash := md5.New()
 	hash.Write(data)
 	return hash.Sum(nil)
 }
