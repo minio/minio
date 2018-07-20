@@ -359,8 +359,8 @@ func CheckLocalServerAddr(serverAddr string) error {
 	p, err := strconv.Atoi(port)
 	if err != nil {
 		return uiErrInvalidAddressFlag(err).Msg("invalid port number")
-	} else if p < 1 || p > 65535 {
-		return uiErrInvalidAddressFlag(nil).Msg("port number must be between 1 to 65535")
+	} else if p < 0 || p > 65535 {
+		return uiErrInvalidAddressFlag(nil).Msg("port number must be between 0 to 65535")
 	}
 
 	// 0.0.0.0 is a wildcard address and refers to local network
