@@ -120,12 +120,6 @@ Example 1:
 		"",
 	)
 
-	uiErrUnableToReadFromBackend = newUIErrFn(
-		"Unable to read from the backend",
-		"Please ensure Minio binary has read permissions for the backend",
-		"",
-	)
-
 	uiErrPortAlreadyInUse = newUIErrFn(
 		"Port is already in use",
 		"Please ensure no other program uses the same address/port",

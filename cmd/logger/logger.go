@@ -377,11 +377,10 @@ func (f fatalMsg) quiet(msg string, args ...interface{}) {
 }
 
 var (
-	logTag       = "ERROR"
-	logBanner    = colorBgRed(colorFgWhite(colorBold(logTag))) + " "
-	emptyBanner  = colorBgRed(strings.Repeat(" ", len(logTag))) + " "
-	minimumWidth = 80
-	bannerWidth  = len(logTag) + 1
+	logTag      = "ERROR"
+	logBanner   = colorBgRed(colorFgWhite(colorBold(logTag))) + " "
+	emptyBanner = colorBgRed(strings.Repeat(" ", len(logTag))) + " "
+	bannerWidth = len(logTag) + 1
 )
 
 func (f fatalMsg) pretty(msg string, args ...interface{}) {
