@@ -108,7 +108,7 @@ func registerAPIRouter(router *mux.Router) {
 		// HeadBucket
 		bucket.Methods("HEAD").HandlerFunc(httpTraceAll(api.HeadBucketHandler))
 		// PostPolicy
-		bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceAll(api.PostPolicyBucketHandler))
+		bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(httpTraceHdrs(api.PostPolicyBucketHandler))
 		// DeleteMultipleObjects
 		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
