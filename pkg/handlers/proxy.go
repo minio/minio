@@ -30,7 +30,6 @@ var (
 	xForwardedPort   = http.CanonicalHeaderKey("X-Forwarded-Port")
 	xForwardedProto  = http.CanonicalHeaderKey("X-Forwarded-Proto")
 	xForwardedScheme = http.CanonicalHeaderKey("X-Forwarded-Scheme")
-	xForwardedServer = http.CanonicalHeaderKey("X-Forwarded-Server")
 	xRealIP          = http.CanonicalHeaderKey("X-Real-IP")
 )
 

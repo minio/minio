@@ -72,16 +72,6 @@ func newFormatFSV1() (format *formatFSV1) {
 	return f
 }
 
-// Returns the latest "fs" format V2
-func newFormatFSV2() (format *formatFSV2) {
-	f := &formatFSV2{}
-	f.Version = formatMetaVersionV1
-	f.Format = formatBackendFS
-	f.ID = mustGetUUID()
-	f.FS.Version = formatFSVersionV2
-	return f
-}
-
 // Returns the field formatMetaV1.Format i.e the string "fs" which is never likely to change.
 // We do not use this function in XL to get the format as the file is not fcntl-locked on XL.
 func formatMetaGetFormatBackendFS(r io.ReadSeeker) (string, error) {
