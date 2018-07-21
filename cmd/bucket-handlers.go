@@ -87,7 +87,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 // -------------------------
 // This operation returns bucket location.
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketLocation")
+	ctx := newContext(r, w, "GetBucketLocation")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -141,7 +141,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 // uploads in the response.
 //
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListMultipartUploads")
+	ctx := newContext(r, w, "ListMultipartUploads")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -188,7 +188,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListBuckets")
+	ctx := newContext(r, w, "ListBuckets")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -244,7 +244,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteMultipleObjects")
+	ctx := newContext(r, w, "DeleteMultipleObjects")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -398,7 +398,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutBucket")
+	ctx := newContext(r, w, "PutBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -474,7 +474,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 // This implementation of the POST operation handles object creation with a specified
 // signature policy in multipart/form-data
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PostPolicyBucket")
+	ctx := newContext(r, w, "PostPolicyBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -694,7 +694,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "HeadBucket")
+	ctx := newContext(r, w, "HeadBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -724,7 +724,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteBucket")
+	ctx := newContext(r, w, "DeleteBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

@@ -34,8 +34,6 @@ func mustGetRequestID(t time.Time) string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	// Set unique request ID for each reply.
-	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
 	w.Header().Set("Server", globalServerUserAgent)
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.

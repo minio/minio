@@ -723,6 +723,26 @@ func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.handler.ServeHTTP(w, r)
 }
 
+// requestIDHeaderHandler sets x-amz-request-id header.
+// Previously, this value was set right before a response
+// was sent to the client.So, logger and Error response XML
+// were not using this value.
+// This is set here so that this header can be logged as
+// part of the log entry and Error response XML.
+type requestIDHeaderHandler struct {
+	handler http.Handler
+}
+
+func addrequestIDHeader(h http.Handler) http.Handler {
+	return requestIDHeaderHandler{handler: h}
+}
+
+func (s requestIDHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set unique request ID for each response.
+	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
+	s.handler.ServeHTTP(w, r)
+}
+
 type securityHeaderHandler struct {
 	handler http.Handler
 }

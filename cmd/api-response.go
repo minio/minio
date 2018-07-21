@@ -577,7 +577,7 @@ func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *u
 	}
 	apiError := getAPIError(errorCode)
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, reqURL.Path)
+	errorResponse := getAPIErrorResponse(apiError, reqURL.Path, w.Header().Get(responseRequestIDKey))
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -592,7 +592,7 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, errorCode APIErrorCode
 func writeErrorResponseJSON(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL) {
 	apiError := getAPIError(errorCode)
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, reqURL.Path)
+	errorResponse := getAPIErrorResponse(apiError, reqURL.Path, w.Header().Get(responseRequestIDKey))
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
