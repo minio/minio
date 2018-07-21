@@ -437,11 +437,13 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 
 		if recV4.Code != testCase.expectedRespStatus {
 			// Verify whether the bucket policy fetched is same as the one inserted.
-			expectedPolicy, err := policy.ParseConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
+			var expectedPolicy *policy.Policy
+			expectedPolicy, err = policy.ParseConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
-			gotPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
+			var gotPolicy *policy.Policy
+			gotPolicy, err = policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
