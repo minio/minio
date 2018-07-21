@@ -543,25 +543,11 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 		// All parts except the last part has to be atleast 5MB.
 		if !isMinAllowedPartSize(fi.Size()) {
-			err = PartTooSmall{
+			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
 				PartSize:   fi.Size(),
 				PartETag:   part.ETag,
 			}
-			logger.LogIf(ctx, err)
-			return oi, err
-		}
-
-		// TODO: Make necessary changes in future as explained in the below comment.
-		// All parts except the last part has to be of same size. We are introducing this
-		// check to see if any clients break. If clients do not break then we can optimize
-		// multipart PutObjectPart by writing the part at the right offset using pwrite()
-		// so that we don't need to do background append at all. i.e by the time we get
-		// CompleteMultipartUpload we already have the full file available which can be
-		// renamed to the main name-space.
-		if partSize != fi.Size() {
-			logger.LogIf(ctx, PartsSizeUnequal{})
-			return oi, PartsSizeUnequal{}
 		}
 	}
 
