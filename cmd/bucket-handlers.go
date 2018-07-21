@@ -28,7 +28,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/gorilla/mux"
 
@@ -311,34 +310,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var wg = &sync.WaitGroup{} // Allocate a new wait group.
-	var dErrs = make([]error, len(deleteObjects.Objects))
-
-	// Delete all requested objects in parallel.
-	for index, object := range deleteObjects.Objects {
-		wg.Add(1)
-		go func(i int, obj ObjectIdentifier) {
-			defer wg.Done()
-			// If the request is denied access, each item
-			// should be marked as 'AccessDenied'
-			if s3Error == ErrAccessDenied {
-				dErrs[i] = PrefixAccessDenied{
-					Bucket: bucket,
-					Object: obj.ObjectName,
-				}
-				return
-			}
-			deleteObject := objectAPI.DeleteObject
-			if api.CacheAPI() != nil {
-				deleteObject = api.CacheAPI().DeleteObject
-			}
-			dErr := deleteObject(ctx, bucket, obj.ObjectName)
-			if dErr != nil {
-				dErrs[i] = dErr
-			}
-		}(index, object)
+	deleteObject := objectAPI.DeleteObject
+	if api.CacheAPI() != nil {
+		deleteObject = api.CacheAPI().DeleteObject
 	}
-	wg.Wait()
+
+	var dErrs = make([]error, len(deleteObjects.Objects))
+	for index, object := range deleteObjects.Objects {
+		// If the request is denied access, each item
+		// should be marked as 'AccessDenied'
+		if s3Error == ErrAccessDenied {
+			dErrs[index] = PrefixAccessDenied{
+				Bucket: bucket,
+				Object: object.ObjectName,
+			}
+			continue
+		}
+		dErrs[index] = deleteObject(ctx, bucket, object.ObjectName)
+	}
 
 	// Collect deleted objects and errors if any.
 	var deletedObjects []ObjectIdentifier
