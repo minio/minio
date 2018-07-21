@@ -1012,12 +1012,12 @@ func getAPIError(code APIErrorCode) APIError {
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
+func getAPIErrorResponse(err APIError, resource, requestid string) APIErrorResponse {
 	return APIErrorResponse{
 		Code:      err.Code,
 		Message:   err.Description,
 		Resource:  resource,
-		RequestID: "3L137",
+		RequestID: requestid,
 		HostID:    "3L137",
 	}
 }

@@ -47,6 +47,8 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []HandlerFunc{
+	// set x-amz-request-id header.
+	addrequestIDHeader,
 	// set HTTP security headers such as Content-Security-Policy.
 	addSecurityHeaders,
 	// Forward path style requests to actual host in a bucket federated setup.

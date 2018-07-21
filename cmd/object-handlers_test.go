@@ -263,7 +263,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey), getGetObjectURL("", bucketName, "abcd"))),
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey), getGetObjectURL("", bucketName, "abcd"), "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
@@ -287,7 +287,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidRange), getGetObjectURL("", bucketName, objectName))),
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidRange), getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusRequestedRangeNotSatisfiable,
 		},
 		// Test case - 5.
@@ -313,7 +313,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  "Invalid-AccessID",
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID), getGetObjectURL("", bucketName, objectName))),
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID), getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusForbidden,
 		},
 		// Test case - 7.
@@ -326,7 +326,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
-				getGetObjectURL("", bucketName, "../../etc"))),
+				getGetObjectURL("", bucketName, "../../etc"), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 8.
@@ -339,7 +339,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
-				"/"+bucketName+"/"+". ./. ./etc")),
+				"/"+bucketName+"/"+". ./. ./etc", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 9.
@@ -352,7 +352,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
-				"/"+bucketName+"/"+". ./../etc")),
+				"/"+bucketName+"/"+". ./../etc", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 10.
@@ -365,7 +365,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
-				getGetObjectURL("", bucketName, "etc/path/proper/.../etc"))),
+				getGetObjectURL("", bucketName, "etc/path/proper/.../etc"), "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 	}
@@ -2238,7 +2238,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 2.
@@ -2253,7 +2253,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 3.
@@ -2268,7 +2268,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 4.
@@ -2283,7 +2283,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 
 			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
 				getAPIErrorResponse(getAPIError(toAPIErrorCode(PartTooSmall{PartNumber: 1})),
-					getGetObjectURL("", bucketName, objectName))}),
+					getGetObjectURL("", bucketName, objectName), "")}),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 5.
@@ -2297,7 +2297,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 6.
@@ -2312,7 +2312,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 7.
@@ -2327,7 +2327,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID),
-				getGetObjectURL("", bucketName, objectName))),
+				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusForbidden,
 		},
 		// Test case - 8.
