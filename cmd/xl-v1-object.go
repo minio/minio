@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
@@ -80,7 +81,7 @@ func (xl xlObjects) prepareFile(ctx context.Context, bucket, object string, size
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+func (xl xlObjects) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
@@ -111,7 +112,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	length := xlMeta.Stat.Size
 
 	// Check if this request is only metadata update.
-	if cpSrcDstSame {
+	if cpSrcDstSame { // FIXME: check the behavior of AWS when version is provided when src == dst
 		// Update `xl.json` content on each disks.
 		for index := range metaArr {
 			metaArr[index].Meta = srcInfo.UserDefined
@@ -138,7 +139,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, version, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
@@ -162,24 +163,32 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	return objInfo, nil
 }
 
-// GetObject - reads an object erasured coded across multiple
+func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+	return xl.CopyObjectVersion(ctx, srcBucket, srcObject, "", dstBucket, dstObject, srcInfo)
+}
+
+func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+	return xl.GetObjectVersion(ctx, bucket, object, "", startOffset, length, writer, etag)
+}
+
+// GetObjectVersion - reads an object erasured coded across multiple
 // disks. Supports additional parameters like offset and length
 // which are synonymous with HTTP Range requests.
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
 		return err
 	}
 	defer objectLock.RUnlock()
-	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag)
+	return xl.getObject(ctx, bucket, object, version, startOffset, length, writer, etag)
 }
 
 // getObject wrapper for xl GetObject
-func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) getObject(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) error {
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
@@ -202,6 +211,28 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		_, err := writer.Write([]byte(""))
 		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket, object)
+	}
+
+	if version != "" && !globalVersioningSys.IsConfigured(bucket) {
+		// FIXME: check the behavior of AWS S3
+		return toObjectErr(errInvalidArgument, bucket, object)
+	}
+
+	if globalVersioningSys.IsConfigured(bucket) {
+		if version == "" {
+			versioning, err := xl.getObjectVersioning(ctx, bucket, object)
+			if err == nil {
+				if versioning.ObjectVersionID != "" {
+					object = pathJoin(object, xlVersioningDir, versioning.ObjectVersionID)
+				}
+
+			}
+			if err != nil && err != errFileNotFound {
+				return toObjectErr(err, bucket, object)
+			}
+		} else {
+			object = pathJoin(object, xlVersioningDir, version)
+		}
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -345,8 +376,12 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 	return dirObjectInfo(bucket, object, 0, map[string]string{}), reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum)
 }
 
-// GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
+	return xl.GetObjectInfoVersion(ctx, bucket, object, "")
+}
+
+// GetObjectInfoVersion - reads object metadata and replies back ObjectInfo.
+func (xl xlObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
@@ -368,7 +403,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (o
 		return oi, nil
 	}
 
-	info, err := xl.getObjectInfo(ctx, bucket, object)
+	info, err := xl.getObjectInfoVersion(ctx, bucket, object, version)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -376,10 +411,121 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (o
 	return info, nil
 }
 
+func (xl xlObjects) getObjectVersioning(ctx context.Context, bucket, object string) (versioning xlVersioningV1, err error) {
+	versioningArr, errs := readAllXLVersioning(ctx, xl.getDisks(), bucket, object)
+	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(xl.getDisks())/2)
+	if reducedErr != nil {
+		return xlVersioningV1{}, reducedErr
+	}
+	var modTimes []time.Time
+	for _, v := range versioningArr {
+		modTimes = append(modTimes, v.ModTime)
+	}
+	modTime, _ := commonTime(modTimes)
+	xlVersioning, err := pickValidXLVersioning(ctx, versioningArr, modTime)
+	if err != nil {
+		return xlVersioningV1{}, toObjectErr(err, bucket, object)
+	}
+	return xlVersioning, nil
+}
+
+// getObjectVersions - wrapper for fetching objec versions
+func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versionIDMarker string, maxKeys int) (versions []VersionInfo, err error) {
+
+	var lastVersion string
+	versioning, err := xl.getObjectVersioning(ctx, bucket, object)
+	if err == nil {
+		lastVersion = versioning.ObjectVersionID
+	} else {
+		if err == errFileNotFound {
+			lastVersion = ""
+		} else {
+			return nil, err
+		}
+	}
+
+	obj, err := xl.GetObjectInfoVersion(ctx, bucket, object, "null")
+	if err == nil {
+		versions = append(versions, VersionInfo{
+			Key:          object,
+			VersionID:    "null",
+			IsLatest:     "null" == lastVersion,
+			Size:         obj.Size,
+			ETag:         obj.ETag,
+			StorageClass: obj.StorageClass,
+			LastModified: obj.ModTime,
+		})
+	} else {
+		if err == errFileNotFound {
+			obj, err := xl.GetObjectInfoVersion(ctx, bucket, object, "")
+			if err == nil {
+				versions = append(versions, VersionInfo{
+					Key:          object,
+					VersionID:    "null",
+					IsLatest:     "" == lastVersion,
+					Size:         obj.Size,
+					ETag:         obj.ETag,
+					StorageClass: obj.StorageClass,
+					LastModified: obj.ModTime,
+				})
+			}
+		}
+	}
+
+	versionPath := pathJoin(object, xlVersioningDir) + slashSeparator
+	versionIDMarkerPath := ""
+	if versionIDMarker != "" {
+		versionIDMarkerPath = pathJoin(object, xlVersioningDir, versionIDMarker)
+	}
+
+	objs, err := xl.ListObjects(ctx, bucket, versionPath, versionIDMarkerPath, "", maxKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, version := range objs.Objects {
+		versionID := strings.TrimPrefix(version.Name, versionPath)
+		versions = append(versions, VersionInfo{
+			Key:          object,
+			VersionID:    versionID,
+			IsLatest:     versionID == lastVersion,
+			Size:         version.Size,
+			ETag:         version.ETag,
+			StorageClass: version.StorageClass,
+			LastModified: version.ModTime,
+		})
+	}
+
+	return versions, nil
+}
+
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
+	versionedObject := object
+	if version != "" && !globalVersioningSys.IsConfigured(bucket) {
+		// FIXME, see AWS behavior and follows it
+		return ObjectInfo{}, toObjectErr(errInvalidArgument, bucket, object)
+	}
+
+	if globalVersioningSys.IsConfigured(bucket) {
+		if version == "" {
+			xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+			if err == nil {
+				if xlVersioning.ObjectVersionID != "" {
+					versionedObject = pathJoin(object, xlVersioningDir, xlVersioning.ObjectVersionID)
+				}
+			} else {
+				if err != errFileNotFound {
+					return ObjectInfo{}, toObjectErr(err, bucket, object)
+				}
+			}
+		} else {
+			versionedObject = pathJoin(object, xlVersioningDir, version)
+		}
+	}
+
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, versionedObject)
 
 	// get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
@@ -525,6 +671,31 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 
 // putObject wrapper for xl PutObject
 func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	versionedObject := object
+	if globalVersioningSys.IsConfigured(bucket) {
+		var objectVersionID string
+		if globalVersioningSys.IsEnabled(bucket) {
+			objectVersionID = mustGetUUID()
+		} else {
+			objectVersionID = "null"
+		}
+		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+		if err != nil {
+			if err != errFileNotFound {
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+			xlVersioning = newXLVersioningV1()
+		}
+		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
+		defer func() {
+			xlVersioning.ObjectVersionID = objectVersionID
+			xlVersioning.ModTime = time.Now().UTC()
+			tempVersioning := mustGetUUID()
+			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+		}()
+	}
+
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -693,7 +864,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 	}
 
-	if xl.isObject(bucket, object) {
+	if !globalVersioningSys.IsEnabled(bucket) && xl.isObject(bucket, object) {
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -731,7 +902,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Rename the successfully written temporary object to final location.
-	if _, err = renameObject(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+	if _, err = renameObject(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, versionedObject, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -768,8 +939,16 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 	isDir := hasSuffix(object, slashSeparator)
 
 	if !isDir {
+		versionedObject := object
+		if globalVersioningSys.IsConfigured(bucket) {
+			// FIXME: check the quorum of all versioned objects
+			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
+			if vErr == nil && xlVersioning.ObjectVersionID != "" {
+				versionedObject = pathJoin(object, xlVersioningDir, xlVersioning.ObjectVersionID)
+			}
+		}
 		// Read metadata associated with the object from all disks.
-		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, versionedObject)
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
 		if err != nil {
@@ -851,6 +1030,10 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 
 	// Success.
 	return nil
+}
+
+func (xl xlObjects) ListObjectsVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	return
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

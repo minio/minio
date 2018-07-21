@@ -223,6 +223,13 @@ func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
+// BucketVersioningNotFound - no bucket versioning found.
+type BucketVersioningNotFound GenericError
+
+func (e BucketVersioningNotFound) Error() string {
+	return "No bucket versioning found for bucket: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

@@ -279,6 +279,11 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 	return partInfo, nil
 }
 
+func (fs *FSObjects) CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, dstBucket, dstObject, uploadID string, partID int,
+	startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
+	return pi, NotImplemented{}
+}
+
 // PutObjectPart - reads incoming data until EOF for the part file on
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
