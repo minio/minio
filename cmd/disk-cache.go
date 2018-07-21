@@ -57,8 +57,11 @@ type cacheObjects struct {
 	// file path patterns to exclude from cache
 	exclude []string
 	// Object functions pointing to the corresponding functions of backend implementation.
-	GetObjectFn               func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
-	GetObjectInfoFn           func(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
+	GetObjectFn            func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
+	GetObjectInfoFn        func(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
+	GetObjectVersionFn     func(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
+	GetObjectInfoVersionFn func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error)
+
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObjectFn            func(ctx context.Context, bucket, object string) error
 	ListObjectsFn             func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
@@ -90,6 +93,10 @@ type CacheObjectLayer interface {
 	// Object operations.
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
+
+	GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
+	GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error)
+
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
 
@@ -244,6 +251,10 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	return
 }
 
+func (c cacheObjects) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
+	return NotImplemented{}
+}
+
 // Returns ObjectInfo from cache if available.
 func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) (ObjectInfo, error) {
 	getObjectInfoFn := c.GetObjectInfoFn
@@ -282,6 +293,10 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) 
 		dcache.Delete(ctx, bucket, object)
 	}
 	return objInfo, nil
+}
+
+func (c cacheObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (ObjectInfo, error) {
+	return ObjectInfo{}, NotImplemented{}
 }
 
 // Returns function "listDir" of the type listDirFunc.

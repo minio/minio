@@ -45,6 +45,91 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 	return ErrNone
 }
 
+// Validate all the ListObjectsVersions query arguments, returns an APIErrorCode
+// if one of the args do not meet the required conditions.
+// Special conditions required by Minio server are as below
+// - delimiter if set should be equal to '/', otherwise the request is rejected.
+// - marker if set should have a common prefix with 'prefix' param, otherwise
+//   the request is rejected.
+func validateListObjectsVersionsArgs(delimiter, encodingType, keyMarker string, maxKeys int, prefix, versionIDMarker string) APIErrorCode {
+	// Max keys cannot be negative.
+	if maxKeys < 0 {
+		return ErrInvalidMaxKeys
+	}
+
+	/// Minio special conditions for ListObjects.
+
+	// Verify if delimiter is anything other than '/', which we do not support.
+	if delimiter != "" && delimiter != "/" {
+		return ErrNotImplemented
+	}
+	// Success.
+	return ErrNone
+}
+
+// ListObjectsVersionsHandler - GET Bucket Object versions
+func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListObjectsVersions")
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	urlValues := r.URL.Query()
+
+	// Extract all the listObjectsVersions query params to their native values.
+	delimiter, encodingType, keyMarker, maxkeys, prefix, versionIDMarker := getListObjectsVersionsArgs(urlValues)
+
+	// Validate the query params before beginning to serve the request.
+	// fetch-owner is not validated since it is a boolean
+	if s3Error := validateListObjectsVersionsArgs(delimiter, encodingType, keyMarker, maxkeys, prefix, versionIDMarker); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	listObjectsVersions := objectAPI.ListObjectsVersions
+
+	// FIXME: shall we cache listing objects versions
+	// if api.CacheAPI() != nil {
+	//	listObjectsV2 = api.CacheAPI().ListObjectsV2
+	//}
+
+	// Inititate a list objects operation based on the input params.
+	// On success would return back ListObjectsInfo object to be
+	// marshaled into S3 compatible XML header.
+	listObjectsVersionsInfo, err := listObjectsVersions(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxkeys)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// FIXME: check if size in versions differentiate between encryption/plain state of object
+	/* for i := range listObjectsVersionsInfo.Versions {
+		if listObjectsVersionsInfo.Versions[i].IsEncrypted() {
+			listObjectsVersionsInfo.Versions[i].Size, err = listObjectsVersionsInfo.Versions[i].DecryptedSize()
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+	} */
+
+	response := generateListObjectsVersionsResponse(bucket, prefix, delimiter, listObjectsVersionsInfo.IsTruncated, maxkeys, listObjectsVersionsInfo.Versions, listObjectsVersionsInfo.DeleteMarkers)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
 // --------------------------
 // This implementation of the GET operation returns some or all (up to 1000)

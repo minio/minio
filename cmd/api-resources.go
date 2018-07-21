@@ -61,6 +61,21 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	return
 }
 
+// Parse bucket url queries for List Objects versions.
+func getListObjectsVersionsArgs(values url.Values) (delimiter, encodingType, keyMarker string, maxkeys int, prefix, versionIDMarker string) {
+	delimiter = values.Get("delimiter")
+	encodingType = values.Get("encoding-type")
+	keyMarker = values.Get("key-marker")
+	if values.Get("max-keys") != "" {
+		maxkeys, _ = strconv.Atoi(values.Get("max-keys"))
+	} else {
+		maxkeys = maxObjectList
+	}
+	prefix = values.Get("prefix")
+	versionIDMarker = values.Get("version-id-marker")
+	return
+}
+
 // Parse bucket url queries for ?uploads
 func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int, encodingType string) {
 	prefix = values.Get("prefix")

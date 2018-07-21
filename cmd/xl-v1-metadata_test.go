@@ -75,7 +75,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		}
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, pathJoin(objectName, xlVersioningDir, "null"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	removeDiskN(disks, 7)
 
 	// Removing disk shouldn't affect reading object info.
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, pathJoin(objectName, xlVersioningDir, "null"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		os.RemoveAll(path.Join(disk, bucketName))
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, pathJoin(objectName, xlVersioningDir, "null"))
 	if err != errVolumeNotFound {
 		t.Fatal(err)
 	}

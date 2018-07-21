@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
@@ -27,6 +28,18 @@ import (
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
+
+func (a GatewayUnsupported) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) error {
+	return NotImplemented{}
+}
+
+func (a GatewayUnsupported) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
+	return ObjectInfo{}, NotImplemented{}
+}
+
+func (a GatewayUnsupported) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
+	return ObjectInfo{}, NotImplemented{}
+}
 
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
@@ -46,10 +59,20 @@ func (a GatewayUnsupported) CopyObjectPart(ctx context.Context, srcBucket, srcOb
 	return pi, NotImplemented{}
 }
 
+// CopyObjectPartVersion copy part of object to uploadID for another object
+func (a GatewayUnsupported) CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject, uploadID string, partID int, startOffset, length int64, srcInfo ObjectInfo) (pi PartInfo, err error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return pi, NotImplemented{}
+}
+
 // PutObjectPart puts a part of object in bucket
 func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi PartInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return pi, NotImplemented{}
+}
+
+func (a GatewayUnsupported) ListObjectsVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	return result, NotImplemented{}
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
@@ -84,6 +107,18 @@ func (a GatewayUnsupported) GetBucketPolicy(ctx context.Context, bucket string) 
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (a GatewayUnsupported) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetBucketVersioning will get versioning on bucket
+func (a GatewayUnsupported) GetBucketVersioning(ctx context.Context, bucket string) (*VersioningConfiguration, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return nil, NotImplemented{}
+}
+
+// SetBucketVersioning will set a new versioning config on bucket
+func (a GatewayUnsupported) SetBucketVersioning(ctx context.Context, bucket string, versioningConfig VersioningConfiguration) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
