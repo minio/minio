@@ -196,11 +196,6 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 		hasPrefix(object, slashSeparator) ||
 		(hasSuffix(object, slashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
-		logger.LogIf(ctx, ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
-
 		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
