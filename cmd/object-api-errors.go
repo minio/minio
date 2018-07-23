@@ -324,7 +324,8 @@ func (e InvalidPart) Error() string {
 type PartsSizeUnequal struct{}
 
 func (e PartsSizeUnequal) Error() string {
-	return "All parts except the last part should be of the same size"
+	return "All parts except the last part should be of the same size. If you see this, you are probably using the standalone single directory mode. " +
+		"You can workaround this by specifying four data directories instead of one."
 }
 
 // PartTooSmall - error if part size is less than 5MB.
