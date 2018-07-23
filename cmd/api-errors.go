@@ -40,8 +40,8 @@ type APIErrorResponse struct {
 	XMLName    xml.Name `xml:"Error" json:"-"`
 	Code       string
 	Message    string
-	Key        string
-	BucketName string
+	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
+	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
