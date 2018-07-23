@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go"
@@ -121,6 +123,31 @@ func (g *S3) Name() string {
 	return s3Backend
 }
 
+const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+// randString generates random names and prepends them with a known prefix.
+func randString(n int, src rand.Source, prefix string) string {
+	b := make([]byte, n)
+	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+	return prefix + string(b[0:30-len(prefix)])
+}
+
 // newS3 - Initializes a new client by auto probing S3 server signature.
 func newS3(url, accessKey, secretKey string) (*miniogo.Core, error) {
 	if url == "" {
@@ -137,13 +164,13 @@ func newS3(url, accessKey, secretKey string) (*miniogo.Core, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if _, err = clnt.BucketExists("probe-bucket-sign"); err != nil {
+	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+	if _, err = clnt.BucketExists(probeBucketName); err != nil {
 		clnt, err = miniogo.NewV2(endpoint, accessKey, secretKey, secure)
 		if err != nil {
 			return nil, err
 		}
-		if _, err = clnt.BucketExists("probe-bucket-sign"); err != nil {
+		if _, err = clnt.BucketExists(probeBucketName); err != nil {
 			return nil, err
 		}
 	}
