@@ -44,8 +44,11 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 
 // Helper function to create a lock server for testing
 func createLockTestServer(t *testing.T) (string, *lockRPCReceiver, string) {
-	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
@@ -61,7 +64,7 @@ func createLockTestServer(t *testing.T) (string, *lockRPCReceiver, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return testPath, locker, token
+	return fsDir, locker, token
 }
 
 // Test Lock functionality
@@ -470,11 +473,14 @@ func TestLockServerInit(t *testing.T) {
 		return
 	}
 
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(rootPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
 
 	currentIsDistXL := globalIsDistXL
 	currentLockServer := globalLockServer

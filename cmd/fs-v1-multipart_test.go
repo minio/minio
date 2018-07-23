@@ -90,23 +90,18 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 
 // TestPutObjectPartFaultyDisk - test PutObjectPart with faulty disks
 func TestPutObjectPartFaultyDisk(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
-
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
+
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
 	dataLen := int64(len(data))
 
-	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 

@@ -25,11 +25,15 @@ import (
 )
 
 func testAuthenticate(authType string, t *testing.T) {
-	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(testPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
 	cred, err := auth.GetNewCredentials()
 	if err != nil {
 		t.Fatalf("Error getting new credentials: %s", err)
@@ -92,11 +96,14 @@ func TestAuthenticateURL(t *testing.T) {
 
 // Tests web request authenticator.
 func TestWebRequestAuthenticate(t *testing.T) {
-	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(testPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	creds := globalServerConfig.GetCredential()
 	token, err := getTokenString(creds.AccessKey, creds.SecretKey)
@@ -143,11 +150,14 @@ func TestWebRequestAuthenticate(t *testing.T) {
 }
 
 func BenchmarkAuthenticateNode(b *testing.B) {
-	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		b.Fatalf("unable initialize config file, %s", err)
+		b.Fatal(err)
 	}
-	defer os.RemoveAll(testPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		b.Fatal(err)
+	}
 
 	creds := globalServerConfig.GetCredential()
 	b.ResetTimer()
@@ -158,11 +168,14 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 }
 
 func BenchmarkAuthenticateWeb(b *testing.B) {
-	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		b.Fatalf("unable initialize config file, %s", err)
+		b.Fatal(err)
 	}
-	defer os.RemoveAll(testPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		b.Fatal(err)
+	}
 
 	creds := globalServerConfig.GetCredential()
 	b.ResetTimer()

@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"time"
 
@@ -462,14 +463,22 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Get config.json - in distributed mode, the configuration
 	// occurring on a quorum of the servers is returned.
-	configBytes, err := getPeerConfig(globalAdminPeers)
+	configData, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
 		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 
-	writeSuccessResponseJSON(w, configBytes)
+	password := globalServerConfig.GetCredential().SecretKey
+	econfigData, err := madmin.EncryptServerConfigData(password, configData)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
 }
 
 // toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
@@ -572,7 +581,13 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	configBytes := configBuf[:n]
+	password := globalServerConfig.GetCredential().SecretKey
+	configBytes, err := madmin.DecryptServerConfigData(password, bytes.NewReader(configBuf[:n]))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
+		return
+	}
 
 	// Validate JSON provided in the request body: check the
 	// client has not sent JSON objects with duplicate keys.
@@ -669,8 +684,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	// Decode request body
 	var req madmin.SetCredsReq
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.LogIf(context.Background(), err)
 		writeErrorResponseJSON(w, ErrRequestBodyParse, r.URL)
 		return
@@ -697,13 +711,28 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
-	if err = globalServerConfig.Save(getConfigFile()); err != nil {
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+
+	// Construct path to config.json for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid race.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 
+	if err = saveServerConfig(newObjectLayerFn(), globalServerConfig); err != nil {
+		objLock.Unlock()
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+	objLock.Unlock()
+
 	// Notify all other Minio peers to update credentials
-	for host, err := range globalNotificationSys.SetCredentials(creds) {
+	for host, err := range globalNotificationSys.LoadCredentials() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", host.String())
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, err)

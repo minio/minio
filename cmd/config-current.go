@@ -29,7 +29,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/quick"
 )
 
 // Steps to move from version N to version N+1
@@ -69,6 +68,10 @@ func (s *serverConfig) GetRegion() string {
 
 // SetCredential sets new credential and returns the previous credential.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
+	if creds.IsValid() && globalActiveCred.IsValid() {
+		globalActiveCred = creds
+	}
+
 	// Save previous credential.
 	prevCred = s.Credential
 
@@ -81,6 +84,9 @@ func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Cred
 
 // GetCredentials get current credentials.
 func (s *serverConfig) GetCredential() auth.Credentials {
+	if globalActiveCred.IsValid() {
+		return globalActiveCred
+	}
 	return s.Credential
 }
 
@@ -208,19 +214,35 @@ func (s *serverConfig) Validate() error {
 	return nil
 }
 
-// Save config file to corresponding backend
-func Save(configFile string, data interface{}) error {
-	return quick.SaveConfig(data, configFile, globalEtcdClient)
-}
+func (s *serverConfig) loadFromEnvs() {
+	// If env is set override the credentials from config file.
+	if globalIsEnvCreds {
+		s.SetCredential(globalActiveCred)
+	}
 
-// Load config from backend
-func Load(configFile string, data interface{}) (quick.Config, error) {
-	return quick.LoadConfig(configFile, globalEtcdClient, data)
-}
+	if globalIsEnvBrowser {
+		s.SetBrowser(globalIsBrowserEnabled)
+	}
 
-// GetVersion gets config version from backend
-func GetVersion(configFile string) (string, error) {
-	return quick.GetVersion(configFile, globalEtcdClient)
+	if globalIsEnvWORM {
+		s.SetWorm(globalWORMEnabled)
+	}
+
+	if globalIsEnvRegion {
+		s.SetRegion(globalServerRegion)
+	}
+
+	if globalIsEnvDomainName {
+		s.Domain = globalDomainName
+	}
+
+	if globalIsStorageClass {
+		s.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
+	}
+
+	if globalIsDiskCacheEnabled {
+		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
+	}
 }
 
 // Returns the string describing a difference with the given
@@ -327,153 +349,82 @@ func newServerConfig() *serverConfig {
 	return srvCfg
 }
 
-// newConfig - initialize a new server config, saves env parameters if
-// found, otherwise use default parameters
-func newConfig() error {
-	// Initialize server config.
-	srvCfg, err := newQuickConfig(newServerConfig())
-	if err != nil {
-		return err
-	}
-
-	// If env is set override the credentials from config file.
-	if globalIsEnvCreds {
-		srvCfg.SetCredential(globalActiveCred)
-	}
-
-	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(globalIsBrowserEnabled)
-	}
-
-	if globalIsEnvWORM {
-		srvCfg.SetWorm(globalWORMEnabled)
-	}
-
-	if globalIsEnvRegion {
-		srvCfg.SetRegion(globalServerRegion)
-	}
-
-	if globalIsEnvDomainName {
-		srvCfg.Domain = globalDomainName
-	}
-
-	if globalIsStorageClass {
-		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
-	}
-
-	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
-	}
-
-	// hold the mutex lock before a new config is assigned.
-	// Save the new config globally.
-	// unlock the mutex.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
-
-	// Save config into file.
-	return Save(getConfigFile(), globalServerConfig)
-}
-
-// newQuickConfig - initialize a new server config, with an allocated
-// quick.Config interface.
-func newQuickConfig(srvCfg *serverConfig) (*serverConfig, error) {
-	qcfg, err := quick.NewConfig(srvCfg, globalEtcdClient)
-	if err != nil {
-		return nil, err
-	}
-
-	srvCfg.Config = qcfg
-	return srvCfg, nil
-}
-
-// getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfig, error) {
-	srvCfg := &serverConfig{
-		Region:  globalMinioDefaultRegion,
-		Browser: true,
-	}
-
-	var err error
-	srvCfg, err = newQuickConfig(srvCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	configFile := getConfigFile()
-	if err = srvCfg.Load(configFile); err != nil {
-		return nil, err
-	}
-
-	if err = srvCfg.Validate(); err != nil {
-		return nil, err
-	}
-
-	return srvCfg, nil
-}
-
-// loadConfig - loads a new config from disk, overrides params from env
-// if found and valid
-func loadConfig() error {
-	srvCfg, err := getValidConfig()
-	if err != nil {
-		return uiErrInvalidConfig(nil).Msg(err.Error())
-	}
-
-	// If env is set override the credentials from config file.
-	if globalIsEnvCreds {
-		srvCfg.SetCredential(globalActiveCred)
-	}
-
-	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(globalIsBrowserEnabled)
-	}
-
-	if globalIsEnvRegion {
-		srvCfg.SetRegion(globalServerRegion)
-	}
-
-	if globalIsEnvDomainName {
-		srvCfg.Domain = globalDomainName
-	}
-
-	if globalIsStorageClass {
-		srvCfg.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
-	}
-
-	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
-	}
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
+func (s *serverConfig) loadToCachedConfigs() {
 	if !globalIsEnvCreds {
-		globalActiveCred = globalServerConfig.GetCredential()
+		globalActiveCred = s.GetCredential()
 	}
 	if !globalIsEnvBrowser {
-		globalIsBrowserEnabled = globalServerConfig.GetBrowser()
+		globalIsBrowserEnabled = s.GetBrowser()
 	}
 	if !globalIsEnvWORM {
-		globalWORMEnabled = globalServerConfig.GetWorm()
+		globalWORMEnabled = s.GetWorm()
 	}
 	if !globalIsEnvRegion {
-		globalServerRegion = globalServerConfig.GetRegion()
+		globalServerRegion = s.GetRegion()
 	}
 	if !globalIsEnvDomainName {
-		globalDomainName = globalServerConfig.Domain
+		globalDomainName = s.Domain
 	}
 	if !globalIsStorageClass {
-		globalStandardStorageClass, globalRRStorageClass = globalServerConfig.GetStorageClass()
+		globalStandardStorageClass, globalRRStorageClass = s.GetStorageClass()
 	}
 	if !globalIsDiskCacheEnabled {
-		cacheConf := globalServerConfig.GetCacheConfig()
+		cacheConf := s.GetCacheConfig()
 		globalCacheDrives = cacheConf.Drives
 		globalCacheExcludes = cacheConf.Exclude
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
+}
+
+// newConfig - initialize a new server config, saves env parameters if
+// found, otherwise use default parameters
+func newConfig(objAPI ObjectLayer) error {
+	// Initialize server config.
+	srvCfg := newServerConfig()
+
+	// Override any values from ENVs.
+	srvCfg.loadFromEnvs()
+
+	// Load values to cached global values.
+	srvCfg.loadToCachedConfigs()
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
+
+	// Save config into file.
+	return saveServerConfig(objAPI, globalServerConfig)
+}
+
+// getValidConfig - returns valid server configuration
+func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
+	srvCfg, err := readServerConfig(context.Background(), objAPI)
+	if err != nil {
+		return nil, err
+	}
+
+	return srvCfg, srvCfg.Validate()
+}
+
+// loadConfig - loads a new config from disk, overrides params from env
+// if found and valid
+func loadConfig(objAPI ObjectLayer) error {
+	srvCfg, err := getValidConfig(objAPI)
+	if err != nil {
+		return uiErrInvalidConfig(nil).Msg(err.Error())
+	}
+
+	// Override any values from ENVs.
+	srvCfg.loadFromEnvs()
+
+	// Load values to cached global values.
+	srvCfg.loadToCachedConfigs()
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
 	globalServerConfigMu.Unlock()
 
 	return nil

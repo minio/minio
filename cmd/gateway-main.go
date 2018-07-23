@@ -150,17 +150,25 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		logger.Fatal(uiErrEnvCredentialsMissing(nil), "Unable to start gateway")
+		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
 	}
 
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to create configuration directories")
 
-	// Initialize gateway config.
-	initConfig()
+	// Initialize server config.
+	srvCfg := newServerConfig()
 
-	// Load logger subsystem
-	loadLoggers()
+	// Override any values from ENVs.
+	srvCfg.loadFromEnvs()
+
+	// Load values to cached global values.
+	srvCfg.loadToCachedConfigs()
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
 
 	// Check and load SSL certificates.
 	var err error

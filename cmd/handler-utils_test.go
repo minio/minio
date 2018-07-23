@@ -30,11 +30,14 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationContraint(t *testing.T) {
-	path, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(path)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	// Test with corrupted XML
 	malformedReq := &http.Request{

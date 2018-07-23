@@ -24,7 +24,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	xrpc "github.com/minio/minio/cmd/rpc"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -158,35 +157,21 @@ func (receiver *peerRPCReceiver) SendEvent(args *SendEventArgs, reply *bool) err
 	return nil
 }
 
-// SetCredentialsArgs - set credentials RPC arguments.
-type SetCredentialsArgs struct {
-	AuthArgs
-	Credentials auth.Credentials
-}
+// LoadCredentials - handles load credentials RPC call.
+func (receiver *peerRPCReceiver) LoadCredentials(args *AuthArgs, reply *VoidReply) error {
+	// Construct path to config.json for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
+	transactionConfigFile := configFile + ".transaction"
 
-// SetCredentials - handles set credentials RPC call.
-func (receiver *peerRPCReceiver) SetCredentials(args *SetCredentialsArgs, reply *VoidReply) error {
-	if !args.Credentials.IsValid() {
-		return fmt.Errorf("invalid credentials passed")
-	}
-
-	// Acquire lock before updating global configuration.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-
-	// Update credentials in memory
-	prevCred := globalServerConfig.SetCredential(args.Credentials)
-
-	// Save credentials to config file
-	if err := globalServerConfig.Save(getConfigFile()); err != nil {
-		// As saving configurstion failed, restore previous credential in memory.
-		globalServerConfig.SetCredential(prevCred)
-
-		logger.LogIf(context.Background(), err)
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid race.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
+	objLock.RUnlock()
 
-	return nil
+	return globalConfigSys.Load(newObjectLayerFn())
 }
 
 // NewPeerRPCServer - returns new peer RPC server.

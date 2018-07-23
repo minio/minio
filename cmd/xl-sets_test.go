@@ -101,12 +101,6 @@ func TestNewXLSets(t *testing.T) {
 // TestHashedLayer - tests the hashed layer which will be returned
 // consistently for a given object name.
 func TestHashedLayer(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	var objs []*xlObjects
 
 	for i := 0; i < 16; i++ {

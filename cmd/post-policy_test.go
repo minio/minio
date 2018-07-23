@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
@@ -118,11 +117,9 @@ func TestPostPolicyBucketHandler(t *testing.T) {
 
 // testPostPolicyBucketHandler - Tests validate post policy handler uploading objects.
 func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
+	if err := newTestConfig(globalMinioDefaultRegion, obj); err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}
-	defer os.RemoveAll(root)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -139,7 +136,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -420,11 +417,9 @@ func TestPostPolicyBucketHandlerRedirect(t *testing.T) {
 
 // testPostPolicyBucketHandlerRedirect tests POST Object when success_action_redirect is specified
 func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
+	if err := newTestConfig(globalMinioDefaultRegion, obj); err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}
-	defer os.RemoveAll(root)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()

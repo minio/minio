@@ -113,11 +113,14 @@ func TestStripStandardPorts(t *testing.T) {
 
 // Test printing server common message.
 func TestPrintServerCommonMessage(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printServerCommonMsg(apiEndpoints)
@@ -125,11 +128,14 @@ func TestPrintServerCommonMessage(t *testing.T) {
 
 // Tests print cli access message.
 func TestPrintCLIAccessMsg(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printCLIAccessMsg(apiEndpoints[0], "myminio")
@@ -137,11 +143,14 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 
 // Test print startup message.
 func TestPrintStartupMessage(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printStartupMessage(apiEndpoints)

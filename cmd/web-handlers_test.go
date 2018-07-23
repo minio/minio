@@ -28,7 +28,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1506,14 +1505,13 @@ func TestWebCheckAuthorization(t *testing.T) {
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	err = newTestConfig(globalMinioDefaultRegion, obj)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
-	// remove the root directory after the test ends.
-	defer os.RemoveAll(rootPath)
 
 	rec := httptest.NewRecorder()
 
@@ -1585,100 +1583,8 @@ func TestWebCheckAuthorization(t *testing.T) {
 	}
 }
 
-// TestWebObjectLayerNotReady - Test RPCs responses when disks are not ready
-func TestWebObjectLayerNotReady(t *testing.T) {
-	// Initialize web rpc endpoint.
-	apiRouter := initTestWebRPCEndPoint(nil)
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal("Init Test config failed", err)
-	}
-	// remove the root directory after the test ends.
-	defer os.RemoveAll(rootPath)
-
-	rec := httptest.NewRecorder()
-
-	credentials := globalServerConfig.GetCredential()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
-	if err != nil {
-		t.Fatal("Cannot authenticate", err)
-	}
-
-	// Check if web rpc calls return Server not initialized. ServerInfo, GenerateAuth,
-	// SetAuth and GetAuth are not concerned
-	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
-		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
-	for _, rpcCall := range webRPCs {
-		args := &AuthArgs{
-			RPCVersion: globalRPCAPIVersion,
-		}
-		reply := &WebGenericRep{}
-		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
-		if nerr != nil {
-			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
-		}
-		apiRouter.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("Test %s: Expected the response status to be 200, but instead found `%d`", rpcCall, rec.Code)
-		}
-		err = getTestWebRPCResponse(rec, &reply)
-		if err == nil {
-			t.Fatalf("Test %s: Should fail", rpcCall)
-		} else {
-			if !strings.EqualFold(err.Error(), errServerNotInitialized.Error()) {
-				t.Fatalf("Test %s: should fail with %s Found error: %v", rpcCall, errServerNotInitialized, err)
-			}
-		}
-	}
-
-	rec = httptest.NewRecorder()
-	// Test authorization of Web.Download
-	req, err := http.NewRequest("GET", "/minio/download/bucket/object?token="+authorization, nil)
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("Expected the response status to be 503, but instead found `%d`", rec.Code)
-	}
-	resp := string(rec.Body.Bytes())
-	if !strings.EqualFold(resp, errServerNotInitialized.Error()) {
-		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errServerNotInitialized, resp)
-	}
-
-	rec = httptest.NewRecorder()
-	// Test authorization of Web.Upload
-	content := []byte("temporary file's content")
-	req, err = http.NewRequest("PUT", "/minio/upload/bucket/object", nil)
-	req.Header.Set("Authorization", "Bearer "+authorization)
-	req.Header.Set("Content-Length", strconv.Itoa(len(content)))
-	req.Header.Set("x-amz-date", "20160814T114029Z")
-	req.Header.Set("Accept", "*/*")
-	req.Body = ioutil.NopCloser(bytes.NewReader(content))
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("Expected the response status to be 503, but instead found `%d`", rec.Code)
-	}
-	resp = string(rec.Body.Bytes())
-	if !strings.EqualFold(resp, errServerNotInitialized.Error()) {
-		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errServerNotInitialized, resp)
-	}
-}
-
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
-
 	// Prepare XL backend
 	obj, fsDirs, err := prepareXL16()
 	if err != nil {
@@ -1686,6 +1592,13 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 	// Executing the object layer tests for XL.
 	defer removeRoots(fsDirs)
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	err = newTestConfig(globalMinioDefaultRegion, obj)
+	if err != nil {
+		t.Fatal("Init Test config failed", err)
+	}
 
 	bucketName := "mybucket"
 	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
@@ -1701,15 +1614,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal("Init Test config failed", err)
-	}
-	// remove the root directory after the test ends.
-	defer os.RemoveAll(rootPath)
 
 	rec := httptest.NewRecorder()
 

@@ -106,7 +106,7 @@ func TestSaveFailOnDir(t *testing.T) {
 }
 
 func TestCheckData(t *testing.T) {
-	err := checkData(nil)
+	err := CheckData(nil)
 	if err == nil {
 		t.Fatal("Unexpected should fail")
 	}
@@ -117,7 +117,7 @@ func TestCheckData(t *testing.T) {
 		Directories []string
 	}
 	saveMeBadNoVersion := myStructBadNoVersion{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = checkData(&saveMeBadNoVersion)
+	err = CheckData(&saveMeBadNoVersion)
 	if err == nil {
 		t.Fatal("Unexpected should fail if Version is not set")
 	}
@@ -128,7 +128,7 @@ func TestCheckData(t *testing.T) {
 		Password string
 	}
 	saveMeBadVersionInt := myStructBadVersionInt{1, "guest", "nopassword"}
-	err = checkData(&saveMeBadVersionInt)
+	err = CheckData(&saveMeBadVersionInt)
 	if err == nil {
 		t.Fatal("Unexpected should fail if Version is integer")
 	}
@@ -141,7 +141,7 @@ func TestCheckData(t *testing.T) {
 	}
 
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = checkData(&saveMeGood)
+	err = CheckData(&saveMeGood)
 	if err != nil {
 		t.Fatal(err)
 	}

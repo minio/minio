@@ -25,12 +25,6 @@ import (
 
 // Tests for if parent directory is object
 func TestXLParentDirIsObject(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	obj, fsDisks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer.")

@@ -17,11 +17,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -29,9 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -85,8 +81,8 @@ func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string)
 	}()
 }
 
-// SetCredentials - calls SetCredentials RPC call on all peers.
-func (sys *NotificationSys) SetCredentials(credentials auth.Credentials) map[xnet.Host]error {
+// LoadCredentials - calls LoadCredentials RPC call on all peers.
+func (sys *NotificationSys) LoadCredentials() map[xnet.Host]error {
 	errors := make(map[xnet.Host]error)
 	var wg sync.WaitGroup
 	for addr, client := range sys.peerRPCClientMap {
@@ -95,7 +91,7 @@ func (sys *NotificationSys) SetCredentials(credentials auth.Credentials) map[xne
 			defer wg.Done()
 			// Try to set credentials in three attempts.
 			for i := 0; i < 3; i++ {
-				err := client.SetCredentials(credentials)
+				err := client.LoadCredentials()
 				if err == nil {
 					break
 				}
@@ -527,41 +523,6 @@ func sendEvent(args eventArgs) {
 			logger.LogOnceIf(ctx, err.Err, err.ID)
 		}
 	}()
-}
-
-func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data))
-	if err != nil {
-		return err
-	}
-
-	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil)
-	return err
-}
-
-var errConfigNotFound = errors.New("config file not found")
-
-func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
-	var buffer bytes.Buffer
-	// Read entire content by setting size to -1
-	err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "")
-	if err != nil {
-		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
-			return nil, errConfigNotFound
-		}
-
-		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
-		logger.LogIf(ctx, err)
-		return nil, err
-	}
-
-	// Return NoSuchNotifications on empty content.
-	if buffer.Len() == 0 {
-		return nil, errNoSuchNotifications
-	}
-
-	return &buffer, nil
 }
 
 func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) (*event.Config, error) {

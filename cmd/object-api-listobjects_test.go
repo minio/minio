@@ -592,13 +592,7 @@ func BenchmarkListObjects(b *testing.B) {
 		b.Fatal(err)
 	}
 	defer os.RemoveAll(directory)
-	// initialize the root directory.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		b.Fatalf("Unable to initialize config. %s", err)
-	}
 
-	defer os.RemoveAll(rootPath)
 	// Create the obj.
 	obj := initFSObjectsB(directory, b)
 
