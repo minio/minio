@@ -72,9 +72,6 @@ ENVIRONMENT VARIABLES:
      MINIO_ACCESS_KEY: Custom username or access key of minimum 3 characters in length.
      MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
 
-  ENDPOINTS:
-     MINIO_ENDPOINTS: List of all endpoints delimited by ' '.
-
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
@@ -106,9 +103,8 @@ EXAMPLES:
      $ export MINIO_DOMAIN=mydomain.com
      $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
-  4. Start minio server on 64 disks server with endpoints through environment variable.
-     $ export MINIO_ENDPOINTS=/mnt/export{1...64}
-     $ {{.HelpName}}
+  4. Start erasure coded minio server on a node with 64 drives.
+     $ {{.HelpName}} /mnt/export{1...64}
 
   5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
      $ export MINIO_ACCESS_KEY=minio
