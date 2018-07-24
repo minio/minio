@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"testing"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 var isMultipartTests = []struct {
@@ -254,6 +256,13 @@ var ssecParseMetadataTests = []struct {
 	}, // 7
 }
 
+func TestCreateMultipartMetadata(t *testing.T) {
+	metadata := CreateMultipartMetadata(nil)
+	if v, ok := metadata[SSEMultipart]; !ok || v != "" {
+		t.Errorf("Metadata is missing the correct value for '%s': got '%s' - want '%s'", SSEMultipart, v, "")
+	}
+}
+
 func TestSSECParseMetadata(t *testing.T) {
 	for i, test := range ssecParseMetadataTests {
 		sealedKey, err := SSEC.ParseMetadata(test.Metadata)
@@ -270,4 +279,83 @@ func TestSSECParseMetadata(t *testing.T) {
 			t.Errorf("Test %d: got sealed key IV '%v' - want sealed key IV '%v'", i, sealedKey.IV, test.SealedKey.IV)
 		}
 	}
+}
+
+var s3CreateMetadataTests = []struct {
+	KeyID         string
+	SealedDataKey []byte
+	SealedKey     SealedKey
+}{
+	{KeyID: "", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
+}
+
+func TestS3CreateMetadata(t *testing.T) {
+	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
+	logger.Disable = true
+	for i, test := range s3CreateMetadataTests {
+		metadata := S3.CreateMetadata(nil, test.KeyID, test.SealedDataKey, test.SealedKey)
+		keyID, kmsKey, sealedKey, err := S3.ParseMetadata(metadata)
+		if err != nil {
+			t.Errorf("Test %d: failed to parse metadata: %v", i, err)
+			continue
+		}
+		if keyID != test.KeyID {
+			t.Errorf("Test %d: Key-ID mismatch: got '%s' - want '%s'", i, keyID, test.KeyID)
+		}
+		if !bytes.Equal(kmsKey, test.SealedDataKey) {
+			t.Errorf("Test %d: sealed KMS data mismatch: got '%v' - want '%v'", i, kmsKey, test.SealedDataKey)
+		}
+		if sealedKey.Algorithm != test.SealedKey.Algorithm {
+			t.Errorf("Test %d: seal algorithm mismatch: got '%s' - want '%s'", i, sealedKey.Algorithm, test.SealedKey.Algorithm)
+		}
+		if !bytes.Equal(sealedKey.IV[:], test.SealedKey.IV[:]) {
+			t.Errorf("Test %d: IV mismatch: got '%v' - want '%v'", i, sealedKey.IV, test.SealedKey.IV)
+		}
+		if !bytes.Equal(sealedKey.Key[:], test.SealedKey.Key[:]) {
+			t.Errorf("Test %d: sealed key mismatch: got '%v' - want '%v'", i, sealedKey.Key, test.SealedKey.Key)
+		}
+	}
+
+	defer func() {
+		if err := recover(); err == nil || err != logger.ErrCritical {
+			t.Errorf("Expected '%s' panic for invalid seal algorithm but got '%s'", logger.ErrCritical, err)
+		}
+	}()
+	_ = S3.CreateMetadata(nil, "", []byte{}, SealedKey{Algorithm: InsecureSealAlgorithm})
+}
+
+var ssecCreateMetadataTests = []SealedKey{
+	{Algorithm: SealAlgorithm},
+	{IV: [32]byte{0xff}, Key: [64]byte{0x7e}, Algorithm: SealAlgorithm},
+}
+
+func TestSSECCreateMetadata(t *testing.T) {
+	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
+	logger.Disable = true
+	for i, test := range s3CreateMetadataTests {
+		metadata := SSEC.CreateMetadata(nil, test.SealedKey)
+		sealedKey, err := SSEC.ParseMetadata(metadata)
+		if err != nil {
+			t.Errorf("Test %d: failed to parse metadata: %v", i, err)
+			continue
+		}
+		if sealedKey.Algorithm != test.SealedKey.Algorithm {
+			t.Errorf("Test %d: seal algorithm mismatch: got '%s' - want '%s'", i, sealedKey.Algorithm, test.SealedKey.Algorithm)
+		}
+		if !bytes.Equal(sealedKey.IV[:], test.SealedKey.IV[:]) {
+			t.Errorf("Test %d: IV mismatch: got '%v' - want '%v'", i, sealedKey.IV, test.SealedKey.IV)
+		}
+		if !bytes.Equal(sealedKey.Key[:], test.SealedKey.Key[:]) {
+			t.Errorf("Test %d: sealed key mismatch: got '%v' - want '%v'", i, sealedKey.Key, test.SealedKey.Key)
+		}
+	}
+
+	defer func() {
+		if err := recover(); err == nil || err != logger.ErrCritical {
+			t.Errorf("Expected '%s' panic for invalid seal algorithm but got '%s'", logger.ErrCritical, err)
+		}
+	}()
+	_ = SSEC.CreateMetadata(nil, SealedKey{Algorithm: InsecureSealAlgorithm})
 }

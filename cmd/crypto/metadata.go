@@ -15,7 +15,11 @@
 package crypto
 
 import (
+	"context"
 	"encoding/base64"
+	"fmt"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 // IsMultiPart returns true if the object metadata indicates
@@ -76,6 +80,36 @@ func (ssec) IsEncrypted(metadata map[string]string) bool {
 	return false
 }
 
+// CreateMultipartMetadata adds the multipart flag entry to metadata
+// and returns modifed metadata. It allocates a new metadata map if
+// metadata is nil.
+func CreateMultipartMetadata(metadata map[string]string) map[string]string {
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	metadata[SSEMultipart] = ""
+	return metadata
+}
+
+// CreateMetadata encodes the keyID, the sealed kms data key and the sealed key
+// into the metadata and returns the modified metadata. It allocates a new
+// metadata map if metadata is nil.
+func (s3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
+	if sealedKey.Algorithm != SealAlgorithm {
+		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
+	}
+
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	metadata[S3KMSKeyID] = keyID
+	metadata[SSESealAlgorithm] = sealedKey.Algorithm
+	metadata[SSEIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
+	metadata[S3SealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
+	metadata[S3KMSSealedKey] = base64.StdEncoding.EncodeToString(kmsKey)
+	return metadata
+}
+
 // ParseMetadata extracts all SSE-S3 related values from the object metadata
 // and checks whether they are well-formed. It returns the KMS key-ID, the
 // sealed KMS key and the sealed object key on success.
@@ -123,6 +157,22 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	copy(sealedKey.IV[:], iv)
 	copy(sealedKey.Key[:], encryptedKey)
 	return keyID, kmsKey, sealedKey, nil
+}
+
+// CreateMetadata encodes the sealed key into the metadata and returns the modified metadata.
+// It allocates a new metadata map if metadata is nil.
+func (ssec) CreateMetadata(metadata map[string]string, sealedKey SealedKey) map[string]string {
+	if sealedKey.Algorithm != SealAlgorithm {
+		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
+	}
+
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	metadata[SSESealAlgorithm] = SealAlgorithm
+	metadata[SSEIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
+	metadata[SSECSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
+	return metadata
 }
 
 // ParseMetadata extracts all SSE-C related values from the object metadata
