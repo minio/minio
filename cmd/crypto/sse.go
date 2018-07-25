@@ -25,6 +25,11 @@ import (
 )
 
 const (
+	// SSEMultipart is the metadata key indicating that the object
+	// was uploaded using the S3 multipart API and stored using
+	// some from of server-side-encryption.
+	SSEMultipart = "X-Minio-Internal-Encrypted-Multipart"
+
 	// SSEIV is the metadata key referencing the random initialization
 	// vector (IV) used for SSE-S3 and SSE-C key derivation.
 	SSEIV = "X-Minio-Internal-Server-Side-Encryption-Iv"
@@ -33,8 +38,8 @@ const (
 	// used by SSE-C and SSE-S3 to encrypt the object.
 	SSESealAlgorithm = "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm"
 
-	// SSECSealKey is the metadata key referencing the sealed object-key for SSE-C.
-	SSECSealKey = "X-Minio-Internal-Server-Side-Encryption-Sealed-Key"
+	// SSECSealedKey is the metadata key referencing the sealed object-key for SSE-C.
+	SSECSealedKey = "X-Minio-Internal-Server-Side-Encryption-Sealed-Key"
 
 	// S3SealedKey is the metadata key referencing the sealed object-key for SSE-S3.
 	S3SealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key"

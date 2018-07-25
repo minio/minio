@@ -49,7 +49,7 @@ var s3ParseTests = []struct {
 
 func TestS3Parse(t *testing.T) {
 	for i, test := range s3ParseTests {
-		if err := S3.Parse(test.Header); err != test.ExpectedErr {
+		if err := S3.ParseHTTP(test.Header); err != test.ExpectedErr {
 			t.Errorf("Test %d: Wanted '%v' but got '%v'", i, test.ExpectedErr, err)
 		}
 	}
@@ -204,7 +204,7 @@ var ssecParseTests = []struct {
 func TestSSECParse(t *testing.T) {
 	var zeroKey [32]byte
 	for i, test := range ssecParseTests {
-		key, err := SSEC.Parse(test.Header)
+		key, err := SSEC.ParseHTTP(test.Header)
 		if err != test.ExpectedErr {
 			t.Errorf("Test %d: want error '%v' but got '%v'", i, test.ExpectedErr, err)
 		}
@@ -286,7 +286,7 @@ var ssecCopyParseTests = []struct {
 func TestSSECopyParse(t *testing.T) {
 	var zeroKey [32]byte
 	for i, test := range ssecCopyParseTests {
-		key, err := SSECopy.Parse(test.Header)
+		key, err := SSECopy.ParseHTTP(test.Header)
 		if err != test.ExpectedErr {
 			t.Errorf("Test %d: want error '%v' but got '%v'", i, test.ExpectedErr, err)
 		}

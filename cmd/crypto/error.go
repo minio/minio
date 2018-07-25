@@ -50,6 +50,14 @@ var (
 )
 
 var (
+	errMissingInternalIV            = Error{"The object metadata is missing the internal encryption IV"}
+	errMissingInternalSealAlgorithm = Error{"The object metadata is missing the internal seal algorithm"}
+
+	errInvalidInternalIV            = Error{"The internal encryption IV is malformed"}
+	errInvalidInternalSealAlgorithm = Error{"The internal seal algorithm is invalid and not supported"}
+)
+
+var (
 	// errOutOfEntropy indicates that the a source of randomness (PRNG) wasn't able
 	// to produce enough random data. This is fatal error and should cause a panic.
 	errOutOfEntropy = errors.New("Unable to read enough randomness from the system")

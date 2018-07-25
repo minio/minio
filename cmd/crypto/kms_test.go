@@ -53,7 +53,7 @@ func TestMasterKeyKMS(t *testing.T) {
 		if err == nil && test.ShouldFail {
 			t.Errorf("Test %d: KMS unsealed the generated successfully but should have failed", i)
 		}
-		if !test.ShouldFail && !bytes.Equal(key, unsealedKey) {
+		if !test.ShouldFail && !bytes.Equal(key[:], unsealedKey[:]) {
 			t.Errorf("Test %d: The generated and unsealed key differ", i)
 		}
 	}
