@@ -169,7 +169,6 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
-	ErrPartsSizeUnequal
 	ErrInvalidRequest
 	// Minio storage class error codes
 	ErrInvalidStorageClass
@@ -785,11 +784,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers are not supported.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrPartsSizeUnequal: {
-		Code:           "XMinioPartsSizeUnequal",
-		Description:    "All parts except the last part should be of the same size.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrObjectTampered: {
 		Code:           "XMinioObjectTampered",
 		Description:    errObjectTampered.Error(),
@@ -970,8 +964,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case UnsupportedMetadata:
 		apiErr = ErrUnsupportedMetadata
-	case PartsSizeUnequal:
-		apiErr = ErrPartsSizeUnequal
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case *event.ErrInvalidEventName:

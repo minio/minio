@@ -320,13 +320,6 @@ func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag."
 }
 
-// PartsSizeUnequal - All parts except the last part should be of the same size
-type PartsSizeUnequal struct{}
-
-func (e PartsSizeUnequal) Error() string {
-	return "All parts except the last part should be of the same size"
-}
-
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
 	PartSize   int64
