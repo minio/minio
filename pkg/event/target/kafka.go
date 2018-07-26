@@ -17,6 +17,7 @@
 package target
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -32,21 +33,16 @@ type KafkaArgs struct {
 	Enable  bool        `json:"enable"`
 	Brokers []xnet.Host `json:"brokers"`
 	Topic   string      `json:"topic"`
-	Net struct {
-		SASL struct {
-			User      string `json:"username"`
-			Password  string `json:"password"`
-			Handshake bool   `json:"handshake"`
-			Enable    bool   `json:"enable"`
-		} `json:"sasl"`
-		TLS struct {
-			Enable bool  `json:"enable"`
-			Config struct {
-				InsecureSkipVerify bool `json:"insecureskipverify"`
-				ClientAuth         int  `json:"clientauth"`
-			} `json:"tlsconfig"`
-		} `json:"tls"`
-	} `json:"net"`
+	TLS     struct {
+		Enable     bool               `json:"enable"`
+		SkipVerify bool               `json:"skipVerify"`
+		ClientAuth tls.ClientAuthType `json:"clientAuth"`
+	} `json:"tls"`
+	SASL struct {
+		Enable   bool   `json:"enable"`
+		User     string `json:"username"`
+		Password string `json:"password"`
+	} `json:"sasl"`
 }
 
 // Validate KafkaArgs fields
@@ -109,17 +105,15 @@ func (target *KafkaTarget) Close() error {
 func NewKafkaTarget(id string, args KafkaArgs) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
-        config.Net.SASL.User = KafkaArgs.Net.SASL.User
-        config.Net.SASL.Password = KafkaArgs.Net.SASL.Password
-        config.Net.SASL.Handshake = KafkaArgs.Net.SASL.Handshake
-        config.Net.SASL.Enable = KafkaArgs.Net.SASL.Enable
+	config.Net.SASL.User = args.SASL.User
+	config.Net.SASL.Password = args.SASL.Password
+	config.Net.SASL.Enable = args.SASL.Enable
 
-        config.Net.TLS.Enable = KafkaArgs.Net.TLS.Enable
-        tlsConfig := &tls.Config{
-                InsecureSkipVerify: KafkaArgs.Net.TLS.Config.InsecureSkipVerify,
-                ClientAuth: KafkaArgs.Net.TLS.Config.ClientAuth,
-        }
-        config.Net.TLS.Config = tlsConfig
+	config.Net.TLS.Enable = args.TLS.Enable
+	tlsConfig := &tls.Config{
+		ClientAuth: args.TLS.ClientAuth,
+	}
+	config.Net.TLS.Config = tlsConfig
 
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 10
