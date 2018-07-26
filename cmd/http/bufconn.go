@@ -19,17 +19,28 @@ package http
 import (
 	"bufio"
 	"net"
+	"net/http"
 	"time"
 )
 
 // BufConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
 type BufConn struct {
 	QuirkConn
-	bufReader              *bufio.Reader // buffered reader wraps reader in net.Conn.
-	readTimeout            time.Duration // sets the read timeout in the connection.
-	writeTimeout           time.Duration // sets the write timeout in the connection.
-	updateBytesReadFunc    func(int)     // function to be called to update bytes read.
-	updateBytesWrittenFunc func(int)     // function to be called to update bytes written.
+	bufReader              *bufio.Reader            // buffered reader wraps reader in net.Conn.
+	readTimeout            time.Duration            // sets the read timeout in the connection.
+	writeTimeout           time.Duration            // sets the write timeout in the connection.
+	request                *http.Request            // HTTP request information.
+	updateBytesReadFunc    func(*http.Request, int) // function to be called to update bytes read.
+	updateBytesWrittenFunc func(*http.Request, int) // function to be called to update bytes written.
+}
+
+func (c *BufConn) setRequest(request *http.Request) {
+	c.request = request
+}
+
+func (c *BufConn) setUpdateFuncs(updateBytesReadFunc, updateBytesWrittenFunc func(*http.Request, int)) {
+	c.updateBytesReadFunc = updateBytesReadFunc
+	c.updateBytesWrittenFunc = updateBytesWrittenFunc
 }
 
 // Sets read timeout
@@ -70,7 +81,7 @@ func (c *BufConn) Read(b []byte) (n int, err error) {
 	c.setReadTimeout()
 	n, err = c.bufReader.Read(b)
 	if err == nil && c.updateBytesReadFunc != nil {
-		c.updateBytesReadFunc(n)
+		c.updateBytesReadFunc(c.request, n)
 	}
 
 	return n, err
@@ -81,21 +92,18 @@ func (c *BufConn) Write(b []byte) (n int, err error) {
 	c.setWriteTimeout()
 	n, err = c.Conn.Write(b)
 	if err == nil && c.updateBytesWrittenFunc != nil {
-		c.updateBytesWrittenFunc(n)
+		c.updateBytesWrittenFunc(c.request, n)
 	}
 
 	return n, err
 }
 
 // newBufConn - creates a new connection object wrapping net.Conn.
-func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration,
-	updateBytesReadFunc, updateBytesWrittenFunc func(int)) *BufConn {
+func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration) *BufConn {
 	return &BufConn{
-		QuirkConn:              QuirkConn{Conn: c},
-		bufReader:              bufio.NewReader(c),
-		readTimeout:            readTimeout,
-		writeTimeout:           writeTimeout,
-		updateBytesReadFunc:    updateBytesReadFunc,
-		updateBytesWrittenFunc: updateBytesWrittenFunc,
+		QuirkConn:    QuirkConn{Conn: c},
+		bufReader:    bufio.NewReader(c),
+		readTimeout:  readTimeout,
+		writeTimeout: writeTimeout,
 	}
 }
