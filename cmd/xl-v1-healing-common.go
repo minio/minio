@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -175,7 +176,10 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// buffer is passed
 			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
 
-			_, isCorrupt := hErr.(hashMismatchError)
+			isCorrupt := false
+			if hErr != nil {
+				isCorrupt = strings.HasPrefix(hErr.Error(), "Bitrot verification mismatch - expected ")
+			}
 			switch {
 			case isCorrupt:
 				fallthrough
