@@ -51,6 +51,8 @@ func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string
 	return isParentDirObject(parent)
 }
 
+var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
+
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {

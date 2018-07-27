@@ -49,9 +49,6 @@ type xlObjects struct {
 	listPool *treeWalkPool
 }
 
-// list of all errors that can be ignored in tree walk operation in XL
-var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
-
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.

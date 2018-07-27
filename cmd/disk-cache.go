@@ -32,13 +32,9 @@ import (
 	"github.com/djherbis/atime"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/wildcard"
-
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/wildcard"
 )
-
-// list of all errors that can be ignored in tree walk operation in disk cache
-var cacheTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
 const (
 	// disk cache needs to have cacheSizeMultiplier * object size space free for a cache entry to be created.
@@ -291,40 +287,32 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - list of fsObjects
-func listDirCacheFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks []*cacheFSObjects) listDirFunc {
-	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string, err error) {
+func listDirCacheFactory(isLeaf isLeafFunc, disks []*cacheFSObjects) listDirFunc {
+	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string) {
 		var entries []string
 		for _, disk := range disks {
 			// ignore disk-caches that might be missing/offline
 			if disk == nil {
 				continue
 			}
-			fs := disk.FSObjects
-			entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 
-			// For any reason disk was deleted or goes offline, continue
-			// and list from other disks if possible.
+			fs := disk.FSObjects
+			var err error
+			entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 			if err != nil {
-				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
-					continue
-				}
-				return nil, err
+				continue
 			}
 
 			// Filter entries that have the prefix prefixEntry.
 			entries = filterMatchingPrefix(entries, prefixEntry)
 			dirs = append(dirs, entries...)
 		}
-		return dirs, nil
+		return dirs
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool, err error) {
-		var cacheEntries []string
-		cacheEntries, err = listCacheDirs(bucket, prefixDir, prefixEntry)
-		if err != nil {
-			return nil, false, err
-		}
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
+		cacheEntries := listCacheDirs(bucket, prefixDir, prefixEntry)
 		for _, entry := range cacheEntries {
 			// Find elements in entries which are not in mergedEntries
 			idx := sort.SearchStrings(mergedEntries, entry)
@@ -335,7 +323,7 @@ func listDirCacheFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks [
 			mergedEntries = append(mergedEntries, entry)
 			sort.Strings(mergedEntries)
 		}
-		return mergedEntries, false, nil
+		return mergedEntries, false
 	}
 	return listDir
 }
@@ -371,7 +359,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			return fs.isObjectDir(bucket, object)
 		}
 
-		listDir := listDirCacheFactory(isLeaf, cacheTreeWalkIgnoredErrs, c.cache.cfs)
+		listDir := listDirCacheFactory(isLeaf, c.cache.cfs)
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
