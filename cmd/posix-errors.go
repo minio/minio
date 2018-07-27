@@ -24,22 +24,46 @@ import (
 
 // Function not implemented error
 func isSysErrNoSys(err error) bool {
-	return err == syscall.ENOSYS
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.ENOSYS:
+			return true
+		}
+	}
+	return false
 }
 
 // Not supported error
 func isSysErrOpNotSupported(err error) bool {
-	return err == syscall.EOPNOTSUPP
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.EOPNOTSUPP:
+			return true
+		}
+	}
+	return false
 }
 
 // No space left on device error
 func isSysErrNoSpace(err error) bool {
-	return err == syscall.ENOSPC
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.ENOSPC:
+			return true
+		}
+	}
+	return false
 }
 
 // Input/output error
 func isSysErrIO(err error) bool {
-	return err == syscall.EIO
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.EIO:
+			return true
+		}
+	}
+	return false
 }
 
 // Check if the given error corresponds to EISDIR (is a directory).

@@ -86,7 +86,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 }
 
 // "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
-type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error)
+type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool)
 
 // A function isLeaf of type isLeafFunc is used to detect if an entry is a leaf entry. There are four scenarios
 // where isLeaf should behave differently:
@@ -141,16 +141,8 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			markerBase = markerSplit[1]
 		}
 	}
-	entries, delayIsLeaf, err := listDir(bucket, prefixDir, entryPrefixMatch)
-	if err != nil {
-		select {
-		case <-endWalkCh:
-			return errWalkAbort
-		case resultCh <- treeWalkResult{err: err}:
-			return err
-		}
-	}
 
+	entries, delayIsLeaf := listDir(bucket, prefixDir, entryPrefixMatch)
 	// When isleaf check is delayed, make sure that it is set correctly here.
 	if delayIsLeaf && isLeaf == nil {
 		return errInvalidArgument

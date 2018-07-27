@@ -622,8 +622,8 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, treeWalkIgnoredErrs []error, sets ...[]StorageAPI) listDirFunc {
-	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string, err error) {
+func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, sets ...[]StorageAPI) listDirFunc {
+	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
@@ -631,15 +631,10 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 
 			var entries []string
 			var newEntries []string
+			var err error
 			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
-				// For any reason disk was deleted or goes offline, continue
-				// and list from other disks if possible.
-				if IsErrIgnored(err, treeWalkIgnoredErrs...) {
-					continue
-				}
-				logger.LogIf(ctx, err)
-				return nil, err
+				continue
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -658,18 +653,13 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 				sort.Strings(mergedEntries)
 			}
 		}
-		return mergedEntries, nil
+		return mergedEntries
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool, err error) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
 		for _, disks := range sets {
-			var entries []string
-			entries, err = listDirInternal(bucket, prefixDir, prefixEntry, disks)
-			if err != nil {
-				return nil, false, err
-			}
-
+			entries := listDirInternal(bucket, prefixDir, prefixEntry, disks)
 			var newEntries []string
 			// Find elements in entries which are not in mergedEntries
 			for _, entry := range entries {
@@ -688,7 +678,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 			}
 		}
 		mergedEntries, delayIsLeaf = filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
-		return mergedEntries, delayIsLeaf, nil
+		return mergedEntries, delayIsLeaf
 	}
 	return listDir
 }
@@ -731,7 +721,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
-		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, xlTreeWalkIgnoredErrs, setDisks...)
+		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, setDisks...)
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
@@ -1266,13 +1256,15 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
 func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc {
-	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string, err error) {
+	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
 			}
+
 			var entries []string
 			var newEntries []string
+			var err error
 			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				continue
@@ -1305,18 +1297,14 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 				sort.Strings(mergedEntries)
 			}
 		}
-		return mergedEntries, nil
+		return mergedEntries
 
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool, err error) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
 		for _, disks := range sets {
-			var entries []string
-			entries, err = listDirInternal(bucket, prefixDir, prefixEntry, disks)
-			if err != nil {
-				return nil, false, err
-			}
+			entries := listDirInternal(bucket, prefixDir, prefixEntry, disks)
 
 			var newEntries []string
 			// Find elements in entries which are not in mergedEntries
@@ -1335,7 +1323,7 @@ func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc
 				sort.Strings(mergedEntries)
 			}
 		}
-		return mergedEntries, false, nil
+		return mergedEntries, false
 	}
 	return listDir
 }
