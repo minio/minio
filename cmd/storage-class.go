@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -196,18 +197,12 @@ func getRedundancyCount(sc string, totalDisks int) (data, parity int) {
 // Returns per object readQuorum and writeQuorum
 // readQuorum is the minimum required disks to read data.
 // writeQuorum is the minimum required disks to write data.
-func objectQuorumFromMeta(xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
-
+func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
 	// get the latest updated Metadata and a count of all the latest updated xlMeta(s)
-	latestXLMeta, count := getLatestXLMeta(partsMetaData, errs)
+	latestXLMeta, err := getLatestXLMeta(ctx, partsMetaData, errs)
 
-	// latestXLMeta is updated most recently.
-	// We implicitly assume that all the xlMeta(s) have same dataBlocks and parityBlocks.
-	// We now check that at least dataBlocks number of xlMeta is available. This means count
-	// should be greater than or equal to dataBlocks field of latestXLMeta. If not we throw read quorum error.
-	if count < latestXLMeta.Erasure.DataBlocks {
-		// This is the case when we can't reliably deduce object quorum
-		return 0, 0, errXLReadQuorum
+	if err != nil {
+		return 0, 0, err
 	}
 
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks

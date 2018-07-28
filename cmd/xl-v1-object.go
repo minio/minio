@@ -89,7 +89,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
 
 	// get Quorum for this object
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(xl, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -208,7 +208,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
 	// get Quorum for this object
-	readQuorum, _, err := objectQuorumFromMeta(xl, metaArr, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -382,7 +382,7 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
 	// get Quorum for this object
-	readQuorum, _, err := objectQuorumFromMeta(xl, metaArr, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return objInfo, err
 	}
@@ -771,7 +771,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 		// Read metadata associated with the object from all disks.
 		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 		// get Quorum for this object
-		_, writeQuorum, err = objectQuorumFromMeta(xl, metaArr, errs)
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
 		if err != nil {
 			return err
 		}

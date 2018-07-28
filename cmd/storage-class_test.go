@@ -303,7 +303,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		{parts7, errs7, 14, 15, nil},
 	}
 	for i, tt := range tests {
-		actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(*xl, tt.parts, tt.errs)
+		actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(context.Background(), *xl, tt.parts, tt.errs)
 		if tt.expectedError != nil && err == nil {
 			t.Errorf("Test %d, Expected %s, got %s", i+1, tt.expectedError, err)
 			return

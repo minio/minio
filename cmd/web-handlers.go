@@ -840,6 +840,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		if _, ok := err.(BucketPolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
 		}
+		return err
 	}
 
 	policyInfo, err := PolicyToBucketAccessPolicy(bucketPolicy)
