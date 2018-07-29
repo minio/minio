@@ -81,7 +81,7 @@ func newRetryTimerWithJitter(unit time.Duration, max time.Duration, jitter float
 			attempt = maxAttempt
 		}
 		//sleep = random_between(0, min(max, base * 2 ** attempt))
-		sleep := unit * time.Duration(1<<uint(attempt))
+		sleep := unit * time.Duration(time.Nanosecond<<uint(attempt))
 		if sleep > max {
 			sleep = max
 		}

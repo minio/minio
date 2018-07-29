@@ -120,7 +120,7 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 		return err
 	}
 
-	if err = os.Mkdir((dirPath), 0777); err != nil {
+	if err = os.Mkdir((dirPath), os.ModePerm); err != nil {
 		switch {
 		case os.IsExist(err):
 			return errVolumeExists
@@ -317,7 +317,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 		return 0, err
 	}
 
-	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+	if err := mkdirAll(pathutil.Dir(filePath), os.ModePerm); err != nil {
 		logger.LogIf(ctx, err)
 		return 0, err
 	}

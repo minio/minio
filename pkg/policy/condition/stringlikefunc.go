@@ -110,8 +110,7 @@ func (f stringNotLikeFunc) String() string {
 
 func validateStringLikeValues(n name, key Key, values set.StringSet) error {
 	for _, s := range values.ToSlice() {
-		switch key {
-		case S3XAmzCopySource:
+		if key == S3XAmzCopySource {
 			tokens := strings.SplitN(s, "/", 2)
 			if len(tokens) < 2 {
 				return fmt.Errorf("invalid value '%v' for '%v' in %v condition", s, key, n)

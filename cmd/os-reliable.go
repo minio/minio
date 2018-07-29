@@ -105,7 +105,7 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 func reliableRename(srcFilePath, dstFilePath string) (err error) {
 	i := 0
 	for {
-		if err = reliableMkdirAll(path.Dir(dstFilePath), 0777); err != nil {
+		if err = reliableMkdirAll(path.Dir(dstFilePath), os.ModePerm); err != nil {
 			return err
 		}
 		// After a successful parent directory create attempt a renameAll.

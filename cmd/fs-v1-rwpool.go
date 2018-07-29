@@ -172,7 +172,7 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 	}
 
 	// Creates parent if missing.
-	if err = mkdirAll(pathutil.Dir(path), 0777); err != nil {
+	if err = mkdirAll(pathutil.Dir(path), os.ModePerm); err != nil {
 		return nil, err
 	}
 

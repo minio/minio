@@ -383,7 +383,7 @@ func (s *siaObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	for _, bktName := range m.ToSlice() {
 		buckets = append(buckets, minio.BucketInfo{
 			Name:    bktName,
-			Created: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+			Created: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC),
 		})
 	}
 
@@ -522,7 +522,7 @@ func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object st
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
-		ModTime: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		ModTime: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC),
 		Size:    int64(so.Filesize),
 		IsDir:   false,
 	}, nil
@@ -551,7 +551,7 @@ func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string
 	return minio.ObjectInfo{
 		Name:    object,
 		Bucket:  bucket,
-		ModTime: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		ModTime: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC),
 		Size:    wsize,
 		ETag:    minio.GenETag(),
 	}, nil

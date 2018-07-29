@@ -668,7 +668,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			ETag:     `"` + objInfo.ETag + `"`,
 			Location: location,
 		})
-		writeResponse(w, http.StatusCreated, resp, "application/xml")
+		writeResponse(w, http.StatusCreated, resp, mimeXML)
 	case "200":
 		writeSuccessResponseHeadersOnly(w)
 	default:

@@ -122,14 +122,14 @@ func initFormatCache(ctx context.Context, drives []string) (formats []*formatCac
 			logger.LogIf(ctx, err)
 			return nil, err
 		}
-		if err = os.Mkdir(drive, 0777); err != nil {
+		if err = os.Mkdir(drive, os.ModePerm); err != nil {
 			logger.GetReqInfo(ctx).AppendTags("drive", drive)
 			logger.LogIf(ctx, err)
 			return nil, err
 		}
 	}
 	for i, drive := range drives {
-		if err = os.Mkdir(pathJoin(drive, minioMetaBucket), 0777); err != nil {
+		if err = os.Mkdir(pathJoin(drive, minioMetaBucket), os.ModePerm); err != nil {
 			if !os.IsExist(err) {
 				logger.GetReqInfo(ctx).AppendTags("drive", drive)
 				logger.LogIf(ctx, err)

@@ -115,7 +115,7 @@ func getValidPath(path string) (string, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		if err = os.MkdirAll(path, 0777); err != nil {
+		if err = os.MkdirAll(path, os.ModePerm); err != nil {
 			return path, err
 		}
 	}
@@ -451,8 +451,8 @@ func (s *posix) MakeVol(volume string) (err error) {
 	if _, err := os.Stat(volumeDir); err != nil {
 		// Volume does not exist we proceed to create.
 		if os.IsNotExist(err) {
-			// Make a volume entry, with mode 0777 mkdir honors system umask.
-			err = os.MkdirAll(volumeDir, 0777)
+			// Make a volume entry, with mode os.ModePerm mkdir honors system umask.
+			err = os.MkdirAll(volumeDir, os.ModePerm)
 		}
 		if os.IsPermission(err) {
 			return errDiskAccessDenied
@@ -877,8 +877,8 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	} else {
 		// Create top level directories if they don't exist.
-		// with mode 0777 mkdir honors system umask.
-		if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		// with mode os.ModePerm mkdir honors system umask.
+		if err = mkdirAll(slashpath.Dir(filePath), os.ModePerm); err != nil {
 			return nil, err
 		}
 	}

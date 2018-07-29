@@ -83,7 +83,7 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 		if err := os.RemoveAll(pathJoin(endpoint.Path, minioMetaTmpBucket)); err != nil {
 			return err
 		}
-		if err := os.MkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), 0777); err != nil {
+		if err := os.MkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), os.ModePerm); err != nil {
 			return err
 		}
 	}

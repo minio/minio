@@ -71,7 +71,7 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 	}
 
 	trashPath := pathJoin(dir, minioMetaBucket, cacheTrashDir)
-	if err := os.MkdirAll(trashPath, 0777); err != nil {
+	if err := os.MkdirAll(trashPath, os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -334,7 +334,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 		}
-		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
+		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), os.ModePerm); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		var fi os.FileInfo

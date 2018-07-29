@@ -40,8 +40,7 @@ func setCrossDomainPolicy(h http.Handler) http.Handler {
 
 func (c crossDomainPolicy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Look for 'crossdomain.xml' in the incoming request.
-	switch r.URL.Path {
-	case crossDomainXMLEntity:
+	if r.URL.Path == crossDomainXMLEntity {
 		// Write the standard cross domain policy xml.
 		w.Write([]byte(crossDomainXML))
 		// Request completed, no need to serve to other handlers.

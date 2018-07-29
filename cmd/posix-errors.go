@@ -115,7 +115,7 @@ func isSysErrPathNotFound(err error) bool {
 		return false
 	}
 	if pathErr, ok := err.(*os.PathError); ok {
-		if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == 0x03 {
+		if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == syscall.ESRCH {
 			// ERROR_PATH_NOT_FOUND
 			return true
 		}
@@ -130,7 +130,7 @@ func isSysErrHandleInvalid(err error) bool {
 	}
 	// Check if err contains ERROR_INVALID_HANDLE errno
 	errno, ok := err.(syscall.Errno)
-	return ok && errno == 0x6
+	return ok && errno == syscall.ENXIO
 }
 
 func isSysErrCrossDevice(err error) bool {

@@ -87,17 +87,17 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	// if it doesn't exist yet.
 	metaBucketPath := pathJoin(fsPath, minioMetaBucket)
 
-	if err := os.MkdirAll(metaBucketPath, 0777); err != nil {
+	if err := os.MkdirAll(metaBucketPath, os.ModePerm); err != nil {
 		return err
 	}
 
 	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
-	if err := os.MkdirAll(metaTmpPath, 0777); err != nil {
+	if err := os.MkdirAll(metaTmpPath, os.ModePerm); err != nil {
 		return err
 	}
 
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	return os.MkdirAll(metaMultipartPath, 0777)
+	return os.MkdirAll(metaMultipartPath, os.ModePerm)
 
 }
 
@@ -806,7 +806,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 			logger.LogIf(ctx, errFileAccessDenied)
 			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
 		}
-		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
+		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), os.ModePerm); err != nil {
 			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
