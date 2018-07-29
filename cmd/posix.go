@@ -329,14 +329,16 @@ func (s *posix) checkDiskFound() (err error) {
 	}
 	_, err = os.Stat(s.diskPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		switch {
+		case os.IsNotExist(err):
 			return errDiskNotFound
-		} else if isSysErrTooLong(err) {
+		case isSysErrTooLong(err):
 			return errFileNameTooLong
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return errFaultyDisk
+		default:
+			return err
 		}
-		return err
 	}
 	return nil
 }
@@ -597,16 +599,18 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	}
 	err = os.Remove((volumeDir))
 	if err != nil {
-		if os.IsNotExist(err) {
+		switch {
+		case os.IsNotExist(err):
 			return errVolumeNotFound
-		} else if isSysErrNotEmpty(err) {
+		case isSysErrNotEmpty(err):
 			return errVolumeNotEmpty
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			return errDiskAccessDenied
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return errFaultyDisk
+		default:
+			return err
 		}
-		return err
 	}
 	return nil
 }
@@ -771,16 +775,18 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	// Open the file for reading.
 	file, err := os.Open((filePath))
 	if err != nil {
-		if os.IsNotExist(err) {
+		switch {
+		case os.IsNotExist(err):
 			return 0, errFileNotFound
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			return 0, errFileAccessDenied
-		} else if isSysErrNotDir(err) {
+		case isSysErrNotDir(err):
 			return 0, errFileAccessDenied
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return 0, errFaultyDisk
+		default:
+			return 0, err
 		}
-		return 0, err
 	}
 
 	// Close the file descriptor.
@@ -880,14 +886,16 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 	w, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
-		if isSysErrNotDir(err) {
+		switch {
+		case isSysErrNotDir(err):
 			return nil, errFileAccessDenied
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			return nil, errFileAccessDenied
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		default:
+			return nil, err
 		}
-		return nil, err
 	}
 
 	return w, nil

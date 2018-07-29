@@ -121,23 +121,25 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 	}
 
 	if err = os.Mkdir((dirPath), 0777); err != nil {
-		if os.IsExist(err) {
+		switch {
+		case os.IsExist(err):
 			return errVolumeExists
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
-		} else if isSysErrNotDir(err) {
+		case isSysErrNotDir(err):
 			// File path cannot be verified since
 			// one of the parents is a file.
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
-		} else if isSysErrPathNotFound(err) {
+		case isSysErrPathNotFound(err):
 			// Add specific case for windows.
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
+		default:
+			logger.LogIf(ctx, err)
+			return err
 		}
-		logger.LogIf(ctx, err)
-		return err
 	}
 
 	return nil
