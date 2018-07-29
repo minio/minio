@@ -178,19 +178,19 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 // Uses cached-object to serve the request. If object is not cached it serves the request from the backend and also
 // stores it in the cache for serving subsequent requests.
 func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
-	GetObjectFn := c.GetObjectFn
-	GetObjectInfoFn := c.GetObjectInfoFn
+	getObjectFn := c.GetObjectFn
+	getObjectInfoFn := c.GetObjectInfoFn
 
 	if c.isCacheExclude(bucket, object) {
-		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
+		return getObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
 	}
 	// fetch cacheFSObjects if object is currently cached or nearest available cache drive
 	dcache, err := c.cache.getCachedFSLoc(ctx, bucket, object)
 	if err != nil {
-		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
+		return getObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
 	}
 	// stat object on backend
-	objInfo, err := GetObjectInfoFn(ctx, bucket, object)
+	objInfo, err := getObjectInfoFn(ctx, bucket, object)
 	backendDown := backendDownError(err)
 	if err != nil && !backendDown {
 		if _, ok := err.(ObjectNotFound); ok {
@@ -201,7 +201,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	}
 
 	if !backendDown && filterFromCache(objInfo.UserDefined) {
-		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
+		return getObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
 	}
 
 	cachedObjInfo, err := dcache.GetObjectInfo(ctx, bucket, object)
@@ -217,11 +217,11 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	}
 	if startOffset != 0 || length != objInfo.Size {
 		// We don't cache partial objects.
-		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
+		return getObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
 	}
 	if !dcache.diskAvailable(objInfo.Size * cacheSizeMultiplier) {
 		// cache only objects < 1/100th of disk capacity
-		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
+		return getObjectFn(ctx, bucket, object, startOffset, length, writer, etag)
 	}
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
@@ -230,7 +230,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		return err
 	}
 	go func() {
-		if err = GetObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag); err != nil {
+		if err = getObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag); err != nil {
 			pipeWriter.CloseWithError(err)
 			return
 		}

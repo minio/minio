@@ -331,7 +331,7 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 		return errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
 	}
 
-	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv[:])
+	metadata[ServerSideEncryptionIV] = base64.StdEncoding.EncodeToString(iv)
 	metadata[ServerSideEncryptionSealAlgorithm] = SSESealAlgorithmDareV2HmacSha256
 	metadata[ServerSideEncryptionSealedKey] = base64.StdEncoding.EncodeToString(sealedKeyW.Bytes())
 	return nil

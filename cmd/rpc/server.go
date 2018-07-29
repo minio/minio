@@ -60,8 +60,8 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 		t = t.Elem()
 	}
 
-	rune, _ := utf8.DecodeRuneInString(t.Name())
-	return unicode.IsUpper(rune) || t.PkgPath() == ""
+	r, _ := utf8.DecodeRuneInString(t.Name())
+	return unicode.IsUpper(r) || t.PkgPath() == ""
 }
 
 // Makes method name map from given type.

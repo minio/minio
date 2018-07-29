@@ -94,13 +94,14 @@ type Console interface {
 }
 
 func consoleLog(console Console, msg string, args ...interface{}) {
-	if jsonFlag {
+	switch {
+	case jsonFlag:
 		// Strip escape control characters from json message
 		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
-	} else if quiet {
+	case quiet:
 		console.quiet(msg, args...)
-	} else {
+	default:
 		console.pretty(msg, args...)
 	}
 }
@@ -283,9 +284,9 @@ func LogIf(ctx context.Context, err error) {
 		req = &ReqInfo{API: "SYSTEM"}
 	}
 
-	API := "SYSTEM"
+	apiName := "SYSTEM"
 	if req.API != "" {
-		API = req.API
+		apiName = req.API
 	}
 
 	tags := make(map[string]string)
@@ -306,7 +307,7 @@ func LogIf(ctx context.Context, err error) {
 		RequestID:    req.RequestID,
 		UserAgent:    req.UserAgent,
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
-		API:          &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
+		API:          &api{Name: apiName, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
 		Trace:        &traceEntry{Message: message, Source: trace, Variables: tags},
 	}
 

@@ -330,12 +330,12 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 				host = endpoint.Host
 			}
 			hostIPSet, _ := getHostIP4(host)
-			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
-				if !IPSet.Intersection(hostIPSet).IsEmpty() {
+			if ipSet, ok := pathIPMap[endpoint.Path]; ok {
+				if !ipSet.Intersection(hostIPSet).IsEmpty() {
 					return serverAddr, endpoints, setupType,
 						uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
 				}
-				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
+				pathIPMap[endpoint.Path] = ipSet.Union(hostIPSet)
 			} else {
 				pathIPMap[endpoint.Path] = hostIPSet
 			}

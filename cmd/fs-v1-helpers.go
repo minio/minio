@@ -121,23 +121,25 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 	}
 
 	if err = os.Mkdir((dirPath), 0777); err != nil {
-		if os.IsExist(err) {
+		switch {
+		case os.IsExist(err):
 			return errVolumeExists
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
-		} else if isSysErrNotDir(err) {
+		case isSysErrNotDir(err):
 			// File path cannot be verified since
 			// one of the parents is a file.
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
-		} else if isSysErrPathNotFound(err) {
+		case isSysErrPathNotFound(err):
 			// Add specific case for windows.
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
+		default:
+			logger.LogIf(ctx, err)
+			return err
 		}
-		logger.LogIf(ctx, err)
-		return err
 	}
 
 	return nil
@@ -359,8 +361,8 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 
 // fsFAllocate is similar to Fallocate but provides a convenient
 // wrapper to handle various operating system specific errors.
-func fsFAllocate(fd int, offset int64, len int64) (err error) {
-	e := Fallocate(fd, offset, len)
+func fsFAllocate(fd int, offset int64, length int64) (err error) {
+	e := Fallocate(fd, offset, length)
 	// Ignore errors when Fallocate is not supported in the current system
 	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
 		switch {

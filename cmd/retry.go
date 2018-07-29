@@ -61,7 +61,7 @@ var globalRandomSource = rand.New(&lockedRandSource{
 // until the maximum retry attempts are reached. - this function is a fully
 // configurable version, meant for only advanced use cases. For the most part
 // one should use newRetryTimerSimple and newRetryTimer.
-func newRetryTimerWithJitter(unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
+func newRetryTimerWithJitter(unit time.Duration, max time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
 	attemptCh := make(chan int)
 
 	// normalize jitter to the range [0, 1.0]
@@ -80,10 +80,10 @@ func newRetryTimerWithJitter(unit time.Duration, cap time.Duration, jitter float
 		if attempt > maxAttempt {
 			attempt = maxAttempt
 		}
-		//sleep = random_between(0, min(cap, base * 2 ** attempt))
+		//sleep = random_between(0, min(max, base * 2 ** attempt))
 		sleep := unit * time.Duration(1<<uint(attempt))
-		if sleep > cap {
-			sleep = cap
+		if sleep > max {
+			sleep = max
 		}
 		if jitter != NoJitter {
 			sleep -= time.Duration(globalRandomSource.Float64() * float64(sleep) * jitter)
