@@ -102,12 +102,6 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetRLock(globalObjectTimeout); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-	defer bucketLock.RUnlock()
 	getBucketInfo := objectAPI.GetBucketInfo
 	if api.CacheAPI() != nil {
 		getBucketInfo = api.CacheAPI().GetBucketInfo
