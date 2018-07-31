@@ -95,6 +95,8 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 			return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
 		case os.IsNotExist(err):
 			return errFileNotFound
+		default:
+			return err
 		}
 	}
 	return err
