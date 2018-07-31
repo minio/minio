@@ -50,21 +50,6 @@ If you're using certificates provided by a CA, add the below section in your yam
             path: public.crt
           - key: private.key
             path: private.key
-```
-
-In case you are using a self signed certificate, Minio server will not trust it by default. To add the certificate as a 
-trusted certificate, add the `public.crt` to the `.minio/certs/CAs` directory as well. This can be done by
-
-```yaml
-    volumes:
-      - name: secret-volume
-        secret:
-          secretName: tls-ssl-minio
-          items:
-          - key: public.crt
-            path: public.crt
-          - key: private.key
-            path: private.key
           - key: public.crt
             path: CAs/public.crt
 ```
@@ -80,5 +65,7 @@ Note that the `secretName` should be same as the secret name created in previous
 
 Here the name of `volumeMount` should match the name of `volume` created previously. Also `mountPath` must be set to the path of
 the Minio server's config sub-directory that is used to store certificates. By default, the location is
-`/user-running-minio/.minio/certs`. Tip: In a standard Kubernetes configuration, this will be `/root/.minio/certs`.
-Kubernetes will mount the secrets volume read-only, so avoid setting `mountPath` to a path that Minio server expects to write to.
+`/<user-running-minio>/.minio/certs`.
+
+*Tip*: In a standard Kubernetes configuration, this will be `/root/.minio/certs`. Kubernetes will mount the secrets volume read-only, 
+so avoid setting `mountPath` to a path that Minio server expects to write to.
