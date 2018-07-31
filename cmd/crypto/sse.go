@@ -65,6 +65,14 @@ const (
 	InsecureSealAlgorithm = "DARE-SHA256"
 )
 
+// String returns the SSE domain as string. For SSE-S3 the
+// domain is "SSE-S3".
+func (s3) String() string { return "SSE-S3" }
+
+// String returns the SSE domain as string. For SSE-C the
+// domain is "SSE-C".
+func (ssec) String() string { return "SSE-C" }
+
 // EncryptSinglePart encrypts an io.Reader which must be the
 // the body of a single-part PUT request.
 func EncryptSinglePart(r io.Reader, key ObjectKey) io.Reader {
