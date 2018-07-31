@@ -61,6 +61,32 @@ func TestGenerateKey(t *testing.T) {
 	}
 }
 
+var generateIVTests = []struct {
+	Random     io.Reader
+	ShouldPass bool
+}{
+	{Random: nil, ShouldPass: true},              // 0
+	{Random: rand.Reader, ShouldPass: true},      // 1
+	{Random: shortRandom(32), ShouldPass: true},  // 2
+	{Random: shortRandom(31), ShouldPass: false}, // 3
+}
+
+func TestGenerateIV(t *testing.T) {
+	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
+	logger.Disable = true
+
+	for i, test := range generateIVTests {
+		i, test := i, test
+		func() {
+			defer recoverTest(i, test.ShouldPass, t)
+			iv := GenerateIV(test.Random)
+			if iv == [32]byte{} {
+				t.Errorf("Test %d: generated IV is zero IV", i) // check that we generate random and unique IV
+			}
+		}()
+	}
+}
+
 var sealUnsealKeyTests = []struct {
 	SealExtKey, SealIV                 [32]byte
 	SealDomain, SealBucket, SealObject string
