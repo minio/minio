@@ -330,7 +330,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		uploadIDPath)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(xl, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -612,7 +612,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(xl, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -829,7 +829,7 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(xl, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
