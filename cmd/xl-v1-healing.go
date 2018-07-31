@@ -611,7 +611,10 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
-	latestXLMeta, _ := getLatestXLMeta(partsMetadata, errs)
+	latestXLMeta, err := getLatestXLMeta(ctx, partsMetadata, errs)
+	if err != nil {
+		return hr, toObjectErr(err, bucket, object)
+	}
 
 	// Lock the object before healing.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)

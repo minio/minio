@@ -547,7 +547,7 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*by
 	err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "")
 	if err != nil {
 		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
 			return nil, errConfigNotFound
 		}
 
