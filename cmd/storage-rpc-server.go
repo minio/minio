@@ -127,27 +127,20 @@ type ReadFileArgs struct {
 	Vol          string
 	Path         string
 	Offset       int64
-	Buffer       []byte
+	Length       int64
 	Algo         BitrotAlgorithm
 	ExpectedHash []byte
 	Verified     bool
 }
 
 // ReadFile - read file handler is rpc wrapper to read file.
-func (receiver *storageRPCReceiver) ReadFile(args *ReadFileArgs, reply *[]byte) error {
+func (receiver *storageRPCReceiver) ReadFile(args *ReadFileArgs, r io.Reader, reply *VoidReply) (io.ReadCloser, error) {
 	var verifier *BitrotVerifier
 	if !args.Verified {
 		verifier = NewBitrotVerifier(args.Algo, args.ExpectedHash)
 	}
 
-	n, err := receiver.local.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer, verifier)
-	// Ignore io.ErrEnexpectedEOF for short reads i.e. less content available than requested.
-	if err == io.ErrUnexpectedEOF {
-		err = nil
-	}
-
-	*reply = args.Buffer[0:n]
-	return err
+	return receiver.local.ReadFile(args.Vol, args.Path, args.Offset, args.Length, verifier)
 }
 
 // PrepareFileArgs represents append file RPC arguments.

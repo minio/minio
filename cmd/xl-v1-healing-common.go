@@ -164,7 +164,6 @@ func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
 	object string) ([]StorageAPI, []error, error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
-	buffer := []byte{}
 	dataErrs := make([]error, len(onlineDisks))
 
 	for i, onlineDisk := range onlineDisks {
@@ -180,9 +179,11 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
 			verifier := NewBitrotVerifier(checksumInfo.Algorithm, checksumInfo.Hash)
 
-			// verification happens even if a 0-length
-			// buffer is passed
-			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
+			// verification happens even if a 0-length is passed
+			rc, hErr := onlineDisk.ReadFile(bucket, partPath, 0, 0, verifier)
+			if rc != nil {
+				rc.Close()
+			}
 
 			isCorrupt := false
 			if hErr != nil {

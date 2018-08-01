@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"io"
 	"sync"
 )
 
@@ -113,11 +114,11 @@ func (d *naughtyDisk) ListDir(volume, path string, count int) (entries []string,
 	return d.disk.ListDir(volume, path, count)
 }
 
-func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
+func (d *naughtyDisk) ReadFile(volume string, path string, offset, length int64, verifier *BitrotVerifier) (rc io.ReadCloser, err error) {
 	if err := d.calcError(); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return d.disk.ReadFile(volume, path, offset, buf, verifier)
+	return d.disk.ReadFile(volume, path, offset, length, verifier)
 }
 
 func (d *naughtyDisk) PrepareFile(volume, path string, length int64) error {

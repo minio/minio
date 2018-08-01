@@ -38,7 +38,7 @@ type StorageAPI interface {
 
 	// File operations.
 	ListDir(volume, dirPath string, count int) ([]string, error)
-	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
+	ReadFile(volume, path string, offset, length int64, verifier *BitrotVerifier) (io.ReadCloser, error)
 	PrepareFile(volume string, path string, len int64) (err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
@@ -57,14 +57,20 @@ type storageReader struct {
 }
 
 func (r *storageReader) Read(p []byte) (n int, err error) {
-	nn, err := r.storage.ReadFile(r.volume, r.path, r.offset, p, nil)
-	r.offset += nn
-	n = int(nn)
+	var reader io.ReadCloser
+	if reader, err = r.storage.ReadFile(r.volume, r.path, r.offset, int64(len(p)), nil); err != nil {
+		return n, err
+	}
+	defer reader.Close()
 
-	if err == io.ErrUnexpectedEOF && nn > 0 {
+	n, err = reader.Read(p)
+	if err == io.ErrUnexpectedEOF && n > 0 {
 		err = io.EOF
 	}
-	return
+
+	r.offset += int64(n)
+
+	return n, err
 }
 
 // storageWriter is a io.Writer view of a disk.

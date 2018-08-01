@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -62,6 +65,57 @@ func (t *Arith) Divide(args *Args, quo *Quotient) error {
 	quo.Quo = args.A / args.B
 	quo.Rem = args.A % args.B
 	return nil
+}
+
+func (t *Arith) MultiplyInputStream(args *Args, reader io.Reader, reply *int) (io.ReadCloser, error) {
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(data) != "multiply reader request" {
+		return nil, fmt.Errorf("expected: message: multiply reader request, got: %s", string(data))
+	}
+
+	*reply = args.A * args.B
+
+	return nil, nil
+}
+
+func (t *Arith) MultiplyOutputStream(args *Args, reader io.Reader, reply *int) (io.ReadCloser, error) {
+	*reply = args.A * args.B
+
+	var buf bytes.Buffer
+	data := []byte("reply")
+	for i := 0; i < *reply; i++ {
+		if n, err := buf.Write(data); err != nil {
+			return nil, err
+		} else if n != len(data) {
+			return nil, errors.New("short write")
+		}
+	}
+
+	return ioutil.NopCloser(&buf), nil
+}
+
+func (t *Arith) MultiplyIOStream(args *Args, reader io.Reader, reply *int) (io.ReadCloser, error) {
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	*reply = args.A * args.B
+
+	var buf bytes.Buffer
+	for i := 0; i < *reply; i++ {
+		if n, err := buf.Write(data); err != nil {
+			return nil, err
+		} else if n != len(data) {
+			return nil, errors.New("short write")
+		}
+	}
+
+	return ioutil.NopCloser(&buf), nil
 }
 
 type mytype int
@@ -157,8 +211,8 @@ func TestGetMethodMap(t *testing.T) {
 	}{
 		// No methods exported.
 		{case1Type, 0},
-		// Multiply and Divide methods are exported.
-		{case2Type, 2},
+		// Multiply, Divide, MultiplyInputStream, MultiplyOutputStream and MultiplyIOStream methods are exported.
+		{case2Type, 5},
 		// Foo method is exported.
 		{case3Type, 1},
 		// Foo method is exported.
@@ -258,10 +312,8 @@ func TestServerCall(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		buf := bufPool.Get()
-		defer bufPool.Put(buf)
-
-		err := testCase.server.call(testCase.serviceMethod, testCase.argBytes, buf)
+		var replyBuf bytes.Buffer
+		_, err := testCase.server.call(testCase.serviceMethod, testCase.argBytes, nil, &replyBuf)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -269,8 +321,9 @@ func TestServerCall(t *testing.T) {
 		}
 
 		if !testCase.expectErr {
-			if !reflect.DeepEqual(buf.Bytes(), testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, buf.Bytes())
+			result := replyBuf.Bytes()
+			if !reflect.DeepEqual(result, testCase.expectedResult) {
+				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 			}
 		}
 	}
