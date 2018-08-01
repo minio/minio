@@ -19,14 +19,49 @@ import (
 	"testing"
 )
 
+var kmsIsRequestedTests = []struct {
+	Header   http.Header
+	Expected bool
+}{
+	{Header: http.Header{}, Expected: false},                                                                                     // 0
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"aws:kms"}}, Expected: true},                                   // 1
+	{Header: http.Header{"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"0839-9047947-844842874-481"}}, Expected: true}, // 2
+	{Header: http.Header{"X-Amz-Server-Side-Encryption-Context": []string{"7PpPLAK26ONlVUGOWlusfg=="}}, Expected: true},          // 3
+	{
+		Header: http.Header{
+			"X-Amz-Server-Side-Encryption":                []string{""},
+			"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{""},
+			"X-Amz-Server-Side-Encryption-Context":        []string{""},
+		},
+		Expected: true,
+	}, // 4
+	{
+		Header: http.Header{
+			"X-Amz-Server-Side-Encryption":                []string{"AES256"},
+			"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{""},
+		},
+		Expected: true,
+	}, // 5
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: false}, // 6
+}
+
+func TestKMSIsRequested(t *testing.T) {
+	for i, test := range kmsIsRequestedTests {
+		if got := S3KMS.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+}
+
 var s3IsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: true},  // 0
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, Expected: true}, // 1
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, Expected: true},        // 2
-	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, Expected: false},  // 3
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: true},         // 0
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, Expected: true},        // 1
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, Expected: true},               // 2
+	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, Expected: false},         // 3
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{SSEAlgorithmKMS}}, Expected: false}, // 4
 }
 
 func TestS3IsRequested(t *testing.T) {
