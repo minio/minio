@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"reflect"
 	"sync"
 
@@ -267,10 +266,11 @@ func formatXLMigrateV2ToV3(export string) error {
 		return err
 	}
 
-	if err = os.RemoveAll(pathJoin(export, minioMetaMultipartBucket)); err != nil {
+	if err = removeAll(pathJoin(export, minioMetaMultipartBucket)); err != nil {
 		return err
 	}
-	if err = os.MkdirAll(pathJoin(export, minioMetaMultipartBucket), 0755); err != nil {
+
+	if err = mkdirAll(pathJoin(export, minioMetaMultipartBucket), 0755); err != nil {
 		return err
 	}
 
