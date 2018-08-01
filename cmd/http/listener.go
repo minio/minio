@@ -300,6 +300,7 @@ func newHTTPListener(serverAddrs []string,
 	updateBytesWrittenFunc func(int)) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
+
 	// Close all opened listeners on error
 	defer func() {
 		if err == nil {
@@ -314,7 +315,7 @@ func newHTTPListener(serverAddrs []string,
 
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
-		if l, err = net.Listen("tcp", serverAddr); err != nil {
+		if l, err = listen("tcp4", serverAddr); err != nil {
 			return nil, err
 		}
 
