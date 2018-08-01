@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -128,6 +129,9 @@ const (
 	ErrSlowDown
 	ErrInvalidPrefixMarker
 	// Add new error codes here.
+
+	// SSE-S3 related API errors
+	ErrInvalidEncryptionMethod
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
 	ErrInsecureSSECustomerRequest
@@ -629,6 +633,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidEncryptionMethod: {
+		Code:           "InvalidRequest",
+		Description:    "The encryption method specified is not supported",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInsecureSSECustomerRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Requests specifying Server Side Encryption with Customer provided keys must be made over a secure connection.",
@@ -866,17 +875,19 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
 	// SSE errors
+	case crypto.ErrInvalidEncryptionMethod:
+		apiErr = ErrInvalidEncryptionMethod
 	case errInsecureSSERequest:
 		apiErr = ErrInsecureSSECustomerRequest
-	case errInvalidSSEAlgorithm:
+	case errInvalidSSEAlgorithm, crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case errInvalidSSEKey:
+	case errInvalidSSEKey, crypto.ErrInvalidCustomerKey:
 		apiErr = ErrInvalidSSECustomerKey
-	case errMissingSSEKey:
+	case errMissingSSEKey, crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
-	case errMissingSSEKeyMD5:
+	case errMissingSSEKeyMD5, crypto.ErrMissingCustomerKeyMD5:
 		apiErr = ErrMissingSSECustomerKeyMD5
-	case errSSEKeyMD5Mismatch:
+	case errSSEKeyMD5Mismatch, crypto.ErrCustomerKeyMD5Mismatch:
 		apiErr = ErrSSECustomerKeyMD5Mismatch
 	case errObjectTampered:
 		apiErr = ErrObjectTampered
@@ -990,6 +1001,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedNotification
 	case BackendDown:
 		apiErr = ErrBackendDown
+	case crypto.Error:
+		apiErr = ErrObjectTampered
 	default:
 		apiErr = ErrInternalError
 	}
