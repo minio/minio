@@ -35,8 +35,8 @@ import (
 type ObjectKey [32]byte
 
 // GenerateKey generates a unique ObjectKey from a 256 bit external key
-// and a source of randomness. If random is nil the default PRNG of system
-// (crypto/rand) is used.
+// and a source of randomness. If random is nil the default PRNG of the
+// system (crypto/rand) is used.
 func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 	if random == nil {
 		random = rand.Reader
@@ -50,6 +50,19 @@ func GenerateKey(extKey [32]byte, random io.Reader) (key ObjectKey) {
 	sha.Write(nonce[:])
 	sha.Sum(key[:0])
 	return key
+}
+
+// GenerateIV generates a new random 256 bit IV from the provided source
+// of randomness. If random is nil the default PRNG of the system
+// (crypto/rand) is used.
+func GenerateIV(random io.Reader) (iv [32]byte) {
+	if random == nil {
+		random = rand.Reader
+	}
+	if _, err := io.ReadFull(random, iv[:]); err != nil {
+		logger.CriticalIf(context.Background(), errOutOfEntropy)
+	}
+	return iv
 }
 
 // SealedKey represents a sealed object key. It can be stored
