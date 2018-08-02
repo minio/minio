@@ -723,12 +723,16 @@ type serverConfigV27 struct {
 	Logger loggerConfig `json:"logger"`
 }
 
-// serverConfigV27 is just like version '26', stores additionally -
+// serverConfigV27 is backward compatible with version '26'.
+// Explicit config for v27 is not created.
+
+
+// serverConfigV28 is just like version '26', stores additionally -
 // config parameters for Kafka notifer.
 //
 // IMPORTANT NOTE: When updating this struct make sure that
 // serverConfig.ConfigDiff() is updated as necessary.
-type serverConfigV27 struct {
+type serverConfigV28 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
 	Version string `json:"version"`
