@@ -85,7 +85,7 @@ func (srv *Server) Start() (err error) {
 
 	// Create new HTTP listener.
 	var listener *httpListener
-	listener, err = newHTTPListener(
+	listener, addrs, err = newHTTPListener(
 		addrs,
 		tlsConfig,
 		tcpKeepAliveTimeout,
@@ -97,6 +97,7 @@ func (srv *Server) Start() (err error) {
 	if err != nil {
 		return err
 	}
+	srv.Addrs = addrs
 
 	// Wrap given handler to do additional
 	// * return 503 (service unavailable) if the server in shutdown.

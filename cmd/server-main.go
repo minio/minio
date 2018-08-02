@@ -325,7 +325,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(globalMinioAddr)
+	apiEndpoints := getAPIEndpoints(globalHTTPServer.Addrs[0])
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.

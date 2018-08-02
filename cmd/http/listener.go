@@ -297,7 +297,7 @@ func newHTTPListener(serverAddrs []string,
 	readTimeout time.Duration,
 	writeTimeout time.Duration,
 	updateBytesReadFunc func(int),
-	updateBytesWrittenFunc func(int)) (listener *httpListener, err error) {
+	updateBytesWrittenFunc func(int)) (listener *httpListener, listeningAddrs []string, err error) {
 
 	var tcpListeners []*net.TCPListener
 	// Close all opened listeners on error
@@ -315,15 +315,16 @@ func newHTTPListener(serverAddrs []string,
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = net.Listen("tcp", serverAddr); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
-			return nil, fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
+			return nil, nil, fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
 		}
 
 		tcpListeners = append(tcpListeners, tcpListener)
+		listeningAddrs = append(listeningAddrs, tcpListener.Addr().String())
 	}
 
 	listener = &httpListener{
@@ -337,5 +338,5 @@ func newHTTPListener(serverAddrs []string,
 	}
 	listener.start()
 
-	return listener, nil
+	return listener, listeningAddrs, nil
 }

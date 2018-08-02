@@ -228,7 +228,7 @@ func TestNewHTTPListener(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			testCase.tcpKeepAliveTimeout,
@@ -279,7 +279,7 @@ func TestHTTPListenerStartClose(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -326,7 +326,7 @@ func TestHTTPListenerAddr(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -370,7 +370,7 @@ func TestHTTPListenerAddrs(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -416,7 +416,7 @@ func TestHTTPListenerAccept(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -495,7 +495,7 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -548,7 +548,7 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -614,7 +614,7 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
@@ -739,7 +739,7 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(
+		listener, _, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
 			time.Duration(0),
