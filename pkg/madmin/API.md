@@ -37,9 +37,9 @@ func main() {
 ```
 
 | Service operations         | Info operations  | Healing operations                    | Config operations         | Misc                                |
-|:------------------------------------|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
-| [`ServiceStatus`](#ServiceStatus)   | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal)             | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) |                                     |
+|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
+| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
+| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | |
 
 
 ## 1. Constructor
