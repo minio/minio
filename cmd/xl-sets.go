@@ -1433,24 +1433,3 @@ func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 	// Return error at the end.
 	return loi, toObjectErr(err, bucket, prefix)
 }
-
-// ListLocks from all sets, aggregate them and return.
-func (s *xlSets) ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) (lockInfo []VolumeLockInfo, err error) {
-	for _, set := range s.sets {
-		var setLockInfo []VolumeLockInfo
-		setLockInfo, err = set.ListLocks(ctx, bucket, prefix, duration)
-		if err != nil {
-			return nil, err
-		}
-		lockInfo = append(lockInfo, setLockInfo...)
-	}
-	return lockInfo, nil
-}
-
-// Clear all requested locks on all sets.
-func (s *xlSets) ClearLocks(ctx context.Context, lockInfo []VolumeLockInfo) error {
-	for _, set := range s.sets {
-		set.ClearLocks(ctx, lockInfo)
-	}
-	return nil
-}

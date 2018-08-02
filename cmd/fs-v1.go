@@ -265,18 +265,6 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-// Locking operations
-
-// ListLocks - List namespace locks held in object layer
-func (fs *FSObjects) ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	return []VolumeLockInfo{}, NotImplemented{}
-}
-
-// ClearLocks - Clear namespace locks held in object layer
-func (fs *FSObjects) ClearLocks(ctx context.Context, info []VolumeLockInfo) error {
-	return NotImplemented{}
-}
-
 /// Bucket operations
 
 // getBucketDir - will convert incoming bucket names to
