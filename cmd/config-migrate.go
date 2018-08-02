@@ -188,6 +188,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "26":
+		if err = migrateV26ToV27(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -2315,5 +2320,125 @@ func migrateV25ToV26() error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv25.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV26ToV27() error {
+	configFile := getConfigFile()
+
+	cv26 := &serverConfigV26{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv26)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘26’. %v", err)
+	}
+	if cv26.Version != "26" {
+		return nil
+	}
+
+	// Copy over fields from V26 into V27 config struct
+	srvConfig := &serverConfigV27{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "27"
+	srvConfig.Credential = cv26.Credential
+	srvConfig.Region = cv26.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv26.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv26.Notify.AMQP
+	}
+	if len(cv26.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv26.Notify.Elasticsearch
+	}
+	if len(cv26.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv26.Notify.Redis
+	}
+	if len(cv26.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv26.Notify.PostgreSQL
+	}
+	if len(cv26.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		// New parameters are added for Kafka,
+		// default value is already 0, so nothing to
+		// explicitly migrate here.
+		srvConfig.Notify.Kafka = cv26.Notify.Kafka
+	}
+	if len(cv26.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv26.Notify.NATS
+	}
+	if len(cv26.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv26.Notify.Webhook
+	}
+	if len(cv26.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv26.Notify.MySQL
+	}
+
+	if len(cv26.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv26.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv26.Browser
+
+	// Load worm config from existing config in the file.
+	srvConfig.Worm = cv26.Worm
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv26.Domain
+
+	// Load storage class config from existing storage class config in the file.
+	srvConfig.StorageClass.RRS = cv26.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv26.StorageClass.Standard
+
+	// Load cache config from existing cache config in the file.
+	srvConfig.Cache.Drives = cv26.Cache.Drives
+	srvConfig.Cache.Exclude = cv26.Cache.Exclude
+	srvConfig.Cache.Expiry = cv26.Cache.Expiry
+	srvConfig.Cache.MaxUse = cv26.Cache.MaxUse
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv26.Version, srvConfig.Version, err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, cv26.Version, srvConfig.Version)
 	return nil
 }
