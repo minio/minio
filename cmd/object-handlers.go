@@ -33,6 +33,7 @@ import (
 
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -70,17 +71,19 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObject")
 
-	var object, bucket string
-	vars := mux.Vars(r)
-	bucket = vars["bucket"]
-	object = vars["object"]
-
-	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
+		writeErrorResponse(w, ErrBadRequest, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -227,16 +230,19 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadObject")
 
-	var object, bucket string
-	vars := mux.Vars(r)
-	bucket = vars["bucket"]
-	object = vars["object"]
-
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
 		return
 	}
+	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
+		writeErrorResponse(w, ErrBadRequest, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -350,14 +356,19 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObject")
 
-	vars := mux.Vars(r)
-	dstBucket := vars["bucket"]
-	dstObject := vars["object"]
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		return
+	}
+
+	vars := mux.Vars(r)
+	dstBucket := vars["bucket"]
+	dstObject := vars["object"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -652,16 +663,20 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
-	// X-Amz-Copy-Source shouldn't be set for this call.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	// X-Amz-Copy-Source shouldn't be set for this call.
+	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		return
+	}
 
 	// Validate storage class metadata if present
 	if _, ok := r.Header[amzStorageClassCanonical]; ok {
@@ -854,16 +869,19 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NewMultipartUpload")
 
-	var object, bucket string
-	vars := mux.Vars(r)
-	bucket = vars["bucket"]
-	object = vars["object"]
-
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -941,15 +959,19 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObjectPart")
 
-	vars := mux.Vars(r)
-	dstBucket := vars["bucket"]
-	dstObject := vars["object"]
-
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		return
+	}
+
+	vars := mux.Vars(r)
+	dstBucket := vars["bucket"]
+	dstObject := vars["object"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -1140,14 +1162,19 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectPart")
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
