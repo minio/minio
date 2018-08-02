@@ -104,10 +104,6 @@ func newNSLock(isDistXL bool) *nsLockMap {
 		lockMap:  make(map[nsParam]*nsLock),
 		counters: &lockStat{},
 	}
-
-	// Initialize nsLockMap with entry for instrumentation information.
-	// Entries of <volume,path> -> stateInfo of locks
-	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
 	return &nsMutex
 }
 
@@ -132,8 +128,7 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	// Lock counter used for lock debugging.
-	counters     *lockStat
-	debugLockMap map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
+	counters *lockStat
 
 	// Indicates if namespace is part of a distributed setup.
 	isDistXL     bool
@@ -162,12 +157,6 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 
-	// Change the state of the lock to be blocked for the given
-	// pair of <volume, path> and <OperationID> till the lock
-	// unblocks. The lock for accessing `globalNSMutex` is held inside
-	// the function itself.
-	n.statusNoneToBlocked(param, lockSource, opsID, readLock)
-
 	// Unlock map before Locking NS which might block.
 	n.lockMapMutex.Unlock()
 
@@ -181,28 +170,14 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	if !locked { // We failed to get the lock
 		n.lockMapMutex.Lock()
 		defer n.lockMapMutex.Unlock()
-		// Changing the status of the operation from blocked to none
-		n.statusBlockedToNone(param, lockSource, opsID, readLock)
 
 		nsLk.ref-- // Decrement ref count since we failed to get the lock
-		// delete the lock state entry for given operation ID.
-		n.deleteLockInfoEntryForOps(param, opsID)
 
 		if nsLk.ref == 0 {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
-
-			// delete the lock state entry for given
-			// <volume, path> pair.
-			n.deleteLockInfoEntryForVolumePath(param)
 		}
-		return
 	}
-
-	// Changing the status of the operation from blocked to
-	// running.  change the state of the lock to be running (from
-	// blocked) for the given pair of <volume, path> and <OperationID>.
-	n.statusBlockedToRunning(param, lockSource, opsID, readLock)
 	return
 }
 
@@ -225,17 +200,10 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 		}
 		if nsLk.ref != 0 {
 			nsLk.ref--
-
-			// delete the lock state entry for given operation ID.
-			n.deleteLockInfoEntryForOps(param, opsID)
 		}
 		if nsLk.ref == 0 {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
-
-			// delete the lock state entry for given
-			// <volume, path> pair.
-			n.deleteLockInfoEntryForVolumePath(param)
 		}
 	}
 }
@@ -296,11 +264,6 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 		// Remove lock from the map.
 		delete(n.lockMap, param)
 	}
-
-	// delete the lock state entry for given
-	// <volume, path> pair. Ignore error as there
-	// is no way to report it back
-	n.deleteLockInfoEntryForVolumePath(param)
 }
 
 // lockInstance - frontend/top-level interface for namespace locks.
@@ -313,7 +276,8 @@ type lockInstance struct {
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
 func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
-	return &lockInstance{n, volume, path, getOpsID()}
+	opsID := mustGetUUID()
+	return &lockInstance{n, volume, path, opsID}
 }
 
 // Lock - block until write lock is taken or timeout has occurred.

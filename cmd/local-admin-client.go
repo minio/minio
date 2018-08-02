@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -49,16 +48,6 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 		return errServerNotInitialized
 	}
 	return objectAPI.ReloadFormat(context.Background(), dryRun)
-}
-
-// ListLocks - Fetches lock information from local lock instrumentation.
-func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return nil, errServerNotInitialized
-	}
-
-	return objectAPI.ListLocks(context.Background(), bucket, prefix, duration)
 }
 
 // ServerInfo - Returns the server info of this server.

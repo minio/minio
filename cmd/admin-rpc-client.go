@@ -54,19 +54,6 @@ func (rpcClient *AdminRPCClient) ReInitFormat(dryRun bool) error {
 	return rpcClient.Call(adminServiceName+".ReInitFormat", &args, &reply)
 }
 
-// ListLocks - Sends list locks command to remote server via RPC.
-func (rpcClient *AdminRPCClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	args := ListLocksQuery{
-		Bucket:   bucket,
-		Prefix:   prefix,
-		Duration: duration,
-	}
-	var reply []VolumeLockInfo
-
-	err := rpcClient.Call(adminServiceName+".ListLocks", &args, &reply)
-	return reply, err
-}
-
 // ServerInfo - returns the server info of the server to which the RPC call is made.
 func (rpcClient *AdminRPCClient) ServerInfo() (sid ServerInfoData, err error) {
 	err = rpcClient.Call(adminServiceName+".ServerInfo", &AuthArgs{}, &sid)
@@ -147,7 +134,6 @@ func NewAdminRPCClient(host *xnet.Host) (*AdminRPCClient, error) {
 type adminCmdRunner interface {
 	SignalService(s serviceSignal) error
 	ReInitFormat(dryRun bool) error
-	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ServerInfo() (ServerInfoData, error)
 	GetConfig() ([]byte, error)
 	WriteTmpConfig(tmpFileName string, configBytes []byte) error
@@ -242,56 +228,6 @@ func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 	}
 	wg.Wait()
 	errs[0] = invokeServiceCmd(cps[0], cmd)
-}
-
-// listPeerLocksInfo - fetch list of locks held on the given bucket,
-// matching prefix held longer than duration from all peer servers.
-func listPeerLocksInfo(peers adminPeers, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	// Used to aggregate volume lock information from all nodes.
-	allLocks := make([][]VolumeLockInfo, len(peers))
-	errs := make([]error, len(peers))
-	var wg sync.WaitGroup
-	localPeer := peers[0]
-	remotePeers := peers[1:]
-	for i, remotePeer := range remotePeers {
-		wg.Add(1)
-		go func(idx int, remotePeer adminPeer) {
-			defer wg.Done()
-			// `remotePeers` is right-shifted by one position relative to `peers`
-			allLocks[idx], errs[idx] = remotePeer.cmdRunner.ListLocks(bucket, prefix, duration)
-		}(i+1, remotePeer)
-	}
-	wg.Wait()
-	allLocks[0], errs[0] = localPeer.cmdRunner.ListLocks(bucket, prefix, duration)
-
-	// Summarizing errors received for ListLocks RPC across all
-	// nodes.  N B the possible unavailability of quorum in errors
-	// applies only to distributed setup.
-	errCount, err := reduceErrs(errs, []error{})
-	if err != nil {
-		if errCount >= (len(peers)/2 + 1) {
-			return nil, err
-		}
-		return nil, InsufficientReadQuorum{}
-	}
-
-	// Group lock information across nodes by (bucket, object)
-	// pair. For readability only.
-	paramLockMap := make(map[nsParam][]VolumeLockInfo)
-	for _, nodeLocks := range allLocks {
-		for _, lockInfo := range nodeLocks {
-			param := nsParam{
-				volume: lockInfo.Bucket,
-				path:   lockInfo.Object,
-			}
-			paramLockMap[param] = append(paramLockMap[param], lockInfo)
-		}
-	}
-	groupedLockInfos := []VolumeLockInfo{}
-	for _, volLocks := range paramLockMap {
-		groupedLockInfos = append(groupedLockInfos, volLocks...)
-	}
-	return groupedLockInfos, nil
 }
 
 // uptimeSlice - used to sort uptimes in chronological order.

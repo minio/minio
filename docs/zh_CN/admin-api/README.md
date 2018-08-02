@@ -69,61 +69,6 @@
     </Error>
     ```
 
-
-### 锁管理API
-* ListLocks
-  - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
-  - x-minio-operation: list
-  - Response: On success 200, json encoded response containing all locks held, for longer than duration.
-  - Possible error responses
-    - ErrInvalidBucketName
-    ```xml
-    <Error>
-        <Code>InvalidBucketName</Code>
-        <Message>The specified bucket is not valid.</Message>
-        <Key></Key>
-        <BucketName></BucketName>
-        <Resource>/</Resource>
-        <RequestId>3L137</RequestId>
-        <HostId>3L137</HostId>
-    </Error>
-    ```
-    - ErrInvalidObjectName
-    ```xml
-    <Error>
-        <Code>XMinioInvalidObjectName</Code>
-        <Message>Object name contains unsupported characters. Unsupported characters are `^*|\&#34;</Message>
-        <Key></Key>
-        <BucketName></BucketName>
-        <Resource>/</Resource>
-        <RequestId>3L137</RequestId>
-        <HostId>3L137</HostId>
-    </Error>
-    ```
-
-    - ErrInvalidDuration
-      ```xml
-      <Error>
-          <Code>InvalidDuration</Code>
-          <Message>Duration provided in the request is invalid.</Message>
-          <Key></Key>
-          <BucketName></BucketName>
-          <Resource>/</Resource>
-          <RequestId>3L137</RequestId>
-          <HostId>3L137</HostId>
-      </Error>
-      ```
-
-
-* ClearLocks
-  - POST /?lock&bucket=mybucket&prefix=myprefix&duration=duration
-  - x-minio-operation: clear
-  - Response: On success 200, json encoded response containing all locks cleared, for longer than duration.
-  - Possible error responses, similar to errors listed in ListLocks.
-    - ErrInvalidBucketName
-    - ErrInvalidObjectName
-    - ErrInvalidDuration
-
 ### 修复
 
 * ListBucketsHeal

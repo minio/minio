@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
@@ -135,20 +134,6 @@ func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, sr
 	srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return objInfo, NotImplemented{}
-}
-
-// Locking operations
-
-// ListLocks lists namespace locks held in object layer
-func (a GatewayUnsupported) ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return []VolumeLockInfo{}, NotImplemented{}
-}
-
-// ClearLocks clears namespace locks held in object layer
-func (a GatewayUnsupported) ClearLocks(ctx context.Context, info []VolumeLockInfo) error {
-	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
 }
 
 // RefreshBucketPolicy refreshes cache policy with what's on disk.

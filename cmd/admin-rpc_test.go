@@ -99,31 +99,6 @@ func testAdminCmdRunnerReInitFormat(t *testing.T, client adminCmdRunner) {
 	}
 }
 
-func testAdminCmdRunnerListLocks(t *testing.T, client adminCmdRunner) {
-	tmpGlobalObjectAPI := globalObjectAPI
-	defer func() {
-		globalObjectAPI = tmpGlobalObjectAPI
-	}()
-
-	testCases := []struct {
-		objectAPI ObjectLayer
-		expectErr bool
-	}{
-		{&DummyObjectLayer{}, false},
-		{nil, true},
-	}
-
-	for i, testCase := range testCases {
-		globalObjectAPI = testCase.objectAPI
-		_, err := client.ListLocks("", "", time.Duration(0))
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-	}
-}
-
 func testAdminCmdRunnerServerInfo(t *testing.T, client adminCmdRunner) {
 	tmpGlobalBootTime := globalBootTime
 	tmpGlobalObjectAPI := globalObjectAPI
@@ -321,16 +296,6 @@ func TestAdminRPCClientReInitFormat(t *testing.T) {
 	}()
 
 	testAdminCmdRunnerReInitFormat(t, rpcClient)
-}
-
-func TestAdminRPCClientListLocks(t *testing.T) {
-	httpServer, rpcClient, prevGlobalServerConfig := newAdminRPCHTTPServerClient(t)
-	defer httpServer.Close()
-	defer func() {
-		globalServerConfig = prevGlobalServerConfig
-	}()
-
-	testAdminCmdRunnerListLocks(t, rpcClient)
 }
 
 func TestAdminRPCClientServerInfo(t *testing.T) {
