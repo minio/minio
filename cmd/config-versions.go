@@ -752,4 +752,7 @@ type serverConfigV28 struct {
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
+
+	// Logger configuration
+	Logger loggerConfig `json:"logger"`
 }
