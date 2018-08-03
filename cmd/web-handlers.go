@@ -741,7 +741,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err := getObject(context.Background(), bucket, object, 0, -1, httpWriter, ""); err != nil {
+	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, ""); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -849,7 +849,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err := getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, ""); err != nil {
+			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, ""); err != nil {
 				return err
 			}
 			if err = httpWriter.Close(); err != nil {

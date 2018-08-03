@@ -603,12 +603,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			var key []byte
 			if crypto.SSEC.IsRequested(formValues) {
 				key, err = ParseSSECustomerHeader(formValues)
-			} else {
-				key, err = generateKMSKey(r, bucket, object, metadata)
-			}
-			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
+				if err != nil {
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
 			}
 			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata, crypto.S3.IsRequested(formValues))
 			if err != nil {

@@ -647,9 +647,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		sseC := crypto.SSEC.IsRequested(r.Header)
 		sseS3 := crypto.S3.IsRequested(r.Header)
 		if sseC || sseS3 {
-			if sseS3 {
-				newKey, err = generateKMSKey(r, dstBucket, dstObject, encMetadata)
-			} else {
+			if sseC {
 				newKey, err = ParseSSECustomerRequest(r)
 			}
 			if err != nil {
@@ -1279,16 +1277,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
+				if err != nil {
+					pipeWriter.CloseWithError(err)
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
 			}
-			if crypto.S3.IsRequested(r.Header) {
-				key, err = generateKMSKey(r, dstBucket, dstObject, li.UserDefined)
-			}
-			if err != nil {
-				pipeWriter.CloseWithError(err)
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
-			}
-
 			var objectEncryptionKey []byte
 			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
@@ -1489,13 +1483,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
-			}
-			if crypto.S3.IsRequested(r.Header) {
-				key, err = unsealKMSKey(bucket, object, li.UserDefined)
-			}
-			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
+				if err != nil {
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
 			}
 
 			// Calculating object encryption key

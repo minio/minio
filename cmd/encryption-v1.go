@@ -17,12 +17,10 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -72,10 +70,6 @@ const (
 	// SSESealAlgorithmDareV2HmacSha256 specifies DAREv2 as authenticated en/decryption scheme and SHA256 as cryptographic
 	// hash function for the HMAC PRF.
 	SSESealAlgorithmDareV2HmacSha256 = "DAREv2-HMAC-SHA256"
-
-	// SSEDomain specifies the domain for the derived key - in this case the
-	// key should be used for SSE-C.
-	SSEDomain = "SSE-C"
 )
 
 // hasServerSideEncryptionHeader returns true if the given HTTP header
@@ -129,116 +123,58 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map[string]string) error {
 	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 
-	algorithm := metadata[crypto.SSESealAlgorithm]
-	if algorithm != SSESealAlgorithmDareSha256 && algorithm != SSESealAlgorithmDareV2HmacSha256 {
-		return errObjectTampered
-	}
-	iv, err := base64.StdEncoding.DecodeString(metadata[crypto.SSEIV])
-	if err != nil || len(iv) != SSEIVSize {
-		return errObjectTampered
-	}
-	sealedKey, err := base64.StdEncoding.DecodeString(metadata[crypto.SSECSealedKey])
-	if err != nil || len(sealedKey) != 64 {
-		return errObjectTampered
-	}
-
-	var (
-		minDAREVersion   byte
-		keyEncryptionKey [32]byte
-	)
-	switch algorithm {
+	switch {
 	default:
 		return errObjectTampered
-	case SSESealAlgorithmDareSha256: // legacy key-encryption-key derivation
-		minDAREVersion = sio.Version10
-		sha := sha256.New()
-		sha.Write(oldKey)
-		sha.Write(iv)
-		sha.Sum(keyEncryptionKey[:0])
-	case SSESealAlgorithmDareV2HmacSha256: // key-encryption-key derivation - See: crypto/doc.go
-		minDAREVersion = sio.Version20
-		mac := hmac.New(sha256.New, oldKey)
-		mac.Write(iv)
-		mac.Write([]byte(SSEDomain))
-		mac.Write([]byte(SSESealAlgorithmDareV2HmacSha256))
-		mac.Write([]byte(path.Join(bucket, object)))
-		mac.Sum(keyEncryptionKey[:0])
-	}
-
-	objectEncryptionKey := bytes.NewBuffer(nil) // decrypt object encryption key
-	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
-		MinVersion: minDAREVersion,
-		Key:        keyEncryptionKey[:],
-	})
-	if n != 32 || err != nil { // Either the provided key does not match or the object was tampered.
-		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
-			return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
+	case crypto.SSEC.IsEncrypted(metadata):
+		sealedKey, err := crypto.SSEC.ParseMetadata(metadata)
+		if err != nil {
+			return err
 		}
-		return crypto.ErrInvalidCustomerKey // To provide strict AWS S3 compatibility we return: access denied.
-	}
-	if subtle.ConstantTimeCompare(oldKey, newKey) == 1 && algorithm != SSESealAlgorithmDareSha256 {
-		return nil // we don't need to rotate keys if newKey == oldKey but we may have to upgrade KDF algorithm
-	}
 
-	mac := hmac.New(sha256.New, newKey) // key-encryption-key derivation - See: crypto/doc.go
-	mac.Write(iv)
-	mac.Write([]byte(SSEDomain))
-	mac.Write([]byte(SSESealAlgorithmDareV2HmacSha256))
-	mac.Write([]byte(path.Join(bucket, object)))
-	mac.Sum(keyEncryptionKey[:0])
+		var objectKey crypto.ObjectKey
+		var extKey [32]byte
+		copy(extKey[:], oldKey)
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.SSEC.String(), bucket, object); err != nil {
+			if subtle.ConstantTimeCompare(oldKey, newKey) == 1 {
+				return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
+			}
+			return crypto.ErrInvalidCustomerKey // To provide strict AWS S3 compatibility we return: access denied.
 
-	sealedKeyW := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
-	n, err = sio.Encrypt(sealedKeyW, bytes.NewReader(objectEncryptionKey.Bytes()), sio.Config{
-		Key: keyEncryptionKey[:],
-	})
-	if n != 64 || err != nil {
-		return errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
+		}
+		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 && sealedKey.Algorithm == crypto.SealAlgorithm {
+			return nil // don't rotate on equal keys if seal algorithm is latest
+		}
+		copy(extKey[:], newKey)
+		sealedKey = objectKey.Seal(extKey, sealedKey.IV, crypto.SSEC.String(), bucket, object)
+		return nil
 	}
-
-	metadata[crypto.SSEIV] = base64.StdEncoding.EncodeToString(iv[:])
-	metadata[crypto.SSESealAlgorithm] = SSESealAlgorithmDareV2HmacSha256
-	metadata[crypto.SSECSealedKey] = base64.StdEncoding.EncodeToString(sealedKeyW.Bytes())
-	return nil
 }
 
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) ([]byte, error) {
 	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-	// See crypto/doc.go for detailed description
-	nonce := make([]byte, 32+SSEIVSize) // generate random values for key derivation
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-	sha := sha256.New() // derive object encryption key
-	sha.Write(key)
-	sha.Write(nonce[:32])
-	objectEncryptionKey := sha.Sum(nil)
 
-	iv := sha256.Sum256(nonce[32:]) // key-encryption-key derivation - See: crypto/doc.go
-	mac := hmac.New(sha256.New, key)
-	mac.Write(iv[:])
-	mac.Write([]byte(SSEDomain))
-	mac.Write([]byte(SSESealAlgorithmDareV2HmacSha256))
-	mac.Write([]byte(path.Join(bucket, object)))
-	keyEncryptionKey := mac.Sum(nil)
-
-	sealedKey := bytes.NewBuffer(nil) // sealedKey := 16 byte header + 32 byte payload + 16 byte tag
-	n, err := sio.Encrypt(sealedKey, bytes.NewReader(objectEncryptionKey), sio.Config{
-		Key: keyEncryptionKey,
-	})
-	if n != 64 || err != nil {
-		return nil, errors.New("failed to seal object encryption key") // if this happens there's a bug in the code (may panic ?)
-	}
-
-	metadata[crypto.SSEIV] = base64.StdEncoding.EncodeToString(iv[:])
-	metadata[crypto.SSESealAlgorithm] = SSESealAlgorithmDareV2HmacSha256
+	var sealedKey crypto.SealedKey
 	if sseS3 {
-		metadata[crypto.S3SealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
+		if globalKMS == nil {
+			return nil, errKMSNotConfigured
+		}
+		key, encKey, err := globalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return nil, err
+		}
+		objectKey := crypto.GenerateKey(key, rand.Reader)
+		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
+		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
+		return objectKey[:], nil
 	} else {
-		metadata[crypto.SSECSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Bytes())
-
+		var extKey [32]byte
+		copy(extKey[:], key)
+		objectKey := crypto.GenerateKey(extKey, rand.Reader)
+		sealedKey = objectKey.Seal(extKey, crypto.GenerateIV(rand.Reader), crypto.SSEC.String(), bucket, object)
+		crypto.SSEC.CreateMetadata(metadata, sealedKey)
+		return objectKey[:], nil
 	}
-
-	return objectEncryptionKey, nil
 }
 
 func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (io.Reader, error) {
@@ -255,26 +191,6 @@ func newEncryptReader(content io.Reader, key []byte, bucket, object string, meta
 	return reader, nil
 }
 
-// generateKMSKey gets a new random plaintext key and sealed plaintext key from
-// Vault. It returns the plaintext key and stores the master Key ID and
-// the sealed plaintext key in the metadata map on success.
-func generateKMSKey(r *http.Request, bucket, object string, metadata map[string]string) ([]byte, error) {
-	if globalKMS == nil {
-		return nil, errKMSNotConfigured
-	}
-	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
-		return nil, crypto.ErrIncompatibleEncryptionMethod
-	}
-	ctx := crypto.Context{bucket: path.Join(bucket, object)}
-	key, encKey, err := globalKMS.GenerateKey(globalKMSKeyID, ctx)
-	if err != nil {
-		return nil, err
-	}
-	metadata[crypto.S3KMSKeyID] = globalKMSKeyID
-	metadata[crypto.S3KMSSealedKey] = string(encKey)
-	return key[:], nil
-}
-
 // set new encryption metadata from http request headers for SSE-C and generated key from KMS in the case of
 // SSE-S3
 func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[string]string) (err error) {
@@ -283,12 +199,9 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 	)
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err = ParseSSECustomerRequest(r)
-	}
-	if crypto.S3.IsRequested(r.Header) {
-		key, err = generateKMSKey(r, bucket, object, metadata)
-	}
-	if err != nil {
-		return
+		if err != nil {
+			return
+		}
 	}
 	_, err = newEncryptMetadata(key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 	return
@@ -306,18 +219,11 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
 		return nil, crypto.ErrIncompatibleEncryptionMethod
 	}
-	if crypto.S3.IsRequested(r.Header) {
-		key, err = generateKMSKey(r, bucket, object, metadata)
+	if crypto.SSEC.IsRequested(r.Header) {
+		key, err = ParseSSECustomerRequest(r)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if crypto.SSEC.IsRequested(r.Header) {
-		key, err = ParseSSECustomerRequest(r)
-
-	}
-	if err != nil {
-		return nil, err
 	}
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsEncrypted(metadata))
 }
@@ -329,68 +235,50 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string
 		key []byte
 		err error
 	)
-	if crypto.S3.IsEncrypted(metadata) {
-		key, err = unsealKMSKey(bucket, object, metadata)
-	}
 	if crypto.SSECopy.IsRequested(r.Header) {
 		key, err = ParseSSECopyCustomerRequest(r, metadata)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, 0, metadata)
 }
 
 func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
-	iv, err := base64.StdEncoding.DecodeString(metadata[crypto.SSEIV])
-	if err != nil || len(iv) != SSEIVSize {
-		return nil, errObjectTampered
-	}
-	k := crypto.SSECSealedKey
-	if crypto.S3.IsEncrypted(metadata) {
-		k = crypto.S3SealedKey
-	}
-	sealedKey, err := base64.StdEncoding.DecodeString(metadata[k])
-	if err != nil || len(sealedKey) != 64 {
-		return nil, errObjectTampered
-	}
-
-	var (
-		minDAREVersion   byte
-		keyEncryptionKey [32]byte
-	)
-	switch algorithm := metadata[crypto.SSESealAlgorithm]; algorithm {
+	switch {
 	default:
 		return nil, errObjectTampered
-	case SSESealAlgorithmDareSha256: // legacy key-encryption-key derivation
-		minDAREVersion = sio.Version10
-		sha := sha256.New()
-		sha.Write(key)
-		sha.Write(iv)
-		sha.Sum(keyEncryptionKey[:0])
-	case SSESealAlgorithmDareV2HmacSha256: // key-encryption-key derivation - See: crypto/doc.go
-		minDAREVersion = sio.Version20
-		mac := hmac.New(sha256.New, key)
-		mac.Write(iv)
-		mac.Write([]byte(SSEDomain))
-		mac.Write([]byte(SSESealAlgorithmDareV2HmacSha256))
-		mac.Write([]byte(path.Join(bucket, object)))
-		mac.Sum(keyEncryptionKey[:0])
+	case crypto.S3.IsEncrypted(metadata):
+		if globalKMS == nil {
+			return nil, errKMSNotConfigured
+		}
+		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
+		if err != nil {
+			return nil, err
+		}
+		extKey, err := globalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return nil, err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
+			return nil, err
+		}
+		return objectKey[:], nil
+	case crypto.SSEC.IsEncrypted(metadata):
+		var extKey [32]byte
+		copy(extKey[:], key)
+		sealedKey, err := crypto.SSEC.ParseMetadata(metadata)
+		if err != nil {
+			return nil, err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.SSEC.String(), bucket, object); err != nil {
+			return nil, err
+		}
+		return objectKey[:], nil
 	}
-
-	objectEncryptionKey := bytes.NewBuffer(nil) // decrypt object encryption key
-	n, err := sio.Decrypt(objectEncryptionKey, bytes.NewReader(sealedKey), sio.Config{
-		MinVersion: minDAREVersion,
-		Key:        keyEncryptionKey[:],
-	})
-	if n != 32 || err != nil {
-		// Either the provided key does not match or the object was tampered.
-		// To provide strict AWS S3 compatibility we return: access denied.
-		return nil, crypto.ErrInvalidCustomerKey
-	}
-	return objectEncryptionKey.Bytes(), nil
 }
 
 func newDecryptWriter(client io.Writer, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
@@ -419,33 +307,11 @@ func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte,
 	return writer, nil
 }
 
-// unsealKMSKey unseals the sealedKey using the Vault master key
-// referenced by the keyID. The plain text key is returned on success.
-func unsealKMSKey(bucket, object string, metadata map[string]string) ([]byte, error) {
-	if globalKMS == nil {
-		return nil, errKMSNotConfigured
-	}
-	ctx := crypto.Context{bucket: path.Join(bucket, object)}
-	keyID, _ := metadata[crypto.S3KMSKeyID]
-	sealedKey, _ := metadata[crypto.S3KMSSealedKey]
-	k, err := globalKMS.UnsealKey(keyID, []byte(sealedKey), ctx)
-	if err != nil {
-		return nil, err
-	}
-	return k[:], nil
-}
-
 // DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
 // the client-side-encryption metadata from the object and sets the correct headers.
 func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
 	if crypto.S3.IsEncrypted(metadata) {
-		key, err := unsealKMSKey(bucket, object, metadata)
-		if err != nil {
-			return nil, err
-		}
-		delete(metadata, crypto.S3KMSKeyID)
-		delete(metadata, crypto.S3KMSSealedKey)
-		return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
+		return newDecryptWriter(client, nil, bucket, object, seqNumber, metadata)
 	}
 
 	key, err := ParseSSECustomerRequest(r)
@@ -453,7 +319,6 @@ func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket,
 		return nil, err
 	}
 	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -495,16 +360,12 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	var key []byte
 	var err error
 	if w.copySource {
-		if crypto.S3.IsEncrypted(w.metadata) {
-			key, err = unsealKMSKey(w.bucket, w.object, w.metadata)
-		} else {
+		if crypto.SSEC.IsEncrypted(w.metadata) {
 			w.req.Header.Set(crypto.SSECopyKey, w.customerKeyHeader)
 			key, err = ParseSSECopyCustomerRequest(w.req, w.metadata)
 		}
 	} else {
-		if crypto.S3.IsEncrypted(w.metadata) {
-			key, err = unsealKMSKey(w.bucket, w.object, w.metadata)
-		} else {
+		if crypto.SSEC.IsEncrypted(w.metadata) {
 			w.req.Header.Set(crypto.SSECKey, w.customerKeyHeader)
 			key, err = ParseSSECustomerRequest(w.req)
 		}
