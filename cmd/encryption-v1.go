@@ -167,14 +167,14 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
 		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
 		return objectKey[:], nil
-	} else {
-		var extKey [32]byte
-		copy(extKey[:], key)
-		objectKey := crypto.GenerateKey(extKey, rand.Reader)
-		sealedKey = objectKey.Seal(extKey, crypto.GenerateIV(rand.Reader), crypto.SSEC.String(), bucket, object)
-		crypto.SSEC.CreateMetadata(metadata, sealedKey)
-		return objectKey[:], nil
 	}
+	var extKey [32]byte
+	copy(extKey[:], key)
+	objectKey := crypto.GenerateKey(extKey, rand.Reader)
+	sealedKey = objectKey.Seal(extKey, crypto.GenerateIV(rand.Reader), crypto.SSEC.String(), bucket, object)
+	crypto.SSEC.CreateMetadata(metadata, sealedKey)
+	return objectKey[:], nil
+
 }
 
 func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (io.Reader, error) {
@@ -225,7 +225,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 			return nil, err
 		}
 	}
-	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsEncrypted(metadata))
+	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
 
 // DecryptCopyRequest decrypts the object with the client provided key. It also removes

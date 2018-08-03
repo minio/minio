@@ -1419,15 +1419,15 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionMethod
 	case errInsecureSSERequest:
 		apiErr = ErrInsecureSSECustomerRequest
-	case errInvalidSSEAlgorithm, crypto.ErrInvalidCustomerAlgorithm:
+	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case errInvalidSSEKey, crypto.ErrInvalidCustomerKey:
+	case crypto.ErrInvalidCustomerKey:
 		apiErr = ErrInvalidSSECustomerKey
-	case errMissingSSEKey, crypto.ErrMissingCustomerKey:
+	case crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
-	case errMissingSSEKeyMD5, crypto.ErrMissingCustomerKeyMD5:
+	case crypto.ErrMissingCustomerKeyMD5:
 		apiErr = ErrMissingSSECustomerKeyMD5
-	case errSSEKeyMD5Mismatch, crypto.ErrCustomerKeyMD5Mismatch:
+	case crypto.ErrCustomerKeyMD5Mismatch:
 		apiErr = ErrSSECustomerKeyMD5Mismatch
 	case errObjectTampered:
 		apiErr = ErrObjectTampered
