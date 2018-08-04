@@ -165,6 +165,15 @@ type RPCClient struct {
 }
 
 func (client *RPCClient) setRetryTicker(ticker *time.Ticker) {
+	if ticker == nil {
+		client.RLock()
+		isNil := client.retryTicker == nil
+		client.RUnlock()
+		if isNil {
+			return
+		}
+	}
+
 	client.Lock()
 	defer client.Unlock()
 
@@ -181,18 +190,22 @@ func (client *RPCClient) Call(serviceMethod string, args interface {
 }, reply interface{}) (err error) {
 	lockedCall := func() error {
 		client.RLock()
-		defer client.RUnlock()
-
-		if client.retryTicker != nil {
+		retryTicker := client.retryTicker
+		client.RUnlock()
+		if retryTicker != nil {
 			select {
-			case <-client.retryTicker.C:
+			case <-retryTicker.C:
 			default:
 				return errRPCRetry
 			}
 		}
 
+		client.RLock()
+		authToken := client.authToken
+		client.RUnlock()
+
 		// Make RPC call.
-		args.SetAuthArgs(AuthArgs{client.authToken, client.args.RPCVersion, time.Now().UTC()})
+		args.SetAuthArgs(AuthArgs{authToken, client.args.RPCVersion, time.Now().UTC()})
 		return client.rpcClient.Call(serviceMethod, args, reply)
 	}
 
