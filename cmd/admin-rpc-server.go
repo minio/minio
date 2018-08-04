@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"path"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -45,20 +44,6 @@ type SignalServiceArgs struct {
 // SignalService - Send a restart or stop signal to the service
 func (receiver *adminRPCReceiver) SignalService(args *SignalServiceArgs, reply *VoidReply) error {
 	return receiver.local.SignalService(args.Sig)
-}
-
-// ListLocksQuery - wraps ListLocks API's query values to send over RPC.
-type ListLocksQuery struct {
-	AuthArgs
-	Bucket   string
-	Prefix   string
-	Duration time.Duration
-}
-
-// ListLocks - lists locks held by requests handled by this server instance.
-func (receiver *adminRPCReceiver) ListLocks(args *ListLocksQuery, reply *[]VolumeLockInfo) (err error) {
-	*reply, err = receiver.local.ListLocks(args.Bucket, args.Prefix, args.Duration)
-	return err
 }
 
 // ServerInfo - returns the server info when object layer was initialized on this server.

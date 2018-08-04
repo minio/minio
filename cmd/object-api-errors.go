@@ -384,3 +384,9 @@ func isErrObjectNotFound(err error) bool {
 	_, ok := err.(ObjectNotFound)
 	return ok
 }
+
+// isInsufficientReadQuorum - Check if error type is InsufficientReadQuorum.
+func isInsufficientReadQuorum(err error) bool {
+	_, ok := err.(InsufficientReadQuorum)
+	return ok
+}

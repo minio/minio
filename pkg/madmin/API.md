@@ -36,10 +36,10 @@ func main() {
 
 ```
 
-| Service operations         | Info operations  | LockInfo operations         | Healing operations                    | Config operations         | Misc                                |
-|:------------------------------------|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
-| [`ServiceStatus`](#ServiceStatus)   | [`ServerInfo`](#ServerInfo) | [`ListLocks`](#ListLocks)   | [`Heal`](#Heal)             | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | [`ClearLocks`](#ClearLocks) |            | [`SetConfig`](#SetConfig) |                                     |
+| Service operations         | Info operations  | Healing operations                    | Config operations         | Misc                                |
+|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
+| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
+| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | |
 
 
 ## 1. Constructor
@@ -202,38 +202,6 @@ Fetches information for all cluster nodes, such as server properties, storage in
 
  ```
 
-
-## 5. Lock operations
-
-<a name="ListLocks"></a>
-### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` for  longer than ``duration`` seconds.
-
-__Example__
-
-``` go
-    volLocks, err := madmClnt.ListLocks("mybucket", "myprefix", 30 * time.Second)
-    if err != nil {
-        log.Fatalln(err)
-    }
-    log.Println("List of locks: ", volLocks)
-
-```
-
-<a name="ClearLocks"></a>
-### ClearLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` for longer than ``duration`` seconds.
-
-__Example__
-
-``` go
-    volLocks, err := madmClnt.ClearLocks("mybucket", "myprefix", 30 * time.Second)
-    if err != nil {
-        log.Fatalln(err)
-    }
-    log.Println("List of locks cleared: ", volLocks)
-
-```
 
 ## 6. Heal operations
 

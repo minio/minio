@@ -119,8 +119,14 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
-// Returns one of the latest updated xlMeta files and count of total valid xlMeta(s) updated latest
-func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
+// Returns the latest updated xlMeta files and error in case of failure.
+func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error) (xlMetaV1, error) {
+
+	// There should be atleast half correct entries, if not return failure
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, globalXLSetDriveCount/2); reducedErr != nil {
+		return xlMetaV1{}, reducedErr
+	}
+
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
@@ -138,8 +144,11 @@ func getLatestXLMeta(partsMetadata []xlMetaV1, errs []error) (xlMetaV1, int) {
 			count++
 		}
 	}
-	// Return one of the latest xlMetaData, and the count of lastest updated xlMeta files
-	return latestXLMeta, count
+	if count < len(partsMetadata)/2 {
+		return xlMetaV1{}, errXLReadQuorum
+	}
+
+	return latestXLMeta, nil
 }
 
 // disksWithAllParts - This function needs to be called with

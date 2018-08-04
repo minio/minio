@@ -24,42 +24,66 @@ import (
 
 // Function not implemented error
 func isSysErrNoSys(err error) bool {
+	if err == syscall.ENOSYS {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.ENOSYS
+
 }
 
 // Not supported error
 func isSysErrOpNotSupported(err error) bool {
+	if err == syscall.EOPNOTSUPP {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.EOPNOTSUPP
+
 }
 
 // No space left on device error
 func isSysErrNoSpace(err error) bool {
+	if err == syscall.ENOSPC {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.ENOSPC
 }
 
 // Input/output error
 func isSysErrIO(err error) bool {
+	if err == syscall.EIO {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.EIO
 }
 
 // Check if the given error corresponds to EISDIR (is a directory).
 func isSysErrIsDir(err error) bool {
+	if err == syscall.EISDIR {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.EISDIR
+
 }
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
+	if err == syscall.ENOTDIR {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.ENOTDIR
 }
 
 // Check if the given error corresponds to the ENAMETOOLONG (name too long).
 func isSysErrTooLong(err error) bool {
+	if err == syscall.ENAMETOOLONG {
+		return true
+	}
 	pathErr, ok := err.(*os.PathError)
 	return ok && pathErr.Err == syscall.ENAMETOOLONG
 }
@@ -67,6 +91,9 @@ func isSysErrTooLong(err error) bool {
 // Check if the given error corresponds to ENOTEMPTY for unix
 // and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
 func isSysErrNotEmpty(err error) bool {
+	if err == syscall.ENOTEMPTY {
+		return true
+	}
 	if pathErr, ok := err.(*os.PathError); ok {
 		if runtime.GOOS == globalWindowsOSName {
 			if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == 0x91 {

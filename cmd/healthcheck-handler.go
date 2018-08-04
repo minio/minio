@@ -55,6 +55,19 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
+	s := objLayer.StorageInfo(ctx)
+	// Gateways don't provide disk info
+	if s.Backend.Type == Unknown {
+		// ListBuckets to confirm gateway backend is up
+		if _, err := objLayer.ListBuckets(ctx); err != nil {
+			writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+			return
+		}
+		writeResponse(w, http.StatusOK, nil, mimeNone)
+		return
+	}
+
 	var totalLocalDisks int
 	var erroredDisks int
 	for _, endpoint := range globalEndpoints {
