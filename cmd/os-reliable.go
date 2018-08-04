@@ -96,10 +96,10 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 		case os.IsNotExist(err):
 			return errFileNotFound
 		default:
-			return nil
+			return err
 		}
 	}
-	return err
+	return nil
 }
 
 // Reliably retries os.RenameAll if for some reason os.RenameAll returns
