@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/inconshreveable/go-update"
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
@@ -458,7 +457,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 
 func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateStatusMsg string, err error) {
 	if !ok {
-		updateStatusMsg = greenColorSprintf("Minio update to version RELEASE.%s canceled.",
+		updateStatusMsg = colorGreenBold("Minio update to version RELEASE.%s canceled.",
 			latestReleaseTime.Format(minioReleaseTagTimeLayout))
 		return updateStatusMsg, nil
 	}
@@ -484,20 +483,17 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 		return updateStatusMsg, err
 	}
 
-	return greenColorSprintf("Minio updated to version RELEASE.%s successfully.",
+	return colorGreenBold("Minio updated to version RELEASE.%s successfully.",
 		latestReleaseTime.Format(minioReleaseTagTimeLayout)), nil
 }
 
 func shouldUpdate(quiet bool, sha256Hex string, latestReleaseTime time.Time) (ok bool) {
 	ok = true
 	if !quiet {
-		ok = prompt.Confirm(greenColorSprintf("Update to RELEASE.%s [%s]", latestReleaseTime.Format(minioReleaseTagTimeLayout), "yes"))
+		ok = prompt.Confirm(colorGreenBold("Update to RELEASE.%s [%s]", latestReleaseTime.Format(minioReleaseTagTimeLayout), "yes"))
 	}
 	return ok
 }
-
-var greenColorSprintf = color.New(color.FgGreen, color.Bold).SprintfFunc()
-var redColorSprintf = color.New(color.FgRed, color.Bold).SprintfFunc()
 
 func mainUpdate(ctx *cli.Context) {
 	if len(ctx.Args()) != 0 {
@@ -520,7 +516,7 @@ func mainUpdate(ctx *cli.Context) {
 
 	// Nothing to update running the latest release.
 	if updateMsg == "" {
-		logger.Info(greenColorSprintf("You are already running the most recent version of ‘minio’."))
+		logger.Info(colorGreenBold("You are already running the most recent version of ‘minio’."))
 		os.Exit(0)
 	}
 
@@ -531,7 +527,7 @@ func mainUpdate(ctx *cli.Context) {
 		var updateStatusMsg string
 		updateStatusMsg, err = doUpdate(sha256Hex, latestReleaseTime, shouldUpdate(quiet, sha256Hex, latestReleaseTime))
 		if err != nil {
-			logger.Info(redColorSprintf("Unable to update ‘minio’."))
+			logger.Info(colorRedBold("Unable to update ‘minio’."))
 			logger.Info(err.Error())
 			os.Exit(-1)
 		}

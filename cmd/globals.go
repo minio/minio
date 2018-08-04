@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"crypto/x509"
+	"fmt"
 	"os"
 	"runtime"
 	"time"
 
+	isatty "github.com/mattn/go-isatty"
 	"github.com/minio/minio-go/pkg/set"
 
 	etcd "github.com/coreos/etcd/clientv3"
@@ -219,12 +221,72 @@ var (
 
 // global colors.
 var (
-	colorBold     = color.New(color.Bold).SprintFunc()
-	colorRed      = color.New(color.FgRed).SprintfFunc()
-	colorBlue     = color.New(color.FgBlue).SprintfFunc()
-	colorYellow   = color.New(color.FgYellow).SprintfFunc()
-	colorBgYellow = color.New(color.BgYellow).SprintfFunc()
-	colorBlack    = color.New(color.FgBlack).SprintfFunc()
+	// Check if we stderr, stdout are dumb terminals, we do not apply
+	// ansi coloring on dumb terminals.
+	isTerminal = func() bool {
+		return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
+	}
+
+	colorBold = func() func(a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.Bold).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
+	colorRed = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgRed).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorBlue = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgBlue).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorYellow = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgYellow).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorCyanBold = func() func(a ...interface{}) string {
+		if isTerminal() {
+			color.New(color.FgCyan, color.Bold).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
+	colorYellowBold = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgYellow, color.Bold).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorBgYellow = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.BgYellow).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorBlack = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgBlack).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorGreenBold = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgGreen, color.Bold).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorRedBold = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgRed, color.Bold).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
 )
 
 // Returns minio global information, as a key value map.

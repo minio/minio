@@ -25,7 +25,6 @@ import (
 
 	"github.com/cheggaaa/pb"
 	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 )
 
 // prepareUpdateMessage - prepares the update message, only if a
@@ -46,10 +45,6 @@ func prepareUpdateMessage(downloadURL string, older time.Duration) string {
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
 func colorizeUpdateMessage(updateString string, newerThan string) string {
-	// Initialize coloring.
-	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
-	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
-
 	msgLine1Fmt := " You are running an older version of Minio released %s "
 	msgLine2Fmt := " Update: %s "
 
@@ -59,8 +54,8 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 	line2Length := len(fmt.Sprintf(msgLine2Fmt, updateString))
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf(msgLine1Fmt, yellow(newerThan))
-	line2InColor := fmt.Sprintf(msgLine2Fmt, cyan(updateString))
+	line1InColor := fmt.Sprintf(msgLine1Fmt, colorYellowBold(newerThan))
+	line2InColor := fmt.Sprintf(msgLine2Fmt, colorCyanBold(updateString))
 
 	// calculate the rectangular box size.
 	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
@@ -94,10 +89,10 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 	}
 
 	lines := []string{
-		yellow(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
+		colorYellowBold(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
 		vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar,
 		vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar,
-		yellow(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
+		colorYellowBold(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
 	}
 	return "\n" + strings.Join(lines, "\n") + "\n"
 }

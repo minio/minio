@@ -18,17 +18,45 @@ package logger
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 
 	"github.com/fatih/color"
+	isatty "github.com/mattn/go-isatty"
 )
 
 // Global colors.
 var (
-	colorBold    = color.New(color.Bold).SprintFunc()
-	colorFgRed   = color.New(color.FgRed).SprintfFunc()
-	colorBgRed   = color.New(color.BgRed).SprintfFunc()
-	colorFgWhite = color.New(color.FgWhite).SprintfFunc()
+	// Check if we stderr, stdout are dumb terminals, we do not apply
+	// ansi coloring on dumb terminals.
+	isTerminal = func() bool {
+		return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
+	}
+
+	colorBold = func() func(a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.Bold).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
+	colorFgRed = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgRed).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorBgRed = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.BgRed).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	colorFgWhite = func() func(format string, a ...interface{}) string {
+		if isTerminal() {
+			return color.New(color.FgWhite).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
 )
 
 var ansiRE = regexp.MustCompile("(\x1b[^m]*m)")
@@ -40,15 +68,21 @@ func ansiEscape(format string, args ...interface{}) {
 }
 
 func ansiMoveRight(n int) {
-	ansiEscape("[%dC", n)
+	if isTerminal() {
+		ansiEscape("[%dC", n)
+	}
 }
 
 func ansiSaveAttributes() {
-	ansiEscape("7")
+	if isTerminal() {
+		ansiEscape("7")
+	}
 }
 
 func ansiRestoreAttributes() {
-	ansiEscape("8")
+	if isTerminal() {
+		ansiEscape("8")
+	}
 }
 
 func uniqueEntries(paths []string) []string {
