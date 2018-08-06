@@ -478,8 +478,9 @@ func toAdminAPIErrCode(err error) APIErrorCode {
 	switch err {
 	case errXLWriteQuorum:
 		return ErrAdminConfigNoQuorum
+	default:
+		return toAPIErrorCode(err)
 	}
-	return toAPIErrorCode(err)
 }
 
 // SetConfigResult - represents detailed results of a set-config

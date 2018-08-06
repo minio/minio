@@ -130,20 +130,23 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 	}
 
 	if err = reliableRename(srcFilePath, dstFilePath); err != nil {
-		if isSysErrNotDir(err) {
+		switch {
+		case isSysErrNotDir(err):
 			return errFileAccessDenied
-		} else if isSysErrPathNotFound(err) {
+		case isSysErrPathNotFound(err):
 			// This is a special case should be handled only for
 			// windows, because windows API does not return "not a
 			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
-		} else if isSysErrCrossDevice(err) {
+		case isSysErrCrossDevice(err):
 			return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
-		} else if os.IsNotExist(err) {
+		case os.IsNotExist(err):
 			return errFileNotFound
+		default:
+			return err
 		}
 	}
-	return err
+	return nil
 }
 
 // Reliably retries os.RenameAll if for some reason os.RenameAll returns

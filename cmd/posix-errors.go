@@ -27,13 +27,9 @@ func isSysErrNoSys(err error) bool {
 	if err == syscall.ENOSYS {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.ENOSYS:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.ENOSYS
+
 }
 
 // Not supported error
@@ -41,13 +37,9 @@ func isSysErrOpNotSupported(err error) bool {
 	if err == syscall.EOPNOTSUPP {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.EOPNOTSUPP:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.EOPNOTSUPP
+
 }
 
 // No space left on device error
@@ -55,13 +47,8 @@ func isSysErrNoSpace(err error) bool {
 	if err == syscall.ENOSPC {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.ENOSPC:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.ENOSPC
 }
 
 // Input/output error
@@ -69,13 +56,8 @@ func isSysErrIO(err error) bool {
 	if err == syscall.EIO {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.EIO:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.EIO
 }
 
 // Check if the given error corresponds to EISDIR (is a directory).
@@ -83,13 +65,9 @@ func isSysErrIsDir(err error) bool {
 	if err == syscall.EISDIR {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.EISDIR:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.EISDIR
+
 }
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).
@@ -97,13 +75,8 @@ func isSysErrNotDir(err error) bool {
 	if err == syscall.ENOTDIR {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.ENOTDIR:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.ENOTDIR
 }
 
 // Check if the given error corresponds to the ENAMETOOLONG (name too long).
@@ -111,13 +84,8 @@ func isSysErrTooLong(err error) bool {
 	if err == syscall.ENAMETOOLONG {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		switch pathErr.Err {
-		case syscall.ENAMETOOLONG:
-			return true
-		}
-	}
-	return false
+	pathErr, ok := err.(*os.PathError)
+	return ok && pathErr.Err == syscall.ENAMETOOLONG
 }
 
 // Check if the given error corresponds to ENOTEMPTY for unix
@@ -133,8 +101,7 @@ func isSysErrNotEmpty(err error) bool {
 				return true
 			}
 		}
-		switch pathErr.Err {
-		case syscall.ENOTEMPTY:
+		if pathErr.Err == syscall.ENOTEMPTY {
 			return true
 		}
 	}
@@ -161,15 +128,11 @@ func isSysErrHandleInvalid(err error) bool {
 		return false
 	}
 	// Check if err contains ERROR_INVALID_HANDLE errno
-	if errno, ok := err.(syscall.Errno); ok && errno == 0x6 {
-		return true
-	}
-	return false
+	errno, ok := err.(syscall.Errno)
+	return ok && errno == 0x6
 }
 
 func isSysErrCrossDevice(err error) bool {
-	if e, ok := err.(*os.LinkError); ok {
-		return e.Err == syscall.EXDEV
-	}
-	return false
+	e, ok := err.(*os.LinkError)
+	return ok && e.Err == syscall.EXDEV
 }

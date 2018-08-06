@@ -94,13 +94,14 @@ type Console interface {
 }
 
 func consoleLog(console Console, msg string, args ...interface{}) {
-	if jsonFlag {
+	switch {
+	case jsonFlag:
 		// Strip escape control characters from json message
 		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
-	} else if quiet {
+	case quiet:
 		console.quiet(msg, args...)
-	} else {
+	default:
 		console.pretty(msg, args...)
 	}
 }

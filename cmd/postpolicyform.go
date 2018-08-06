@@ -57,8 +57,9 @@ func toString(val interface{}) string {
 	switch v := val.(type) {
 	case string:
 		return v
+	default:
+		return ""
 	}
-	return ""
 }
 
 // toLowerString - safely convert interface to lower string
@@ -78,18 +79,15 @@ func toInteger(val interface{}) (int64, error) {
 	case string:
 		i, err := strconv.Atoi(v)
 		return int64(i), err
+	default:
+		return 0, errors.New("Invalid number format")
 	}
-
-	return 0, errors.New("Invalid number format")
 }
 
 // isString - Safely check if val is of type string without causing panic.
 func isString(val interface{}) bool {
-	switch val.(type) {
-	case string:
-		return true
-	}
-	return false
+	_, ok := val.(string)
+	return ok
 }
 
 // ContentLengthRange - policy content-length-range field.

@@ -427,9 +427,10 @@ func hashKey(algo string, key string, cardinality int) int {
 	switch algo {
 	case formatXLVersionV2DistributionAlgo:
 		return crcHashMod(key, cardinality)
+	default:
+		// Unknown algorithm returns -1, also if cardinality is lesser than 0.
+		return -1
 	}
-	// Unknown algorithm returns -1, also if cardinality is lesser than 0.
-	return -1
 }
 
 // Returns always a same erasure coded set for a given input.

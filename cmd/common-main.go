@@ -99,9 +99,10 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	var configDir string
 
-	if ctx.IsSet("config-dir") {
+	switch {
+	case ctx.IsSet("config-dir"):
 		configDir = ctx.String("config-dir")
-	} else if ctx.GlobalIsSet("config-dir") {
+	case ctx.GlobalIsSet("config-dir"):
 		configDir = ctx.GlobalString("config-dir")
 		// cli package does not expose parent's "config-dir" option.  Below code is workaround.
 		if configDir == "" || configDir == getConfigDir() {
@@ -109,7 +110,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 				configDir = ctx.Parent().GlobalString("config-dir")
 			}
 		}
-	} else {
+	default:
 		// Neither local nor global config-dir option is provided.  In this case, try to use
 		// default config directory.
 		configDir = getConfigDir()

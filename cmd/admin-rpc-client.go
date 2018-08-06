@@ -398,14 +398,16 @@ func getValidServerConfig(serverConfigs []serverConfig, errs []error) (scv serve
 				// seen. See example above for
 				// clarity.
 				continue
-			} else if j < i && serverConfigs[i].ConfigDiff(&serverConfigs[j]) == "" {
+			}
+			if j < i && serverConfigs[i].ConfigDiff(&serverConfigs[j]) == "" {
 				// serverConfigs[i] is equal to
 				// serverConfigs[j], update
 				// serverConfigs[j]'s counter since it
 				// is the lower index.
 				configCounter[j]++
 				break
-			} else if j == i {
+			}
+			if j == i {
 				// serverConfigs[i] is equal to no
 				// other value seen before. It is
 				// unique so far.

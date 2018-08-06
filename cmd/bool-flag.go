@@ -56,11 +56,12 @@ func (bf *BoolFlag) UnmarshalJSON(data []byte) (err error) {
 
 // ParseBoolFlag - parses string into BoolFlag.
 func ParseBoolFlag(s string) (bf BoolFlag, err error) {
-	if s == "on" {
+	switch s {
+	case "on":
 		bf = true
-	} else if s == "off" {
+	case "off":
 		bf = false
-	} else {
+	default:
 		err = fmt.Errorf("invalid value ‘%s’ for BoolFlag", s)
 	}
 
