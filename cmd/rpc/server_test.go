@@ -18,12 +18,19 @@ package rpc
 
 import (
 	"bytes"
+	"encoding/gob"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 )
+
+func gobEncode(e interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(e)
+	return buf.Bytes(), err
+}
 
 type Args struct {
 	A, B int
@@ -251,7 +258,10 @@ func TestServerCall(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := testCase.server.call(testCase.serviceMethod, testCase.argBytes)
+		buf := bufPool.Get()
+		defer bufPool.Put(buf)
+
+		err := testCase.server.call(testCase.serviceMethod, testCase.argBytes, buf)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -259,8 +269,8 @@ func TestServerCall(t *testing.T) {
 		}
 
 		if !testCase.expectErr {
-			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+			if !reflect.DeepEqual(buf.Bytes(), testCase.expectedResult) {
+				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, buf.Bytes())
 			}
 		}
 	}
