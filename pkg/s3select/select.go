@@ -181,7 +181,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 		if record == nil {
 			if functionFlag {
 				rowStruct := &Row{
-					record: reader.aggFuncToStr(myAggVals),
+					record: reader.aggFuncToStr(myAggVals) + "\n",
 				}
 				myRow <- rowStruct
 			}
@@ -203,7 +203,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 		}
 		// When we have reached our limit, on what the user specified as the number
 		// of rows they wanted, we terminate our interpreter.
-		if filtrCount == limitOfRecords-1 && limitOfRecords != 0 {
+		if filtrCount == limitOfRecords && limitOfRecords != 0 {
 			close(myRow)
 			return
 		}
@@ -220,7 +220,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 			// if its an asterix we just print everything in the row
 			if reqColNames[0] == "*" && functionNames[0] == "" {
 				rowStruct := &Row{
-					record: reader.printAsterix(record),
+					record: reader.printAsterix(record) + "\n",
 				}
 				myRow <- rowStruct
 			} else if alias != "" {
@@ -246,7 +246,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 							return
 						}
 						rowStruct := &Row{
-							record: myQueryRow,
+							record: myQueryRow + "\n",
 						}
 						myRow <- rowStruct
 					}
@@ -269,7 +269,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 							return
 						}
 						rowStruct := &Row{
-							record: myQueryRow,
+							record: myQueryRow + "\n",
 						}
 						myRow <- rowStruct
 					}
@@ -315,7 +315,7 @@ func (reader *Input) processColNameIndex(record []string, reqColNames []string, 
 		if mytempindex > len(columns) {
 			return "", ErrInvalidColumnIndex
 		}
-		myRow = writeRow(myRow, record[mytempindex], reader.options.OutputFieldDelimiter)
+		myRow = writeRow(myRow, record[mytempindex], reader.options.OutputFieldDelimiter, len(reqColNames))
 		if err != nil {
 			return "", ErrMissingHeaders
 		}
@@ -337,14 +337,14 @@ func (reader *Input) processColNameLiteral(record []string, reqColNames []string
 		// this is the case to deal with COALESCE.
 		if reqColNames[i] == "" && isValidFunc(myFunc.index, i) {
 			myVal := evaluateFuncExpr(myFunc.funcExpr[i], "", record, columnsMap)
-			myRow = writeRow(myRow, myVal, reader.options.OutputFieldDelimiter)
+			myRow = writeRow(myRow, myVal, reader.options.OutputFieldDelimiter, len(reqColNames))
 			continue
 		}
 		myTempIndex, notFound := columnsMap[trimQuotes(reqColNames[i])]
 		if !notFound {
 			return "", ErrMissingHeaders
 		}
-		myRow = writeRow(myRow, record[myTempIndex], reader.options.OutputFieldDelimiter)
+		myRow = writeRow(myRow, record[myTempIndex], reader.options.OutputFieldDelimiter, len(reqColNames))
 	}
 	if len(myRow) > 1000000 {
 		return "", ErrOverMaxRecordSize

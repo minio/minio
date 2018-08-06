@@ -143,12 +143,12 @@ func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord []
 				return stringOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
 			}
 			return stringOps(myVal, myRecord, myReturnVal, columnsMap)
-		} else if myVal.Name.CompliantName() == "NULLIF" {
+		} else if strings.ToUpper(myVal.Name.CompliantName()) == "NULLIF" {
 			if mySubFunc != nil {
 				return nullOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
 			}
 			return nullOps(myVal, myRecord, myReturnVal, columnsMap)
-		} else if myVal.Name.CompliantName() == "COALESCE" {
+		} else if strings.ToUpper(myVal.Name.CompliantName()) == "COALESCE" {
 			if mySubFunc != nil {
 				return coalOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
 			}
@@ -221,11 +221,11 @@ func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []string, columnNames map[stri
 // supportedString is a function that checks whether the function is a supported
 // string one
 func supportedString(strFunc string) bool {
-	return stringInSlice(strFunc, []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER"})
+	return stringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER"})
 }
 
 // supportedFunc is a function that checks whether the function is a supported
 // S3 one.
 func supportedFunc(strFunc string) bool {
-	return stringInSlice(strFunc, []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER", "COALESCE", "NULLIF"})
+	return stringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER", "COALESCE", "NULLIF"})
 }

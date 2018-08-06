@@ -39,20 +39,22 @@ const (
 	continuationTime time.Duration = 5 * time.Second
 )
 
-// Progress represents a struct that represents the format for XML of the
+// progress represents a struct that represents the format for XML of the
 // progress messages
 type progress struct {
-	BytesScanned   int64 `xml:"BytesScanned"`
-	BytesProcessed int64 `xml:"BytesProcessed"`
-	BytesReturned  int64 `xml:"BytesReturned"`
+	BytesScanned   int64  `xml:"BytesScanned"`
+	BytesProcessed int64  `xml:"BytesProcessed"`
+	BytesReturned  int64  `xml:"BytesReturned"`
+	Xmlns          string `xml:"xmlns,attr"`
 }
 
-// Progress represents a struct that represents the format for XML of the stat
+// stats represents a struct that represents the format for XML of the stat
 // messages
 type stats struct {
-	BytesScanned   int64 `xml:"BytesScanned"`
-	BytesProcessed int64 `xml:"BytesProcessed"`
-	BytesReturned  int64 `xml:"BytesReturned"`
+	BytesScanned   int64  `xml:"BytesScanned"`
+	BytesProcessed int64  `xml:"BytesProcessed"`
+	BytesReturned  int64  `xml:"BytesReturned"`
+	Xmlns          string `xml:"xmlns,attr"`
 }
 
 // StatInfo is a struct that represents the
@@ -179,7 +181,7 @@ func (reader *Input) ReadRecord() []string {
 
 	row, fileErr = reader.reader.Read()
 	emptysToAppend := reader.minOutputLength - len(row)
-	if fileErr == io.EOF {
+	if fileErr == io.EOF || fileErr == io.ErrClosedPipe {
 		return nil
 	} else if _, ok := fileErr.(*csv.ParseError); ok {
 		emptysToAppend = reader.minOutputLength
@@ -230,10 +232,11 @@ func (reader *Input) createStatXML() (string, error) {
 		reader.stats.BytesProcessed = reader.options.StreamSize
 		reader.stats.BytesScanned = reader.stats.BytesProcessed
 	}
-	statXML := &stats{
+	statXML := stats{
 		BytesScanned:   reader.stats.BytesScanned,
 		BytesProcessed: reader.stats.BytesProcessed,
 		BytesReturned:  reader.stats.BytesReturned,
+		Xmlns:          "",
 	}
 	out, err := xml.Marshal(statXML)
 	if err != nil {
@@ -254,6 +257,7 @@ func (reader *Input) createProgressXML() (string, error) {
 		BytesScanned:   reader.stats.BytesScanned,
 		BytesProcessed: reader.stats.BytesProcessed,
 		BytesReturned:  reader.stats.BytesReturned,
+		Xmlns:          "",
 	}
 	out, err := xml.Marshal(progressXML)
 	if err != nil {
@@ -302,7 +306,7 @@ func (reader *Input) Execute(writer io.Writer) error {
 				curBuf.Reset()
 				close(myRow)
 				return nil
-			} else if ok && len(row.record) > 0 {
+			} else if ok {
 				message := reader.writeRecordMessage(row.record, curBuf)
 				_, err := message.WriteTo(writer)
 				flusher, okFlush := writer.(http.Flusher)

@@ -151,6 +151,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 	if selectReq.InputSerialization.CompressionType == SelectCompressionNONE ||
 		selectReq.InputSerialization.CompressionType == "" {
+		selectReq.InputSerialization.CompressionType = SelectCompressionNONE
 		if !strings.Contains(objInfo.ContentType, "text/csv") {
 			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
 			return
@@ -181,7 +182,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	reader, pipewriter := io.Pipe()
-	defer reader.Close()
 
 	// Get the object.
 	var startOffset int64
@@ -204,6 +204,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 	}
 	go func() {
+		defer reader.Close()
 		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer,
 			objInfo.ETag); gerr != nil {
 			pipewriter.CloseWithError(gerr)
@@ -245,6 +246,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		if err := s3s.Execute(w); err != nil {
 			logger.LogIf(ctx, err)
 		}
+		return
 	}
 }
 

@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -668,7 +669,7 @@ func TestMyXMLFunction(t *testing.T) {
 		expectedStat     int
 		expectedProgress int
 	}{
-		{150, 156},
+		{159, 165},
 	}
 	for _, table := range tables {
 		myVal, _ := s3s.createStatXML()
@@ -677,6 +678,7 @@ func TestMyXMLFunction(t *testing.T) {
 			t.Error()
 		}
 		if len(myOtherVal) != table.expectedProgress {
+			fmt.Println(len(myOtherVal))
 			t.Error()
 		}
 	}
@@ -752,7 +754,7 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 		expectedStat       int
 		expectedProgress   int
 	}{
-		{myVal, myOtherVal, 233, 243},
+		{myVal, myOtherVal, 242, 252},
 	}
 	for _, table := range tables {
 		var currBuf = &bytes.Buffer{}
@@ -873,6 +875,106 @@ func TestMatch(t *testing.T) {
 			text:    "aYYYYa",
 			matched: true,
 		},
+		{
+			pattern: "C%",
+			text:    "CA",
+			matched: true,
+		},
+		{
+			pattern: "C%",
+			text:    "SC",
+			matched: false,
+		},
+		{
+			pattern: "%C",
+			text:    "SC",
+			matched: true,
+		},
+		{
+			pattern: "%C",
+			text:    "CA",
+			matched: false,
+		},
+		{
+			pattern: "%C",
+			text:    "ACCC",
+			matched: true,
+		},
+		{
+			pattern: "C%",
+			text:    "CCC",
+			matched: true,
+		},
+		{
+			pattern: "j%",
+			text:    "mejri",
+			matched: false,
+		},
+		{
+			pattern: "a%o",
+			text:    "ando",
+			matched: true,
+		},
+		{
+			pattern: "%j",
+			text:    "mejri",
+			matched: false,
+		},
+		{
+			pattern: "%ja",
+			text:    "mejrija",
+			matched: true,
+		},
+		{
+			pattern: "ja%",
+			text:    "jamal",
+			matched: true,
+		},
+		{
+			pattern: "a%o",
+			text:    "andp",
+			matched: false,
+		},
+		{
+			pattern: "_r%",
+			text:    "arpa",
+			matched: true,
+		},
+		{
+			pattern: "_r%",
+			text:    "apra",
+			matched: false,
+		},
+		{
+			pattern: "a_%_%",
+			text:    "appple",
+			matched: true,
+		},
+		{
+			pattern: "l_b%",
+			text:    "lebron",
+			matched: true,
+		},
+		{
+			pattern: "leb%",
+			text:    "Dalembert",
+			matched: false,
+		},
+		{
+			pattern: "leb%",
+			text:    "Landesberg",
+			matched: false,
+		},
+		{
+			pattern: "leb%",
+			text:    "Mccalebb",
+			matched: false,
+		},
+		{
+			pattern: "%lebb",
+			text:    "Mccalebb",
+			matched: true,
+		},
 	}
 	// Iterating over the test cases, call the function under test and asert the output.
 	for i, testCase := range testCases {
@@ -881,6 +983,7 @@ func TestMatch(t *testing.T) {
 			t.Error()
 		}
 		if testCase.matched != actualResult {
+			fmt.Println("Expected Pattern", testCase.pattern, "Expected Text", testCase.text)
 			t.Errorf("Test %d: Expected the result to be `%v`, but instead found it to be `%v`", i+1, testCase.matched, actualResult)
 		}
 	}

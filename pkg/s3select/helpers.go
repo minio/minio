@@ -75,6 +75,9 @@ func matchesMyWhereClause(row []string, columnNames map[string]int, alias string
 	var conversionColumn string
 	var operator string
 	var operand interface{}
+	if fmt.Sprintf("%v", whereClause) == "false" {
+		return false, nil
+	}
 	switch expr := whereClause.(type) {
 	case *sqlparser.IsExpr:
 		return evaluateIsExpr(expr, row, columnNames, alias)
@@ -166,7 +169,7 @@ func matchesMyWhereClause(row []string, columnNames map[string]int, alias string
 	return true, nil
 }
 func applyStrFunc(rawArg string, funcName string) string {
-	switch funcName {
+	switch strings.ToUpper(funcName) {
 	case "TRIM":
 		// parser has an issue which does not allow it to support Trim with other
 		// arguments
@@ -302,11 +305,39 @@ func floatEval(myRecordVal float64, operator string, myOperand float64) (bool, e
 	return false, ErrUnsupportedSyntax
 }
 
+// prefixMatch allows for matching a prefix only like query e.g a%
+func prefixMatch(pattern string, record string) bool {
+	for i := 0; i < len(pattern)-1; i++ {
+		if pattern[i] != record[i] && pattern[i] != byte('_') {
+			return false
+		}
+	}
+	return true
+}
+
+// suffixMatch allows for matching a suffix only like query e.g %an
+func suffixMatch(pattern string, record string) bool {
+	for i := len(pattern) - 1; i > 0; i-- {
+		if pattern[i] != record[len(record)-(len(pattern)-i)] && pattern[i] != byte('_') {
+			return false
+		}
+	}
+	return true
+}
+
 // This function is for evaluating select statements which are case sensitive
 func likeConvert(pattern string, record string) (bool, error) {
 	// If pattern is empty just return false
 	if pattern == "" || record == "" {
 		return false, nil
+	}
+	// for suffix match queries e.g %a
+	if len(pattern) >= 2 && pattern[0] == byte('%') && strings.Count(pattern, "%") == 1 {
+		return suffixMatch(pattern, record), nil
+	}
+	// for prefix match queries e.g a%
+	if len(pattern) >= 2 && pattern[len(pattern)-1] == byte('%') && strings.Count(pattern, "%") == 1 {
+		return prefixMatch(pattern, record), nil
 	}
 	charCount := 0
 	currPos := 0
@@ -318,6 +349,13 @@ func likeConvert(pattern string, record string) (bool, error) {
 			charCount++
 			// if there have been more characters in the pattern than record, clearly
 			// there should be a return
+			if i != len(pattern)-1 {
+				if pattern[i+1] != byte('%') && pattern[i+1] != byte('_') {
+					if currPos != len(record)-1 && pattern[i+1] != record[currPos+1] {
+						return false, nil
+					}
+				}
+			}
 			if charCount > len(record) {
 				return false, nil
 			}
@@ -330,6 +368,9 @@ func likeConvert(pattern string, record string) (bool, error) {
 		}
 		if pattern[i] == byte('%') || pattern[i] == byte('*') {
 			// if there is a wildcard then want to return true if its last and flag it.
+			if currPos == len(record) {
+				return false, nil
+			}
 			if i+1 == len(pattern) {
 				return true, nil
 			}
@@ -353,6 +394,9 @@ func likeConvert(pattern string, record string) (bool, error) {
 		}
 	}
 	if charCount > len(record) {
+		return false, nil
+	}
+	if currPos < len(record) {
 		return false, nil
 	}
 	return true, nil
@@ -579,8 +623,25 @@ func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) 
 	return nil
 }
 
+// qualityCheck ensures the row has enough separators.
+func qualityCheck(row string, amountOfSep int, sep string) string {
+	for i := 0; i < amountOfSep; i++ {
+		row = row + sep
+	}
+	return row
+}
+
 // writeRow helps to write the row regardless of how many entries.
-func writeRow(myRow string, myEntry string, delimiter string) string {
+func writeRow(myRow string, myEntry string, delimiter string, numOfReqCols int) string {
+	if myEntry == "" && len(myRow) == 0 && numOfReqCols == 1 {
+		return myEntry
+	}
+	if myEntry == "" && len(myRow) == 0 {
+		return myEntry + delimiter
+	}
+	if len(myRow) == 1 && myRow[0] == ',' {
+		return myRow + myEntry
+	}
 	if len(myRow) == 0 {
 		return myEntry
 	}
@@ -638,14 +699,6 @@ func checkForDuplicates(columns []string, columnsMap map[string]int, hasDuplicat
 		}
 	}
 	return nil
-}
-
-// qualityCheck ensures the row has enough separators.
-func qualityCheck(row string, amountOfSep int, sep string) string {
-	for i := 0; i < amountOfSep; i++ {
-		row = row + sep
-	}
-	return row
 }
 
 // evaluateParserType is a function that takes a SQL value and returns it as an
