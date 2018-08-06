@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "27",
+	"version": "28",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"

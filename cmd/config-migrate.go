@@ -193,6 +193,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "27":
+		if err = migrateV27ToV28(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
