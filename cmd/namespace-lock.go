@@ -133,31 +133,31 @@ type nsLockMap struct {
 	// Indicates if namespace is part of a distributed setup.
 	isDistXL     bool
 	lockMap      map[nsParam]*nsLock
-	lockMapMutex sync.Mutex
+	lockMapMutex sync.RWMutex
 }
 
 // Lock the namespace resource.
 func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
 	var nsLk *nsLock
-	n.lockMapMutex.Lock()
 
+	n.lockMapMutex.Lock()
 	param := nsParam{volume, path}
 	nsLk, found := n.lockMap[param]
 	if !found {
-		nsLk = &nsLock{
+		n.lockMap[param] = &nsLock{
 			RWLockerSync: func() RWLockerSync {
 				if n.isDistXL {
 					return dsync.NewDRWMutex(pathJoin(volume, path), globalDsync)
 				}
 				return &lsync.LRWMutex{}
 			}(),
-			ref: 0,
+			ref: 1,
 		}
-		n.lockMap[param] = nsLk
+		nsLk = n.lockMap[param]
+	} else {
+		// Update ref count here to avoid multiple races.
+		nsLk.ref++
 	}
-	nsLk.ref++ // Update ref count here to avoid multiple races.
-
-	// Unlock map before Locking NS which might block.
 	n.lockMapMutex.Unlock()
 
 	// Locking here will block (until timeout).
@@ -168,44 +168,44 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	}
 
 	if !locked { // We failed to get the lock
+
+		// Decrement ref count since we failed to get the lock
 		n.lockMapMutex.Lock()
-		defer n.lockMapMutex.Unlock()
-
-		nsLk.ref-- // Decrement ref count since we failed to get the lock
-
+		nsLk.ref--
 		if nsLk.ref == 0 {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 		}
+		n.lockMapMutex.Unlock()
 	}
 	return
 }
 
 // Unlock the namespace resource.
 func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
-	// nsLk.Unlock() will not block, hence locking the map for the
-	// entire function is fine.
-	n.lockMapMutex.Lock()
-	defer n.lockMapMutex.Unlock()
-
 	param := nsParam{volume, path}
-	if nsLk, found := n.lockMap[param]; found {
-		if readLock {
-			nsLk.RUnlock()
-		} else {
-			nsLk.Unlock()
-		}
-		if nsLk.ref == 0 {
-			logger.LogIf(context.Background(), errors.New("Namespace reference count cannot be 0"))
-		}
-		if nsLk.ref != 0 {
-			nsLk.ref--
-		}
+	n.lockMapMutex.RLock()
+	nsLk, found := n.lockMap[param]
+	n.lockMapMutex.RUnlock()
+	if !found {
+		return
+	}
+	if readLock {
+		nsLk.RUnlock()
+	} else {
+		nsLk.Unlock()
+	}
+	n.lockMapMutex.Lock()
+	if nsLk.ref == 0 {
+		logger.LogIf(context.Background(), errors.New("Namespace reference count cannot be 0"))
+	} else {
+		nsLk.ref--
 		if nsLk.ref == 0 {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 		}
 	}
+	n.lockMapMutex.Unlock()
 }
 
 // Lock - locks the given resource for writes, using a previously
