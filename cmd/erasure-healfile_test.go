@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"reflect"
 	"testing"
 )
 
@@ -56,11 +55,9 @@ var erasureHealFileTests = []struct {
 	{dataBlocks: 7, disks: 14, offDisks: 6, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},  // 14
 	{dataBlocks: 8, disks: 16, offDisks: 4, badDisks: 5, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: true},   // 15
 	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false},   // 16
-	{dataBlocks: 2, disks: 4, offDisks: 0, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: 0, shouldFail: true},                         // 17
-	{dataBlocks: 12, disks: 16, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false}, // 18
-	{dataBlocks: 6, disks: 8, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 19
-	{dataBlocks: 7, disks: 10, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: 0, shouldFail: true},                        // 20
-	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte * 64, algorithm: SHA256, shouldFail: false},              // 21
+	{dataBlocks: 12, disks: 16, offDisks: 2, badDisks: 1, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false}, // 17
+	{dataBlocks: 6, disks: 8, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: BLAKE2b512, shouldFail: false},               // 18
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte * 64, algorithm: SHA256, shouldFail: false},              // 19
 }
 
 func TestErasureHealFile(t *testing.T) {
@@ -75,7 +72,8 @@ func TestErasureHealFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
 		}
-		storage, err := NewErasureStorage(context.Background(), setup.disks, test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
+		disks := setup.disks
+		storage, err := NewErasureStorage(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -85,36 +83,50 @@ func TestErasureHealFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
-		algorithm := test.algorithm
-		if !algorithm.Available() {
-			algorithm = DefaultBitrotAlgorithm
-		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
-		file, err := storage.CreateFile(context.Background(), bytes.NewReader(data), "testbucket", "testobject", buffer, algorithm, test.dataBlocks+1)
+		writers := make([]*bitrotWriter, len(disks))
+		for i, disk := range disks {
+			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", test.algorithm)
+		}
+		_, err = storage.CreateFile(context.Background(), bytes.NewReader(data), writers, buffer, storage.dataBlocks+1)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
+		readers := make([]*bitrotReader, len(disks))
+		for i, disk := range disks {
+			shardFilesize := getErasureShardFileSize(test.blocksize, test.size, storage.dataBlocks)
+			readers[i] = newBitrotReader(disk, "testbucket", "testobject", test.algorithm, shardFilesize, writers[i].Sum())
+		}
+
 		// setup stale disks for the test case
-		staleDisks := make([]StorageAPI, len(storage.disks))
-		copy(staleDisks, storage.disks)
-		for j := 0; j < len(storage.disks); j++ {
+		staleDisks := make([]StorageAPI, len(disks))
+		copy(staleDisks, disks)
+		for j := 0; j < len(staleDisks); j++ {
 			if j < test.offDisks {
-				storage.disks[j] = OfflineDisk
+				readers[j] = nil
 			} else {
 				staleDisks[j] = nil
 			}
 		}
 		for j := 0; j < test.badDisks; j++ {
-			storage.disks[test.offDisks+j] = badDisk{nil}
+			readers[test.offDisks+j].disk = badDisk{nil}
 		}
 		for j := 0; j < test.badStaleDisks; j++ {
 			staleDisks[j] = badDisk{nil}
 		}
 
+		staleWriters := make([]*bitrotWriter, len(staleDisks))
+		for i, disk := range staleDisks {
+			if disk == nil {
+				continue
+			}
+			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", test.algorithm)
+		}
+
 		// test case setup is complete - now call Healfile()
-		info, err := storage.HealFile(context.Background(), staleDisks, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Checksums)
+		err = storage.HealFile(context.Background(), readers, staleWriters, test.size)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}
@@ -122,19 +134,13 @@ func TestErasureHealFile(t *testing.T) {
 			t.Errorf("Test %d: should fail but it passed", i)
 		}
 		if err == nil {
-			if info.Size != test.size {
-				t.Errorf("Test %d: healed wrong number of bytes: got: #%d want: #%d", i, info.Size, test.size)
-			}
-			if info.Algorithm != test.algorithm {
-				t.Errorf("Test %d: healed with wrong algorithm: got: %v want: %v", i, info.Algorithm, test.algorithm)
-			}
 			// Verify that checksums of staleDisks
 			// match expected values
-			for i, disk := range staleDisks {
-				if disk == nil || info.Checksums[i] == nil {
+			for i := range staleWriters {
+				if staleWriters[i] == nil {
 					continue
 				}
-				if !reflect.DeepEqual(info.Checksums[i], file.Checksums[i]) {
+				if !bytes.Equal(staleWriters[i].Sum(), writers[i].Sum()) {
 					t.Errorf("Test %d: heal returned different bitrot checksums", i)
 				}
 			}

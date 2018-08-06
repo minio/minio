@@ -447,28 +447,35 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	// Heal each part. erasureHealFile() will write the healed
 	// part to .minio/tmp/uuid/ which needs to be renamed later to
 	// the final location.
-	storage, err := NewErasureStorage(ctx, latestDisks, latestMeta.Erasure.DataBlocks,
+	storage, err := NewErasureStorage(ctx, latestMeta.Erasure.DataBlocks,
 		latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object)
 	}
-	checksums := make([][]byte, len(latestDisks))
+
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
 		var algorithm BitrotAlgorithm
-		for i, disk := range storage.disks {
-			if disk != OfflineDisk {
-				info := partsMetadata[i].Erasure.GetChecksumInfo(partName)
-				algorithm = info.Algorithm
-				checksums[i] = info.Hash
+		bitrotReaders := make([]*bitrotReader, len(latestDisks))
+		for i, disk := range latestDisks {
+			if disk == OfflineDisk {
+				continue
 			}
+			info := partsMetadata[i].Erasure.GetChecksumInfo(partName)
+			algorithm = info.Algorithm
+			endOffset := getErasureShardFileEndOffset(0, partSize, partSize, erasure.BlockSize, storage.dataBlocks)
+			bitrotReaders[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), algorithm, endOffset, info.Hash)
 		}
-		// Heal the part file.
-		file, hErr := storage.HealFile(ctx, outDatedDisks, bucket, pathJoin(object, partName),
-			erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize,
-			algorithm, checksums)
+		bitrotWriters := make([]*bitrotWriter, len(outDatedDisks))
+		for i, disk := range outDatedDisks {
+			if disk == OfflineDisk {
+				continue
+			}
+			bitrotWriters[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), algorithm)
+		}
+		hErr := storage.HealFile(ctx, bitrotReaders, bitrotWriters, partSize)
 		if hErr != nil {
 			return result, toObjectErr(hErr, bucket, object)
 		}
@@ -480,14 +487,14 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			}
 			// A non-nil stale disk which did not receive
 			// a healed part checksum had a write error.
-			if file.Checksums[i] == nil {
+			if bitrotWriters[i] == nil {
 				outDatedDisks[i] = nil
 				disksToHealCount--
 				continue
 			}
 			// append part checksums
 			checksumInfos[i] = append(checksumInfos[i],
-				ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
+				ChecksumInfo{partName, algorithm, bitrotWriters[i].Sum()})
 		}
 
 		// If all disks are having errors, we give up.

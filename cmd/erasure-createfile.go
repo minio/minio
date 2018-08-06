@@ -18,85 +18,92 @@ package cmd
 
 import (
 	"context"
-	"hash"
 	"io"
+
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 )
 
-// CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
-// the file at the given volume and path. It will read from src until an io.EOF occurs. The given algorithm will
-// be used to protect the erasure encoded file.
-func (s *ErasureStorage) CreateFile(ctx context.Context, src io.Reader, volume, path string, buffer []byte, algorithm BitrotAlgorithm, writeQuorum int) (f ErasureFileInfo, err error) {
-	if !algorithm.Available() {
-		logger.LogIf(ctx, errBitrotHashAlgoInvalid)
-		return f, errBitrotHashAlgoInvalid
-	}
-	f.Checksums = make([][]byte, len(s.disks))
-	hashers := make([]hash.Hash, len(s.disks))
-	for i := range hashers {
-		hashers[i] = algorithm.New()
-	}
-	errChans, errs := make([]chan error, len(s.disks)), make([]error, len(s.disks))
-	for i := range errChans {
-		errChans[i] = make(chan error, 1) // create buffered channel to let finished go-routines die early
-	}
-
-	var blocks [][]byte
-	var n = len(buffer)
-	for n == len(buffer) {
-		n, err = io.ReadFull(src, buffer)
-		if n == 0 && err == io.EOF {
-			if f.Size != 0 { // don't write empty block if we have written to the disks
-				break
-			}
-			blocks = make([][]byte, len(s.disks)) // write empty block
-		} else if err == nil || (n > 0 && err == io.ErrUnexpectedEOF) {
-			blocks, err = s.ErasureEncode(ctx, buffer[:n])
-			if err != nil {
-				return f, err
-			}
-		} else {
-			logger.LogIf(ctx, err)
-			return f, err
-		}
-
-		for i := range errChans { // span workers
-			go erasureAppendFile(ctx, s.disks[i], volume, path, hashers[i], blocks[i], errChans[i])
-		}
-		for i := range errChans { // wait until all workers are finished
-			errs[i] = <-errChans[i]
-		}
-		if err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum); err != nil {
-			return f, err
-		}
-		s.disks = evalDisks(s.disks, errs)
-		f.Size += int64(n)
-	}
-
-	f.Algorithm = algorithm
-	for i, disk := range s.disks {
-		if disk == OfflineDisk {
-			continue
-		}
-		f.Checksums[i] = hashers[i].Sum(nil)
-	}
-	return f, nil
+// Writes in parallel to bitrotWriters
+type parallelWriter struct {
+	writers     []*bitrotWriter
+	writeQuorum int
+	errs        []error
 }
 
-// erasureAppendFile appends the content of buf to the file on the given disk and updates computes
-// the hash of the written data. It sends the write error (or nil) over the error channel.
-func erasureAppendFile(ctx context.Context, disk StorageAPI, volume, path string, hash hash.Hash, buf []byte, errChan chan<- error) {
-	if disk == OfflineDisk {
-		logger.LogIf(ctx, errDiskNotFound)
-		errChan <- errDiskNotFound
-		return
+// Append appends data to bitrotWriters in parallel.
+func (p *parallelWriter) Append(ctx context.Context, blocks [][]byte) error {
+	var wg sync.WaitGroup
+
+	for i := range p.writers {
+		if p.writers[i] == nil {
+			p.errs[i] = errDiskNotFound
+			continue
+		}
+
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p.errs[i] = p.writers[i].Append(blocks[i])
+			if p.errs[i] != nil {
+				p.writers[i] = nil
+			}
+		}(i)
 	}
-	err := disk.AppendFile(volume, path, buf)
-	if err != nil {
-		errChan <- err
-		return
+	wg.Wait()
+
+	// If nilCount >= p.writeQuorum, we return nil. This is because HealFile() uses
+	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
+	// i.e if we do no return here in such a case, reduceWriteQuorumErrs() would
+	// return a quorum error to HealFile().
+	nilCount := 0
+	for _, err := range p.errs {
+		if err == nil {
+			nilCount++
+		}
 	}
-	hash.Write(buf)
-	errChan <- err
+	if nilCount >= p.writeQuorum {
+		return nil
+	}
+	return reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
+}
+
+// CreateFile reads from the reader, erasure-encodes the data and writes to the writers.
+func (s *ErasureStorage) CreateFile(ctx context.Context, src io.Reader, writers []*bitrotWriter, buf []byte, quorum int) (total int64, err error) {
+	writer := &parallelWriter{
+		writers:     writers,
+		writeQuorum: quorum,
+		errs:        make([]error, len(writers)),
+	}
+
+	for {
+		var blocks [][]byte
+		n, err := io.ReadFull(src, buf)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			logger.LogIf(ctx, err)
+			return 0, err
+		}
+		eof := err == io.EOF || err == io.ErrUnexpectedEOF
+		if n == 0 && total != 0 {
+			// Reached EOF, nothing more to be done.
+			break
+		}
+		// We take care of the situation where if n == 0 and total == 0 by creating empty data and parity files.
+		blocks, err = s.ErasureEncode(ctx, buf[:n])
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return 0, err
+		}
+
+		if err = writer.Append(ctx, blocks); err != nil {
+			logger.LogIf(ctx, err)
+			return 0, err
+		}
+		total += int64(n)
+		if eof {
+			break
+		}
+	}
+	return total, nil
 }

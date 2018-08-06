@@ -23,214 +23,166 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-type errIdx struct {
-	idx int
-	err error
+// Reads in parallel from bitrotReaders.
+type parallelReader struct {
+	readers       []*bitrotReader
+	dataBlocks    int
+	offset        int64
+	shardSize     int64
+	shardFileSize int64
 }
 
-func (s ErasureStorage) readConcurrent(ctx context.Context, volume, path string, offset, length int64,
-	verifiers []*BitrotVerifier) (buffers [][]byte, needsReconstruction bool,
-	err error) {
+// newParallelReader returns parallelReader.
+func newParallelReader(readers []*bitrotReader, dataBlocks int, offset int64, fileSize int64, blocksize int64) *parallelReader {
+	shardSize := ceilFrac(blocksize, int64(dataBlocks))
+	shardFileSize := getErasureShardFileSize(blocksize, fileSize, dataBlocks)
+	return &parallelReader{
+		readers,
+		dataBlocks,
+		(offset / blocksize) * shardSize,
+		shardSize,
+		shardFileSize,
+	}
+}
 
-	errChan := make(chan errIdx)
-	stageBuffers := make([][]byte, len(s.disks))
-	buffers = make([][]byte, len(s.disks))
-
-	readDisk := func(i int) {
-		stageBuffers[i] = make([]byte, length)
-		disk := s.disks[i]
-		if disk == OfflineDisk {
-			logger.LogIf(ctx, errDiskNotFound)
-			errChan <- errIdx{i, errDiskNotFound}
-			return
+// Returns if buf can be erasure decoded.
+func (p *parallelReader) canDecode(buf [][]byte) bool {
+	bufCount := 0
+	for _, b := range buf {
+		if b != nil {
+			bufCount++
 		}
-		_, rerr := disk.ReadFile(volume, path, offset, stageBuffers[i], verifiers[i])
-		errChan <- errIdx{i, rerr}
+	}
+	return bufCount >= p.dataBlocks
+}
+
+// Read reads from bitrotReaders in parallel. Returns p.dataBlocks number of bufs.
+func (p *parallelReader) Read() ([][]byte, error) {
+	type errIdx struct {
+		idx int
+		buf []byte
+		err error
 	}
 
-	var finishedCount, successCount, launchIndex int
+	errCh := make(chan errIdx)
+	currReaderIndex := 0
+	newBuf := make([][]byte, len(p.readers))
 
-	for ; launchIndex < s.dataBlocks; launchIndex++ {
-		go readDisk(launchIndex)
+	if p.offset+p.shardSize > p.shardFileSize {
+		p.shardSize = p.shardFileSize - p.offset
 	}
-	for finishedCount < launchIndex {
-		select {
-		case errVal := <-errChan:
-			finishedCount++
-			if errVal.err != nil {
-				// TODO: meaningfully log the disk read error
 
-				// A disk failed to return data, so we
-				// request an additional disk if possible
-				if launchIndex < s.dataBlocks+s.parityBlocks {
-					needsReconstruction = true
-					// requiredBlocks++
-					go readDisk(launchIndex)
-					launchIndex++
-				}
-			} else {
-				successCount++
-				buffers[errVal.idx] = stageBuffers[errVal.idx]
-				stageBuffers[errVal.idx] = nil
+	read := func(currReaderIndex int) {
+		b, err := p.readers[currReaderIndex].ReadChunk(p.offset, p.shardSize)
+		errCh <- errIdx{currReaderIndex, b, err}
+	}
+
+	readerCount := 0
+	for _, r := range p.readers {
+		if r != nil {
+			readerCount++
+		}
+	}
+	if readerCount < p.dataBlocks {
+		return nil, errXLReadQuorum
+	}
+
+	readerCount = 0
+	for i, r := range p.readers {
+		if r == nil {
+			continue
+		}
+		go read(i)
+		readerCount++
+		if readerCount == p.dataBlocks {
+			currReaderIndex = i + 1
+			break
+		}
+	}
+
+	for errVal := range errCh {
+		if errVal.err == nil {
+			newBuf[errVal.idx] = errVal.buf
+			if p.canDecode(newBuf) {
+				p.offset += int64(p.shardSize)
+				return newBuf, nil
 			}
+			continue
 		}
+		p.readers[errVal.idx] = nil
+		for currReaderIndex < len(p.readers) {
+			if p.readers[currReaderIndex] != nil {
+				break
+			}
+			currReaderIndex++
+		}
+
+		if currReaderIndex == len(p.readers) {
+			break
+		}
+		go read(currReaderIndex)
+		currReaderIndex++
 	}
-	if successCount != s.dataBlocks {
-		// Not enough disks returns data.
-		err = errXLReadQuorum
-		logger.LogIf(ctx, err)
-	}
-	return
+
+	return nil, errXLReadQuorum
 }
 
-// ReadFile reads as much data as requested from the file under the
-// given volume and path and writes the data to the provided writer.
-// The algorithm and the keys/checksums are used to verify the
-// integrity of the given file. ReadFile will read data from the given
-// offset up to the given length. If parts of the file are corrupted
-// ReadFile tries to reconstruct the data.
-func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, volume, path string, offset,
-	length, totalLength int64, checksums [][]byte, algorithm BitrotAlgorithm,
-	blocksize int64) (f ErasureFileInfo, err error) {
-
+// ReadFile reads from readers, reconstructs data if needed and writes the data to the writer.
+func (s ErasureStorage) ReadFile(ctx context.Context, writer io.Writer, readers []*bitrotReader, offset, length, totalLength int64) error {
 	if offset < 0 || length < 0 {
-		logger.LogIf(ctx, errUnexpected)
-		return f, errUnexpected
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
 	if offset+length > totalLength {
-		logger.LogIf(ctx, errUnexpected)
-		return f, errUnexpected
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
-	if !algorithm.Available() {
-		logger.LogIf(ctx, errBitrotHashAlgoInvalid)
-		return f, errBitrotHashAlgoInvalid
-	}
-
-	f.Checksums = make([][]byte, len(s.disks))
-	verifiers := make([]*BitrotVerifier, len(s.disks))
-	for i, disk := range s.disks {
-		if disk == OfflineDisk {
-			continue
-		}
-		verifiers[i] = NewBitrotVerifier(algorithm, checksums[i])
-	}
-
-	chunksize := ceilFrac(blocksize, int64(s.dataBlocks))
-
-	// We read all whole-blocks of erasure coded data containing
-	// the requested data range.
-	//
-	// The start index of the erasure coded block containing the
-	// `offset` byte of data is:
-	partDataStartIndex := (offset / blocksize) * chunksize
-	// The start index of the erasure coded block containing the
-	// (last) byte of data at the index `offset + length - 1` is:
-	blockStartIndex := ((offset + length - 1) / blocksize) * chunksize
-	// However, we need the end index of the e.c. block containing
-	// the last byte - we need to check if that block is the last
-	// block in the part (in that case, it may be have a different
-	// chunk size)
-	isLastBlock := (totalLength-1)/blocksize == (offset+length-1)/blocksize
-	var partDataEndIndex int64
-	if isLastBlock {
-		lastBlockChunkSize := chunksize
-		if totalLength%blocksize != 0 {
-			lastBlockChunkSize = ceilFrac(totalLength%blocksize, int64(s.dataBlocks))
-		}
-		partDataEndIndex = blockStartIndex + lastBlockChunkSize - 1
-	} else {
-		partDataEndIndex = blockStartIndex + chunksize - 1
-	}
-
-	// Thus, the length of data to be read from the part file(s) is:
-	partDataLength := partDataEndIndex - partDataStartIndex + 1
-	// The calculation above does not apply when length == 0:
 	if length == 0 {
-		partDataLength = 0
+		return nil
 	}
 
-	var buffers [][]byte
-	var needsReconstruction bool
-	buffers, needsReconstruction, err = s.readConcurrent(ctx, volume, path,
-		partDataStartIndex, partDataLength, verifiers)
-	if err != nil {
-		// Could not read enough disks.
-		return
-	}
+	reader := newParallelReader(readers, s.dataBlocks, offset, totalLength, s.blockSize)
 
-	numChunks := ceilFrac(partDataLength, chunksize)
-	blocks := make([][]byte, len(s.disks))
+	startBlock := offset / s.blockSize
+	endBlock := (offset + length) / s.blockSize
 
-	if needsReconstruction && numChunks > 1 {
-		// Allocate once for all the equal length blocks. The
-		// last block may have a different length - allocation
-		// for this happens inside the for loop below.
-		for i := range blocks {
-			if len(buffers[i]) == 0 {
-				blocks[i] = make([]byte, chunksize)
-			}
+	var bytesWritten int64
+	for block := startBlock; block <= endBlock; block++ {
+		var blockOffset, blockLength int64
+		switch {
+		case startBlock == endBlock:
+			blockOffset = offset % s.blockSize
+			blockLength = length
+		case block == startBlock:
+			blockOffset = offset % s.blockSize
+			blockLength = s.blockSize - blockOffset
+		case block == endBlock:
+			blockOffset = 0
+			blockLength = (offset + length) % s.blockSize
+		default:
+			blockOffset = 0
+			blockLength = s.blockSize
 		}
-	}
-
-	var buffOffset int64
-	for chunkNumber := int64(0); chunkNumber < numChunks; chunkNumber++ {
-		if chunkNumber == numChunks-1 && partDataLength%chunksize != 0 {
-			chunksize = partDataLength % chunksize
-			// We allocate again as the last chunk has a
-			// different size.
-			for i := range blocks {
-				if len(buffers[i]) == 0 {
-					blocks[i] = make([]byte, chunksize)
-				}
-			}
+		if blockLength == 0 {
+			break
 		}
-
-		for i := range blocks {
-			if len(buffers[i]) == 0 {
-				blocks[i] = blocks[i][0:0]
-			}
-		}
-
-		for i := range blocks {
-			if len(buffers[i]) != 0 {
-				blocks[i] = buffers[i][buffOffset : buffOffset+chunksize]
-			}
-		}
-		buffOffset += chunksize
-
-		if needsReconstruction {
-			if err = s.ErasureDecodeDataBlocks(blocks); err != nil {
-				logger.LogIf(ctx, err)
-				return f, err
-			}
-		}
-
-		var writeStart int64
-		if chunkNumber == 0 {
-			writeStart = offset % blocksize
-		}
-
-		writeLength := blocksize - writeStart
-		if chunkNumber == numChunks-1 {
-			lastBlockLength := (offset + length) % blocksize
-			if lastBlockLength != 0 {
-				writeLength = lastBlockLength - writeStart
-			}
-		}
-		n, err := writeDataBlocks(ctx, writer, blocks, s.dataBlocks, writeStart, writeLength)
+		bufs, err := reader.Read()
 		if err != nil {
-			return f, err
+			return err
 		}
-
-		f.Size += n
-	}
-
-	f.Algorithm = algorithm
-	for i, disk := range s.disks {
-		if disk == OfflineDisk || buffers[i] == nil {
-			continue
+		if err = s.ErasureDecodeDataBlocks(bufs); err != nil {
+			logger.LogIf(ctx, err)
+			return err
 		}
-		f.Checksums[i] = verifiers[i].Sum(nil)
+		n, err := writeDataBlocks(ctx, writer, bufs, s.dataBlocks, blockOffset, blockLength)
+		if err != nil {
+			return err
+		}
+		bytesWritten += n
 	}
-	return f, nil
+	if bytesWritten != length {
+		logger.LogIf(ctx, errLessData)
+		return errLessData
+	}
+	return nil
 }

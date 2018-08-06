@@ -233,7 +233,6 @@ func (client *StorageRPCClient) ReadFile(volume string, path string, offset int6
 	if verifier != nil {
 		args.Algo = verifier.algorithm
 		args.ExpectedHash = verifier.sum
-		args.Verified = verifier.IsVerified()
 	}
 	var reply []byte
 
