@@ -1,7 +1,7 @@
-// +build linux darwin freebsd netbsd openbsd
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,9 +90,9 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 				return nil, err
 			}
 			if fi.IsDir() {
-				entries = append(entries, fi.Name()+slashSeparator)
+				entries = append(entries, name+slashSeparator)
 			} else if fi.Mode().IsRegular() {
-				entries = append(entries, fi.Name())
+				entries = append(entries, name)
 			}
 		default:
 			// Skip entries which are not file or directory.
