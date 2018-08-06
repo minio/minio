@@ -64,7 +64,7 @@ func fsRemoveAll(ctx context.Context, dirPath string) (err error) {
 		return err
 	}
 
-	if err = os.RemoveAll(dirPath); err != nil {
+	if err = removeAll(dirPath); err != nil {
 		if os.IsPermission(err) {
 			logger.LogIf(ctx, errVolumeAccessDenied)
 			return errVolumeAccessDenied
