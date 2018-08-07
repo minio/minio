@@ -2375,7 +2375,7 @@ func migrateV27ToV28() error {
 		return nil
 	}
 
-	// Copy over fields from V26 into V27 config struct
+	// Copy over fields from V27 into V28 config struct
 	srvConfig := &serverConfigV28{
 		Notify: notifier{},
 	}
