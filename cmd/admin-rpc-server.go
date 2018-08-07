@@ -108,5 +108,5 @@ func registerAdminRPCRouter(router *mux.Router) {
 	rpcServer, err := NewAdminRPCServer()
 	logger.FatalIf(err, "Unable to initialize Lock RPC Server", context.Background())
 	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-	subrouter.Path(adminServiceSubPath).Handler(rpcServer)
+	subrouter.Path(adminServiceSubPath).HandlerFunc(httpTraceHdrs(rpcServer.ServeHTTP))
 }
