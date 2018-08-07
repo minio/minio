@@ -192,5 +192,5 @@ func registerDistNSLockRouter(router *mux.Router) {
 	go startLockMaintenance(globalLockServer)
 
 	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-	subrouter.Path(lockServiceSubPath).Handler(rpcServer)
+	subrouter.Path(lockServiceSubPath).HandlerFunc(httpTraceHdrs(rpcServer.ServeHTTP))
 }

@@ -226,7 +226,7 @@ func registerStorageRPCRouters(router *mux.Router, endpoints EndpointList) {
 				logger.Fatal(uiErrUnableToWriteInBackend(err), "Unable to configure one of server's RPC services")
 			}
 			subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-			subrouter.Path(path.Join(storageServiceSubPath, endpoint.Path)).Handler(rpcServer)
+			subrouter.Path(path.Join(storageServiceSubPath, endpoint.Path)).HandlerFunc(httpTraceHdrs(rpcServer.ServeHTTP))
 		}
 	}
 }

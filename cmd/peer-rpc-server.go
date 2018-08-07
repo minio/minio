@@ -203,5 +203,5 @@ func registerPeerRPCRouter(router *mux.Router) {
 	rpcServer, err := NewPeerRPCServer()
 	logger.FatalIf(err, "Unable to initialize peer RPC Server", context.Background())
 	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
-	subrouter.Path(peerServiceSubPath).Handler(rpcServer)
+	subrouter.Path(peerServiceSubPath).HandlerFunc(httpTraceHdrs(rpcServer.ServeHTTP))
 }
