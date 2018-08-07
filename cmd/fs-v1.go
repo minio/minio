@@ -656,9 +656,11 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	// parallel Put() operations.
 
 	rlk, err := fs.rwPool.Open(fsMetaPath)
+	var n int64
 	if err == nil {
 		// Read from fs metadata only if it exists.
-		_, rerr := fsMeta.ReadFrom(ctx, rlk.LockedFile)
+		var rerr error
+		n, rerr = fsMeta.ReadFrom(ctx, rlk.LockedFile)
 		fs.rwPool.Close(fsMetaPath)
 		if rerr != nil {
 			return oi, rerr
@@ -666,7 +668,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	}
 
 	// Return a default etag and content-type based on the object's extension.
-	if err == errFileNotFound {
+	if (err == errFileNotFound) || (n == 0) {
 		fsMeta = fs.defaultFsJSON(object)
 	}
 
