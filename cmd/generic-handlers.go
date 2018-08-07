@@ -27,7 +27,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 
-	etcd "github.com/coreos/etcd/client"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -653,7 +652,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
-		if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+		if err == dns.ErrNoEntriesFound {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 		} else {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -688,10 +687,10 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 // rate.Limiter token bucket configured with maxOpenFileLimit and
 // burst set to 1. The request will idle for up to 1*time.Second.
 // If the limiter detects the deadline will be exceeded, the request is
-// cancelled immediately.
+// canceled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	logger.CriticalIf(context.Background(), err)
+	logger.FatalIf(err, "Unable to get maximum open file limit", context.Background())
 	// Burst value is set to 1 to allow only maxOpenFileLimit
 	// requests to happen at once.
 	l := rate.NewLimiter(rate.Limit(maxLimit), 1)
@@ -724,6 +723,26 @@ func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.handler.ServeHTTP(w, r)
 }
 
+// requestIDHeaderHandler sets x-amz-request-id header.
+// Previously, this value was set right before a response
+// was sent to the client.So, logger and Error response XML
+// were not using this value.
+// This is set here so that this header can be logged as
+// part of the log entry and Error response XML.
+type requestIDHeaderHandler struct {
+	handler http.Handler
+}
+
+func addrequestIDHeader(h http.Handler) http.Handler {
+	return requestIDHeaderHandler{handler: h}
+}
+
+func (s requestIDHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set unique request ID for each response.
+	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
+	s.handler.ServeHTTP(w, r)
+}
+
 type securityHeaderHandler struct {
 	handler http.Handler
 }
@@ -737,4 +756,21 @@ func (s securityHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	header.Set("X-XSS-Protection", "1; mode=block")                  // Prevents against XSS attacks
 	header.Set("Content-Security-Policy", "block-all-mixed-content") // prevent mixed (HTTP / HTTPS content)
 	s.handler.ServeHTTP(w, r)
+}
+
+// criticalErrorHandler handles critical server failures caused by
+// `panic(logger.ErrCritical)` as done by `logger.CriticalIf`.
+//
+// It should be always the first / highest HTTP handler.
+type criticalErrorHandler struct{ handler http.Handler }
+
+func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if err := recover(); err == logger.ErrCritical { // handle
+			writeErrorResponse(w, ErrInternalError, r.URL)
+		} else if err != nil {
+			panic(err) // forward other panic calls
+		}
+	}()
+	h.handler.ServeHTTP(w, r)
 }

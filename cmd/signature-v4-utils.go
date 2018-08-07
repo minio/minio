@@ -39,6 +39,9 @@ func skipContentSha256Cksum(r *http.Request) bool {
 
 	if isRequestPresignedSignatureV4(r) {
 		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		if !ok {
+			v, ok = r.Header["X-Amz-Content-Sha256"]
+		}
 	} else {
 		v, ok = r.Header["X-Amz-Content-Sha256"]
 	}
@@ -62,6 +65,9 @@ func getContentSha256Cksum(r *http.Request) string {
 		// will default to 'UNSIGNED-PAYLOAD'.
 		defaultSha256Cksum = unsignedPayload
 		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		if !ok {
+			v, ok = r.Header["X-Amz-Content-Sha256"]
+		}
 	} else {
 		// X-Amz-Content-Sha256, if not set in signed requests, checksum
 		// will default to sha256([]byte("")).

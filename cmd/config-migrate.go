@@ -21,9 +21,9 @@ import (
 	"os"
 	"path/filepath"
 
-	etcd "github.com/coreos/etcd/client"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
@@ -183,6 +183,16 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "25":
+		if err = migrateV25ToV26(); err != nil {
+			return err
+		}
+		fallthrough
+	case "26":
+		if err = migrateV26ToV27(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -196,7 +206,7 @@ func purgeV1() error {
 
 	cv1 := &configV1{}
 	_, err := Load(configFile, cv1)
-	if os.IsNotExist(err) || etcd.IsKeyNotFound(err) {
+	if os.IsNotExist(err) || err == dns.ErrNoEntriesFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config version ‘1’. %v", err)
@@ -2191,5 +2201,157 @@ func migrateV24ToV25() error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv24.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV25ToV26() error {
+	configFile := getConfigFile()
+
+	cv25 := &serverConfigV25{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, cv25)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘25’. %v", err)
+	}
+	if cv25.Version != "25" {
+		return nil
+	}
+
+	// Copy over fields from V25 into V26 config struct
+	srvConfig := &serverConfigV26{
+		Notify: notifier{},
+	}
+	srvConfig.Version = "26"
+	srvConfig.Credential = cv25.Credential
+	srvConfig.Region = cv25.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	if len(cv25.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]target.AMQPArgs)
+		srvConfig.Notify.AMQP["1"] = target.AMQPArgs{}
+	} else {
+		srvConfig.Notify.AMQP = cv25.Notify.AMQP
+	}
+	if len(cv25.Notify.Elasticsearch) == 0 {
+		srvConfig.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
+		srvConfig.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Elasticsearch = cv25.Notify.Elasticsearch
+	}
+	if len(cv25.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]target.RedisArgs)
+		srvConfig.Notify.Redis["1"] = target.RedisArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv25.Notify.Redis
+	}
+	if len(cv25.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
+		srvConfig.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv25.Notify.PostgreSQL
+	}
+	if len(cv25.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]target.KafkaArgs)
+		srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
+	} else {
+		srvConfig.Notify.Kafka = cv25.Notify.Kafka
+	}
+	if len(cv25.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]target.NATSArgs)
+		srvConfig.Notify.NATS["1"] = target.NATSArgs{}
+	} else {
+		srvConfig.Notify.NATS = cv25.Notify.NATS
+	}
+	if len(cv25.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]target.WebhookArgs)
+		srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
+	} else {
+		srvConfig.Notify.Webhook = cv25.Notify.Webhook
+	}
+	if len(cv25.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]target.MySQLArgs)
+		srvConfig.Notify.MySQL["1"] = target.MySQLArgs{
+			Format: event.NamespaceFormat,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv25.Notify.MySQL
+	}
+
+	if len(cv25.Notify.MQTT) == 0 {
+		srvConfig.Notify.MQTT = make(map[string]target.MQTTArgs)
+		srvConfig.Notify.MQTT["1"] = target.MQTTArgs{}
+	} else {
+		srvConfig.Notify.MQTT = cv25.Notify.MQTT
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv25.Browser
+
+	// Load worm config from existing config in the file.
+	srvConfig.Worm = cv25.Worm
+
+	// Load domain config from existing config in the file.
+	srvConfig.Domain = cv25.Domain
+
+	// Load storage class config from existing storage class config in the file.
+	srvConfig.StorageClass.RRS = cv25.StorageClass.RRS
+	srvConfig.StorageClass.Standard = cv25.StorageClass.Standard
+
+	// Load cache config from existing cache config in the file.
+	srvConfig.Cache.Drives = cv25.Cache.Drives
+	srvConfig.Cache.Exclude = cv25.Cache.Exclude
+	srvConfig.Cache.Expiry = cv25.Cache.Expiry
+
+	// Add predefined value to new server config.
+	srvConfig.Cache.MaxUse = globalCacheMaxUse
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv25.Version, srvConfig.Version, err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, cv25.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV26ToV27() error {
+	configFile := getConfigFile()
+
+	// config V27 is backward compatible with V26, load the old
+	// config file in serverConfigV27 struct and put some examples
+	// in the new `logger` field
+	srvConfig := &serverConfigV27{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+
+	if srvConfig.Version != "26" {
+		return nil
+	}
+
+	srvConfig.Version = "27"
+	// Enable console logging by default to avoid breaking users
+	// current deployments
+	srvConfig.Logger.Console.Enabled = true
+	srvConfig.Logger.HTTP = make(map[string]loggerHTTP)
+	srvConfig.Logger.HTTP["1"] = loggerHTTP{}
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "26", "27")
 	return nil
 }

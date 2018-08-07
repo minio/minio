@@ -16,8 +16,8 @@
 
 ## 前提条件
 
-* 从[这里](http://docs.minio.io/docs/zh_CN/minio-quickstart-guide)下载并安装Minio Server。
-* 从[这里](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)下载并安装Minio Client。
+* 从[这里](https://docs.minio.io/cn/minio-quickstart-guide)下载并安装Minio Server。
+* 从[这里](https://docs.minio.io/cn/minio-client-quickstart-guide)下载并安装Minio Client。
 
 <a name="AMQP"></a>
 ## 使用AMQP发布Minio事件
@@ -960,4 +960,4 @@ mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
+*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/cn/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。

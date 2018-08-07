@@ -22,8 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/coreos/etcd/client"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -40,8 +41,8 @@ type APIErrorResponse struct {
 	XMLName    xml.Name `xml:"Error" json:"-"`
 	Code       string
 	Message    string
-	Key        string
-	BucketName string
+	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
+	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
@@ -129,6 +130,9 @@ const (
 	ErrInvalidPrefixMarker
 	// Add new error codes here.
 
+	// SSE-S3 related API errors
+	ErrInvalidEncryptionMethod
+
 	// Server-Side-Encryption (with Customer provided key) related API errors.
 	ErrInsecureSSECustomerRequest
 	ErrSSEMultipartEncrypted
@@ -169,7 +173,6 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
-	ErrPartsSizeUnequal
 	ErrInvalidRequest
 	// Minio storage class error codes
 	ErrInvalidStorageClass
@@ -193,6 +196,7 @@ const (
 	ErrHealMissingBucket
 	ErrHealAlreadyRunning
 	ErrHealOverlappingPaths
+	ErrIncorrectContinuationToken
 )
 
 // error code to APIError structure, these fields carry respective
@@ -629,6 +633,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidEncryptionMethod: {
+		Code:           "InvalidRequest",
+		Description:    "The encryption method specified is not supported",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInsecureSSECustomerRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Requests specifying Server Side Encryption with Customer provided keys must be made over a secure connection.",
@@ -691,7 +700,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
-		HTTPStatusCode: http.StatusInternalServerError,
+		HTTPStatusCode: http.StatusInsufficientStorage,
 	},
 	ErrRequestBodyParse: {
 		Code:           "XMinioRequestBodyParse",
@@ -784,11 +793,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers are not supported.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrPartsSizeUnequal: {
-		Code:           "XMinioPartsSizeUnequal",
-		Description:    "All parts except the last part should be of the same size.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrObjectTampered: {
 		Code:           "XMinioObjectTampered",
 		Description:    errObjectTampered.Error(),
@@ -842,7 +846,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Object storage backend is unreachable",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
-
+	ErrIncorrectContinuationToken: {
+		Code:           "InvalidArgument",
+		Description:    "The continuation token provided is incorrect",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -867,17 +875,19 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
 	// SSE errors
+	case crypto.ErrInvalidEncryptionMethod:
+		apiErr = ErrInvalidEncryptionMethod
 	case errInsecureSSERequest:
 		apiErr = ErrInsecureSSECustomerRequest
-	case errInvalidSSEAlgorithm:
+	case errInvalidSSEAlgorithm, crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case errInvalidSSEKey:
+	case errInvalidSSEKey, crypto.ErrInvalidCustomerKey:
 		apiErr = ErrInvalidSSECustomerKey
-	case errMissingSSEKey:
+	case errMissingSSEKey, crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
-	case errMissingSSEKeyMD5:
+	case errMissingSSEKeyMD5, crypto.ErrMissingCustomerKeyMD5:
 		apiErr = ErrMissingSSECustomerKeyMD5
-	case errSSEKeyMD5Mismatch:
+	case errSSEKeyMD5Mismatch, crypto.ErrCustomerKeyMD5Mismatch:
 		apiErr = ErrSSECustomerKeyMD5Mismatch
 	case errObjectTampered:
 		apiErr = ErrObjectTampered
@@ -898,10 +908,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 	// etcd specific errors, a key is always a bucket for us return
 	// ErrNoSuchBucket in such a case.
-	if e, ok := err.(*client.Error); ok {
-		if e.Code == client.ErrorCodeKeyNotFound {
-			return ErrNoSuchBucket
-		}
+	if err == dns.ErrNoEntriesFound {
+		return ErrNoSuchBucket
 	}
 
 	switch err.(type) {
@@ -967,8 +975,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case UnsupportedMetadata:
 		apiErr = ErrUnsupportedMetadata
-	case PartsSizeUnequal:
-		apiErr = ErrPartsSizeUnequal
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case *event.ErrInvalidEventName:
@@ -995,6 +1001,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedNotification
 	case BackendDown:
 		apiErr = ErrBackendDown
+	case crypto.Error:
+		apiErr = ErrObjectTampered
 	default:
 		apiErr = ErrInternalError
 	}
@@ -1009,12 +1017,12 @@ func getAPIError(code APIErrorCode) APIError {
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
+func getAPIErrorResponse(err APIError, resource, requestid string) APIErrorResponse {
 	return APIErrorResponse{
 		Code:      err.Code,
 		Message:   err.Description,
 		Resource:  resource,
-		RequestID: "3L137",
+		RequestID: requestid,
 		HostID:    "3L137",
 	}
 }

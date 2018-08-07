@@ -58,6 +58,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -86,6 +88,42 @@ type MySQLArgs struct {
 	User     string   `json:"user"`
 	Password string   `json:"password"`
 	Database string   `json:"database"`
+}
+
+// Validate MySQLArgs fields
+func (m MySQLArgs) Validate() error {
+	if !m.Enable {
+		return nil
+	}
+
+	if m.Format != "" {
+		f := strings.ToLower(m.Format)
+		if f != event.NamespaceFormat && f != event.AccessFormat {
+			return fmt.Errorf("unrecognized format")
+		}
+	}
+
+	if m.Table == "" {
+		return fmt.Errorf("table unspecified")
+	}
+
+	if m.DSN != "" {
+		if _, err := mysql.ParseDSN(m.DSN); err != nil {
+			return err
+		}
+	} else {
+		// Some fields need to be specified when DSN is unspecified
+		if m.Port == "" {
+			return fmt.Errorf("unspecified port")
+		}
+		if _, err := strconv.Atoi(m.Port); err != nil {
+			return fmt.Errorf("invalid port")
+		}
+		if m.Database == "" {
+			return fmt.Errorf("database unspecified")
+		}
+	}
+	return nil
 }
 
 // MySQLTarget - MySQL target.

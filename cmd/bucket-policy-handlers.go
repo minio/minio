@@ -38,7 +38,7 @@ const (
 // PutBucketPolicyHandler - This HTTP handler stores given bucket policy configuration as per
 // https://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutBucketPolicy")
+	ctx := newContext(r, w, "PutBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -91,10 +91,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	globalPolicySys.Set(bucket, *bucketPolicy)
-	for nerr := range globalNotificationSys.SetBucketPolicy(bucket, bucketPolicy) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
-		logger.LogIf(ctx, nerr.Err)
-	}
+	globalNotificationSys.SetBucketPolicy(ctx, bucket, bucketPolicy)
 
 	// Success.
 	writeSuccessNoContent(w)
@@ -102,7 +99,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 // DeleteBucketPolicyHandler - This HTTP handler removes bucket policy configuration.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteBucketPolicy")
+	ctx := newContext(r, w, "DeleteBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -130,10 +127,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	globalPolicySys.Remove(bucket)
-	for nerr := range globalNotificationSys.RemoveBucketPolicy(bucket) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
-		logger.LogIf(ctx, nerr.Err)
-	}
+	globalNotificationSys.RemoveBucketPolicy(ctx, bucket)
 
 	// Success.
 	writeSuccessNoContent(w)
@@ -141,7 +135,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 // GetBucketPolicyHandler - This HTTP handler returns bucket policy configuration.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketPolicy")
+	ctx := newContext(r, w, "GetBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {

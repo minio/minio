@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go"
@@ -65,6 +67,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
@@ -83,6 +86,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}}
 `
 
@@ -97,12 +101,16 @@ EXAMPLES:
 
 // Handler for 'minio gateway s3' command line.
 func s3GatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
-	host := ctx.Args().First()
-	// Validate gateway arguments.
-	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	args := ctx.Args()
+	if !ctx.Args().Present() {
+		args = cli.Args{"https://s3.amazonaws.com"}
+	}
 
-	minio.StartGateway(ctx, &S3{host})
+	// Validate gateway arguments.
+	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), args.First()), "Invalid argument")
+
+	// Start the gateway..
+	minio.StartGateway(ctx, &S3{args.First()})
 }
 
 // S3 implements Gateway.
@@ -115,34 +123,71 @@ func (g *S3) Name() string {
 	return s3Backend
 }
 
-// NewGatewayLayer returns s3 ObjectLayer.
-func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	var err error
-	var endpoint string
-	var secure = true
+const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
 
-	// Validate host parameters.
-	if g.host != "" {
-		// Override default params if the host is provided
-		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
+// randString generates random names and prepends them with a known prefix.
+func randString(n int, src rand.Source, prefix string) string {
+	b := make([]byte, n)
+	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+	return prefix + string(b[0:30-len(prefix)])
+}
+
+// newS3 - Initializes a new client by auto probing S3 server signature.
+func newS3(url, accessKey, secretKey string) (*miniogo.Core, error) {
+	if url == "" {
+		url = "https://s3.amazonaws.com"
+	}
+
+	// Override default params if the host is provided
+	endpoint, secure, err := minio.ParseGatewayEndpoint(url)
+	if err != nil {
+		return nil, err
+	}
+
+	clnt, err := miniogo.NewV4(endpoint, accessKey, secretKey, secure)
+	if err != nil {
+		return nil, err
+	}
+	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+	if _, err = clnt.BucketExists(probeBucketName); err != nil {
+		clnt, err = miniogo.NewV2(endpoint, accessKey, secretKey, secure)
 		if err != nil {
+			return nil, err
+		}
+		if _, err = clnt.BucketExists(probeBucketName); err != nil {
 			return nil, err
 		}
 	}
 
-	// Default endpoint parameters
-	if endpoint == "" {
-		endpoint = "s3.amazonaws.com"
-	}
+	return &miniogo.Core{Client: clnt}, nil
+}
 
-	// Initialize minio client object.
-	client, err := miniogo.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)
+// NewGatewayLayer returns s3 ObjectLayer.
+func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+	// Probe S3 signature with input credentials.
+	clnt, err := newS3(g.host, creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &s3Objects{
-		Client: client,
+		Client: clnt,
 	}, nil
 }
 
@@ -209,7 +254,6 @@ func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.
 		}, nil
 	}
 
-	logger.LogIf(ctx, minio.BucketNotFound{Bucket: bucket})
 	return bi, minio.BucketNotFound{Bucket: bucket}
 }
 
@@ -255,7 +299,7 @@ func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, e error) {
-	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
+	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return loi, minio.ErrorRespToObjectError(err, bucket)
@@ -446,7 +490,6 @@ func (l *s3Objects) SetBucketPolicy(ctx context.Context, bucket string, bucketPo
 func (l *s3Objects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	data, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, minio.ErrorRespToObjectError(err, bucket)
 	}
 

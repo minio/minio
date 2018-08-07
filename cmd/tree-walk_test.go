@@ -196,7 +196,7 @@ func TestTreeWalk(t *testing.T) {
 		return len(entries) == 0
 	}
 
-	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk)
+	listDir := listDirFactory(context.Background(), isLeaf, disk)
 	// Simple test for prefix based walk.
 	testTreeWalkPrefix(t, listDir, isLeaf, isLeafDir)
 	// Simple test when marker is set.
@@ -240,7 +240,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 		return len(entries) == 0
 	}
 
-	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk)
+	listDir := listDirFactory(context.Background(), isLeaf, disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
 	pool := newTreeWalkPool(2 * time.Second)
@@ -315,7 +315,7 @@ func TestListDir(t *testing.T) {
 	// create listDir function.
 	listDir := listDirFactory(context.Background(), func(volume, prefix string) bool {
 		return !hasSuffix(prefix, slashSeparator)
-	}, xlTreeWalkIgnoredErrs, disk1, disk2)
+	}, disk1, disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
 	disks := []StorageAPI{disk1, disk2}
@@ -327,10 +327,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file1" from fsDir1.
-	entries, _, err := listDir(volume, "", "")
-	if err != nil {
-		t.Error(err)
-	}
+	entries, _ := listDir(volume, "", "")
 	if len(entries) != 2 {
 		t.Fatal("Expected the number of entries to be 2")
 	}
@@ -348,10 +345,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file2" from fsDir2.
-	entries, _, err = listDir(volume, "", "")
-	if err != nil {
-		t.Error(err)
-	}
+	entries, _ = listDir(volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}
@@ -361,13 +355,6 @@ func TestListDir(t *testing.T) {
 	err = os.RemoveAll(fsDir2)
 	if err != nil {
 		t.Error(err)
-	}
-	// None of the disks are available, should get
-	// errDiskNotFound. Since errDiskNotFound is an ignored error,
-	// we should get nil.
-	_, _, err = listDir(volume, "", "")
-	if err != nil {
-		t.Errorf("expected nil error but found %v.", err)
 	}
 }
 
@@ -400,7 +387,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -515,7 +502,7 @@ func TestSortedness(t *testing.T) {
 	}
 
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -598,7 +585,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, xlTreeWalkIgnoredErrs, disk1)
+	listDir := listDirFactory(context.Background(), isLeaf, disk1)
 
 	// Create the namespace.
 	var files = []string{

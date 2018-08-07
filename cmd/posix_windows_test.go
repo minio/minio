@@ -69,7 +69,7 @@ func TestUNCPaths(t *testing.T) {
 	}
 }
 
-// Test to validate posix behaviour on windows when a non-final path component is a file.
+// Test to validate posix behavior on windows when a non-final path component is a file.
 func TestUNCPathENOTDIR(t *testing.T) {
 	var err error
 	// Instantiate posix object to manage a disk

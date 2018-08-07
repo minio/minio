@@ -54,7 +54,7 @@ type accessControlPolicy struct {
 // This operation uses the ACL
 // subresource to return the ACL of a specified bucket.
 func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketACL")
+	ctx := newContext(r, w, "GetBucketACL")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -101,7 +101,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 // This operation uses the ACL
 // subresource to return the ACL of a specified object.
 func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetObjectACL")
+	ctx := newContext(r, w, "GetObjectACL")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

@@ -42,7 +42,7 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 // as per http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 // It returns empty configuration if its not set.
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketNotification")
+	ctx := newContext(r, w, "GetBucketNotification")
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
@@ -94,7 +94,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 // PutBucketNotificationHandler - This HTTP handler stores given notification configuration as per
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html.
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutBucketNotification")
+	ctx := newContext(r, w, "PutBucketNotification")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -146,10 +146,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	rulesMap := config.ToRulesMap()
 	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
-	for nerr := range globalNotificationSys.PutBucketNotification(bucketName, rulesMap) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
-		logger.LogIf(ctx, nerr.Err)
-	}
+	globalNotificationSys.PutBucketNotification(ctx, bucketName, rulesMap)
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -157,7 +154,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 // ListenBucketNotificationHandler - This HTTP handler sends events to the connected HTTP client.
 // Client should send prefix/suffix object name to match and events to watch as query parameters.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListenBucketNotification")
+	ctx := newContext(r, w, "ListenBucketNotification")
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
@@ -224,15 +221,21 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	host, e := xnet.ParseHost(r.RemoteAddr)
-	logger.CriticalIf(ctx, e)
+	host, err := xnet.ParseHost(r.RemoteAddr)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
-	target, e := target.NewHTTPClientTarget(*host, w)
-	logger.CriticalIf(ctx, e)
+	target, err := target.NewHTTPClientTarget(*host, w)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
 
-	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
+	if err = globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -241,25 +244,24 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
 	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
 
-	thisAddr, e := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	logger.CriticalIf(ctx, e)
+	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
-	if err := SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
+	if err = SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
-	errCh := globalNotificationSys.ListenBucketNotification(bucketName, eventNames, pattern, target.ID(), *thisAddr)
-	for nerr := range errCh {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
-		logger.LogIf(ctx, nerr.Err)
-	}
+	globalNotificationSys.ListenBucketNotification(ctx, bucketName, eventNames, pattern, target.ID(), *thisAddr)
 
 	<-target.DoneCh
 
-	if err := RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
+	if err = RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

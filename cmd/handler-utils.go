@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -26,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 	httptracer "github.com/minio/minio/pkg/handlers"
 )
 
@@ -113,40 +116,54 @@ var userMetadataKeyPrefixes = []string{
 	"X-Minio-Meta-",
 }
 
-// extractMetadataFromHeader extracts metadata from HTTP header.
-func extractMetadataFromHeader(ctx context.Context, header http.Header) (map[string]string, error) {
-	if header == nil {
-		logger.LogIf(ctx, errInvalidArgument)
-		return nil, errInvalidArgument
+// extractMetadata extracts metadata from HTTP header and HTTP queryString.
+func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
+	query := r.URL.Query()
+	header := r.Header
+	metadata = make(map[string]string)
+	// Extract all query values.
+	err = extractMetadataFromMap(ctx, query, metadata)
+	if err != nil {
+		return nil, err
 	}
-	metadata := make(map[string]string)
 
+	// Extract all header values.
+	err = extractMetadataFromMap(ctx, header, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	// Success.
+	return metadata, nil
+}
+
+// extractMetadata extracts metadata from map values.
+func extractMetadataFromMap(ctx context.Context, v map[string][]string, m map[string]string) error {
+	if v == nil {
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
+	}
 	// Save all supported headers.
 	for _, supportedHeader := range supportedHeaders {
-		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
-		// HTTP headers are case insensitive, look for both canonical
-		// and non canonical entries.
-		if _, ok := header[canonicalHeader]; ok {
-			metadata[supportedHeader] = header.Get(canonicalHeader)
-		} else if _, ok := header[supportedHeader]; ok {
-			metadata[supportedHeader] = header.Get(supportedHeader)
+		if value, ok := v[http.CanonicalHeaderKey(supportedHeader)]; ok {
+			m[supportedHeader] = value[0]
+		} else if value, ok := v[supportedHeader]; ok {
+			m[supportedHeader] = value[0]
 		}
 	}
-
-	// Go through all other headers for any additional headers that needs to be saved.
-	for key := range header {
-		if key != http.CanonicalHeaderKey(key) {
-			logger.LogIf(ctx, errInvalidArgument)
-			return nil, errInvalidArgument
-		}
+	for key := range v {
 		for _, prefix := range userMetadataKeyPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				metadata[key] = header.Get(key)
+			if !strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
+				continue
+			}
+			value, ok := v[key]
+			if ok {
+				m[key] = strings.Join(value, ",")
 				break
 			}
 		}
 	}
-	return metadata, nil
+	return nil
 }
 
 // The Query string for the redirect URL the client is
@@ -167,7 +184,7 @@ func extractReqParams(r *http.Request) map[string]string {
 
 	// Success.
 	return map[string]string{
-		"sourceIPAddress": r.RemoteAddr,
+		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
 }
@@ -220,6 +237,19 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 		return nil, "", 0, nil, err
 	}
 
+	// this means that filename="" was not specified for file key and Go has
+	// an ugly way of handling this situation. Refer here
+	// https://golang.org/src/mime/multipart/formdata.go#L61
+	if len(form.File) == 0 {
+		var b = &bytes.Buffer{}
+		for _, v := range formValues["File"] {
+			b.WriteString(v)
+		}
+		fileSize = int64(b.Len())
+		filePart = ioutil.NopCloser(b)
+		return filePart, fileName, fileSize, formValues, nil
+	}
+
 	// Iterator until we find a valid File field and break
 	for k, v := range form.File {
 		canonicalFormName := http.CanonicalHeaderKey(k)
@@ -254,7 +284,6 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 			break
 		}
 	}
-
 	return filePart, fileName, fileSize, formValues, nil
 }
 

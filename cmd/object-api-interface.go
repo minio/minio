@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -64,10 +63,6 @@ type ObjectLayer interface {
 	HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error)
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 	ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
-
-	// Locking operations
-	ListLocks(ctx context.Context, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
-	ClearLocks(context.Context, []VolumeLockInfo) error
 
 	// Policy operations
 	SetBucketPolicy(context.Context, string, *policy.Policy) error

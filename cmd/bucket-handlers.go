@@ -28,20 +28,17 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
-
-	etcd "github.com/coreos/etcd/client"
 
 	"github.com/gorilla/mux"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
-
-	"github.com/minio/minio-go/pkg/set"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -64,7 +61,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
-				if etcd.IsKeyNotFound(gerr) || gerr == dns.ErrNoEntriesFound {
+				if gerr == dns.ErrNoEntriesFound {
 					return globalDNSConfig.Put(b[index].Name)
 				}
 				return gerr
@@ -89,7 +86,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 // -------------------------
 // This operation returns bucket location.
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetBucketLocation")
+	ctx := newContext(r, w, "GetBucketLocation")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -105,12 +102,6 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetRLock(globalObjectTimeout); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-	defer bucketLock.RUnlock()
 	getBucketInfo := objectAPI.GetBucketInfo
 	if api.CacheAPI() != nil {
 		getBucketInfo = api.CacheAPI().GetBucketInfo
@@ -143,7 +134,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 // uploads in the response.
 //
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListMultipartUploads")
+	ctx := newContext(r, w, "ListMultipartUploads")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -190,7 +181,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListBuckets")
+	ctx := newContext(r, w, "ListBuckets")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -211,7 +202,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && !etcd.IsKeyNotFound(err) && err != dns.ErrNoEntriesFound {
+		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
@@ -246,7 +237,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteMultipleObjects")
+	ctx := newContext(r, w, "DeleteMultipleObjects")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -313,34 +304,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var wg = &sync.WaitGroup{} // Allocate a new wait group.
-	var dErrs = make([]error, len(deleteObjects.Objects))
-
-	// Delete all requested objects in parallel.
-	for index, object := range deleteObjects.Objects {
-		wg.Add(1)
-		go func(i int, obj ObjectIdentifier) {
-			defer wg.Done()
-			// If the request is denied access, each item
-			// should be marked as 'AccessDenied'
-			if s3Error == ErrAccessDenied {
-				dErrs[i] = PrefixAccessDenied{
-					Bucket: bucket,
-					Object: obj.ObjectName,
-				}
-				return
-			}
-			deleteObject := objectAPI.DeleteObject
-			if api.CacheAPI() != nil {
-				deleteObject = api.CacheAPI().DeleteObject
-			}
-			dErr := deleteObject(ctx, bucket, obj.ObjectName)
-			if dErr != nil {
-				dErrs[i] = dErr
-			}
-		}(index, object)
+	deleteObject := objectAPI.DeleteObject
+	if api.CacheAPI() != nil {
+		deleteObject = api.CacheAPI().DeleteObject
 	}
-	wg.Wait()
+
+	var dErrs = make([]error, len(deleteObjects.Objects))
+	for index, object := range deleteObjects.Objects {
+		// If the request is denied access, each item
+		// should be marked as 'AccessDenied'
+		if s3Error == ErrAccessDenied {
+			dErrs[index] = PrefixAccessDenied{
+				Bucket: bucket,
+				Object: object.ObjectName,
+			}
+			continue
+		}
+		dErrs[index] = deleteObject(ctx, bucket, object.ObjectName)
+	}
 
 	// Collect deleted objects and errors if any.
 	var deletedObjects []ObjectIdentifier
@@ -375,7 +356,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Get host and port from Request.RemoteAddr failing which
 	// fill them with empty strings.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -400,7 +381,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutBucket")
+	ctx := newContext(r, w, "PutBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -432,7 +413,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(bucket); err != nil {
-			if etcd.IsKeyNotFound(err) || err == dns.ErrNoEntriesFound {
+			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -476,7 +457,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 // This implementation of the POST operation handles object creation with a specified
 // signature policy in multipart/form-data
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PostPolicyBucket")
+	ctx := newContext(r, w, "PostPolicyBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -601,7 +582,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	// Extract metadata to be saved from received Form.
-	metadata, err := extractMetadataFromHeader(ctx, formValues)
+	metadata := make(map[string]string)
+	err = extractMetadataFromMap(ctx, formValues, metadata)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -623,7 +605,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
-			reader, err = newEncryptReader(hashReader, key, metadata)
+			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -648,7 +630,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header().Set("Location", location)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -695,7 +677,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 // have permission to access it. Otherwise, the operation might
 // return responses such as 404 Not Found and 403 Forbidden.
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "HeadBucket")
+	ctx := newContext(r, w, "HeadBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -725,7 +707,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteBucket")
+	ctx := newContext(r, w, "DeleteBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -753,10 +735,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	globalNotificationSys.RemoveNotification(bucket)
 	globalPolicySys.Remove(bucket)
-	for nerr := range globalNotificationSys.DeleteBucket(bucket) {
-		logger.GetReqInfo(ctx).AppendTags("remotePeer", nerr.Host.Name)
-		logger.LogIf(ctx, nerr.Err)
-	}
+	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {

@@ -28,7 +28,6 @@ import (
 	"time"
 
 	c "github.com/minio/mc/pkg/console"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // Disable disables all logging, false by default. (used for "go test")
@@ -52,6 +51,25 @@ var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
 	"cmd.StartGateway",
+	"cmd.(*webAPIHandlers).ListBuckets",
+	"cmd.(*webAPIHandlers).MakeBucket",
+	"cmd.(*webAPIHandlers).DeleteBucket",
+	"cmd.(*webAPIHandlers).ListObjects",
+	"cmd.(*webAPIHandlers).RemoveObject",
+	"cmd.(*webAPIHandlers).Login",
+	"cmd.(*webAPIHandlers).GenerateAuth",
+	"cmd.(*webAPIHandlers).SetAuth",
+	"cmd.(*webAPIHandlers).GetAuth",
+	"cmd.(*webAPIHandlers).CreateURLToken",
+	"cmd.(*webAPIHandlers).Upload",
+	"cmd.(*webAPIHandlers).Download",
+	"cmd.(*webAPIHandlers).DownloadZip",
+	"cmd.(*webAPIHandlers).GetBucketPolicy",
+	"cmd.(*webAPIHandlers).ListAllBucketPolicies",
+	"cmd.(*webAPIHandlers).SetBucketPolicy",
+	"cmd.(*webAPIHandlers).PresignedGet",
+	"cmd.(*webAPIHandlers).ServerInfo",
+	"cmd.(*webAPIHandlers).StorageInfo",
 	// add more here ..
 }
 
@@ -76,13 +94,14 @@ type Console interface {
 }
 
 func consoleLog(console Console, msg string, args ...interface{}) {
-	if jsonFlag {
+	switch {
+	case jsonFlag:
 		// Strip escape control characters from json message
 		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
-	} else if quiet {
+	case quiet:
 		console.quiet(msg, args...)
-	} else {
+	default:
 		console.pretty(msg, args...)
 	}
 }
@@ -103,14 +122,15 @@ type api struct {
 }
 
 type logEntry struct {
-	Level      string      `json:"level"`
-	Time       string      `json:"time"`
-	API        *api        `json:"api,omitempty"`
-	RemoteHost string      `json:"remotehost,omitempty"`
-	RequestID  string      `json:"requestID,omitempty"`
-	UserAgent  string      `json:"userAgent,omitempty"`
-	Message    string      `json:"message,omitempty"`
-	Trace      *traceEntry `json:"error,omitempty"`
+	DeploymentID string      `json:"deploymentid,omitempty"`
+	Level        string      `json:"level"`
+	Time         string      `json:"time"`
+	API          *api        `json:"api,omitempty"`
+	RemoteHost   string      `json:"remotehost,omitempty"`
+	RequestID    string      `json:"requestID,omitempty"`
+	UserAgent    string      `json:"userAgent,omitempty"`
+	Message      string      `json:"message,omitempty"`
+	Trace        *traceEntry `json:"error,omitempty"`
 }
 
 // quiet: Hide startup messages if enabled
@@ -119,7 +139,14 @@ var (
 	quiet, jsonFlag bool
 	// Custom function to format error
 	errorFmtFunc func(string, error, bool) string
+
+	deploymentID string
 )
+
+// SetDeploymentID - Used to set the deployment ID, in XL and FS mode
+func SetDeploymentID(id string) {
+	deploymentID = id
+}
 
 // EnableQuiet - turns quiet option on.
 func EnableQuiet() {
@@ -142,21 +169,23 @@ func RegisterUIError(f func(string, error, bool) string) {
 // and GOROOT directories. Also append github.com/minio/minio
 // This is done to clean up the filename, when stack trace is
 // displayed when an error happens.
-func Init(goPath string) {
+func Init(goPath string, goRoot string) {
 
 	var goPathList []string
+	var goRootList []string
 	var defaultgoPathList []string
+	var defaultgoRootList []string
+	pathSeperator := ":"
 	// Add all possible GOPATH paths into trimStrings
 	// Split GOPATH depending on the OS type
 	if runtime.GOOS == "windows" {
-		goPathList = strings.Split(goPath, ";")
-		defaultgoPathList = strings.Split(build.Default.GOPATH, ";")
-	} else {
-		// All other types of OSs
-		goPathList = strings.Split(goPath, ":")
-		defaultgoPathList = strings.Split(build.Default.GOPATH, ":")
-
+		pathSeperator = ";"
 	}
+
+	goPathList = strings.Split(goPath, pathSeperator)
+	goRootList = strings.Split(goRoot, pathSeperator)
+	defaultgoPathList = strings.Split(build.Default.GOPATH, pathSeperator)
+	defaultgoRootList = strings.Split(build.Default.GOROOT, pathSeperator)
 
 	// Add trim string "{GOROOT}/src/" into trimStrings
 	trimStrings = []string{filepath.Join(runtime.GOROOT(), "src") + string(filepath.Separator)}
@@ -167,9 +196,20 @@ func Init(goPath string) {
 		trimStrings = append(trimStrings, filepath.Join(goPathString, "src")+string(filepath.Separator))
 	}
 
+	for _, goRootString := range goRootList {
+		trimStrings = append(trimStrings, filepath.Join(goRootString, "src")+string(filepath.Separator))
+	}
+
 	for _, defaultgoPathString := range defaultgoPathList {
 		trimStrings = append(trimStrings, filepath.Join(defaultgoPathString, "src")+string(filepath.Separator))
 	}
+
+	for _, defaultgoRootString := range defaultgoRootList {
+		trimStrings = append(trimStrings, filepath.Join(defaultgoRootString, "src")+string(filepath.Separator))
+	}
+
+	// Remove duplicate entries.
+	trimStrings = uniqueEntries(trimStrings)
 
 	// Add "github.com/minio/minio" as the last to cover
 	// paths like "{GOROOT}/src/github.com/minio/minio"
@@ -200,7 +240,7 @@ func getTrace(traceLevel int) []string {
 	var trace []string
 	pc, file, lineNumber, ok := runtime.Caller(traceLevel)
 
-	for ok {
+	for ok && file != "" {
 		// Clean up the common prefixes
 		file = trimTrace(file)
 		// Get the function name
@@ -260,83 +300,32 @@ func LogIf(ctx context.Context, err error) {
 	// Get the cause for the Error
 	message := err.Error()
 
-	// Output the formatted log message at console
-	var output string
-	if jsonFlag {
-		logJSON, err := json.Marshal(&logEntry{
-			Level:      ErrorLvl.String(),
-			RemoteHost: req.RemoteHost,
-			RequestID:  req.RequestID,
-			UserAgent:  req.UserAgent,
-			Time:       time.Now().UTC().Format(time.RFC3339Nano),
-			API:        &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
-			Trace:      &traceEntry{Message: message, Source: trace, Variables: tags},
-		})
-		if err != nil {
-			panic(err)
-		}
-		output = string(logJSON)
-	} else {
-		// Add a sequence number and formatting for each stack trace
-		// No formatting is required for the first entry
-		for i, element := range trace {
-			trace[i] = fmt.Sprintf("%8v: %s", i+1, element)
-		}
-
-		tagString := ""
-		for key, value := range tags {
-			if value != "" {
-				if tagString != "" {
-					tagString += ", "
-				}
-				tagString += key + "=" + value
-			}
-		}
-
-		apiString := "API: " + API + "("
-		if req.BucketName != "" {
-			apiString = apiString + "bucket=" + req.BucketName
-		}
-		if req.ObjectName != "" {
-			apiString = apiString + ", object=" + req.ObjectName
-		}
-		apiString += ")"
-		timeString := "Time: " + time.Now().Format(loggerTimeFormat)
-
-		var requestID string
-		if req.RequestID != "" {
-			requestID = "\nRequestID: " + req.RequestID
-		}
-
-		var remoteHost string
-		if req.RemoteHost != "" {
-			remoteHost = "\nRemoteHost: " + req.RemoteHost
-		}
-
-		var userAgent string
-		if req.UserAgent != "" {
-			userAgent = "\nUserAgent: " + req.UserAgent
-		}
-
-		if len(tags) > 0 {
-			tagString = "\n       " + tagString
-		}
-
-		var msg = colorFgRed(colorBold(message))
-		output = fmt.Sprintf("\n%s\n%s%s%s%s\nError: %s%s\n%s",
-			apiString, timeString, requestID, remoteHost, userAgent,
-			msg, tagString, strings.Join(trace, "\n"))
+	entry := logEntry{
+		DeploymentID: deploymentID,
+		Level:        ErrorLvl.String(),
+		RemoteHost:   req.RemoteHost,
+		RequestID:    req.RequestID,
+		UserAgent:    req.UserAgent,
+		Time:         time.Now().UTC().Format(time.RFC3339Nano),
+		API:          &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
+		Trace:        &traceEntry{Message: message, Source: trace, Variables: tags},
 	}
-	fmt.Println(output)
+
+	// Iterate over all logger targets to send the log entry
+	for _, t := range Targets {
+		t.send(entry)
+	}
 }
 
-// CriticalIf :
-// Like LogIf with exit
-// It'll be called for fatal error conditions during run-time
+// ErrCritical is the value panic'd whenever CriticalIf is called.
+var ErrCritical struct{}
+
+// CriticalIf logs the provided error on the console. It fails the
+// current go-routine by causing a `panic(ErrCritical)`.
 func CriticalIf(ctx context.Context, err error) {
 	if err != nil {
 		LogIf(ctx, err)
-		os.Exit(1)
+		panic(ErrCritical)
 	}
 }
 
@@ -389,23 +378,15 @@ func (f fatalMsg) quiet(msg string, args ...interface{}) {
 }
 
 var (
-	logTag       = "ERROR"
-	logBanner    = colorBgRed(colorFgWhite(colorBold(logTag))) + " "
-	emptyBanner  = colorBgRed(strings.Repeat(" ", len(logTag))) + " "
-	minimumWidth = 80
-	bannerWidth  = len(logTag) + 1
+	logTag      = "ERROR"
+	logBanner   = colorBgRed(colorFgWhite(colorBold(logTag))) + " "
+	emptyBanner = colorBgRed(strings.Repeat(" ", len(logTag))) + " "
+	bannerWidth = len(logTag) + 1
 )
 
 func (f fatalMsg) pretty(msg string, args ...interface{}) {
 	// Build the passed error message
 	errMsg := fmt.Sprintf(msg, args...)
-	// Check terminal width
-	termWidth, _, err := terminal.GetSize(0)
-	if err != nil || termWidth < minimumWidth {
-		termWidth = minimumWidth
-	}
-	// Calculate available widht without the banner
-	width := termWidth - bannerWidth
 
 	tagPrinted := false
 
@@ -436,13 +417,8 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 			ansiRestoreAttributes()
 			ansiMoveRight(bannerWidth)
 			// Continue  error message printing
-			if len(line) > width {
-				fmt.Println(line[:width])
-				line = line[width:]
-			} else {
-				fmt.Println(line)
-				break
-			}
+			fmt.Println(line)
+			break
 		}
 	}
 

@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 
+	"github.com/miekg/dns"
 	"github.com/minio/minio/cmd/logger"
 
 	"github.com/minio/minio/pkg/auth"
@@ -39,9 +41,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "25"
+const serverConfigVersion = "27"
 
-type serverConfig = serverConfigV25
+type serverConfig = serverConfigV27
 
 var (
 	// globalServerConfig server config.
@@ -116,15 +118,94 @@ func (s *serverConfig) GetWorm() bool {
 }
 
 // SetCacheConfig sets the current cache config
-func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int) {
+func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int, maxuse int) {
 	s.Cache.Drives = drives
 	s.Cache.Exclude = exclude
 	s.Cache.Expiry = expiry
+	s.Cache.MaxUse = maxuse
 }
 
 // GetCacheConfig gets the current cache config
 func (s *serverConfig) GetCacheConfig() CacheConfig {
 	return s.Cache
+}
+
+func (s *serverConfig) Validate() error {
+	if s.Version != serverConfigVersion {
+		return fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, s.Version)
+	}
+
+	// Validate credential fields only when
+	// they are not set via the environment
+	// Error out if global is env credential is not set and config has invalid credential
+	if !globalIsEnvCreds && !s.Credential.IsValid() {
+		return errors.New("invalid credential in config file")
+	}
+
+	// Region: nothing to validate
+	// Browser, Worm, Cache and StorageClass values are already validated during json unmarshal
+
+	if s.Domain != "" {
+		if _, ok := dns.IsDomainName(s.Domain); !ok {
+			return errors.New("invalid domain name")
+		}
+	}
+
+	for _, v := range s.Notify.AMQP {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("amqp: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.Elasticsearch {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("elasticsearch: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.Kafka {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("kafka: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.MQTT {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("mqtt: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.MySQL {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("mysql: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.NATS {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("nats: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.PostgreSQL {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("postgreSQL: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.Redis {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("redis: %s", err.Error())
+		}
+	}
+
+	for _, v := range s.Notify.Webhook {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("webhook: %s", err.Error())
+		}
+	}
+
+	return nil
 }
 
 // Save config file to corresponding backend
@@ -179,6 +260,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "MySQL Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
 		return "MQTT Notification configuration differs"
+	case !reflect.DeepEqual(s.Logger, t.Logger):
+		return "Logger configuration differs"
 	case reflect.DeepEqual(s, t):
 		return ""
 	default:
@@ -205,6 +288,7 @@ func newServerConfig() *serverConfig {
 			Drives:  []string{},
 			Exclude: []string{},
 			Expiry:  globalCacheExpiry,
+			MaxUse:  globalCacheMaxUse,
 		},
 		Notify: notifier{},
 	}
@@ -232,6 +316,14 @@ func newServerConfig() *serverConfig {
 	srvCfg.Cache.Drives = make([]string, 0)
 	srvCfg.Cache.Exclude = make([]string, 0)
 	srvCfg.Cache.Expiry = globalCacheExpiry
+	srvCfg.Cache.MaxUse = globalCacheMaxUse
+
+	// Console logging is on by default
+	srvCfg.Logger.Console.Enabled = true
+	// Create an example of HTTP logger
+	srvCfg.Logger.HTTP = make(map[string]loggerHTTP)
+	srvCfg.Logger.HTTP["target1"] = loggerHTTP{Endpoint: "https://username:password@example.com/api"}
+
 	return srvCfg
 }
 
@@ -270,7 +362,7 @@ func newConfig() error {
 	}
 
 	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -314,15 +406,8 @@ func getValidConfig() (*serverConfig, error) {
 		return nil, err
 	}
 
-	if srvCfg.Version != serverConfigVersion {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, srvCfg.Version)
-	}
-
-	// Validate credential fields only when
-	// they are not set via the environment
-	// Error out if global is env credential is not set and config has invalid credential
-	if !globalIsEnvCreds && !srvCfg.Credential.IsValid() {
-		return nil, errors.New("invalid credential in config file " + getConfigFile())
+	if err = srvCfg.Validate(); err != nil {
+		return nil, err
 	}
 
 	return srvCfg, nil
@@ -358,7 +443,7 @@ func loadConfig() error {
 	}
 
 	if globalIsDiskCacheEnabled {
-		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry)
+		srvCfg.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -387,6 +472,7 @@ func loadConfig() error {
 		globalCacheDrives = cacheConf.Drives
 		globalCacheExcludes = cacheConf.Exclude
 		globalCacheExpiry = cacheConf.Expiry
+		globalCacheMaxUse = cacheConf.MaxUse
 	}
 	globalServerConfigMu.Unlock()
 
@@ -398,17 +484,19 @@ func loadConfig() error {
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
+func getNotificationTargets(config *serverConfig) *event.TargetList {
 	targetList := event.NewTargetList()
 
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
 			newTarget, err := target.NewAMQPTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -417,10 +505,14 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewElasticsearchTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
+
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
+
 			}
 		}
 	}
@@ -429,10 +521,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewKafkaTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -441,10 +535,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewMQTTTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -453,10 +549,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewMySQLTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -465,10 +563,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewNATSTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -477,10 +577,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewPostgreSQLTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -489,10 +591,12 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget, err := target.NewRedisTarget(id, args)
 			if err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 			if err = targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
@@ -501,10 +605,11 @@ func getNotificationTargets(config *serverConfig) (*event.TargetList, error) {
 		if args.Enable {
 			newTarget := target.NewWebhookTarget(id, args)
 			if err := targetList.Add(newTarget); err != nil {
-				return nil, err
+				logger.LogIf(context.Background(), err)
+				continue
 			}
 		}
 	}
 
-	return targetList, nil
+	return targetList
 }

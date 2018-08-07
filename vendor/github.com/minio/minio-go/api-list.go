@@ -118,7 +118,7 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 		var continuationToken string
 		for {
 			// Get list of objects a maximum of 1000 per request.
-			result, err := c.listObjectsV2Query(bucketName, objectPrefix, continuationToken, fetchOwner, delimiter, 1000)
+			result, err := c.listObjectsV2Query(bucketName, objectPrefix, continuationToken, fetchOwner, delimiter, 1000, "")
 			if err != nil {
 				objectStatCh <- ObjectInfo{
 					Err: err,
@@ -171,11 +171,12 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 // You can use the request parameters as selection criteria to return a subset of the objects in a bucket.
 // request parameters :-
 // ---------
-// ?continuation-token - Specifies the key to start with when listing objects in a bucket.
+// ?continuation-token - Used to continue iterating over a set of objects
 // ?delimiter - A delimiter is a character you use to group keys.
 // ?prefix - Limits the response to keys that begin with the specified prefix.
 // ?max-keys - Sets the maximum number of keys returned in the response body.
-func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
+// ?start-after - Specifies the key to start after when listing objects in a bucket.
+func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int, startAfter string) (ListBucketV2Result, error) {
 	// Validate bucket name.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ListBucketV2Result{}, err
@@ -215,6 +216,11 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 	}
 	// Set max keys.
 	urlValues.Set("max-keys", fmt.Sprintf("%d", maxkeys))
+
+	// Set start-after
+	if startAfter != "" {
+		urlValues.Set("start-after", startAfter)
+	}
 
 	// Execute GET on bucket to list objects.
 	resp, err := c.executeMethod(context.Background(), "GET", requestMetadata{

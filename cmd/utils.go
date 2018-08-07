@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -141,6 +142,10 @@ const (
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
+
+	// Default values used while communicating with the cloud backends
+	defaultDialTimeout   = 30 * time.Second
+	defaultDialKeepAlive = 30 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -262,8 +267,8 @@ func NewCustomHTTPTransport() *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   defaultDialTimeout,
+			KeepAlive: defaultDialKeepAlive,
 		}).DialContext,
 		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,
@@ -326,7 +331,7 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 }
 
 // Returns context with ReqInfo details set in the context.
-func newContext(r *http.Request, api string) context.Context {
+func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -335,7 +340,14 @@ func newContext(r *http.Request, api string) context.Context {
 	if prefix != "" {
 		object = prefix
 	}
-	reqInfo := &logger.ReqInfo{RemoteHost: r.RemoteAddr, UserAgent: r.Header.Get("user-agent"), API: api, BucketName: bucket, ObjectName: object}
+	reqInfo := &logger.ReqInfo{
+		RequestID:  w.Header().Get(responseRequestIDKey),
+		RemoteHost: handlers.GetSourceIP(r),
+		UserAgent:  r.Header.Get("user-agent"),
+		API:        api,
+		BucketName: bucket,
+		ObjectName: object,
+	}
 	return logger.SetReqInfo(context.Background(), reqInfo)
 }
 

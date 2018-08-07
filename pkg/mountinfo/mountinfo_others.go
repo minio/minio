@@ -1,7 +1,7 @@
-// +build !linux
+// +build !linux,!windows
 
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,4 +22,9 @@ package mountinfo
 // this is a dummy function and returns nil for now.
 func CheckCrossDevice(paths []string) error {
 	return nil
+}
+
+// IsLikelyMountPoint determines if a directory is a mountpoint.
+func IsLikelyMountPoint(file string) bool {
+	return false
 }

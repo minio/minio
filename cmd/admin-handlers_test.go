@@ -38,22 +38,24 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "13",
+	"version": "27",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
 	},
-	"region": "us-west-1",
-	"logger": {
-		"console": {
-			"enable": true,
-			"level": "fatal"
-		},
-		"file": {
-			"enable": false,
-			"fileName": "",
-			"level": ""
-		}
+	"region": "",
+	"browser": "on",
+	"worm": "off",
+	"domain": "",
+	"storageclass": {
+		"standard": "",
+		"rrs": ""
+	},
+	"cache": {
+		"drives": [],
+		"expiry": 90,
+		"maxuse": 80,
+		"exclude": []
 	},
 	"notify": {
 		"amqp": {
@@ -63,12 +65,54 @@ var (
 				"exchange": "",
 				"routingKey": "",
 				"exchangeType": "",
+				"deliveryMode": 0,
 				"mandatory": false,
 				"immediate": false,
 				"durable": false,
 				"internal": false,
 				"noWait": false,
 				"autoDeleted": false
+			}
+		},
+		"elasticsearch": {
+			"1": {
+				"enable": false,
+				"format": "",
+				"url": "",
+				"index": ""
+			}
+		},
+		"kafka": {
+			"1": {
+				"enable": false,
+				"brokers": null,
+				"topic": ""
+			}
+		},
+		"mqtt": {
+			"1": {
+				"enable": false,
+				"broker": "",
+				"topic": "",
+				"qos": 0,
+				"clientId": "",
+				"username": "",
+				"password": "",
+				"reconnectInterval": 0,
+				"keepAliveInterval": 0
+			}
+		},
+		"mysql": {
+			"1": {
+				"enable": false,
+				"format": "",
+				"dsnString": "",
+				"table": "",
+				"host": "",
+				"port": "",
+				"user": "",
+				"password": "",
+				"database": ""
 			}
 		},
 		"nats": {
@@ -90,24 +134,10 @@ var (
 				}
 			}
 		},
-		"elasticsearch": {
-			"1": {
-				"enable": false,
-				"url": "",
-				"index": ""
-			}
-		},
-		"redis": {
-			"1": {
-				"enable": false,
-				"address": "",
-				"password": "",
-				"key": ""
-			}
-		},
 		"postgresql": {
 			"1": {
 				"enable": false,
+				"format": "",
 				"connectionString": "",
 				"table": "",
 				"host": "",
@@ -117,11 +147,13 @@ var (
 				"database": ""
 			}
 		},
-		"kafka": {
+		"redis": {
 			"1": {
 				"enable": false,
-				"brokers": null,
-				"topic": ""
+				"format": "",
+				"address": "",
+				"password": "",
+				"key": ""
 			}
 		},
 		"webhook": {
@@ -130,8 +162,20 @@ var (
 				"endpoint": ""
 			}
 		}
-	}
-}`)
+	    },
+	    "logger": {
+		"console": {
+		    "enabled": true
+		},
+		"http": {
+		    "1": {
+			"enabled": false,
+			"endpoint": "http://user:example@localhost:9001/api/endpoint"
+		    }
+		}
+	    }
+
+	}`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
@@ -176,10 +220,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Init global heal state
 	initAllHealState(globalIsXL)
 
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if err != nil {
-		return nil, err
-	}
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
@@ -566,193 +607,6 @@ func TestServiceSetCreds(t *testing.T) {
 			if cred.SecretKey != testCase.SecretKey {
 				t.Errorf("Test %d: Wrong secret key, expected = %s, found = %s", i+1, testCase.SecretKey, cred.SecretKey)
 			}
-		}
-	}
-}
-
-// mkLockQueryVal - helper function to build lock query param.
-func mkLockQueryVal(bucket, prefix, durationStr string) url.Values {
-	qVal := url.Values{}
-	qVal.Set(string(mgmtBucket), bucket)
-	qVal.Set(string(mgmtPrefix), prefix)
-	qVal.Set(string(mgmtLockOlderThan), durationStr)
-	return qVal
-}
-
-// Test for locks list management REST API.
-func TestListLocksHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
-
-	testCases := []struct {
-		bucket         string
-		prefix         string
-		duration       string
-		expectedStatus int
-	}{
-		// Test 1 - valid testcase
-		{
-			bucket:         "mybucket",
-			prefix:         "myobject",
-			duration:       "1s",
-			expectedStatus: http.StatusOK,
-		},
-		// Test 2 - invalid duration
-		{
-			bucket:         "mybucket",
-			prefix:         "myprefix",
-			duration:       "invalidDuration",
-			expectedStatus: http.StatusBadRequest,
-		},
-		// Test 3 - invalid bucket name
-		{
-			bucket:         `invalid\\Bucket`,
-			prefix:         "myprefix",
-			duration:       "1h",
-			expectedStatus: http.StatusBadRequest,
-		},
-		// Test 4 - invalid prefix
-		{
-			bucket:         "mybucket",
-			prefix:         `invalid\\Prefix`,
-			duration:       "1h",
-			expectedStatus: http.StatusBadRequest,
-		},
-	}
-
-	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
-		req, err := newTestRequest("GET", "/minio/admin/v1/locks?"+queryVal.Encode(), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct list locks request - %v", i+1, err)
-		}
-
-		cred := globalServerConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign list locks request - %v", i+1, err)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.router.ServeHTTP(rec, req)
-		if test.expectedStatus != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.expectedStatus, rec.Code)
-		}
-	}
-}
-
-// Test for locks clear management REST API.
-func TestClearLocksHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Initialize admin peers to make admin RPC calls.
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
-
-	testCases := []struct {
-		bucket         string
-		prefix         string
-		duration       string
-		expectedStatus int
-	}{
-		// Test 1 - valid testcase
-		{
-			bucket:         "mybucket",
-			prefix:         "myobject",
-			duration:       "1s",
-			expectedStatus: http.StatusOK,
-		},
-		// Test 2 - invalid duration
-		{
-			bucket:         "mybucket",
-			prefix:         "myprefix",
-			duration:       "invalidDuration",
-			expectedStatus: http.StatusBadRequest,
-		},
-		// Test 3 - invalid bucket name
-		{
-			bucket:         `invalid\\Bucket`,
-			prefix:         "myprefix",
-			duration:       "1h",
-			expectedStatus: http.StatusBadRequest,
-		},
-		// Test 4 - invalid prefix
-		{
-			bucket:         "mybucket",
-			prefix:         `invalid\\Prefix`,
-			duration:       "1h",
-			expectedStatus: http.StatusBadRequest,
-		},
-	}
-
-	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
-		req, err := newTestRequest("DELETE", "/minio/admin/v1/locks?"+queryVal.Encode(), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct clear locks request - %v", i+1, err)
-		}
-
-		cred := globalServerConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign clear locks request - %v", i+1, err)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.router.ServeHTTP(rec, req)
-		if test.expectedStatus != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.expectedStatus, rec.Code)
-		}
-	}
-}
-
-// Test for lock query param validation helper function.
-func TestValidateLockQueryParams(t *testing.T) {
-	// reset globals.
-	// this is to make sure that the tests are not affected by modified globals.
-	resetTestGlobals()
-	// initialize NSLock.
-	initNSLock(false)
-	// Sample query values for test cases.
-	allValidVal := mkLockQueryVal("bucket", "prefix", "1s")
-	invalidBucketVal := mkLockQueryVal(`invalid\\Bucket`, "prefix", "1s")
-	invalidPrefixVal := mkLockQueryVal("bucket", `invalid\\Prefix`, "1s")
-	invalidOlderThanVal := mkLockQueryVal("bucket", "prefix", "invalidDuration")
-
-	testCases := []struct {
-		qVals  url.Values
-		apiErr APIErrorCode
-	}{
-		{
-			qVals:  invalidBucketVal,
-			apiErr: ErrInvalidBucketName,
-		},
-		{
-			qVals:  invalidPrefixVal,
-			apiErr: ErrInvalidObjectName,
-		},
-		{
-			qVals:  invalidOlderThanVal,
-			apiErr: ErrInvalidDuration,
-		},
-		{
-			qVals:  allValidVal,
-			apiErr: ErrNone,
-		},
-	}
-
-	for i, test := range testCases {
-		_, _, _, apiErr := validateLockQueryParams(test.qVals)
-		if apiErr != test.apiErr {
-			t.Errorf("Test %d - Expected error %v but received %v", i+1, test.apiErr, apiErr)
 		}
 	}
 }

@@ -51,6 +51,8 @@ func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string
 	return isParentDirObject(parent)
 }
 
+var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
+
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
@@ -100,17 +102,4 @@ func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
 		logger.LogIf(ctx, err)
 	} // Exhausted all disks - return false.
 	return false
-}
-
-// Calculate the space occupied by an object in a single disk
-func (xl xlObjects) sizeOnDisk(fileSize int64, blockSize int64, dataBlocks int) int64 {
-	numBlocks := fileSize / blockSize
-	chunkSize := ceilFrac(blockSize, int64(dataBlocks))
-	sizeInDisk := numBlocks * chunkSize
-	remaining := fileSize % blockSize
-	if remaining > 0 {
-		sizeInDisk += ceilFrac(remaining, int64(dataBlocks))
-	}
-
-	return sizeInDisk
 }

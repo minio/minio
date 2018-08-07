@@ -80,10 +80,10 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 			}
 			return err
 		}
-		if err := os.RemoveAll(pathJoin(endpoint.Path, minioMetaTmpBucket)); err != nil {
+		if err := removeAll(pathJoin(endpoint.Path, minioMetaTmpBucket)); err != nil {
 			return err
 		}
-		if err := os.MkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), 0777); err != nil {
+		if err := mkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), 0777); err != nil {
 			return err
 		}
 	}
@@ -186,6 +186,23 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 		return nil, err
 	}
 
+	// Get the deploymentID if set.
+	format.ID, err = formatXLGetDeploymentID(format, formatConfigs)
+	if err != nil {
+		return nil, err
+	}
+
+	if format.ID == "" {
+		if err = formatXLFixDeploymentID(context.Background(), storageDisks, format); err != nil {
+			return nil, err
+		}
+	}
+
+	logger.SetDeploymentID(format.ID)
+
+	if err = formatXLFixLocalDeploymentID(context.Background(), storageDisks, format); err != nil {
+		return nil, err
+	}
 	return format, nil
 }
 

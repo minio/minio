@@ -50,9 +50,11 @@ deadcode:
 	@${GOPATH}/bin/deadcode -test $(shell go list ./...) || true
 
 spelling:
-	@${GOPATH}/bin/misspell -error `find cmd/`
-	@${GOPATH}/bin/misspell -error `find pkg/`
-	@${GOPATH}/bin/misspell -error `find docs/`
+	@${GOPATH}/bin/misspell -locale US -error `find cmd/`
+	@${GOPATH}/bin/misspell -locale US -error `find pkg/`
+	@${GOPATH}/bin/misspell -locale US -error `find docs/`
+	@${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
+	@${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
 
 # Builds minio, runs the verifiers then runs the tests.
 check: test
@@ -89,7 +91,7 @@ pkg-list:
 # Builds minio and installs it to $GOPATH/bin.
 install: build
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
-	@cp $(PWD)/minio $(GOPATH)/bin/minio
+	@mkdir -p $(GOPATH)/bin && cp $(PWD)/minio $(GOPATH)/bin/minio
 	@echo "Installation successful. To learn more, try \"minio --help\"."
 
 clean:

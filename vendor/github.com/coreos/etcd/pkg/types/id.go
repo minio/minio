@@ -14,9 +14,7 @@
 
 package types
 
-import (
-	"strconv"
-)
+import "strconv"
 
 // ID represents a generic identifier which is canonically
 // stored as a uint64 but is typically represented as a

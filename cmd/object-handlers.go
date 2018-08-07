@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
@@ -67,7 +68,7 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // This implementation of the GET operation retrieves object. To use GET,
 // you must have READ access to the object.
 func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "GetObject")
+	ctx := newContext(r, w, "GetObject")
 
 	var object, bucket string
 	vars := mux.Vars(r)
@@ -159,7 +160,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
 
-			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, startOffset, length, objInfo, false)
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, bucket, object, startOffset, length, objInfo, false)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -196,7 +197,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -217,7 +218,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
 func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "HeadObject")
+	ctx := newContext(r, w, "HeadObject")
 
 	var object, bucket string
 	vars := mux.Vars(r)
@@ -268,7 +269,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, apiErr, r.URL)
 			return
 		} else if encrypted {
-			if _, err = DecryptRequest(w, r, objInfo.UserDefined); err != nil {
+			if _, err = DecryptRequest(w, r, bucket, object, objInfo.UserDefined); err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -292,7 +293,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -311,7 +312,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 // Extract metadata relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Metadata-Directive.
-func getCpObjMetadataFromHeader(ctx context.Context, header http.Header, userMeta map[string]string) (map[string]string, error) {
+func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta map[string]string) (map[string]string, error) {
 	// Make a copy of the supplied metadata to avoid
 	// to change the original one.
 	defaultMeta := make(map[string]string, len(userMeta))
@@ -321,13 +322,13 @@ func getCpObjMetadataFromHeader(ctx context.Context, header http.Header, userMet
 
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
-	if isMetadataReplace(header) {
-		return extractMetadataFromHeader(ctx, header)
+	if isMetadataReplace(r.Header) {
+		return extractMetadata(ctx, r)
 	}
 
 	// if x-amz-metadata-directive says COPY then we
 	// return the default metadata.
-	if isMetadataCopy(header) {
+	if isMetadataCopy(r.Header) {
 		return defaultMeta, nil
 	}
 
@@ -340,7 +341,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, header http.Header, userMet
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "CopyObject")
+	ctx := newContext(r, w, "CopyObject")
 
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
@@ -461,7 +462,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
-			if err = rotateKey(oldKey, newKey, encMetadata); err != nil {
+			if err = rotateKey(oldKey, newKey, srcBucket, srcObject, encMetadata); err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -473,7 +474,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if sseCopyC {
 				// Source is encrypted make sure to save the encrypted size.
 				writer = ioutil.LimitedWriter(writer, 0, srcInfo.Size)
-				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcInfo)
+				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcBucket, srcObject, srcInfo)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -488,7 +489,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				}
 			}
 			if sseC {
-				reader, err = newEncryptReader(pipeReader, newKey, encMetadata)
+				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -512,7 +513,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	srcInfo.Writer = writer
 
-	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r.Header, srcInfo.UserDefined)
+	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
 	if err != nil {
 		pipeWriter.CloseWithError(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
@@ -616,7 +617,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -637,7 +638,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutObject")
+	ctx := newContext(r, w, "PutObject")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -697,12 +698,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Extract metadata to be saved from incoming HTTP header.
-	metadata, err := extractMetadataFromHeader(ctx, r.Header)
+	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
+
 	if rAuthType == authTypeStreamingSigned {
 		if contentEncoding, ok := metadata["content-encoding"]; ok {
 			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
@@ -787,7 +788,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsEncryptionSupported() {
 		if hasSSECustomerHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
-			reader, err = EncryptRequest(hashReader, r, metadata)
+			reader, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -804,6 +805,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
 		putObject = api.CacheAPI().PutObject
 	}
+
 	// Create the object..
 	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata)
 	if err != nil {
@@ -822,7 +824,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -843,7 +845,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 // NewMultipartUploadHandler - New multipart upload.
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "NewMultipartUpload")
+	ctx := newContext(r, w, "NewMultipartUpload")
 
 	var object, bucket string
 	vars := mux.Vars(r)
@@ -886,7 +888,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
-			_, err = newEncryptMetadata(key, encMetadata)
+			_, err = newEncryptMetadata(key, bucket, object, encMetadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -899,7 +901,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// Extract metadata that needs to be saved.
-	metadata, err := extractMetadataFromHeader(ctx, r.Header)
+	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -930,7 +932,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 // CopyObjectPartHandler - uploads a part by copying data from an existing object as data source.
 func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "CopyObjectPart")
+	ctx := newContext(r, w, "CopyObjectPart")
 
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
@@ -1035,6 +1037,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	var writer io.WriteCloser = pipeWriter
 	var reader io.Reader = pipeReader
+	var getLength = length
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "")
 	if err != nil {
 		pipeWriter.CloseWithError(err)
@@ -1054,7 +1057,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-			writer, startOffset, length, err = DecryptBlocksRequest(pipeWriter, r, startOffset, length, srcInfo, true)
+			writer, startOffset, getLength, err = DecryptBlocksRequest(writer, r, srcBucket, srcObject, startOffset, length, srcInfo, true)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1074,28 +1077,29 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 
-			// Calculating object encryption key
 			var objectEncryptionKey []byte
-			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 
-			reader, err = sio.EncryptReader(pipeReader, sio.Config{Key: objectEncryptionKey})
+			var partIDbin [4]byte
+			binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
+
+			mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+			mac.Write(partIDbin[:])
+			partEncryptionKey := mac.Sum(nil)
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
 			if err != nil {
 				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 
-			size := length
-			if !sseCopyC {
-				info := ObjectInfo{Size: length}
-				size = info.EncryptedSize()
-			}
-
+			info := ObjectInfo{Size: length}
+			size := info.EncryptedSize()
 			srcInfo.Reader, err = hash.NewReader(reader, size, "", "")
 			if err != nil {
 				pipeWriter.CloseWithError(err)
@@ -1109,7 +1113,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, length, srcInfo)
+		dstObject, uploadID, partID, startOffset, getLength, srcInfo)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1127,7 +1131,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 // PutObjectPartHandler - uploads an incoming part for an ongoing multipart operation.
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "PutObjectPart")
+	ctx := newContext(r, w, "PutObjectPart")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1279,7 +1283,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 			// Calculating object encryption key
 			var objectEncryptionKey []byte
-			objectEncryptionKey, err = decryptObjectInfo(key, li.UserDefined)
+			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1326,7 +1330,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 // AbortMultipartUploadHandler - Abort multipart upload
 func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "AbortMultipartUpload")
+	ctx := newContext(r, w, "AbortMultipartUpload")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1365,7 +1369,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 // ListObjectPartsHandler - List object parts
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "ListObjectParts")
+	ctx := newContext(r, w, "ListObjectParts")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1405,7 +1409,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 
 // CompleteMultipartUploadHandler - Complete multipart upload.
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "CompleteMultipartUpload")
+	ctx := newContext(r, w, "CompleteMultipartUpload")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1493,7 +1497,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
 	if err != nil {
 		host, port = "", ""
 	}
@@ -1514,7 +1518,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 // DeleteObjectHandler - delete an object
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, "DeleteObject")
+	ctx := newContext(r, w, "DeleteObject")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1537,6 +1541,27 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		// DeleteObject is always successful irrespective of object existence.
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
+	}
+
+	if globalDNSConfig != nil {
+		_, err := globalDNSConfig.Get(bucket)
+		if err != nil {
+			if err == dns.ErrNoEntriesFound {
+				writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			} else {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			}
+			return
+		}
+	} else {
+		getBucketInfo := objectAPI.GetBucketInfo
+		if api.CacheAPI() != nil {
+			getBucketInfo = api.CacheAPI().GetBucketInfo
+		}
+		if _, err := getBucketInfo(ctx, bucket); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html

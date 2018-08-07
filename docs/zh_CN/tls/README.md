@@ -20,7 +20,7 @@ Minio在Linux只支持使用PEM格式的key/certificate。
 
 #### 使用 Let's Encrypt
 
-更多信息，请访问 [这里](https://docs.minio.io/docs/zh_CN/generate-let-s-encypt-certificate-using-concert-for-minio)
+更多信息，请访问 [这里](https://docs.minio.io/cn/generate-let-s-encypt-certificate-using-concert-for-minio)
 
 #### 使用 generate_cert.go (self-signed certificate)
 
@@ -125,5 +125,5 @@ certtool.exe --generate-self-signed --load-privkey private.key --template cert.c
 Minio可以配置成连接其它服务，不管是Minio节点还是像NATs、Redis这些。如果这些服务用的不是在已知证书机构注册的证书，你可以让Minio服务信任这些CA，怎么做呢，将这些证书放到Minio配置路径下(`~/.minio/certs/CAs/` Linux 或者 `C:\Users\<Username>\.minio\certs\CAs` Windows).
 
 # 了解更多
-* [Minio快速入门](https://docs.minio.io/docs/zh_CN/minio-quickstart-guide)
-* [Minio客户端权威指南](https://docs.minio.io/docs/zh_CN/minio-client-complete-guide)
+* [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide)
+* [Minio客户端权威指南](https://docs.minio.io/cn/minio-client-complete-guide)

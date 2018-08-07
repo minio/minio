@@ -308,7 +308,7 @@ func TestEncryptRequest(t *testing.T) {
 		for k, v := range test.header {
 			req.Header.Set(k, v)
 		}
-		_, err := EncryptRequest(content, req, test.metadata)
+		_, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
 		}
@@ -328,11 +328,14 @@ func TestEncryptRequest(t *testing.T) {
 }
 
 var decryptRequestTests = []struct {
-	header     map[string]string
-	metadata   map[string]string
-	shouldFail bool
+	bucket, object string
+	header         map[string]string
+	metadata       map[string]string
+	shouldFail     bool
 }{
 	{
+		bucket: "bucket",
+		object: "object",
 		header: map[string]string{
 			SSECustomerAlgorithm: "AES256",
 			SSECustomerKey:       "MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=",
@@ -346,6 +349,23 @@ var decryptRequestTests = []struct {
 		shouldFail: false,
 	},
 	{
+		bucket: "bucket",
+		object: "object",
+		header: map[string]string{
+			SSECustomerAlgorithm: "AES256",
+			SSECustomerKey:       "MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=",
+			SSECustomerKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
+		},
+		metadata: map[string]string{
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			ServerSideEncryptionIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
+			ServerSideEncryptionSealedKey:     "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
+		},
+		shouldFail: false,
+	},
+	{
+		bucket: "bucket",
+		object: "object",
 		header: map[string]string{
 			SSECustomerAlgorithm: "AES256",
 			SSECustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
@@ -359,6 +379,8 @@ var decryptRequestTests = []struct {
 		shouldFail: true,
 	},
 	{
+		bucket: "bucket",
+		object: "object",
 		header: map[string]string{
 			SSECustomerAlgorithm: "AES256",
 			SSECustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
@@ -372,6 +394,8 @@ var decryptRequestTests = []struct {
 		shouldFail: true,
 	},
 	{
+		bucket: "bucket",
+		object: "object",
 		header: map[string]string{
 			SSECustomerAlgorithm: "AES256",
 			SSECustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
@@ -384,20 +408,38 @@ var decryptRequestTests = []struct {
 		},
 		shouldFail: true,
 	},
+	{
+		bucket: "bucket",
+		object: "object-2",
+		header: map[string]string{
+			SSECustomerAlgorithm: "AES256",
+			SSECustomerKey:       "MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=",
+			SSECustomerKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
+		},
+		metadata: map[string]string{
+			ServerSideEncryptionSealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			ServerSideEncryptionIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
+			ServerSideEncryptionSealedKey:     "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
+		},
+		shouldFail: true,
+	},
 }
 
 func TestDecryptRequest(t *testing.T) {
 	defer func(flag bool) { globalIsSSL = flag }(globalIsSSL)
 	globalIsSSL = true
-	for i, test := range decryptRequestTests {
+	for i, test := range decryptRequestTests[1:] {
 		client := bytes.NewBuffer(nil)
 		req := &http.Request{Header: http.Header{}}
 		for k, v := range test.header {
 			req.Header.Set(k, v)
 		}
-		_, err := DecryptRequest(client, req, test.metadata)
+		_, err := DecryptRequest(client, req, test.bucket, test.object, test.metadata)
 		if err != nil && !test.shouldFail {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
+		}
+		if err == nil && test.shouldFail {
+			t.Fatalf("Test %d: should fail but passed", i)
 		}
 		if key, ok := test.metadata[SSECustomerKey]; ok {
 			t.Errorf("Test %d: Client provided key survived in metadata - key: %s", i, key)

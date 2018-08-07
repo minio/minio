@@ -53,13 +53,6 @@ func registerAdminRouter(router *mux.Router) {
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
 
-	/// Lock operations
-
-	// List Locks
-	adminV1Router.Methods(http.MethodGet).Path("/locks").HandlerFunc(httpTraceAll(adminAPI.ListLocksHandler))
-	// Clear locks
-	adminV1Router.Methods(http.MethodDelete).Path("/locks").HandlerFunc(httpTraceAll(adminAPI.ClearLocksHandler))
-
 	/// Heal operations
 
 	// Heal processing endpoint.

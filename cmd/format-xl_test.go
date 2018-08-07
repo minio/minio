@@ -345,8 +345,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format version "2".
 		{
 			&formatXLV3{
-				Version: "2",
-				Format:  "XL",
+				formatMetaV1: formatMetaV1{
+					Version: "2",
+					Format:  "XL",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
@@ -361,8 +363,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format "Unknown".
 		{
 			&formatXLV3{
-				Version: "1",
-				Format:  "Unknown",
+				formatMetaV1: formatMetaV1{
+					Version: "1",
+					Format:  "Unknown",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
@@ -377,8 +381,10 @@ func TestCheckFormatXLValue(t *testing.T) {
 		// Invalid XL format version "0".
 		{
 			&formatXLV3{
-				Version: "1",
-				Format:  "XL",
+				formatMetaV1: formatMetaV1{
+					Version: "1",
+					Format:  "XL",
+				},
 				XL: struct {
 					Version          string     `json:"version"`
 					This             string     `json:"this"`
@@ -463,6 +469,61 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	}
 	if _, err = getFormatXLInQuorum(formats); err == nil {
 		t.Fatal("Unexpected success")
+	}
+}
+
+// Tests formatXLGetDeploymentID()
+func TestGetXLID(t *testing.T) {
+	setCount := 2
+	disksPerSet := 8
+
+	format := newFormatXLV3(setCount, disksPerSet)
+	formats := make([]*formatXLV3, 16)
+
+	for i := 0; i < setCount; i++ {
+		for j := 0; j < disksPerSet; j++ {
+			newFormat := *format
+			newFormat.XL.This = format.XL.Sets[i][j]
+			formats[i*disksPerSet+j] = &newFormat
+		}
+	}
+
+	// Return a format from list of formats in quorum.
+	quorumFormat, err := getFormatXLInQuorum(formats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if the reference format and input formats are same.
+	var id string
+	if id, err = formatXLGetDeploymentID(quorumFormat, formats); err != nil {
+		t.Fatal(err)
+	}
+
+	if id == "" {
+		t.Fatal("ID cannot be empty.")
+	}
+
+	formats[0] = nil
+	if id, err = formatXLGetDeploymentID(quorumFormat, formats); err != nil {
+		t.Fatal(err)
+	}
+	if id == "" {
+		t.Fatal("ID cannot be empty.")
+	}
+
+	formats[1].XL.Sets[0][0] = "bad-uuid"
+	if id, err = formatXLGetDeploymentID(quorumFormat, formats); err != nil {
+		t.Fatal(err)
+	}
+
+	if id == "" {
+		t.Fatal("ID cannot be empty.")
+	}
+
+	formats[2].ID = "bad-id"
+	if id, err = formatXLGetDeploymentID(quorumFormat, formats); err != errCorruptedFormat {
+		t.Fatal("Unexpected Success")
 	}
 }
 

@@ -118,6 +118,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
   GCS credentials file:
      GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
@@ -137,6 +138,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}} mygcsprojectid
 `
 
@@ -552,15 +554,15 @@ func isGCSMarker(marker string) bool {
 
 // ListObjects - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjects(ctx context.Context, bucket string, prefix string, marker string, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
+	if maxKeys == 0 {
+		return minio.ListObjectsInfo{}, nil
+	}
+
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{
 		Delimiter: delimiter,
 		Prefix:    prefix,
 		Versions:  false,
 	})
-
-	isTruncated := false
-	nextMarker := ""
-	prefixes := []string{}
 
 	// To accommodate S3-compatible applications using
 	// ListObjectsV1 to use object keys as markers to control the
@@ -572,83 +574,86 @@ func (l *gcsGateway) ListObjects(ctx context.Context, bucket string, prefix stri
 	//   prefixing "{minio}" to the GCS continuation token,
 	//   e.g, "{minio}CgRvYmoz"
 	//
-	// - Application supplied markers are used as-is to list
-	//   object keys that appear after it in the lexicographical order.
+	// - Application supplied markers are transformed to a
+	//   GCS continuation token.
 
 	// If application is using GCS continuation token we should
 	// strip the gcsTokenPrefix we added.
-	gcsMarker := isGCSMarker(marker)
-	if gcsMarker {
-		it.PageInfo().Token = strings.TrimPrefix(marker, gcsTokenPrefix)
+	token := ""
+	if marker != "" {
+		if isGCSMarker(marker) {
+			token = strings.TrimPrefix(marker, gcsTokenPrefix)
+		} else {
+			token = toGCSPageToken(marker)
+		}
 	}
+	nextMarker := ""
 
-	it.PageInfo().MaxSize = maxKeys
+	var prefixes []string
+	var objects []minio.ObjectInfo
+	var nextPageToken string
+	var err error
 
-	objects := []minio.ObjectInfo{}
+	pager := iterator.NewPager(it, maxKeys, token)
 	for {
-		if len(objects) >= maxKeys {
-			// check if there is one next object and
-			// if that one next object is our hidden
-			// metadata folder, then just break
-			// otherwise we've truncated the output
-			attrs, _ := it.Next()
-			if attrs != nil && attrs.Prefix == minio.GatewayMinioSysTmp {
-				break
-			}
-
-			isTruncated = true
-			break
-		}
-
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
+		gcsObjects := make([]*storage.ObjectAttrs, 0)
+		nextPageToken, err = pager.NextPage(&gcsObjects)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return minio.ListObjectsInfo{}, gcsToObjectError(err, bucket, prefix)
 		}
 
-		nextMarker = toGCSPageToken(attrs.Name)
+		for _, attrs := range gcsObjects {
 
-		if attrs.Prefix == minio.GatewayMinioSysTmp {
-			// We don't return our metadata prefix.
-			continue
-		}
-		if !strings.HasPrefix(prefix, minio.GatewayMinioSysTmp) {
-			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
-			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
-			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, minio.GatewayMinioSysTmp) ||
-				strings.HasPrefix(attrs.Name, minio.GatewayMinioSysTmp) {
+			// Due to minio.GatewayMinioSysTmp keys being skipped, the number of objects + prefixes
+			// returned may not total maxKeys. This behavior is compatible with the S3 spec which
+			// allows the response to include less keys than maxKeys.
+			if attrs.Prefix == minio.GatewayMinioSysTmp {
+				// We don't return our metadata prefix.
 				continue
 			}
-		}
-		if attrs.Prefix != "" {
-			prefixes = append(prefixes, attrs.Prefix)
-			continue
-		}
-		if !gcsMarker && attrs.Name <= marker {
-			// if user supplied a marker don't append
-			// objects until we reach marker (and skip it).
-			continue
+			if !strings.HasPrefix(prefix, minio.GatewayMinioSysTmp) {
+				// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
+				// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
+				// which will be helpful to observe the "directory structure" for debugging purposes.
+				if strings.HasPrefix(attrs.Prefix, minio.GatewayMinioSysTmp) ||
+					strings.HasPrefix(attrs.Name, minio.GatewayMinioSysTmp) {
+					continue
+				}
+			}
+
+			if attrs.Prefix != "" {
+				prefixes = append(prefixes, attrs.Prefix)
+			} else {
+				objects = append(objects, fromGCSAttrsToObjectInfo(attrs))
+			}
+
+			// The NextMarker property should only be set in the response if a delimiter is used
+			if delimiter != "" {
+				if attrs.Prefix > nextMarker {
+					nextMarker = attrs.Prefix
+				} else if attrs.Name > nextMarker {
+					nextMarker = attrs.Name
+				}
+			}
 		}
 
-		objects = append(objects, minio.ObjectInfo{
-			Name:            attrs.Name,
-			Bucket:          attrs.Bucket,
-			ModTime:         attrs.Updated,
-			Size:            attrs.Size,
-			ETag:            minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C)),
-			UserDefined:     attrs.Metadata,
-			ContentType:     attrs.ContentType,
-			ContentEncoding: attrs.ContentEncoding,
-		})
+		// Exit the loop if at least one item can be returned from
+		// the current page or there are no more pages available
+		if nextPageToken == "" || len(prefixes)+len(objects) > 0 {
+			break
+		}
+	}
+
+	if nextPageToken == "" {
+		nextMarker = ""
+	} else if nextMarker != "" {
+		nextMarker = gcsTokenPrefix + toGCSPageToken(nextMarker)
 	}
 
 	return minio.ListObjectsInfo{
-		IsTruncated: isTruncated,
-		NextMarker:  gcsTokenPrefix + nextMarker,
+		IsTruncated: nextPageToken != "",
+		NextMarker:  nextMarker,
 		Prefixes:    prefixes,
 		Objects:     objects,
 	}, nil
@@ -656,68 +661,72 @@ func (l *gcsGateway) ListObjects(ctx context.Context, bucket string, prefix stri
 
 // ListObjectsV2 - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (minio.ListObjectsV2Info, error) {
+	if maxKeys == 0 {
+		return minio.ListObjectsV2Info{ContinuationToken: continuationToken}, nil
+	}
+
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{
 		Delimiter: delimiter,
 		Prefix:    prefix,
 		Versions:  false,
 	})
 
-	isTruncated := false
-	it.PageInfo().MaxSize = maxKeys
-
-	if continuationToken != "" {
-		// If client sends continuationToken, set it
-		it.PageInfo().Token = continuationToken
-	} else {
-		// else set the continuationToken to return
-		continuationToken = it.PageInfo().Token
-		if continuationToken != "" {
-			// If GCS SDK sets continuationToken, it means there are more than maxKeys in the current page
-			// and the response will be truncated
-			isTruncated = true
-		}
+	token := continuationToken
+	if token == "" && startAfter != "" {
+		token = toGCSPageToken(startAfter)
 	}
 
 	var prefixes []string
 	var objects []minio.ObjectInfo
+	var nextPageToken string
+	var err error
 
+	pager := iterator.NewPager(it, maxKeys, token)
 	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-
+		gcsObjects := make([]*storage.ObjectAttrs, 0)
+		nextPageToken, err = pager.NextPage(&gcsObjects)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return minio.ListObjectsV2Info{}, gcsToObjectError(err, bucket, prefix)
 		}
 
-		if attrs.Prefix == minio.GatewayMinioSysTmp {
-			// We don't return our metadata prefix.
-			continue
-		}
-		if !strings.HasPrefix(prefix, minio.GatewayMinioSysTmp) {
-			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
-			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
-			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, minio.GatewayMinioSysTmp) ||
-				strings.HasPrefix(attrs.Name, minio.GatewayMinioSysTmp) {
+		for _, attrs := range gcsObjects {
+
+			// Due to minio.GatewayMinioSysTmp keys being skipped, the number of objects + prefixes
+			// returned may not total maxKeys. This behavior is compatible with the S3 spec which
+			// allows the response to include less keys than maxKeys.
+			if attrs.Prefix == minio.GatewayMinioSysTmp {
+				// We don't return our metadata prefix.
 				continue
+			}
+			if !strings.HasPrefix(prefix, minio.GatewayMinioSysTmp) {
+				// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
+				// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
+				// which will be helpful to observe the "directory structure" for debugging purposes.
+				if strings.HasPrefix(attrs.Prefix, minio.GatewayMinioSysTmp) ||
+					strings.HasPrefix(attrs.Name, minio.GatewayMinioSysTmp) {
+					continue
+				}
+			}
+
+			if attrs.Prefix != "" {
+				prefixes = append(prefixes, attrs.Prefix)
+			} else {
+				objects = append(objects, fromGCSAttrsToObjectInfo(attrs))
 			}
 		}
 
-		if attrs.Prefix != "" {
-			prefixes = append(prefixes, attrs.Prefix)
-			continue
+		// Exit the loop if at least one item can be returned from
+		// the current page or there are no more pages available
+		if nextPageToken == "" || len(prefixes)+len(objects) > 0 {
+			break
 		}
-
-		objects = append(objects, fromGCSAttrsToObjectInfo(attrs))
 	}
 
 	return minio.ListObjectsV2Info{
-		IsTruncated:           isTruncated,
+		IsTruncated:           nextPageToken != "",
 		ContinuationToken:     continuationToken,
-		NextContinuationToken: continuationToken,
+		NextContinuationToken: nextPageToken,
 		Prefixes:              prefixes,
 		Objects:               objects,
 	}, nil
@@ -1009,12 +1018,8 @@ func (l *gcsGateway) AbortMultipartUpload(ctx context.Context, bucket string, ke
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 // Note that there is a limit (currently 32) to the number of components that can
-// be composed in a single operation. There is a limit (currently 1024) to the total
-// number of components for a given composite object. This means you can append to
-// each object at most 1023 times. There is a per-project rate limit (currently 200)
-// to the number of components you can compose per second. This rate counts both the
-// components being appended to a composite object as well as the components being
-// copied when the composite object of which they are a part is copied.
+// be composed in a single operation. There is a per-project rate limit (currently 200)
+// to the number of source objects you can compose per second.
 func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string, key string, uploadID string, uploadedParts []minio.CompletePart) (minio.ObjectInfo, error) {
 	meta := gcsMultipartMetaName(uploadID)
 	object := l.client.Bucket(bucket).Object(meta)
@@ -1134,7 +1139,6 @@ func (l *gcsGateway) CompleteMultipartUpload(ctx context.Context, bucket string,
 func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, bucketPolicy *policy.Policy) error {
 	policyInfo, err := minio.PolicyToBucketAccessPolicy(bucketPolicy)
 	if err != nil {
-		// This should not happen.
 		logger.LogIf(ctx, err)
 		return gcsToObjectError(err, bucket)
 	}
@@ -1190,7 +1194,6 @@ func (l *gcsGateway) SetBucketPolicy(ctx context.Context, bucket string, bucketP
 func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
 	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, gcsToObjectError(err, bucket)
 	}
 
@@ -1225,7 +1228,6 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 
 	// Return NoSuchBucketPolicy error, when policy is not set
 	if len(actionSet) == 0 {
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
 		return nil, gcsToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	}
 
@@ -1250,7 +1252,6 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	// This only removes the storage.AllUsers policies
 	if err := l.client.Bucket(bucket).ACL().Delete(l.ctx, storage.AllUsers); err != nil {
-		logger.LogIf(ctx, err)
 		return gcsToObjectError(err, bucket)
 	}
 

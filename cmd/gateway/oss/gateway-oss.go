@@ -74,6 +74,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
   1. Start minio gateway server for Aliyun OSS backend.
@@ -92,6 +93,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}}
 `
 
@@ -477,8 +479,11 @@ func ossListObjects(ctx context.Context, client *oss.Client, bucket, prefix, mar
 // ossListObjectsV2 lists all blobs in OSS bucket filtered by prefix.
 func ossListObjectsV2(ctx context.Context, client *oss.Client, bucket, prefix, continuationToken, delimiter string, maxKeys int,
 	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
-	// fetchOwner and startAfter are not supported and unused.
+	// fetchOwner is not supported and unused.
 	marker := continuationToken
+	if marker == "" {
+		marker = startAfter
+	}
 
 	resultV1, err := ossListObjects(ctx, client, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
@@ -1016,7 +1021,6 @@ func (l *ossObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 	switch result.ACL {
 	case string(oss.ACLPrivate):
 		// By default, all buckets starts with a "private" policy.
-		logger.LogIf(ctx, minio.BucketPolicyNotFound{})
 		return nil, ossToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	case string(oss.ACLPublicRead):
 		readOnly = true

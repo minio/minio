@@ -34,7 +34,7 @@ _init() {
 
 ## FIXME:
 ## In OSX, 'readlink -f' option does not exist, hence
-## we have our own readlink -f behaviour here.
+## we have our own readlink -f behavior here.
 ## Once OSX has the option, below function is good enough.
 ## 
 ## readlink() {
@@ -89,11 +89,11 @@ check_minimum_version() {
 
 assert_is_supported_arch() {
     case "${ARCH}" in
-        x86_64 | amd64 | aarch64 | arm* )
+        x86_64 | amd64 | aarch64 | ppc64le | arm* )
             return
             ;;
         *)
-            echo "Arch '${ARCH}' is not supported. Supported Arch: [x86_64, amd64, aarch64, arm*]"
+            echo "Arch '${ARCH}' is not supported. Supported Arch: [x86_64, amd64, aarch64, ppc64le, arm*]"
             exit 1
     esac
 }

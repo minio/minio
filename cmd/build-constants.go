@@ -22,6 +22,9 @@ var (
 	// GOPATH - GOPATH value at the time of build.
 	GOPATH = ""
 
+	// GOROOT - GOROOT value at the time of build.
+	GOROOT = ""
+
 	// Go get development tag.
 	goGetTag = "DEVELOPMENT.GOGET"
 

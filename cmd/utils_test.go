@@ -445,6 +445,7 @@ func TestCeilFrac(t *testing.T) {
 // Test if isErrIgnored works correctly.
 func TestIsErrIgnored(t *testing.T) {
 	var errIgnored = fmt.Errorf("ignored error")
+	ignoredErrs := append(baseIgnoredErrs, errIgnored)
 	var testCases = []struct {
 		err     error
 		ignored bool
@@ -457,9 +458,13 @@ func TestIsErrIgnored(t *testing.T) {
 			err:     errIgnored,
 			ignored: true,
 		},
+		{
+			err:     errFaultyDisk,
+			ignored: true,
+		},
 	}
 	for i, testCase := range testCases {
-		if ok := IsErrIgnored(testCase.err, errIgnored); ok != testCase.ignored {
+		if ok := IsErrIgnored(testCase.err, ignoredErrs...); ok != testCase.ignored {
 			t.Errorf("Test: %d, Expected %t, got %t", i+1, testCase.ignored, ok)
 		}
 	}

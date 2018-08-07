@@ -162,6 +162,16 @@ func (functions *Functions) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// GobEncode - encodes Functions to gob data.
+func (functions Functions) GobEncode() ([]byte, error) {
+	return functions.MarshalJSON()
+}
+
+// GobDecode - decodes gob data to Functions.
+func (functions *Functions) GobDecode(data []byte) error {
+	return functions.UnmarshalJSON(data)
+}
+
 // NewFunctions - returns new Functions with given function list.
 func NewFunctions(functions ...Function) Functions {
 	return Functions(functions)

@@ -320,13 +320,6 @@ func (e InvalidPart) Error() string {
 	return "One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag."
 }
 
-// PartsSizeUnequal - All parts except the last part should be of the same size
-type PartsSizeUnequal struct{}
-
-func (e PartsSizeUnequal) Error() string {
-	return "All parts except the last part should be of the same size"
-}
-
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
 	PartSize   int64
@@ -382,18 +375,18 @@ func (e BackendDown) Error() string {
 
 // isErrIncompleteBody - Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
-	switch err.(type) {
-	case IncompleteBody:
-		return true
-	}
-	return false
+	_, ok := err.(IncompleteBody)
+	return ok
 }
 
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
-	switch err.(type) {
-	case ObjectNotFound:
-		return true
-	}
-	return false
+	_, ok := err.(ObjectNotFound)
+	return ok
+}
+
+// isInsufficientReadQuorum - Check if error type is InsufficientReadQuorum.
+func isInsufficientReadQuorum(err error) bool {
+	_, ok := err.(InsufficientReadQuorum)
+	return ok
 }

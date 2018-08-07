@@ -34,7 +34,7 @@ import (
 )
 
 func init() {
-	logger.Init(GOPATH)
+	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
 }
 
@@ -159,6 +159,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize gateway config.
 	initConfig()
 
+	// Load logger subsystem
+	loadLoggers()
+
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
@@ -170,8 +173,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	initNSLock(false) // Enable local namespace lock.
 
 	// Create new notification system.
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, EndpointList{})
-	logger.FatalIf(err, "Unable to create new notification system")
+	globalNotificationSys = NewNotificationSys(globalServerConfig, EndpointList{})
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
@@ -197,7 +199,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, registerHandlers(router, globalHandlers...), getCert)
+	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
@@ -214,6 +216,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
+
+	go globalPolicySys.Init(newObject)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()

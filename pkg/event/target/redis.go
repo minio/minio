@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -34,6 +35,26 @@ type RedisArgs struct {
 	Addr     xnet.Host `json:"address"`
 	Password string    `json:"password"`
 	Key      string    `json:"key"`
+}
+
+// Validate RedisArgs fields
+func (r RedisArgs) Validate() error {
+	if !r.Enable {
+		return nil
+	}
+
+	if r.Format != "" {
+		f := strings.ToLower(r.Format)
+		if f != event.NamespaceFormat && f != event.AccessFormat {
+			return fmt.Errorf("unrecognized format")
+		}
+	}
+
+	if r.Key == "" {
+		return fmt.Errorf("empty key")
+	}
+
+	return nil
 }
 
 // RedisTarget - Redis target.

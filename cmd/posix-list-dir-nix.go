@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -124,17 +123,11 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 
 	d, err := os.Open(dirPath)
 	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || isSysErrNotDir(err) {
 			return nil, errFileNotFound
 		}
 		if os.IsPermission(err) {
 			return nil, errFileAccessDenied
-		}
-
-		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
-			return nil, errFileNotFound
 		}
 		return nil, err
 	}
@@ -148,6 +141,9 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	for !done {
 		nbuf, err := syscall.ReadDirent(fd, buf)
 		if err != nil {
+			if isSysErrNotDir(err) {
+				return nil, errFileNotFound
+			}
 			return nil, err
 		}
 		if nbuf <= 0 {

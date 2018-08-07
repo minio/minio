@@ -145,6 +145,6 @@ func TestHealObjectXL(t *testing.T) {
 	_, err = obj.HealObject(context.Background(), bucket, object, false)
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
-		t.Errorf("Expected %v but received %v", InsufficientWriteQuorum{}, err)
+		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
 	}
 }

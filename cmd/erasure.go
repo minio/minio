@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/subtle"
-	"hash"
 
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/minio/cmd/logger"
@@ -28,43 +26,36 @@ import (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// ErasureFileInfo contains information about an erasure file operation (create, read, heal).
-type ErasureFileInfo struct {
-	Size      int64
-	Algorithm BitrotAlgorithm
-	Checksums [][]byte
-}
-
-// ErasureStorage represents an array of disks.
-// The disks contain erasure coded and bitrot-protected data.
+// ErasureStorage - erasure encoding details.
 type ErasureStorage struct {
-	disks                    []StorageAPI
 	erasure                  reedsolomon.Encoder
 	dataBlocks, parityBlocks int
+	blockSize                int64
 }
 
-// NewErasureStorage creates a new ErasureStorage. The storage erasure codes and protects all data written to
-// the disks.
-func NewErasureStorage(ctx context.Context, disks []StorageAPI, dataBlocks, parityBlocks int, blockSize int64) (s ErasureStorage, err error) {
-	shardsize := (int(blockSize) + dataBlocks - 1) / dataBlocks
+// NewErasureStorage creates a new ErasureStorage.
+func NewErasureStorage(ctx context.Context, dataBlocks, parityBlocks int, blockSize int64) (s ErasureStorage, err error) {
+	shardsize := int(ceilFrac(blockSize, int64(dataBlocks)))
 	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return s, err
 	}
 	s = ErasureStorage{
-		disks:        make([]StorageAPI, len(disks)),
 		erasure:      erasure,
 		dataBlocks:   dataBlocks,
 		parityBlocks: parityBlocks,
+		blockSize:    blockSize,
 	}
-	copy(s.disks, disks)
 	return
 }
 
 // ErasureEncode encodes the given data and returns the erasure-coded data.
 // It returns an error if the erasure coding failed.
 func (s *ErasureStorage) ErasureEncode(ctx context.Context, data []byte) ([][]byte, error) {
+	if len(data) == 0 {
+		return make([][]byte, s.dataBlocks+s.parityBlocks), nil
+	}
 	encoded, err := s.erasure.Split(data)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -81,6 +72,16 @@ func (s *ErasureStorage) ErasureEncode(ctx context.Context, data []byte) ([][]by
 // It only decodes the data blocks but does not verify them.
 // It returns an error if the decoding failed.
 func (s *ErasureStorage) ErasureDecodeDataBlocks(data [][]byte) error {
+	needsReconstruction := false
+	for _, b := range data[:s.dataBlocks] {
+		if b == nil {
+			needsReconstruction = true
+			break
+		}
+	}
+	if !needsReconstruction {
+		return nil
+	}
 	if err := s.erasure.ReconstructData(data); err != nil {
 		return err
 	}
@@ -96,27 +97,3 @@ func (s *ErasureStorage) ErasureDecodeDataAndParityBlocks(ctx context.Context, d
 	}
 	return nil
 }
-
-// NewBitrotVerifier returns a new BitrotVerifier implementing the given algorithm.
-func NewBitrotVerifier(algorithm BitrotAlgorithm, checksum []byte) *BitrotVerifier {
-	return &BitrotVerifier{algorithm.New(), algorithm, checksum, false}
-}
-
-// BitrotVerifier can be used to verify protected data.
-type BitrotVerifier struct {
-	hash.Hash
-
-	algorithm BitrotAlgorithm
-	sum       []byte
-	verified  bool
-}
-
-// Verify returns true iff the computed checksum of the verifier matches the the checksum provided when the verifier
-// was created.
-func (v *BitrotVerifier) Verify() bool {
-	v.verified = true
-	return subtle.ConstantTimeCompare(v.Sum(nil), v.sum) == 1
-}
-
-// IsVerified returns true iff Verify was called at least once.
-func (v *BitrotVerifier) IsVerified() bool { return v.verified }

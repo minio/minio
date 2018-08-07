@@ -33,7 +33,7 @@ import (
 )
 
 func init() {
-	logger.Init(GOPATH)
+	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
 }
 
@@ -72,9 +72,6 @@ ENVIRONMENT VARIABLES:
      MINIO_ACCESS_KEY: Custom username or access key of minimum 3 characters in length.
      MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
 
-  ENDPOINTS:
-     MINIO_ENDPOINTS: List of all endpoints delimited by ' '.
-
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
@@ -82,6 +79,7 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
+     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
@@ -105,9 +103,8 @@ EXAMPLES:
      $ export MINIO_DOMAIN=mydomain.com
      $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
-  4. Start minio server on 64 disks server with endpoints through environment variable.
-     $ export MINIO_ENDPOINTS=/mnt/export{1...64}
-     $ {{.HelpName}}
+  4. Start erasure coded minio server on a node with 64 drives.
+     $ {{.HelpName}} /mnt/export{1...64}
 
   5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
      $ export MINIO_ACCESS_KEY=minio
@@ -118,6 +115,7 @@ EXAMPLES:
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
      $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
      $ export MINIO_CACHE_EXPIRY=40
+     $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}} /home/shared
 `,
 }
@@ -219,6 +217,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize server config.
 	initConfig()
 
+	// Load logger subsystem
+	loadLoggers()
+
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
@@ -269,15 +270,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
 
-	// Create new notification system.
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize the notification system")
-	}
-
-	// Create new policy system.
-	globalPolicySys = NewPolicySys()
-
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
@@ -286,7 +278,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, handler, getCert)
+	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
@@ -313,15 +305,31 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
+	// Re-enable logging
+	logger.Disable = false
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
+
+	// Initialize policy system.
+	if err := globalPolicySys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize policy system")
+	}
+
+	// Create new notification system.
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+
+	// Initialize notification system.
+	if err := globalNotificationSys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize notification system")
+	}
+
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(globalMinioAddr)
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
-
-	// Re-enable logging
-	logger.Disable = false
 
 	handleSignals()
 }
