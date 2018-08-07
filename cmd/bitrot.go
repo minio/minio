@@ -18,12 +18,12 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"hash"
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
 
