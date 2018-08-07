@@ -88,8 +88,21 @@ describe("ObjectActions", () => {
         object={{ name: "obj1" }}
         currentPrefix={"pre1/"}
         showShareObjectModal={true}
+        shareObjectName={"obj1"}
       />
     )
     expect(wrapper.find("Connect(ShareObjectModal)").length).toBe(1)
+  })
+
+  it("shouldn't render ShareObjectModal when the names of the objects don't match", () => {
+    const wrapper = shallow(
+      <ObjectActions
+        object={{ name: "obj1" }}
+        currentPrefix={"pre1/"}
+        showShareObjectModal={true}
+        shareObjectName={"obj2"}
+      />
+    )
+    expect(wrapper.find("Connect(ShareObjectModal)").length).toBe(0)
   })
 })
