@@ -70,9 +70,9 @@ async.waterfall([
       commitId = stdout.replace('\n', '')
       if (commitId.length !== 40) throw new Error('commitId invalid : ' + commitId)
       assetsFileName = 'ui-assets.go';
-      var cmd = 'go-bindata-assetfs -pkg browser -nocompress=true production/...'
+      var cmd = 'go-bindata-assetfs -o bindata_assetfs.go -pkg browser -nocompress=true production/...'
       if (!isProduction) {
-        cmd = 'go-bindata-assetfs -pkg browser -nocompress=true dev/...'
+        cmd = 'go-bindata-assetfs -o bindata_assetfs.go -pkg browser -nocompress=true dev/...'
       }
       console.log('Running', cmd)
       exec(cmd, cb)
