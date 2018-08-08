@@ -173,16 +173,23 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	setObjectHeaders(w, objInfo, hrange)
 	setHeadGetRespHeaders(w, r.URL.Query())
-	httpWriter := ioutil.WriteOnClose(writer)
 
 	getObject := objectAPI.GetObject
 	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
 		getObject = api.CacheAPI().GetObject
 	}
 
+	statusCodeWritten := false
+	httpWriter := ioutil.WriteOnClose(writer)
+
+	if hrange != nil && hrange.offsetBegin > -1 {
+		statusCodeWritten = true
+		w.WriteHeader(http.StatusPartialContent)
+	}
+
 	// Reads the object at startOffset and writes to mw.
 	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
-		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
 		httpWriter.Close()
@@ -190,7 +197,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if err = httpWriter.Close(); err != nil {
-		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
+		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}

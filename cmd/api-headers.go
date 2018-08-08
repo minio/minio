@@ -100,6 +100,5 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 		// Override content-length
 		w.Header().Set("Content-Length", strconv.FormatInt(contentRange.getLength(), 10))
 		w.Header().Set("Content-Range", contentRange.String())
-		w.WriteHeader(http.StatusPartialContent)
 	}
 }
