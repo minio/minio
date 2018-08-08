@@ -91,20 +91,15 @@ func (r *recordResponseWriter) WriteHeader(i int) {
 
 func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 	n, err = r.ResponseWriter.Write(p)
-	// We log after calling ResponseWriter.Write() because this latter
-	// proactively prepares headers when WriteHeader is not called yet.
 	if !r.headersLogged {
+		// We assume the response code to be '200 OK' when WriteHeader() is not called,
+		// that way following Golang HTTP response behavior.
 		writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
-	if r.statusCode != http.StatusOK && r.statusCode != http.StatusNoContent && r.statusCode != 0 {
-		// We always log error responses.
+	if (r.statusCode != http.StatusOK && r.statusCode != http.StatusPartialContent && r.statusCode != 0) || r.logBody {
+		// Always logging error responses.
 		r.body.Write(p)
-		return
-	}
-	if r.logBody {
-		r.body.Write(p)
-		return
 	}
 	return n, err
 }
@@ -180,6 +175,10 @@ func TraceReqHandlerFunc(f http.HandlerFunc, output io.Writer, logBody bool) htt
 
 		b.Write(respBodyRecorder.Headers())
 		fmt.Fprintf(b, "\n")
+
+		// recordResponseWriter{} is configured to record only
+		// responses with http code != 200 &  != 206, we don't
+		// have to check for logBody value here.
 		bodyContents := respBodyRecorder.Body()
 		if bodyContents != nil {
 			b.Write(bodyContents)
