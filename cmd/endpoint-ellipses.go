@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -69,10 +71,26 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 		return nil, errInvalidArgument
 	}
 
+	// isValidSetSize - checks whether given count is a valid set size for erasure coding.
+	isValidSetSize := func(count uint64) bool {
+		return (count >= setSizes[0] && count <= setSizes[len(setSizes)-1] && count%2 == 0)
+	}
+
+	var customSetDriveCount uint64
+	if v := os.Getenv("MINIO_ERASURE_SET_DRIVE_COUNT"); v != "" {
+		customSetDriveCount, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, uiErrInvalidErasureSetSize(err)
+		}
+		if !isValidSetSize(customSetDriveCount) {
+			return nil, uiErrInvalidErasureSetSize(nil)
+		}
+	}
+
 	setIndexes = make([][]uint64, len(totalSizes))
 	for _, totalSize := range totalSizes {
 		// Check if totalSize has minimum range upto setSize
-		if totalSize < setSizes[0] {
+		if totalSize < setSizes[0] || totalSize < customSetDriveCount {
 			return nil, uiErrInvalidNumberOfErasureEndpoints(nil)
 		}
 	}
@@ -95,9 +113,24 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 		setSize = commonSize
 	}
 
-	// isValidSetSize - checks whether given count is a valid set size for erasure coding.
-	isValidSetSize := func(count uint64) bool {
-		return (count >= setSizes[0] && count <= setSizes[len(setSizes)-1] && count%2 == 0)
+	possibleSetCounts := func(setSize uint64) (ss []uint64) {
+		for _, s := range setSizes {
+			if setSize%s == 0 {
+				ss = append(ss, s)
+			}
+		}
+		return ss
+	}
+
+	if customSetDriveCount > 0 {
+		msg := fmt.Sprintf("Invalid set drive count, leads to non-uniform distribution for the given number of disks. Possible values for custom set count are %d", possibleSetCounts(setSize))
+		if customSetDriveCount > setSize {
+			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
+		}
+		if setSize%customSetDriveCount != 0 {
+			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
+		}
+		setSize = customSetDriveCount
 	}
 
 	// Check whether setSize is with the supported range.
