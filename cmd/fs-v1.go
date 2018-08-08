@@ -498,6 +498,22 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	return objInfo, nil
 }
 
+func (fs *FSObjects) ListObjectsVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	return result, NotImplemented{}
+}
+
+func (fs *FSObjects) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+	return fs.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo)
+}
+
+func (fs *FSObjects) GetObjectVersion(ctx context.Context, bucket, object, version string, offset int64, length int64, writer io.Writer, etag string) (err error) {
+	return fs.GetObject(ctx, bucket, object, offset, length, writer, etag)
+}
+
+func (fs *FSObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
+	return fs.GetObjectInfo(ctx, bucket, object)
+}
+
 // GetObject - reads an object from the disk.
 // Supports additional parameters like offset and length
 // which are synonymous with HTTP Range requests.
@@ -1226,6 +1242,14 @@ func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 // DeleteBucketPolicy deletes all policies on bucket
 func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, fs, bucket)
+}
+
+func (fs *FSObjects) GetBucketVersioning(ctx context.Context, bucket string) (*VersioningConfiguration, error) {
+	return nil, NotImplemented{}
+}
+
+func (fs *FSObjects) SetBucketVersioning(ctx context.Context, bucket string, versioningConfig VersioningConfiguration) error {
+	return NotImplemented{}
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

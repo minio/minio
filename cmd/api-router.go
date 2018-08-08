@@ -85,6 +85,8 @@ func registerAPIRouter(router *mux.Router) {
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
 		// GetBucketPolicy
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		// GetBucketVersioning
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketVersioningHandler)).Queries("versioning", "")
 
 		// GetBucketACL -- this is a dummy call.
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketACLHandler)).Queries("acl", "")
@@ -95,12 +97,16 @@ func registerAPIRouter(router *mux.Router) {
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListenBucketNotificationHandler)).Queries("events", "{events:.*}")
 		// ListMultipartUploads
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
+		// ListObjectVersions
+		bucket.Methods("GET").HandlerFunc(httpTraceHdrs(api.ListObjectsVersionsHandler)).Queries("versions", "")
 		// ListObjectsV2
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
 		// PutBucketPolicy
 		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		// PutBucketVersioning
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketVersioningHandler)).Queries("versioning", "")
 		// PutBucketNotification
 		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
 		// PutBucket

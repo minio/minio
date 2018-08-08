@@ -38,18 +38,26 @@ type ObjectLayer interface {
 	DeleteBucket(ctx context.Context, bucket string) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
+	ListObjectsVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error)
 
 	// Object operations.
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
+
+	GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
+	GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error)
+
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error)
+	CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
 	NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error)
 	CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
+		startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error)
+	CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, uploadID string, partID int,
 		startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error)
 	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error)
 	ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error)
@@ -68,6 +76,10 @@ type ObjectLayer interface {
 	SetBucketPolicy(context.Context, string, *policy.Policy) error
 	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
 	DeleteBucketPolicy(context.Context, string) error
+
+	// Versioning operations
+	GetBucketVersioning(context.Context, string) (*VersioningConfiguration, error)
+	SetBucketVersioning(context.Context, string, VersioningConfiguration) error
 
 	// Supported operations check
 	IsNotificationSupported() bool

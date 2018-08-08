@@ -252,12 +252,16 @@ func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object strin
 	return xl.newMultipartUpload(ctx, bucket, object, meta)
 }
 
-// CopyObjectPart - reads incoming stream and internally erasure codes
+func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
+	return xl.CopyObjectPartVersion(ctx, srcBucket, srcObject, "", dstBucket, dstObject, uploadID, partID, startOffset, length, srcInfo)
+}
+
+// CopyObjectPartVersion - reads incoming stream and internally erasure codes
 // them. This call is similar to put object part operation but the source
 // data is read from an existing object.
 //
 // Implements S3 compatible Upload Part Copy API.
-func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
+func (xl xlObjects) CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
 	// Hold read locks on source object only if we are
 	// going to read data from source object.
 	objectSRLock := xl.nsMutex.NewNSLock(srcBucket, srcObject)
@@ -271,7 +275,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 	}
 
 	go func() {
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, "", startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 			}
@@ -737,7 +741,42 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	if xl.isObject(bucket, object) {
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		if xl.isObject(bucket, object) {
+			logger.LogIf(ctx, ObjectAlreadyExists{Bucket: bucket, Object: object})
+			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+		}
+	}
+
+	versionedObject := object
+	if globalVersioningSys.IsConfigured(bucket) {
+		var xlVersioning xlVersioningV1
+		var objectVersionID string
+		if globalVersioningSys.IsEnabled(bucket) {
+			objectVersionID = mustGetUUID()
+		} else {
+			objectVersionID = "null"
+		}
+		xlVersioning, err = xl.getObjectVersioning(ctx, bucket, object)
+		if err != nil {
+			if err == errFileNotFound {
+				xlVersioning = newXLVersioningV1()
+			} else {
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+		}
+		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
+		defer func() {
+			xlVersioning.ObjectVersionID = objectVersionID
+			xlVersioning.ModTime = time.Now().UTC()
+			tempVersioning := mustGetUUID()
+			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+		}()
+	}
+
+	if xl.isObject(bucket, versionedObject) {
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -747,7 +786,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors.
-		_, err = renameObject(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, newUniqueID, writeQuorum)
+		_, err = renameObject(ctx, xl.getDisks(), bucket, versionedObject, minioMetaTmpBucket, newUniqueID, writeQuorum)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
@@ -766,16 +805,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		}
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if xl.isObject(bucket, object) {
-			logger.LogIf(ctx, ObjectAlreadyExists{Bucket: bucket, Object: object})
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-		}
-	}
-
 	// Rename the multipart object to final location.
-	if _, err = renameObject(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, writeQuorum); err != nil {
+	if _, err = renameObject(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, versionedObject, writeQuorum); err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
 

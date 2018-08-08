@@ -143,6 +143,15 @@ func parseXLFormat(xlMetaBuf []byte) string {
 	return gjson.GetBytes(xlMetaBuf, "format").String()
 }
 
+func parseXLModTime(xlMetaBuf []byte) (time.Time, error) {
+	// fetching modTime.
+	return time.Parse(time.RFC3339, gjson.GetBytes(xlMetaBuf, "modTime").String())
+}
+
+func parseXLObjectVersionID(xlMetaBuf []byte) string {
+	return gjson.GetBytes(xlMetaBuf, "objectVersionID").String()
+}
+
 func parseXLRelease(xlMetaBuf []byte) string {
 	return gjson.GetBytes(xlMetaBuf, "minio.release").String()
 }
@@ -341,6 +350,76 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 
 	// Return all the metadata.
 	return metadataArray, errs
+}
+
+// Constructs XLVersioningV1 using `gjson` lib to retrieve each field.
+func xlVersioningV1UnmarshalJSON(ctx context.Context, xlVersioningBuf []byte) (xlVersioning xlVersioningV1, e error) {
+	// obtain version.
+	xlVersioning.Version = parseXLVersion(xlVersioningBuf)
+	// obtain format.
+	xlVersioning.Format = parseXLFormat(xlVersioningBuf)
+	// obtain object version id.
+	xlVersioning.ObjectVersionID = parseXLObjectVersionID(xlVersioningBuf)
+	// obtain modtime.
+	xlVersioning.ModTime, e = parseXLModTime(xlVersioningBuf)
+	if e != nil {
+		return xlVersioningV1{}, e
+	}
+	// Get the xlMetaV1.Release field.
+	xlVersioning.Minio.Release = parseXLRelease(xlVersioningBuf)
+
+	return xlVersioning, nil
+}
+
+// readXLVersioning reads `versioning.json` and returns back XL versioning structure.
+func readXLVersioning(ctx context.Context, disk StorageAPI, bucket string, object string) (xlVersioning xlVersioningV1, err error) {
+	// Reads entire `versioning.json`.
+	xlVersioningBuf, err := disk.ReadAll(bucket, path.Join(object, xlVersioningJSONFile))
+	if err != nil {
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
+		return xlVersioningV1{}, err
+	}
+	// obtain xlVersioningV1{} using `github.com/tidwall/gjson`.
+	xlVersioning, err = xlVersioningV1UnmarshalJSON(ctx, xlVersioningBuf)
+	if err != nil {
+		return xlVersioningV1{}, err
+	}
+	// Return structured `versioning.json`.
+	return xlVersioning, nil
+}
+
+// Reads all `versioning.json` data as a xlVersioningV1 slice.
+// Returns error slice indicating the failed metadata reads.
+func readAllXLVersioning(ctx context.Context, disks []StorageAPI, bucket, object string) ([]xlVersioningV1, []error) {
+	errs := make([]error, len(disks))
+	versioningArray := make([]xlVersioningV1, len(disks))
+	var wg = &sync.WaitGroup{}
+	// Read `versioning.json` parallelly across disks.
+	for index, disk := range disks {
+		if disk == nil {
+			errs[index] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		// Read `versioning.json` in routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			var err error
+			versioningArray[index], err = readXLVersioning(ctx, disk, bucket, object)
+			if err != nil {
+				errs[index] = err
+				return
+			}
+		}(index, disk)
+	}
+
+	// Wait for all the routines to finish.
+	wg.Wait()
+
+	// Return all the versioning
+	return versioningArray, errs
 }
 
 // Return shuffled partsMetadata depending on distribution.

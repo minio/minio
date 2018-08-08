@@ -59,11 +59,31 @@ func (api *DummyObjectLayer) ListObjectsV2(ctx context.Context, bucket, prefix, 
 	return
 }
 
+func (api *DummyObjectLayer) ListObjectsVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	return
+}
+
 func (api *DummyObjectLayer) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
 	return
 }
 
+func (api *DummyObjectLayer) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
+	return
+}
+
+func (api *DummyObjectLayer) GetBucketVersioning(context.Context, string) (v *VersioningConfiguration, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) SetBucketVersioning(context.Context, string, VersioningConfiguration) (err error) {
+	return
+}
+
 func (api *DummyObjectLayer) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
 	return
 }
 
@@ -72,6 +92,10 @@ func (api *DummyObjectLayer) PutObject(ctx context.Context, bucket, object strin
 }
 
 func (api *DummyObjectLayer) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	return
 }
 
@@ -88,6 +112,10 @@ func (api *DummyObjectLayer) NewMultipartUpload(ctx context.Context, bucket, obj
 }
 
 func (api *DummyObjectLayer) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (info PartInfo, err error) {
 	return
 }
 
