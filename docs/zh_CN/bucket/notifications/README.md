@@ -399,7 +399,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 
 ### 第一步：集成Redis到Minio
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对中值的集合。
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对里面值的集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -466,7 +466,7 @@ OK
 1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
 ```
 
-在这我们可以看到了Minio在`minio_events`这个key上执行了`HSET`命令。
+在这我们可以看到Minio在`minio_events`这个key上执行了`HSET`命令。
 
 如果用的是`access`格式，那么`minio_events`就是一个list,Minio就会调用`RPUSH`添加到list中。这个list的消费者会使用`BLPOP`从list的最左端删除list元素。
 
