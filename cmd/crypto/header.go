@@ -19,10 +19,21 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"net/http"
+	"strings"
 )
 
 // SSEHeader is the general AWS SSE HTTP header key.
 const SSEHeader = "X-Amz-Server-Side-Encryption"
+
+const (
+	// SSEKmsID is the HTTP header key referencing the SSE-KMS
+	// key ID.
+	SSEKmsID = SSEHeader + "-Aws-Kms-Key-Id"
+
+	// SSEKmsContext is the HTTP header key referencing the
+	// SSE-KMS encryption context.
+	SSEKmsContext = SSEHeader + "-Context"
+)
 
 const (
 	// SSECAlgorithm is the HTTP header key referencing
@@ -52,10 +63,16 @@ const (
 	SSECopyKeyMD5 = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-Md5"
 )
 
-// SSEAlgorithmAES256 is the only supported value for the SSE-S3 or SSE-C algorithm header.
-// For SSE-S3 see: https://docs.aws.amazon.com/AmazonS3/latest/dev/SSEUsingRESTAPI.html
-// For SSE-C  see: https://docs.aws.amazon.com/AmazonS3/latest/dev/ServerSideEncryptionCustomerKeys.html
-const SSEAlgorithmAES256 = "AES256"
+const (
+	// SSEAlgorithmAES256 is the only supported value for the SSE-S3 or SSE-C algorithm header.
+	// For SSE-S3 see: https://docs.aws.amazon.com/AmazonS3/latest/dev/SSEUsingRESTAPI.html
+	// For SSE-C  see: https://docs.aws.amazon.com/AmazonS3/latest/dev/ServerSideEncryptionCustomerKeys.html
+	SSEAlgorithmAES256 = "AES256"
+
+	// SSEAlgorithmKMS is the value of 'X-Amz-Server-Side-Encryption' for SSE-KMS.
+	// See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingKMSEncryption.html
+	SSEAlgorithmKMS = "aws:kms"
+)
 
 // S3 represents AWS SSE-S3. It provides functionality to handle
 // SSE-S3 requests.
@@ -67,7 +84,7 @@ type s3 struct{}
 // the S3 client requests SSE-S3.
 func (s3) IsRequested(h http.Header) bool {
 	_, ok := h[SSEHeader]
-	return ok
+	return ok && strings.ToLower(h.Get(SSEHeader)) != SSEAlgorithmKMS // Return only true if the SSE header is specified and does not contain the SSE-KMS value
 }
 
 // ParseHTTP parses the SSE-S3 related HTTP headers and checks
@@ -77,6 +94,27 @@ func (s3) ParseHTTP(h http.Header) (err error) {
 		err = ErrInvalidEncryptionMethod
 	}
 	return
+}
+
+// S3KMS represents AWS SSE-KMS. It provides functionality to
+// handle SSE-KMS requests.
+var S3KMS = s3KMS{}
+
+type s3KMS struct{}
+
+// IsRequested returns true if the HTTP headers indicates that
+// the S3 client requests SSE-KMS.
+func (s3KMS) IsRequested(h http.Header) bool {
+	if _, ok := h[SSEKmsID]; ok {
+		return true
+	}
+	if _, ok := h[SSEKmsContext]; ok {
+		return true
+	}
+	if _, ok := h[SSEHeader]; ok {
+		return strings.ToUpper(h.Get(SSEHeader)) != SSEAlgorithmAES256 // Return only true if the SSE header is specified and does not contain the SSE-S3 value
+	}
+	return false
 }
 
 var (
