@@ -16,34 +16,30 @@ package crypto
 
 import (
 	"bytes"
-	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	vault "github.com/hashicorp/vault/api"
-	"github.com/minio/minio/cmd/logger"
 )
 
 const (
 	// VaultEndpointEnv Vault endpoint environment variable
-	VaultEndpointEnv = "MINIO_VAULT_ENDPOINT"
+	VaultEndpointEnv = "MINIO_SSE_VAULT_ENDPOINT"
 	// vaultAuthTypeEnv type of vault auth to be used
-	vaultAuthTypeEnv = "MINIO_VAULT_AUTH_TYPE"
+	vaultAuthTypeEnv = "MINIO_SSE_VAULT_AUTH_TYPE"
 	// vaultAppRoleIDEnv  Vault AppRole ID environment variable
-	vaultAppRoleIDEnv = "MINIO_VAULT_APPROLE_ID"
+	vaultAppRoleIDEnv = "MINIO_SSE_VAULT_APPROLE_ID"
 	// vaultAppSecretIDEnv Vault AppRole Secret environment variable
-	vaultAppSecretIDEnv = "MINIO_VAULT_APPROLE_SECRET"
+	vaultAppSecretIDEnv = "MINIO_SSE_VAULT_APPROLE_SECRET"
 	// vaultKeyVersionEnv Vault Key Version environment variable
-	vaultKeyVersionEnv = "MINIO_VAULT_KEY_VERSION"
+	vaultKeyVersionEnv = "MINIO_SSE_VAULT_KEY_VERSION"
 	// vaultKeyNameEnv Vault Encryption Key Name environment variable
-	vaultKeyNameEnv = "MINIO_VAULT_KEY_NAME"
+	vaultKeyNameEnv = "MINIO_SSE_VAULT_KEY_NAME"
 )
 
 var (
@@ -62,6 +58,11 @@ type vaultService struct {
 // return transit secret engine's path for encrypt operation
 func (v *vaultService) encryptEndpoint(key string) string {
 	return "/transit/encrypt/" + key
+}
+
+// return transit secret engine's path for generate data key operation
+func (v *vaultService) genDataKeyEndpoint(key string) string {
+	return "/transit/datakey/plaintext/" + key
 }
 
 // return transit secret engine's path for decrypt operation
@@ -218,23 +219,28 @@ func (v *vaultService) renewToken(c *vault.Client) {
 // Generates a random plain text key, sealed plain text key from
 // Vault. It returns the plaintext key and sealed plaintext key on success
 func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
-		logger.CriticalIf(context.Background(), errOutOfEntropy)
-	}
-	base64str := base64.StdEncoding.EncodeToString(key[:])
+	// if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
+	// 	logger.CriticalIf(context.Background(), errOutOfEntropy)
+	// }
+	// base64str := base64.StdEncoding.EncodeToString(key[:])
 	contextStream := new(bytes.Buffer)
 	ctx.WriteTo(contextStream)
 
 	payload := map[string]interface{}{
-		"plaintext": base64str,
-		"context":   base64.StdEncoding.EncodeToString(contextStream.Bytes()),
+		//"plaintext": base64str,
+		"context": base64.StdEncoding.EncodeToString(contextStream.Bytes()),
 	}
-	s, err1 := v.client.Logical().Write(v.encryptEndpoint(keyID), payload)
+	s, err1 := v.client.Logical().Write(v.genDataKeyEndpoint(keyID), payload)
 
 	if err1 != nil {
 		return key, sealedKey, ErrKMSInternalException
 	}
 	sealKey := s.Data["ciphertext"].(string)
+	plainKey, err := base64.StdEncoding.DecodeString(s.Data["plaintext"].(string))
+	if err != nil {
+		return key, sealedKey, ErrKMSInternalException
+	}
+	copy(key[:], []byte(plainKey))
 	return key, []byte(sealKey), nil
 }
 
@@ -248,7 +254,6 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 		"context":    base64.StdEncoding.EncodeToString(contextStream.Bytes()),
 	}
 	s, err1 := v.client.Logical().Write(v.decryptEndpoint(keyID), payload)
-
 	if err1 != nil {
 		return key, ErrKMSInternalException
 	}
@@ -258,5 +263,6 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 		return key, ErrKMSInternalException
 	}
 	copy(key[:], []byte(plainKey))
+
 	return key, nil
 }

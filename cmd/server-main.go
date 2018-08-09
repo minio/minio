@@ -93,10 +93,10 @@ ENVIRONMENT VARIABLES:
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
 	
    KMS:
-     MINIO_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
-     MINIO_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
-     MINIO_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
-     MINIO_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
+     MINIO_SSE_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
+     MINIO_SSE_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
+     MINIO_SSE_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
+     MINIO_SSE_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
@@ -125,10 +125,10 @@ EXAMPLES:
      $ {{.HelpName}} /home/shared
 	
   7. Start minio server with KMS enabled.
-     $ export MINIO_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
-     $ export MINIO_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-     $ export MINIO_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
-     $ export MINIO_VAULT_KEY_NAME=my-minio-key
+     $ export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
+     $ export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+     $ export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
+     $ export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
      $ {{.HelpName}} /home/shared
 `,
 }

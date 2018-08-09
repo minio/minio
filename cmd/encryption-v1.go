@@ -163,6 +163,7 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 		if err != nil {
 			return nil, err
 		}
+
 		objectKey := crypto.GenerateKey(key, rand.Reader)
 		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
 		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
@@ -254,6 +255,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 			return nil, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
+
 		if err != nil {
 			return nil, err
 		}

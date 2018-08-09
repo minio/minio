@@ -18,10 +18,10 @@ Vault as Key Management System requires following to be configured in Vault
 You'll need the Vault endpoint, AppRole ID, AppRole SecretID, encryption key-ring name before starting Minio server with Vault as KMS
 
 ```sh
-export MINIO_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
-export MINIO_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-export MINIO_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
-export MINIO_VAULT_KEY_NAME=my-minio-key
+export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
+export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
+export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
 minio server ~/export
 ```
 
