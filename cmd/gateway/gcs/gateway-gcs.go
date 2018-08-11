@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-
 	"math"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -768,22 +768,27 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
 	metadata := make(map[string]string)
 	for k, v := range attrs.Metadata {
+		k = http.CanonicalHeaderKey(k)
+		// Translate the GCS custom metadata prefix
+		if strings.HasPrefix(k, "X-Goog-Meta-") {
+			k = strings.Replace(k, "X-Goog-Meta-", "X-Amz-Meta-", 1)
+		}
 		metadata[k] = v
 	}
 	if attrs.ContentType != "" {
-		metadata["content-type"] = attrs.ContentType
+		metadata["Content-Type"] = attrs.ContentType
 	}
 	if attrs.ContentEncoding != "" {
-		metadata["content-encoding"] = attrs.ContentEncoding
+		metadata["Content-Encoding"] = attrs.ContentEncoding
 	}
 	if attrs.CacheControl != "" {
-		metadata["cache-control"] = attrs.CacheControl
+		metadata["Cache-Control"] = attrs.CacheControl
 	}
 	if attrs.ContentDisposition != "" {
-		metadata["content-disposition"] = attrs.ContentDisposition
+		metadata["Content-Disposition"] = attrs.ContentDisposition
 	}
 	if attrs.ContentLanguage != "" {
-		metadata["content-language"] = attrs.ContentLanguage
+		metadata["Content-Language"] = attrs.ContentLanguage
 	}
 	return minio.ObjectInfo{
 		Name:            attrs.Name,
@@ -799,21 +804,25 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 
 // applyMetadataToGCSAttrs applies metadata to a GCS ObjectAttrs instance
 func applyMetadataToGCSAttrs(metadata map[string]string, attrs *storage.ObjectAttrs) {
-	attrs.ContentType = metadata["content-type"]
-	attrs.ContentEncoding = metadata["content-encoding"]
-	attrs.CacheControl = metadata["cache-control"]
-	attrs.ContentDisposition = metadata["content-disposition"]
-	attrs.ContentLanguage = metadata["content-language"]
-
 	attrs.Metadata = make(map[string]string)
 	for k, v := range metadata {
-		attrs.Metadata[k] = v
-	}
-	// Filter metadata which is stored as a unique attribute
-	for _, key := range []string{
-		"content-type", "content-encoding", "cache-control", "content-disposition", "content-language",
-	} {
-		delete(attrs.Metadata, key)
+		k = http.CanonicalHeaderKey(k)
+		switch {
+		case strings.HasPrefix(k, "X-Amz-Meta-"):
+			// Translate the S3 user-defined metadata prefix
+			k = strings.Replace(k, "X-Amz-Meta-", "x-goog-meta-", 1)
+			attrs.Metadata[k] = v
+		case k == "Content-Type":
+			attrs.ContentType = v
+		case k == "Content-Encoding":
+			attrs.ContentEncoding = v
+		case k == "Cache-Control":
+			attrs.CacheControl = v
+		case k == "Content-Disposition":
+			attrs.ContentDisposition = v
+		case k == "Content-Language":
+			attrs.ContentLanguage = v
+		}
 	}
 }
 
