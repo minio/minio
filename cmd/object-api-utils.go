@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/rand"
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -302,3 +304,56 @@ type byBucketName []BucketInfo
 func (d byBucketName) Len() int           { return len(d) }
 func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
+// GetObjectReader is a type that wraps a reader with a lock to
+// provide a ReadCloser interface that unlocks on Close()
+type GetObjectReader struct {
+	lock RWLocker
+	pr   io.Reader
+
+	// register any clean up actions (happens before unlocking)
+	cleanUp func()
+
+	once sync.Once
+}
+
+// NewGetObjectReader creates a new GetObjectReader. The cleanUp
+// action is called on Close() before the lock is unlocked.
+func NewGetObjectReader(reader io.Reader, lock RWLocker, cleanUp func()) io.ReadCloser {
+	return &GetObjectReader{
+		lock:    lock,
+		pr:      reader,
+		cleanUp: cleanUp,
+	}
+}
+
+// Close - calls the cleanup action if provided, and *then* unlocks
+// the object. Calling Close multiple times is safe.
+func (g *GetObjectReader) Close() error {
+	// sync.Once is used here to ensure that Close() is
+	// idempotent.
+	g.once.Do(func() {
+		// Unlocking is defer-red - this ensures that
+		// unlocking happens even if cleanUp panics.
+		defer func() {
+			if g.lock != nil {
+				g.lock.RUnlock()
+			}
+		}()
+		if g.cleanUp != nil {
+			g.cleanUp()
+		}
+	})
+	return nil
+}
+
+// Read - to implement Reader interface.
+func (g *GetObjectReader) Read(p []byte) (n int, err error) {
+	n, err = g.pr.Read(p)
+	if err != nil {
+		// Calling code may not Close() in case of error, so
+		// we ensure it.
+		g.Close()
+	}
+	return
+}

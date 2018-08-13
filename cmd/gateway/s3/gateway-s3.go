@@ -301,6 +301,27 @@ func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 	return minio.FromMinioClientListBucketV2Result(bucket, result), nil
 }
 
+func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec) (objInfo minio.ObjectInfo, reader io.ReadCloser, err error) {
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object)
+	if err != nil {
+		return objInfo, reader, err
+	}
+
+	startOffset, length := int64(0), objInfo.Size
+	if rs != nil {
+		startOffset, length = rs.GetOffsetLength(objInfo.Size)
+	}
+
+	pr, pw := io.Pipe()
+	objReader := minio.NewGetObjectReader(pr, nil, nil)
+	go func() {
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag)
+		pw.CloseWithError(err)
+	}()
+
+	return objInfo, objReader, nil
+}
+
 // GetObject reads an object from S3. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
@@ -313,6 +334,9 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 	}
 
 	opts := miniogo.GetObjectOptions{}
+	if etag != "" {
+		opts.SetMatchETag(etag)
+	}
 	if startOffset >= 0 && length >= 0 {
 		if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
 			logger.LogIf(ctx, err)

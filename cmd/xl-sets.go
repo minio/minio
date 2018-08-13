@@ -550,6 +550,11 @@ func (s *xlSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err err
 
 // --- Object Operations ---
 
+// GetObjectNInfo
+func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error) {
+	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs)
+}
+
 // GetObject - reads an object from the hashedSet based on the object name.
 func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag)
