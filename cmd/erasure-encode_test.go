@@ -28,6 +28,10 @@ import (
 
 type badDisk struct{ StorageAPI }
 
+func (a badDisk) String() string {
+	return "bad-disk"
+}
+
 func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
 	return errFaultyDisk
 }
