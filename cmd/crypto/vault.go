@@ -45,19 +45,12 @@ const (
 var (
 	//ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
 	ErrKMSAuthLogin = errors.New("Vault service did not return auth info")
-	//ErrKMSInternalException is raised when KMS encrypt/decrypt fails for any reason
-	ErrKMSInternalException = errors.New("Vault service failed with internal errors")
 )
 
 type vaultService struct {
 	config        *VaultConfig
 	client        *vault.Client
 	leaseDuration time.Duration
-}
-
-// return transit secret engine's path for encrypt operation
-func (v *vaultService) encryptEndpoint(key string) string {
-	return "/transit/encrypt/" + key
 }
 
 // return transit secret engine's path for generate data key operation
@@ -219,26 +212,21 @@ func (v *vaultService) renewToken(c *vault.Client) {
 // Generates a random plain text key, sealed plain text key from
 // Vault. It returns the plaintext key and sealed plaintext key on success
 func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	// if _, err = io.ReadFull(rand.Reader, key[:]); err != nil {
-	// 	logger.CriticalIf(context.Background(), errOutOfEntropy)
-	// }
-	// base64str := base64.StdEncoding.EncodeToString(key[:])
 	contextStream := new(bytes.Buffer)
 	ctx.WriteTo(contextStream)
 
 	payload := map[string]interface{}{
-		//"plaintext": base64str,
 		"context": base64.StdEncoding.EncodeToString(contextStream.Bytes()),
 	}
 	s, err1 := v.client.Logical().Write(v.genDataKeyEndpoint(keyID), payload)
 
 	if err1 != nil {
-		return key, sealedKey, ErrKMSInternalException
+		return key, sealedKey, err1
 	}
 	sealKey := s.Data["ciphertext"].(string)
 	plainKey, err := base64.StdEncoding.DecodeString(s.Data["plaintext"].(string))
 	if err != nil {
-		return key, sealedKey, ErrKMSInternalException
+		return key, sealedKey, err1
 	}
 	copy(key[:], []byte(plainKey))
 	return key, []byte(sealKey), nil
@@ -255,12 +243,12 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 	}
 	s, err1 := v.client.Logical().Write(v.decryptEndpoint(keyID), payload)
 	if err1 != nil {
-		return key, ErrKMSInternalException
+		return key, err1
 	}
 	base64Key := s.Data["plaintext"].(string)
 	plainKey, err1 := base64.StdEncoding.DecodeString(base64Key)
 	if err1 != nil {
-		return key, ErrKMSInternalException
+		return key, err1
 	}
 	copy(key[:], []byte(plainKey))
 

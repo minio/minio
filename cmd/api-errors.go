@@ -148,7 +148,6 @@ const (
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
 	ErrKMSAuthFailure
-	ErrKMSInternalException
 
 	// Bucket notification related errors.
 	ErrEventNotification
@@ -789,11 +788,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrKMSNotConfigured: {
 		Code:           "InvalidArgument",
 		Description:    "Server side encryption specified but KMS is not configured",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrKMSInternalException: {
-		Code:           "InvalidArgument",
-		Description:    "Server side encryption specified but KMS has an internal exception",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrKMSAuthFailure: {
@@ -1443,8 +1437,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case crypto.ErrKMSAuthLogin:
 		apiErr = ErrKMSAuthFailure
-	case crypto.ErrKMSInternalException:
-		apiErr = ErrKMSInternalException
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	}
