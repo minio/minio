@@ -23,7 +23,9 @@ import (
 	"path"
 	"reflect"
 	"testing"
+	"time"
 
+	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
 
 	miniogo "github.com/minio/minio-go"
@@ -391,5 +393,107 @@ func TestGCSToObjectError(t *testing.T) {
 				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, actualErr)
 			}
 		}
+	}
+}
+
+func TestS3MetaToGCSAttributes(t *testing.T) {
+	headers := map[string]string{
+		"accept-encoding":          "gzip",
+		"content-encoding":         "gzip",
+		"cache-control":            "age: 3600",
+		"content-disposition":      "dummy",
+		"content-type":             "application/javascript",
+		"Content-Language":         "en",
+		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+	}
+	// Only X-Amz-Meta- prefixed entries will be returned in
+	// Metadata (without the prefix!)
+	expectedHeaders := map[string]string{
+		"x-goog-meta-Hdr":           "value",
+		"x-goog-meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x-goog-meta-X-Amz-Matdesc": "{}",
+		"x-goog-meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+	}
+
+	attrs := storage.ObjectAttrs{}
+	applyMetadataToGCSAttrs(headers, &attrs)
+
+	if !reflect.DeepEqual(attrs.Metadata, expectedHeaders) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, attrs.Metadata)
+	}
+
+	if attrs.CacheControl != headers["cache-control"] {
+		t.Fatalf("Test failed with Cache-Control mistmatch, expected %s, got %s", headers["cache-control"], attrs.CacheControl)
+	}
+	if attrs.ContentDisposition != headers["content-disposition"] {
+		t.Fatalf("Test failed with Content-Disposition mistmatch, expected %s, got %s", headers["content-disposition"], attrs.ContentDisposition)
+	}
+	if attrs.ContentEncoding != headers["content-encoding"] {
+		t.Fatalf("Test failed with Content-Encoding mistmatch, expected %s, got %s", headers["content-encoding"], attrs.ContentEncoding)
+	}
+	if attrs.ContentLanguage != headers["Content-Language"] {
+		t.Fatalf("Test failed with Content-Language mistmatch, expected %s, got %s", headers["Content-Language"], attrs.ContentLanguage)
+	}
+	if attrs.ContentType != headers["content-type"] {
+		t.Fatalf("Test failed with Content-Type mistmatch, expected %s, got %s", headers["content-type"], attrs.ContentType)
+	}
+}
+
+func TestGCSAttrsToObjectInfo(t *testing.T) {
+	metadata := map[string]string{
+		"x-goog-meta-Hdr":           "value",
+		"x-goog-meta-x_amz_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x-goog-meta-x-amz-matdesc": "{}",
+		"x-goog-meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+	}
+	expectedMeta := map[string]string{
+		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X_amz_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
+		"Cache-Control":            "max-age: 3600",
+		"Content-Disposition":      "dummy",
+		"Content-Encoding":         "gzip",
+		"Content-Language":         "en",
+		"Content-Type":             "application/javascript",
+	}
+
+	attrs := storage.ObjectAttrs{
+		Name:               "test-obj",
+		Bucket:             "test-bucket",
+		Updated:            time.Now(),
+		Size:               123,
+		CRC32C:             45312398,
+		CacheControl:       "max-age: 3600",
+		ContentDisposition: "dummy",
+		ContentEncoding:    "gzip",
+		ContentLanguage:    "en",
+		ContentType:        "application/javascript",
+		Metadata:           metadata,
+	}
+	expectedETag := minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C))
+
+	objInfo := fromGCSAttrsToObjectInfo(&attrs)
+	if !reflect.DeepEqual(objInfo.UserDefined, expectedMeta) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, objInfo.UserDefined)
+	}
+
+	if objInfo.Name != attrs.Name {
+		t.Fatalf("Test failed with Name mistmatch, expected %s, got %s", attrs.Name, objInfo.Name)
+	}
+	if objInfo.Bucket != attrs.Bucket {
+		t.Fatalf("Test failed with Bucket mistmatch, expected %s, got %s", attrs.Bucket, objInfo.Bucket)
+	}
+	if objInfo.ModTime != attrs.Updated {
+		t.Fatalf("Test failed with ModTime mistmatch, expected %s, got %s", attrs.Updated, objInfo.ModTime)
+	}
+	if objInfo.Size != attrs.Size {
+		t.Fatalf("Test failed with Size mistmatch, expected %d, got %d", attrs.Size, objInfo.Size)
+	}
+	if objInfo.ETag != expectedETag {
+		t.Fatalf("Test failed with ETag mistmatch, expected %s, got %s", expectedETag, objInfo.ETag)
 	}
 }
