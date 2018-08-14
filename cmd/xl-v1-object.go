@@ -807,7 +807,6 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			dErrs[index] = errDiskNotFound
 			continue
 		}

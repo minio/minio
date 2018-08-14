@@ -50,7 +50,6 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			dErrs[index] = errDiskNotFound
 			continue
 		}
@@ -234,7 +233,6 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	// Remove a volume entry on all underlying storage disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			dErrs[index] = errDiskNotFound
 			continue
 		}

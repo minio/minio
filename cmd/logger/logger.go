@@ -47,6 +47,11 @@ const (
 
 const loggerTimeFormat string = "15:04:05 MST 01/02/2006"
 
+// List of error strings to be ignored by LogIf
+const (
+	diskNotFoundError = "disk not found"
+)
+
 var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
@@ -267,14 +272,33 @@ func getTrace(traceLevel int) []string {
 	return trace
 }
 
-// LogIf prints a detailed error message during
+// LogAlwaysIf prints a detailed error message during
 // the execution of the server.
-func LogIf(ctx context.Context, err error) {
-	if Disable {
+func LogAlwaysIf(ctx context.Context, err error) {
+	if err == nil {
 		return
 	}
 
+	logIf(ctx, err)
+}
+
+// LogIf prints a detailed error message during
+// the execution of the server, if it is not an
+// ignored error.
+func LogIf(ctx context.Context, err error) {
 	if err == nil {
+		return
+	}
+
+	if err.Error() != diskNotFoundError {
+		logIf(ctx, err)
+	}
+}
+
+// logIf prints a detailed error message during
+// the execution of the server.
+func logIf(ctx context.Context, err error) {
+	if Disable {
 		return
 	}
 

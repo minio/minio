@@ -36,14 +36,14 @@ var printEndpointError = func() func(Endpoint, error) {
 			m = make(map[string]bool)
 			m[err.Error()] = true
 			printOnce[endpoint] = m
-			logger.LogIf(ctx, err)
+			logger.LogAlwaysIf(ctx, err)
 			return
 		}
 		if m[err.Error()] {
 			return
 		}
 		m[err.Error()] = true
-		logger.LogIf(ctx, err)
+		logger.LogAlwaysIf(ctx, err)
 	}
 }()
 

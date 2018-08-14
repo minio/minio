@@ -428,7 +428,6 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			mErrs[index] = errDiskNotFound
 			continue
 		}
@@ -467,7 +466,6 @@ func writeSameXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			logger.LogIf(ctx, errDiskNotFound)
 			mErrs[index] = errDiskNotFound
 			continue
 		}
