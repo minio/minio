@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -28,21 +27,15 @@ import (
 )
 
 // Initialize cache FS objects.
-func initCacheFSObjects(disk string, cacheMaxUse int, t *testing.T) (*cacheFSObjects, error) {
-	newTestConfig(globalMinioDefaultRegion)
-	var err error
-	obj, err := newCacheFSObjects(disk, globalCacheExpiry, cacheMaxUse)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return obj, nil
+func initCacheFSObjects(disk string, cacheMaxUse int) (*cacheFSObjects, error) {
+	return newCacheFSObjects(disk, globalCacheExpiry, cacheMaxUse)
 }
 
 // inits diskCache struct for nDisks
 func initDiskCaches(drives []string, cacheMaxUse int, t *testing.T) (*diskCache, error) {
 	var cfs []*cacheFSObjects
 	for _, d := range drives {
-		obj, err := initCacheFSObjects(d, cacheMaxUse, t)
+		obj, err := initCacheFSObjects(d, cacheMaxUse)
 		if err != nil {
 			return nil, err
 		}
@@ -131,11 +124,6 @@ func TestGetCacheFSMaxUse(t *testing.T) {
 
 // test wildcard patterns for excluding entries from cache
 func TestCacheExclusion(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
 	fsDirs, err := getRandomDisks(1)
 	if err != nil {
 		t.Fatal(err)

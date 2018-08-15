@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"net"
 	"os"
@@ -45,39 +44,6 @@ func checkUpdate(mode string) {
 		} else {
 			logger.StartupMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
-	}
-}
-
-// Initialize and load config from remote etcd or local config directory
-func initConfig() {
-	if globalEtcdClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		resp, err := globalEtcdClient.Get(ctx, getConfigFile())
-		cancel()
-		// This means there are no entries in etcd with config file
-		// So create a new config
-		if err == nil && resp.Count == 0 {
-			logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-			logger.Info("Created minio configuration file successfully at %v", globalEtcdClient.Endpoints())
-		} else {
-			// This means there is an entry in etcd, update it if required and proceed
-			if err == nil && resp.Count > 0 {
-				logger.FatalIf(migrateConfig(), "Config migration failed.")
-				logger.FatalIf(loadConfig(), "Unable to load config version: '%s'.", serverConfigVersion)
-			} else {
-				logger.FatalIf(err, "Unable to load config version: '%s'.", serverConfigVersion)
-			}
-		}
-		return
-	}
-
-	if isFile(getConfigFile()) {
-		logger.FatalIf(migrateConfig(), "Config migration failed")
-		logger.FatalIf(loadConfig(), "Unable to load the configuration file")
-	} else {
-		// Config file does not exist, we create it fresh and return upon success.
-		logger.FatalIf(newConfig(), "Unable to initialize minio config for the first time")
-		logger.Info("Created minio configuration file successfully at " + getConfigDir())
 	}
 }
 
@@ -146,6 +112,11 @@ func handleCommonEnvVars() {
 		// credential Envs are set globally.
 		globalIsEnvCreds = true
 		globalActiveCred = cred
+	}
+
+	// In distributed setup users need to set ENVs always.
+	if !globalIsEnvCreds && globalIsDistXL {
+		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to start distributed server mode")
 	}
 
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {

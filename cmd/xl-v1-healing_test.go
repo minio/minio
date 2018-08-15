@@ -19,19 +19,12 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 // Tests undoes and validates if the undoing completes successfully.
 func TestUndoMakeBucket(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
-
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -65,12 +58,6 @@ func TestUndoMakeBucket(t *testing.T) {
 
 // Tests healing of object.
 func TestHealObjectXL(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
-
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {

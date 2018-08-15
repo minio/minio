@@ -20,7 +20,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/logger"
 )
 
 // objectAPIHandler implements and provides http handlers for S3 API.
@@ -31,14 +30,6 @@ type objectAPIHandlers struct {
 
 // registerAPIRouter - registers S3 compatible APIs.
 func registerAPIRouter(router *mux.Router) {
-	var err error
-	var cacheConfig = globalServerConfig.GetCacheConfig()
-	if len(cacheConfig.Drives) > 0 {
-		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-	}
-
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,

@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -111,12 +110,6 @@ func partsMetaFromModTimes(modTimes []time.Time, algorithm BitrotAlgorithm, chec
 // TestListOnlineDisks - checks if listOnlineDisks and outDatedDisks
 // are consistent with each other.
 func TestListOnlineDisks(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Failed to initialize config - %v", err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
@@ -280,12 +273,6 @@ func TestListOnlineDisks(t *testing.T) {
 
 func TestDisksWithAllParts(t *testing.T) {
 	ctx := context.Background()
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Failed to initialize config - %v", err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)

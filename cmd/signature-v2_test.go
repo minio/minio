@@ -40,11 +40,14 @@ func TestResourceListSorting(t *testing.T) {
 
 // Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	now := UTCNow()
 
@@ -157,11 +160,14 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 
 // TestValidateV2AuthHeader - Tests validate the logic of V2 Authorization header validator.
 func TestValidateV2AuthHeader(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	accessID := globalServerConfig.GetCredential().AccessKey
 	testCases := []struct {
@@ -228,11 +234,15 @@ func TestValidateV2AuthHeader(t *testing.T) {
 }
 
 func TestDoesPolicySignatureV2Match(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
 	creds := globalServerConfig.GetCredential()
 	policy := "policy"
 	testCases := []struct {

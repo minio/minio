@@ -22,3 +22,4 @@ parts/
 prime/
 stage/
 .sia_temp/
+config.json

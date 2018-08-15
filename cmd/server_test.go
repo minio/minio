@@ -28,7 +28,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -46,7 +45,6 @@ type TestSuiteCommon struct {
 	endPoint   string
 	accessKey  string
 	secretKey  string
-	configPath string
 	signer     signerType
 	secure     bool
 	transport  *http.Transport
@@ -145,9 +143,6 @@ func TestServerSuite(t *testing.T) {
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
 func (s *TestSuiteCommon) SetUpSuite(c *check) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	c.Assert(err, nil)
-
 	if s.secure {
 		cert, key, err := generateTLSCertKey("127.0.0.1")
 		c.Assert(err, nil)
@@ -171,12 +166,10 @@ func (s *TestSuiteCommon) SetUpSuite(c *check) {
 	s.endPoint = s.testServer.Server.URL
 	s.accessKey = s.testServer.AccessKey
 	s.secretKey = s.testServer.SecretKey
-	s.configPath = rootPath
 }
 
 // Called implicitly by "gopkg.in/check.v1" after all tests are run.
 func (s *TestSuiteCommon) TearDownSuite(c *check) {
-	os.RemoveAll(s.configPath)
 	s.testServer.Stop()
 }
 

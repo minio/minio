@@ -126,6 +126,9 @@ var (
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 
+	// globalConfigSys server config system.
+	globalConfigSys *ConfigSys
+
 	globalNotificationSys *NotificationSys
 	globalPolicySys       *PolicySys
 

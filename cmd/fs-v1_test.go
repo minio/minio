@@ -26,12 +26,6 @@ import (
 
 // Tests for if parent directory is object
 func TestFSParentDirIsObject(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	obj, disk, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
@@ -120,12 +114,6 @@ func TestNewFS(t *testing.T) {
 // TestFSShutdown - initialize a new FS object layer then calls
 // Shutdown to check returned results
 func TestFSShutdown(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	bucketName := "testbucket"
 	objectName := "object"
 	// Create and return an fsObject with its path in the disk
@@ -133,6 +121,7 @@ func TestFSShutdown(t *testing.T) {
 		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		obj := initFSObjects(disk, t)
 		fs := obj.(*FSObjects)
+
 		objectContent := "12345"
 		obj.MakeBucketWithLocation(context.Background(), bucketName, "")
 		obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil)

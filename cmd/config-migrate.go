@@ -33,6 +33,21 @@ import (
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
 var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully."
 
+// Save config file to corresponding backend
+func Save(configFile string, data interface{}) error {
+	return quick.SaveConfig(data, configFile, globalEtcdClient)
+}
+
+// Load config from backend
+func Load(configFile string, data interface{}) (quick.Config, error) {
+	return quick.LoadConfig(configFile, globalEtcdClient, data)
+}
+
+// GetVersion gets config version from backend
+func GetVersion(configFile string) (string, error) {
+	return quick.GetVersion(configFile, globalEtcdClient)
+}
+
 // Migrates all config versions from "1" to "18".
 func migrateConfig() error {
 	// Purge all configs with version '1',
@@ -45,6 +60,9 @@ func migrateConfig() error {
 	// Load only config version information.
 	version, err := GetVersion(getConfigFile())
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 

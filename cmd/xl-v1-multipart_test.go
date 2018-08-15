@@ -18,20 +18,12 @@ package cmd
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 )
 
 // Tests cleanup multipart uploads for erasure coded backend.
 func TestXLCleanupStaleMultipartUploads(t *testing.T) {
-	// Initialize configuration
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-	defer os.RemoveAll(root)
-
 	// Create an instance of xl backend
 	obj, fsDirs, err := prepareXL16()
 	if err != nil {

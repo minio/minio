@@ -153,9 +153,9 @@ func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 	return fields, nil
 }
 
-// checkData - checks the validity of config data. Data should be of
+// CheckData - checks the validity of config data. Data should be of
 // type struct and contain a string type field called "Version".
-func checkData(data interface{}) error {
+func CheckData(data interface{}) error {
 	if !structs.IsStruct(data) {
 		return fmt.Errorf("interface must be struct type")
 	}
@@ -211,7 +211,7 @@ func LoadConfig(filename string, clnt *etcd.Client, data interface{}) (qc Config
 
 // SaveConfig - saves given configuration data into given file as JSON.
 func SaveConfig(data interface{}, filename string, clnt *etcd.Client) (err error) {
-	if err = checkData(data); err != nil {
+	if err = CheckData(data); err != nil {
 		return err
 	}
 	var qc Config
@@ -225,7 +225,7 @@ func SaveConfig(data interface{}, filename string, clnt *etcd.Client) (err error
 // NewConfig loads config from etcd client if provided, otherwise loads from a local filename.
 // fails when all else fails.
 func NewConfig(data interface{}, clnt *etcd.Client) (cfg Config, err error) {
-	if err := checkData(data); err != nil {
+	if err := CheckData(data); err != nil {
 		return nil, err
 	}
 

@@ -520,14 +520,14 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	prevCred := globalServerConfig.SetCredential(creds)
 
 	// Persist updated credentials.
-	if err = globalServerConfig.Save(getConfigFile()); err != nil {
+	if err = saveServerConfig(newObjectLayerFn(), globalServerConfig); err != nil {
 		// Save the current creds when failed to update.
 		globalServerConfig.SetCredential(prevCred)
 		logger.LogIf(context.Background(), err)
 		return toJSONError(err)
 	}
 
-	if errs := globalNotificationSys.SetCredentials(creds); len(errs) != 0 {
+	if errs := globalNotificationSys.LoadCredentials(); len(errs) != 0 {
 		reply.PeerErrMsgs = make(map[string]string)
 		for host, err := range errs {
 			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)

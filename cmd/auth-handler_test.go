@@ -344,11 +344,14 @@ func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int6
 
 // Tests is requested authenticated function, tests replies for s3 errors.
 func TestIsReqAuthenticated(t *testing.T) {
-	path, err := newTestConfig(globalMinioDefaultRegion)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer os.RemoveAll(path)
 
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
@@ -384,11 +387,15 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 }
 func TestCheckAdminRequestAuthType(t *testing.T) {
-	path, err := newTestConfig(globalMinioDefaultRegion)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer os.RemoveAll(path)
 
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {

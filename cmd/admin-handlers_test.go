@@ -193,15 +193,15 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
 
-	// Initialize minio server config.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		return nil, err
-	}
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, xlDirs, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
 		return nil, xlErr
+	}
+
+	// Initialize minio server config.
+	if err := newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		return nil, err
 	}
 
 	// Initialize boot time
@@ -230,17 +230,15 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	registerAdminRouter(adminRouter)
 
 	return &adminXLTestBed{
-		configPath: rootPath,
-		xlDirs:     xlDirs,
-		objLayer:   objLayer,
-		router:     adminRouter,
+		xlDirs:   xlDirs,
+		objLayer: objLayer,
+		router:   adminRouter,
 	}, nil
 }
 
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminXLTestBed) TearDown() {
-	os.RemoveAll(atb.configPath)
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
 }
@@ -680,8 +678,14 @@ func TestSetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
+	password := globalServerConfig.GetCredential().SecretKey
+	econfigJSON, err := madmin.EncryptServerConfigData(password, configJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
-		int64(len(configJSON)), bytes.NewReader(configJSON))
+		int64(len(econfigJSON)), bytes.NewReader(econfigJSON))
 	if err != nil {
 		t.Fatalf("Failed to construct set-config object request - %v", err)
 	}
@@ -724,7 +728,7 @@ func TestSetConfigHandler(t *testing.T) {
 	// Check that a config with duplicate keys in an object return
 	// error.
 	{
-		invalidCfg := append(configJSON[:len(configJSON)-1], []byte(`, "version": "15"}`)...)
+		invalidCfg := append(econfigJSON[:len(econfigJSON)-1], []byte(`, "version": "15"}`)...)
 		req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
 			int64(len(invalidCfg)), bytes.NewReader(invalidCfg))
 		if err != nil {
@@ -823,11 +827,15 @@ func TestToAdminAPIErr(t *testing.T) {
 }
 
 func TestWriteSetConfigResponse(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(rootPath)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+
 	testCases := []struct {
 		status bool
 		errs   []error

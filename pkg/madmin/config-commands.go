@@ -18,6 +18,8 @@
 package madmin
 
 import (
+	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +28,8 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/sio"
+	"golang.org/x/crypto/argon2"
 )
 
 // NodeSummary - represents the result of an operation part of
@@ -43,13 +47,48 @@ type SetConfigResult struct {
 	Status      bool          `json:"status"`
 }
 
-// GetConfig - returns the config.json of a minio setup.
-func (adm *AdminClient) GetConfig() ([]byte, error) {
-	// No TLS?
-	if !adm.secure {
-		return nil, fmt.Errorf("credentials/configuration cannot be retrieved over an insecure connection")
+// EncryptServerConfigData - encrypts server config data.
+func EncryptServerConfigData(password string, data []byte) ([]byte, error) {
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return nil, err
 	}
 
+	// derive an encryption key from the master key and the nonce
+	var key [32]byte
+	copy(key[:], argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32))
+
+	encrypted, err := sio.EncryptReader(bytes.NewReader(data), sio.Config{
+		Key: key[:]},
+	)
+	if err != nil {
+		return nil, err
+	}
+	edata, err := ioutil.ReadAll(encrypted)
+	return append(salt, edata...), err
+}
+
+// DecryptServerConfigData - decrypts server config data.
+func DecryptServerConfigData(password string, data io.Reader) ([]byte, error) {
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(data, salt); err != nil {
+		return nil, err
+	}
+	// derive an encryption key from the master key and the nonce
+	var key [32]byte
+	copy(key[:], argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32))
+
+	decrypted, err := sio.DecryptReader(data, sio.Config{
+		Key: key[:]},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadAll(decrypted)
+}
+
+// GetConfig - returns the config.json of a minio setup, incoming data is encrypted.
+func (adm *AdminClient) GetConfig() ([]byte, error) {
 	// Execute GET on /minio/admin/v1/config to get config of a setup.
 	resp, err := adm.executeMethod("GET",
 		requestData{relPath: "/v1/config"})
@@ -61,18 +100,14 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, httpRespToErrorResponse(resp)
 	}
+	defer resp.Body.Close()
 
-	// Return the JSON marshaled bytes to user.
-	return ioutil.ReadAll(resp.Body)
+	return DecryptServerConfigData(adm.secretAccessKey, resp.Body)
 }
 
 // SetConfig - set config supplied as config.json for the setup.
 func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
 	const maxConfigJSONSize = 256 * 1024 // 256KiB
-
-	if !adm.secure { // No TLS?
-		return r, fmt.Errorf("credentials/configuration cannot be updated over an insecure connection")
-	}
 
 	// Read configuration bytes
 	configBuf := make([]byte, maxConfigJSONSize+1)
@@ -104,9 +139,14 @@ func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err erro
 		return r, errors.New("Duplicate key in json file: " + err.Error())
 	}
 
+	econfigBytes, err := EncryptServerConfigData(adm.secretAccessKey, configBytes)
+	if err != nil {
+		return r, err
+	}
+
 	reqData := requestData{
 		relPath: "/v1/config",
-		content: configBytes,
+		content: econfigBytes,
 	}
 
 	// Execute PUT on /minio/admin/v1/config to set config.

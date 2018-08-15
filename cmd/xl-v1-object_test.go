@@ -262,12 +262,6 @@ func TestPutObjectNoQuorum(t *testing.T) {
 
 // Tests both object and bucket healing.
 func TestHealing(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Failed to initialize test config %v", err)
-	}
-	defer os.RemoveAll(rootPath)
-
 	obj, fsDirs, err := prepareXL16()
 	if err != nil {
 		t.Fatal(err)

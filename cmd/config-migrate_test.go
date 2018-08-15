@@ -25,14 +25,25 @@ import (
 
 // Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	objLayer, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	err = newTestConfig(globalMinioDefaultRegion, objLayer)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root directory after the test ends.
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer os.RemoveAll(rootPath)
-
 	setConfigDir(rootPath)
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	globalObjLayerMutex.Unlock()
 
 	// Create a V1 config json file and store it
 	configJSON := "{ \"version\":\"1\", \"accessKeyId\":\"abcde\", \"secretAccessKey\":\"abcdefgh\"}"
@@ -45,13 +56,14 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	if err := migrateConfig(); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
+
 	// Check if config v1 is removed from filesystem
 	if _, err := os.Stat(configPath); err == nil || !os.IsNotExist(err) {
 		t.Fatal("Config V1 file is not purged")
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(); err != nil {
+	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -59,20 +71,13 @@ func TestServerConfigMigrateV1(t *testing.T) {
 // Test if all migrate code returns nil when config file does not
 // exist
 func TestServerConfigMigrateInexistentConfig(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal(err)
 	}
-	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
-	configPath := rootPath + "/" + minioConfigFile
-
-	// Remove config file
-	if err := os.Remove(configPath); err != nil {
-		t.Fatal("Unexpected error: ", err)
-	}
 
 	if err := migrateV2ToV3(); err != nil {
 		t.Fatal("migrate v2 to v3 should succeed when no config file is found")
@@ -153,14 +158,23 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 
 // Test if a config migration from v2 to v27 is successfully done
 func TestServerConfigMigrateV2toV27(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal(err)
 	}
-	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
-
 	setConfigDir(rootPath)
+
+	objLayer, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	globalObjLayerMutex.Unlock()
+
 	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
@@ -186,8 +200,12 @@ func TestServerConfigMigrateV2toV27(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	if err := migrateConfigToMinioSys(); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(); err != nil {
+	if err := loadConfig(newObjectLayerFn()); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
@@ -208,13 +226,11 @@ func TestServerConfigMigrateV2toV27(t *testing.T) {
 
 // Test if all migrate code returns error with corrupted config files
 func TestServerConfigMigrateFaultyConfig(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal(err)
 	}
-	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
-
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile
 
@@ -303,13 +319,11 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 
 // Test if all migrate code returns error with corrupted config files
 func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal(err)
 	}
-	// remove the root directory after the test ends.
 	defer os.RemoveAll(rootPath)
-
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile
 

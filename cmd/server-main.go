@@ -211,14 +211,13 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server environment vars.
 	serverHandleEnvVars()
 
+	// In distributed setup users need to set ENVs always.
+	if !globalIsEnvCreds && globalIsDistXL {
+		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to initialize minio server in distributed mode")
+	}
+
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
-
-	// Initialize server config.
-	initConfig()
-
-	// Load logger subsystem
-	loadLoggers()
 
 	// Check and load SSL certificates.
 	var err error
@@ -244,6 +243,11 @@ func serverMain(ctx *cli.Context) {
 			mode = globalMinioModeXL
 		}
 		checkUpdate(mode)
+	}
+
+	// Enforce ENV credentials for distributed setup such that we can create the first config.
+	if globalIsDistXL && !globalIsEnvCreds {
+		logger.Fatal(uiErrInvalidCredentials(nil), "Unable to start the server in distrbuted mode. In distributed mode we require explicit credentials.")
 	}
 
 	// Set system resources to maximum.
@@ -305,8 +309,29 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
+	// Initialize server config.
+	initConfig()
+
+	// Load logger subsystem
+	loadLoggers()
+
+	var cacheConfig = globalServerConfig.GetCacheConfig()
+	if len(cacheConfig.Drives) > 0 {
+		// initialize the new disk cache objects.
+		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+	}
+
 	// Re-enable logging
 	logger.Disable = false
+
+	// Create a new config system.
+	globalConfigSys = NewConfigSys()
+
+	// Initialize config system.
+	if err := globalConfigSys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize config system")
+	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

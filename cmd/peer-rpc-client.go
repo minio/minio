@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -116,9 +115,9 @@ func (rpcClient *PeerRPCClient) SendEvent(bucketName string, targetID, remoteTar
 	return err
 }
 
-// SetCredentials - calls set credentials RPC.
-func (rpcClient *PeerRPCClient) SetCredentials(credentials auth.Credentials) error {
-	args := SetCredentialsArgs{Credentials: credentials}
+// LoadCredentials - calls load credentials RPC.
+func (rpcClient *PeerRPCClient) LoadCredentials() error {
+	args := AuthArgs{}
 	reply := VoidReply{}
 
 	return rpcClient.Call(peerServiceName+".SetCredentials", &args, &reply)

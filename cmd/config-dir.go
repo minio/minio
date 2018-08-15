@@ -28,9 +28,6 @@ const (
 	// Default minio configuration directory where below configuration files/directories are stored.
 	defaultMinioConfigDir = ".minio"
 
-	// Minio configuration file.
-	minioConfigFile = "config.json"
-
 	// Directory contains below files/directories for HTTPS configuration.
 	certsDir = "certs"
 
