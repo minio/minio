@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -80,6 +81,65 @@ func TestGetDivisibleSize(t *testing.T) {
 			if testCase.result != gotGCD {
 				t.Errorf("Expected %v, got %v", testCase.result, gotGCD)
 			}
+		})
+	}
+}
+
+// Test tests calculating set indexes with ENV override for drive count.
+func TestGetSetIndexesEnvOverride(t *testing.T) {
+	testCases := []struct {
+		args        []string
+		totalSizes  []uint64
+		indexes     [][]uint64
+		envOverride string
+		success     bool
+	}{
+		{
+			[]string{"data{1...64}"},
+			[]uint64{64},
+			[][]uint64{{8, 8, 8, 8, 8, 8, 8, 8}},
+			"8",
+			true,
+		},
+		{
+			[]string{"data{1...60}"},
+			nil,
+			nil,
+			"8",
+			false,
+		},
+		{
+			[]string{"data{1...64}"},
+			nil,
+			nil,
+			"-1",
+			false,
+		},
+		{
+			[]string{"data{1...64}"},
+			nil,
+			nil,
+			"2",
+			false,
+		},
+	}
+
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			if err := os.Setenv("MINIO_ERASURE_SET_DRIVE_COUNT", testCase.envOverride); err != nil {
+				t.Fatal(err)
+			}
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes)
+			if err != nil && testCase.success {
+				t.Errorf("Expected success but failed instead %s", err)
+			}
+			if err == nil && !testCase.success {
+				t.Errorf("Expected failure but passed instead")
+			}
+			if !reflect.DeepEqual(testCase.indexes, gotIndexes) {
+				t.Errorf("Expected %v, got %v", testCase.indexes, gotIndexes)
+			}
+			os.Unsetenv("MINIO_ERASURE_SET_DRIVE_COUNT")
 		})
 	}
 }

@@ -29,6 +29,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	uiErrInvalidErasureSetSize = newUIErrFn(
+		"Invalid erasure set size",
+		"Please check the passed value",
+		"Erasure set can only accept any of [4, 6, 8, 10, 12, 14, 16] values.",
+	)
+
 	uiErrInvalidWormValue = newUIErrFn(
 		"Invalid WORM value",
 		"Please check the passed value",
