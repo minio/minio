@@ -223,6 +223,9 @@ func TestValidateConfig(t *testing.T) {
 
 		// Test 27 - Test MQTT
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mqtt": { "1": { "enable": true, "broker": "",  "topic": "", "qos": 0, "clientId": "", "username": "", "password": ""}}}}`, false},
+
+		// Test 28 - Test Compression
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "compress": { "include": { "types": [], "names": ["*.log"] }, "exclude": { "types": [], "names": ["*.log"] }}}`, false},
 	}
 
 	for i, testCase := range testCases {

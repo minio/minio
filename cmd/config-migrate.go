@@ -193,6 +193,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "27":
+		if err = migrateV27ToV28(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -2349,9 +2354,43 @@ func migrateV26ToV27() error {
 	srvConfig.Logger.HTTP["1"] = loggerHTTP{}
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %v", err)
+		return fmt.Errorf("Failed to migrate config from `26' to `27'. %v", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "26", "27")
+	return nil
+}
+
+func migrateV27ToV28() error {
+
+	configFile := getConfigFile()
+
+	// config V28 is backward compatible with V27, load the old
+	// config file in serverConfigV28 struct and set the default values
+	// for the compression configuration.
+	srvConfig := &serverConfigV28{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+
+	if srvConfig.Version != "27" {
+		return nil
+	}
+
+	srvConfig.Version = "28"
+	// Init compression config.For future migration, Compression config needs to be copied over from previous version.
+	srvConfig.Compression.Include.Types = []string{}
+	srvConfig.Compression.Include.Names = []string{}
+	srvConfig.Compression.Exclude.Types = []string{}
+	srvConfig.Compression.Exclude.Names = []string{}
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from `27' to `28'. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")
 	return nil
 }

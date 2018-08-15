@@ -72,4 +72,7 @@ type ObjectLayer interface {
 	// Supported operations check
 	IsNotificationSupported() bool
 	IsEncryptionSupported() bool
+
+	// Compression support check.
+	IsCompressionSupported() bool
 }

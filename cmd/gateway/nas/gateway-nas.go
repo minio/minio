@@ -125,3 +125,8 @@ type nasObjects struct {
 func (l *nasObjects) IsNotificationSupported() bool {
 	return false
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *nasObjects) IsCompressionSupported() bool {
+	return false
+}

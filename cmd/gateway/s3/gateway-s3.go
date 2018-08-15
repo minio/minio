@@ -505,3 +505,8 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	}
 	return nil
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *s3Objects) IsCompressionSupported() bool {
+	return false
+}

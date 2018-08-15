@@ -216,6 +216,26 @@ var (
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
+	// Is compression exclude extensions/content-types set.
+	globalIsEnvCompressionExclude bool
+
+	// Is compression include extensions/content-types set.
+	globalIsEnvCompressionInclude bool
+
+	// Exclude-list for compression.
+	globalExcludeCompressExtensions   []string
+	globalExcludeCompressContentTypes []string
+
+	// Exclude-list for compression.
+	globalIncludeCompressExtensions   []string
+	globalIncludeCompressContentTypes []string
+
+	// Some standard object extensions which we strictly dis-allow for compression.
+	standardExcludeCompressExtensions = []string{"*.gz", "*.bz2", "*.rar", "*.zip", "*.7z"}
+
+	// Some standard content-types which we strictly dis-allow for compression.
+	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
+
 	// Add new variable global values here.
 )
 

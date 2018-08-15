@@ -490,6 +490,11 @@ func (s *xlSets) IsEncryptionSupported() bool {
 	return s.getHashedSet("").IsEncryptionSupported()
 }
 
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (s *xlSets) IsCompressionSupported() bool {
+	return s.getHashedSet("").IsCompressionSupported()
+}
+
 // DeleteBucket - deletes a bucket on all sets simultaneously,
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
