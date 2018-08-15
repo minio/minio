@@ -404,7 +404,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 
 	// Latest xlMetaV1 for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, pErr := pickValidXLMeta(ctx, partsMetadata, modTime)
+	latestMeta, pErr := pickValidXLMeta(ctx, partsMetadata, modTime, quorum)
 	if pErr != nil {
 		return result, toObjectErr(pErr, bucket, object)
 	}
