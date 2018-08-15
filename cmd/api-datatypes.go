@@ -25,6 +25,87 @@ const (
 	responseRequestIDKey = "x-amz-request-id"
 )
 
+// CSVFileHeaderInfo -Can be either USE IGNORE OR NONE, defines what to do with
+// the first row
+type CSVFileHeaderInfo string
+
+// Constants for file header info.
+const (
+	CSVFileHeaderInfoNone   CSVFileHeaderInfo = "NONE"
+	CSVFileHeaderInfoIgnore                   = "IGNORE"
+	CSVFileHeaderInfoUse                      = "USE"
+)
+
+// SelectCompressionType - ONLY GZIP is supported
+type SelectCompressionType string
+
+// Constants for compression types under select API.
+const (
+	SelectCompressionNONE SelectCompressionType = "NONE"
+	SelectCompressionGZIP                       = "GZIP"
+	SelectCompressionBZIP                       = "BZIP2"
+)
+
+// CSVQuoteFields - Can be either Always or AsNeeded
+type CSVQuoteFields string
+
+// Constants for csv quote styles.
+const (
+	CSVQuoteFieldsAlways   CSVQuoteFields = "Always"
+	CSVQuoteFieldsAsNeeded                = "AsNeeded"
+)
+
+// QueryExpressionType - Currently can only be SQL
+type QueryExpressionType string
+
+// Constants for expression type.
+const (
+	QueryExpressionTypeSQL QueryExpressionType = "SQL"
+)
+
+// JSONType determines json input serialization type.
+type JSONType string
+
+// Constants for JSONTypes.
+const (
+	JSONDocumentType JSONType = "Document"
+	JSONStreamType            = "Stream"
+	JSONLinesType             = "Lines"
+)
+
+// ObjectSelectRequest - represents the input select body
+type ObjectSelectRequest struct {
+	XMLName            xml.Name `xml:"SelectObjectContentRequest" json:"-"`
+	Expression         string
+	ExpressionType     QueryExpressionType
+	InputSerialization struct {
+		CompressionType SelectCompressionType
+		CSV             *struct {
+			FileHeaderInfo       CSVFileHeaderInfo
+			RecordDelimiter      string
+			FieldDelimiter       string
+			QuoteCharacter       string
+			QuoteEscapeCharacter string
+			Comments             string
+		}
+		JSON *struct {
+			Type JSONType
+		}
+	}
+	OutputSerialization struct {
+		CSV *struct {
+			QuoteFields          CSVQuoteFields
+			RecordDelimiter      string
+			FieldDelimiter       string
+			QuoteCharacter       string
+			QuoteEscapeCharacter string
+		}
+		JSON *struct {
+			RecordDelimiter string
+		}
+	}
+}
+
 // ObjectIdentifier carries key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`

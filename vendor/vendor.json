@@ -461,6 +461,12 @@
 			"revisionTime": "2018-01-16T16:19:11Z"
 		},
 		{
+			"checksumSHA1": "mA7isU/nIAT5ytwIzK65H0vlVqI=",
+			"path": "github.com/klauspost/compress/flate",
+			"revision": "5fb1f31b0a61e9858f12f39266e059848a5f1cea",
+			"revisionTime": "2018-04-02T19:26:10Z"
+		},
+		{
 			"path": "github.com/klauspost/cpuid",
 			"revision": "349c675778172472f5e8f3a3e0fe187e302e5a10",
 			"revisionTime": "2016-01-06T11:44:51+01:00"
@@ -470,6 +476,12 @@
 			"path": "github.com/klauspost/crc32",
 			"revision": "cb6bfca970f6908083f26f39a79009d608efd5cd",
 			"revisionTime": "2016-10-16T15:41:25Z"
+		},
+		{
+			"checksumSHA1": "o/9oGuVccfxPYuRdzvW0lv7Zbzg=",
+			"path": "github.com/klauspost/pgzip",
+			"revision": "90b2c57fba35a1dd05cb40f9200722763808d99b",
+			"revisionTime": "2018-06-06T15:09:39Z"
 		},
 		{
 			"checksumSHA1": "ehsrWipiGIWqa4To8TmelIx06vI=",
@@ -789,6 +801,42 @@
 			"path": "github.com/tidwall/match",
 			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
 			"revisionTime": "2016-08-30T17:39:30Z"
+		},
+		{
+			"checksumSHA1": "MWqyOvDMkW+XYe2RJ5mplvut+aE=",
+			"path": "github.com/ugorji/go/codec",
+			"revision": "ded73eae5db7e7a0ef6f55aace87a2873c5d2b74",
+			"revisionTime": "2017-01-07T13:32:03Z"
+		},
+		{
+			"checksumSHA1": "6ksZHYhLc3yOzTbcWKb3bDENhD4=",
+			"path": "github.com/xwb1989/sqlparser",
+			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
+			"revisionTime": "2018-06-06T15:21:19Z"
+		},
+		{
+			"checksumSHA1": "L/Q8Ylbo+wnj5whDFfMxxwyxmdo=",
+			"path": "github.com/xwb1989/sqlparser/dependency/bytes2",
+			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
+			"revisionTime": "2018-06-06T15:21:19Z"
+		},
+		{
+			"checksumSHA1": "f9K0yQdwD0Z2yc3bmDw2uqXt4hU=",
+			"path": "github.com/xwb1989/sqlparser/dependency/hack",
+			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
+			"revisionTime": "2018-06-06T15:21:19Z"
+		},
+		{
+			"checksumSHA1": "xpu1JU/VZ7gGNbU5Ol9Nm1oS4tY=",
+			"path": "github.com/xwb1989/sqlparser/dependency/querypb",
+			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
+			"revisionTime": "2018-06-06T15:21:19Z"
+		},
+		{
+			"checksumSHA1": "KbNIySCQgMG81TRMJp1IDRfSgv8=",
+			"path": "github.com/xwb1989/sqlparser/dependency/sqltypes",
+			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
+			"revisionTime": "2018-06-06T15:21:19Z"
 		},
 		{
 			"checksumSHA1": "6NS7FWJl1FobB+Xfe4SzBGD+75g=",

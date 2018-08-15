@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
@@ -40,6 +41,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/s3select"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
@@ -60,6 +62,191 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 		if header, ok := supportedHeadGetReqParams[k]; ok {
 			w.Header()[header] = v
 		}
+	}
+}
+
+// SelectObjectContentHandler - GET Object?select
+// ----------
+// This implementation of the GET operation retrieves object content based
+// on an SQL expression. In the request, along with the sql expression, you must
+// also specify a data serialization format (JSON, CSV) of the object.
+func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SelectObject")
+	var object, bucket string
+	vars := mux.Vars(r)
+	bucket = vars["bucket"]
+	object = vars["object"]
+
+	// Fetch object stat info.
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+		if getRequestAuthType(r) == authTypeAnonymous {
+			// As per "Permission" section in
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html If
+			// the object you request does not exist, the error Amazon S3 returns
+			// depends on whether you also have the s3:ListBucket permission. * If you
+			// have the s3:ListBucket permission on the bucket, Amazon S3 will return
+			// an HTTP status code 404 ("no such key") error. * if you don’t have the
+			// s3:ListBucket permission, Amazon S3 will return an HTTP status code 403
+			// ("access denied") error.`
+			if globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.ListBucketAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+			}) {
+				_, err := getObjectInfo(ctx, bucket, object)
+				if toAPIErrorCode(err) == ErrNoSuchKey {
+					s3Error = ErrNoSuchKey
+				}
+			}
+		}
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if r.ContentLength <= 0 {
+		writeErrorResponse(w, ErrEmptyRequestBody, r.URL)
+		return
+	}
+	var selectReq ObjectSelectRequest
+	if err := xmlDecoder(r.Body, &selectReq, r.ContentLength); err != nil {
+		fmt.Println(err)
+		writeErrorResponse(w, ErrMalformedXML, r.URL)
+		return
+	}
+
+	objInfo, err := getObjectInfo(ctx, bucket, object)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	// Get request range.
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		writeErrorResponse(w, ErrUnsupportedRangeHeader, r.URL)
+		return
+	}
+
+	if selectReq.InputSerialization.CompressionType == SelectCompressionGZIP {
+		if !strings.Contains(objInfo.ContentType, "gzip") {
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			return
+		}
+	}
+	if selectReq.InputSerialization.CompressionType == SelectCompressionBZIP {
+		if !strings.Contains(objInfo.ContentType, "bzip") {
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			return
+		}
+	}
+	if selectReq.InputSerialization.CompressionType == SelectCompressionNONE ||
+		selectReq.InputSerialization.CompressionType == "" {
+		selectReq.InputSerialization.CompressionType = SelectCompressionNONE
+		if !strings.Contains(objInfo.ContentType, "text/csv") {
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			return
+		}
+	}
+	if !strings.EqualFold(string(selectReq.ExpressionType), "SQL") {
+		writeErrorResponse(w, ErrInvalidExpressionType, r.URL)
+		return
+	}
+	if len(selectReq.Expression) >= (256 * 1000) {
+		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
+	}
+	if selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoUse &&
+		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone &&
+		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoIgnore &&
+		selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
+		writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL)
+	}
+	if selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAlways &&
+		selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAsNeeded &&
+		selectReq.OutputSerialization.CSV.QuoteFields != "" {
+		writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
+	}
+
+	getObject := objectAPI.GetObject
+	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+		getObject = api.CacheAPI().GetObject
+	}
+
+	reader, pipewriter := io.Pipe()
+
+	// Get the object.
+	var startOffset int64
+	length := objInfo.Size
+
+	var writer io.Writer
+	writer = pipewriter
+	if objectAPI.IsEncryptionSupported() {
+		if hasSSECustomerHeader(r.Header) {
+			// Response writer should be limited early on for decryption upto required length,
+			// additionally also skipping mod(offset)64KiB boundaries.
+			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
+
+			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, bucket,
+				object, startOffset, length, objInfo, false)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+		}
+	}
+	go func() {
+		defer reader.Close()
+		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer,
+			objInfo.ETag); gerr != nil {
+			pipewriter.CloseWithError(gerr)
+			return
+		}
+		pipewriter.Close() // Close writer explicitly signaling we wrote all data.
+	}()
+
+	//s3select //Options
+	if selectReq.OutputSerialization.CSV.FieldDelimiter == "" {
+		selectReq.OutputSerialization.CSV.FieldDelimiter = ","
+	}
+	if selectReq.InputSerialization.CSV.FileHeaderInfo == "" {
+		selectReq.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoNone
+	}
+	if selectReq.InputSerialization.CSV != nil {
+		options := &s3select.Options{
+			HasHeader:            selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone,
+			FieldDelimiter:       selectReq.InputSerialization.CSV.FieldDelimiter,
+			Comments:             selectReq.InputSerialization.CSV.Comments,
+			Name:                 "S3Object", // Default table name for all objects
+			ReadFrom:             reader,
+			Compressed:           string(selectReq.InputSerialization.CompressionType),
+			Expression:           selectReq.Expression,
+			OutputFieldDelimiter: selectReq.OutputSerialization.CSV.FieldDelimiter,
+			StreamSize:           objInfo.Size,
+			HeaderOpt:            selectReq.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
+		}
+		s3s, err := s3select.NewInput(options)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		_, _, _, _, _, _, err = s3s.ParseSelect(selectReq.Expression)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		if err := s3s.Execute(w); err != nil {
+			logger.LogIf(ctx, err)
+		}
+		return
 	}
 }
 

@@ -475,7 +475,6 @@ var notimplementedObjectResourceNames = map[string]bool{
 	"policy":  true,
 	"tagging": true,
 	"restore": true,
-	"select":  true,
 }
 
 // Resource handler ServeHTTP() wrapper

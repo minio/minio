@@ -42,8 +42,8 @@ ineffassign:
 
 cyclo:
 	@echo "Running $@"
-	@${GOPATH}/bin/gocyclo -over 100 cmd
-	@${GOPATH}/bin/gocyclo -over 100 pkg
+	@${GOPATH}/bin/gocyclo -over 200 cmd
+	@${GOPATH}/bin/gocyclo -over 200 pkg
 
 deadcode:
 	@echo "Running $@"
