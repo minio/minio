@@ -31,6 +31,7 @@ import (
 	"github.com/fatih/color"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/auth/iam"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
 )
@@ -210,6 +211,9 @@ var (
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig dns.Config
+
+	globalPolicyStore *iam.PolicyStore
+	globalUsersStore  *iam.UsersStore
 
 	// Default usage check interval value.
 	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours

@@ -31,6 +31,15 @@ const (
 	// Minio configuration file.
 	minioConfigFile = "config.json"
 
+	// Directory contains users and policies to support multi user.
+	iamDir = "iam"
+
+	// Minio multi-user users list.
+	iamUsers = "users.json"
+
+	// Minio user policies.
+	iamPolicies = "policies.json"
+
 	// Directory contains below files/directories for HTTPS configuration.
 	certsDir = "certs"
 
@@ -70,6 +79,10 @@ func (config *ConfigDir) getCertsDir() string {
 	return filepath.Join(config.Get(), certsDir)
 }
 
+func (config *ConfigDir) getIAMDir() string {
+	return filepath.Join(config.Get(), iamDir)
+}
+
 // GetCADir - returns certificate CA directory.
 func (config *ConfigDir) GetCADir() string {
 	return filepath.Join(config.getCertsDir(), certsCADir)
@@ -77,12 +90,25 @@ func (config *ConfigDir) GetCADir() string {
 
 // Create - creates configuration directory tree.
 func (config *ConfigDir) Create() error {
-	return os.MkdirAll(config.GetCADir(), 0700)
+	if err := os.MkdirAll(config.GetCADir(), 0700); err != nil {
+		return err
+	}
+	return os.MkdirAll(config.getIAMDir(), 0700)
 }
 
 // GetMinioConfigFile - returns absolute path of config.json file.
 func (config *ConfigDir) GetMinioConfigFile() string {
 	return filepath.Join(config.Get(), minioConfigFile)
+}
+
+// GetIAMUsersFile - returns absolute path of users.json file.
+func (config *ConfigDir) GetIAMUsersFile() string {
+	return filepath.Join(config.getIAMDir(), iamUsers)
+}
+
+// GetIAMPoliciesFile - returns absolute path of policies.json file.
+func (config *ConfigDir) GetIAMPoliciesFile() string {
+	return filepath.Join(config.getIAMDir(), iamPolicies)
 }
 
 // GetPublicCertFile - returns absolute path of public.crt file.
@@ -124,6 +150,14 @@ func createConfigDir() error {
 
 func getConfigFile() string {
 	return configDir.GetMinioConfigFile()
+}
+
+func getIAMUsersFile() string {
+	return configDir.GetIAMUsersFile()
+}
+
+func getIAMPoliciesFile() string {
+	return configDir.GetIAMPoliciesFile()
 }
 
 func getPublicCertFile() string {

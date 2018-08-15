@@ -31,6 +31,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/auth/iam"
 	"github.com/minio/minio/pkg/dns"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -48,8 +49,18 @@ func checkUpdate(mode string) {
 	}
 }
 
+func initIAMConfigs() {
+	var err error
+	globalPolicyStore, err = iam.NewPolicyStore(getIAMPoliciesFile(), globalEtcdClient)
+	logger.FatalIf(err, "Unable to initialize policies store")
+
+	globalUsersStore, err = iam.NewUsersStore(getIAMUsersFile(), globalEtcdClient)
+	logger.FatalIf(err, "Unable to initialize users store")
+}
+
 // Initialize and load config from remote etcd or local config directory
 func initConfig() {
+	initIAMConfigs()
 	if globalEtcdClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		resp, err := globalEtcdClient.Get(ctx, getConfigFile())

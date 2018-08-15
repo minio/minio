@@ -1,0 +1,15 @@
+{
+    "version": "1",
+    "users": {
+        "user1": {
+            "accessKey": "user1",
+            "secretKey": "aaaa",
+            "policy": "read-only"
+        },
+        "user2": {
+            "accessKey": "user2",
+            "secretKey": "aaaa",
+            "policy": "read-write"
+        }
+    }
+}

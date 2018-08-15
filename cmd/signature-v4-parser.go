@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -44,6 +45,29 @@ func (c credentialHeader) getScope() string {
 		c.scope.service,
 		c.scope.request,
 	}, "/")
+}
+
+func getReqAccessKey(r *http.Request, region string) (string, APIErrorCode) {
+	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get("X-Amz-Credential"), region)
+	if err != ErrNone {
+		// Strip off the Algorithm prefix.
+		v4Auth := strings.TrimPrefix(r.Header.Get("Authorization"), signV4Algorithm)
+		authFields := strings.Split(strings.TrimSpace(v4Auth), ",")
+		if len(authFields) != 3 {
+			return "", ErrMissingFields
+		}
+		ch, err = parseCredentialHeader(authFields[0], region)
+		if err != ErrNone {
+			return "", err
+		}
+		if globalServerConfig.GetCredential().AccessKey != ch.accessKey {
+			// Check if the access key is part of users credentials.
+			if _, ok := globalUsersStore.Get(ch.accessKey); !ok {
+				return "", ErrInvalidAccessKeyID
+			}
+		}
+	}
+	return ch.accessKey, ErrNone
 }
 
 // parse credentialHeader string into its structured form.

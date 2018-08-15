@@ -90,9 +90,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
-			// If the object you request does not exist, the error Amazon S3 returns depends on whether you also have the s3:ListBucket permission.
-			// * If you have the s3:ListBucket permission on the bucket, Amazon S3 will return an HTTP status code 404 ("no such key") error.
-			// * if you don’t have the s3:ListBucket permission, Amazon S3 will return an HTTP status code 403 ("access denied") error.`
+			// If the object you request does not exist, the error Amazon S3 returns
+			// depends on whether you also have the s3:ListBucket permission. If you
+			// have the s3:ListBucket permission on the bucket, Amazon S3 will return
+			// an HTTP status code 404 ("no such key") error. if you don’t have the
+			// s3:ListBucket permission, Amazon S3 will return an HTTP status code 403
+			// ("access denied") error.`
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
@@ -245,10 +248,13 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
-			// As per "Permission" section in https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
-			// If the object you request does not exist, the error Amazon S3 returns depends on whether you also have the s3:ListBucket permission.
-			// * If you have the s3:ListBucket permission on the bucket, Amazon S3 will return an HTTP status code 404 ("no such key") error.
-			// * if you don’t have the s3:ListBucket permission, Amazon S3 will return an HTTP status code 403 ("access denied") error.`
+			// As per "Permission" section in https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
+			// If the object you request does not exist, the error Amazon S3 returns
+			// depends on whether you also have the s3:ListBucket permission. If you
+			// have the s3:ListBucket permission on the bucket, Amazon S3 will return
+			// an HTTP status code 404 ("no such key") error. if you don’t have the
+			// s3:ListBucket permission, Amazon S3 will return an HTTP status code 403
+			// ("access denied") error.`
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
@@ -739,22 +745,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		putObject = objectAPI.PutObject
 	)
 	reader = r.Body
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+
+	// Check if put is allowed.
+	if s3Err = isPutAllowed(rAuthType, bucket, object, r); s3Err != ErrNone {
+		writeErrorResponse(w, s3Err, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Err = newSignV4ChunkedReader(r)
@@ -768,7 +765,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Err, r.URL)
 			return
 		}
-
 	case authTypePresigned, authTypeSigned:
 		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
 			writeErrorResponse(w, s3Err, r.URL)
@@ -1210,41 +1206,31 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
 		reader    io.Reader
+		s3Error   APIErrorCode
 	)
 	reader = r.Body
 
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error = isPutAllowed(rAuthType, bucket, object, r); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
+		s3Error = isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
+		if s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
