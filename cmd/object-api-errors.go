@@ -314,10 +314,15 @@ func (e InvalidUploadID) Error() string {
 }
 
 // InvalidPart One or more of the specified parts could not be found
-type InvalidPart struct{}
+type InvalidPart struct {
+	PartNumber int
+	ExpETag    string
+	GotETag    string
+}
 
 func (e InvalidPart) Error() string {
-	return "One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag."
+	return fmt.Sprintf("Specified part could not be found. PartNumber %d, Expected %s, got %s",
+		e.PartNumber, e.ExpETag, e.GotETag)
 }
 
 // PartTooSmall - error if part size is less than 5MB.

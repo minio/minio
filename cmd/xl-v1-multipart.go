@@ -331,6 +331,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
+		preUploadIDLock.RUnlock()
 		return pi, toObjectErr(err, bucket, object)
 	}
 
@@ -665,14 +666,23 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		partIdx := objectPartIndex(currentXLMeta.Parts, part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {
-			logger.LogIf(ctx, InvalidPart{})
-			return oi, InvalidPart{}
+			invp := InvalidPart{
+				PartNumber: part.PartNumber,
+				GotETag:    part.ETag,
+			}
+			logger.LogIf(ctx, invp)
+			return oi, invp
 		}
 
 		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
-			logger.LogIf(ctx, InvalidPart{})
-			return oi, InvalidPart{}
+			invp := InvalidPart{
+				PartNumber: part.PartNumber,
+				ExpETag:    currentXLMeta.Parts[partIdx].ETag,
+				GotETag:    part.ETag,
+			}
+			logger.LogIf(ctx, invp)
+			return oi, invp
 		}
 
 		// All parts except the last part has to be atleast 5MB.
