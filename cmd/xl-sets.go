@@ -714,7 +714,15 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		}
 
 		isLeafDir := func(bucket, entry string) bool {
-			return s.getHashedSet(entry).isObjectDir(bucket, entry)
+			// Verify prefixes in all sets.
+			var ok bool
+			for _, set := range s.sets {
+				ok = set.isObjectDir(bucket, entry)
+				if ok {
+					return true
+				}
+			}
+			return false
 		}
 
 		var setDisks = make([][]StorageAPI, len(s.sets))
@@ -742,7 +750,13 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		var objInfo ObjectInfo
 		var err error
 		if hasSuffix(walkResult.entry, slashSeparator) {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
+			// Verify prefixes in all sets.
+			for _, set := range s.sets {
+				objInfo, err = set.getObjectInfoDir(ctx, bucket, walkResult.entry)
+				if err == nil {
+					break
+				}
+			}
 		} else {
 			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
 		}
@@ -1349,7 +1363,14 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 		}
 
 		isLeafDir := func(bucket, entry string) bool {
-			return s.getHashedSet(entry).isObjectDir(bucket, entry)
+			var ok bool
+			for _, set := range s.sets {
+				ok = set.isObjectDir(bucket, entry)
+				if ok {
+					return true
+				}
+			}
+			return false
 		}
 
 		var setDisks = make([][]StorageAPI, len(s.sets))
