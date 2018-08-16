@@ -11,7 +11,8 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quicks
 Vault as Key Management System requires following to be configured in Vault
 
 - transit backend configured with a named encryption key-ring
-- AppRole based authentication with read/update policy for transit backend
+- AppRole based authentication with read/update policy for transit backend. In particular, read and update policy
+  are required for the generate data key endpoint and decrypt key endpoint.
 
 ### Environment variables
 

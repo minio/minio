@@ -121,7 +121,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 	var selectReq ObjectSelectRequest
 	if err := xmlDecoder(r.Body, &selectReq, r.ContentLength); err != nil {
-		fmt.Println(err)
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
@@ -178,7 +177,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
+	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) {
 		getObject = api.CacheAPI().GetObject
 	}
 
@@ -191,7 +190,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	var writer io.Writer
 	writer = pipewriter
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(r.Header) {
+		if crypto.SSEC.IsRequested(r.Header) {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)

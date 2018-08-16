@@ -244,6 +244,7 @@ func (s *serverConfig) loadFromEnvs() {
 	if globalIsDiskCacheEnabled {
 		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
+
 	if globalKMS != nil {
 		s.KMS = globalKMSConfig
 	}
@@ -383,7 +384,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
 	if globalKMS == nil {
-		globalKMSConfig = globalServerConfig.KMS
+		globalKMSConfig = s.KMS
 		if kms, err := crypto.NewVault(globalKMSConfig); err == nil {
 			globalKMS = kms
 			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
@@ -403,9 +404,6 @@ func newConfig(objAPI ObjectLayer) error {
 	// Load values to cached global values.
 	srvCfg.loadToCachedConfigs()
 
-	if globalKMS != nil {
-		srvCfg.KMS = globalKMSConfig
-	}
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg

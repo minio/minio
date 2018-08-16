@@ -161,7 +161,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 
 // Test if a config migration from v2 to v28 is successfully done
 func TestServerConfigMigrateV2toV28(t *testing.T) {
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
 	}
