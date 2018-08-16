@@ -1,5 +1,5 @@
 {
-    "version": "26",
+    "version": "28",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
@@ -91,7 +91,17 @@
             "1": {
                 "enable": true,
                 "brokers": ["localhost:9092"],
-                "topic": "bucketevents"
+                "topic": "bucketevents",
+                "tls" : {
+                    "enable" : true,
+                    "skipVerify" : false,
+                    "clientAuth" : 0
+                },
+                "sasl" : {
+                    "enable" : true,
+                    "username" : "kafka",
+                    "password" : "kafkapasswd"
+                }
             }
         },
         "webhook": {

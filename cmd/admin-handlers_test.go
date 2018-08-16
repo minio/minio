@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "27",
+	"version": "28",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
@@ -86,7 +86,17 @@ var (
 			"1": {
 				"enable": false,
 				"brokers": null,
-				"topic": ""
+				"topic": "",
+				"tls" : {
+					"enable" : false,
+					"skipVerify" : false,
+					"clientAuth" : 0
+				},
+				"sasl" : {
+					"enable" : false,
+					"username" : "",
+					"password" : ""
+				}
 			}
 		},
 		"mqtt": {
