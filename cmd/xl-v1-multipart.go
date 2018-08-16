@@ -778,7 +778,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if xl.isObject(bucket, object) {
-			logger.LogIf(ctx, ObjectAlreadyExists{Bucket: bucket, Object: object})
 			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 		}
 	}

@@ -462,7 +462,6 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 			defer wg.Done()
 			if err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
 				if !IsErrIgnored(err, ignoredErr...) {
-					logger.LogIf(ctx, err)
 					errs[index] = err
 				}
 			}
@@ -743,7 +742,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if xl.isObject(bucket, object) {
-			logger.LogIf(ctx, ObjectAlreadyExists{Bucket: bucket, Object: object})
 			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 		}
 	}

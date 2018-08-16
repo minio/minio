@@ -66,12 +66,8 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 func reduceQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, quorum int, quorumErr error) error {
 	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
 	if maxCount >= quorum {
-		if maxErr != errFileNotFound && maxErr != errVolumeNotFound {
-			logger.LogIf(ctx, maxErr)
-		}
 		return maxErr
 	}
-	logger.LogIf(ctx, quorumErr)
 	return quorumErr
 }
 

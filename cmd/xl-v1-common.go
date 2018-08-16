@@ -69,11 +69,6 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 			continue
 		}
-		reqInfo := &logger.ReqInfo{BucketName: bucket}
-		reqInfo.AppendTags("prefix", prefix)
-		reqInfo.AppendTags("xlMetaJSONFile", xlMetaJSONFile)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 	} // Exhausted all disks - return false.
 	return false
 }
