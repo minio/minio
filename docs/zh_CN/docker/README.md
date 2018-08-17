@@ -111,8 +111,8 @@ docker stats <container_id>
 ## 了解更多
 
 
-* [在Docker Compose上部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-compose)
-* [在Docker Swarm上部署Minio](https://docs.minio.io/docs/zh_CN/deploy-minio-on-docker-swarm)
-* [分布式Minio快速入门](https://docs.minio.io/docs/zh_CN/distributed-minio-quickstart-guide)
-* [Minio纠删码模式快速入门](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure)
+* [在Docker Compose上部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-compose)
+* [在Docker Swarm上部署Minio](https://docs.minio.io/cn/deploy-minio-on-docker-swarm)
+* [分布式Minio快速入门](https://docs.minio.io/cn/distributed-minio-quickstart-guide)
+* [Minio纠删码模式快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
 
