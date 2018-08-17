@@ -18,8 +18,10 @@ package certs
 
 import (
 	"crypto/tls"
+	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/rjeczalik/notify"
 )
@@ -46,6 +48,14 @@ type LoadX509KeyPairFunc func(certFile, keyFile string) (tls.Certificate, error)
 
 // New initializes a new certs monitor.
 func New(certFile, keyFile string, loadCert LoadX509KeyPairFunc) (*Certs, error) {
+	certFileIsLink, err := checkSymlink(certFile)
+	if err != nil {
+		return nil, err
+	}
+	keyFileIsLink, err := checkSymlink(keyFile)
+	if err != nil {
+		return nil, err
+	}
 	c := &Certs{
 		certFile: certFile,
 		keyFile:  keyFile,
@@ -55,11 +65,54 @@ func New(certFile, keyFile string, loadCert LoadX509KeyPairFunc) (*Certs, error)
 		e: make(chan notify.EventInfo, 1),
 	}
 
-	if err := c.watch(); err != nil {
-		return nil, err
+	if certFileIsLink && keyFileIsLink {
+		if err := c.watchSymlinks(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := c.watch(); err != nil {
+			return nil, err
+		}
 	}
 
 	return c, nil
+}
+
+func checkSymlink(file string) (bool, error) {
+	st, err := os.Lstat(file)
+	if err != nil {
+		return false, err
+	}
+	return st.Mode()&os.ModeSymlink == os.ModeSymlink, nil
+}
+
+// watchSymlinks reloads symlinked files since fsnotify cannot watch
+// on symbolic links.
+func (c *Certs) watchSymlinks() (err error) {
+	c.Lock()
+	c.cert, err = c.loadCert(c.certFile, c.keyFile)
+	c.Unlock()
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			select {
+			case <-c.e:
+				// Once stopped exits this routine.
+				return
+			case <-time.After(24 * time.Hour):
+				cert, cerr := c.loadCert(c.certFile, c.keyFile)
+				if cerr != nil {
+					continue
+				}
+				c.Lock()
+				c.cert = cert
+				c.Unlock()
+			}
+		}
+	}()
+	return nil
 }
 
 // watch starts watching for changes to the certificate
