@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"path"
 	"sort"
 	"sync"
@@ -295,18 +295,52 @@ func (m xlMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partInd
 	return 0, 0, InvalidRange{}
 }
 
-// pickValidXLMeta - picks one valid xlMeta content and returns from a
-// slice of xlmeta content.
-func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time) (xmv xlMetaV1, e error) {
-	// Pick latest valid metadata.
-	for _, meta := range metaArr {
+func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Time, quorum int) (xmv xlMetaV1, e error) {
+	metaHashes := make([]string, len(metaArr))
+	for i, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
-			return meta, nil
+			h := sha256.New()
+			for _, p := range meta.Parts {
+				h.Write([]byte(p.Name))
+			}
+			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 		}
 	}
-	err := fmt.Errorf("No valid xl.json present")
-	logger.LogIf(ctx, err)
-	return xmv, err
+
+	metaHashCountMap := make(map[string]int)
+	for _, hash := range metaHashes {
+		if hash == "" {
+			continue
+		}
+		metaHashCountMap[hash]++
+	}
+
+	maxHash := ""
+	maxCount := 0
+	for hash, count := range metaHashCountMap {
+		if count > maxCount {
+			maxCount = count
+			maxHash = hash
+		}
+	}
+
+	if maxCount < quorum {
+		return xlMetaV1{}, errXLReadQuorum
+	}
+
+	for i, hash := range metaHashes {
+		if hash == maxHash {
+			return metaArr[i], nil
+		}
+	}
+
+	return xlMetaV1{}, errXLReadQuorum
+}
+
+// pickValidXLMeta - picks one valid xlMeta content and returns from a
+// slice of xlmeta content.
+func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time, quorum int) (xmv xlMetaV1, e error) {
+	return getXLMetaInQuorum(ctx, metaArr, modTime, quorum)
 }
 
 // list of all errors that can be ignored in a metadata operation.

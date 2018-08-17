@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"os"
 	"path"
 	"strconv"
@@ -349,11 +348,11 @@ func TestPickValidXLMeta(t *testing.T) {
 			metaArr:     invalidXS,
 			modTime:     now,
 			xlMeta:      invalidX1,
-			expectedErr: errors.New("No valid xl.json present"),
+			expectedErr: errXLReadQuorum,
 		},
 	}
 	for i, test := range testCases {
-		xlMeta, err := pickValidXLMeta(context.Background(), test.metaArr, test.modTime)
+		xlMeta, err := pickValidXLMeta(context.Background(), test.metaArr, test.modTime, len(test.metaArr)/2)
 		if test.expectedErr != nil {
 			if err.Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",
