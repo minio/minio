@@ -35,11 +35,3 @@ func TestLocalAdminClientServerInfo(t *testing.T) {
 func TestLocalAdminClientGetConfig(t *testing.T) {
 	testAdminCmdRunnerGetConfig(t, &localAdminClient{})
 }
-
-func TestLocalAdminClientWriteTmpConfig(t *testing.T) {
-	testAdminCmdRunnerWriteTmpConfig(t, &localAdminClient{})
-}
-
-func TestLocalAdminClientCommitConfig(t *testing.T) {
-	testAdminCmdRunnerCommitConfig(t, &localAdminClient{})
-}

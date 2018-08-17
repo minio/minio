@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/minio/minio/cmd/crypto"
@@ -49,7 +51,7 @@ func GetVersion(configFile string) (string, error) {
 	return quick.GetVersion(configFile, globalEtcdClient)
 }
 
-// Migrates all config versions from "1" to "18".
+// Migrates all config versions from "1" to "28".
 func migrateConfig() error {
 	// Purge all configs with version '1',
 	// this is a special case since version '1' used
@@ -2400,6 +2402,45 @@ func migrateV27ToV28() error {
 	srvConfig.Version = "28"
 	srvConfig.KMS = crypto.KMSConfig{}
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")
+	return nil
+}
+
+// Migrates '.minio.sys/config.json' v27 to v28.
+func migrateMinioSysConfig(objAPI ObjectLayer) error {
+	// Construct path to config.json for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid race.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	return migrateV27ToV28MinioSys(objAPI)
+}
+
+func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	srvConfig, err := readServerConfig(context.Background(), objAPI)
+	if err == errConfigNotFound {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+	if srvConfig.Version != "27" {
+		return nil
+	}
+
+	srvConfig.Version = "28"
+	srvConfig.KMS = crypto.KMSConfig{}
+	if err = saveServerConfig(objAPI, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
 	}
 
