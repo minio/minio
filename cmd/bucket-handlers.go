@@ -32,6 +32,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -597,15 +598,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if hasSSECustomerHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C requests
+		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
 			var reader io.Reader
 			var key []byte
-			key, err = ParseSSECustomerHeader(formValues)
-			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
+			if crypto.SSEC.IsRequested(formValues) {
+				key, err = ParseSSECustomerHeader(formValues)
+				if err != nil {
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
 			}
-			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata)
+			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata, crypto.S3.IsRequested(formValues))
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return

@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+
+	"github.com/minio/minio/cmd/crypto"
 )
 
 // Tests getRedirectLocation function for all its criteria.
@@ -153,15 +155,15 @@ var containsReservedMetadataTests = []struct {
 		header: http.Header{"X-Minio-Key": []string{"value"}},
 	},
 	{
-		header:     http.Header{ServerSideEncryptionIV: []string{"iv"}},
+		header:     http.Header{crypto.SSEIV: []string{"iv"}},
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{ServerSideEncryptionSealAlgorithm: []string{SSESealAlgorithmDareSha256}},
+		header:     http.Header{crypto.SSESealAlgorithm: []string{SSESealAlgorithmDareSha256}},
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{ServerSideEncryptionSealedKey: []string{"mac"}},
+		header:     http.Header{crypto.SSECSealedKey: []string{"mac"}},
 		shouldFail: true,
 	},
 	{

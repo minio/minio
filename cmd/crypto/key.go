@@ -87,7 +87,6 @@ func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) Se
 	mac.Write([]byte(SealAlgorithm))
 	mac.Write([]byte(path.Join(bucket, object))) // use path.Join for canonical 'bucket/object'
 	mac.Sum(sealingKey[:0])
-
 	if n, err := sio.Encrypt(&encryptedKey, bytes.NewReader(key[:]), sio.Config{Key: sealingKey[:]}); n != 64 || err != nil {
 		logger.CriticalIf(context.Background(), errors.New("Unable to generate sealed key"))
 	}

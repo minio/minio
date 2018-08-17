@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "27",
+	"version": "28",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
@@ -56,6 +56,22 @@ var (
 		"expiry": 90,
 		"maxuse": 80,
 		"exclude": []
+	},
+	"kms": {
+		"vault": {
+			"endpoint": "",
+			"auth": {
+				"type": "",
+				"approle": {
+					"id": "",
+					"secret": ""
+				}
+			},
+			"key-id": {
+				"name": "",
+				"version": 0
+			}
+		}
 	},
 	"notify": {
 		"amqp": {

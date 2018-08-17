@@ -29,6 +29,7 @@ import (
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
@@ -219,6 +220,12 @@ var (
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
+	// KMS key id
+	globalKMSKeyID string
+	// Allocated KMS
+	globalKMS crypto.KMS
+	// KMS config
+	globalKMSConfig crypto.KMSConfig
 	// Add new variable global values here.
 )
 
