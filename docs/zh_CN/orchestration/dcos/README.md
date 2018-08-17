@@ -38,6 +38,7 @@ $ dcos package uninstall minio
 
 ### 了解更多
 
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
+- [Minio Erasure Code QuickStart Guide](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure)
+
 - [DC/OS Project](https://docs.mesosphere.com/)
 

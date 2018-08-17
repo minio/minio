@@ -8,7 +8,9 @@
 
 ### 数据保护
 
-分布式Minio采用 [erasure code](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)来防范多个节点宕机和[位衰减`bit rot`](https://github.com/minio/minio/blob/master/cn/erasure/README.md#what-is-bit-rot-protection)。  
+
+分布式Minio采用 [erasure code](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure)来防范多个节点宕机和[位衰减`bit rot`](https://github.com/minio/minio/blob/master/docs/zh_CN/erasure/README.md#what-is-bit-rot-protection)。  
+
 分布式Minio至少需要4个节点，使用分布式Minio自动引入了纠删码功能。
 
 ### 高可用
@@ -111,9 +113,11 @@ minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
 验证是否部署成功，使用浏览器访问Minio服务或者使用 [`mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)。多个节点的存储容量和就是分布式Minio的存储容量。
 
 ## 了解更多
-- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
-- [使用 `mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)
-- [使用 `aws-cli`](https://docs.minio.io/cn/aws-cli-with-minio)
-- [使用 `s3cmd](https://docs.minio.io/cn/s3cmd-with-minio)
-- [使用 `minio-go` SDK ](https://docs.minio.io/cn/golang-client-quickstart-guide)
+
+- [Minio纠删码快速入门](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure)
+- [使用 `mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)
+- [使用 `aws-cli`](https://docs.minio.io/docs/zh_CN/aws-cli-with-minio)
+- [使用 `s3cmd](https://docs.minio.io/docs/zh_CN/s3cmd-with-minio)
+- [使用 `minio-go` SDK ](https://docs.minio.io/docs/zh_CN/golang-client-quickstart-guide)
+
 - [minio官方文档](https://docs.minio.io)
