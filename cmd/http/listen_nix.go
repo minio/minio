@@ -21,7 +21,6 @@ package http
 import "github.com/valyala/tcplisten"
 
 var cfg = &tcplisten.Config{
-	ReusePort:   true,
 	DeferAccept: true,
 	FastOpen:    true,
 }
