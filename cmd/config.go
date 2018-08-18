@@ -255,7 +255,6 @@ func initConfig() {
 		if err == errConfigNotFound {
 			// Config file does not exist, we create it fresh and return upon success.
 			logger.FatalIf(newConfig(objAPI), "Unable to initialize minio config for the first time")
-			logger.Info("Created minio configuration file successfully at " + getConfigDir())
 		} else {
 			logger.FatalIf(err, "Unable to load the configuration file")
 		}
