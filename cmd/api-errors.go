@@ -129,6 +129,7 @@ const (
 	ErrMaximumExpires
 	ErrSlowDown
 	ErrInvalidPrefixMarker
+	ErrBadRequest
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -634,6 +635,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidPrefixMarker: {
 		Code:           "InvalidPrefixMarker",
 		Description:    "Invalid marker prefix combination",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBadRequest: {
+		Code:           "BadRequest",
+		Description:    "400 BadRequest",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
