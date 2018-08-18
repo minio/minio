@@ -895,6 +895,12 @@
 			"revisionTime": "2017-01-07T13:32:03Z"
 		},
 		{
+			"checksumSHA1": "R/Mpe0uUp5HeqWrdrH5qE2qZuE8=",
+			"path": "github.com/valyala/tcplisten",
+			"revision": "ceec8f93295a060cdb565ec25e4ccf17941dbd55",
+			"revisionTime": "2016-11-14T21:01:44Z"
+		},
+		{
 			"checksumSHA1": "6ksZHYhLc3yOzTbcWKb3bDENhD4=",
 			"path": "github.com/xwb1989/sqlparser",
 			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",

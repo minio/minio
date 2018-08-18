@@ -197,11 +197,23 @@ func TestIsHTTPMethod(t *testing.T) {
 func TestNewHTTPListener(t *testing.T) {
 	errMsg := ": no such host"
 
-	remoteAddrErrMsg := "listen tcp 93.184.216.34:65432: bind: cannot assign requested address"
+	remoteAddrErrMsgIP := "cannot bind to \"93.184.216.34:65432\": cannot assign requested address"
 	if runtime.GOOS == "windows" {
-		remoteAddrErrMsg = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
-	} else if runtime.GOOS == "darwin" {
-		remoteAddrErrMsg = "listen tcp 93.184.216.34:65432: bind: can't assign requested address"
+		remoteAddrErrMsgIP = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
+	}
+	remoteAddrErrMsgHost := "cannot bind to \"example.org:65432\": cannot assign requested address"
+	if runtime.GOOS == "windows" {
+		remoteAddrErrMsgHost = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
+	}
+
+	remoteMissingErr := "address unknown-host: missing port in address"
+	if runtime.GOOS == "windows" {
+		remoteMissingErr = "listen tcp: address unknown-host: missing port in address"
+	}
+
+	remoteUnknownErr := "lookup unknown-host" + errMsg
+	if runtime.GOOS == "wpindows" {
+		remoteUnknownErr = "listen tcp: lookup unknown-host" + errMsg
 	}
 
 	tlsConfig := getTLSConfig(t)
@@ -217,12 +229,12 @@ func TestNewHTTPListener(t *testing.T) {
 		errorLogFunc           func(context.Context, error)
 		expectedErr            error
 	}{
-		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"example.org:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: address unknown-host: missing port in address")},
-		{[]string{"unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
-		{[]string{"localhost:65432", "93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"localhost:65432", "unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
+		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsgIP)},
+		{[]string{"example.org:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsgHost)},
+		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteMissingErr)},
+		{[]string{"unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteUnknownErr)},
+		{[]string{"localhost:65432", "93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsgIP)},
+		{[]string{"localhost:65432", "unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteUnknownErr)},
 		{[]string{"localhost:0"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
 		{[]string{"localhost:0"}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
 	}
