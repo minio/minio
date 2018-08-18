@@ -161,19 +161,22 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrInvalidExpressionType, r.URL)
 		return
 	}
-	if len(selectReq.Expression) >= (256 * 1000) {
+	if len(selectReq.Expression) >= s3select.MaxExpressionLength {
 		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
+		return
 	}
 	if selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoUse &&
 		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone &&
 		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoIgnore &&
 		selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
 		writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL)
+		return
 	}
 	if selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAlways &&
 		selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAsNeeded &&
 		selectReq.OutputSerialization.CSV.QuoteFields != "" {
 		writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
+		return
 	}
 
 	getObject := objectAPI.GetObject
@@ -205,8 +208,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 	go func() {
 		defer reader.Close()
-		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer,
-			objInfo.ETag); gerr != nil {
+		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer, objInfo.ETag); gerr != nil {
 			pipewriter.CloseWithError(gerr)
 			return
 		}
@@ -243,10 +245,9 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
-		if err := s3s.Execute(w); err != nil {
+		if err = s3s.Execute(w); err != nil {
 			logger.LogIf(ctx, err)
 		}
-		return
 	}
 }
 

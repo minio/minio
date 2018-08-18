@@ -25,6 +25,9 @@ import (
 	"github.com/xwb1989/sqlparser"
 )
 
+// MaxExpressionLength - 256KiB
+const MaxExpressionLength = 256 * 1024
+
 // This function processes size so that we can calculate bytes BytesProcessed.
 func processSize(myrecord []string) int64 {
 	if len(myrecord) > 0 {
