@@ -32,21 +32,6 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// NodeSummary - represents the result of an operation part of
-// set-config on a node.
-type NodeSummary struct {
-	Name   string `json:"name"`
-	ErrSet bool   `json:"errSet"`
-	ErrMsg string `json:"errMsg"`
-}
-
-// SetConfigResult - represents detailed results of a set-config
-// operation.
-type SetConfigResult struct {
-	NodeResults []NodeSummary `json:"nodeResults"`
-	Status      bool          `json:"status"`
-}
-
 // EncryptServerConfigData - encrypts server config data.
 func EncryptServerConfigData(password string, data []byte) ([]byte, error) {
 	salt := make([]byte, 32)
@@ -106,17 +91,17 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 }
 
 // SetConfig - set config supplied as config.json for the setup.
-func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
+func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 	const maxConfigJSONSize = 256 * 1024 // 256KiB
 
 	// Read configuration bytes
 	configBuf := make([]byte, maxConfigJSONSize+1)
 	n, err := io.ReadFull(config, configBuf)
 	if err == nil {
-		return r, fmt.Errorf("too large file")
+		return fmt.Errorf("too large file")
 	}
 	if err != io.ErrUnexpectedEOF {
-		return r, err
+		return err
 	}
 	configBytes := configBuf[:n]
 
@@ -127,21 +112,21 @@ func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err erro
 
 	// Check if read data is in json format
 	if err = json.Unmarshal(configBytes, &cfg); err != nil {
-		return r, errors.New("Invalid JSON format: " + err.Error())
+		return errors.New("Invalid JSON format: " + err.Error())
 	}
 
 	// Check if the provided json file has "version" key set
 	if cfg.Version == "" {
-		return r, errors.New("Missing or unset \"version\" key in json file")
+		return errors.New("Missing or unset \"version\" key in json file")
 	}
 	// Validate there are no duplicate keys in the JSON
 	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		return r, errors.New("Duplicate key in json file: " + err.Error())
+		return errors.New("Duplicate key in json file: " + err.Error())
 	}
 
 	econfigBytes, err := EncryptServerConfigData(adm.secretAccessKey, configBytes)
 	if err != nil {
-		return r, err
+		return err
 	}
 
 	reqData := requestData{
@@ -154,18 +139,12 @@ func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err erro
 
 	defer closeResponse(resp)
 	if err != nil {
-		return r, err
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return r, httpRespToErrorResponse(resp)
+		return httpRespToErrorResponse(resp)
 	}
 
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return r, err
-	}
-
-	err = json.Unmarshal(jsonBytes, &r)
-	return r, err
+	return nil
 }

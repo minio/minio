@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -593,8 +592,14 @@ func TestServiceSetCreds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("JSONify err: %v", err)
 		}
+
+		ebody, err := madmin.EncryptServerConfigData(credentials.SecretKey, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		// Construct setCreds request
-		req, err := getServiceCmdRequest(setCreds, credentials, body)
+		req, err := getServiceCmdRequest(setCreds, credentials, ebody)
 		if err != nil {
 			t.Fatalf("Failed to build service status request %v", err)
 		}
@@ -710,16 +715,6 @@ func TestSetConfigHandler(t *testing.T) {
 	adminTestBed.router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
-	}
-
-	result := setConfigResult{}
-	err = json.NewDecoder(rec.Body).Decode(&result)
-	if err != nil {
-		t.Fatalf("Failed to decode set config result json %v", err)
-	}
-
-	if !result.Status {
-		t.Error("Expected set-config to succeed, but failed")
 	}
 
 	// Check that a very large config file returns an error.
@@ -838,85 +833,6 @@ func TestToAdminAPIErr(t *testing.T) {
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)
-		}
-	}
-}
-
-func TestWriteSetConfigResponse(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(fsDir)
-	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
-	}
-
-	testCases := []struct {
-		status bool
-		errs   []error
-	}{
-		// 1. all nodes returned success.
-		{
-			status: true,
-			errs:   []error{nil, nil, nil, nil},
-		},
-		// 2. some nodes returned errors.
-		{
-			status: false,
-			errs:   []error{errDiskNotFound, nil, errDiskAccessDenied, errFaultyDisk},
-		},
-	}
-
-	testPeers := []adminPeer{
-		{
-			addr: "localhost:9001",
-		},
-		{
-			addr: "localhost:9002",
-		},
-		{
-			addr: "localhost:9003",
-		},
-		{
-			addr: "localhost:9004",
-		},
-	}
-
-	testURL, err := url.Parse("http://dummy.com")
-	if err != nil {
-		t.Fatalf("Failed to parse a place-holder url")
-	}
-
-	var actualResult setConfigResult
-	for i, test := range testCases {
-		rec := httptest.NewRecorder()
-		writeSetConfigResponse(rec, testPeers, test.errs, test.status, testURL)
-		resp := rec.Result()
-		jsonBytes, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Test %d: Failed to read response %v", i+1, err)
-		}
-
-		err = json.Unmarshal(jsonBytes, &actualResult)
-		if err != nil {
-			t.Fatalf("Test %d: Failed to unmarshal json %v", i+1, err)
-		}
-		if actualResult.Status != test.status {
-			t.Errorf("Test %d: Expected status %v but received %v", i+1, test.status, actualResult.Status)
-		}
-		for p, res := range actualResult.NodeResults {
-			if res.Name != testPeers[p].addr {
-				t.Errorf("Test %d: Expected node name %s but received %s", i+1, testPeers[p].addr, res.Name)
-			}
-			expectedErrMsg := fmt.Sprintf("%v", test.errs[p])
-			if res.ErrMsg != expectedErrMsg {
-				t.Errorf("Test %d: Expected error %s but received %s", i+1, expectedErrMsg, res.ErrMsg)
-			}
-			expectedErrSet := test.errs[p] != nil
-			if res.ErrSet != expectedErrSet {
-				t.Errorf("Test %d: Expected ErrSet %v but received %v", i+1, expectedErrSet, res.ErrSet)
-			}
 		}
 	}
 }

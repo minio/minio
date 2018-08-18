@@ -69,31 +69,6 @@ func (receiver *adminRPCReceiver) ReInitFormat(args *ReInitFormatArgs, reply *Vo
 	return receiver.local.ReInitFormat(args.DryRun)
 }
 
-// WriteConfigArgs - wraps the bytes to be written and temporary file name.
-type WriteConfigArgs struct {
-	AuthArgs
-	TmpFileName string
-	Buf         []byte
-}
-
-// WriteTmpConfig - writes the supplied config contents onto the
-// supplied temporary file.
-func (receiver *adminRPCReceiver) WriteTmpConfig(args *WriteConfigArgs, reply *VoidReply) error {
-	return receiver.local.WriteTmpConfig(args.TmpFileName, args.Buf)
-}
-
-// CommitConfigArgs - wraps the config file name that needs to be
-// committed into config.json on this node.
-type CommitConfigArgs struct {
-	AuthArgs
-	FileName string
-}
-
-// CommitConfig - Renames the temporary file into config.json on this node.
-func (receiver *adminRPCReceiver) CommitConfig(args *CommitConfigArgs, reply *VoidReply) error {
-	return receiver.local.CommitConfig(args.FileName)
-}
-
 // NewAdminRPCServer - returns new admin RPC server.
 func NewAdminRPCServer() (*xrpc.Server, error) {
 	rpcServer := xrpc.NewServer()

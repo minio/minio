@@ -63,9 +63,9 @@ func registerAdminRouter(router *mux.Router) {
 	/// Config operations
 
 	// Update credentials
-	adminV1Router.Methods(http.MethodPut).Path("/config/credential").HandlerFunc(httpTraceAll(adminAPI.UpdateCredentialsHandler))
+	adminV1Router.Methods(http.MethodPut).Path("/config/credential").HandlerFunc(httpTraceHdrs(adminAPI.UpdateCredentialsHandler))
 	// Get config
-	adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceAll(adminAPI.GetConfigHandler))
+	adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 	// Set config
-	adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceAll(adminAPI.SetConfigHandler))
+	adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
 }

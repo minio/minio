@@ -19,7 +19,6 @@ package madmin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -38,15 +37,15 @@ func (adm *AdminClient) SetCredentials(access, secret string) error {
 		return err
 	}
 
-	// No TLS?
-	if !adm.secure {
-		return fmt.Errorf("credentials cannot be updated over an insecure connection")
+	ebody, err := EncryptServerConfigData(adm.secretAccessKey, body)
+	if err != nil {
+		return err
 	}
 
 	// Setup new request
 	reqData := requestData{
 		relPath: "/v1/config/credential",
-		content: body,
+		content: ebody,
 	}
 
 	// Execute GET on bucket to list objects.
@@ -62,5 +61,6 @@ func (adm *AdminClient) SetCredentials(access, secret string) error {
 	if resp.StatusCode != http.StatusOK {
 		return httpRespToErrorResponse(resp)
 	}
+
 	return nil
 }

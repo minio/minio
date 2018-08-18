@@ -246,16 +246,22 @@ func initConfig() {
 				logger.Fatal(err, "Unable to migrate 'config.json' to '.minio.sys/config/config.json'")
 			}
 		}
-
 	}
-	if err := checkServerConfig(context.Background(), newObjectLayerFn()); err != nil {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		logger.FatalIf(errServerNotInitialized, "Server is not initialized yet unable to proceed")
+	}
+	if err := checkServerConfig(context.Background(), objAPI); err != nil {
 		if err == errConfigNotFound {
 			// Config file does not exist, we create it fresh and return upon success.
-			logger.FatalIf(newConfig(newObjectLayerFn()), "Unable to initialize minio config for the first time")
+			logger.FatalIf(newConfig(objAPI), "Unable to initialize minio config for the first time")
 			logger.Info("Created minio configuration file successfully at " + getConfigDir())
 		} else {
 			logger.FatalIf(err, "Unable to load the configuration file")
 		}
 	}
-	logger.FatalIf(loadConfig(newObjectLayerFn()), "Unable to load the configuration file")
+
+	logger.FatalIf(migrateMinioSysConfig(objAPI), "Config migration failed for minio.sys config")
+
+	logger.FatalIf(loadConfig(objAPI), "Unable to load the configuration file")
 }

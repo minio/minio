@@ -20,11 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // localAdminClient - represents admin operation to be executed locally.
@@ -84,29 +79,4 @@ func (lc localAdminClient) GetConfig() ([]byte, error) {
 	}
 
 	return json.Marshal(globalServerConfig)
-}
-
-// WriteTmpConfig - writes config file content to a temporary file on
-// the local server.
-func (lc localAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
-	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
-	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
-	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
-	logger.LogIf(ctx, err)
-	return err
-}
-
-// CommitConfig - Move the new config in tmpFileName onto config.json
-// on a local node.
-func (lc localAdminClient) CommitConfig(tmpFileName string) error {
-	configFile := getConfigFile()
-	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
-
-	err := os.Rename(tmpConfigFile, configFile)
-	reqInfo := (&logger.ReqInfo{}).AppendTags("tmpConfigFile", tmpConfigFile)
-	reqInfo.AppendTags("configFile", configFile)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
-	logger.LogIf(ctx, err)
-	return err
 }
