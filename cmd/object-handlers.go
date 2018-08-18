@@ -270,6 +270,15 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	transactionLock := pathJoin(bucket, object, "transaction")
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionLock)
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+
+	}
+	defer objLock.RUnlock()
+
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
 		getObjectInfo = api.CacheAPI().GetObjectInfo
@@ -577,6 +586,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	transactionLock := pathJoin(srcBucket, srcObject, "transaction")
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionLock)
+	if lockErr := objLock.GetRLock(globalOperationTimeout); lockErr != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+
+	}
+	defer objLock.RUnlock()
+
 	// Check if metadata directive is valid.
 	if !isMetadataDirectiveValid(r.Header) {
 		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
@@ -863,6 +881,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	transactionLock := pathJoin(bucket, object, "transaction")
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionLock)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+	defer objLock.Unlock()
 
 	// Validate storage class metadata if present
 	if _, ok := r.Header[amzStorageClassCanonical]; ok {
@@ -1166,6 +1192,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
 		return
 	}
+
+	transactionLock := pathJoin(srcBucket, srcObject, "transaction")
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionLock)
+	if lockErr := objLock.GetRLock(globalOperationTimeout); lockErr != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+	defer objLock.RUnlock()
 
 	uploadID := r.URL.Query().Get("uploadId")
 	partIDString := r.URL.Query().Get("partNumber")
@@ -1628,6 +1662,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
+
+	transactionLock := pathJoin(bucket, object, "transaction")
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionLock)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+	defer objLock.Unlock()
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
