@@ -91,7 +91,7 @@ ENVIRONMENT VARIABLES:
      MINIO_DOMAIN:    To enable bucket DNS requests, set this value to Minio host domain name.
      MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of Minio host public IP(s) delimited by ",".
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
-	
+
    KMS:
      MINIO_SSE_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
      MINIO_SSE_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
@@ -123,7 +123,7 @@ EXAMPLES:
      $ export MINIO_CACHE_EXPIRY=40
      $ export MINIO_CACHE_MAXUSE=80
      $ {{.HelpName}} /home/shared
-	
+
   7. Start minio server with KMS enabled.
      $ export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
      $ export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
@@ -322,8 +322,13 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
-	// Initialize server config.
-	initConfig()
+	// Create a new config system.
+	globalConfigSys = NewConfigSys()
+
+	// Initialize config system.
+	if err = globalConfigSys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize config system")
+	}
 
 	// Load logger subsystem
 	loadLoggers()
@@ -337,14 +342,6 @@ func serverMain(ctx *cli.Context) {
 
 	// Re-enable logging
 	logger.Disable = false
-
-	// Create a new config system.
-	globalConfigSys = NewConfigSys()
-
-	// Initialize config system.
-	if err := globalConfigSys.Init(newObjectLayerFn()); err != nil {
-		logger.Fatal(err, "Unable to initialize config system")
-	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

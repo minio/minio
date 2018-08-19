@@ -64,6 +64,12 @@ func (s *serverConfig) SetRegion(region string) {
 
 // GetRegion get current region.
 func (s *serverConfig) GetRegion() string {
+	if globalIsEnvRegion {
+		return globalServerRegion
+	}
+	if s == nil {
+		return ""
+	}
 	return s.Region
 }
 
@@ -111,16 +117,34 @@ func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 // GetStorageClass reads storage class fields from current config.
 // It returns the standard and reduced redundancy storage class struct
 func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
+	if globalIsStorageClass {
+		return globalStandardStorageClass, globalRRStorageClass
+	}
+	if s == nil {
+		return storageClass{}, storageClass{}
+	}
 	return s.StorageClass.Standard, s.StorageClass.RRS
 }
 
 // GetBrowser get current credentials.
 func (s *serverConfig) GetBrowser() bool {
+	if globalIsEnvWORM {
+		return globalWORMEnabled
+	}
+	if s == nil {
+		return true
+	}
 	return bool(s.Browser)
 }
 
 // GetWorm get current credentials.
 func (s *serverConfig) GetWorm() bool {
+	if globalIsEnvBrowser {
+		return globalIsBrowserEnabled
+	}
+	if s == nil {
+		return false
+	}
 	return bool(s.Worm)
 }
 
@@ -134,10 +158,24 @@ func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int, maxu
 
 // GetCacheConfig gets the current cache config
 func (s *serverConfig) GetCacheConfig() CacheConfig {
+	if globalIsDiskCacheEnabled {
+		return CacheConfig{
+			Drives:  globalCacheDrives,
+			Exclude: globalCacheExcludes,
+			Expiry:  globalCacheExpiry,
+			MaxUse:  globalCacheMaxUse,
+		}
+	}
+	if s == nil {
+		return CacheConfig{}
+	}
 	return s.Cache
 }
 
 func (s *serverConfig) Validate() error {
+	if s == nil {
+		return nil
+	}
 	if s.Version != serverConfigVersion {
 		return fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, s.Version)
 	}

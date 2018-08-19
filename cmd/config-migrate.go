@@ -2411,18 +2411,6 @@ func migrateV27ToV28() error {
 
 // Migrates '.minio.sys/config.json' v27 to v28.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
-	// Construct path to config.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
-	transactionConfigFile := configFile + ".transaction"
-
-	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
-	// and configFile, take a transaction lock to avoid race.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	return migrateV27ToV28MinioSys(objAPI)
 }
 

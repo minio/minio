@@ -97,7 +97,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	serverHandleEnvVars()
 
 	// Init config
-	initConfig()
+	initConfig(objLayer)
 
 	// Check if serverConfig has
 	if globalServerConfig.GetBrowser() {
