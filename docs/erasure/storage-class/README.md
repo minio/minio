@@ -72,12 +72,12 @@ export MINIO_STORAGE_CLASS_STANDARD=EC:3
 export MINIO_STORAGE_CLASS_RRS=EC:2
 ```
 
-Storage class can also be set via `config.json` file. Refer [storage class](https://github.com/minio/minio/tree/master/docs/config#storage-class) for
+Storage class can also be set via `mc admin config` get/set commands to update the configuration. Refer [storage class](https://github.com/minio/minio/tree/master/docs/config#storage-class) for
 more details.
 
 *Note*
 
-- If `STANDARD` storage class is set via environment variables or `config.json` files, and `x-amz-storage-class` is not present in request metadata, Minio server will 
+- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, Minio server will 
 apply `STANDARD` storage class to the object. This means the data and parity disks will be used as set in `STANDARD` storage class.
 
 - If storage class is not defined before starting Minio server, and subsequent PutObject metadata field has `x-amz-storage-class` present
