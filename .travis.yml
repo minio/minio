@@ -8,6 +8,13 @@ dist: trusty
 
 language: go
 
+# this ensures PRs based on a local branch are not built twice
+# the downside is that a PR targeting a different branch is not built
+# but as a workaround you can add the branch to this list
+branches:
+  only:
+    - master
+
 matrix:
   include:
     - os: linux

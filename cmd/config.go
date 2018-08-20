@@ -193,7 +193,7 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
-	return loadConfig(objAPI)
+	return initConfig(objAPI)
 }
 
 // NewConfigSys - creates new config system object.
@@ -201,20 +201,8 @@ func NewConfigSys() *ConfigSys {
 	return &ConfigSys{}
 }
 
-// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/minio.json'
+// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys() error {
-	// Construct path to config.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
-	transactionConfigFile := configFile + ".transaction"
-
-	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
-	// and configFile, take a transaction lock to avoid race.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	// Verify if backend already has the file.
 	if err := checkServerConfig(context.Background(), newObjectLayerFn()); err != errConfigNotFound {
 		return err
@@ -229,38 +217,45 @@ func migrateConfigToMinioSys() error {
 }
 
 // Initialize and load config from remote etcd or local config directory
-func initConfig() {
+func initConfig(objAPI ObjectLayer) error {
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
 	if globalEtcdClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		resp, err := globalEtcdClient.Get(ctx, getConfigFile())
 		cancel()
 		if err == nil && resp.Count > 0 {
-			logger.FatalIf(migrateConfig(), "Config migration failed")
+			return migrateConfig()
 		}
 	} else {
 		if isFile(getConfigFile()) {
-			logger.FatalIf(migrateConfig(), "Config migration failed")
+			if err := migrateConfig(); err != nil {
+				return err
+			}
 
 			// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 			if err := migrateConfigToMinioSys(); err != nil {
-				logger.Fatal(err, "Unable to migrate 'config.json' to '.minio.sys/config/config.json'")
+				return err
 			}
 		}
 	}
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		logger.FatalIf(errServerNotInitialized, "Server is not initialized yet unable to proceed")
-	}
+
 	if err := checkServerConfig(context.Background(), objAPI); err != nil {
 		if err == errConfigNotFound {
 			// Config file does not exist, we create it fresh and return upon success.
-			logger.FatalIf(newConfig(objAPI), "Unable to initialize minio config for the first time")
+			if err = newConfig(objAPI); err != nil {
+				return err
+			}
 		} else {
-			logger.FatalIf(err, "Unable to load the configuration file")
+			return err
 		}
 	}
 
-	logger.FatalIf(migrateMinioSysConfig(objAPI), "Config migration failed for minio.sys config")
+	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
+	}
 
-	logger.FatalIf(loadConfig(objAPI), "Unable to load the configuration file")
+	return loadConfig(objAPI)
 }

@@ -124,7 +124,7 @@ __NOTE:__ `{1...n}` shown in shortened examples above have 3 dots! Using only 2 
 
 ## 3. Test your setup
 
-To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the combined capacity of all the storage drives as the capacity of this drive.
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). 
 
 ## Explore Further
 - [Minio Large Bucket Suppport Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
