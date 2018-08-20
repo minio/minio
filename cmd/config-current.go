@@ -490,7 +490,9 @@ func loadConfig(objAPI ObjectLayer) error {
 // * Handle the configuration in this function to create/add into TargetList.
 func getNotificationTargets(config *serverConfig) *event.TargetList {
 	targetList := event.NewTargetList()
-
+	if config == nil {
+		return targetList
+	}
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
 			newTarget, err := target.NewAMQPTarget(id, args)
