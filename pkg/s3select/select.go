@@ -48,13 +48,13 @@ func (reader *Input) runSelectParser(selectExpression string, myRow chan *Row) {
 // ParseSelect parses the SELECT expression, and effectively tokenizes it into
 // its separate parts. It returns the requested column names,alias,limit of
 // records, and the where clause.
-func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int, interface{}, []string, *SelectFuncs, error) {
+func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
 	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
 
 	stmt, err := sqlparser.Parse(sqlInput)
 	var whereClause interface{}
 	var alias string
-	var limit int
+	var limit int64
 	myFuncs := &SelectFuncs{}
 	// TODO Maybe can parse their errors a bit to return some more of the s3 errors
 	if err != nil {
@@ -137,7 +137,8 @@ func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int, interf
 			switch expr := stmt.Limit.Rowcount.(type) {
 			case *sqlparser.SQLVal:
 				// The Value of how many rows we're going to limit by
-				limit, _ = strconv.Atoi(string(expr.Val[:]))
+				parsedLimit, _ := strconv.Atoi(string(expr.Val[:]))
+				limit = int64(parsedLimit)
 			}
 		}
 		if stmt.GroupBy != nil {
@@ -157,7 +158,7 @@ func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int, interf
 // This is the main function, It goes row by row and for records which validate
 // the where clause it currently prints the appropriate row given the requested
 // columns.
-func (reader *Input) processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int, functionNames []string, myRow chan *Row, myFunc *SelectFuncs) {
+func (reader *Input) processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int64, functionNames []string, myRow chan *Row, myFunc *SelectFuncs) {
 	counter := -1
 	filtrCount := 0
 	functionFlag := false
@@ -203,7 +204,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 		}
 		// When we have reached our limit, on what the user specified as the number
 		// of rows they wanted, we terminate our interpreter.
-		if filtrCount == limitOfRecords && limitOfRecords != 0 {
+		if int64(filtrCount) == limitOfRecords && limitOfRecords != 0 {
 			close(myRow)
 			return
 		}
