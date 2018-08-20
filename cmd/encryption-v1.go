@@ -822,6 +822,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		delete(objInfo.UserDefined, crypto.S3SealedKey)
 		delete(objInfo.UserDefined, crypto.S3KMSKeyID)
 		delete(objInfo.UserDefined, crypto.S3KMSSealedKey)
+		delete(objInfo.UserDefined, crypto.SSEHeader)
 	}
 	if w.copySource {
 		w.customerKeyHeader = r.Header.Get(crypto.SSECopyKey)

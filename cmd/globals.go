@@ -226,6 +226,8 @@ var (
 	globalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
+	// gateway sse options
+	GlobalGatewaySSE []string
 	// Add new variable global values here.
 )
 

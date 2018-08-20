@@ -509,3 +509,8 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	}
 	return nil
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (l *s3Objects) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

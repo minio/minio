@@ -193,6 +193,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	var writer io.Writer
 	writer = pipewriter
 	if objectAPI.IsEncryptionSupported() {
+		objInfo.UserDefined = cleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if crypto.SSEC.IsRequested(r.Header) {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
@@ -356,6 +357,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objectAPI.IsEncryptionSupported() {
+		objInfo.UserDefined = cleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
@@ -498,8 +500,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	var encrypted bool
 	if objectAPI.IsEncryptionSupported() {
-		if encrypted, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		objInfo.UserDefined = cleanMinioInternalMetadataKeys(objInfo.UserDefined)
+		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL)
 			return
 		} else if encrypted {
 			s3Encrypted := crypto.S3.IsEncrypted(objInfo.UserDefined)
@@ -558,7 +561,6 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	for k, v := range userMeta {
 		defaultMeta[k] = v
 	}
-
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isMetadataReplace(r.Header) {
@@ -629,7 +631,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject); err == nil {
@@ -637,8 +638,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-
+	gwEncryption := isGatewayEncrypt(srcInfo.UserDefined, r.Header)
 	if objectAPI.IsEncryptionSupported() {
+		srcInfo.UserDefined = cleanMinioInternalMetadataKeys(srcInfo.UserDefined)
 		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -845,6 +847,24 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			objInfo.ETag = remoteObjInfo.ETag
 			objInfo.ModTime = remoteObjInfo.LastModified
 		}
+	} else if gwEncryption {
+		go func() {
+			if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+				pipeWriter.CloseWithError(gerr)
+				writeErrorResponse(w, ErrInternalError, r.URL)
+				return
+			}
+			// Close writer explicitly to indicate data has been written
+			srcInfo.Writer.Close()
+		}()
+		bkendObjInfo, rerr := objectAPI.PutObject(ctx, dstBucket, dstObject, srcInfo.Reader, srcInfo.UserDefined)
+		if rerr != nil {
+			pipeWriter.CloseWithError(rerr)
+			writeErrorResponse(w, ErrInternalError, r.URL)
+			return
+		}
+		objInfo.ETag = bkendObjInfo.ETag
+		objInfo.ModTime = bkendObjInfo.ModTime
 	} else {
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
@@ -1248,6 +1268,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if objectAPI.IsEncryptionSupported() {
+		srcInfo.UserDefined = cleanMinioInternalMetadataKeys(srcInfo.UserDefined)
 		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
 			writeErrorResponse(w, apiErr, r.URL)
 			return
@@ -1335,6 +1356,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				}
 			}
 			var objectEncryptionKey []byte
+			li.UserDefined = cleanMinioInternalMetadataKeys(li.UserDefined)
 			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
 				pipeWriter.CloseWithError(err)
@@ -1547,6 +1569,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 			// Calculating object encryption key
 			var objectEncryptionKey []byte
+			li.UserDefined = cleanMinioInternalMetadataKeys(li.UserDefined)
 			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)

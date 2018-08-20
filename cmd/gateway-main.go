@@ -146,8 +146,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if !globalIsEnvCreds {
 		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
 	}
-
+	// handle gateway specific env
+	handleGatewayEnvVars()
 	// Create certs path.
+
 	logger.FatalIf(createConfigDir(), "Unable to create configuration directories")
 
 	// Initialize server config.

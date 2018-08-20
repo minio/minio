@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"path"
 	"runtime"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -222,6 +224,34 @@ func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[strin
 		newMeta[k] = v
 	}
 	return newMeta
+}
+
+// cleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
+// encryption metadata that was sent by minio gateway
+func cleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
+	var newMeta = make(map[string]string)
+	for k, v := range metadata {
+		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
+			newMeta[strings.TrimPrefix(k, "X-Amz-Meta-")] = v
+		} else {
+			newMeta[k] = v
+		}
+	}
+	return newMeta
+}
+
+// returns true if object is sse encrypted at the gateway
+func isGatewayEncrypt(metadata map[string]string, headers http.Header) bool {
+	if GlobalGatewaySSE != nil && (hasServerSideEncryptionHeader(headers) || crypto.SSECopy.IsRequested(headers)) {
+		return true
+	}
+
+	for k := range metadata {
+		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
+			return true
+		}
+	}
+	return false
 }
 
 // Extracts etag value from the metadata.
