@@ -21,7 +21,6 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"io/ioutil"
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/cmd/logger"
@@ -118,6 +117,7 @@ type bitrotReader struct {
 	filePath  string
 	verifier  *BitrotVerifier // Holds the bit-rot info
 	endOffset int64           // Affects the length of data requested in disk.ReadFile depending on Read()'s offset
+	reader    io.Reader
 }
 
 // newBitrotReader returns bitrotReader.
@@ -136,22 +136,15 @@ func newBitrotReader(disk StorageAPI, volume, filePath string, algo BitrotAlgori
 // ReadChunk returns requested data.
 func (b *bitrotReader) ReadChunk(offset int64, length int64) ([]byte, error) {
 	var err error
-	var rc io.ReadCloser
-	if rc, err = b.disk.ReadFile(b.volume, b.filePath, offset, length, b.verifier); err != nil {
-		logger.LogIf(context.Background(), err)
-		return nil, err
+	if b.reader == nil {
+		if b.reader, err = b.disk.ReadFile(b.volume, b.filePath, offset, b.endOffset-offset, b.verifier); err != nil {
+			return nil, err
+		}
 	}
-
-	var buf []byte
-	buf, err = ioutil.ReadAll(rc)
-	rc.Close()
-
+	buf := make([]byte, length)
+	_, err = io.ReadFull(b.reader, buf)
 	if err != nil && err != io.EOF {
 		return nil, err
-	}
-
-	if int64(len(buf)) != length {
-		return nil, errLessData
 	}
 
 	return buf, nil
