@@ -147,6 +147,7 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 		}
 		copy(extKey[:], newKey)
 		sealedKey = objectKey.Seal(extKey, sealedKey.IV, crypto.SSEC.String(), bucket, object)
+		crypto.SSEC.CreateMetadata(metadata, sealedKey)
 		return nil
 	}
 }
