@@ -77,6 +77,10 @@ func (sys *PolicySys) Remove(bucketName string) {
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
+	if sys == nil {
+		return args.IsOwner
+	}
+
 	sys.RLock()
 	defer sys.RUnlock()
 
