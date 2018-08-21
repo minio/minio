@@ -219,6 +219,11 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
+	case "28":
+		if err = migrateV28ToV29(); err != nil {
+			return err
+		}
+		fallthrough
 	case serverConfigVersion:
 		// No migration needed. this always points to current version.
 		err = nil
@@ -2375,7 +2380,7 @@ func migrateV26ToV27() error {
 	srvConfig.Logger.HTTP["1"] = loggerHTTP{}
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %v", err)
+		return fmt.Errorf("Failed to migrate config from `26' to `27'. %v", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "26", "27")
@@ -2387,6 +2392,7 @@ func migrateV27ToV28() error {
 
 	// config V28 is backward compatible with V27, load the old
 	// config file in serverConfigV28 struct and initialize KMSConfig
+
 	srvConfig := &serverConfigV28{}
 	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
 	if os.IsNotExist(err) {
@@ -2409,12 +2415,45 @@ func migrateV27ToV28() error {
 	return nil
 }
 
-// Migrates '.minio.sys/config.json' v27 to v28.
-func migrateMinioSysConfig(objAPI ObjectLayer) error {
-	return migrateV27ToV28MinioSys(objAPI)
+func migrateV28ToV29() error {
+
+	configFile := getConfigFile()
+
+	// config V29 is backward compatible with V28, load the old
+	// config file in serverConfigV28 struct and set the default values
+	// for the compression configuration.
+	srvConfig := &serverConfigV29{}
+	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+
+	if srvConfig.Version != "28" {
+		return nil
+	}
+
+	srvConfig.Version = "29"
+	// Init compression config.For future migration, Compression config needs to be copied over from previous version.
+	srvConfig.Compression.Enabled = false
+	srvConfig.Compression.Extensions = []string{".txt", ".log", ".csv", ".json"}
+	srvConfig.Compression.MimeTypes = []string{"text/csv", "text/plain", "application/json"}
+
+	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
+		return fmt.Errorf("Failed to migrate config from `28' to `29'. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "28", "29")
+	return nil
 }
 
-func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
+// Migrates '.minio.sys/config.json' v28 to v29.
+func migrateMinioSysConfig(objAPI ObjectLayer) error {
+	return migrateV28ToV29MinioSys(objAPI)
+}
+
+func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	srvConfig, err := readServerConfig(context.Background(), objAPI)
 	if err == errConfigNotFound {
@@ -2422,16 +2461,19 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
 	}
-	if srvConfig.Version != "27" {
+	if srvConfig.Version != "28" {
 		return nil
 	}
 
-	srvConfig.Version = "28"
-	srvConfig.KMS = crypto.KMSConfig{}
+	srvConfig.Version = "29"
+	// Init compression config.For future migration, Compression config needs to be copied over from previous version.
+	srvConfig.Compression.Enabled = false
+	srvConfig.Compression.Extensions = []string{".txt", ".log", ".csv", ".json"}
+	srvConfig.Compression.MimeTypes = []string{"text/csv", "text/plain", "application/json"}
 	if err = saveServerConfig(objAPI, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
 	}
 
-	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")
+	logger.Info(configMigrateMSGTemplate, configFile, "28", "29")
 	return nil
 }

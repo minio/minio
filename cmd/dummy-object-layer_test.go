@@ -154,3 +154,7 @@ func (api *DummyObjectLayer) IsNotificationSupported() (b bool) {
 func (api *DummyObjectLayer) IsEncryptionSupported() (b bool) {
 	return
 }
+
+func (api *DummyObjectLayer) IsCompressionSupported() (b bool) {
+	return
+}

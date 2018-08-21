@@ -194,7 +194,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.UserDefined = httpMeta
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "")
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	objInfo.UserDefined = httpMeta
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "")
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
 	if err != nil {
 		t.Fatal(err)
 	}

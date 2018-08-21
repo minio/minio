@@ -359,10 +359,10 @@
 			"revisionTime": "2018-04-30T18:52:41Z"
 		},
 		{
-			"checksumSHA1": "W+E/2xXcE1GmJ0Qb784ald0Fn6I=",
+			"checksumSHA1": "h1d2lPZf6j2dW/mIqVnd1RdykDo=",
 			"path": "github.com/golang/snappy",
-			"revision": "d9eb7a3d35ec988b8585d4a0068e462c27d28380",
-			"revisionTime": "2016-05-29T05:00:41Z"
+			"revision": "2e65f85255dbc3072edf28d6b5b8efc472979f5a",
+			"revisionTime": "2018-05-18T05:39:59Z"
 		},
 		{
 			"checksumSHA1": "0x0CoHbgoWngucjKSDPFodeL8ek=",

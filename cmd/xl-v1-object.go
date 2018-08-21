@@ -145,7 +145,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	hashReader, err := hash.NewReader(pipeReader, length, "", "", length)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, dstBucket, dstObject)
@@ -175,6 +175,7 @@ func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startO
 		return err
 	}
 	defer objectLock.RUnlock()
+
 	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag)
 }
 
@@ -577,7 +578,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
@@ -618,12 +619,12 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size == -1 || size > blockSizeV1:
+		buffer = xl.bp.Get()
+		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size)
-	default:
-		buffer = xl.bp.Get()
-		defer xl.bp.Put(buffer)
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -647,7 +648,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		var curPartReader io.Reader
-		if curPartSize > 0 {
+
+		if curPartSize >= 0 {
 			pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum)
 			if pErr != nil {
 				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
@@ -674,9 +676,23 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
-		if n < curPartSize {
+
+		if n < curPartSize && data.Size() > 0 {
 			logger.LogIf(ctx, IncompleteBody{})
 			return ObjectInfo{}, IncompleteBody{}
+		}
+
+		if n == 0 && data.Size() == -1 {
+			// The last part of a compressed object will always be empty
+			// Since the compressed size is unpredictable.
+			// Hence removing the last (empty) part from all `xl.disks`.
+			for _, disk := range xl.getDisks() {
+				dErr := disk.DeleteFile(minioMetaTmpBucket, tempErasureObj)
+				if dErr != nil {
+					return ObjectInfo{}, toObjectErr(dErr, minioMetaTmpBucket, tempErasureObj)
+				}
+			}
+			break
 		}
 
 		// Update the total written size
@@ -687,7 +703,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 				onlineDisks[i] = nil
 				continue
 			}
-			partsMetadata[i].AddObjectPart(partIdx, partName, "", n)
+			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, data.ActualSize())
 			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, w.Sum()})
 		}
 

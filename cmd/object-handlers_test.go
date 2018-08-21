@@ -1080,7 +1080,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	}
 
 	a := 0
-	b := globalMinPartSize - 1
+	b := globalMinPartSize
 	var parts []CompletePart
 	for partNumber := 1; partNumber <= 2; partNumber++ {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
@@ -1100,7 +1100,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, `func (api objectAPIHandlers) CopyObjectHandler` handles the request.
-		a = globalMinPartSize
+		a = globalMinPartSize + 1
 		b = len(bytesData[0].byteData) - 1
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

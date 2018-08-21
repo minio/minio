@@ -95,7 +95,18 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	setConfigDir(configDirAbs)
 }
 
+// Parses the given compression exclude list `extensions` or `content-types`.
+func parseCompressExcludes(excludes []string) ([]string, error) {
+	for _, e := range excludes {
+		if len(e) == 0 {
+			return nil, uiErrInvalidCompressionExcludesValue(nil).Msg("extension/mime-type (%s) cannot be empty", e)
+		}
+	}
+	return excludes, nil
+}
+
 func handleCommonEnvVars() {
+	compressEnvDelimiter := ","
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
 		globalProfiler = startProfiler(profiler)
@@ -264,5 +275,29 @@ func handleCommonEnvVars() {
 		globalKMS = kms
 		globalKMSKeyID = kmsConf.Vault.Key.Name
 		globalKMSConfig = kmsConf
+	}
+
+	if compress := os.Getenv("MINIO_COMPRESS"); compress != "" {
+		globalIsCompressionEnabled = strings.EqualFold(compress, "true")
+	}
+
+	compressExtensions := os.Getenv("MINIO_COMPRESS_EXTENSIONS")
+	compressMimeTypes := os.Getenv("MINIO_COMPRESS_MIMETYPES")
+	if compressExtensions != "" || compressMimeTypes != "" {
+		globalIsEnvCompression = true
+		if compressExtensions != "" {
+			extensions, err := parseCompressExcludes(strings.Split(compressExtensions, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_EXTENSIONS value (`%s`)", extensions)
+			}
+			globalCompressExtensions = extensions
+		}
+		if compressMimeTypes != "" {
+			contenttypes, err := parseCompressExcludes(strings.Split(compressMimeTypes, compressEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_COMPRESS_MIMETYPES value (`%s`)", contenttypes)
+			}
+			globalCompressMimeTypes = contenttypes
+		}
 	}
 }

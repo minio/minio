@@ -299,3 +299,8 @@ func (xl xlObjects) IsNotificationSupported() bool {
 func (xl xlObjects) IsEncryptionSupported() bool {
 	return true
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (xl xlObjects) IsCompressionSupported() bool {
+	return true
+}

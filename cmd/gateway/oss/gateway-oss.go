@@ -1074,3 +1074,8 @@ func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 	}
 	return nil
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *ossObjects) IsCompressionSupported() bool {
+	return false
+}

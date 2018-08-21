@@ -21,14 +21,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/wildcard"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -294,6 +297,113 @@ func getRandomHostPort(records []dns.SrvRecord) (string, int) {
 	rand.Seed(time.Now().Unix())
 	srvRecord := records[rand.Intn(len(records))]
 	return srvRecord.Host, srvRecord.Port
+}
+
+// IsCompressed returns true if the object is marked as compressed.
+func (o *ObjectInfo) IsCompressed() bool {
+	_, ok := o.UserDefined[ReservedMetadataPrefix+"compression"]
+	return ok
+}
+
+// GetActualSize - read the decompressed size from the meta json.
+func (o *ObjectInfo) GetActualSize() int64 {
+	metadata := o.UserDefined
+	sizeStr, ok := metadata[ReservedMetadataPrefix+"actual-size"]
+	if ok {
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err == nil {
+			return size
+		}
+	} else {
+		var totalPartSize int64
+		for _, part := range o.Parts {
+			totalPartSize += part.ActualSize
+		}
+		return totalPartSize
+	}
+	return 0
+}
+
+// Disabling compression for encrypted enabled requests.
+// Using compression and encryption together enables room for side channel attacks.
+// Eliminate non-compressible objects by extensions/content-types.
+func isCompressible(header http.Header, object string) bool {
+	if hasServerSideEncryptionHeader(header) || excludeForCompression(object, header) {
+		return false
+	}
+	return true
+}
+
+// Eliminate the non-compressible objects.
+func excludeForCompression(object string, header http.Header) bool {
+	objStr := object
+	contentType := header.Get("Content-Type")
+	if globalIsCompressionEnabled {
+		// We strictly disable compression for standard extensions/content-types (`compressed`).
+		if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
+			return true
+		}
+		// Filter compression includes.
+		if len(globalCompressExtensions) > 0 || len(globalCompressMimeTypes) > 0 {
+			extensions := globalCompressExtensions
+			mimeTypes := globalCompressMimeTypes
+			if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
+				return false
+			}
+			return true
+		}
+		return false
+	}
+	return true
+}
+
+// Utility which returns if a string is present in the list.
+func hasStringSuffixInSlice(str string, list []string) bool {
+	for _, v := range list {
+		if strings.HasSuffix(str, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns true if any of the given wildcard patterns match the matchStr.
+func hasPattern(patterns []string, matchStr string) bool {
+	for _, pattern := range patterns {
+		if ok := wildcard.MatchSimple(pattern, matchStr); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns the part file name which matches the partNumber and etag.
+func getPartFile(entries []string, partNumber int, etag string) string {
+	for _, entry := range entries {
+		if strings.HasPrefix(entry, fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
+			return entry
+		}
+	}
+	return ""
+}
+
+// Returs the compressed offset which should be skipped.
+func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (int64, int64) {
+	var compressedOffset int64
+	var skipLength int64
+	var cumulativeActualSize int64
+	if len(objectInfo.Parts) > 0 {
+		for _, part := range objectInfo.Parts {
+			cumulativeActualSize += part.ActualSize
+			if cumulativeActualSize <= offset {
+				compressedOffset += part.Size
+			} else {
+				skipLength = cumulativeActualSize - part.ActualSize
+				break
+			}
+		}
+	}
+	return compressedOffset, offset - skipLength
 }
 
 // byBucketName is a collection satisfying sort.Interface.

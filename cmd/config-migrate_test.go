@@ -157,10 +157,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV27ToV28(); err != nil {
 		t.Fatal("migrate v27 to v28 should succeed when no config file is found")
 	}
+	if err := migrateV28ToV29(); err != nil {
+		t.Fatal("migrate v28 to v29 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v28 is successfully done
-func TestServerConfigMigrateV2toV28(t *testing.T) {
+// Test if a config migration from v2 to v29 is successfully done
+func TestServerConfigMigrateV2toV29(t *testing.T) {
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
@@ -318,9 +321,11 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err := migrateV26ToV27(); err == nil {
 		t.Fatal("migrateConfigV26ToV27() should fail with a corrupted json")
 	}
-
 	if err := migrateV27ToV28(); err == nil {
 		t.Fatal("migrateConfigV27ToV28() should fail with a corrupted json")
+	}
+	if err := migrateV28ToV29(); err == nil {
+		t.Fatal("migrateConfigV28ToV29() should fail with a corrupted json")
 	}
 }
 
