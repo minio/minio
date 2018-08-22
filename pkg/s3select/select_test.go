@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/minio/minio/pkg/s3select"
 )
 
 // Unit Test for the checkForDuplicates function.
@@ -289,7 +291,7 @@ func TestMyParser(t *testing.T) {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		reqCols, alias, myLimit, _, aggFunctionNames, _, err := s3s.ParseSelect(table.myQuery)
+		reqCols, alias, myLimit, _, aggFunctionNames, _, err := s3select.ParseSelect(table.myQuery, s3s)
 		if table.err != err {
 			t.Error()
 		}
@@ -481,7 +483,7 @@ func TestMyWhereEval(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		_, alias, _, whereClause, _, _, _ := s3s.ParseSelect(table.myQuery)
+		_, alias, _, whereClause, _, _, _ := s3select.ParseSelect(table.myQuery, s3s)
 		myVal, err := matchesMyWhereClause(table.record, columnsMap, alias, whereClause)
 		if table.err != err {
 			t.Error()
@@ -632,7 +634,7 @@ func TestInterpreter(t *testing.T) {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		reqCols, alias, myLimit, whereClause, aggFunctionNames, _, err := s3s.ParseSelect(table.myQuery)
+		reqCols, alias, myLimit, whereClause, aggFunctionNames, _, err := s3select.ParseSelect(table.myQuery, s3s)
 		if err != table.err {
 			t.Fatal()
 		}
@@ -708,7 +710,7 @@ func TestMyProtocolFunction(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	_, err := NewInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -721,15 +723,15 @@ func TestMyProtocolFunction(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currentMessage = &bytes.Buffer{}
-		if len(s3s.writeRecordMessage(table.payloadMsg, currentMessage).Bytes()) != table.expectedRecord {
+		if len(writeRecordMessage(table.payloadMsg, currentMessage).Bytes()) != table.expectedRecord {
 			t.Error()
 		}
 		currentMessage.Reset()
-		if len(s3s.writeEndMessage(currentMessage).Bytes()) != table.expectedEnd {
+		if len(writeEndMessage(currentMessage).Bytes()) != table.expectedEnd {
 			t.Error()
 		}
 		currentMessage.Reset()
-		if len(s3s.writeContinuationMessage(currentMessage).Bytes()) != 57 {
+		if len(writeContinuationMessage(currentMessage).Bytes()) != 57 {
 			t.Error()
 		}
 		currentMessage.Reset()
@@ -768,11 +770,11 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currBuf = &bytes.Buffer{}
-		if len(s3s.writeStatMessage(table.payloadStatMsg, currBuf).Bytes()) != table.expectedStat {
+		if len(writeStatMessage(table.payloadStatMsg, currBuf).Bytes()) != table.expectedStat {
 			t.Error()
 		}
 		currBuf.Reset()
-		if len(s3s.writeProgressMessage(table.payloadProgressMsg, currBuf).Bytes()) != table.expectedProgress {
+		if len(writeProgressMessage(table.payloadProgressMsg, currBuf).Bytes()) != table.expectedProgress {
 			t.Error()
 		}
 	}
@@ -794,7 +796,7 @@ func TestMyErrorProtocolFunctions(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	_, err := NewInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -809,7 +811,7 @@ func TestMyErrorProtocolFunctions(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currentMessage = &bytes.Buffer{}
-		if len(s3s.writeErrorMessage(table.err, currentMessage).Bytes()) != table.expectedError {
+		if len(writeErrorMessage(table.err, currentMessage).Bytes()) != table.expectedError {
 			t.Error()
 		}
 
@@ -1034,7 +1036,7 @@ func TestMyValids(t *testing.T) {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		_, _, _, _, _, _, err = s3s.ParseSelect(table.myQuery)
+		_, _, _, _, _, _, err = s3select.ParseSelect(table.myQuery, s3s)
 		if err != table.err {
 			t.Fatal()
 		}

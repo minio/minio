@@ -78,6 +78,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
+	var s3s s3select.SelectQuery
 
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
@@ -153,7 +154,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if selectReq.InputSerialization.CompressionType == SelectCompressionNONE ||
 		selectReq.InputSerialization.CompressionType == "" {
 		selectReq.InputSerialization.CompressionType = SelectCompressionNONE
-		if !strings.Contains(objInfo.ContentType, "text/csv") {
+		if !strings.Contains(objInfo.ContentType, "text/csv") && !strings.Contains(objInfo.ContentType, "application/json") {
 			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
 			return
 		}
@@ -166,22 +167,30 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
 		return
 	}
-	if selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoUse &&
-		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone &&
-		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoIgnore &&
-		selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
-		writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL)
-		return
+	if selectReq.InputSerialization.CSV != nil {
+		if selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoUse &&
+			selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone &&
+			selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoIgnore &&
+			selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
+			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL)
+			return
+		}
+		if selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAlways &&
+			selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAsNeeded &&
+			selectReq.OutputSerialization.CSV.QuoteFields != "" {
+			writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
+			return
+		}
+		if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
+			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+			return
+		}
 	}
-	if selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAlways &&
-		selectReq.OutputSerialization.CSV.QuoteFields != CSVQuoteFieldsAsNeeded &&
-		selectReq.OutputSerialization.CSV.QuoteFields != "" {
-		writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
-		return
-	}
-	if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
-		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
-		return
+	if selectReq.InputSerialization.JSON != nil {
+		if selectReq.InputSerialization.JSON.Type != "" {
+			writeErrorResponse(w, ErrInvalidJSONType, r.URL)
+		}
+
 	}
 
 	getObject := objectAPI.GetObject
@@ -220,16 +229,18 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}()
 
 	//s3select //Options
-	if selectReq.OutputSerialization.CSV.FieldDelimiter == "" {
-		selectReq.OutputSerialization.CSV.FieldDelimiter = ","
-	}
-	if selectReq.InputSerialization.CSV.FileHeaderInfo == "" {
-		selectReq.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoNone
-	}
-	if selectReq.InputSerialization.CSV.RecordDelimiter == "" {
-		selectReq.InputSerialization.CSV.RecordDelimiter = "\n"
-	}
+
 	if selectReq.InputSerialization.CSV != nil {
+		if selectReq.OutputSerialization.CSV.FieldDelimiter == "" {
+			selectReq.OutputSerialization.CSV.FieldDelimiter = ","
+		}
+		if selectReq.InputSerialization.CSV.FileHeaderInfo == "" {
+			selectReq.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoNone
+		}
+		if selectReq.InputSerialization.CSV.RecordDelimiter == "" {
+			selectReq.InputSerialization.CSV.RecordDelimiter = "\n"
+		}
+
 		options := &s3select.Options{
 			HasHeader:            selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone,
 			RecordDelimiter:      selectReq.InputSerialization.CSV.RecordDelimiter,
@@ -243,19 +254,37 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			StreamSize:           objInfo.Size,
 			HeaderOpt:            selectReq.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
 		}
-		s3s, err := s3select.NewInput(options)
+		s3s, err = s3select.NewInput(options)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
-		_, _, _, _, _, _, err = s3s.ParseSelect(selectReq.Expression)
+
+	}
+
+	if selectReq.InputSerialization.JSON != nil {
+		options := &s3select.JSONOptions{
+			Name:       "S3Object", // Default table name for all objects
+			ReadFrom:   reader,
+			Compressed: string(selectReq.InputSerialization.CompressionType),
+			Expression: selectReq.Expression,
+			StreamSize: objInfo.Size,
+			//Typej: selectReq.InputSerialization.JSON.Type  -- To be implemented
+		}
+		s3s, err = s3select.NewJSONInput(options)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
-		if err = s3s.Execute(w); err != nil {
-			logger.LogIf(ctx, err)
-		}
+	}
+	_, _, _, _, _, _, err = s3select.ParseSelect(selectReq.Expression, s3s)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	if err = s3select.Execute(w, s3s); err != nil {
+		logger.LogIf(ctx, err)
+
 	}
 }
 
