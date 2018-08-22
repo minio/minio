@@ -715,8 +715,8 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
-			writeErrorResponse(w, apiErr, r.URL)
+		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+			writeWebErrorResponse(w, err)
 			return
 		}
 	}
@@ -818,8 +818,8 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			if objectAPI.IsEncryptionSupported() {
-				if apiErr, _ := DecryptObjectInfo(&info, r.Header); apiErr != ErrNone {
-					writeErrorResponse(w, apiErr, r.URL)
+				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
+					writeWebErrorResponse(w, err)
 					return err
 				}
 			}
@@ -1235,6 +1235,12 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	} else if err == errEncryptedObject {
+		return getAPIError(ErrSSEEncryptedObject)
+	} else if err == errInvalidEncryptionParameters {
+		return getAPIError(ErrInvalidEncryptionParameters)
+	} else if err == errObjectTampered {
+		return getAPIError(ErrObjectTampered)
 	} else if err == errMethodNotAllowed {
 		return getAPIError(ErrMethodNotAllowed)
 	}

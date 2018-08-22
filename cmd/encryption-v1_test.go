@@ -521,43 +521,43 @@ func TestDecryptRequest(t *testing.T) {
 var decryptObjectInfoTests = []struct {
 	info    ObjectInfo
 	headers http.Header
-	expErr  APIErrorCode
+	expErr  error
 }{
 	{
 		info:    ObjectInfo{Size: 100},
 		headers: http.Header{},
-		expErr:  ErrNone,
+		expErr:  nil,
 	},
 	{
 		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
-		expErr:  ErrNone,
+		expErr:  nil,
 	},
 	{
 		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
-		expErr:  ErrNone,
+		expErr:  nil,
 	},
 	{
 		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSECSealedKey: "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA=="}},
 		headers: http.Header{},
-		expErr:  ErrSSEEncryptedObject,
+		expErr:  errEncryptedObject,
 	},
 	{
 		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
-		expErr:  ErrInvalidEncryptionParameters,
+		expErr:  errInvalidEncryptionParameters,
 	},
 	{
 		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
-		expErr:  ErrObjectTampered,
+		expErr:  errObjectTampered,
 	},
 }
 
 func TestDecryptObjectInfo(t *testing.T) {
 	for i, test := range decryptObjectInfoTests {
-		if err, encrypted := DecryptObjectInfo(&test.info, test.headers); err != test.expErr {
+		if encrypted, err := DecryptObjectInfo(&test.info, test.headers); err != test.expErr {
 			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
 		} else if enc := crypto.IsEncrypted(test.info.UserDefined); encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)

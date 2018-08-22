@@ -43,6 +43,8 @@ var (
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
 	// Additional Minio errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
+	// error returned when invalid encryption parameters are specified
+	errInvalidEncryptionParameters = errors.New("The encryption parameters are not applicable to this object")
 )
 
 const (
@@ -714,28 +716,25 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 // decryption succeeded.
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
-func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
+func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, err error) {
 	// Directories are never encrypted.
 	if info.IsDir {
-		return ErrNone, false
+		return false, nil
 	}
 	// disallow X-Amz-Server-Side-Encryption header on HEAD and GET
 	if crypto.S3.IsRequested(headers) {
-		apiErr = ErrInvalidEncryptionParameters
+		err = errInvalidEncryptionParameters
 		return
 	}
-	if apiErr, encrypted = ErrNone, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSEC.IsRequested(headers) {
-		apiErr = ErrInvalidEncryptionParameters
+	if err, encrypted = nil, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSEC.IsRequested(headers) {
+		err = errInvalidEncryptionParameters
 	} else if encrypted {
 		if (crypto.SSEC.IsEncrypted(info.UserDefined) && !crypto.SSEC.IsRequested(headers)) ||
 			(crypto.S3.IsEncrypted(info.UserDefined) && crypto.SSEC.IsRequested(headers)) {
-			apiErr = ErrSSEEncryptedObject
+			err = errEncryptedObject
 			return
 		}
-		var err error
-		if info.Size, err = info.DecryptedSize(); err != nil {
-			apiErr = toAPIErrorCode(err)
-		}
+		info.Size, err = info.DecryptedSize()
 	}
 	return
 }
