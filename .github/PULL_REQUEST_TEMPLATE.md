@@ -7,6 +7,10 @@
 <!--- Why is this change required? What problem does it solve? -->
 <!--- If it fixes an open issue, please link to the issue here. -->
 
+## Regression
+<!-- Is this PR fixing a regression? (Yes / No) -->
+<!-- If Yes, optionally please include minio version or commit id or PR# that caused this regression, if you have these details. -->
+
 ## How Has This Been Tested?
 <!--- Please describe in detail how you tested your changes. -->
 <!--- Include details of your testing environment, and the tests you ran to -->
