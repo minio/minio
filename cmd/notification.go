@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +47,13 @@ func (sys *NotificationSys) GetARNList() []string {
 	arns := []string{}
 	region := globalServerConfig.GetRegion()
 	for _, targetID := range sys.targetList.List() {
-		arns = append(arns, targetID.ToARN(region).String())
+		// httpclient target is part of ListenBucketNotification
+		// which doesn't need to be listed as part of the ARN list
+		// This list is only meant for external targets, filter
+		// this out pro-actively.
+		if !strings.HasPrefix(targetID.ID, "httpclient+") {
+			arns = append(arns, targetID.ToARN(region).String())
+		}
 	}
 
 	return arns
