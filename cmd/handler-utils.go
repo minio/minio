@@ -189,6 +189,15 @@ func extractReqParams(r *http.Request) map[string]string {
 	}
 }
 
+// Extract response elements to be sent with event notifiation.
+func extractRespElements(w http.ResponseWriter) map[string]string {
+
+	return map[string]string{
+		"content-length": w.Header().Get("Content-Length"),
+		// Add more fields here.
+	}
+}
+
 // Trims away `aws-chunked` from the content-encoding header if present.
 // Streaming signature clients can have custom content-encoding such as
 // `aws-chunked,gzip` here we need to only save `gzip`.

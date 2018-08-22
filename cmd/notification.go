@@ -439,13 +439,14 @@ func NewNotificationSys(config *serverConfig, endpoints EndpointList) *Notificat
 }
 
 type eventArgs struct {
-	EventName  event.Name
-	BucketName string
-	Object     ObjectInfo
-	ReqParams  map[string]string
-	Host       string
-	Port       string
-	UserAgent  string
+	EventName    event.Name
+	BucketName   string
+	Object       ObjectInfo
+	ReqParams    map[string]string
+	RespElements map[string]string
+	Host         string
+	Port         string
+	UserAgent    string
 }
 
 // ToEvent - converts to notification event.
@@ -464,6 +465,13 @@ func (args eventArgs) ToEvent() event.Event {
 	eventTime := UTCNow()
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
 
+	respElements := map[string]string{
+		"x-amz-request-id":        uniqueID,
+		"x-minio-origin-endpoint": getOriginEndpoint(), // Minio specific custom elements.
+	}
+	if args.RespElements["content-length"] != "" {
+		respElements["content-length"] = args.RespElements["content-length"]
+	}
 	newEvent := event.Event{
 		EventVersion:      "2.0",
 		EventSource:       "minio:s3",
@@ -472,10 +480,7 @@ func (args eventArgs) ToEvent() event.Event {
 		EventName:         args.EventName,
 		UserIdentity:      event.Identity{creds.AccessKey},
 		RequestParameters: args.ReqParams,
-		ResponseElements: map[string]string{
-			"x-amz-request-id":        uniqueID,
-			"x-minio-origin-endpoint": getOriginEndpoint(), // Minio specific custom elements.
-		},
+		ResponseElements:  respElements,
 		S3: event.Metadata{
 			SchemaVersion:   "1.0",
 			ConfigurationID: "Config",
