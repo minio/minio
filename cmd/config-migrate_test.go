@@ -174,10 +174,6 @@ func TestServerConfigMigrateV2toV28(t *testing.T) {
 	}
 	defer os.RemoveAll(fsDir)
 
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
 	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
@@ -203,12 +199,12 @@ func TestServerConfigMigrateV2toV28(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	if err := migrateConfigToMinioSys(); err != nil {
+	if err := migrateConfigToMinioSys(objLayer); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(newObjectLayerFn()); err != nil {
+	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 

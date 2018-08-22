@@ -202,9 +202,9 @@ func NewConfigSys() *ConfigSys {
 }
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
-func migrateConfigToMinioSys() error {
+func migrateConfigToMinioSys(objAPI ObjectLayer) error {
 	// Verify if backend already has the file.
-	if err := checkServerConfig(context.Background(), newObjectLayerFn()); err != errConfigNotFound {
+	if err := checkServerConfig(context.Background(), objAPI); err != errConfigNotFound {
 		return err
 	} // if errConfigNotFound proceed to migrate..
 
@@ -213,7 +213,7 @@ func migrateConfigToMinioSys() error {
 		return err
 	}
 
-	return saveServerConfig(newObjectLayerFn(), config)
+	return saveServerConfig(objAPI, config)
 }
 
 // Initialize and load config from remote etcd or local config directory
@@ -236,7 +236,7 @@ func initConfig(objAPI ObjectLayer) error {
 			}
 
 			// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
-			if err := migrateConfigToMinioSys(); err != nil {
+			if err := migrateConfigToMinioSys(objAPI); err != nil {
 				return err
 			}
 		}

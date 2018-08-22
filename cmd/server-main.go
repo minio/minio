@@ -313,10 +313,6 @@ func serverMain(ctx *cli.Context) {
 		logger.FatalIf(err, "Unable to initialize backend")
 	}
 
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
-
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		initFederatorBackend(newObject)
@@ -326,7 +322,7 @@ func serverMain(ctx *cli.Context) {
 	globalConfigSys = NewConfigSys()
 
 	// Initialize config system.
-	if err = globalConfigSys.Init(newObjectLayerFn()); err != nil {
+	if err = globalConfigSys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize config system")
 	}
 
@@ -347,7 +343,7 @@ func serverMain(ctx *cli.Context) {
 	globalPolicySys = NewPolicySys()
 
 	// Initialize policy system.
-	if err := globalPolicySys.Init(newObjectLayerFn()); err != nil {
+	if err := globalPolicySys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
@@ -355,9 +351,13 @@ func serverMain(ctx *cli.Context) {
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Initialize notification system.
-	if err := globalNotificationSys.Init(newObjectLayerFn()); err != nil {
+	if err := globalNotificationSys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize notification system")
 	}
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(globalMinioAddr)
