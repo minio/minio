@@ -296,7 +296,7 @@ func TestMyParser(t *testing.T) {
 		if alias != table.alias {
 			t.Error()
 		}
-		if myLimit != table.myLimit {
+		if myLimit != int64(table.myLimit) {
 			t.Error()
 		}
 		if !reflect.DeepEqual(table.aggFuncs, aggFunctionNames) {
