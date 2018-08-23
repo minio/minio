@@ -14,7 +14,7 @@ WORKDIR /go/src/github.com/minio/
 COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
 
 RUN  \
-     apk add --no-cache ca-certificates curl && \
+     apk add --no-cache ca-certificates && \
      apk add --no-cache --virtual .build-deps git && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      go get -v -d github.com/minio/minio && \
