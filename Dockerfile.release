@@ -13,6 +13,7 @@ RUN \
      apk add --no-cache --virtual .build-deps curl && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
+     apk del .build-deps && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/healthcheck.sh
