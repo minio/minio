@@ -61,6 +61,8 @@ check: test
 test: verifiers build
 	@echo "Running unit tests"
 	@go test $(GOFLAGS) -tags kqueue ./...
+
+verify: build
 	@echo "Verifying build"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 

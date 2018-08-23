@@ -20,14 +20,14 @@ matrix:
     - os: linux
       env:
         - ARCH=x86_64
-      go: 1.10.1
+      go: 1.10.3
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
         - make test GOFLAGS="-timeout 15m -race -v"
+        - make verify
         - make coverage
-        - node --version
         - cd browser && yarn && yarn test && cd ..
 
 before_install:
