@@ -192,11 +192,17 @@ func (sys *NotificationSys) AddRemoteTarget(bucketName string, target event.Targ
 	if targetMap == nil {
 		targetMap = make(map[event.TargetID]event.RulesMap)
 	}
-	targetMap[target.ID()] = rulesMap.Clone()
+
+	rulesMap = rulesMap.Clone()
+	targetMap[target.ID()] = rulesMap
 	sys.bucketRemoteTargetRulesMap[bucketName] = targetMap
+
+	rulesMap = rulesMap.Clone()
+	rulesMap.Add(sys.bucketRulesMap[bucketName])
+	sys.bucketRulesMap[bucketName] = rulesMap
+
 	sys.Unlock()
 
-	sys.AddRulesMap(bucketName, rulesMap)
 	return nil
 }
 
@@ -341,8 +347,12 @@ func (sys *NotificationSys) AddRulesMap(bucketName string, rulesMap event.RulesM
 		rulesMap.Add(targetRulesMap)
 	}
 
-	rulesMap.Add(sys.bucketRulesMap[bucketName])
-	sys.bucketRulesMap[bucketName] = rulesMap
+	// Do not add for an empty rulesMap.
+	if len(rulesMap) == 0 {
+		delete(sys.bucketRulesMap, bucketName)
+	} else {
+		sys.bucketRulesMap[bucketName] = rulesMap
+	}
 }
 
 // RemoveRulesMap - removes rules map for bucket name.
