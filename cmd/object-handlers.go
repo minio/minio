@@ -306,8 +306,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if apiErr, _ := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
-			writeErrorResponse(w, apiErr, r.URL)
+		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
 	}
@@ -468,10 +468,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
-
+	var encrypted bool
 	if objectAPI.IsEncryptionSupported() {
-		if apiErr, encrypted := DecryptObjectInfo(&objInfo, r.Header); apiErr != ErrNone {
-			writeErrorResponse(w, apiErr, r.URL)
+		if encrypted, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		} else if encrypted {
 			s3Encrypted := crypto.S3.IsEncrypted(objInfo.UserDefined)
