@@ -7,17 +7,13 @@
 
 package highwayhash
 
+import "golang.org/x/sys/cpu"
+
 var (
-	useSSE4 = supportsSSE4()
-	useAVX2 = supportsAVX2()
+	useSSE4 = cpu.X86.HasSSE41
+	useAVX2 = cpu.X86.HasAVX2
 	useNEON = false
 )
-
-//go:noescape
-func supportsSSE4() bool
-
-//go:noescape
-func supportsAVX2() bool
 
 //go:noescape
 func initializeSSE4(state *[16]uint64, key []byte)
@@ -38,31 +34,34 @@ func finalizeSSE4(out []byte, state *[16]uint64)
 func finalizeAVX2(out []byte, state *[16]uint64)
 
 func initialize(state *[16]uint64, key []byte) {
-	if useAVX2 {
+	switch {
+	case useAVX2:
 		initializeAVX2(state, key)
-	} else if useSSE4 {
+	case useSSE4:
 		initializeSSE4(state, key)
-	} else {
+	default:
 		initializeGeneric(state, key)
 	}
 }
 
 func update(state *[16]uint64, msg []byte) {
-	if useAVX2 {
+	switch {
+	case useAVX2:
 		updateAVX2(state, msg)
-	} else if useSSE4 {
+	case useSSE4:
 		updateSSE4(state, msg)
-	} else {
+	default:
 		updateGeneric(state, msg)
 	}
 }
 
 func finalize(out []byte, state *[16]uint64) {
-	if useAVX2 {
+	switch {
+	case useAVX2:
 		finalizeAVX2(out, state)
-	} else if useSSE4 {
+	case useSSE4:
 		finalizeSSE4(out, state)
-	} else {
+	default:
 		finalizeGeneric(out, state)
 	}
 }

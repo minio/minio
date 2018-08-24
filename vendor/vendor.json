@@ -628,10 +628,10 @@
 			"revisionTime": "2018-01-23T12:12:34Z"
 		},
 		{
-			"checksumSHA1": "w7ykRf31om2J6832Py4Kz/PEnSI=",
+			"checksumSHA1": "2Fu1GmLwDo6FFdahjnlWnPkwJTE=",
 			"path": "github.com/minio/highwayhash",
-			"revision": "1ea1b5fce73b1d7abbd822a194b51f3736b1f23b",
-			"revisionTime": "2018-01-09T22:40:08Z"
+			"revision": "85fc8a2dacad36a6beb2865793cd81363a496696",
+			"revisionTime": "2018-05-01T08:09:13Z"
 		},
 		{
 			"checksumSHA1": "7/Hdd23/j4/yt4BXa+h0kqz1yjw=",
@@ -830,10 +830,10 @@
 			"revisionTime": "2018-04-08T09:29:02Z"
 		},
 		{
-			"checksumSHA1": "T2BgxGcsgrldYNFPQcmw46/K4qM=",
+			"checksumSHA1": "D8AVDI39CJ+jvw0HOotYU2gz54c=",
 			"path": "github.com/rjeczalik/notify",
-			"revision": "d152f3ce359a5464dc41e84a8919fc67e55bbbf0",
-			"revisionTime": "2018-03-12T21:30:58Z"
+			"revision": "4e54e7fd043e865c50bda93359fb78813a8d165b",
+			"revisionTime": "2018-08-08T20:39:25Z"
 		},
 		{
 			"path": "github.com/rs/cors",
