@@ -643,7 +643,6 @@ type serverConfigV25 struct {
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
 	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -667,7 +666,6 @@ type serverConfigV26 struct {
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
 	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -708,7 +706,6 @@ type serverConfigV27 struct {
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
 	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -738,7 +735,6 @@ type serverConfigV28 struct {
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
 	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration

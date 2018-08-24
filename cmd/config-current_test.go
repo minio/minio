@@ -107,11 +107,6 @@ func TestServerConfigWithEnvs(t *testing.T) {
 		t.Error("Expected browser to be disabled but it is not")
 	}
 
-	// Check if serverConfig returns WORM config from the env
-	if !globalServerConfig.GetWorm() {
-		t.Error("Expected WORM to be enabled but it is not")
-	}
-
 	// Check if serverConfig has region from the environment
 	if globalServerConfig.GetRegion() != "us-west-1" {
 		t.Errorf("Expected region to be \"us-west-1\", found %v", globalServerConfig.GetRegion())
