@@ -7,14 +7,13 @@
 
 package highwayhash
 
+import "golang.org/x/sys/cpu"
+
 var (
-	useSSE4 = supportsSSE4()
+	useSSE4 = cpu.X86.HasSSE41
 	useAVX2 = false
 	useNEON = false
 )
-
-//go:noescape
-func supportsSSE4() bool
 
 //go:noescape
 func initializeSSE4(state *[16]uint64, key []byte)

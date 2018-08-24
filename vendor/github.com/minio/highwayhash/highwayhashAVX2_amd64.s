@@ -248,8 +248,3 @@ hash64:
 	MOVQ DX, 0(BX)
 	RET
 
-// func supportsAVX2() bool
-TEXT ·supportsAVX2(SB), 4, $0-1
-	MOVQ runtime·support_avx2(SB), AX
-	MOVB AX, ret+0(FP)
-	RET
