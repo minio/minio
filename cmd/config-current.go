@@ -128,8 +128,8 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 
 // GetBrowser get current credentials.
 func (s *serverConfig) GetBrowser() bool {
-	if globalIsEnvWORM {
-		return globalWORMEnabled
+	if globalIsEnvBrowser {
+		return globalIsBrowserEnabled
 	}
 	if s == nil {
 		return true
@@ -139,8 +139,8 @@ func (s *serverConfig) GetBrowser() bool {
 
 // GetWorm get current credentials.
 func (s *serverConfig) GetWorm() bool {
-	if globalIsEnvBrowser {
-		return globalIsBrowserEnabled
+	if globalIsEnvWORM {
+		return globalWORMEnabled
 	}
 	if s == nil {
 		return false

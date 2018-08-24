@@ -66,6 +66,9 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	os.Setenv("MINIO_BROWSER", "off")
 	defer os.Unsetenv("MINIO_BROWSER")
 
+	os.Setenv("MINIO_WORM", "on")
+	defer os.Unsetenv("MINIO_WORM")
+
 	os.Setenv("MINIO_ACCESS_KEY", "minio")
 	defer os.Unsetenv("MINIO_ACCESS_KEY")
 
@@ -99,29 +102,35 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	// Init config
 	initConfig(objLayer)
 
-	// Check if serverConfig has
+	// Check if serverConfig has browser disabled
 	if globalServerConfig.GetBrowser() {
-		t.Errorf("Expecting browser is set to false found %v", globalServerConfig.GetBrowser())
+		t.Error("Expected browser to be disabled but it is not")
 	}
 
-	// Check if serverConfig has
+	// Check if serverConfig returns WORM config from the env
+	if !globalServerConfig.GetWorm() {
+		t.Error("Expected WORM to be enabled but it is not")
+	}
+
+	// Check if serverConfig has region from the environment
 	if globalServerConfig.GetRegion() != "us-west-1" {
-		t.Errorf("Expecting region to be \"us-west-1\" found %v", globalServerConfig.GetRegion())
+		t.Errorf("Expected region to be \"us-west-1\", found %v", globalServerConfig.GetRegion())
 	}
 
-	// Check if serverConfig has
+	// Check if serverConfig has credentials from the environment
 	cred := globalServerConfig.GetCredential()
 
 	if cred.AccessKey != "minio" {
-		t.Errorf("Expecting access key to be `minio` found %s", cred.AccessKey)
+		t.Errorf("Expected access key to be `minio`, found %s", cred.AccessKey)
 	}
 
 	if cred.SecretKey != "minio123" {
-		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
+		t.Errorf("Expected access key to be `minio123`, found %s", cred.SecretKey)
 	}
 
+	// Check if serverConfig has the correct domain
 	if globalServerConfig.Domain != "domain.com" {
-		t.Errorf("Expecting Domain to be `domain.com` found " + globalServerConfig.Domain)
+		t.Errorf("Expected Domain to be `domain.com`, found " + globalServerConfig.Domain)
 	}
 }
 
