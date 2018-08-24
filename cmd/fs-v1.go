@@ -456,7 +456,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
-		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil {
+		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil && err != io.EOF {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
@@ -660,7 +660,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		// Read from fs metadata only if it exists.
 		_, rerr := fsMeta.ReadFrom(ctx, rlk.LockedFile)
 		fs.rwPool.Close(fsMetaPath)
-		if rerr != nil {
+		if rerr != nil && rerr != io.EOF {
 			return oi, rerr
 		}
 	}
