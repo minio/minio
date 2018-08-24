@@ -17,7 +17,7 @@
 import React from "react"
 import { shallow, mount } from "enzyme"
 import { Policy } from "../Policy"
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../../constants"
+import { READ_ONLY, WRITE_ONLY, READ_WRITE, NONE } from "../../constants"
 import web from "../../web"
 
 jest.mock("../../web", () => ({
@@ -29,6 +29,11 @@ jest.mock("../../web", () => ({
 describe("Policy", () => {
   it("should render without crashing", () => {
     shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={READ_ONLY} />)
+  })
+
+  it("should not render when policy is listed as 'none'", () => {
+    const wrapper = shallow(<Policy currentBucket={"bucket"} prefix={"foo"} policy={NONE} />)
+    expect(wrapper.find(".pmb-list").length).toBe(0)
   })
 
   it("should call web.setBucketPolicy and fetchPolicies on submit", () => {
