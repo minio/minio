@@ -246,9 +246,6 @@ func handleCommonEnvVars() {
 			logger.Fatal(uiErrInvalidWormValue(nil).Msg("Unknown value `%s`", worm), "Unable to validate MINIO_WORM environment variable")
 		}
 
-		// worm Envs are set globally, this does not represent
-		// if worm is turned off or on.
-		globalIsEnvWORM = true
 		globalWORMEnabled = bool(wormFlag)
 	}
 

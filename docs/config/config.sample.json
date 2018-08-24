@@ -6,7 +6,6 @@
     },
     "region": "us-east-1",
     "browser": "on",
-    "worm": "off",
     "domain": "",
     "storageclass": {
         "standard": "",
@@ -126,4 +125,3 @@
         }
     }
 }
-

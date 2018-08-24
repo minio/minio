@@ -507,6 +507,12 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// if WORM is enabled disable config updates.
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
 	// Read configuration bytes from request body.
 	configBuf := make([]byte, maxConfigJSONSize+1)
 	n, err := io.ReadFull(r.Body, configBuf)
@@ -588,17 +594,17 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Avoid setting new credentials when they are already passed
-	// by the environment. Deny if WORM is enabled.
-	if globalIsEnvCreds {
-		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
-		return
-	}
-
 	// Authenticate request
 	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Avoid setting new credentials when they are already passed
+	// by the environment. Deny if WORM is enabled.
+	if globalIsEnvCreds || globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 

@@ -44,7 +44,6 @@ var (
 	},
 	"region": "",
 	"browser": "on",
-	"worm": "off",
 	"domain": "",
 	"storageclass": {
 		"standard": "",

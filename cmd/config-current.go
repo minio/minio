@@ -103,12 +103,6 @@ func (s *serverConfig) SetBrowser(b bool) {
 	s.Browser = BoolFlag(b)
 }
 
-// SetWorm set if worm is enabled.
-func (s *serverConfig) SetWorm(b bool) {
-	// Set the new value.
-	s.Worm = BoolFlag(b)
-}
-
 func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
 	s.StorageClass.Standard = standardClass
 	s.StorageClass.RRS = rrsClass
@@ -135,17 +129,6 @@ func (s *serverConfig) GetBrowser() bool {
 		return true
 	}
 	return bool(s.Browser)
-}
-
-// GetWorm get current credentials.
-func (s *serverConfig) GetWorm() bool {
-	if globalIsEnvWORM {
-		return globalWORMEnabled
-	}
-	if s == nil {
-		return false
-	}
-	return bool(s.Worm)
 }
 
 // SetCacheConfig sets the current cache config
@@ -261,10 +244,6 @@ func (s *serverConfig) loadFromEnvs() {
 
 	if globalIsEnvBrowser {
 		s.SetBrowser(globalIsBrowserEnabled)
-	}
-
-	if globalIsEnvWORM {
-		s.SetWorm(globalWORMEnabled)
 	}
 
 	if globalIsEnvRegion {
@@ -401,9 +380,6 @@ func (s *serverConfig) loadToCachedConfigs() {
 	}
 	if !globalIsEnvBrowser {
 		globalIsBrowserEnabled = s.GetBrowser()
-	}
-	if !globalIsEnvWORM {
-		globalWORMEnabled = s.GetWorm()
 	}
 	if !globalIsEnvRegion {
 		globalServerRegion = s.GetRegion()
