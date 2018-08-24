@@ -30,6 +30,9 @@ const (
 	xlMetaJSONFile = "xl.json"
 )
 
+// OfflineDisk represents an unavailable disk.
+var OfflineDisk StorageAPI // zero value is nil
+
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
 	// name space mutex for object layer.
@@ -137,7 +140,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	}
 	storageInfo.Used = used
 
-	storageInfo.Backend.Type = Erasure
+	storageInfo.Backend.Type = BackendErasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
 

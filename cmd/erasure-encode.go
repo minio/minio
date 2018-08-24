@@ -69,8 +69,8 @@ func (p *parallelWriter) Append(ctx context.Context, blocks [][]byte) error {
 	return reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
 }
 
-// CreateFile reads from the reader, erasure-encodes the data and writes to the writers.
-func (s *ErasureStorage) CreateFile(ctx context.Context, src io.Reader, writers []*bitrotWriter, buf []byte, quorum int) (total int64, err error) {
+// Encode reads from the reader, erasure-encodes the data and writes to the writers.
+func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []*bitrotWriter, buf []byte, quorum int) (total int64, err error) {
 	writer := &parallelWriter{
 		writers:     writers,
 		writeQuorum: quorum,
@@ -90,7 +90,7 @@ func (s *ErasureStorage) CreateFile(ctx context.Context, src io.Reader, writers 
 			break
 		}
 		// We take care of the situation where if n == 0 and total == 0 by creating empty data and parity files.
-		blocks, err = s.ErasureEncode(ctx, buf[:n])
+		blocks, err = e.EncodeData(ctx, buf[:n])
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return 0, err

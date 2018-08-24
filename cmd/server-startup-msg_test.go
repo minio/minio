@@ -30,7 +30,7 @@ import (
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{}
-	infoStorage.Backend.Type = Erasure
+	infoStorage.Backend.Type = BackendErasure
 	infoStorage.Backend.OnlineDisks = 7
 	infoStorage.Backend.OfflineDisks = 1
 

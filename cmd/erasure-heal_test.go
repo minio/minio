@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-var erasureHealFileTests = []struct {
+var erasureHealTests = []struct {
 	dataBlocks, disks int
 
 	// number of offline disks is also number of staleDisks for
@@ -60,8 +60,8 @@ var erasureHealFileTests = []struct {
 	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badStaleDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte * 64, algorithm: SHA256, shouldFail: false},              // 19
 }
 
-func TestErasureHealFile(t *testing.T) {
-	for i, test := range erasureHealFileTests {
+func TestErasureHeal(t *testing.T) {
+	for i, test := range erasureHealTests {
 		if test.offDisks < test.badStaleDisks {
 			// test case sanity check
 			t.Fatalf("Test %d: Bad test case - number of stale disks cannot be less than number of badstale disks", i)
@@ -73,7 +73,7 @@ func TestErasureHealFile(t *testing.T) {
 			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
 		}
 		disks := setup.disks
-		storage, err := NewErasureStorage(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
+		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -88,7 +88,7 @@ func TestErasureHealFile(t *testing.T) {
 		for i, disk := range disks {
 			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", test.algorithm)
 		}
-		_, err = storage.CreateFile(context.Background(), bytes.NewReader(data), writers, buffer, storage.dataBlocks+1)
+		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
@@ -96,7 +96,7 @@ func TestErasureHealFile(t *testing.T) {
 
 		readers := make([]*bitrotReader, len(disks))
 		for i, disk := range disks {
-			shardFilesize := getErasureShardFileSize(test.blocksize, test.size, storage.dataBlocks)
+			shardFilesize := getErasureShardFileSize(test.blocksize, test.size, erasure.dataBlocks)
 			readers[i] = newBitrotReader(disk, "testbucket", "testobject", test.algorithm, shardFilesize, writers[i].Sum())
 		}
 
@@ -126,7 +126,7 @@ func TestErasureHealFile(t *testing.T) {
 		}
 
 		// test case setup is complete - now call Healfile()
-		err = storage.HealFile(context.Background(), readers, staleWriters, test.size)
+		err = erasure.Heal(context.Background(), readers, staleWriters, test.size)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}

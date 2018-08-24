@@ -32,7 +32,7 @@ func (d badDisk) ReadFile(volume string, path string, offset int64, buf []byte, 
 	return 0, errFaultyDisk
 }
 
-var erasureReadFileTests = []struct {
+var erasureDecodeTests = []struct {
 	dataBlocks                   int
 	onDisks, offDisks            int
 	blocksize, data              int64
@@ -81,13 +81,13 @@ var erasureReadFileTests = []struct {
 	{dataBlocks: 8, onDisks: 12, offDisks: 4, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},            // 37
 }
 
-func TestErasureReadFile(t *testing.T) {
-	for i, test := range erasureReadFileTests {
+func TestErasureDecode(t *testing.T) {
+	for i, test := range erasureDecodeTests {
 		setup, err := newErasureTestSetup(test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		storage, err := NewErasureStorage(context.Background(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
+		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
@@ -108,7 +108,7 @@ func TestErasureReadFile(t *testing.T) {
 		for i, disk := range disks {
 			writers[i] = newBitrotWriter(disk, "testbucket", "object", writeAlgorithm)
 		}
-		n, err := storage.CreateFile(context.Background(), bytes.NewReader(data[:]), writers, buffer, storage.dataBlocks+1)
+		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[:]), writers, buffer, erasure.dataBlocks+1)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
@@ -129,12 +129,12 @@ func TestErasureReadFile(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			endOffset := getErasureShardFileEndOffset(test.offset, test.length, test.data, test.blocksize, storage.dataBlocks)
+			endOffset := getErasureShardFileEndOffset(test.offset, test.length, test.data, test.blocksize, erasure.dataBlocks)
 			bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", writeAlgorithm, endOffset, writers[index].Sum())
 		}
 
 		writer := bytes.NewBuffer(nil)
-		err = storage.ReadFile(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
+		err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
@@ -157,7 +157,7 @@ func TestErasureReadFile(t *testing.T) {
 				if disk == OfflineDisk {
 					continue
 				}
-				endOffset := getErasureShardFileEndOffset(test.offset, test.length, test.data, test.blocksize, storage.dataBlocks)
+				endOffset := getErasureShardFileEndOffset(test.offset, test.length, test.data, test.blocksize, erasure.dataBlocks)
 				bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", writeAlgorithm, endOffset, writers[index].Sum())
 			}
 			for j := range disks[:test.offDisks] {
@@ -167,7 +167,7 @@ func TestErasureReadFile(t *testing.T) {
 				bitrotReaders[0] = nil
 			}
 			writer.Reset()
-			err = storage.ReadFile(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
+			err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}
@@ -184,10 +184,10 @@ func TestErasureReadFile(t *testing.T) {
 	}
 }
 
-// Test erasureReadFile with random offset and lengths.
+// Test erasureDecode with random offset and lengths.
 // This test is t.Skip()ed as it a long time to run, hence should be run
 // explicitly after commenting out t.Skip()
-func TestErasureReadFileRandomOffsetLength(t *testing.T) {
+func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 	// Comment the following line to run this test.
 	t.SkipNow()
 	// Initialize environment needed for the test.
@@ -201,7 +201,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 	defer setup.Remove()
 	disks := setup.disks
-	storage, err := NewErasureStorage(context.Background(), dataBlocks, parityBlocks, blockSize)
+	erasure, err := NewErasure(context.Background(), dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Fatalf("failed to create ErasureStorage: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 	// Create a test file to read from.
 	buffer := make([]byte, blockSize, 2*blockSize)
-	n, err := storage.CreateFile(context.Background(), bytes.NewReader(data), writers, buffer, storage.dataBlocks+1)
+	n, err := erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
-	// Verify erasureReadFile() for random offsets and lengths.
+	// Verify erasure.Decode() for random offsets and lengths.
 	for i := 0; i < iterations; i++ {
 		offset := r.Int63n(length)
 		readLen := r.Int63n(length - offset)
@@ -252,10 +252,10 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			endOffset := getErasureShardFileEndOffset(offset, readLen, length, blockSize, storage.dataBlocks)
+			endOffset := getErasureShardFileEndOffset(offset, readLen, length, blockSize, erasure.dataBlocks)
 			bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", DefaultBitrotAlgorithm, endOffset, writers[index].Sum())
 		}
-		err = storage.ReadFile(context.Background(), buf, bitrotReaders, offset, readLen, length)
+		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length)
 		if err != nil {
 			t.Fatal(err, offset, readLen)
 		}
@@ -269,14 +269,14 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 // Benchmarks
 
-func benchmarkErasureRead(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
+func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
 	setup, err := newErasureTestSetup(data, parity, blockSizeV1)
 	if err != nil {
 		b.Fatalf("failed to create test setup: %v", err)
 	}
 	defer setup.Remove()
 	disks := setup.disks
-	storage, err := NewErasureStorage(context.Background(), data, parity, blockSizeV1)
+	erasure, err := NewErasure(context.Background(), data, parity, blockSizeV1)
 	if err != nil {
 		b.Fatalf("failed to create ErasureStorage: %v", err)
 	}
@@ -291,7 +291,7 @@ func benchmarkErasureRead(data, parity, dataDown, parityDown int, size int64, b 
 
 	content := make([]byte, size)
 	buffer := make([]byte, blockSizeV1, 2*blockSizeV1)
-	_, err = storage.CreateFile(context.Background(), bytes.NewReader(content), writers, buffer, storage.dataBlocks+1)
+	_, err = erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)
 	if err != nil {
 		b.Fatalf("failed to create erasure test file: %v", err)
 	}
@@ -312,62 +312,62 @@ func benchmarkErasureRead(data, parity, dataDown, parityDown int, size int64, b 
 			if writers[index] == nil {
 				continue
 			}
-			endOffset := getErasureShardFileEndOffset(0, size, size, storage.blockSize, storage.dataBlocks)
+			endOffset := getErasureShardFileEndOffset(0, size, size, erasure.blockSize, erasure.dataBlocks)
 			bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", DefaultBitrotAlgorithm, endOffset, writers[index].Sum())
 		}
-		if err = storage.ReadFile(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size); err != nil {
+		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size); err != nil {
 			panic(err)
 		}
 	}
 }
 
-func BenchmarkErasureReadQuick(b *testing.B) {
+func BenchmarkErasureDecodeQuick(b *testing.B) {
 	const size = 12 * 1024 * 1024
-	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 0, size, b) })
-	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 1, size, b) })
-	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 0, size, b) })
-	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 1, size, b) })
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 1, 0, size, b) })
+	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 1, 1, size, b) })
 }
 
-func BenchmarkErasureRead_4_64KB(b *testing.B) {
+func BenchmarkErasureDecode_4_64KB(b *testing.B) {
 	const size = 64 * 1024
-	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 0, size, b) })
-	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 1, size, b) })
-	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 0, size, b) })
-	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 1, 1, size, b) })
-	b.Run(" 00|XX ", func(b *testing.B) { benchmarkErasureRead(2, 2, 0, 2, size, b) })
-	b.Run(" XX|00 ", func(b *testing.B) { benchmarkErasureRead(2, 2, 2, 0, size, b) })
+	b.Run(" 00|00 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 0, 0, size, b) })
+	b.Run(" 00|X0 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 0, 1, size, b) })
+	b.Run(" X0|00 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 1, 0, size, b) })
+	b.Run(" X0|X0 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 1, 1, size, b) })
+	b.Run(" 00|XX ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 0, 2, size, b) })
+	b.Run(" XX|00 ", func(b *testing.B) { benchmarkErasureDecode(2, 2, 2, 0, size, b) })
 }
 
-func BenchmarkErasureRead_8_20MB(b *testing.B) {
+func BenchmarkErasureDecode_8_20MB(b *testing.B) {
 	const size = 20 * 1024 * 1024
-	b.Run(" 0000|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 0, size, b) })
-	b.Run(" 0000|X000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 1, size, b) })
-	b.Run(" X000|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 1, 0, size, b) })
-	b.Run(" X000|X000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 1, 1, size, b) })
-	b.Run(" 0000|XXXX ", func(b *testing.B) { benchmarkErasureRead(4, 4, 0, 4, size, b) })
-	b.Run(" XX00|XX00 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 2, 2, size, b) })
-	b.Run(" XXXX|0000 ", func(b *testing.B) { benchmarkErasureRead(4, 4, 4, 0, size, b) })
+	b.Run(" 0000|0000 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 0, 0, size, b) })
+	b.Run(" 0000|X000 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 0, 1, size, b) })
+	b.Run(" X000|0000 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 1, 0, size, b) })
+	b.Run(" X000|X000 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 1, 1, size, b) })
+	b.Run(" 0000|XXXX ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 0, 4, size, b) })
+	b.Run(" XX00|XX00 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 2, 2, size, b) })
+	b.Run(" XXXX|0000 ", func(b *testing.B) { benchmarkErasureDecode(4, 4, 4, 0, size, b) })
 }
 
-func BenchmarkErasureRead_12_30MB(b *testing.B) {
+func BenchmarkErasureDecode_12_30MB(b *testing.B) {
 	const size = 30 * 1024 * 1024
-	b.Run(" 000000|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 0, size, b) })
-	b.Run(" 000000|X00000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 1, size, b) })
-	b.Run(" X00000|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 1, 0, size, b) })
-	b.Run(" X00000|X00000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 1, 1, size, b) })
-	b.Run(" 000000|XXXXXX ", func(b *testing.B) { benchmarkErasureRead(6, 6, 0, 6, size, b) })
-	b.Run(" XXX000|XXX000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 3, 3, size, b) })
-	b.Run(" XXXXXX|000000 ", func(b *testing.B) { benchmarkErasureRead(6, 6, 6, 0, size, b) })
+	b.Run(" 000000|000000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 0, 0, size, b) })
+	b.Run(" 000000|X00000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 0, 1, size, b) })
+	b.Run(" X00000|000000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 1, 0, size, b) })
+	b.Run(" X00000|X00000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 1, 1, size, b) })
+	b.Run(" 000000|XXXXXX ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 0, 6, size, b) })
+	b.Run(" XXX000|XXX000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 3, 3, size, b) })
+	b.Run(" XXXXXX|000000 ", func(b *testing.B) { benchmarkErasureDecode(6, 6, 6, 0, size, b) })
 }
 
-func BenchmarkErasureRead_16_40MB(b *testing.B) {
+func BenchmarkErasureDecode_16_40MB(b *testing.B) {
 	const size = 40 * 1024 * 1024
-	b.Run(" 00000000|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 0, size, b) })
-	b.Run(" 00000000|X0000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 1, size, b) })
-	b.Run(" X0000000|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 1, 0, size, b) })
-	b.Run(" X0000000|X0000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 1, 1, size, b) })
-	b.Run(" 00000000|XXXXXXXX ", func(b *testing.B) { benchmarkErasureRead(8, 8, 0, 8, size, b) })
-	b.Run(" XXXX0000|XXXX0000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 4, 4, size, b) })
-	b.Run(" XXXXXXXX|00000000 ", func(b *testing.B) { benchmarkErasureRead(8, 8, 8, 0, size, b) })
+	b.Run(" 00000000|00000000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 0, 0, size, b) })
+	b.Run(" 00000000|X0000000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 0, 1, size, b) })
+	b.Run(" X0000000|00000000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 1, 0, size, b) })
+	b.Run(" X0000000|X0000000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 1, 1, size, b) })
+	b.Run(" 00000000|XXXXXXXX ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 0, 8, size, b) })
+	b.Run(" XXXX0000|XXXX0000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 4, 4, size, b) })
+	b.Run(" XXXXXXXX|00000000 ", func(b *testing.B) { benchmarkErasureDecode(8, 8, 8, 0, size, b) })
 }

@@ -369,7 +369,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 	}
 
-	storage, err := NewErasureStorage(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -397,7 +397,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, DefaultBitrotAlgorithm)
 	}
-	n, err := storage.CreateFile(ctx, data, writers, buffer, storage.dataBlocks+1)
+	n, err := erasure.Encode(ctx, data, writers, buffer, erasure.dataBlocks+1)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}

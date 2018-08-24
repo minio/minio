@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -355,7 +354,6 @@ func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
-			fmt.Println(err)
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
 

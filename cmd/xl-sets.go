@@ -272,7 +272,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
 func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
-	storageInfo.Backend.Type = Erasure
+	storageInfo.Backend.Type = BackendErasure
 	for _, set := range s.sets {
 		lstorageInfo := set.StorageInfo(ctx)
 		storageInfo.Used = storageInfo.Used + lstorageInfo.Used

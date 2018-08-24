@@ -23,20 +23,20 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-// HealFile heals the shard files on non-nil writers. Note that the quorum passed is 1
+// Heal heals the shard files on non-nil writers. Note that the quorum passed is 1
 // as healing should continue even if it has been successful healing only one shard file.
-func (s ErasureStorage) HealFile(ctx context.Context, readers []*bitrotReader, writers []*bitrotWriter, size int64) error {
+func (e Erasure) Heal(ctx context.Context, readers []*bitrotReader, writers []*bitrotWriter, size int64) error {
 	r, w := io.Pipe()
 	go func() {
-		if err := s.ReadFile(ctx, w, readers, 0, size, size); err != nil {
+		if err := e.Decode(ctx, w, readers, 0, size, size); err != nil {
 			w.CloseWithError(err)
 			return
 		}
 		w.Close()
 	}()
-	buf := make([]byte, s.blockSize)
+	buf := make([]byte, e.blockSize)
 	// quorum is 1 because CreateFile should continue writing as long as we are writing to even 1 disk.
-	n, err := s.CreateFile(ctx, r, writers, buf, 1)
+	n, err := e.Encode(ctx, r, writers, buf, 1)
 	if err != nil {
 		return err
 	}
