@@ -630,35 +630,46 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
 func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, sets ...[]StorageAPI) listDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
+		var wg sync.WaitGroup
+		var entryCh = make(chan string, 1000)
 		for _, disk := range disks {
 			if disk == nil {
 				continue
 			}
 
-			var entries []string
-			var newEntries []string
-			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
-			if err != nil {
+			wg.Add(1)
+			// Spawn listing for entries across all drives in
+			// parallel each entry is sent over the channel.
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				entries, err := disk.ListDir(bucket, prefixDir, -1)
+				if err != nil {
+					return
+				}
+				for _, entry := range entries {
+					select {
+					case entryCh <- entry:
+					}
+				}
+			}(disk)
+		}
+		go func() {
+			wg.Wait()
+			close(entryCh)
+		}()
+
+		// Find elements in entries which are not in mergedEntries.
+		for entry := range entryCh {
+			idx := sort.SearchStrings(mergedEntries, entry)
+			// if entry is already present in mergedEntries don't add.
+			if idx < len(mergedEntries) && mergedEntries[idx] == entry {
 				continue
 			}
-
-			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedEntries, entry)
-				// if entry is already present in mergedEntries don't add.
-				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
-					continue
-				}
-				newEntries = append(newEntries, entry)
-			}
-
-			if len(newEntries) > 0 {
-				// Merge the entries and sort it.
-				mergedEntries = append(mergedEntries, newEntries...)
-				sort.Strings(mergedEntries)
-			}
+			mergedEntries = append(mergedEntries, entry)
+			// Sort the merged entries.
+			sort.Strings(mergedEntries)
 		}
+
 		return mergedEntries
 	}
 
