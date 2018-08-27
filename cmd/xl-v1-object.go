@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"io"
@@ -160,6 +161,53 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	pipeReader.Close()
 
 	return objInfo, nil
+}
+
+func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error) {
+
+	// Acquire lock
+	lock := xl.nsMutex.NewNSLock(bucket, object)
+	if err = lock.GetRLock(globalObjectTimeout); err != nil {
+		return objInfo, nil, err
+	}
+	objReader := &GetObjectReader{
+		lock: lock,
+	}
+
+	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
+		return objInfo, objReader, err
+	}
+
+	if hasSuffix(object, slashSeparator) {
+		if !xl.isObjectDir(bucket, object) {
+			return objInfo, objReader, toObjectErr(errFileNotFound, bucket, object)
+		}
+		var e error
+		if objInfo, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
+			return objInfo, objReader, toObjectErr(e, bucket, object)
+		}
+		objReader.pr = bytes.NewBuffer(nil)
+		return objInfo, objReader, nil
+	}
+
+	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
+	if err != nil {
+		return objInfo, objReader, toObjectErr(err, bucket, object)
+	}
+
+	startOffset, readLength := int64(0), objInfo.Size
+	if rs != nil {
+		startOffset, readLength = rs.GetOffsetLength(objInfo.Size)
+	}
+
+	pr, pw := io.Pipe()
+	objReader.pr = pr
+	go func() {
+		err := xl.getObject(ctx, bucket, object, startOffset, readLength, pw, "")
+		pw.CloseWithError(err)
+	}()
+
+	return objInfo, objReader, nil
 }
 
 // GetObject - reads an object erasured coded across multiple

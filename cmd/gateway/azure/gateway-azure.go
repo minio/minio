@@ -615,6 +615,27 @@ func (a *azureObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 	return result, nil
 }
 
+func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec) (objInfo minio.ObjectInfo, reader io.ReadCloser, err error) {
+	objInfo, err = a.GetObjectInfo(ctx, bucket, object)
+	if err != nil {
+		return objInfo, reader, err
+	}
+
+	startOffset, length := int64(0), objInfo.Size
+	if rs != nil {
+		startOffset, length = rs.GetOffsetLength(objInfo.Size)
+	}
+
+	pr, pw := io.Pipe()
+	objReader := minio.NewGetObjectReader(pr, nil, nil)
+	go func() {
+		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag)
+		pw.CloseWithError(err)
+	}()
+
+	return objInfo, objReader, nil
+}
+
 // GetObject - reads an object from azure. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.

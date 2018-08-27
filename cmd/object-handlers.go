@@ -272,53 +272,20 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	getObjectInfo := objectAPI.GetObjectInfo
+	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
-		if getRequestAuthType(r) == authTypeAnonymous {
-			// As per "Permission" section in https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
-			// If the object you request does not exist, the error Amazon S3 returns depends on whether you also have the s3:ListBucket permission.
-			// * If you have the s3:ListBucket permission on the bucket, Amazon S3 will return an HTTP status code 404 ("no such key") error.
-			// * if you don’t have the s3:ListBucket permission, Amazon S3 will return an HTTP status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
-				Action:          policy.ListBucketAction,
-				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, ""),
-				IsOwner:         false,
-			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
-				if toAPIErrorCode(err) == ErrNoSuchKey {
-					s3Error = ErrNoSuchKey
-				}
-			}
-		}
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
-
-	objInfo, err := getObjectInfo(ctx, bucket, object)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
-		}
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
 	// Get request range.
-	var hrange *httpRange
+	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
-			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+		var err error
+		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+			// Handle only errInvalidRange. Ignore other
+			// parse error and treat it as regular Get
+			// request like Amazon S3.
 			if err == errInvalidRange {
 				writeErrorResponse(w, ErrInvalidRange, r.URL)
 				return
@@ -329,33 +296,99 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	objInfo, reader, err := getObjectNInfo(ctx, bucket, object, rs)
+	if reader != nil {
+		defer reader.Close()
+	}
+	// Before check err value above, we need to check the auth
+	// type to return the correct error (NoSuchKey vs AccessDenied)
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+		if getRequestAuthType(r) == authTypeAnonymous {
+			// As per "Permission" section in
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
+			// If the object you request does not exist,
+			// the error Amazon S3 returns depends on
+			// whether you also have the s3:ListBucket
+			// permission.
+			// * If you have the s3:ListBucket permission
+			//   on the bucket, Amazon S3 will return an
+			//   HTTP status code 404 ("no such key")
+			//   error.
+			// * if you don’t have the s3:ListBucket
+			//   permission, Amazon S3 will return an HTTP
+			//   status code 403 ("access denied") error.`
+			if globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.ListBucketAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+			}) {
+				if toAPIErrorCode(err) == ErrNoSuchKey {
+					s3Error = ErrNoSuchKey
+				}
+			}
+		}
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// If object is encrypted, we avoid the cache layer.
+	isEncrypted := objectAPI.IsEncryptionSupported() && (crypto.SSEC.IsRequested(r.Header) ||
+		crypto.S3.IsEncrypted(objInfo.UserDefined))
+	if isEncrypted && api.CacheAPI() != nil {
+		// Close the existing reader before re-querying the backend
+		if reader != nil {
+			reader.Close()
+		}
+		// Query the backend
+		objInfo, reader, err = objectAPI.GetObjectNInfo(ctx, bucket, object, rs)
+		if reader != nil {
+			defer reader.Close()
+		}
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+	}
+
+	if objectAPI.IsEncryptionSupported() {
+		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+	}
+
 	// Validate pre-conditions if any.
 	if checkPreconditions(w, r, objInfo) {
 		return
 	}
 
-	// Get the object.
-	var startOffset int64
-	length := objInfo.Size
-	if hrange != nil {
-		startOffset = hrange.offsetBegin
-		length = hrange.getLength()
+	startOffset, length := int64(0), objInfo.Size
+	if rs != nil {
+		startOffset, length = rs.GetOffsetLength(objInfo.Size)
 	}
 
-	var writer io.Writer
-	writer = w
+	// Get the object.
 	if objectAPI.IsEncryptionSupported() {
 		s3Encrypted := crypto.S3.IsEncrypted(objInfo.UserDefined)
 		if crypto.SSEC.IsRequested(r.Header) || s3Encrypted {
-			// Response writer should be limited early on for decryption upto required length,
-			// additionally also skipping mod(offset)64KiB boundaries.
-			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-
-			writer, startOffset, length, err = DecryptBlocksRequest(writer, r, bucket, object, startOffset, length, objInfo, false)
+			var encReader io.Reader
+			encReader, startOffset, length, err = DecryptBlocksRequestR(reader, r, bucket, object, startOffset, length, objInfo, false)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
+			// Resulting reader should be limited early on
+			// for decryption upto required length,
+			// additionally also skipping mod(offset)64KiB
+			// boundaries.
+			encReader = io.LimitReader(ioutil.NewSkipReader(encReader, startOffset%(64*1024)), length)
+			cleanUp := func() { reader.Close() }
+			reader = NewGetObjectReader(encReader, nil, cleanUp)
 			if s3Encrypted {
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			} else {
@@ -365,24 +398,19 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	setObjectHeaders(w, objInfo, hrange)
+	setObjectHeaders(w, objInfo, rs)
 	setHeadGetRespHeaders(w, r.URL.Query())
 
-	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3.IsEncrypted(objInfo.UserDefined) {
-		getObject = api.CacheAPI().GetObject
-	}
-
 	statusCodeWritten := false
-	httpWriter := ioutil.WriteOnClose(writer)
+	httpWriter := ioutil.WriteOnClose(w)
 
-	if hrange != nil && hrange.offsetBegin > -1 {
+	if rs != nil {
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
 	}
 
-	// Reads the object at startOffset and writes to mw.
-	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
+	// Write object content to response body
+	if _, err = io.Copy(httpWriter, reader); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
