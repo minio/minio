@@ -129,6 +129,12 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatXLAll(storageDisks)
+	// Check if we have
+	for i, sErr := range sErrs {
+		if _, ok := formatCriticalErrors[sErr]; ok {
+			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
+		}
+	}
 
 	// Pre-emptively check if one of the formatted disks
 	// is invalid. This function returns success for the
@@ -137,12 +143,6 @@ func connectLoadInitFormats(firstDisk bool, endpoints EndpointList, setCount, dr
 	// trying to pool FS backend into an XL set.
 	if err = checkFormatXLValues(formatConfigs); err != nil {
 		return nil, err
-	}
-
-	for i, sErr := range sErrs {
-		if _, ok := formatCriticalErrors[sErr]; ok {
-			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
-		}
 	}
 
 	// All disks report unformatted we should initialized everyone.
