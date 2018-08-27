@@ -3,6 +3,9 @@ profile
 
 Simple profiling support package for Go
 
+[![Build Status](https://travis-ci.org/pkg/profile.svg?branch=master)](https://travis-ci.org/pkg/profile) [![GoDoc](http://godoc.org/github.com/pkg/profile?status.svg)](http://godoc.org/github.com/pkg/profile)
+
+
 installation
 ------------
 
@@ -42,3 +45,10 @@ func main() {
 Several convenience package level values are provided for cpu, memory, and block (contention) profiling.
 
 For more complex options, consult the [documentation](http://godoc.org/github.com/pkg/profile).
+
+contributing
+------------
+
+We welcome pull requests, bug fixes and issue reports.
+
+Before proposing a change, please discuss it first by raising an issue.

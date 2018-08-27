@@ -228,8 +228,9 @@ func TestURL2BucketObjectName(t *testing.T) {
 
 // Add tests for starting and stopping different profilers.
 func TestStartProfiler(t *testing.T) {
-	if startProfiler("") != nil {
-		t.Fatal("Expected nil, but non-nil value returned for invalid profiler.")
+	_, err := startProfiler("", "")
+	if err == nil {
+		t.Fatal("Expected a non nil error, but nil error returned for invalid profiler.")
 	}
 }
 

@@ -52,6 +52,23 @@ func (receiver *adminRPCReceiver) ServerInfo(args *AuthArgs, reply *ServerInfoDa
 	return err
 }
 
+// StartProfilingArgs - holds the RPC argument for StartingProfiling RPC call
+type StartProfilingArgs struct {
+	AuthArgs
+	Profiler string
+}
+
+// StartProfiling - starts profiling of this server
+func (receiver *adminRPCReceiver) StartProfiling(args *StartProfilingArgs, reply *VoidReply) error {
+	return receiver.local.StartProfiling(args.Profiler)
+}
+
+// DownloadProfilingData - stops and returns profiling data of this server
+func (receiver *adminRPCReceiver) DownloadProfilingData(args *AuthArgs, reply *[]byte) (err error) {
+	*reply, err = receiver.local.DownloadProfilingData()
+	return
+}
+
 // GetConfig - returns the config.json of this server.
 func (receiver *adminRPCReceiver) GetConfig(args *AuthArgs, reply *[]byte) (err error) {
 	*reply, err = receiver.local.GetConfig()
