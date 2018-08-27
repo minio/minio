@@ -9,11 +9,9 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_SECRET_KEY_FILE=secret_key
 
 RUN \
-     apk add --no-cache ca-certificates && \
-     apk add --no-cache --virtual .build-deps curl && \
+     apk add --no-cache ca-certificates 'curl>7.61.0' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
-     apk del .build-deps && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/healthcheck.sh
