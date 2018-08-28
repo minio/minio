@@ -75,6 +75,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	versionID := r.URL.Query().Get("versionId")
+
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -82,9 +84,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
+	getObjectInfoVersion := objectAPI.GetObjectInfoVersion
+	if versionID == "" && api.CacheAPI() != nil {
+		getObjectInfoVersion = func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
+			return api.CacheAPI().GetObjectInfo(ctx, bucket, object)
+		}
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
@@ -99,7 +103,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
+				_, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -109,7 +113,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object)
+	objInfo, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -175,13 +179,15 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setHeadGetRespHeaders(w, r.URL.Query())
 	httpWriter := ioutil.WriteOnClose(writer)
 
-	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !hasSSECustomerHeader(r.Header) {
-		getObject = api.CacheAPI().GetObject
+	getObjectVersion := objectAPI.GetObjectVersion
+	if api.CacheAPI() != nil && versionID == "" && !hasSSECustomerHeader(r.Header) {
+		getObjectVersion = func(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
+			return api.CacheAPI().GetObject(ctx, bucket, object, startOffset, length, writer, etag)
+		}
 	}
 
 	// Reads the object at startOffset and writes to mw.
-	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
+	if err = getObjectVersion(ctx, bucket, object, versionID, startOffset, length, httpWriter, objInfo.ETag); err != nil {
 		if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
@@ -366,7 +372,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
 	}
 
-	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
+	versionID := ""
+
+	cpSrcURL, err := url.Parse(cpSrcPath)
+	if err != nil {
+		// FIXME: check AWS for error
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		return
+	} else {
+		versionID = cpSrcURL.Query().Get("versionId")
+	}
+
+	srcBucket, srcObject := path2BucketAndObject(cpSrcURL.Path)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
@@ -380,7 +397,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject)
+	srcInfo, err := objectAPI.GetObjectInfoVersion(ctx, srcBucket, srcObject, versionID)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -571,7 +588,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		var dstRecords []dns.SrvRecord
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
 			go func() {
-				if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+				if gerr := objectAPI.GetObjectVersion(ctx, srcBucket, srcObject, versionID, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 					pipeWriter.CloseWithError(gerr)
 					writeErrorResponse(w, ErrInternalError, r.URL)
 					return
@@ -600,7 +617,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	} else {
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
-		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo)
+		objInfo, err = objectAPI.CopyObjectVersion(ctx, srcBucket, srcObject, versionID, dstBucket, dstObject, srcInfo)
 		if err != nil {
 			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)

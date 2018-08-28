@@ -308,6 +308,14 @@ func serverMain(ctx *cli.Context) {
 	// Re-enable logging
 	logger.Disable = false
 
+	// Create new versioning system.
+	globalVersioningSys = NewVersioningSys()
+
+	// Initialize versioning system.
+	if err := globalVersioningSys.Init(newObjectLayerFn()); err != nil {
+		logger.Fatal(err, "Unable to initialize versioning system")
+	}
+
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 

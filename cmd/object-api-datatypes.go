@@ -244,6 +244,45 @@ type ListObjectsV2Info struct {
 	Prefixes []string
 }
 
+type VersionInfo struct {
+	Key          string
+	VersionID    string
+	IsLatest     bool
+	LastModified time.Time
+	ETag         string
+	Size         int64
+	StorageClass string
+	Owner        Owner
+}
+
+type DeleteMarkerInfo struct {
+	Key          string
+	VersionID    string
+	IsLatest     bool
+	LastModified time.Time
+	Owner        Owner
+}
+
+// ListObjectsVersionsInfo - container for list objects versions.
+type ListObjectsVersionsInfo struct {
+	// Indicates whether the returned list objects response is truncated. A
+	// value of true indicates that the list was truncated. The list can be truncated
+	// if the number of objects exceeds the limit allowed or specified
+	// by max keys.
+	IsTruncated bool
+
+	KeyMarker     string
+	NextKeyMarker string
+
+	// FIXME: Implement chuncked responses for versioned lists
+	VersionIdMarker     string
+	NextVersionIdMarker string
+
+	// List of objects info for this request.
+	Versions      []VersionInfo
+	DeleteMarkers []DeleteMarkerInfo
+}
+
 // PartInfo - represents individual part metadata.
 type PartInfo struct {
 	// Part number that identifies the part. This is a positive integer between

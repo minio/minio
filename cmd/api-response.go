@@ -101,6 +101,52 @@ type ListObjectsV2Response struct {
 	EncodingType string `xml:"EncodingType,omitempty"`
 }
 
+type VersionResponse struct {
+	Key          string
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool
+	ETag         string
+	Size         int64
+	StorageClass string
+	Owner        Owner
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+}
+
+
+type DeleteMarkerResponse struct {
+	Key          string
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool
+	Owner        Owner
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+}
+
+// ListObjectsVersionsResponse - format for list objects response.
+type ListObjectsVersionsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListVersionsResult" json:"-"`
+
+	Name   string
+	Prefix string
+
+	VersionIDMarker     string
+	NextVersionIDMarker string
+	KeyMarker           string
+	NextKeyMarker       string
+
+	Versions      []VersionResponse      `xml:"Version"`
+	DeleteMarkers []DeleteMarkerResponse `xml:"DeleteMarker"`
+
+	KeyCount  int
+	MaxKeys   int
+	Delimiter string
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string `xml:"EncodingType,omitempty"`
+}
+
 // Part container for part metadata.
 type Part struct {
 	PartNumber   int
@@ -410,6 +456,50 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	}
 	data.CommonPrefixes = commonPrefixes
 	data.KeyCount = len(data.Contents) + len(data.CommonPrefixes)
+	return data
+}
+
+// generates an ListObjectVersions response for the said bucket with other enumerated options.
+func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, isTruncated bool, maxKeys int, versions []VersionInfo, deleteMarkers []DeleteMarkerInfo) ListObjectsVersionsResponse {
+
+	var data = ListObjectsVersionsResponse{}
+	var owner = Owner{
+		ID: globalMinioDefaultOwnerID,
+	}
+
+	for _, version := range versions {
+		var content = VersionResponse{}
+		content.VersionID = version.VersionID
+		content.IsLatest = version.IsLatest
+		content.Key = version.Key
+		content.LastModified = version.LastModified.UTC().Format(timeFormatAMZLong)
+		if version.ETag != "" {
+			content.ETag = "\"" + version.ETag + "\""
+		}
+		content.Size = version.Size
+		content.StorageClass = version.StorageClass
+		content.Owner = owner
+		data.Versions = append(data.Versions, content)
+	}
+
+	for _, deleteMarker := range deleteMarkers {
+		var content = DeleteMarkerResponse{}
+		content.VersionID = deleteMarker.VersionID
+		content.IsLatest = deleteMarker.IsLatest
+		content.Key = deleteMarker.Key
+		content.LastModified = deleteMarker.LastModified.UTC().Format(timeFormatAMZLong)
+		content.Owner = owner
+		data.DeleteMarkers = append(data.DeleteMarkers, content)
+	}
+
+	// TODO - support EncodingType in xml decoding
+	data.Name = bucket
+	data.Delimiter = delimiter
+	data.Prefix = prefix
+	data.MaxKeys = maxKeys
+	data.IsTruncated = isTruncated
+	data.KeyCount = len(data.Versions) + len(data.DeleteMarkers)
+
 	return data
 }
 

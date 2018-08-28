@@ -76,7 +76,7 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	logger.Disable = true
+	logger.Disable = false
 }
 
 // concurreny level for certain parallel tests.

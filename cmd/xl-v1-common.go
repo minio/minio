@@ -19,8 +19,6 @@ package cmd
 import (
 	"context"
 	"path"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
@@ -51,31 +49,24 @@ func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string
 	return isParentDirObject(parent)
 }
 
-var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
-
-// isObject - returns `true` if the prefix is an object i.e if
-// `xl.json` exists at the leaf, false otherwise.
-func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
+func (xl xlObjects) isJSONFile(bucket, prefix, jsonFile string) (ok bool) {
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
 		// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-		_, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
+		_, err := disk.StatFile(bucket, path.Join(prefix, jsonFile))
 		if err == nil {
 			return true
 		}
-		// Ignore for file not found,  disk not found or faulty disk.
-		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
-			continue
-		}
-		reqInfo := &logger.ReqInfo{BucketName: bucket}
-		reqInfo.AppendTags("prefix", prefix)
-		reqInfo.AppendTags("xlMetaJSONFile", xlMetaJSONFile)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 	} // Exhausted all disks - return false.
 	return false
+}
+
+// isObject - returns `true` if the prefix is an object i.e if
+// `xl.json` or `versioning.json` exists at the leaf, false otherwise.
+func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
+	return xl.isJSONFile(bucket, prefix, xlMetaJSONFile) || xl.isJSONFile(bucket, prefix, xlVersioningJSONFile)
 }
 
 // isObjectDir returns if the specified path represents an empty directory.
@@ -92,14 +83,6 @@ func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
 			}
 			return false
 		}
-		// Ignore for file not found,  disk not found or faulty disk.
-		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
-			continue
-		}
-		reqInfo := &logger.ReqInfo{BucketName: bucket}
-		reqInfo.AppendTags("prefix", prefix)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 	} // Exhausted all disks - return false.
 	return false
 }

@@ -256,6 +256,8 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 			getDisks: s.GetDisks(i),
 			nsMutex:  mutex,
 			bp:       bp,
+			// FIXME: we should not have a list pool here ?
+			listPool: newTreeWalkPool(globalLookupTimeout),
 		}
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
@@ -442,6 +444,101 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 	return s.getHashedSet(bucket).GetBucketInfo(ctx, bucket)
 }
 
+func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	// validate all the inputs for listObjects
+	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, s); err != nil {
+		return result, err
+	}
+
+	var versionsInfos []VersionInfo
+	var deleteMarkers []DeleteMarkerInfo
+	var eof bool
+	var nextKeyMarker string
+
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, keyMarker, prefix, false})
+	if walkResultCh == nil {
+		endWalkCh = make(chan struct{})
+		isLeaf := func(bucket, entry string) bool {
+			entry = strings.TrimSuffix(entry, slashSeparator)
+			// Verify if we are at the leaf, a leaf is where we
+			// see `xl.json` or `versioning.json` inside a directory.
+			return s.getHashedSet(entry).isObject(bucket, entry)
+		}
+
+		isLeafDir := func(bucket, entry string) bool {
+			return s.getHashedSet(entry).isObjectDir(bucket, entry)
+		}
+
+		var setDisks = make([][]StorageAPI, len(s.sets))
+		for _, set := range s.sets {
+			setDisks = append(setDisks, set.getLoadBalancedDisks())
+		}
+
+		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, setDisks...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, keyMarker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	}
+
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walkResultCh
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			return result, toObjectErr(walkResult.err, bucket, prefix)
+		}
+
+		var objVersions []VersionInfo
+		var delMarkers []DeleteMarkerInfo
+		var err error
+		objVersions, delMarkers, err = s.getHashedSet(walkResult.entry).getObjectVersions(ctx, bucket, walkResult.entry, versionIDMarker, maxKeys-i)
+		if err != nil {
+			// Ignore errFileNotFound as the object might have got
+			// deleted in the interim period of listing and getObjectInfo(),
+			// ignore quorum error as it might be an entry from an outdated disk.
+			if IsErrIgnored(err, []error{
+				errFileNotFound,
+				errXLReadQuorum,
+			}...) {
+				continue
+			}
+			return result, toObjectErr(err, bucket, prefix)
+		}
+		nextKeyMarker = objVersions[len(objVersions)-1].Key
+		versionsInfos = append(versionsInfos, objVersions...)
+		deleteMarkers = append(deleteMarkers, delMarkers...)
+		i++
+		if walkResult.end {
+			eof = true
+			break
+		}
+	}
+
+	params := listParams{bucket, recursive, nextKeyMarker, prefix, false}
+	if !eof {
+		s.listPool.Set(params, walkResultCh, endWalkCh)
+	}
+
+	result = ListObjectsVersionsInfo{IsTruncated: !eof}
+	for _, versionInfo := range versionsInfos {
+		result.NextKeyMarker = versionInfo.Key
+		result.Versions = append(result.Versions, versionInfo)
+	}
+	for _, delMarkerInfo := range deleteMarkers {
+		result.DeleteMarkers = append(result.DeleteMarkers, delMarkerInfo)
+	}
+
+	return result, nil
+}
+
 // ListObjectsV2 lists all objects in bucket filtered by prefix
 func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
 	marker := continuationToken
@@ -477,6 +574,16 @@ func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Po
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, s, bucket)
+}
+
+// SetBucketVersioning will set a new versioning configuration on a bucket
+func (s *xlSets) SetBucketVersioning(ctx context.Context, bucket string, versioning VersioningConfiguration) error {
+	return saveVersioningConfig(s, bucket, versioning)
+}
+
+// GetBucketVersioning will return a versioning configuration on a bucket
+func (s *xlSets) GetBucketVersioning(ctx context.Context, bucket string) (*VersioningConfiguration, error) {
+	return getVersioningConfig(s, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
@@ -554,6 +661,11 @@ func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffs
 	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag)
 }
 
+// GetObject - reads an object from the hashedSet based on the object name.
+func (s *xlSets) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) error {
+	return s.getHashedSet(object).GetObjectVersion(ctx, bucket, object, version, startOffset, length, writer, etag)
+}
+
 // PutObject - writes an object to hashedSet based on the object name.
 func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, metadata)
@@ -564,13 +676,17 @@ func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string) (objI
 	return s.getHashedSet(object).GetObjectInfo(ctx, bucket, object)
 }
 
+func (s *xlSets) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
+	return s.getHashedSet(object).GetObjectInfoVersion(ctx, bucket, object, version)
+}
+
 // DeleteObject - deletes an object from the hashedSet based on the object name.
 func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string) (err error) {
 	return s.getHashedSet(object).DeleteObject(ctx, bucket, object)
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
-func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
+func (s *xlSets) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
 
@@ -603,7 +719,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	go func() {
-		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, version, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 			}
@@ -617,6 +733,11 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}()
 
 	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
+}
+
+// CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
+func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
+	return s.CopyObjectVersion(ctx, srcBucket, srcObject, "", destBucket, destObject, srcInfo)
 }
 
 // Returns function "listDir" of the type listDirFunc.
@@ -708,7 +829,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		isLeaf := func(bucket, entry string) bool {
 			entry = strings.TrimSuffix(entry, slashSeparator)
 			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` inside a directory.
+			// see `xl.json` or `versioning.json` inside a directory.
 			return s.getHashedSet(entry).isObject(bucket, entry)
 		}
 
@@ -743,7 +864,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		if hasSuffix(walkResult.entry, slashSeparator) {
 			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
 		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
+			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoVersion(ctx, bucket, walkResult.entry, "")
 		}
 		if err != nil {
 			// Ignore errFileNotFound as the object might have got
@@ -753,6 +874,11 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 				errFileNotFound,
 				errXLReadQuorum,
 			}...) {
+				continue
+			}
+			// For versioning, ignore ObjectNotFound for cases where
+			// DeleteMarker is at the top
+			if _, ok := err.(ObjectNotFound); globalVersioningSys.IsConfigured(bucket) && ok {
 				continue
 			}
 			return result, toObjectErr(err, bucket, prefix)
@@ -794,15 +920,20 @@ func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, 
 	return s.getHashedSet(object).NewMultipartUpload(ctx, bucket, object, metadata)
 }
 
-// Copies a part of an object from source hashedSet to destination hashedSet.
 func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
+	startOffset int64, length int64, srcInfo ObjectInfo) (partInfo PartInfo, err error) {
+	return s.CopyObjectPartVersion(ctx, srcBucket, srcObject, "", destBucket, destObject, uploadID, partID, startOffset, length, srcInfo)
+}
+
+// Copies a part of an object from source hashedSet to destination hashedSet.
+func (s *xlSets) CopyObjectPartVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo ObjectInfo) (partInfo PartInfo, err error) {
 
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
 
 	go func() {
-		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.GetObjectVersion(ctx, srcBucket, srcObject, version, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 				return

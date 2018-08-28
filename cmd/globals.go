@@ -78,6 +78,8 @@ const (
 	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 	// Refresh interval to update in-memory bucket policy cache.
 	globalRefreshBucketPolicyInterval = 5 * time.Minute
+	// Refresh interval to update in-memory bucket versioning cache.
+	globalRefreshBucketVersioningInterval = 5 * time.Minute
 
 	// Limit of location constraint XML for unauthenticted PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
@@ -126,6 +128,7 @@ var (
 
 	globalNotificationSys *NotificationSys
 	globalPolicySys       *PolicySys
+	globalVersioningSys   *VersioningSys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
