@@ -646,3 +646,8 @@ func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string)
 
 	return nil
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (l *tritonObjects) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

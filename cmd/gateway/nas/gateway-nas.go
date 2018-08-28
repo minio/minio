@@ -125,3 +125,8 @@ type nasObjects struct {
 func (l *nasObjects) IsNotificationSupported() bool {
 	return false
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (l *nasObjects) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

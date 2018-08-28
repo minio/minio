@@ -835,3 +835,8 @@ func (l *b2Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	logger.LogIf(ctx, err)
 	return b2ToObjectError(err)
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (l *b2Objects) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

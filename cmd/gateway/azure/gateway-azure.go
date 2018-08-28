@@ -1144,3 +1144,8 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 	err := container.SetPermissions(perm, nil)
 	return azureToObjectError(err)
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (a *azureObjects) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

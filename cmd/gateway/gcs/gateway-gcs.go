@@ -1287,3 +1287,8 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 
 	return nil
 }
+
+// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+func (l *gcsGateway) IsEncryptionSupported() bool {
+	return len(minio.GlobalGatewaySSE) > 0
+}

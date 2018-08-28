@@ -102,6 +102,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsV2Info.Objects {
+		listObjectsV2Info.Objects[i].UserDefined = cleanMinioInternalMetadataKeys(listObjectsV2Info.Objects[i].UserDefined)
 		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
@@ -168,6 +169,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsInfo.Objects {
+		listObjectsInfo.Objects[i].UserDefined = cleanMinioInternalMetadataKeys(listObjectsInfo.Objects[i].UserDefined)
 		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
