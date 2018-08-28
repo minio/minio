@@ -136,7 +136,8 @@ func checkServerConfig(ctx context.Context, objAPI ObjectLayer) error {
 	}
 
 	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile); err != nil {
-		if isErrObjectNotFound(err) {
+		// Convert ObjectNotFound, Quorum errors into errConfigNotFound
+		if isErrObjectNotFound(err) || isInsufficientReadQuorum(err) {
 			return errConfigNotFound
 		}
 		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
@@ -162,7 +163,7 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*by
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
 	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, ""); err != nil {
-		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
+		// Convert ObjectNotFound, IncompleteBody and Quorum errors into errConfigNotFound
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
 			return nil, errConfigNotFound
 		}
