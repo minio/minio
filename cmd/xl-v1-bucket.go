@@ -83,7 +83,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	var versioningConfig = VersioningConfiguration{
 		XMLNS:  "http://s3.amazonaws.com/doc/2006-03-01/",
-		Status: "Suspended",
+		Status: "", // The initial response (from S3) for newly created bucket is empty
 	}
 
 	if err = xl.SetBucketVersioning(ctx, bucket, versioningConfig); err != nil {

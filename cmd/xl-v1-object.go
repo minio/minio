@@ -441,14 +441,14 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 	for i, v := range versioning.ObjectVersions {
 		if !v.DeleteMarker {
 			versions = append(versions, VersionInfo{
-				Key:          object,
-				VersionID:    v.Id,
-				IsLatest:     i == len(versioning.ObjectVersions)-1,
+				Key:       object,
+				VersionID: v.Id,
+				IsLatest:  i == len(versioning.ObjectVersions)-1,
 				// FIXME: Get size / etag / StorageClass from xl.json
-				Size:         123,    // obj.Size,
-				ETag:         "ETAG", // obj.ETag,
-				StorageClass: "REDUCED", // obj.StorageClass,
-				LastModified:  v.TimeStamp,
+				Size:         123456789,                          // obj.Size,
+				ETag:         "0123456789abcdef0123456789abcdef", // obj.ETag,
+				StorageClass: "STANDARD",                         // obj.StorageClass,
+				LastModified: v.TimeStamp,
 			})
 		} else {
 			deleteMarkers = append(deleteMarkers, DeleteMarkerInfo{
@@ -460,7 +460,7 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 		}
 	}
 
-	return versions, deleteMarkers,nil
+	return versions, deleteMarkers, nil
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
