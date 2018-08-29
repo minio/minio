@@ -233,6 +233,9 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			encReader = io.LimitReader(ioutil.NewSkipReader(encReader, startOffset%(64*1024)), length)
 			cleanUp := func() { reader.Close() }
 			reader = NewGetObjectReader(encReader, nil, cleanUp)
+			if reader != nil {
+				defer reader.Close()
+			}
 			if s3Encrypted {
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			} else {
@@ -416,6 +419,9 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			encReader = io.LimitReader(ioutil.NewSkipReader(encReader, startOffset%(64*1024)), length)
 			cleanUp := func() { reader.Close() }
 			reader = NewGetObjectReader(encReader, nil, cleanUp)
+			if reader != nil {
+				defer reader.Close()
+			}
 			if s3Encrypted {
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			} else {

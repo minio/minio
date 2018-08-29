@@ -170,29 +170,26 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	if err = lock.GetRLock(globalObjectTimeout); err != nil {
 		return objInfo, nil, err
 	}
-	objReader := &GetObjectReader{
-		lock: lock,
-	}
 
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return objInfo, objReader, err
+		return objInfo, nil, err
 	}
 
 	if hasSuffix(object, slashSeparator) {
 		if !xl.isObjectDir(bucket, object) {
-			return objInfo, objReader, toObjectErr(errFileNotFound, bucket, object)
+			return objInfo, nil, toObjectErr(errFileNotFound, bucket, object)
 		}
 		var e error
 		if objInfo, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
-			return objInfo, objReader, toObjectErr(e, bucket, object)
+			return objInfo, nil, toObjectErr(e, bucket, object)
 		}
-		objReader.pr = bytes.NewBuffer(nil)
+		objReader := NewGetObjectReader(bytes.NewReader(nil), lock, nil)
 		return objInfo, objReader, nil
 	}
 
 	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
 	if err != nil {
-		return objInfo, objReader, toObjectErr(err, bucket, object)
+		return objInfo, nil, toObjectErr(err, bucket, object)
 	}
 
 	startOffset, readLength := int64(0), objInfo.Size
@@ -201,10 +198,14 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	}
 
 	pr, pw := io.Pipe()
-	objReader.pr = pr
+	objReader := NewGetObjectReader(pr, lock, nil)
 	go func() {
 		err := xl.getObject(ctx, bucket, object, startOffset, readLength, pw, "")
-		pw.CloseWithError(err)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		pw.Close()
 	}()
 
 	return objInfo, objReader, nil
