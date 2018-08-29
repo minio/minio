@@ -20,12 +20,10 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -195,27 +193,6 @@ func TestIsHTTPMethod(t *testing.T) {
 }
 
 func TestNewHTTPListener(t *testing.T) {
-	errMsg := ": no such host"
-
-	remoteAddrErrMsgIP := "cannot bind to \"93.184.216.34:65432\": cannot assign requested address"
-	if runtime.GOOS == "windows" {
-		remoteAddrErrMsgIP = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
-	}
-	remoteAddrErrMsgHost := "cannot bind to \"example.org:65432\": cannot assign requested address"
-	if runtime.GOOS == "windows" {
-		remoteAddrErrMsgHost = "listen tcp 93.184.216.34:65432: bind: The requested address is not valid in its context."
-	}
-
-	remoteMissingErr := "address unknown-host: missing port in address"
-	if runtime.GOOS == "windows" {
-		remoteMissingErr = "listen tcp: address unknown-host: missing port in address"
-	}
-
-	remoteUnknownErr := "lookup unknown-host" + errMsg
-	if runtime.GOOS == "windows" {
-		remoteUnknownErr = "listen tcp: lookup unknown-host" + errMsg
-	}
-
 	tlsConfig := getTLSConfig(t)
 
 	testCases := []struct {
@@ -226,16 +203,16 @@ func TestNewHTTPListener(t *testing.T) {
 		writeTimeout           time.Duration
 		updateBytesReadFunc    func(*http.Request, int)
 		updateBytesWrittenFunc func(*http.Request, int)
-		expectedErr            error
+		expectedErr            bool
 	}{
-		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteAddrErrMsgIP)},
-		{[]string{"example.org:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteAddrErrMsgHost)},
-		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteMissingErr)},
-		{[]string{"unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteUnknownErr)},
-		{[]string{"localhost:65432", "93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteAddrErrMsgIP)},
-		{[]string{"localhost:65432", "unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, errors.New(remoteUnknownErr)},
-		{[]string{"localhost:0"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil},
-		{[]string{"localhost:0"}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil},
+		{[]string{"93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"example.org:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"localhost:65432", "93.184.216.34:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"localhost:65432", "unknown-host:65432"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
+		{[]string{"localhost:0"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, false},
+		{[]string{"localhost:0"}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, false},
 	}
 
 	for _, testCase := range testCases {
@@ -250,22 +227,12 @@ func TestNewHTTPListener(t *testing.T) {
 			testCase.updateBytesWrittenFunc,
 		)
 
-		if testCase.expectedErr == nil {
+		if !testCase.expectedErr {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		} else if err == nil {
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else {
-			var match bool
-			if strings.HasSuffix(testCase.expectedErr.Error(), errMsg) {
-				match = strings.HasSuffix(err.Error(), errMsg)
-			} else {
-				match = (testCase.expectedErr.Error() == err.Error())
-			}
-			if !match {
-				t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
-			}
 		}
 
 		if err == nil {

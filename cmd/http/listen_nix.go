@@ -18,7 +18,11 @@
 
 package http
 
-import "github.com/valyala/tcplisten"
+import (
+	"net"
+
+	"github.com/valyala/tcplisten"
+)
 
 var cfg = &tcplisten.Config{
 	DeferAccept: true,
@@ -27,3 +31,4 @@ var cfg = &tcplisten.Config{
 
 // Unix listener with special TCP options.
 var listen = cfg.NewListener
+var fallbackListen = net.Listen
