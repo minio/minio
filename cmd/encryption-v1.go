@@ -372,6 +372,17 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 	return reader, nil
 }
 
+// GetEncryptedOffsetLength - returns encrypted offset and length
+// along with sequence number
+func GetEncryptedOffsetLength(startOffset, length int64, objInfo ObjectInfo) (seqNumber uint32, encStartOffset, encLength int64) {
+	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
+		return
+	}
+	seqNumber, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
+	return
+}
+
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
 func DecryptBlocksRequestR(client io.Reader, r *http.Request, bucket, object string, startOffset, length int64, objInfo ObjectInfo, copySource bool) (io.Reader, int64, int64, error) {
@@ -380,7 +391,6 @@ func DecryptBlocksRequestR(client io.Reader, r *http.Request, bucket, object str
 
 	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
-
 		var reader io.Reader
 		var err error
 		if copySource {
