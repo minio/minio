@@ -12,7 +12,7 @@ clone_folder: c:\gopath\src\github.com\minio\minio
 # Environment variables
 environment:
   GOPATH: c:\gopath
-  GOROOT: c:\go
+  GOROOT: c:\go110
 
 # scripts that run after cloning repository
 install:
