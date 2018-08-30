@@ -72,6 +72,7 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // on an SQL expression. In the request, along with the sql expression, you must
 // also specify a data serialization format (JSON, CSV) of the object.
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
+
 	ctx := newContext(r, w, "SelectObject")
 	var object, bucket string
 	vars := mux.Vars(r)
@@ -184,7 +185,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) {
+	if api.CacheAPI() != nil && !crypto.IsEncrypted(objInfo.UserDefined) {
 		getObject = api.CacheAPI().GetObject
 	}
 	reader, pipewriter := io.Pipe()
@@ -196,7 +197,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	var writer io.Writer
 	writer = pipewriter
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.SSEC.IsRequested(r.Header) {
+		if crypto.IsEncrypted(objInfo.UserDefined) {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
@@ -354,7 +355,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	writer = w
 	if objectAPI.IsEncryptionSupported() {
 		s3Encrypted := crypto.S3.IsEncrypted(objInfo.UserDefined)
-		if crypto.SSEC.IsRequested(r.Header) || s3Encrypted {
+		if crypto.IsEncrypted(objInfo.UserDefined) {
 			// Response writer should be limited early on for decryption upto required length,
 			// additionally also skipping mod(offset)64KiB boundaries.
 			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
@@ -377,7 +378,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setHeadGetRespHeaders(w, r.URL.Query())
 
 	getObject := objectAPI.GetObject
-	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3.IsEncrypted(objInfo.UserDefined) {
+	if api.CacheAPI() != nil && !crypto.IsEncrypted(objInfo.UserDefined) {
 		getObject = api.CacheAPI().GetObject
 	}
 
@@ -1304,10 +1305,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			}
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			if !hasServerSideEncryptionHeader(r.Header) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
-				return
-			}
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
@@ -1506,7 +1503,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 	}
-
+	sseS3 := false
 	if objectAPI.IsEncryptionSupported() {
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
@@ -1515,10 +1512,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			if !hasServerSideEncryptionHeader(r.Header) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
-				return
-			}
+			sseS3 = crypto.S3.IsEncrypted(li.UserDefined)
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
@@ -1559,7 +1553,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
-	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
+	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) && !sseS3 {
 		putObjectPart = api.CacheAPI().PutObjectPart
 	}
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, hashReader, opts)
