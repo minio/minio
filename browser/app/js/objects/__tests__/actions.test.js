@@ -113,6 +113,9 @@ describe("Objects actions", () => {
     })
     const expectedActions = [
       {
+        type: "alert/CLEAR"
+      },
+      {
         type: "objects/SET_LIST",
         objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
@@ -143,6 +146,9 @@ describe("Objects actions", () => {
       objects: { currentPrefix: "" }
     })
     const expectedActions = [
+      {
+        type: "alert/CLEAR"
+      },
       {
         type: "objects/APPEND_LIST",
         objects: [{ name: "test1" }, { name: "test2" }],
@@ -198,6 +204,7 @@ describe("Objects actions", () => {
     })
     const expectedActions = [
       { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "alert/CLEAR" },
       { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
