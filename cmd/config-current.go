@@ -43,9 +43,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "32"
+const serverConfigVersion = "33"
 
-type serverConfig = serverConfigV32
+type serverConfig = serverConfigV33
 
 var (
 	// globalServerConfig server config.

@@ -2455,7 +2455,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	return saveServerConfig(context.Background(), objAPI, config)
 }
 
-// Migrates '.minio.sys/config.json' to v32.
+// Migrates '.minio.sys/config.json' to v33.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
@@ -2483,7 +2483,10 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	if err := migrateV30ToV31MinioSys(objAPI); err != nil {
 		return err
 	}
-	return migrateV31ToV32MinioSys(objAPI)
+	if err := migrateV31ToV32MinioSys(objAPI); err != nil {
+		return err
+	}
+	return migrateV32ToV33MinioSys(objAPI)
 }
 
 func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (bool, []byte, error) {
@@ -2677,5 +2680,38 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "31", "32")
+	return nil
+}
+
+func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	ok, data, err := checkConfigVersion(objAPI, configFile, "32")
+	if err == errConfigNotFound {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+	if !ok {
+		return nil
+	}
+
+	cfg := &serverConfigV33{}
+	if err = json.Unmarshal(data, cfg); err != nil {
+		return err
+	}
+
+	cfg.Version = "33"
+
+	data, err = json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+		return fmt.Errorf("Failed to migrate config from  32  to  33 . %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "32", "33")
 	return nil
 }
