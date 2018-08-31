@@ -174,6 +174,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	objInfo, reader, err := getObjectNInfo(ctx, bucket, object, nil)
+	if reader != nil {
+		readerTmp := reader
+		defer readerTmp.Close()
+	}
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -208,12 +212,15 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 		// Query the backend
 		objInfo, reader, err = objectAPI.GetObjectNInfo(ctx, bucket, object, nil)
+		if reader != nil {
+			readerTmp := reader
+			defer readerTmp.Close()
+		}
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
 	}
-	defer reader.Close()
 
 	startOffset, length := int64(0), objInfo.Size
 	// Get the object.
@@ -231,11 +238,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			// additionally also skipping mod(offset)64KiB
 			// boundaries.
 			encReader = io.LimitReader(ioutil.NewSkipReader(encReader, startOffset%(64*1024)), length)
-			cleanUp := func() { reader.Close() }
+			oldReader := reader
+			cleanUp := func() { oldReader.Close() }
 			reader = NewGetObjectReader(encReader, nil, cleanUp)
-			if reader != nil {
-				defer reader.Close()
-			}
+			defer reader.Close()
 			if s3Encrypted {
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			} else {
@@ -365,26 +371,50 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	objInfo, reader, err := getObjectNInfo(ctx, bucket, object, rs)
+	if reader != nil {
+		readerTmp := reader
+		defer readerTmp.Close()
+	}
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
-	// If object is encrypted, we avoid the cache layer.
-	if crypto.IsEncrypted(objInfo.UserDefined) && api.CacheAPI() != nil {
+	startOffset, length := int64(0), objInfo.Size
+	if rs != nil {
+		startOffset, length = rs.GetOffsetLength(objInfo.Size)
+	}
+
+	// If object is encrypted, we requery the backend to read the
+	// appropriate offsets. We also avoid the cache.
+	if crypto.IsEncrypted(objInfo.UserDefined) {
 		// Close the existing reader before re-querying the backend
 		if reader != nil {
 			reader.Close()
 		}
-		// Query the backend
-		objInfo, reader, err = objectAPI.GetObjectNInfo(ctx, bucket, object, rs)
+		// Reset length to the actual (decrypted) length of
+		// the object (i.e. when unencrypted)
+		length, err = objInfo.DecryptedSize()
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		if rs != nil {
+			startOffset, length = rs.GetOffsetLength(length)
+		}
+		_, encOffset, encLength := GetEncryptedOffsetLength(startOffset, length, objInfo)
+		// Query the backend with updated range for encrypted
+		// object
+		objInfo, reader, err = objectAPI.GetObjectNInfo(ctx, bucket, object, &HTTPRangeSpec{false, encOffset, encOffset + encLength - 1})
+		if reader != nil {
+			readerTmp := reader
+			defer readerTmp.Close()
+		}
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
 	}
-	defer reader.Close()
-
 	if objectAPI.IsEncryptionSupported() {
 		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -397,17 +427,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	startOffset, length := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, length = rs.GetOffsetLength(objInfo.Size)
-	}
-
 	// Get the object.
 	if objectAPI.IsEncryptionSupported() {
 		s3Encrypted := crypto.IsEncrypted(objInfo.UserDefined)
 		if s3Encrypted {
 			var encReader io.Reader
-			encReader, startOffset, length, err = DecryptBlocksRequestR(reader, r, bucket, object, startOffset, length, objInfo, false)
+			encReader, _, _, err = DecryptBlocksRequestR(reader, r, bucket, object, startOffset, length, objInfo, false)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -417,11 +442,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// additionally also skipping mod(offset)64KiB
 			// boundaries.
 			encReader = io.LimitReader(ioutil.NewSkipReader(encReader, startOffset%(64*1024)), length)
-			cleanUp := func() { reader.Close() }
+			oldReader := reader
+			cleanUp := func() { oldReader.Close() }
 			reader = NewGetObjectReader(encReader, nil, cleanUp)
-			if reader != nil {
-				defer reader.Close()
-			}
+			defer reader.Close()
 			if s3Encrypted {
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			} else {

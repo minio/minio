@@ -41,6 +41,10 @@ type ObjectLayer interface {
 
 	// Object operations.
 
+	// CAUTION!!!: This function returns with a lock on the object
+	// held. Closing it is done via reader.Close(), and this must
+	// be done whenever the function returns a non-nil reader
+	// (regardless of the err being nil or not.)
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error)
 
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
