@@ -404,7 +404,9 @@ func newHTTPListener(serverAddrs []string,
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = listen("tcp4", serverAddr); err != nil {
-			return nil, err
+			if l, err = fallbackListen("tcp4", serverAddr); err != nil {
+				return nil, err
+			}
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
