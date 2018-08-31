@@ -94,8 +94,11 @@ func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource 
 				continue
 			}
 
-			if strings.HasPrefix(token, "Host: ") {
-				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "Host: ")
+			// HTTP headers are case insensitive, so we should simply convert
+			// each tokens to their lower case form to match 'host' header.
+			token = strings.ToLower(token)
+			if strings.HasPrefix(token, "host: ") {
+				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
 				return resource, host, nil
 			}
 		}
