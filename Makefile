@@ -4,6 +4,13 @@ LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
 BUILD_LDFLAGS := '$(LDFLAGS)'
 
+DOCKER_REPO_NAME:= gcr.io/npav-172917/
+DOCKER_IMAGE_NAME := minio
+GO_REPOSITORY_PATH := github.com/accedian/$(DOCKER_IMAGE_NAME)
+DOCKER_VER := RELEASE.2018-08-25T01-56-38Z.$(if $(DOCKER_VER),$(DOCKER_VER),$(shell whoami)-dev)
+SOLUTION_NAME := Minio
+
+
 all: build
 
 checks:
@@ -95,6 +102,13 @@ install: build
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
 	@mkdir -p $(GOPATH)/bin && cp $(PWD)/minio $(GOPATH)/bin/minio
 	@echo "Installation successful. To learn more, try \"minio --help\"."
+
+circleci-docker-build:
+	docker build -t ${DOCKER_REPO_NAME}${DOCKER_IMAGE_NAME}:${DOCKER_VER} -f Dockerfile .
+
+circleci-push: circleci-docker-build
+	docker push  ${DOCKER_REPO_NAME}${DOCKER_IMAGE_NAME}:${DOCKER_VER}
+
 
 clean:
 	@echo "Cleaning up all the generated files"
