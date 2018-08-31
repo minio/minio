@@ -843,24 +843,27 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if hasSuffix(object, slashSeparator) {
-		// Delete the object on all disks.
-		if err = xl.deleteObject(ctx, bucket, object, len(xl.getDisks())/2+1, true); err != nil {
+	if !xl.isObject(bucket, object) {
+		return ObjectNotFound{bucket, object}
+	}
+
+	var writeQuorum int
+	var isObjectDir = hasSuffix(object, slashSeparator)
+
+	if isObjectDir {
+		writeQuorum = len(xl.getDisks())/2 + 1
+	} else {
+		// Read metadata associated with the object from all disks.
+		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		// get Quorum for this object
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
+		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}
 
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-
-	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
 	// Delete the object on all disks.
-	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, false); err != nil {
+	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, isObjectDir); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
