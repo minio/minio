@@ -16,6 +16,7 @@
 #
 
 set -x
+: ${STARTUP_GRACE_PERIOD_SEC='500'}
 
 _init () {
     scheme="http://"
@@ -30,7 +31,7 @@ healthcheck_main () {
     # with 0 to ensure healthy status till distributed Minio starts (120s).
     #
     # Refer: https://github.com/moby/moby/pull/28938#issuecomment-301753272
-    if [ $(( $(date +%s) - start )) -lt 120 ]; then
+    if [ $(( $(date +%s) - start )) -lt "${STARTUP_GRACE_PERIOD_SEC}" ]; then
         exit 0
     else
         # Get the http response code
