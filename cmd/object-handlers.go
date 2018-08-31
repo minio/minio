@@ -386,11 +386,21 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// If object is encrypted, we requery the backend to read the
-	// appropriate offsets. We also avoid the cache
+	// appropriate offsets. We also avoid the cache.
 	if crypto.IsEncrypted(objInfo.UserDefined) {
 		// Close the existing reader before re-querying the backend
 		if reader != nil {
 			reader.Close()
+		}
+		// Reset length to the actual (decrypted) length of
+		// the object (i.e. when unencrypted)
+		length, err = objInfo.DecryptedSize()
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+		if rs != nil {
+			startOffset, length = rs.GetOffsetLength(length)
 		}
 		_, encOffset, encLength := GetEncryptedOffsetLength(startOffset, length, objInfo)
 		// Query the backend with updated range for encrypted

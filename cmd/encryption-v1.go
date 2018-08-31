@@ -428,11 +428,13 @@ func DecryptBlocksRequestR(client io.Reader, r *http.Request, bucket, object str
 	}
 
 	startSeqNum := partStartOffset / sseDAREPackageBlockSize
+	partDecRelOffset := int64(startSeqNum) * sseDAREPackageBlockSize
 	partEncRelOffset := int64(startSeqNum) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
 
 	w := &DecryptBlocksReader{
 		reader:            client,
 		startSeqNum:       uint32(startSeqNum),
+		partDecRelOffset:  partDecRelOffset,
 		partEncRelOffset:  partEncRelOffset,
 		parts:             objInfo.Parts,
 		partIndex:         partStartIndex,
@@ -509,7 +511,7 @@ type DecryptBlocksReader struct {
 	bucket, object string
 	metadata       map[string]string
 
-	partEncRelOffset int64
+	partDecRelOffset, partEncRelOffset int64
 
 	copySource bool
 	// Customer Key
@@ -559,10 +561,10 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 		delete(m, crypto.SSECKey)
 	}
 
-	// make sure to provide a NopCloser such that a Close
-	// on sio.decryptWriter doesn't close the underlying writer's
-	// close which perhaps can close the stream prematurely.
-	decrypter, err := newDecryptReaderWithObjectKey(d.reader, partEncryptionKey, d.startSeqNum, m)
+	// Limit the reader, so the decryptor doesnt receive bytes
+	// from the next part (different DARE stream)
+	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
+	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum, m)
 	if err != nil {
 		return err
 	}
@@ -574,14 +576,16 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 	var err error
 	var n1 int
-	if int64(len(p)) < d.parts[d.partIndex].Size-d.partEncRelOffset {
+	decPartSize, _ := sio.DecryptedSize(uint64(d.parts[d.partIndex].Size))
+	unReadPartLen := int64(decPartSize) - d.partDecRelOffset
+	if int64(len(p)) < unReadPartLen {
 		n1, err = d.decrypter.Read(p)
 		if err != nil {
 			return 0, err
 		}
-		d.partEncRelOffset += int64(n1)
+		d.partDecRelOffset += int64(n1)
 	} else {
-		n1, err = d.decrypter.Read(p[:d.parts[d.partIndex].Size-d.partEncRelOffset])
+		n1, err = io.ReadFull(d.decrypter, p[:unReadPartLen])
 		if err != nil {
 			return 0, err
 		}
@@ -589,11 +593,15 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 		// We should now proceed to next part, reset all
 		// values appropriately.
 		d.partEncRelOffset = 0
+		d.partDecRelOffset = 0
 		d.startSeqNum = 0
 
 		d.partIndex++
+		if d.partIndex == len(d.parts) {
+			return n1, io.EOF
+		}
 
-		err = d.buildDecrypter(d.partIndex + 1)
+		err = d.buildDecrypter(d.parts[d.partIndex].Number)
 		if err != nil {
 			return 0, err
 		}
@@ -603,7 +611,7 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 			return 0, err
 		}
 
-		d.partEncRelOffset += int64(n1)
+		d.partDecRelOffset += int64(n1)
 	}
 
 	return len(p), nil
