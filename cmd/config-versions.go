@@ -756,30 +756,3 @@ type serverConfigV28 struct {
 	// Logger configuration
 	Logger loggerConfig `json:"logger"`
 }
-
-// serverConfigV27 is just like version '26', stores additionally -
-// config parameters for Kafka notifer.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
-type serverConfigV27 struct {
-	quick.Config `json:"-"` // ignore interfaces
-
-	Version string `json:"version"`
-
-	// S3 API configuration.
-	Credential auth.Credentials `json:"credential"`
-	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
-	Domain     string           `json:"domain"`
-
-	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
-
-	// Cache configuration
-	Cache CacheConfig `json:"cache"`
-
-	// Notification queue configuration.
-	Notify notifier `json:"notify"`
-}
