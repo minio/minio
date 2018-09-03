@@ -318,6 +318,9 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
+	// Re-enable logging
+	logger.Disable = false
+
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
 
@@ -335,9 +338,6 @@ func serverMain(ctx *cli.Context) {
 		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
-
-	// Re-enable logging
-	logger.Disable = false
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
