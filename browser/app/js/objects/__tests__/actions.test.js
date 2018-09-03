@@ -19,9 +19,14 @@ import thunk from "redux-thunk"
 import * as actionsObjects from "../actions"
 import * as alertActions from "../../alert/actions"
 import { minioBrowserPrefix } from "../../constants"
+import history from "../../history"
 
 jest.mock("../../web", () => ({
-  LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
+  LoggedIn: jest
+    .fn(() => true)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(false),
   ListObjects: jest.fn(({ bucketName }) => {
     if (bucketName === "test-deny") {
       return Promise.reject({
@@ -172,7 +177,7 @@ describe("Objects actions", () => {
     })
   })
 
-  it("creates objects/RESET_LIST after tring to fetch the objects from bucket with ListObjects denied", () => {
+  it("creates objects/RESET_LIST after failing to fetch the objects from bucket with ListObjects denied for LoggedIn users", () => {
     const store = mockStore({
       buckets: { currentBucket: "test-deny" },
       objects: { currentPrefix: "" }
@@ -196,6 +201,16 @@ describe("Objects actions", () => {
     return store.dispatch(actionsObjects.fetchObjects()).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("redirect to login after failing to fetch the objects from bucket for non-LoggedIn users", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test-deny" },
+      objects: { currentPrefix: "" }
+    })
+    return store.dispatch(actionsObjects.fetchObjects()).then(() => {
+      expect(history.location.pathname.endsWith("/login")).toBeTruthy()
     })
   })
 
