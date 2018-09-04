@@ -19,9 +19,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
+	"strings"
+
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +35,9 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
+	ioutilx "github.com/minio/minio/pkg/ioutil"
 )
 
 // Type to capture different modifications to API request to simulate failure cases.
@@ -129,7 +135,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
 		req, err := newTestSignedRequestV4("HEAD", getHeadObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -147,7 +153,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for Head Object endpoint.
 		reqV2, err := newTestSignedRequestV2("HEAD", getHeadObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
@@ -182,7 +188,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 	nilReq, err := newTestSignedRequestV4("HEAD", getGetObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -192,14 +198,139 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
+func TestAPIHeadObjectHandlerWithEncryption(t *testing.T) {
+	globalPolicySys = NewPolicySys()
+	defer func() { globalPolicySys = nil }()
+
+	defer DetectTestLeak(t)()
+	ExecObjectLayerAPITest(t, testAPIHeadObjectHandlerWithEncryption, []string{"NewMultipart", "PutObjectPart", "CompleteMultipart", "GetObject", "PutObject", "HeadObject"})
+}
+
+func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T) {
+
+	// Set SSL to on to do encryption tests
+	globalIsSSL = true
+	defer func() { globalIsSSL = false }()
+
+	var (
+		oneMiB        int64 = 1024 * 1024
+		key32Bytes          = generateBytesData(32 * humanize.Byte)
+		key32BytesMd5       = md5.Sum(key32Bytes)
+		metaWithSSEC        = map[string]string{
+			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
+			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+		}
+		mapCopy = func(m map[string]string) map[string]string {
+			r := make(map[string]string, len(m))
+			for k, v := range m {
+				r[k] = v
+			}
+			return r
+		}
+	)
+
+	type ObjectInput struct {
+		objectName  string
+		partLengths []int64
+
+		metaData map[string]string
+	}
+
+	objectLength := func(oi ObjectInput) (sum int64) {
+		for _, l := range oi.partLengths {
+			sum += l
+		}
+		return
+	}
+
+	// set of inputs for uploading the objects before tests for
+	// downloading is done. Data bytes are from DummyDataGen.
+	objectInputs := []ObjectInput{
+		// Unencrypted objects
+		{"nothing", []int64{0}, nil},
+		{"small-1", []int64{509}, nil},
+
+		{"mp-1", []int64{5 * oneMiB, 1}, nil},
+		{"mp-2", []int64{5487701, 5487799, 3}, nil},
+
+		// Encrypted object
+		{"enc-nothing", []int64{0}, mapCopy(metaWithSSEC)},
+		{"enc-small-1", []int64{509}, mapCopy(metaWithSSEC)},
+
+		{"enc-mp-1", []int64{5 * oneMiB, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
+	}
+
+	// iterate through the above set of inputs and upload the object.
+	for _, input := range objectInputs {
+		uploadTestObject(t, apiRouter, credentials, bucketName, input.objectName, input.partLengths, input.metaData, false)
+	}
+
+	for i, input := range objectInputs {
+		// initialize HTTP NewRecorder, this records any
+		// mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for HEAD object.
+		req, err := newTestSignedRequestV4("HEAD", getHeadObjectURL("", bucketName, input.objectName),
+			0, nil, credentials.AccessKey, credentials.SecretKey, nil)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a
+		// ServeHTTP to execute the logic of the handler.
+		apiRouter.ServeHTTP(rec, req)
+
+		isEnc := false
+		expected := 200
+		if strings.HasPrefix(input.objectName, "enc-") {
+			isEnc = true
+			expected = 400
+		}
+		if rec.Code != expected {
+			t.Errorf("Test %d: expected code %d but got %d for object %s", i+1, expected, rec.Code, input.objectName)
+		}
+
+		contentLength := rec.Header().Get("Content-Length")
+		if isEnc {
+			// initialize HTTP NewRecorder, this records any
+			// mutations to response writer inside the handler.
+			rec := httptest.NewRecorder()
+			// construct HTTP request for HEAD object.
+			req, err := newTestSignedRequestV4("HEAD", getHeadObjectURL("", bucketName, input.objectName),
+				0, nil, credentials.AccessKey, credentials.SecretKey, input.metaData)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
+			}
+			// Since `apiRouter` satisfies `http.Handler` it has a
+			// ServeHTTP to execute the logic of the handler.
+			apiRouter.ServeHTTP(rec, req)
+
+			if rec.Code != 200 {
+				t.Errorf("Test %d: Did not receive a 200 response: %d", i+1, rec.Code)
+			}
+			contentLength = rec.Header().Get("Content-Length")
+		}
+
+		if contentLength != fmt.Sprintf("%d", objectLength(input)) {
+			t.Errorf("Test %d: Content length is mismatching: got %s (expected: %d)", i+1, contentLength, objectLength(input))
+		}
+	}
+}
+
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetObjectHandler(t *testing.T) {
+	globalPolicySys = NewPolicySys()
+	defer func() { globalPolicySys = nil }()
+
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIGetObjectHandler, []string{"GetObject"})
 }
 
 func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
+
 	objectName := "test-object"
 	// set of byte data for PutObject.
 	// object has to be created before running tests for GetObject.
@@ -376,7 +507,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
 		req, err := newTestSignedRequestV4("GET", getGetObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Get Object: <ERROR> %v", i+1, err)
@@ -406,7 +537,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for  GET Object endpoint.
 		reqV2, err := newTestSignedRequestV2("GET", getGetObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for GetObject: <ERROR> %v", i+1, instanceType, err)
@@ -455,7 +586,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 	nilReq, err := newTestSignedRequestV4("GET", getGetObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -463,6 +594,204 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+}
+
+// Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
+func TestAPIGetObjectWithMPHandler(t *testing.T) {
+	globalPolicySys = NewPolicySys()
+	defer func() { globalPolicySys = nil }()
+
+	defer DetectTestLeak(t)()
+	ExecObjectLayerAPITest(t, testAPIGetObjectWithMPHandler, []string{"NewMultipart", "PutObjectPart", "CompleteMultipart", "GetObject", "PutObject"})
+}
+
+func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T) {
+
+	// Set SSL to on to do encryption tests
+	globalIsSSL = true
+	defer func() { globalIsSSL = false }()
+
+	var (
+		oneMiB        int64 = 1024 * 1024
+		key32Bytes          = generateBytesData(32 * humanize.Byte)
+		key32BytesMd5       = md5.Sum(key32Bytes)
+		metaWithSSEC        = map[string]string{
+			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
+			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+		}
+		mapCopy = func(m map[string]string) map[string]string {
+			r := make(map[string]string, len(m))
+			for k, v := range m {
+				r[k] = v
+			}
+			return r
+		}
+	)
+
+	type ObjectInput struct {
+		objectName  string
+		partLengths []int64
+
+		metaData map[string]string
+	}
+
+	objectLength := func(oi ObjectInput) (sum int64) {
+		for _, l := range oi.partLengths {
+			sum += l
+		}
+		return
+	}
+
+	// set of inputs for uploading the objects before tests for
+	// downloading is done. Data bytes are from DummyDataGen.
+	objectInputs := []ObjectInput{
+		// // cases 0-3: small single part objects
+		{"nothing", []int64{0}, make(map[string]string)},
+		{"small-0", []int64{11}, make(map[string]string)},
+		{"small-1", []int64{509}, make(map[string]string)},
+		{"small-2", []int64{5 * oneMiB}, make(map[string]string)},
+		// // // cases 4-7: multipart part objects
+		{"mp-0", []int64{5 * oneMiB, 1}, make(map[string]string)},
+		{"mp-1", []int64{5*oneMiB + 1, 1}, make(map[string]string)},
+		{"mp-2", []int64{5487701, 5487799, 3}, make(map[string]string)},
+		{"mp-3", []int64{10499807, 10499963, 7}, make(map[string]string)},
+		// cases 8-11: small single part objects with encryption
+		{"enc-nothing", []int64{0}, mapCopy(metaWithSSEC)},
+		{"enc-small-0", []int64{11}, mapCopy(metaWithSSEC)},
+		{"enc-small-1", []int64{509}, mapCopy(metaWithSSEC)},
+		{"enc-small-2", []int64{5 * oneMiB}, mapCopy(metaWithSSEC)},
+		// cases 12-15: multipart part objects with encryption
+		{"enc-mp-0", []int64{5 * oneMiB, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-1", []int64{5*oneMiB + 1, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
+		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
+	}
+
+	// iterate through the above set of inputs and upload the object.
+	for _, input := range objectInputs {
+		uploadTestObject(t, apiRouter, credentials, bucketName, input.objectName, input.partLengths, input.metaData, false)
+	}
+
+	// function type for creating signed requests - used to repeat
+	// requests with V2 and V4 signing.
+	type testSignedReqFn func(method, urlStr string, contentLength int64,
+		body io.ReadSeeker, accessKey, secretKey string, metamap map[string]string) (*http.Request,
+		error)
+
+	mkGetReq := func(oi ObjectInput, byteRange string, i int, mkSignedReq testSignedReqFn) {
+		object := oi.objectName
+		rec := httptest.NewRecorder()
+		req, err := mkSignedReq("GET", getGetObjectURL("", bucketName, object),
+			0, nil, credentials.AccessKey, credentials.SecretKey, oi.metaData)
+		if err != nil {
+			t.Fatalf("Object: %s Case %d ByteRange: %s: Failed to create HTTP request for Get Object: <ERROR> %v",
+				object, i+1, byteRange, err)
+		}
+
+		if byteRange != "" {
+			req.Header.Add("Range", byteRange)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+
+		// Check response code (we make only valid requests in
+		// this test)
+		if rec.Code != http.StatusPartialContent && rec.Code != http.StatusOK {
+			bd, err1 := ioutil.ReadAll(rec.Body)
+			t.Fatalf("%s Object: %s Case %d ByteRange: %s: Got response status `%d` and body: %s,%v",
+				instanceType, object, i+1, byteRange, rec.Code, string(bd), err1)
+		}
+
+		var off, length int64
+		var rs *HTTPRangeSpec
+		if byteRange != "" {
+			rs, err = parseRequestRangeSpec(byteRange)
+			if err != nil {
+				t.Fatalf("Object: %s Case %d ByteRange: %s: Unexpected err: %v", object, i+1, byteRange, err)
+			}
+		}
+		off, length, err = rs.GetOffsetLength(objectLength(oi))
+		if err != nil {
+			t.Fatalf("Object: %s Case %d ByteRange: %s: Unexpected err: %v", object, i+1, byteRange, err)
+		}
+
+		readers := []io.Reader{}
+		cumulativeSum := int64(0)
+		for _, p := range oi.partLengths {
+			readers = append(readers, NewDummyDataGen(p, cumulativeSum))
+			cumulativeSum += p
+		}
+		refReader := io.LimitReader(ioutilx.NewSkipReader(io.MultiReader(readers...), off), length)
+		if ok, msg := cmpReaders(refReader, rec.Body); !ok {
+			t.Fatalf("(%s) Object: %s Case %d ByteRange: %s --> data mismatch! (msg: %s)", instanceType, oi.objectName, i+1, byteRange, msg)
+		}
+	}
+
+	// Iterate over each uploaded object and do a bunch of get
+	// requests on them.
+	caseNumber := 0
+	signFns := []testSignedReqFn{newTestSignedRequestV2, newTestSignedRequestV4}
+	for _, oi := range objectInputs {
+		objLen := objectLength(oi)
+		for _, sf := range signFns {
+			// Read whole object
+			mkGetReq(oi, "", caseNumber, sf)
+			caseNumber++
+
+			// No range requests are possible if the
+			// object length is 0
+			if objLen == 0 {
+				continue
+			}
+
+			// Various ranges to query - all are valid!
+			rangeHdrs := []string{
+				// Read first byte of object
+				fmt.Sprintf("bytes=%d-%d", 0, 0),
+				// Read second byte of object
+				fmt.Sprintf("bytes=%d-%d", 1, 1),
+				// Read last byte of object
+				fmt.Sprintf("bytes=-%d", 1),
+				// Read all but first byte of object
+				"bytes=1-",
+				// Read first half of object
+				fmt.Sprintf("bytes=%d-%d", 0, objLen/2),
+				// Read last half of object
+				fmt.Sprintf("bytes=-%d", objLen/2),
+				// Read middle half of object
+				fmt.Sprintf("bytes=%d-%d", objLen/4, objLen*3/4),
+				// Read 100MiB of the object from the beginning
+				fmt.Sprintf("bytes=%d-%d", 0, 100*humanize.MiByte),
+				// Read 100MiB of the object from the end
+				fmt.Sprintf("bytes=-%d", 100*humanize.MiByte),
+			}
+			for _, rangeHdr := range rangeHdrs {
+				mkGetReq(oi, rangeHdr, caseNumber, sf)
+				caseNumber++
+			}
+		}
+
+	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+	nilReq, err := newTestSignedRequestV4("GET", getGetObjectURL("", nilBucket, nilObject),
+		0, nil, "", "", nil)
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+
 }
 
 // Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
@@ -912,7 +1241,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
 		req, err = newTestSignedRequestV4("PUT", getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey)
+			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
 		}
@@ -953,7 +1282,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT Object endpoint.
 		reqV2, err = newTestSignedRequestV2("PUT", getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey)
+			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutObject: <ERROR> %v", i+1, instanceType, err)
@@ -1013,7 +1342,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -1091,7 +1420,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 
 		// construct HTTP request for copy object.
 		var req *http.Request
-		req, err = newTestSignedRequestV4("PUT", cpPartURL, 0, nil, credentials.AccessKey, credentials.SecretKey)
+		req, err = newTestSignedRequestV4("PUT", cpPartURL, 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 		if err != nil {
 			t.Fatalf("Test failed to create HTTP request for copy object part: <ERROR> %v", err)
 		}
@@ -1373,11 +1702,11 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		rec := httptest.NewRecorder()
 		if !testCase.invalidPartNumber || !testCase.maximumPartNumber {
 			// construct HTTP request for copy object.
-			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil, testCase.accessKey, testCase.secretKey)
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		} else if testCase.invalidPartNumber {
-			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "abc"), 0, nil, testCase.accessKey, testCase.secretKey)
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "abc"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		} else if testCase.maximumPartNumber {
-			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "99999"), 0, nil, testCase.accessKey, testCase.secretKey)
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "99999"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		}
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for copy Object: <ERROR> %v", i+1, err)
@@ -1447,7 +1776,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectPartURL("", nilBucket, nilObject, "0", "0"),
-		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+		0, bytes.NewReader([]byte("testNilObjLayer")), "", "", nil)
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
@@ -1740,7 +2069,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		rec := httptest.NewRecorder()
 		// construct HTTP request for copy object.
 		req, err = newTestSignedRequestV4("PUT", getCopyObjectURL("", testCase.bucketName, testCase.newObjectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for copy Object: <ERROR> %v", i+1, err)
@@ -1859,7 +2188,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	// Below is how CopyObjectHandler is registered.
 	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?")
@@ -1890,7 +2219,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	rec := httptest.NewRecorder()
 	// construct HTTP request for NewMultipart upload.
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, credentials.AccessKey, credentials.SecretKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1923,7 +2252,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	// construct HTTP request for NewMultipart upload.
 	// Setting an invalid accessID.
 	req, err = newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, "Invalid-AccessID", credentials.SecretKey)
+		0, nil, "Invalid-AccessID", credentials.SecretKey, nil)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1942,7 +2271,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	recV2 := httptest.NewRecorder()
 	// construct HTTP request for NewMultipartUpload endpoint.
 	reqV2, err := newTestSignedRequestV2("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, credentials.AccessKey, credentials.SecretKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1975,7 +2304,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	// construct HTTP request for NewMultipartUpload endpoint.
 	// Setting invalid AccessID.
 	reqV2, err = newTestSignedRequestV2("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, "Invalid-AccessID", credentials.SecretKey)
+		0, nil, "Invalid-AccessID", credentials.SecretKey, nil)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -2010,7 +2339,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("POST", getNewMultipartURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2046,7 +2375,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 			defer wg.Done()
 			rec := httptest.NewRecorder()
 			// construct HTTP request NewMultipartUpload.
-			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKey, credentials.SecretKey)
+			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 			if err != nil {
 				t.Fatalf("Failed to create HTTP request for NewMultipart request: <ERROR> %v", err)
@@ -2362,7 +2691,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		}
 		// Indicating that all parts are uploaded and initiating CompleteMultipartUpload.
 		req, err = newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", bucketName, objectName, testCase.uploadID),
-			int64(len(completeBytes)), bytes.NewReader(completeBytes), testCase.accessKey, testCase.secretKey)
+			int64(len(completeBytes)), bytes.NewReader(completeBytes), testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for CompleteMultipartUpload: <ERROR> %v", err)
 		}
@@ -2423,7 +2752,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2547,7 +2876,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		var req *http.Request
 		// Indicating that all parts are uploaded and initiating abortMultipartUpload.
 		req, err = newTestSignedRequestV4("DELETE", getAbortMultipartUploadURL("", testCase.bucket, testCase.object, testCase.uploadID),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for AbortMultipartUpload: <ERROR> %v", err)
 		}
@@ -2586,7 +2915,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getAbortMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2692,7 +3021,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Delete Object end point.
 		req, err = newTestSignedRequestV4("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Delete Object: <ERROR> %v", i+1, err)
@@ -2710,7 +3039,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for Delete Object endpoint.
 		reqV2, err = newTestSignedRequestV2("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -2747,7 +3076,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getDeleteObjectURL("", nilBucket, nilObject),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -2769,7 +3098,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKey, credentials.SecretKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2836,7 +3165,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKey, credentials.SecretKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -3107,7 +3436,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			// constructing a v4 signed HTTP request.
 			reqV4, err = newTestSignedRequestV4("PUT",
 				getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
-				0, test.reader, test.accessKey, test.secretKey)
+				0, test.reader, test.accessKey, test.secretKey, nil)
 			if err != nil {
 				t.Fatalf("Failed to create a signed V4 request to upload part for %s/%s: <ERROR> %v",
 					bucketName, test.objectName, err)
@@ -3116,7 +3445,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			// construct HTTP request for PutObject Part Object endpoint.
 			reqV2, err = newTestSignedRequestV2("PUT",
 				getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
-				0, test.reader, test.accessKey, test.secretKey)
+				0, test.reader, test.accessKey, test.secretKey, nil)
 
 			if err != nil {
 				t.Fatalf("Test %d %s Failed to create a V2  signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
@@ -3218,7 +3547,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	nilObject := "dummy-object"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectPartURL("", nilBucket, nilObject, "0", "0"),
-		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+		0, bytes.NewReader([]byte("testNilObjLayer")), "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -3241,7 +3570,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
-		0, nil, credentials.AccessKey, credentials.SecretKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -3264,7 +3593,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	rec = httptest.NewRecorder()
 	req, err = newTestSignedRequestV4("PUT",
 		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey)
+		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -3424,7 +3753,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 			// constructing a v4 signed HTTP request for ListMultipartUploads.
 			reqV4, err = newTestSignedRequestV4("GET",
 				getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
-				0, nil, credentials.AccessKey, credentials.SecretKey)
+				0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 			if err != nil {
 				t.Fatalf("Failed to create a V4 signed request to list object parts for %s/%s: <ERROR> %v.",
@@ -3434,7 +3763,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 			// construct HTTP request for PutObject Part Object endpoint.
 			reqV2, err = newTestSignedRequestV2("GET",
 				getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
-				0, nil, credentials.AccessKey, credentials.SecretKey)
+				0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 			if err != nil {
 				t.Fatalf("Failed to create a V2 signed request to list object parts for %s/%s: <ERROR> %v.",
@@ -3522,7 +3851,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 
 	nilReq, err := newTestSignedRequestV4("GET",
 		getListMultipartURLWithParams("", nilBucket, nilObject, "dummy-uploadID", "0", "0", ""),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 	if err != nil {
 		t.Errorf("Minio %s:Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}

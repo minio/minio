@@ -718,14 +718,17 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	length := objInfo.Size
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			length, _ = objInfo.DecryptedSize()
+		}
 	}
 	var startOffset int64
-	length := objInfo.Size
 	var writer io.Writer
 	writer = w
 	if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(objInfo.UserDefined) {
@@ -822,17 +825,21 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
+			length := info.Size
 			if objectAPI.IsEncryptionSupported() {
-				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
+				if _, err = DecryptObjectInfo(info, r.Header); err != nil {
 					writeWebErrorResponse(w, err)
 					return err
+				}
+				if crypto.IsEncrypted(info.UserDefined) {
+					length, _ = info.DecryptedSize()
 				}
 			}
 			header := &zip.FileHeader{
 				Name:               strings.TrimPrefix(objectName, args.Prefix),
 				Method:             zip.Deflate,
-				UncompressedSize64: uint64(info.Size),
-				UncompressedSize:   uint32(info.Size),
+				UncompressedSize64: uint64(length),
+				UncompressedSize:   uint32(length),
 			}
 			wr, err := archive.CreateHeader(header)
 			if err != nil {
@@ -840,7 +847,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			var startOffset int64
-			length := info.Size
 			var writer io.Writer
 			writer = wr
 			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {

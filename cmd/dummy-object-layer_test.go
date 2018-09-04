@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"net/http"
 
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -56,6 +57,10 @@ func (api *DummyObjectLayer) ListObjects(ctx context.Context, bucket, prefix, ma
 }
 
 func (api *DummyObjectLayer) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
 	return
 }
 

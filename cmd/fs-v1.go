@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"sort"
@@ -496,6 +498,86 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 
 	return objInfo, nil
+}
+
+// GetObjectNInfo - returns object info and a reader for object
+// content.
+func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
+		return nil, err
+	}
+
+	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
+		return nil, toObjectErr(err, bucket)
+	}
+
+	// Lock the object before reading.
+	lock := fs.nsMutex.NewNSLock(bucket, object)
+	if err = lock.GetRLock(globalObjectTimeout); err != nil {
+		logger.LogIf(ctx, err)
+		return nil, err
+	}
+	nsUnlocker := lock.RUnlock
+
+	// For a directory, we need to send an reader that returns no bytes.
+	if hasSuffix(object, slashSeparator) {
+		// The lock taken above is released when
+		// objReader.Close() is called by the caller.
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), ObjectInfo{}, nsUnlocker), nil
+	}
+
+	// Otherwise we get the object info
+	var objInfo ObjectInfo
+	if objInfo, err = fs.getObjectInfo(ctx, bucket, object); err != nil {
+		nsUnlocker()
+		return nil, toObjectErr(err, bucket, object)
+	}
+
+	// Take a rwPool lock for NFS gateway type deployment
+	rwPoolUnlocker := func() {}
+	if bucket != minioMetaBucket {
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+		_, err = fs.rwPool.Open(fsMetaPath)
+		if err != nil && err != errFileNotFound {
+			logger.LogIf(ctx, err)
+			nsUnlocker()
+			return nil, toObjectErr(err, bucket, object)
+		}
+		// Need to clean up lock after getObject is
+		// completed.
+		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
+	}
+
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker, rwPoolUnlocker)
+	if rErr != nil {
+		return nil, rErr
+	}
+
+	// Read the object, doesn't exist returns an s3 compatible error.
+	fsObjPath := pathJoin(fs.fsPath, bucket, object)
+	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
+	if err != nil {
+		rwPoolUnlocker()
+		nsUnlocker()
+		return nil, toObjectErr(err, bucket, object)
+	}
+	var reader io.Reader
+	reader = io.LimitReader(readCloser, length)
+	closeFn := func() {
+		readCloser.Close()
+	}
+
+	// Check if range is valid
+	if off > size || off+length > size {
+		err = InvalidRange{off, length, size}
+		logger.LogIf(ctx, err)
+		closeFn()
+		rwPoolUnlocker()
+		nsUnlocker()
+		return nil, err
+	}
+
+	return objReaderFn(reader, h, closeFn)
 }
 
 // GetObject - reads an object from the disk.

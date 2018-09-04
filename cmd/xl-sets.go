@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -577,6 +578,11 @@ func (s *xlSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err err
 }
 
 // --- Object Operations ---
+
+// GetObjectNInfo - returns object info and locked object ReadCloser
+func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs, h)
+}
 
 // GetObject - reads an object from the hashedSet based on the object name.
 func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {

@@ -20,15 +20,20 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/ioutil"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -302,3 +307,141 @@ type byBucketName []BucketInfo
 func (d byBucketName) Len() int           { return len(d) }
 func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
+// GetObjectReader is a type that wraps a reader with a lock to
+// provide a ReadCloser interface that unlocks on Close()
+type GetObjectReader struct {
+	ObjInfo ObjectInfo
+	pReader io.Reader
+
+	cleanUpFns []func()
+	once       sync.Once
+}
+
+// NewGetObjectReaderFromReader sets up a GetObjectReader with a given
+// reader. This ignores any object properties.
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, cleanupFns ...func()) *GetObjectReader {
+	return &GetObjectReader{
+		ObjInfo:    oi,
+		pReader:    r,
+		cleanUpFns: cleanupFns,
+	}
+}
+
+// ObjReaderFn is a function type that takes a reader and returns
+// GetObjectReader and an error. Request headers are passed to provide
+// encryption parameters. cleanupFns allow cleanup funcs to be
+// registered for calling after usage of the reader.
+type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
+
+// NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
+// are called on Close() in reverse order as passed here. NOTE: It is
+// assumed that clean up functions do not panic (otherwise, they may
+// not all run!).
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) (
+	fn ObjReaderFn, off, length int64, err error) {
+
+	// Call the clean-up functions immediately in case of exit
+	// with error
+	defer func() {
+		if err != nil {
+			for i := len(cleanUpFns) - 1; i >= 0; i-- {
+				cleanUpFns[i]()
+			}
+		}
+	}()
+
+	isEncrypted := crypto.IsEncrypted(oi.UserDefined)
+	var skipLen int64
+	// Calculate range to read (different for
+	// e.g. encrypted/compressed objects)
+	switch {
+	case isEncrypted:
+		var seqNumber uint32
+		var partStart int
+		off, length, skipLen, seqNumber, partStart, err = oi.GetDecryptedRange(rs)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		var decSize int64
+		decSize, err = oi.DecryptedSize()
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		var decRangeLength int64
+		decRangeLength, err = rs.GetLength(decSize)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		// We define a closure that performs decryption given
+		// a reader that returns the desired range of
+		// encrypted bytes. The header parameter is used to
+		// provide encryption parameters.
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+			cFns = append(cleanUpFns, cFns...)
+			// Attach decrypter on inputReader
+			var decReader io.Reader
+			decReader, err = DecryptBlocksRequestR(inputReader, h,
+				off, length, seqNumber, partStart, oi, false)
+			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
+				return nil, err
+			}
+
+			// Apply the skipLen and limit on the
+			// decrypted stream
+			decReader = io.LimitReader(ioutil.NewSkipReader(decReader, skipLen), decRangeLength)
+
+			// Assemble the GetObjectReader
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    decReader,
+				cleanUpFns: cFns,
+			}
+			return r, nil
+		}
+
+	default:
+		off, length, err = rs.GetOffsetLength(oi.Size)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    inputReader,
+				cleanUpFns: append(cleanUpFns, cFns...),
+			}
+			return r, nil
+		}
+	}
+
+	return fn, off, length, nil
+}
+
+// Close - calls the cleanup actions in reverse order
+func (g *GetObjectReader) Close() error {
+	// sync.Once is used here to ensure that Close() is
+	// idempotent.
+	g.once.Do(func() {
+		for i := len(g.cleanUpFns) - 1; i >= 0; i-- {
+			g.cleanUpFns[i]()
+		}
+	})
+	return nil
+}
+
+// Read - to implement Reader interface.
+func (g *GetObjectReader) Read(p []byte) (n int, err error) {
+	n, err = g.pReader.Read(p)
+	if err != nil {
+		// Calling code may not Close() in case of error, so
+		// we ensure it.
+		g.Close()
+	}
+	return
+}

@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"net/http"
 
 	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/pkg/hash"
@@ -47,6 +48,13 @@ type ObjectLayer interface {
 
 	// Object operations.
 
+	// GetObjectNInfo returns a GetObjectReader that satisfies the
+	// ReadCloser interface. The Close method unlocks the object
+	// after reading, so it must always be called after usage.
+	//
+	// IMPORTANTLY, when implementations return err != nil, this
+	// function MUST NOT return a non-nil ReadCloser.
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (reader *GetObjectReader, err error)
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
