@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"io"
@@ -30,8 +31,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"bytes"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
@@ -738,8 +737,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 //
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
-func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
-	var n int
+func (s *posix) ReadFile(volume, path string, offset, length int64, verifier *BitrotVerifier) (io.ReadCloser, error) {
 	var err error
 	defer func() {
 		if err == errFaultyDisk {
@@ -748,36 +746,36 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	}()
 
 	if offset < 0 {
-		return 0, errInvalidArgument
+		return nil, errInvalidArgument
 	}
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return 0, errFaultyDisk
+		return nil, errFaultyDisk
 	}
 
 	if err = s.checkDiskFound(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errVolumeNotFound
+			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
-			return 0, errFaultyDisk
+			return nil, errFaultyDisk
 		}
-		return 0, err
+		return nil, err
 	}
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength((filePath)); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Open the file for reading.
@@ -785,15 +783,15 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			return 0, errFileNotFound
+			return nil, errFileNotFound
 		case os.IsPermission(err):
-			return 0, errFileAccessDenied
+			return nil, errFileAccessDenied
 		case isSysErrNotDir(err):
-			return 0, errFileAccessDenied
+			return nil, errFileAccessDenied
 		case isSysErrIO(err):
-			return 0, errFaultyDisk
+			return nil, errFaultyDisk
 		default:
-			return 0, err
+			return nil, err
 		}
 	}
 
@@ -802,18 +800,24 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 
 	st, err := file.Stat()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Verify it is a regular file, otherwise subsequent Seek is
 	// undefined.
 	if !st.Mode().IsRegular() {
-		return 0, errIsNotRegular
+		return nil, errIsNotRegular
 	}
 
+	var n int
+	buffer := make([]byte, length)
+
 	if verifier == nil {
-		n, err = file.ReadAt(buffer, offset)
-		return int64(n), err
+		if n, err = file.ReadAt(buffer, offset); err != nil {
+			return nil, err
+		}
+
+		return ioutil.NopCloser(bytes.NewReader(buffer[:n])), nil
 	}
 
 	bufp := s.pool.Get().(*[]byte)
@@ -821,26 +825,28 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 
 	h := verifier.algorithm.New()
 	if _, err = io.CopyBuffer(h, io.LimitReader(file, offset), *bufp); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if n, err = io.ReadFull(file, buffer); err != nil {
-		return int64(n), err
+		return nil, err
 	}
 
+	buffer = buffer[:n]
+
 	if _, err = h.Write(buffer); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if bytes.Compare(h.Sum(nil), verifier.sum) != 0 {
-		return 0, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
+		return nil, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
 	}
 
-	return int64(len(buffer)), nil
+	return ioutil.NopCloser(bytes.NewReader(buffer)), nil
 }
 
 func (s *posix) createFile(volume, path string) (f *os.File, err error) {

@@ -28,8 +28,12 @@ import (
 
 type badDisk struct{ StorageAPI }
 
-func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
+func (d badDisk) AppendFile(volume string, path string, buf []byte) error {
 	return errFaultyDisk
+}
+
+func (d badDisk) ReadFile(volume string, path string, offset, length int64, verifier *BitrotVerifier) (rc io.ReadCloser, err error) {
+	return nil, errFaultyDisk
 }
 
 const oneMiByte = 1 * humanize.MiByte

@@ -17,11 +17,13 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -41,50 +43,56 @@ type Client struct {
 }
 
 // Call - calls service method on RPC server.
-func (client *Client) Call(serviceMethod string, args, reply interface{}) error {
+func (client *Client) Call(serviceMethod string, args interface{}, reader io.Reader, reply interface{}) (io.ReadCloser, error) {
 	replyKind := reflect.TypeOf(reply).Kind()
 	if replyKind != reflect.Ptr {
-		return fmt.Errorf("rpc reply must be a pointer type, but found %v", replyKind)
+		return nil, fmt.Errorf("rpc reply must be a pointer type, but found %v", replyKind)
 	}
 
-	argBuf := bufPool.Get()
-	defer bufPool.Put(argBuf)
-
-	if err := gobEncodeBuf(args, argBuf); err != nil {
-		return err
+	argsBuf := bufPool.Get()
+	defer bufPool.Put(argsBuf)
+	if err := gob.NewEncoder(argsBuf).Encode(args); err != nil {
+		return nil, err
 	}
 
 	callRequest := CallRequest{
 		Method:   serviceMethod,
-		ArgBytes: argBuf.Bytes(),
+		ArgBytes: argsBuf.Bytes(),
 	}
 
-	reqBuf := bufPool.Get()
-	defer bufPool.Put(reqBuf)
-	if err := gob.NewEncoder(reqBuf).Encode(callRequest); err != nil {
-		return err
+	requestBuf := bufPool.Get()
+	defer bufPool.Put(requestBuf)
+	if err := gob.NewEncoder(requestBuf).Encode(callRequest); err != nil {
+		return nil, err
 	}
 
-	response, err := client.httpClient.Post(client.serviceURL.String(), "", reqBuf)
+	var body io.Reader = requestBuf
+	if reader != nil {
+		body = io.MultiReader(body, reader)
+	}
+
+	response, err := client.httpClient.Post(client.serviceURL.String(), "", body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("%v rpc call failed with error code %v", serviceMethod, response.StatusCode)
+		response.Body.Close()
+		return nil, fmt.Errorf("%v rpc call failed with error code %v", serviceMethod, response.StatusCode)
 	}
 
 	var callResponse CallResponse
-	if err := gob.NewDecoder(response.Body).Decode(&callResponse); err != nil {
-		return err
+	if err := gob.NewDecoder(newGobReader(response.Body)).Decode(&callResponse); err != nil {
+		response.Body.Close()
+		return nil, err
 	}
 
 	if callResponse.Error != "" {
-		return errors.New(callResponse.Error)
+		response.Body.Close()
+		return nil, errors.New(callResponse.Error)
 	}
 
-	return gobDecode(callResponse.ReplyBytes, reply)
+	return response.Body, gob.NewDecoder(bytes.NewReader(callResponse.ReplyBytes)).Decode(reply)
 }
 
 // Close - does nothing and presents for interface compatibility.

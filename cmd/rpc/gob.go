@@ -16,35 +16,18 @@
 
 package rpc
 
-import (
-	"bytes"
-	"sync"
-)
+import "io"
 
-var bufPool = NewPool()
-
-// A Pool is a type-safe wrapper around a sync.Pool.
-type Pool struct {
-	p *sync.Pool
+type gobReader struct {
+	io.ReadCloser
 }
 
-// NewPool constructs a new Pool.
-func NewPool() Pool {
-	return Pool{p: &sync.Pool{
-		New: func() interface{} {
-			return &bytes.Buffer{}
-		},
-	}}
+func (r *gobReader) ReadByte() (byte, error) {
+	b := []byte{0}
+	_, err := r.Read(b)
+	return b[0], err
 }
 
-// Get retrieves a bytes.Buffer from the pool, creating one if necessary.
-func (p Pool) Get() *bytes.Buffer {
-	buf := p.p.Get().(*bytes.Buffer)
-	return buf
-}
-
-// Put - returns a bytes.Buffer to the pool.
-func (p Pool) Put(buf *bytes.Buffer) {
-	buf.Reset()
-	p.p.Put(buf)
+func newGobReader(rc io.ReadCloser) *gobReader {
+	return &gobReader{rc}
 }

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"io"
@@ -144,6 +143,25 @@ func (client *StorageRPCClient) call(handler string, args interface {
 	return toStorageErr(err)
 }
 
+func (client *StorageRPCClient) callWith(handler string, args interface {
+	SetAuthArgs(args AuthArgs)
+}, r io.Reader, reply interface{}) (io.ReadCloser, error) {
+	if !client.connected {
+		return nil, errDiskNotFound
+	}
+
+	rc, err := client.CallWith(handler, args, r, reply)
+	if err == nil {
+		return rc, nil
+	}
+
+	if isNetworkDisconnectError(err) {
+		client.connected = false
+	}
+
+	return nil, toStorageErr(err)
+}
+
 // DiskInfo - fetch disk information for a remote disk.
 func (client *StorageRPCClient) DiskInfo() (info DiskInfo, err error) {
 	err = client.call(storageServiceName+".DiskInfo", &AuthArgs{}, &info)
@@ -215,34 +233,20 @@ func (client *StorageRPCClient) ReadAll(volume, path string) (buf []byte, err er
 }
 
 // ReadFile - reads a file at remote path and fills the buffer.
-func (client *StorageRPCClient) ReadFile(volume string, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
-	// Recover from any panic and return error.
-	defer func() {
-		if r := recover(); r != nil {
-			err = bytes.ErrTooLarge
-		}
-	}()
-
+func (client *StorageRPCClient) ReadFile(volume string, path string, offset, length int64, verifier *BitrotVerifier) (rc io.ReadCloser, err error) {
 	args := ReadFileArgs{
 		Vol:      volume,
 		Path:     path,
 		Offset:   offset,
-		Buffer:   buffer,
+		Length:   length,
 		Verified: true, // mark read as verified by default
 	}
 	if verifier != nil {
 		args.Algo = verifier.algorithm
 		args.ExpectedHash = verifier.sum
 	}
-	var reply []byte
 
-	err = client.call(storageServiceName+".ReadFile", &args, &reply)
-
-	// Copy reply to buffer.
-	copy(buffer, reply)
-
-	// Return length of result, err if any.
-	return int64(len(reply)), err
+	return client.callWith(storageServiceName+".ReadFile", &args, nil, &VoidReply{})
 }
 
 // ListDir - list all entries at prefix.

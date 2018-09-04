@@ -1098,41 +1098,28 @@ func TestPosixReadFile(t *testing.T) {
 		{
 			volume, "level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			0, 5, nil, errFileNameTooLong},
-		// Buffer size greater than object size. - 8
-		{
-			volume, "myobject", 0, 16,
-			[]byte("hello, world"),
-			io.ErrUnexpectedEOF,
-		},
-		// Reading from an offset success. - 9
+		// Reading from an offset success. - 8
 		{
 			volume, "myobject", 7, 5,
 			[]byte("world"), nil,
 		},
-		// Reading from an object but buffer size greater. - 10
-		{
-			volume, "myobject",
-			7, 8,
-			[]byte("world"),
-			io.ErrUnexpectedEOF,
-		},
-		// Seeking ahead returns io.EOF. - 11
+		// Seeking ahead returns io.EOF. - 9
 		{
 			volume, "myobject", 14, 1, nil, io.EOF,
 		},
-		// Empty volume name. - 12
+		// Empty volume name. - 10
 		{
 			"", "myobject", 14, 1, nil, errVolumeNotFound,
 		},
-		// Empty filename name. - 13
+		// Empty filename name. - 11
 		{
 			volume, "", 14, 1, nil, errIsNotRegular,
 		},
-		// Non existent volume name - 14.
+		// Non existent volume name - 12
 		{
 			"abcd", "", 14, 1, nil, errVolumeNotFound,
 		},
-		// Non existent filename - 15.
+		// Non existent filename - 13
 		{
 			volume, "abcd", 14, 1, nil, errFileNotFound,
 		},
@@ -1150,19 +1137,24 @@ func TestPosixReadFile(t *testing.T) {
 	}
 
 	{
-		buf := make([]byte, 5)
 		// Test for negative offset.
-		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
+		if _, err = posixStorage.ReadFile(volume, "myobject", -1, 0, v); err == nil {
 			t.Fatalf("expected: error, got: <nil>")
 		}
 	}
 
 	// Following block validates all ReadFile test cases.
 	for i, testCase := range testCases {
+		var rc io.ReadCloser
+		var buf []byte
 		var n int64
-		// Common read buffer.
-		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
+		rc, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, int64(testCase.bufSize), v)
+		if rc != nil {
+			buf, err = ioutil.ReadAll(rc)
+			n = int64(len(buf))
+			rc.Close()
+		}
+
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1234,8 +1226,7 @@ func TestPosixReadFile(t *testing.T) {
 		}
 
 		// Common read buffer.
-		var buf = make([]byte, 10)
-		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, 10, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
@@ -1246,9 +1237,7 @@ func TestPosixReadFile(t *testing.T) {
 	if posixType, ok := posixStorage.(*posix); ok {
 		// setting the io error count from as specified in the test case.
 		posixType.ioErrCount = int32(6)
-		// Common read buffer.
-		var buf = make([]byte, 10)
-		_, err = posixType.ReadFile("abc", "yes", 0, buf, nil)
+		_, err = posixType.ReadFile("abc", "yes", 0, 10, nil)
 		if err != errFaultyDisk {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
@@ -1316,8 +1305,14 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 			test.expError = hashMismatchError{hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(expected)}
 		}
 
-		buffer := make([]byte, test.length)
-		n, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
+		rc, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), int64(test.length), NewBitrotVerifier(test.algorithm, h.Sum(nil)))
+		var buffer []byte
+		var n int64
+		if rc != nil {
+			buffer, err = ioutil.ReadAll(rc)
+			n = int64(len(buffer))
+			rc.Close()
+		}
 
 		switch {
 		case err == nil && test.expError != nil:
