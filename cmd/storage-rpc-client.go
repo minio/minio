@@ -227,7 +227,7 @@ func (client *StorageRPCClient) ReadFile(volume string, path string, offset int6
 		Vol:      volume,
 		Path:     path,
 		Offset:   offset,
-		Buffer:   buffer,
+		Length:   int64(len(buffer)),
 		Verified: true, // mark read as verified by default
 	}
 	if verifier != nil {
