@@ -233,13 +233,13 @@ func apiGet(ctx context.Context, addr, call, apiPassword string) (*http.Response
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		logger.LogIf(ctx, MethodNotSupported{call})
 		return nil, MethodNotSupported{call}
 	}
 	if non2xx(resp.StatusCode) {
 		err := decodeError(resp)
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
@@ -266,13 +266,13 @@ func apiPost(ctx context.Context, addr, call, vals, apiPassword string) (*http.R
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		return nil, MethodNotSupported{call}
 	}
 
 	if non2xx(resp.StatusCode) {
 		err := decodeError(resp)
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		return nil, err
 	}
 	return resp, nil
@@ -285,7 +285,7 @@ func post(ctx context.Context, addr, call, vals, apiPassword string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	minio.CloseResponse(resp.Body)
 	return nil
 }
 
@@ -295,7 +295,7 @@ func list(ctx context.Context, addr string, apiPassword string, obj *renterFiles
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer minio.CloseResponse(resp.Body)
 
 	if resp.StatusCode == http.StatusNoContent {
 		logger.LogIf(ctx, fmt.Errorf("Expecting a response, but API returned %s", resp.Status))
@@ -313,7 +313,7 @@ func get(ctx context.Context, addr, call, apiPassword string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	minio.CloseResponse(resp.Body)
 	return nil
 }
 
