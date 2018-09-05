@@ -843,7 +843,7 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if !xl.isObject(bucket, object) {
+	if !xl.isObject(bucket, object) && !xl.isObjectDir(bucket, object) {
 		return ObjectNotFound{bucket, object}
 	}
 
