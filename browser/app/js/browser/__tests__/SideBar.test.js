@@ -31,11 +31,4 @@ describe("SideBar", () => {
     const wrapper = shallow(<SideBar />)
     expect(wrapper.find("Connect(BucketSearch)").length).toBe(0)
   })
-
-  it("should call clickOutside when the user clicks outside the sidebar", () => {
-    const clickOutside = jest.fn()
-    const wrapper = shallow(<SideBar clickOutside={clickOutside} />)
-    wrapper.simulate("clickOut", { preventDefault: jest.fn() })
-    expect(clickOutside).toHaveBeenCalled()
-  })
 })

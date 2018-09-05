@@ -34,9 +34,9 @@ describe("Header", () => {
     expect(wrapper.find("a").text()).toBe("Login")
   })
 
-  it("should render StorageInfo and BrowserDropdown when the user has LoggedIn", () => {
+  it("should render SettingsMenu when settings is clicked", () => {
     const wrapper = shallow(<Header />)
-    expect(wrapper.find("Connect(BrowserDropdown)").length).toBe(1)
-    expect(wrapper.find("Connect(StorageInfo)").length).toBe(1)
+    wrapper.find(".settings__toggle").simulate("click")
+    expect(wrapper.find("Connect(SettingsMenu)").length).toBe(1)
   })
 })

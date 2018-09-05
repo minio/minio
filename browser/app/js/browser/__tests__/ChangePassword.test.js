@@ -16,7 +16,7 @@
 
 import React from "react"
 import { shallow, mount } from "enzyme"
-import { ChangePasswordModal } from "../ChangePasswordModal"
+import { ChangePassword } from "../ChangePassword"
 
 jest.mock("../../web", () => ({
   GetAuth: jest.fn(() => {
@@ -44,11 +44,11 @@ describe("ChangePasswordModal", () => {
   }
 
   it("should render without crashing", () => {
-    shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    shallow(<ChangePassword serverInfo={serverInfo} />)
   })
 
   it("should get the keys when its rendered", () => {
-    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    const wrapper = shallow(<ChangePassword serverInfo={serverInfo} />)
     setImmediate(() => {
       expect(wrapper.state("accessKey")).toBe("test1")
       expect(wrapper.state("secretKey")).toBe("test2")
@@ -57,17 +57,21 @@ describe("ChangePasswordModal", () => {
 
   it("should show readonly keys when isEnvCreds is true", () => {
     const newServerInfo = { ...serverInfo, info: { isEnvCreds: true } }
-    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
+    const wrapper = shallow(<ChangePassword serverInfo={newServerInfo} />)
     expect(wrapper.state("accessKey")).toBe("xxxxxxxxx")
     expect(wrapper.state("secretKey")).toBe("xxxxxxxxx")
-    expect(wrapper.find("#accessKey").prop("readonly")).toBeTruthy()
-    expect(wrapper.find("#secretKey").prop("readonly")).toBeTruthy()
+    expect(
+      wrapper.find("#change-password-access-key").prop("readOnly")
+    ).toBeTruthy()
+    expect(
+      wrapper.find("#change-password-secret-key").prop("readOnly")
+    ).toBeTruthy()
     expect(wrapper.find("#generate-keys").hasClass("hidden")).toBeTruthy()
     expect(wrapper.find("#update-keys").hasClass("hidden")).toBeTruthy()
   })
 
   it("should generate accessKey and secretKey when Generate buttons is clicked", () => {
-    const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} />)
+    const wrapper = shallow(<ChangePassword serverInfo={serverInfo} />)
     wrapper.find("#generate-keys").simulate("click")
     setImmediate(() => {
       expect(wrapper.state("accessKey")).toBe("gen1")
@@ -77,14 +81,19 @@ describe("ChangePasswordModal", () => {
 
   it("should update accessKey and secretKey when Update button is clicked", () => {
     const showAlert = jest.fn()
+    const hideChangePassword = jest.fn()
     const wrapper = shallow(
-      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />
+      <ChangePassword
+        serverInfo={serverInfo}
+        showAlert={showAlert}
+        hideChangePassword={hideChangePassword}
+      />
     )
     wrapper
-      .find("#accessKey")
+      .find("#change-password-access-key")
       .simulate("change", { target: { value: "test3" } })
     wrapper
-      .find("#secretKey")
+      .find("#change-password-secret-key")
       .simulate("change", { target: { value: "test4" } })
     wrapper.find("#update-keys").simulate("click")
     setImmediate(() => {
@@ -98,7 +107,7 @@ describe("ChangePasswordModal", () => {
   it("should call hideChangePassword when Cancel button is clicked", () => {
     const hideChangePassword = jest.fn()
     const wrapper = shallow(
-      <ChangePasswordModal
+      <ChangePassword
         serverInfo={serverInfo}
         hideChangePassword={hideChangePassword}
       />

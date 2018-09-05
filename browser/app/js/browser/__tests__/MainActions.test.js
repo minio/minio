@@ -40,31 +40,20 @@ describe("MainActions", () => {
   it("should show only file upload action when user has not LoggedIn and prefixWritable is true", () => {
     const wrapper = shallow(<MainActions prefixWritable={true} />)
     expect(wrapper.find("#show-make-bucket").length).toBe(0)
-    expect(wrapper.find("#file-input").length).toBe(1)
+    expect(wrapper.find("#add-new-upload").length).toBe(1)
   })
 
   it("should show make bucket upload file actions when user has LoggedIn", () => {
     const wrapper = shallow(<MainActions />)
     expect(wrapper.find("#show-make-bucket").length).toBe(1)
-    expect(wrapper.find("#file-input").length).toBe(1)
-  })
-
-  it("should call showMakeBucketModal when create bucket icon is clicked", () => {
-    const showMakeBucketModal = jest.fn()
-    const wrapper = shallow(
-      <MainActions showMakeBucketModal={showMakeBucketModal} />
-    )
-    wrapper
-      .find("#show-make-bucket")
-      .simulate("click", { preventDefault: jest.fn() })
-    expect(showMakeBucketModal).toHaveBeenCalled()
+    expect(wrapper.find("#add-new-upload").length).toBe(1)
   })
 
   it("should call uploadFile when a file is selected for upload", () => {
     const uploadFile = jest.fn()
     const wrapper = shallow(<MainActions uploadFile={uploadFile} />)
     const files = [new Blob(["file content"], { type: "text/plain" })]
-    const input = wrapper.find("#file-input")
+    const input = wrapper.find("#add-new-upload")
     const event = {
       preventDefault: jest.fn(),
       target: {

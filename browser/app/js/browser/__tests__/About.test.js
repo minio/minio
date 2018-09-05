@@ -16,21 +16,26 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import { MobileHeader } from "../MobileHeader"
+import { About } from "../About"
 
-describe("Bucket", () => {
+describe("AboutModal", () => {
+  const serverInfo = {
+    version: "test",
+    memory: "test",
+    platform: "test",
+    runtime: "test"
+  }
+
   it("should render without crashing", () => {
-    shallow(<MobileHeader sidebarOpen={false} />)
+    shallow(<About serverInfo={serverInfo} />)
   })
 
-  it("should toggleSidebar when trigger is clicked", () => {
-    const toggleSidebar = jest.fn()
+  it("should call hideAbout when close button is clicked", () => {
+    const hideAbout = jest.fn()
     const wrapper = shallow(
-      <MobileHeader sidebarOpen={false} toggleSidebar={toggleSidebar} />
+      <About serverInfo={serverInfo} hideAbout={hideAbout} />
     )
-    wrapper
-      .find("#sidebar-toggle")
-      .simulate("click", { stopPropagation: jest.fn() })
-    expect(toggleSidebar).toHaveBeenCalled()
+    wrapper.find("button").simulate("click")
+    expect(hideAbout).toHaveBeenCalled()
   })
 })
