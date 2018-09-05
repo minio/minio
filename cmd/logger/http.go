@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -54,6 +56,8 @@ func (h *HTTPTarget) startHTTPLogger() {
 				continue
 			}
 			if resp.Body != nil {
+				buf := make([]byte, 512)
+				io.CopyBuffer(ioutil.Discard, resp.Body, buf)
 				resp.Body.Close()
 			}
 		}

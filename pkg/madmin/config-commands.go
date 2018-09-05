@@ -85,7 +85,7 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, httpRespToErrorResponse(resp)
 	}
-	defer resp.Body.Close()
+	defer closeResponse(resp)
 
 	return DecryptServerConfigData(adm.secretAccessKey, resp.Body)
 }
