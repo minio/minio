@@ -1,0 +1,89 @@
+.login {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: $login-bg;
+  padding: 10px;
+}
+
+.login__main {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login__form {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  padding: 30px 0;
+}
+
+.login__btn {
+  @include size($login-button-size, $login-button-size);
+  border: 0;
+  background-color: $login-button-bg;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  transition: background-color 250ms;
+  cursor: pointer;
+
+  &:before,
+  &:after {
+    content: '';
+    @include size(100%, 100%);
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: $login-button-icon no-repeat center;
+    will-change: opacity, transform;
+    transition: opacity 250ms, transform 250ms;
+    cursor: pointer;
+  }
+
+  &:before {
+    opacity: 0;
+    transform: translate3d(-$login-button-size/2, 0, 0);
+  }
+
+  &:hover {
+    background-color: $login-button-hover-bg;
+
+    &:before {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    &:after {
+      transform: translate3d($login-button-size/2, 0, 0);
+      opacity: 0;
+    }
+  }
+}
+
+.login__bottom {
+  padding: 20px 40px;
+  display: flex;
+  flex: 0 0 100px;
+  align-items: center;
+
+  @media(max-height: $breakpoint-max-height - 1) {
+    display: none;
+  }
+}
+
+.login__host {
+  color: $theme-color-muted;
+
+  & > img {
+    vertical-align: top;
+    margin: -1px 5px 0 0;
+  }
+}
+
+.login__logo {
+  margin-left: auto;
+  width: $login-logo-width;
+}

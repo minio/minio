@@ -1,0 +1,159 @@
+.settings {
+  margin: 0 0 0 auto;
+  flex: 0 0 auto;
+}
+
+.settings--active {
+  .settings__menu {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .settings__nav {
+
+    & > a {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+
+      &:nth-child(1) {
+        transition-delay: 100ms;
+      }
+      &:nth-child(2) {
+        transition-delay: 175ms;
+      }
+      &:nth-child(3) {
+        transition-delay: 250ms;
+      }
+      &:nth-child(4) {
+        transition-delay: 325ms;
+      }
+      &:nth-child(5) {
+        transition-delay: 400ms;
+      }
+      &:nth-child(6) {
+        transition-delay: 475ms;
+      }
+      &:nth-child(7) {
+        transition-delay: 550ms;
+      }
+    }
+  }
+}
+
+.settings--closing {
+  .settings__nav {
+    & > a {
+      opacity: 0;
+      transform: translate3d(50%, 0, 0);
+
+      &:nth-child(1) {
+        transition-delay: 450ms;
+      }
+      &:nth-child(2) {
+        transition-delay: 375ms;
+      }
+      &:nth-child(3) {
+        transition-delay: 300ms;
+      }
+      &:nth-child(4) {
+        transition-delay: 225ms;
+      }
+      &:nth-child(5) {
+        transition-delay: 150ms;
+      }
+      &:nth-child(6) {
+        transition-delay: 75ms;
+      }
+      &:nth-child(7) {
+        transition-delay: 0ms;
+      }
+    }
+  }
+}
+
+.settings__toggle {
+  @include size(30px, 30px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $icon-hover-bg;
+  }
+}
+
+.settings__menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  @include size($sidebar-width, 100%);
+  background-color: $settings-menu-bg;
+  z-index: $settings-z-index;
+  padding: 15px;
+  will-change: transform, opacity, width;
+  transition: opacity 300ms, transform 300ms, width 200ms linear 150ms;
+  transform: translate3d($sidebar-width + 10, 0, 0);
+}
+
+.settings__menu--expand {
+  width: $settings-menu-expand-width;
+}
+
+.settings__nav {
+  transition: opacity 200ms;
+  position: relative;
+  z-index: 1;
+
+  & > a {
+    display: block;
+    padding: 10px 15px;
+    color: $theme-color-light;
+    position: relative;
+    transform: translate3d(50%, 0, 0);
+    transition: transform 300ms, opacity 300ms;
+    will-change: left, opacity;
+    opacity: 0;
+    border-radius: 2px;
+
+    &:hover {
+      background-color: darken($theme-color-dark, 5%);
+    }
+  }
+}
+
+.settings__nav--hidden {
+  opacity: 0;
+}
+
+.settings__panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 100%;
+  padding: 30px;
+  transition: opacity 300ms, transform 500ms;
+  opacity: 0.01;
+  z-index: 0;
+  will-change: transform, opacity;
+  transform: translate3d(5%,0,0);
+}
+
+.settings__panel--active {
+  opacity: 1;
+  z-index: 2;
+  transform: translate3d(0,0,0);
+}
+
+.settings__panel__inner {
+  padding: 25px;
+  background-color: darken($settings-menu-bg, 8%);
+  border-radius: 2px;
+  margin-bottom: 10px;
+}
+
+.settings__panel__footer {
+  .button {
+    margin-right: 10px;
+  }
+}

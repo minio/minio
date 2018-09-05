@@ -17,8 +17,7 @@
 import React from "react"
 
 export const Host = () => (
-  <div className="fes-host">
-    <i className="fa fa-globe" />
+  <div className="host">
     <a href="/">{window.location.host}</a>
   </div>
 )

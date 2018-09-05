@@ -1,0 +1,36 @@
+* {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+
+  &:focus,
+  &:active {
+    outline: none;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: $font-family;
+  background-color: $body-bg;
+  font-size: $font-size-base;
+  color: $body-color;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: $headings-color;
+  font-weight: $font-weight-bold;
+}
+
+a {
+  text-decoration: none;
+  color: $link-color;
+  
+  &:hover {
+    color: $link-hover-color;
+  }
+}

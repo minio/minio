@@ -1,0 +1,116 @@
+// Form Controls
+@mixin form-item-input($color, $border-color, $border-focus-color) {
+  color: $color !important;
+  border-color: $border-color;
+
+  &:focus {
+    border-color: $border-focus-color;
+  }
+}
+
+.form-item {
+  &:not(:last-child) {
+    margin-bottom: 25px;
+  }
+
+  &:not(.form-item--dark) {
+    .form-item__input {
+      @include form-item-input($form-input-color, $form-input-border-color, $form-input-focus-border-color);
+
+      @include placeholder {
+        color: $form-placeholder-color
+      }
+    }
+
+    .form-item__label {
+      color: $form-input-label-color;
+    }
+  }
+  
+  &.form-item--dark {
+    .form-item__input {
+      @include form-item-input($form-input-dark-color, $form-input-dark-border-color, $form-input-dark-focus-border-color);
+    }
+    
+    .form-item__label {
+      color: $form-input-dark-label-color;
+    }
+  }
+}
+
+.form-item__label {
+  font-weight: normal;
+  margin-bottom: 5px;
+  display: block;
+  font-size: $form-input-font-size;
+}
+
+.form-item__input {
+  border-width: 0 0 1px 0;
+  border-style: solid;
+  font-size: $form-input-font-size;
+  background-color: transparent !important;
+  transition: border-color 300ms;
+  @include size(100%, $form-input-height);
+  box-shadow: none;
+
+  @include placeholder {
+    opacity: 1;
+  }
+}
+
+.form-item--centered {
+  .form-item__input {
+    text-align: center;
+  }
+}
+
+// Select Group
+.select-group {
+  display: flex;
+}
+
+.select-group__item {
+  position: relative;
+  flex: 1;
+
+  & > input {
+    opacity: 0;
+    position: absolute;
+    left: 0;
+    top: 0;
+    @include size(100%, 100%);
+    z-index: 2;
+
+    &:checked {
+      & ~ i {
+        background-color: $select-group-item-checked-bg;
+        color: $white;
+      }
+    }
+  }
+
+  & > i {
+    @include size(100%, $button-height);
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    background-color: $select-group-bg;
+    transition: background-color 300ms, color 300ms;
+    font-size: $font-size-sm;
+  }
+
+  &:first-child {
+    & > i {
+      border-radius: $border-radius 0 0 $border-radius;
+    }
+  }
+
+  &:last-child {
+    & > i {
+      border-radius: 0 $border-radius $border-radius 0;
+    }
+  }
+}

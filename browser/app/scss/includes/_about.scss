@@ -1,0 +1,15 @@
+.about__item {
+  &:not(:last-child) {
+    margin-bottom: 25px;
+  }
+}
+
+.about__title {
+  margin-bottom: 5px;
+  color: $about-title-color;
+}
+
+.about__value {
+  font-size: $font-size-sm;
+  color: $about-value-color;
+}

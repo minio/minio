@@ -27,16 +27,11 @@ export class StorageInfo extends React.Component {
   render() {
     const { used } = this.props.storageInfo
     return (
-      <div className="feh-used">
-        <div className="fehu-chart">
-          <div style={{ width: 0 }} />
+      <div className="storage">
+        <div className="storage__bar">
+          <i style={{ width: 0 }} />
         </div>
-        <ul>
-          <li>
-            <span>Used: </span>
-            {humanize.filesize(used)}
-          </li>
-        </ul>
+        <div className="storage__info">Used: {humanize.filesize(used)}</div>
       </div>
     )
   }

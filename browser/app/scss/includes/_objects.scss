@@ -1,0 +1,265 @@
+$object-types:
+        folder
+        pdf
+        zip
+        audio
+        code
+        excel
+        image
+        video
+        other
+        text
+        doc
+        presentation;
+
+.objects {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 5px 0 20px;
+}
+
+.objects__header {
+  flex: 0 0 auto;
+}
+
+.objects__body {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+
+  &:before {
+    color: $white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    height: calc(100% - 20px);
+    width: 100%;
+    left: 0;
+    top: 10px;
+    z-index: 1;
+    transition: background 300ms;
+    background: rgba($theme-color-dark, 0.75) url(../img/icons/upload.svg) no-repeat center;
+    border-radius: 2px;
+  }
+}
+
+.objects__body--active {
+  &:before {
+    content: '';
+  }
+}
+
+.objects__scroller {
+  height: 100%;
+  overflow: auto;
+  padding: 10px 0;
+}
+
+.objects__row {
+  display: flex;
+  align-items: center;
+  will-change: background-color;
+  transition: background-color 300ms;
+  cursor: pointer;
+  padding: 5px;
+
+  &:not(.objects__row--header) {
+    border-radius: 2px;
+    margin-bottom: 2px;
+
+    .objects__item--name {
+      padding: 10px 0;
+    }
+  }
+
+  &:not(.objects__row--checked):not(.objects__row--header) {
+    &:hover {
+      background-color: $objects-row-hover-bg;
+
+      .objects__icon {
+        background-color: $white;
+        box-shadow: 0 0 10px rgba($black, 0.015);
+      }
+    }
+  }
+}
+
+.objects__row--header {
+  position: relative;
+
+  &:after {
+    position: absolute;
+    content: '';
+    left: 5px;
+    bottom: 0;
+    width: calc(100% - 10px);
+    background-color: $objects-header-border-color;
+    height: 1px;
+  }
+
+  .objects__item {
+    padding: 5px 0;
+    @include user-select(none);
+  }
+}
+
+.objects__row--checked {
+  .objects__icon {
+    background-color: $white;
+  }
+}
+
+.objects__row--checked {
+  background-color: $objects-row-checked-bg;
+
+  .objects__item--name {
+    pointer-events: none;
+  }
+}
+
+.objects__icon {
+  @include size(37px, 37px);
+  border-radius: 3px;
+  background-color: $objects-icon-bg;
+  background-position: center;
+  background-repeat: no-repeat;
+  will-change: background-color;
+  transition: background-color 300ms;
+}
+
+.objects__checkbox {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  opacity: 0;
+  visibility: hidden;
+}
+
+@each $type in $object-types {
+  .objects__icon--#{$type} {
+    background-image: url('../img/file-types/#{$type}.svg');
+  }
+}
+
+.objects__item {
+  padding-right: 12px;
+  position: relative;
+
+  &:hover {
+    .objects__sort {
+      opacity: 1;
+    }
+  }
+}
+
+.objects__item--name {
+  flex: 1 1 auto;
+  min-width: 200px;
+
+  & > span {
+    display: block;
+    @include text-truncate();
+  }
+}
+
+.objects__item--size {
+  flex: 0 0 120px;
+}
+
+.objects__item--modified {
+  flex: 0 0 165px;
+}
+
+.objects__sort {
+  position: absolute;
+  right: 20px;
+  bottom: 5px;
+  @include size(15px, 12px);
+  opacity: 0;
+  transition: opacity 300ms;
+
+  & > i {
+    height: 2px;
+    background-color: $body-color;
+    display: block;
+    transition: width 300ms;
+
+    & + i {
+      margin-top: 2px;
+    }
+  }
+}
+
+.objects__sort--asc {
+  & > i {
+    &:nth-child(1) {
+      width:33.33%;
+      transition-delay: 0ms;
+    }
+
+    &:nth-child(2) {
+      width:66.66%;
+      transition-delay: 100ms;
+    }
+
+    &:nth-child(3) {
+      width:100%;
+      transition-delay: 200ms;
+    }
+  }
+}
+
+.objects__sort--desc {
+  & > i {
+    &:nth-child(1) {
+      width:100%;
+      transition-delay: 200ms;
+    }
+
+    &:nth-child(2) {
+      width:66.66%;
+      transition-delay: 100ms;
+    }
+
+    &:nth-child(3) {
+      width:33.33%;
+      transition-delay: 0ms;
+    }
+  }
+}
+
+.objects__loading {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  text-align: center;
+
+  & > span {
+    background-color: $theme-color-dark;
+    border-radius: $border-radius $border-radius 0 0;
+    padding: 8px 15px;
+    display: inline-block;
+    color: $objects-loading-color;
+    animation: objects-loader 1000ms infinite;
+    font-size: $font-size-sm;
+  }
+}
+
+@keyframes objects-loader {
+  0%   {
+    color:rgba($objects-loading-color, 0.25);
+  }
+  50%  {
+    color: $objects-loading-color
+  }
+  100% {
+    color:rgba($objects-loading-color, 0.25);
+  }
+}
+
+

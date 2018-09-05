@@ -16,77 +16,107 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import { Dropdown, OverlayTrigger, Tooltip } from "react-bootstrap"
 import web from "../web"
+import classNames from "classnames"
 import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
 import { getPrefixWritable } from "../objects/selectors"
+import ClickOutHandler from "react-onclickout"
+import MakeBucketModal from "../buckets/MakeBucketModal"
 
-export const MainActions = ({
-  prefixWritable,
-  uploadFile,
-  showMakeBucketModal
-}) => {
-  const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
-  const makeBucketTooltip = (
-    <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
-  )
-  const onFileUpload = e => {
+export class MainActions extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      addNewActive: false,
+      makeBucketActive: false
+    }
+  }
+
+  onFileUpload(func, e) {
     e.preventDefault()
     let files = e.target.files
     let filesToUploadCount = files.length
     for (let i = 0; i < filesToUploadCount; i++) {
-      uploadFile(files.item(i))
+      func(files.item(i))
     }
     e.target.value = null
   }
 
-  const loggedIn = web.LoggedIn()
+  toggleAddNew() {
+    this.setState({
+      addNewActive: !this.state.addNewActive
+    })
+  }
 
-  if (loggedIn || prefixWritable) {
-    return (
-      <Dropdown dropup className="feb-actions" id="fe-action-toggle">
-        <Dropdown.Toggle noCaret className="feba-toggle">
-          <span>
-            <i className="fa fa-plus" />
-          </span>
-        </Dropdown.Toggle>
-        <Dropdown.Menu>
-          <OverlayTrigger placement="left" overlay={uploadTooltip}>
-            <a href="#" className="feba-btn feba-upload">
+  openMakeBucket() {
+    this.setState({
+      makeBucketActive: true
+    })
+  }
+
+  closeMakeBucket() {
+    if (this.state.makeBucketActive) {
+      this.setState({
+        makeBucketActive: false
+      })
+    } else {
+      this.setState({
+        addNewActive: false
+      })
+    }
+  }
+
+  render() {
+    const { prefixWritable, uploadFile } = this.props
+    const loggedIn = web.LoggedIn()
+
+    if (loggedIn || prefixWritable) {
+      return (
+        <ClickOutHandler onClickOut={this.closeMakeBucket.bind(this)}>
+          <div
+            className={classNames({
+              "add-new": true,
+              "add-new--active": this.state.addNewActive,
+              "add-new--bucket": this.state.makeBucketActive
+            })}
+          >
+            <i
+              className="add-new__toggle"
+              onClick={this.toggleAddNew.bind(this)}
+            />
+
+            <label
+              htmlFor="add-new-upload"
+              className="add-new__item add-new__item--upload"
+            >
               <input
                 type="file"
-                onChange={onFileUpload}
-                style={{ display: "none" }}
-                id="file-input"
+                onChange={this.onFileUpload.bind(this, uploadFile)}
+                id="add-new-upload"
                 multiple={true}
               />
-              <label htmlFor="file-input">
-                {" "}
-                <i className="fa fa-cloud-upload" />{" "}
-              </label>
-            </a>
-          </OverlayTrigger>
-          {loggedIn && (
-            <OverlayTrigger placement="left" overlay={makeBucketTooltip}>
-              <a
-                href="#"
+            </label>
+            {loggedIn && (
+              <div
                 id="show-make-bucket"
-                className="feba-btn feba-bucket"
-                onClick={e => {
-                  e.preventDefault()
-                  showMakeBucketModal()
-                }}
+                className="add-new__item add-new__item--bucket"
+                onClick={
+                  this.state.makeBucketActive
+                    ? ""
+                    : this.openMakeBucket.bind(this)
+                }
               >
-                <i className="fa fa-hdd-o" />
-              </a>
-            </OverlayTrigger>
-          )}
-        </Dropdown.Menu>
-      </Dropdown>
-    )
-  } else {
-    return <noscript />
+                <MakeBucketModal />
+              </div>
+            )}
+            <div />
+          </div>
+        </ClickOutHandler>
+      )
+    } else {
+      return <noscript />
+    }
   }
 }
 

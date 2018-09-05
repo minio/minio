@@ -15,22 +15,33 @@
  */
 
 import React from "react"
-import ConfirmModal from "../browser/ConfirmModal"
+import iconDanger from "../../img/icons/danger.svg"
 
 export const DeleteObjectConfirmModal = ({
   deleteObject,
   hideDeleteConfirmModal
 }) => (
-  <ConfirmModal
-    show={true}
-    icon="fa fa-exclamation-triangle mci-red"
-    text="Are you sure you want to delete?"
-    sub="This cannot be undone!"
-    okText="Delete"
-    cancelText="Cancel"
-    okHandler={deleteObject}
-    cancelHandler={hideDeleteConfirmModal}
-  />
+  <div className="modal modal--dialog">
+    <div className="modal__content">
+      <div className="modal__icon">
+        <img src={iconDanger} alt="" />
+      </div>
+      <div className="modal__title">Are you sure you want to delete?</div>
+      <div className="modal__sub-title">This cannot be undone!</div>
+
+      <div className="modal__actions">
+        <button
+          className="button button--light"
+          onClick={hideDeleteConfirmModal}
+        >
+          Cancel
+        </button>
+        <button className="button button--danger" onClick={deleteObject}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
 )
 
 export default DeleteObjectConfirmModal

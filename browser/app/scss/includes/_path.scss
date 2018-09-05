@@ -1,0 +1,57 @@
+.path {
+  display: flex;
+  align-items: center;
+  flex: 1 1 100%;
+  margin-left: -5px;
+}
+
+.path--has-back {
+  padding-left: 50px;
+  position: relative;
+}
+
+.path__item {
+  position: relative;
+  cursor: pointer;
+
+  &:not(:nth-last-child(4)) {
+    border-radius: 2px;
+    margin-right: 25px;
+    padding: 3px 5px;
+  }
+
+  &:not(:nth-last-child(-n+3)) {
+    display: none;
+  }
+
+  &:not(:last-child) {
+    &:after {
+      position: absolute;
+      content: '';
+      @include size(7px, 11px);
+      background: $path-seperator-icon no-repeat center;
+      right: -15px;
+      top: 6px;
+    }
+  }
+
+  &:hover {
+    background-color: $path-item-hover-bg;
+  }
+}
+
+.path__back {
+  position: absolute;
+  left: 5px;
+  top: -7px;
+  cursor: pointer;
+  @include size(37px, 37px);
+  border-radius: 3px;
+  background: $objects-icon-bg $path-back-icon no-repeat center;
+  will-change: background-color;
+  transition: background-color 300ms;
+
+  &:hover {
+    background-color: darken($objects-icon-bg, 2%);
+  }
+}

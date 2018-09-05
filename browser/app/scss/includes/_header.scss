@@ -1,0 +1,21 @@
+.header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  padding: 20px 25px 12px;
+}
+
+.guest-login {
+  margin-left: auto;
+  color: $white;
+  background-color: $guest-login-bg;
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 2px;
+
+  &:hover {
+    background-color: $guest-login-hover-bg;
+    color: $white;
+  }
+}

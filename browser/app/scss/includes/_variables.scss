@@ -1,0 +1,201 @@
+// Grid Breakpoints
+$grid-breakpoints: (
+  xs: 576px,
+  sm: 768px,
+  md: 992px,
+  lg: 1200px
+);
+$breakpoint-max-height: 500px;
+
+
+// Colors
+$black: #000;
+$white: #fff;
+$red: #ff6b68;
+$blue: #2196F3;
+$green: #32c787;
+$amber: #ffc721;
+
+
+// Theme Colors
+$theme-color-dark: #263238;
+$theme-color-light: #d3e0ec;
+$theme-color-grey: #f6f9fa;
+$theme-color-muted: #99a9b1;
+$theme-color-hover: #f4f4f4;
+
+
+// Fonts
+$font-family: 'Roboto', sans-serif;
+$font-size-base: 14px;
+$font-size-sm: $font-size-base - 2;
+$font-weight-bold: 500;
+
+
+// Body
+$body-color: #455a64;
+$body-bg: $white;
+
+
+// Links
+$link-color: #3184ff;
+$link-hover-color: darken($link-color, 10%);
+
+
+// Headings
+$headings-color: $theme-color-dark;
+
+
+// Border Radius
+$border-radius: 2px;
+
+
+// Header
+$header-z-index: 100;
+$logo-container-width: 280px;
+$guest-login-bg: $red;
+$guest-login-hover-bg: darken($red, 10%);
+
+
+// Sidebar
+$sidebar-width: 225px;
+$sidebar-bg: #f5f7f8;
+$sidebar-z-index: $header-z-index + 1;
+$sidebar-bottom-color: lighten($body-color, 10%);
+$sidebar-bottom-bg: darken($sidebar-bg, 5%);
+$storage-bg: $white;
+$storage-fill-bg: #2dbcff;
+
+
+// Buckets
+$buckets-item-hover-bg: #dee4e7;
+$buckets-item-color: $body-color;
+$buckets-item-active-color: #effaff;
+$buckets-item-active-bg: $theme-color-dark;
+$bucket-search-border-color: #dee6ea;
+$bucket-item-icon: url(../img/icons/bucket.svg);
+$bucket-item-active-icon: url(../img/icons/bucket-active.svg);
+$buckets-dropdown-item-color: #8ea3ad;
+$buckets-dropdown-item-hover-color: $white;
+
+
+// Path
+$path-item-hover-bg: $theme-color-hover;
+$path-seperator-icon: url(../img/icons/chevron-right.svg);
+$path-back-icon: url(../img/icons/path-previous.svg);
+$path-back-bg: #f5f7f8;
+
+
+// Objects
+$objects-row-checked-bg: #e4f2f9;
+$objects-row-hover-bg: #f0f7fa;
+$objects-row-checked-border-color: rgba($white, 0.1) !important;
+$objects-icon-bg: #f0f7fa;
+$objects-icon-border-color: #dce8ec;
+$objects-header-border-color: #f1f5f7;
+$objects-loading-color: #effaff;
+
+
+// Settings
+$settings-menu-bg: $theme-color-dark;
+$settings-z-index: 100;
+$settings-backdrop-z-index: $settings-z-index - 1;
+$settings-menu-expand-width: 500px;
+
+
+// Icons
+$icon-hover-bg: #f5f7f8;
+
+
+// Add new
+$add-new-toggle-z-index: 10;
+$add-new-bucket-icon: url(../img/icons/create-bucket.svg);
+
+
+// Button
+$button-variants: (
+  info: #2196F3,
+  danger: #ff6b68,
+  success: #32c787,
+  warning: #FF9800,
+  light: #f2f4f5,
+  dark: #161c20
+);
+$button-font-size: $font-size-base - 1;
+$button-default-color: #455a64;
+$button-height: 30px;
+
+
+// About
+$about-title-color: #e3edf5;
+$about-value-color: #a3b1bd;
+
+
+// Form
+$form-input-height: 30px;
+$form-input-font-size: $font-size-base - 1;
+$form-input-dark-border-color: #38454c;
+$form-input-border-color: #d9e4e8;
+$form-input-focus-border-color: darken($form-input-border-color, 15%);
+$form-input-dark-focus-border-color: #99afbb;
+$form-input-color: #607985;
+$form-input-dark-color: #f5f7f8;
+$form-input-label-color: #000;
+$form-input-dark-label-color: #6a7b84;
+$form-placeholder-color: #8b9fa9;
+
+
+// Alert
+$alert-variants: (
+  info: $blue,
+  danger: $red,
+  success: $green,
+  warning: $amber
+);
+$alert-max-width: 500px;
+$alert-box-shadow: 0 5px 10px rgba($black, 0.1);
+$alert-z-index: 10000;
+$alert-progress-bg: $theme-color-dark;
+$alert-sub-color: rgba($white, 0.5);
+$alert-close-icon: url(../img/icons/close.svg);
+
+
+// Modal
+$modal-z-index: $alert-z-index - 1;
+$modal-bg: rgba($theme-color-dark, 0.1);
+$modal-content-bg: $white;
+$modal-width: 500px;
+$modal-title-color: $theme-color-dark;
+$modal-sub-title-color: #839198;
+$modal-dialog-width: 300px;
+$modal-close-icon: url(../img/icons/close-dark.svg);
+$modal-close-hover-bg: $theme-color-hover;
+
+
+// Select Group
+$select-group-bg: $theme-color-grey;
+$select-group-item-checked-bg: $blue;
+
+
+// Policy
+$policy-item-bg: $theme-color-grey;
+$policy-close-icon: $modal-close-icon;
+
+
+// Share
+$set-expire-handle-icon: url(../img/icons/chevron-right.svg);
+
+
+// Login
+$login-bg: $white;
+$login-logo-width: 30px;
+$login-button-bg: #e9f2f6;
+$login-button-hover-bg: darken($login-button-bg, 5%);
+$login-button-size: 45px;
+$login-button-icon: url(../img/icons/arrow-right.svg);
+
+
+// Progress
+$progress-bg: rgba($white, 0.1);
+$progress-bar-height: 2px;
+$progress-bar-bg: $white;

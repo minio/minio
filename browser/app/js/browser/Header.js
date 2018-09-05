@@ -16,28 +16,90 @@
 
 import React from "react"
 import Path from "../objects/Path"
-import StorageInfo from "./StorageInfo"
-import BrowserDropdown from "./BrowserDropdown"
+import SettingsMenu from "./SettingsMenu"
 import web from "../web"
 import { minioBrowserPrefix } from "../constants"
+import classNames from "classnames"
+import iconMore from "../../img/icons/more.svg"
 
-export const Header = () => {
-  const loggedIn = web.LoggedIn()
-  return (
-    <header className="fe-header">
-      <Path />
-      {loggedIn && <StorageInfo />}
-      <ul className="feh-actions">
+export class Header extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      settingsActive: false,
+      settingsClosing: false,
+      settingsEnters: false
+    }
+  }
+
+  openSettingsMenu() {
+    this.setState({
+      settingsClosing: false,
+      settingsEnters: false,
+      settingsActive: true
+    })
+
+    setTimeout(() => {
+      this.setState({
+        settingsEnters: true
+      })
+    }, 1)
+  }
+
+  closeSettingsMenu() {
+    this.setState({
+      settingsClosing: true
+    })
+
+    setTimeout(() => {
+      this.setState({
+        settingsEnters: false
+      })
+    }, 450)
+
+    setTimeout(() => {
+      this.setState({
+        settingsActive: false
+      })
+    }, 750)
+  }
+
+  render() {
+    const loggedIn = web.LoggedIn()
+
+    return (
+      <header className="header">
+        <Path />
+
         {loggedIn ? (
-          <BrowserDropdown />
+          <div
+            className={classNames({
+              settings: true,
+              "settings--active": this.state.settingsEnters,
+              "settings--closing": this.state.settingsClosing
+            })}
+          >
+            <i
+              onClick={this.openSettingsMenu.bind(this)}
+              className="settings__toggle"
+            >
+              <img src={iconMore} alt="" />
+            </i>
+
+            {this.state.settingsActive && (
+              <SettingsMenu
+                closeSettingsMenu={this.closeSettingsMenu.bind(this)}
+              />
+            )}
+          </div>
         ) : (
-          <a className="btn btn-danger" href={minioBrowserPrefix + "/login"}>
+          <a className="guest-login" href={minioBrowserPrefix + "/login"}>
             Login
           </a>
         )}
-      </ul>
-    </header>
-  )
+      </header>
+    )
+  }
 }
 
 export default Header

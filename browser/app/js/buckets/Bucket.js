@@ -17,29 +17,81 @@
 import React from "react"
 import classNames from "classnames"
 import BucketDropdown from "./BucketDropdown"
+import ClickOutHandler from "react-onclickout"
 
-export const Bucket = ({ bucket, isActive, selectBucket }) => {
-  return (
-    <li
-      className={classNames({
-        active: isActive
-      })}
-      onClick={e => {
-        e.preventDefault()
-        selectBucket(bucket)
-      }}
-    >
-      <a
-        href=""
+export class Bucket extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      bucketDropdownActive: false,
+      bucketDropdownEnters: false
+    }
+  }
+
+  showBucketDropdown() {
+    this.setState({
+      bucketDropdownActive: true
+    })
+
+    setTimeout(() => {
+      this.setState({
+        bucketDropdownEnters: true
+      })
+    }, 1)
+  }
+
+  hideBucketDropdown() {
+    this.setState({
+      bucketDropdownEnters: false
+    })
+
+    setTimeout(() => {
+      this.setState({
+        bucketDropdownActive: false
+      })
+    }, 300)
+  }
+
+  render() {
+    const { bucket, isActive, selectBucket } = this.props
+
+    return (
+      <div
         className={classNames({
-          "fesli-loading": false
+          buckets__item: true,
+          "buckets__item--active": isActive,
+          "buckets__item--enters": this.state.bucketDropdownEnters
         })}
+        onClick={e => {
+          e.preventDefault()
+          this.hideBucketDropdown.bind(this)
+          setTimeout(function() {
+            selectBucket(bucket)
+          })
+        }}
       >
-        {bucket}
-      </a>
-      <BucketDropdown bucket={bucket}/>
-    </li>
-  )
+        <span>{bucket}</span>
+        {isActive && (
+          <div className="buckets__dropdown">
+            <i
+              className="buckets__toggle"
+              onClick={
+                this.state.bucketDropdownActive
+                  ? this.hideBucketDropdown.bind(this)
+                  : this.showBucketDropdown.bind(this)
+              }
+            />
+
+            {this.state.bucketDropdownActive && (
+              <ClickOutHandler onClickOut={this.hideBucketDropdown.bind(this)}>
+                <BucketDropdown bucket={bucket} />
+              </ClickOutHandler>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 }
 
 export default Bucket

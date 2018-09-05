@@ -16,9 +16,7 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import { Modal, ModalHeader, ModalBody } from "react-bootstrap"
 import CopyToClipboard from "react-copy-to-clipboard"
-import web from "../web"
 import * as objectsActions from "./actions"
 import * as alertActions from "../alert/actions"
 import {
@@ -38,11 +36,21 @@ export class ShareObjectModal extends React.Component {
       }
     }
     this.expiryRange = {
-      days: { min: 0, max: 7 },
-      hours: { min: 0, max: 23 },
-      minutes: { min: 0, max: 59 }
+      days: {
+        min: 0,
+        max: 7
+      },
+      hours: {
+        min: 0,
+        max: 23
+      },
+      minutes: {
+        min: 0,
+        max: 59
+      }
     }
   }
+
   updateExpireValue(param, inc) {
     let expiry = Object.assign({}, this.state.expiry)
 
@@ -68,49 +76,44 @@ export class ShareObjectModal extends React.Component {
       expiry
     })
 
-    const { object, shareObject } = this.props
-    shareObject(object.name, expiry.days, expiry.hours, expiry.minutes)
+    const { shareObjectDetails: { object }, shareObject } = this.props
+    shareObject(object, expiry.days, expiry.hours, expiry.minutes)
   }
+
   onUrlCopied() {
     const { showCopyAlert, hideShareObject } = this.props
     showCopyAlert("Link copied to clipboard!")
     hideShareObject()
   }
+
   render() {
     const { shareObjectDetails, shareObject, hideShareObject } = this.props
     return (
-      <Modal
-        show={true}
-        animation={false}
-        onHide={hideShareObject}
-        bsSize="small"
-      >
-        <ModalHeader>Share Object</ModalHeader>
-        <ModalBody>
-          <div className="input-group copy-text">
-            <label>Shareable Link</label>
+      <div className="modal">
+        <div className="modal__content">
+          <div className="form-item">
+            <label className="form-item__label">Shareable Link</label>
             <input
               type="text"
+              className="form-item__input"
               ref={node => (this.copyTextInput = node)}
               readOnly="readOnly"
               value={window.location.protocol + "//" + shareObjectDetails.url}
               onClick={() => this.copyTextInput.select()}
             />
           </div>
-          <div
-            className="input-group"
-            style={{ display: web.LoggedIn() ? "block" : "none" }}
-          >
-            <label>Expires in (Max 7 days)</label>
+
+          <div className="form-item">
+            <label className="form-item__label">Expires in (Max 7 days)</label>
             <div className="set-expire">
-              <div className="set-expire-item">
+              <div className="set-expire__item">
                 <i
                   id="increase-days"
-                  className="set-expire-increase"
+                  className="set-expire__handle set-expire__handle--inc"
                   onClick={() => this.updateExpireValue("days", 1)}
                 />
-                <div className="set-expire-title">Days</div>
-                <div className="set-expire-value">
+                <div className="set-expire__title">Days</div>
+                <div className="set-expire__value">
                   <input
                     ref="expireDays"
                     type="number"
@@ -122,18 +125,18 @@ export class ShareObjectModal extends React.Component {
                 </div>
                 <i
                   id="decrease-days"
-                  className="set-expire-decrease"
+                  className="set-expire__handle set-expire__handle--dec"
                   onClick={() => this.updateExpireValue("days", -1)}
                 />
               </div>
-              <div className="set-expire-item">
+              <div className="set-expire__item">
                 <i
                   id="increase-hours"
-                  className="set-expire-increase"
+                  className="set-expire__handle set-expire__handle--inc"
                   onClick={() => this.updateExpireValue("hours", 1)}
                 />
-                <div className="set-expire-title">Hours</div>
-                <div className="set-expire-value">
+                <div className="set-expire__title">Hours</div>
+                <div className="set-expire__value">
                   <input
                     ref="expireHours"
                     type="number"
@@ -144,19 +147,19 @@ export class ShareObjectModal extends React.Component {
                   />
                 </div>
                 <i
-                  className="set-expire-decrease"
+                  className="set-expire__handle set-expire__handle--dec"
                   id="decrease-hours"
                   onClick={() => this.updateExpireValue("hours", -1)}
                 />
               </div>
-              <div className="set-expire-item">
+              <div className="set-expire__item">
                 <i
                   id="increase-minutes"
-                  className="set-expire-increase"
+                  className="set-expire__handle set-expire__handle--inc"
                   onClick={() => this.updateExpireValue("minutes", 1)}
                 />
-                <div className="set-expire-title">Minutes</div>
-                <div className="set-expire-value">
+                <div className="set-expire__title">Minutes</div>
+                <div className="set-expire__value">
                   <input
                     ref="expireMins"
                     type="number"
@@ -168,32 +171,32 @@ export class ShareObjectModal extends React.Component {
                 </div>
                 <i
                   id="decrease-minutes"
-                  className="set-expire-decrease"
+                  className="set-expire__handle set-expire__handle--dec"
                   onClick={() => this.updateExpireValue("minutes", -1)}
                 />
               </div>
             </div>
           </div>
-        </ModalBody>
-        <div className="modal-footer">
-          <CopyToClipboard
-            text={window.location.protocol + "//" + shareObjectDetails.url}
-            onCopy={this.onUrlCopied.bind(this)}
-          >
-            <button className="btn btn-success">Copy Link</button>
-          </CopyToClipboard>
-          <button className="btn btn-link" onClick={hideShareObject}>
-            Cancel
-          </button>
+
+          <div className="modal__actions">
+            <button className="button button--light" onClick={hideShareObject}>
+              Cancel
+            </button>
+            <CopyToClipboard
+              text={window.location.protocol + "//" + shareObjectDetails.url}
+              onCopy={this.onUrlCopied.bind(this)}
+            >
+              <button className="button button--success">Copy Link</button>
+            </CopyToClipboard>
+          </div>
         </div>
-      </Modal>
+      </div>
     )
   }
 }
 
 const mapStateToProps = (state, ownProps) => {
   return {
-    object: ownProps.object,
     shareObjectDetails: state.objects.shareObject
   }
 }
@@ -204,7 +207,12 @@ const mapDispatchToProps = dispatch => {
       dispatch(objectsActions.shareObject(object, days, hours, minutes)),
     hideShareObject: () => dispatch(objectsActions.hideShareObject()),
     showCopyAlert: message =>
-      dispatch(alertActions.set({ type: "success", message: message }))
+      dispatch(
+        alertActions.set({
+          type: "success",
+          message: message
+        })
+      )
   }
 }
 

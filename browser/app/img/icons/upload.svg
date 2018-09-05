@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240px" height="123px" viewBox="0 0 240 123" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Untitled</title>
+    <desc>Created with Sketch.</desc>
+    <defs>
+        <rect id="path-1" x="0" y="0" width="240" height="123" rx="8"></rect>
+        <mask id="mask-2" maskContentUnits="userSpaceOnUse" maskUnits="objectBoundingBox" x="0" y="0" width="240" height="123" fill="white">
+            <use xlink:href="#path-1"></use>
+        </mask>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <use id="Rectangle-2" stroke-opacity="0.215834466" stroke="#FFFFFF" mask="url(#mask-2)" stroke-width="4" stroke-dasharray="6" xlink:href="#path-1"></use>
+        <text id="Drop-your-files-here" font-family="Roboto-Regular, Roboto" font-size="18" font-weight="normal" fill="#FFFFFF">
+            <tspan x="44" y="88">Drop your files here</tspan>
+        </text>
+        <g transform="translate(105.000000, 27.000000)" fill="#FFFFFF" id="Fill-2">
+            <path d="M8.28571429,27.5294118 L20.7142857,27.5294118 L20.7142857,14.8235294 L29,14.8235294 L14.5,0 L0,14.8235294 L8.28571429,14.8235294 L8.28571429,27.5294118 Z M0,31.7647059 L29,31.7647059 L29,36 L0,36 L0,31.7647059 Z"></path>
+        </g>
+    </g>
+</svg>

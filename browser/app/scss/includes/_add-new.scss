@@ -1,0 +1,148 @@
+.add-new {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.add-new__toggle,
+.add-new__item {
+  @include size(45px, 45px);
+  background-color: $red;
+  border-radius: 50%;
+  cursor: pointer;
+
+  &:hover {
+    background-color: darken($red, 10%);
+  }
+}
+
+.add-new__toggle {
+  position: relative;
+  z-index: $add-new-toggle-z-index;
+  transition: background-color 300ms, transform 300ms;
+
+  &:before,
+  &:after {
+    content: '';
+    @include size(100%, 100%);
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: url(../img/icons/add.svg) no-repeat center;
+    transition: opacity 300ms, transform 300ms;
+  }
+
+  &:after {
+    transform: rotate(45deg) scale(0);
+    opacity: 1;
+  }
+
+}
+
+.add-new__item {
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: translate3d(0,0,0) scale(0);
+  opacity: 0;
+  will-change: width, height, background-color, transform, border-radius, opacity;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.add-new__item--upload {
+  background-image: url(../img/icons/upload-file.svg);
+  transition: background-color 300ms, transform 300ms ease, opacity 300ms;
+
+  input[type=file] {
+    display: none;
+  }
+}
+
+.add-new__item--bucket {
+  background-image: $add-new-bucket-icon;
+  transition: background-color 300ms, transform 300ms ease, opacity 300ms, width 300ms, height 300ms, border-radius 300ms;
+  overflow: hidden;
+}
+
+.add-new--active {
+  .add-new__toggle {
+    transform: scale(0.85);
+
+    &:before {
+      transform: scale(0);
+      opacity: 0;
+    }
+
+    &:after {
+      transform: rotate(45deg) scale(1);
+      opacity: 1;
+    }
+  }
+
+  .add-new__item {
+    opacity: 1;
+  }
+
+  .add-new__item--upload {
+    transform: translate3d(0,-55px,0) scale(1);
+  }
+
+  .add-new__item--bucket {
+    transform: translate3d(0,-113px,0) scale(1);
+  }
+}
+
+.add-new--bucket {
+  .add-new__item--bucket {
+    z-index: $add-new-toggle-z-index + 1;
+    @include size(250px, 80px);
+    border-radius: 2px;
+    transform: translate3d(0,-35px,0) scale(1);
+
+    &:hover {
+      background-color: $red;
+    }
+  }
+
+  .add-new__item--upload {
+    transform: translate3d(0,-25px,0) scale(1);
+  }
+
+  .new-bucket {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.new-bucket {
+  padding: 22px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  @include size(100%, 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms;
+  background-color: $red;
+}
+
+.new-bucket__input {
+  border: 0;
+  background-color: transparent;
+  border-bottom: 1px solid rgba($white, 0.25);
+  @include size(100%, 30px);
+  color: $white;
+  transition: border-color 300ms;
+
+  &:focus {
+    border-color: rgba($white, 0.75);
+  }
+  
+  @include placeholder {
+    color: $white;
+    opacity: 1;
+  }
+}

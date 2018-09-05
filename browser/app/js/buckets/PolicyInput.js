@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from '../constants'
+import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../constants"
 
 import React from "react"
 import { connect } from "react-redux"
-import classnames from "classnames"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
@@ -37,61 +36,88 @@ export class PolicyInput extends React.Component {
   handlePolicySubmit(e) {
     e.preventDefault()
     const { currentBucket, fetchPolicies, showAlert } = this.props
-    
-    if (this.prefix.value === "*")
-      this.prefix.value = ""
-    
+
+    if (this.prefix.value === "*") this.prefix.value = ""
+
     let policyAlreadyExists = this.props.policies.some(
-      elem => this.prefix.value === elem.prefix && this.policy.value === elem.policy
+      elem =>
+        this.prefix.value === elem.prefix && this.policy.value === elem.policy
     )
     if (policyAlreadyExists) {
       showAlert("danger", "Policy for this prefix already exists.")
       return
     }
-    
-    web.
-      SetBucketPolicy({
+
+    web
+      .SetBucketPolicy({
         bucketName: currentBucket,
         prefix: this.prefix.value,
         policy: this.policy.value
       })
       .then(() => {
         fetchPolicies(currentBucket)
-        this.prefix.value = ''
+        this.prefix.value = ""
       })
       .catch(e => showAlert("danger", e.message))
   }
 
   render() {
+    const { bucket } = this.props
     return (
-      <header className="pmb-list">
-        <div className="pmbl-item">
-          <input 
-            type="text"
-            ref={ prefix => this.prefix = prefix }
-            className="form-control"
-            placeholder="Prefix"
-          />
+      <div className="policy__header">
+        <div className="policy__prefix">
+          <div className="policy__label">Prefix</div>
+
+          <div className="policy__prefix__inner">
+            <div className="policy__bucket">{bucket + "/"}</div>
+            <input type="text" ref={prefix => (this.prefix = prefix)} />
+          </div>
         </div>
-        <div className="pmbl-item">
-          <select ref={ policy => this.policy = policy } className="form-control">
-            <option value={ READ_ONLY }>
-              Read Only
-            </option>
-            <option value={ WRITE_ONLY }>
-              Write Only
-            </option>
-            <option value={ READ_WRITE }>
-              Read and Write
-            </option>
-          </select>
+
+        <div className="policy__permission">
+          <div className="policy__label">Permission</div>
+
+          <div className="select-group">
+            <div className="select-group__item">
+              <input
+                type="radio"
+                name="policy-permission"
+                defaultChecked
+                value={READ_ONLY}
+                ref={policy => (this.policy = policy)}
+              />
+              <i>R</i>
+            </div>
+
+            <div className="select-group__item">
+              <input
+                type="radio"
+                name="policy-permission"
+                value={WRITE_ONLY}
+                ref={policy => (this.policy = policy)}
+              />
+              <i>W</i>
+            </div>
+
+            <div className="select-group__item">
+              <input
+                type="radio"
+                name="policy-permission"
+                value={READ_WRITE}
+                ref={policy => (this.policy = policy)}
+              />
+              <i>RW</i>
+            </div>
+          </div>
         </div>
-        <div className="pmbl-item">
-          <button className="btn btn-block btn-primary" onClick={ this.handlePolicySubmit.bind(this) }>
-            Add
-          </button>
-        </div>
-      </header>
+
+        <button
+          className="button button--success"
+          onClick={this.handlePolicySubmit.bind(this)}
+        >
+          Add
+        </button>
+      </div>
     )
   }
 }

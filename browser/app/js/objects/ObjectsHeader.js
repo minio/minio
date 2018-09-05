@@ -25,59 +25,73 @@ export const ObjectsHeader = ({
   sortLastModifiedOrder,
   sortObjects
 }) => (
-  <div className="feb-container">
-    <header className="fesl-row" data-type="folder">
-      <div className="fesl-item fesl-item-icon" />
+  <div className="objects__header">
+    <div className="objects__row objects__row--header">
       <div
-        className="fesl-item fesl-item-name"
+        className="objects__item objects__item--name"
         id="sort-by-name"
         onClick={() => sortObjects("name")}
-        data-sort="name"
       >
         Name
-        <i
+        <div
           className={classNames({
-            "fesli-sort": true,
-            fa: true,
-            "fa-sort-alpha-desc": sortNameOrder,
-            "fa-sort-alpha-asc": !sortNameOrder
+            objects__sort: true,
+            "objects__sort--asc": !sortNameOrder,
+            "objects__sort--desc": sortNameOrder
           })}
-        />
+        >
+          <i />
+          <i />
+          <i />
+        </div>
       </div>
+
       <div
-        className="fesl-item fesl-item-size"
+        className={classNames({
+          "objects__item objects__item--size": true,
+          "objects__item--sort-asc": !sortSizeOrder,
+          "objects__item--sort-desc": sortSizeOrder
+        })}
         id="sort-by-size"
         onClick={() => sortObjects("size")}
-        data-sort="size"
       >
         Size
-        <i
+        <div
           className={classNames({
-            "fesli-sort": true,
-            fa: true,
-            "fa-sort-amount-desc": sortSizeOrder,
-            "fa-sort-amount-asc": !sortSizeOrder
+            objects__sort: true,
+            "objects__sort--asc": !sortSizeOrder,
+            "objects__sort--desc": sortSizeOrder
           })}
-        />
+        >
+          <i />
+          <i />
+          <i />
+        </div>
       </div>
+
       <div
-        className="fesl-item fesl-item-modified"
+        className={classNames({
+          "objects__item objects__item--modified": true,
+          "objects__item--sort-asc": !sortLastModifiedOrder,
+          "objects__item--sort-desc": sortLastModifiedOrder
+        })}
         id="sort-by-last-modified"
         onClick={() => sortObjects("last-modified")}
-        data-sort="last-modified"
       >
         Last Modified
-        <i
+        <div
           className={classNames({
-            "fesli-sort": true,
-            fa: true,
-            "fa-sort-numeric-desc": sortLastModifiedOrder,
-            "fa-sort-numeric-asc": !sortLastModifiedOrder
+            objects__sort: true,
+            "objects__sort--asc": !sortLastModifiedOrder,
+            "objects__sort--desc": sortLastModifiedOrder
           })}
-        />
+        >
+          <i />
+          <i />
+          <i />
+        </div>
       </div>
-      <div className="fesl-item fesl-item-actions" />
-    </header>
+    </div>
   </div>
 )
 

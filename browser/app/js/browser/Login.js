@@ -16,13 +16,13 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import classNames from "classnames"
 import logo from "../../img/logo.svg"
 import Alert from "../alert/Alert"
 import * as actionsAlert from "../alert/actions"
-import InputGroup from "./InputGroup"
 import web from "../web"
 import { Redirect } from "react-router-dom"
+
+import iconGlobe from "../../img/icons/globe.svg"
 
 export class Login extends React.Component {
   constructor(props) {
@@ -93,46 +93,59 @@ export class Login extends React.Component {
     // Make sure you don't show a fading out alert box on the initial web-page load.
     if (!alert.message) alertBox = ""
     return (
-      <div className="login">
+      <React.Fragment>
         {alertBox}
-        <div className="l-wrap">
-          <form onSubmit={this.handleSubmit.bind(this)}>
-            <InputGroup
-              value={this.state.accessKey}
-              onChange={this.accessKeyChange.bind(this)}
-              className="ig-dark"
-              label="Access Key"
-              id="accessKey"
-              name="username"
-              type="text"
-              spellCheck="false"
-              required="required"
-              autoComplete="username"
-            />
-            <InputGroup
-              value={this.state.secretKey}
-              onChange={this.secretKeyChange.bind(this)}
-              className="ig-dark"
-              label="Secret Key"
-              id="secretKey"
-              name="password"
-              type="password"
-              spellCheck="false"
-              required="required"
-              autoComplete="new-password"
-            />
-            <button className="lw-btn" type="submit">
-              <i className="fa fa-sign-in" />
-            </button>
-          </form>
+        <div className="login">
+          <div className="login__main">
+            <form
+              className="login__form"
+              onSubmit={this.handleSubmit.bind(this)}
+            >
+              <div className="form-item form-item--centered">
+                <input
+                  type="text"
+                  value={this.state.accessKey}
+                  onChange={this.accessKeyChange.bind(this)}
+                  className="form-item__input"
+                  label="Access Key"
+                  id="accessKey"
+                  name="username"
+                  spellCheck="false"
+                  required="required"
+                  placeholder="Access Key"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="form-item form-item--centered">
+                <input
+                  value={this.state.secretKey}
+                  onChange={this.secretKeyChange.bind(this)}
+                  className="form-item__input"
+                  label="Secret Key"
+                  id="secretKey"
+                  name="password"
+                  type="password"
+                  spellCheck="false"
+                  required="required"
+                  placeholder="Secret Key"
+                  autoComplete="off"
+                />
+              </div>
+
+              <button className="login__btn" type="submit" />
+            </form>
+          </div>
+
+          <div className="login__bottom">
+            <div className="login__host">
+              <img src={iconGlobe} alt="" />
+              {window.location.host}
+            </div>
+            <img className="login__logo" src={logo} alt="" />
+          </div>
         </div>
-        <div className="l-footer">
-          <a className="lf-logo" href="">
-            <img src={logo} alt="" />
-          </a>
-          <div className="lf-server">{window.location.host}</div>
-        </div>
-      </div>
+      </React.Fragment>
     )
   }
 }

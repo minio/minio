@@ -15,33 +15,35 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
 import InfiniteScroll from "react-infinite-scroller"
 import * as actionsObjects from "./actions"
 import ObjectsList from "./ObjectsList"
+import Dropzone from "../uploads/Dropzone"
 
 export class ObjectsListContainer extends React.Component {
   render() {
     const { objects, isTruncated, currentBucket, loadObjects } = this.props
     return (
-      <div className="feb-container">
+      <Dropzone>
         <InfiniteScroll
           pageStart={0}
           loadMore={() => loadObjects(true)}
           hasMore={isTruncated}
           useWindow={true}
           initialLoad={false}
+          className={"objects__scroller"}
         >
           <ObjectsList objects={objects} />
         </InfiniteScroll>
+
         <div
-          className="text-center"
+          className="objects__loading"
           style={{ display: isTruncated && currentBucket ? "block" : "none" }}
         >
           <span>Loading...</span>
         </div>
-      </div>
+      </Dropzone>
     )
   }
 }

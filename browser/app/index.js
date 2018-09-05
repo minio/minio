@@ -15,9 +15,7 @@
  */
 
 import "babel-polyfill"
-import "./less/main.less"
-import "font-awesome/css/font-awesome.css"
-import "material-design-iconic-font/dist/css/material-design-iconic-font.min.css"
+import "./scss/app.scss"
 
 import React from "react"
 import ReactDOM from "react-dom"
@@ -26,7 +24,6 @@ import { Provider } from "react-redux"
 
 import history from "./js/history"
 import configureStore from "./js/store/configure-store"
-import hideLoader from "./js/loader"
 import App from "./js/App"
 
 const store = configureStore()
@@ -37,7 +34,5 @@ ReactDOM.render(
       <App />
     </Router>
   </Provider>,
-  document.getElementById("root")
+  document.getElementById("main")
 )
-
-hideLoader()

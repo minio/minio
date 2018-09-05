@@ -1,0 +1,17 @@
+.progress,
+.progress__bar {
+  border-radius: $border-radius;
+}
+
+.progress {
+  background-color: $progress-bg;
+  margin: 10px 0;
+}
+
+.progress__bar {
+  height: $progress-bar-height;
+  display: block;
+  background-color: $progress-bar-bg;
+  border-radius: $border-radius;
+  transition: width 500ms ease-in;
+}

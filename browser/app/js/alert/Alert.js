@@ -15,16 +15,18 @@
  */
 
 import React from "react"
-import AlertComponent from "react-bootstrap/lib/Alert"
+import classNames from "classnames"
 
 const Alert = ({ show, type, message, onDismiss }) => (
-  <AlertComponent
-    className={"alert animated " + (show ? "fadeInDown" : "fadeOutUp")}
-    bsStyle={type}
-    onDismiss={onDismiss}
+  <div
+    className={classNames({
+      alert: true,
+      [`alert--${type}`]: true
+    })}
   >
-    <div className="text-center">{message}</div>
-  </AlertComponent>
+    <div className="alert__message">{message}</div>
+    <i className="alert__close" onClick={onDismiss} />
+  </div>
 )
 
 export default Alert

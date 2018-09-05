@@ -1,0 +1,13 @@
+#main {
+  @include size(100%, 100%);
+  min-width: 1200px; // TODO: Has to go when doing responsive
+  display: flex;
+}
+
+.content {
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}

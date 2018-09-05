@@ -18,6 +18,7 @@ import React from "react"
 import { connect } from "react-redux"
 import { getCurrentBucket } from "../buckets/selectors"
 import * as actionsObjects from "./actions"
+import classNames from "classnames"
 
 export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   const onPrefixClick = (e, prefix) => {
@@ -26,31 +27,44 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   }
   let dirPath = []
   let path = ""
+
   if (currentPrefix) {
     path = currentPrefix.split("/").map((dir, i) => {
       if (dir) {
         dirPath.push(dir)
         let dirPath_ = dirPath.join("/") + "/"
         return (
-          <span key={i}>
-            <a href="" onClick={e => onPrefixClick(e, dirPath_)}>
-              {dir}
-            </a>
+          <span
+            className="path__item"
+            key={i}
+            onClick={e => onPrefixClick(e, dirPath_)}
+          >
+            {dir}
           </span>
         )
       }
     })
   }
 
+  let dirPrev = dirPath.slice(0, -1).join("/") + "/"
+  let prevLink = (
+    <div className="path__back" onClick={e => onPrefixClick(e, dirPrev)} />
+  )
+
   return (
-    <h2>
-      <span className="main">
-        <a onClick={e => onPrefixClick(e, "")} href="">
-          {currentBucket}
-        </a>
+    <div
+      className={classNames({
+        path: true,
+        "path--has-back": dirPath.length > 2
+      })}
+    >
+      {dirPath.length > 2 ? prevLink : ""}
+
+      <span className="path__item" onClick={e => onPrefixClick(e, "")}>
+        {currentBucket}
       </span>
       {path}
-    </h2>
+    </div>
   )
 }
 

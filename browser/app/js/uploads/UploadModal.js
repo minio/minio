@@ -16,12 +16,10 @@
 
 import React from "react"
 import humanize from "humanize"
-import classNames from "classnames"
 import { connect } from "react-redux"
-
-import { ProgressBar } from "react-bootstrap"
-import AbortConfirmModal from "./AbortConfirmModal"
 import * as uploadsActions from "./actions"
+
+import AbortConfirmModal from "./AbortConfirmModal"
 
 export class UploadModal extends React.Component {
   render() {
@@ -47,6 +45,10 @@ export class UploadModal extends React.Component {
 
     let percent = totalLoaded / totalSize * 100
 
+    let progressBarStyle = {
+      width: percent + "%"
+    }
+
     // If more than one: "Uploading files (5)..."
     // If only one: "Uploading myfile.txt..."
     let text =
@@ -57,18 +59,16 @@ export class UploadModal extends React.Component {
       "..."
 
     return (
-      <div className="alert alert-info progress animated fadeInUp ">
-        <button type="button" className="close" onClick={showAbortModal}>
-          <span>×</span>
-        </button>
-        <div className="text-center">
-          <small>{text}</small>
+      <div className="alert alert--progress">
+        <i className="alert__close" onClick={showAbortModal} />
+
+        {text}
+        <div className="progress">
+          <i className="progress__bar" style={progressBarStyle} />
         </div>
-        <ProgressBar now={percent} />
-        <div className="text-center">
-          <small>
-            {humanize.filesize(totalLoaded)} ({percent.toFixed(2)} %)
-          </small>
+
+        <div className="alert__sub">
+          {humanize.filesize(totalLoaded)} ({percent.toFixed(2)} %)
         </div>
       </div>
     )

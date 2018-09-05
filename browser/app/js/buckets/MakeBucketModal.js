@@ -16,7 +16,6 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import { Modal, ModalBody } from "react-bootstrap"
 import * as actionsBuckets from "./actions"
 
 export class MakeBucketModal extends React.Component {
@@ -42,34 +41,17 @@ export class MakeBucketModal extends React.Component {
     this.props.hideMakeBucketModal()
   }
   render() {
-    const { showMakeBucketModal } = this.props
     return (
-      <Modal
-        className="modal-create-bucket"
-        bsSize="small"
-        animation={false}
-        show={showMakeBucketModal}
-        onHide={this.hideModal.bind(this)}
-      >
-        <button className="close close-alt" onClick={this.hideModal.bind(this)}>
-          <span>×</span>
-        </button>
-        <ModalBody>
-          <form onSubmit={this.onSubmit.bind(this)}>
-            <div className="input-group">
-              <input
-                className="ig-text"
-                type="text"
-                placeholder="Bucket Name"
-                value={this.state.bucketName}
-                onChange={e => this.setState({ bucketName: e.target.value })}
-                autoFocus
-              />
-              <i className="ig-helpers" />
-            </div>
-          </form>
-        </ModalBody>
-      </Modal>
+      <form onSubmit={this.onSubmit.bind(this)} className="new-bucket">
+        <input
+          id="new-bucket"
+          className="new-bucket__input"
+          type="text"
+          placeholder="Bucket Name"
+          value={this.state.bucketName}
+          onChange={e => this.setState({ bucketName: e.target.value })}
+        />
+      </form>
     )
   }
 }

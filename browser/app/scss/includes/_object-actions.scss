@@ -1,0 +1,54 @@
+.object-actions {
+  background-color: $theme-color-dark;
+  border-radius: 0 0 2px 2px;
+  padding: 8px;
+  position: absolute;
+  left: 20px;
+  top: 0;
+  transform: translate3d(0, -101%, 0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+  width: calc(100% - 40px);
+  will-change: opacity, transform;
+  transition: opacity 250ms, transform 250ms;
+}
+
+.object-actions__item {
+  display: inline-block;
+  padding: 8px 12px;
+  color: $theme-color-light;
+  border-radius: 2px;
+  border: 0;
+  background-color: transparent;
+
+  &:not(:disabled) {
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba($white, 0.05);
+      color: $white;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  & > img {
+    vertical-align: middle;
+    position: relative;
+    top: -2px;
+    margin-right: 10px;
+  }
+}
+
+.object-actions--active {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.object-actions__close {
+  float: right;
+}

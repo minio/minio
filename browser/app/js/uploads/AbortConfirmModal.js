@@ -15,10 +15,10 @@
  */
 
 import React from "react"
-import classNames from "classnames"
 import { connect } from "react-redux"
-import ConfirmModal from "../browser/ConfirmModal"
 import * as uploadsActions from "./actions"
+
+import iconDanger from "../../img/icons/danger.svg"
 
 export class AbortConfirmModal extends React.Component {
   abortUploads() {
@@ -29,32 +29,28 @@ export class AbortConfirmModal extends React.Component {
   }
   render() {
     const { hideAbort } = this.props
-    let baseClass = classNames({
-      "abort-upload": true
-    })
-    let okIcon = classNames({
-      fa: true,
-      "fa-times": true
-    })
-    let cancelIcon = classNames({
-      fa: true,
-      "fa-cloud-upload": true
-    })
-
     return (
-      <ConfirmModal
-        show={true}
-        baseClass={baseClass}
-        text="Abort uploads in progress?"
-        icon="fa fa-info-circle mci-amber"
-        sub="This cannot be undone!"
-        okText="Abort"
-        okIcon={okIcon}
-        cancelText="Upload"
-        cancelIcon={cancelIcon}
-        okHandler={this.abortUploads.bind(this)}
-        cancelHandler={hideAbort}
-      />
+      <div className="modal modal--dialog">
+        <div className="modal__content">
+          <div className="modal__icon">
+            <img src={iconDanger} alt="" />
+          </div>
+          <div className="modal__title">Abort uploads in progress?</div>
+          <div className="modal__sub-title">This cannot be undone!</div>
+
+          <div className="modal__actions">
+            <button className="button button--light" onClick={hideAbort}>
+              Upload
+            </button>
+            <button
+              className="button button--danger"
+              onClick={this.abortUploads.bind(this)}
+            >
+              Abort
+            </button>
+          </div>
+        </div>
+      </div>
     )
   }
 }

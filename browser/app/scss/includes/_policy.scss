@@ -1,0 +1,84 @@
+.policy__header {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 30px;
+
+  & > * {
+    &:not(:last-child){
+      margin-right: 10px;
+    }
+  }
+}
+
+.policy__bucket {
+  background-color: darken($policy-item-bg, 3%);
+  padding: 7px 10px;
+  border-radius: $border-radius 0 0 $border-radius;
+}
+
+
+.policy__prefix {
+  flex: 1 1 auto;
+}
+
+.policy__prefix__inner {
+  display: flex;
+
+  & > input[type=text] {
+    border: 0;
+    background-color: $policy-item-bg;
+    @include size(100%, $button-height);
+    padding: 0 10px;
+    border-radius: 0 $border-radius $border-radius 0;
+    color: $form-input-color;
+
+    @include placeholder {
+      color: $form-placeholder-color;
+    }
+  }
+}
+
+.policy__label {
+  font-size: $font-size-sm;
+  margin-bottom: 8px;
+}
+
+.policy__item {
+  background-color: $policy-item-bg;
+  margin-bottom: 3px;
+  border-radius: $border-radius;
+  padding: 8px 40px 8px 10px;
+  position: relative;
+
+  & > small {
+    display: block;
+    margin-top: 5px;
+    font-size: $font-size-sm;
+    color: $theme-color-muted;
+  }
+
+  &:hover {
+    .policy__item__remove {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
+
+.policy__item__remove {
+  @include size(21px, 21px);
+  opacity: 0;
+  transform: scale(0);
+  position: absolute;
+  background: $policy-close-icon no-repeat center;
+  background-size: 9px;
+  top: 14px;
+  right: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: opacity 200ms, transform 200ms, background-color 200ms;
+
+  &:hover {
+    background-color: $white;
+  }
+}

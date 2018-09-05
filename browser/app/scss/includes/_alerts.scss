@@ -1,0 +1,51 @@
+.alert {
+  position: fixed;
+  margin: 0;
+  color: $white;
+  width: 100%;
+  padding: 18px 35px 18px 20px;
+  z-index: $alert-z-index;
+
+  &:not(.alert--progress) {
+    border-radius: $border-radius;
+    max-width: $alert-max-width;
+    right: 20px;
+    top: 20px;
+    box-shadow: $alert-box-shadow;
+  }
+}
+
+.alert__sub {
+  font-size: $font-size-sm;
+  color: $alert-sub-color;
+}
+
+
+.alert__close {
+  @include size(23px, 23px);
+  background: $alert-close-icon no-repeat center;
+  background-size: 9px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background-color 300ms;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  border-radius: 50%;
+
+  &:hover {
+    background-color: rgba($white, 0.2);
+  }
+}
+
+@each $variant, $bg in $alert-variants {
+  .alert--#{$variant} {
+    background-color: $bg;
+  }
+}
+
+.alert--progress {
+  left: 0;
+  bottom: 0;
+  background-color: $alert-progress-bg;
+}

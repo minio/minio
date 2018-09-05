@@ -1,0 +1,16 @@
+.button {
+  border: 0;
+  border-radius: $border-radius;
+  height: $button-height;
+  padding: 0 12px;
+  transition: background-color 300ms;
+  font-size: $button-font-size;
+  cursor: pointer;
+  display: inline-block;
+}
+
+@each $variant, $bg in $button-variants {
+  .button--#{$variant} {
+    @include button-variants($bg);
+  }
+}

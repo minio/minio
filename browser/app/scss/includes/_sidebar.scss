@@ -1,0 +1,250 @@
+// Base
+.sidebar {
+  background-color: $sidebar-bg;
+  overflow: auto;
+  flex: 0 0 auto;
+  @include size($sidebar-width, 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+
+// Logo
+.logo {
+  display: flex;
+  align-items: center;
+  padding: 18px;
+  flex: 0 0 auto;
+}
+
+.logo__img {
+  width: 18px;
+}
+
+.logo__text {
+  padding-left: 11px;
+  font-size: $font-size-base + 3;
+  line-height: 100%;
+
+  & > small {
+    margin: 1px 0 0 1px;
+    display: block;
+    line-height: 100%;
+    font-size: $font-size-base;
+  }
+}
+
+
+// Buckets Search
+.bucket-search {
+  border-radius: 3px;
+  position: relative;
+  padding: 15px 20px 0;
+}
+
+.bucket-search__text {
+  color: $theme-color-dark;
+  @include size(100%, 33px);
+  border: 0;
+  padding: 0 20px 0 27px;
+  background: transparent url(../img/icons/search.svg) no-repeat left 2px top 10px;
+  background-size: 12px;
+  border-bottom: 1px solid $bucket-search-border-color;
+  will-change: background-position, border-color, padding-left;
+  transition: border-color 250ms, padding-left 250ms, background-position 250ms;
+
+
+  &:focus {
+    border-color: darken($bucket-search-border-color, 15%);
+    padding-left: 0;
+    background-position: left -15px top 10px;
+  }
+
+  @include placeholder {
+    color: $body-color;
+  }
+}
+
+
+// Buckets
+.buckets {
+  flex: 1 1 auto;
+  overflow: hidden;
+  height: 100%;
+  padding: 0 12px 0;
+}
+
+.buckets__inner {
+  height: 100%;
+  overflow: auto;
+  margin-right: -25px;
+  padding: 10px 25px 10px 0;
+}
+
+.buckets__item {
+  position: relative;
+  cursor: pointer;
+  display: block;
+  padding: 10px 10px 10px 35px;
+  color: $buckets-item-color;
+  border-radius: $border-radius;
+  background-image: $bucket-item-icon;
+  background-position: left 10px center;
+  background-repeat: no-repeat;
+  transition: background-color 350ms;
+
+  & > span {
+    display: block;
+    @include text-truncate();
+  }
+
+  &:not(.buckets__item--active) {
+    &:hover {
+      color: $buckets-item-color;
+      background-color: $buckets-item-hover-bg;
+    }
+  }
+
+  & > span {
+    @include text-truncate();
+  }
+}
+
+.buckets__item--active {
+  background-color: $buckets-item-active-bg;
+  background-image: $bucket-item-active-icon;
+  padding-right: 25px;
+
+  &, &:hover {
+    color: $buckets-item-active-color;
+  }
+}
+
+.buckets__toggle {
+  @include size(30px, 100%);
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 300ms;
+
+  &:before,
+  &:after {
+    content: '';
+    @include size(100%, 100%);
+    background: url(../img/icons/dropdown-toggle.svg) no-repeat center;
+    position: absolute;
+    right: 0;
+    transition: top 300ms, opacity 200ms;
+  }
+
+  &:before{
+    top: 0;
+    opacity: 1;
+  }
+
+  &:after {
+    transform: rotate(-180deg);
+    top: -50%;
+    opacity: 0;
+  }
+}
+
+.buckets__item--active:hover,
+.buckets__item--enters {
+  .buckets__toggle {
+    opacity: 1;
+  }
+}
+
+.buckets__actions {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: -1px;
+  width: 100%;
+  z-index: 1;
+  padding: 10px 0;
+  background-color: darken($buckets-item-active-bg, 5%);
+  border-radius: 0 0 $border-radius $border-radius;
+  will-change: transform, opacity;
+  opacity: 0;
+  transform: translate3d(0,-10px,0);
+  transition: transform 300ms, opacity 300ms;
+
+  & > a {
+    display: block;
+    padding: 5px 10px 5px 35px;
+    font-size: $font-size-sm;
+    color: $buckets-dropdown-item-color;
+    transition: color 300ms;
+    @include user-select(none);
+
+    &:hover {
+      color: $buckets-dropdown-item-hover-color;
+    }
+  }
+}
+
+.buckets__item--enters {
+  .buckets__toggle {
+    &:before{
+      top: 50%;
+      opacity: 0;
+    }
+
+    &:after {
+      top: 0;
+      opacity: 1;
+    }
+  }
+
+  .buckets__actions {
+    opacity: 1;
+    transform: translate3d(0,0,0);
+  }
+}
+
+
+// Bottom
+@media(min-height: $breakpoint-max-height) {
+  .sidebar__bottom {
+    font-size: $font-size-base - 2;
+    background-color: $sidebar-bottom-bg;
+    padding: 15px;
+    color: $sidebar-bottom-color;
+  }
+
+  .storage {
+
+  }
+
+  .storage__bar {
+    height: 2px;
+    border-radius: 2px;
+    background-color: $storage-bg;
+    overflow: hidden;
+    margin-bottom: 5px;
+
+    & > i {
+      background-color: $storage-fill-bg;
+      height: 100%;
+      display: block;
+    }
+  }
+
+  .host {
+    margin-bottom: 15px;
+
+    & > a {
+      color: $sidebar-bottom-color;
+    }
+  }
+}
+
+@media(max-height: $breakpoint-max-height - 1) {
+  .sidebar__bottom {
+    display: none;
+  }
+}

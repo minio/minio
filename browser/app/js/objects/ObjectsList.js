@@ -26,7 +26,7 @@ export const ObjectsList = ({ objects }) => {
       return <ObjectContainer object={object} key={object.name} />
     }
   })
-  return <div>{list}</div>
+  return <React.Fragment>{list}</React.Fragment>
 }
 
 export default ObjectsList

@@ -16,7 +16,6 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import { Scrollbars } from "react-custom-scrollbars"
 import * as actionsBuckets from "./actions"
 import { getVisibleBuckets } from "./selectors"
 import BucketContainer from "./BucketContainer"
@@ -42,16 +41,10 @@ export class BucketList extends React.Component {
   render() {
     const { visibleBuckets } = this.props
     return (
-      <div className="fesl-inner">
-        <Scrollbars
-          renderTrackVertical={props => <div className="scrollbar-vertical" />}
-        >
-          <ul>
-            {visibleBuckets.map(bucket => (
-              <BucketContainer key={bucket} bucket={bucket} />
-            ))}
-          </ul>
-        </Scrollbars>
+      <div className="buckets__inner">
+        {visibleBuckets.map(bucket => (
+          <BucketContainer key={bucket} bucket={bucket} />
+        ))}
       </div>
     )
   }

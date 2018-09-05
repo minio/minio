@@ -14,84 +14,87 @@
  * limitations under the License.
  */
 
-var webpack = require('webpack')
-var path = require('path')
-var CopyWebpackPlugin = require('copy-webpack-plugin')
+var webpack = require("webpack")
+var path = require("path")
+var CopyWebpackPlugin = require("copy-webpack-plugin")
 var purify = require("purifycss-webpack-plugin")
 
 var exports = {
   context: __dirname,
-  entry: [
-    path.resolve(__dirname, 'app/index.js')
-  ],
+  entry: [path.resolve(__dirname, "app/index.js")],
   output: {
-    path: path.resolve(__dirname, 'production'),
-    filename: 'index_bundle.js'
+    path: path.resolve(__dirname, "production"),
+    filename: "index_bundle.js"
   },
   module: {
-    rules: [{
+    rules: [
+      {
         test: /\.js$/,
         exclude: /(node_modules|bower_components)/,
-        use: [{
-          loader: 'babel-loader',
-          options: {
-            presets: ['react', 'es2015']
+        use: [
+          {
+            loader: "babel-loader",
+            options: {
+              presets: ["react", "es2015"]
+            }
           }
-        }]
-      }, {
-        test: /\.less$/,
-        use: [{
-          loader: 'style-loader'
-        }, {
-          loader: 'css-loader'
-        }, {
-          loader: 'less-loader'
-        }]
-      }, {
+        ]
+      },
+      {
+        test: /\.scss$/,
+        use: [
+          {
+            loader: "style-loader"
+          },
+          {
+            loader: "css-loader"
+          },
+          {
+            loader: "sass-loader"
+          }
+        ]
+      },
+      {
         test: /\.css$/,
-        use: [{
-          loader: 'style-loader'
-        }, {
-          loader: 'css-loader'
-        }]
-      }, {
+        use: [
+          {
+            loader: "style-loader"
+          },
+          {
+            loader: "css-loader"
+          }
+        ]
+      },
+      {
         test: /\.(eot|woff|woff2|ttf|svg|png)/,
-        use: [{
-          loader: 'url-loader'
-        }]
-      }]
+        use: [
+          {
+            loader: "url-loader"
+          }
+        ]
+      }
+    ]
   },
-  node:{
-    fs:'empty'
+  node: {
+    fs: "empty"
   },
   plugins: [
-    new CopyWebpackPlugin([
-      {from: 'app/css/loader.css'},
-      {from: 'app/img/favicon.ico'},
-      {from: 'app/img/browsers/chrome.png'},
-      {from: 'app/img/browsers/firefox.png'},
-      {from: 'app/img/browsers/safari.png'},
-      {from: 'app/img/logo.svg'},
-      {from: 'app/index.html'}
-    ]),
+    new CopyWebpackPlugin([{ from: "app/index.html" }]),
     new webpack.DefinePlugin({
-        'process.env.NODE_ENV': '"production"'
+      "process.env.NODE_ENV": '"production"'
     }),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),
     new purify({
-        basePath: __dirname,
-        paths: [
-            "app/index.html",
-            "app/js/*.js"
-        ]
+      basePath: __dirname,
+      paths: ["app/index.html", "app/js/*.js"]
     })
   ]
 }
 
-if (process.env.NODE_ENV === 'dev') {
+if (process.env.NODE_ENV === "dev") {
   exports.entry = [
-    'webpack-dev-server/client?http://localhost:8080',
-    path.resolve(__dirname, 'app/index.js')
+    "webpack-dev-server/client?http://localhost:8080",
+    path.resolve(__dirname, "app/index.js")
   ]
 }
 

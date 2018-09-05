@@ -16,37 +16,45 @@
 
 import React from "react"
 import classNames from "classnames"
-import ClickOutHandler from "react-onclickout"
 import { connect } from "react-redux"
 
 import logo from "../../img/logo.svg"
-import Dropdown from "react-bootstrap/lib/Dropdown"
 import BucketSearch from "../buckets/BucketSearch"
 import BucketList from "../buckets/BucketList"
 import Host from "./Host"
 import * as actionsCommon from "./actions"
 import web from "../web"
+import StorageInfo from "./StorageInfo"
 
-export const SideBar = ({ sidebarOpen, clickOutside }) => {
+const loggedIn = web.LoggedIn()
+
+export const SideBar = ({ sidebarOpen }) => {
   return (
-    <ClickOutHandler onClickOut={clickOutside}>
-      <div
-        className={classNames({
-          "fe-sidebar": true,
-          toggled: sidebarOpen
-        })}
-      >
-        <div className="fes-header clearfix hidden-sm hidden-xs">
-          <img src={logo} alt="" />
-          <h2>Minio Browser</h2>
+    <aside
+      className={classNames({
+        sidebar: true,
+        toggled: sidebarOpen
+      })}
+    >
+      <div className="logo">
+        <img className="logo__img" src={logo} alt="" />
+        <div className="logo__text">
+          <small>Minio</small>
+          Browser
         </div>
-        <div className="fes-list">
-          {web.LoggedIn() && <BucketSearch />}
-          <BucketList />
-        </div>
-        <Host />
       </div>
-    </ClickOutHandler>
+
+      {web.LoggedIn() && <BucketSearch />}
+
+      <div className="buckets">
+        <BucketList />
+      </div>
+
+      <div className="sidebar__bottom">
+        <Host />
+        {loggedIn && <StorageInfo />}
+      </div>
+    </aside>
   )
 }
 

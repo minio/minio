@@ -20,6 +20,19 @@ import classNames from "classnames"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import ShareObjectModal from "./ShareObjectModal"
+import web from "../web"
+import * as objectsActions from "./actions"
+import {
+  SHARE_OBJECT_EXPIRY_DAYS,
+  SHARE_OBJECT_EXPIRY_HOURS,
+  SHARE_OBJECT_EXPIRY_MINUTES
+} from "../constants"
+
+import iconDelete from "../../img/icons/trash.svg"
+import iconShare from "../../img/icons/share.svg"
+import iconDownload from "../../img/icons/download.svg"
+import iconClose from "../../img/icons/close.svg"
 
 export class ObjectsBulkActions extends React.Component {
   constructor(props) {
@@ -28,15 +41,7 @@ export class ObjectsBulkActions extends React.Component {
       showDeleteConfirmation: false
     }
   }
-  handleDownload() {
-    const { checkedObjects, clearChecked, downloadChecked, downloadObject } = this.props
-    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) {
-      downloadObject(checkedObjects[0])
-      clearChecked()
-    } else {
-      downloadChecked()
-    }
-  }
+
   deleteChecked() {
     const { deleteChecked } = this.props
     deleteChecked()
@@ -47,69 +52,113 @@ export class ObjectsBulkActions extends React.Component {
       showDeleteConfirmation: false
     })
   }
+  shareObject(e) {
+    e.preventDefault()
+    const { checkedObjects, shareObject } = this.props
+    if (checkedObjects.length != 1) {
+      return
+    }
+    const object = checkedObjects[0]
+    shareObject(
+      object,
+      SHARE_OBJECT_EXPIRY_DAYS,
+      SHARE_OBJECT_EXPIRY_HOURS,
+      SHARE_OBJECT_EXPIRY_MINUTES
+    )
+  }
+
   render() {
-    const { checkedObjects, clearChecked } = this.props
+    const {
+      checkedObjects,
+      checkedObjectsCount,
+      downloadChecked,
+      object,
+      showShareObjectModal,
+      clearChecked
+    } = this.props
+    const loggedIn = web.LoggedIn()
+
     return (
-      <div
-        className={
-          "list-actions" +
-          classNames({
-            " list-actions-toggled": checkedObjects.length > 0
-          })
-        }
-      >
-        <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjects.length}
-          {checkedObjects.length === 1 ? " Object " : " Objects "}
-          selected
-        </span>
-        <span className="la-actions pull-right">
-          <button id="download-checked" onClick={this.handleDownload.bind(this)}>
-            {" "}
-            Download
-            {(checkedObjects.length === 1 && !checkedObjects[0].endsWith('/')) ? 
-            " object" : " all as zip" }{" "}
-          </button>
-        </span>
-        <span className="la-actions pull-right">
+      <React.Fragment>
+        <div
+          className={classNames({
+            "object-actions": true,
+            "object-actions--active": checkedObjectsCount
+          })}
+        >
           <button
             id="delete-checked"
-            onClick={() => this.setState({ showDeleteConfirmation: true })}
+            className="object-actions__item"
+            onClick={() =>
+              this.setState({
+                showDeleteConfirmation: true
+              })
+            }
+            disabled={!checkedObjectsCount}
           >
-            {" "}
-            Delete selected{" "}
+            <img src={iconDelete} alt="" />
+            Delete selected
           </button>
-        </span>
-        <i
-          className="la-close fa fa-times"
-          id="close-bulk-actions"
-          onClick={clearChecked}
-        />
+
+          {loggedIn && (
+            <button
+              id="share-checked"
+              className="object-actions__item"
+              onClick={this.shareObject.bind(this)}
+              disabled={checkedObjectsCount != 1}
+            >
+              <img src={iconShare} alt="" />
+              Share
+            </button>
+          )}
+          <button
+            id="download-checked"
+            className="object-actions__item"
+            onClick={downloadChecked}
+            disabled={!checkedObjectsCount}
+          >
+            <img src={iconDownload} alt="" />
+            Download
+            {checkedObjects.length > 1 ? " all as zip" : " object"}
+          </button>
+          <span
+            id="close-bulk-actions"
+            className="object-actions__item object-actions__close"
+            onClick={clearChecked}
+          >
+            <img src={iconClose} alt="" />
+            Cancel
+          </span>
+        </div>
+
+        {showShareObjectModal && <ShareObjectModal object={object} />}
+
         {this.state.showDeleteConfirmation && (
           <DeleteObjectConfirmModal
             deleteObject={this.deleteChecked.bind(this)}
             hideDeleteConfirmModal={this.hideDeleteConfirmModal.bind(this)}
           />
         )}
-      </div>
+      </React.Fragment>
     )
   }
 }
 
 const mapStateToProps = state => {
   return {
-    checkedObjects: getCheckedList(state)
+    checkedObjects: getCheckedList(state),
+    checkedObjectsCount: getCheckedList(state).length,
+    showShareObjectModal: state.objects.shareObject.show
   }
 }
 
 const mapDispatchToProps = dispatch => {
   return {
-    downloadObject: object => dispatch(actions.downloadObject(object)),
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
-    downloadObject: object => dispatch(actions.downloadObject(object)),
-    resetCheckedList: () => dispatch(actions.resetCheckedList()),
     clearChecked: () => dispatch(actions.resetCheckedList()),
-    deleteChecked: () => dispatch(actions.deleteCheckedObjects())
+    deleteChecked: () => dispatch(actions.deleteCheckedObjects()),
+    shareObject: (object, days, hours, minutes) =>
+      dispatch(objectsActions.shareObject(object, days, hours, minutes))
   }
 }
 

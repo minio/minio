@@ -16,56 +16,72 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import humanize from "humanize"
-import Moment from "moment"
 import { getDataType } from "../mime"
 import * as actions from "./actions"
 import { getCheckedList } from "./selectors"
+import classNames from "classnames"
 
 export const ObjectItem = ({
   name,
+  id,
   contentType,
   size,
   lastModified,
   checked,
   checkObject,
   uncheckObject,
-  actionButtons,
   onClick
 }) => {
+  let nonFolderData = (
+    <React.Fragment>
+      <div className="objects__item objects__item--size">{size}</div>
+      <div className="objects__item objects__item--modified">
+        {lastModified}
+      </div>
+    </React.Fragment>
+  )
+
   return (
-    <div className={"fesl-row"} data-type={getDataType(name, contentType)}>
-      <div className="fesl-item fesl-item-icon">
-        <div className="fi-select">
-          <input
-            type="checkbox"
-            name={name}
-            checked={checked}
-            onChange={() => {
-              checked ? uncheckObject(name) : checkObject(name)
-            }}
-          />
-          <i className="fis-icon" />
-          <i className="fis-helper" />
-        </div>
-      </div>
-      <div className="fesl-item fesl-item-name">
-        <a
-          href="#"
-          onClick={e => {
-            e.preventDefault()
-            if (onClick) {
-              onClick()
-            }
+    <label
+      htmlFor={id}
+      className={classNames({
+        objects__row: true,
+        "objects__row--checked": checked
+      })}
+    >
+      <div className="objects__item">
+        <div
+          className={
+            "objects__icon objects__icon--" + getDataType(name, contentType)
+          }
+        />
+
+        <input
+          id={id}
+          className="objects__checkbox"
+          type="checkbox"
+          name={name}
+          checked={checked}
+          onChange={() => {
+            checked ? uncheckObject(name) : checkObject(name)
           }}
-        >
-          {name}
-        </a>
+        />
       </div>
-      <div className="fesl-item fesl-item-size">{size}</div>
-      <div className="fesl-item fesl-item-modified">{lastModified}</div>
-      <div className="fesl-item fesl-item-actions">{actionButtons}</div>
-    </div>
+
+      <div
+        className="objects__item objects__item--name"
+        onClick={e => {
+          if (getDataType(name, contentType) === "folder") {
+            e.preventDefault()
+            onClick()
+          }
+        }}
+      >
+        {name}
+      </div>
+
+      {getDataType(name, contentType) != "folder" ? nonFolderData : ""}
+    </label>
   )
 }
 
