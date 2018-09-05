@@ -74,14 +74,14 @@ Secret key should be in between 8 and 40 characters.`,
 
 	uiErrEnvCredentialsMissingGateway = newUIErrFn(
 		"Credentials missing",
-		"Please provide correct credentials",
-		`Access key and Secret key should be specified in Gateway mode from environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
+		"Please set your credentials in the environment",
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
 	)
 
-	uiErrEnvCredentialsMissingServer = newUIErrFn(
+	uiErrEnvCredentialsMissingDistributed = newUIErrFn(
 		"Credentials missing",
-		"Please provide correct credentials",
-		`Access key and Secret key should be specified in distributed server mode from environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
+		"Please set your credentials in the environment",
+		`In distributed server mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
 	)
 
 	uiErrInvalidErasureEndpoints = newUIErrFn(

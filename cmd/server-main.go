@@ -271,7 +271,7 @@ func serverMain(ctx *cli.Context) {
 				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
 			} else {
 				// Credential is not available anywhere by both means, we cannot start distributed setup anymore, fail eagerly.
-				logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to initialize distributed Minio server.")
+				logger.Fatal(uiErrEnvCredentialsMissingDistributed(nil), "Unable to initialize the server in distributed mode")
 			}
 		}
 	}
