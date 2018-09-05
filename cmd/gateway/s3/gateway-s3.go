@@ -307,12 +307,14 @@ func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, o minio.ObjectOptions) error {
 	if length < 0 && length != -1 {
 		return minio.ErrorRespToObjectError(minio.InvalidRange{}, bucket, key)
 	}
 
 	opts := miniogo.GetObjectOptions{}
+	opts.ServerSideEncryption = o.ServerSideEncryption
+
 	if startOffset >= 0 && length >= 0 {
 		if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
 			logger.LogIf(ctx, err)
@@ -333,8 +335,8 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object string) (objInfo minio.ObjectInfo, err error) {
-	oi, err := l.Client.StatObject(bucket, object, miniogo.StatObjectOptions{})
+func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	oi, err := l.Client.StatObject(bucket, object, miniogo.StatObjectOptions{miniogo.GetObjectOptions{ServerSideEncryption: opts.ServerSideEncryption}})
 	if err != nil {
 		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
 	}
@@ -343,8 +345,8 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata))
+func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
@@ -353,7 +355,7 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
+func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
 	// metadata input is already a trickled down value from interpreting x-amz-metadata-directive at
 	// handler layer. So what we have right now is supposed to be applied on the destination object anyways.
@@ -363,7 +365,7 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
-	return l.GetObjectInfo(ctx, dstBucket, dstObject)
+	return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 }
 
 // DeleteObject deletes a blob in bucket
@@ -387,9 +389,9 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 }
 
 // NewMultipartUpload upload object in multiple parts
-func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string) (uploadID string, err error) {
+func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
 	// Create PutObject options
-	opts := miniogo.PutObjectOptions{UserMetadata: metadata}
+	opts := miniogo.PutObjectOptions{UserMetadata: metadata, ServerSideEncryption: o.ServerSideEncryption}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
@@ -398,8 +400,8 @@ func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader) (pi minio.PartInfo, e error) {
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5Base64String(), data.SHA256HexString())
+func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
 	if err != nil {
 		return pi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
@@ -410,7 +412,7 @@ func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object str
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, srcInfo minio.ObjectInfo) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (p minio.PartInfo, err error) {
 
 	srcInfo.UserDefined = map[string]string{
 		"x-amz-copy-source-if-match": srcInfo.ETag,
@@ -448,7 +450,7 @@ func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return l.GetObjectInfo(ctx, bucket, object)
+	return l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 }
 
 // SetBucketPolicy sets policy on bucket

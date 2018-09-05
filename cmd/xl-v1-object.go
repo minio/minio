@@ -80,7 +80,7 @@ func (xl xlObjects) prepareFile(ctx context.Context, bucket, object string, size
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
@@ -138,7 +138,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag, srcOpts); gerr != nil {
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
@@ -151,7 +151,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
-	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, hashReader, srcInfo.UserDefined)
+	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, hashReader, srcInfo.UserDefined, dstOpts)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -168,18 +168,18 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
 		return err
 	}
 	defer objectLock.RUnlock()
-	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag)
+	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 // getObject wrapper for xl GetObject
-func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
@@ -350,7 +350,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
+func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
@@ -512,7 +512,7 @@ func renameObject(ctx context.Context, disks []StorageAPI, srcBucket, srcObject,
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Validate put object input args.
 	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
@@ -523,11 +523,11 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
-	return xl.putObject(ctx, bucket, object, data, metadata)
+	return xl.putObject(ctx, bucket, object, data, metadata, opts)
 }
 
 // putObject wrapper for xl PutObject
-func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 

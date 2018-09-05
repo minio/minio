@@ -162,7 +162,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	for i, testCase := range testCases {
-		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256), testCase.inputMeta)
+		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256), testCase.inputMeta, ObjectOptions{})
 		if actualErr != nil && testCase.expectedError == nil {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -235,7 +235,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 
 	sha256sum := ""
 	for i, testCase := range testCases {
-		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta)
+		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta, ObjectOptions{})
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -284,7 +284,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		InsufficientWriteQuorum{},
 	}
 
-	_, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta)
+	_, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetHashReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), testCase.inputMeta, ObjectOptions{})
 	if actualErr != nil && testCase.shouldPass {
 		t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", len(testCases)+1, instanceType, actualErr.Error())
 	}
@@ -316,7 +316,7 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 
 	data := []byte("hello, world")
 	// Create object.
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		// Failed to create object, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -347,9 +347,9 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
-
+	opts := ObjectOptions{}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -361,7 +361,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 	md5Writer.Write(fiveMBBytes)
 	etag1 := hex.EncodeToString(md5Writer.Sum(nil))
 	sha256sum := ""
-	_, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), int64(len(fiveMBBytes)), etag1, sha256sum))
+	_, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), int64(len(fiveMBBytes)), etag1, sha256sum), opts)
 	if err != nil {
 		// Failed to upload object part, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -372,7 +372,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 	md5Writer = md5.New()
 	md5Writer.Write(data)
 	etag2 := hex.EncodeToString(md5Writer.Sum(nil))
-	_, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, 2, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), etag2, sha256sum))
+	_, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, 2, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), etag2, sha256sum), opts)
 	if err != nil {
 		// Failed to upload object part, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

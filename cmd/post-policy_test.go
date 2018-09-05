@@ -124,6 +124,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 
+	var opts ObjectOptions
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
@@ -227,7 +228,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		}
 		// When the operation is successful, check if sending metadata is successful too
 		if rec.Code == http.StatusNoContent {
-			objInfo, err := obj.GetObjectInfo(context.Background(), bucketName, testCase.objectName+"/upload.txt")
+			objInfo, err := obj.GetObjectInfo(context.Background(), bucketName, testCase.objectName+"/upload.txt", opts)
 			if err != nil {
 				t.Error("Unexpected error: ", err)
 			}
@@ -427,6 +428,8 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Key specified in Form data
 	keyName := "test/object"
 
+	var opts ObjectOptions
+
 	// The final name of the upload object
 	targetObj := keyName + "/upload.txt"
 
@@ -478,7 +481,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	}
 
 	// Get the uploaded object info
-	info, err := obj.GetObjectInfo(context.Background(), bucketName, targetObj)
+	info, err := obj.GetObjectInfo(context.Background(), bucketName, targetObj, opts)
 	if err != nil {
 		t.Error("Unexpected error: ", err)
 	}

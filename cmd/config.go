@@ -135,7 +135,7 @@ func checkServerConfig(ctx context.Context, objAPI ObjectLayer) error {
 		return checkServerConfigEtcd(configFile)
 	}
 
-	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile); err != nil {
+	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
 		// Convert ObjectNotFound, Quorum errors into errConfigNotFound
 		if isErrObjectNotFound(err) || isInsufficientReadQuorum(err) {
 			return errConfigNotFound
@@ -153,7 +153,7 @@ func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
 		return err
 	}
 
-	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil)
+	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil, ObjectOptions{})
 	return err
 }
 
@@ -162,7 +162,7 @@ var errConfigNotFound = errors.New("config file not found")
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, ""); err != nil {
+	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
 		// Convert ObjectNotFound, IncompleteBody and Quorum errors into errConfigNotFound
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
 			return nil, errConfigNotFound

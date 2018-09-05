@@ -34,6 +34,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	var objLayer ObjectLayer
 	var disks []string
 	var err error
+	var opts ObjectOptions
 
 	objLayer, disks, err = prepareXL16()
 	if err != nil {
@@ -48,18 +49,18 @@ func TestRepeatPutObjectPart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uploadID, err := objLayer.NewMultipartUpload(context.Background(), "bucket1", "mpartObj1", nil)
+	uploadID, err := objLayer.NewMultipartUpload(context.Background(), "bucket1", "mpartObj1", nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fiveMBBytes := bytes.Repeat([]byte("a"), 5*humanize.MiByte)
 	md5Hex := getMD5Hash(fiveMBBytes)
-	_, err = objLayer.PutObjectPart(context.Background(), "bucket1", "mpartObj1", uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""))
+	_, err = objLayer.PutObjectPart(context.Background(), "bucket1", "mpartObj1", uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// PutObjectPart should succeed even if part already exists. ref: https://github.com/minio/minio/issues/1930
-	_, err = objLayer.PutObjectPart(context.Background(), "bucket1", "mpartObj1", uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""))
+	_, err = objLayer.PutObjectPart(context.Background(), "bucket1", "mpartObj1", uploadID, 1, mustGetHashReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create object "dir/obj" under bucket "bucket" for Test 7 to pass
-	_, err = xl.PutObject(context.Background(), "bucket", "dir/obj", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	_, err = xl.PutObject(context.Background(), "bucket", "dir/obj", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 	}
@@ -109,7 +110,6 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	// Cleanup backend directories
 	removeRoots(fsDirs)
 }
-
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Reset global storage class flags
 	resetGlobalStorageEnvs()
@@ -129,8 +129,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
+	opts := ObjectOptions{}
 	// Create object "obj" under bucket "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 
 	// Create "obj" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,8 +180,9 @@ func TestGetObjectNoQuorum(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
+	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +205,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Fetch object from store.
-		err = xl.GetObject(context.Background(), bucket, object, 0, int64(len("abcd")), ioutil.Discard, "")
+		err = xl.GetObject(context.Background(), bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
@@ -229,8 +231,9 @@ func TestPutObjectNoQuorum(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
+	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +256,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Upload new content to same object "object"
-		_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+		_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
@@ -287,7 +290,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), length, "", ""), nil)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), length, "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

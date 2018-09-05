@@ -89,7 +89,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if api.CacheAPI() != nil {
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
-
+	opts := ObjectOptions{}
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
@@ -106,7 +106,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
+				_, err := getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -125,7 +125,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -183,7 +183,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) {
 		getObject = api.CacheAPI().GetObject
 	}
-
 	reader, pipewriter := io.Pipe()
 
 	// Get the object.
@@ -208,7 +207,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 	go func() {
 		defer reader.Close()
-		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer, objInfo.ETag); gerr != nil {
+		if gerr := getObject(ctx, bucket, object, 0, objInfo.Size, writer, objInfo.ETag, opts); gerr != nil {
 			pipewriter.CloseWithError(gerr)
 			return
 		}
@@ -271,6 +270,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+	opts := ObjectOptions{}
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -289,7 +289,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
+				_, err := getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -299,7 +299,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -382,7 +382,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Reads the object at startOffset and writes to mw.
-	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag); err != nil {
+	if err = getObject(ctx, bucket, object, startOffset, length, httpWriter, objInfo.ETag, opts); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
@@ -441,6 +441,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	opts := ObjectOptions{}
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
@@ -453,7 +454,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
+				_, err := getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -463,7 +464,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
@@ -595,8 +596,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	var srcOpts, dstOpts ObjectOptions
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject)
+	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject, srcOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -604,7 +606,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -791,7 +793,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		var dstRecords []dns.SrvRecord
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
 			go func() {
-				if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+				if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
 					pipeWriter.CloseWithError(gerr)
 					writeErrorResponse(w, ErrInternalError, r.URL)
 					return
@@ -808,7 +810,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				writeErrorResponse(w, ErrInternalError, r.URL)
 				return
 			}
-			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined)
+			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
 			if rerr != nil {
 				pipeWriter.CloseWithError(rerr)
 				writeErrorResponse(w, ErrInternalError, r.URL)
@@ -820,7 +822,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	} else {
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
-		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo)
+		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		if err != nil {
 			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1001,10 +1003,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
+	opts := ObjectOptions{}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1031,7 +1033,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Create the object..
-	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata)
+	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1087,6 +1089,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+	opts := ObjectOptions{}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -1095,7 +1098,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1140,7 +1143,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
 		newMultipartUpload = api.CacheAPI().NewMultipartUpload
 	}
-	uploadID, err := newMultipartUpload(ctx, bucket, object, metadata)
+	uploadID, err := newMultipartUpload(ctx, bucket, object, metadata, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1204,8 +1207,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
 		return
 	}
-
-	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject)
+	var srcOpts, dstOpts ObjectOptions
+	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject, srcOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1213,7 +1216,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1338,11 +1341,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 	srcInfo.Writer = writer
-
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, getLength, srcInfo)
+		dstObject, uploadID, partID, startOffset, getLength, srcInfo, srcOpts, dstOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1488,9 +1490,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	opts := ObjectOptions{}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1551,7 +1554,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
 		putObjectPart = api.CacheAPI().PutObjectPart
 	}
-	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, hashReader)
+	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, hashReader, opts)
 	if err != nil {
 		// Verify if the underlying error is signature mismatch.
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1589,7 +1592,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{}); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1664,7 +1667,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object); err == nil {
+		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{}); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
