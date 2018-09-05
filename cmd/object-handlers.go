@@ -178,6 +178,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
 		return
 	}
+	if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
+		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+		return
+	}
 
 	getObject := objectAPI.GetObject
 	if api.CacheAPI() != nil && !crypto.SSEC.IsRequested(r.Header) {
@@ -222,9 +226,13 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if selectReq.InputSerialization.CSV.FileHeaderInfo == "" {
 		selectReq.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoNone
 	}
+	if selectReq.InputSerialization.CSV.RecordDelimiter == "" {
+		selectReq.InputSerialization.CSV.RecordDelimiter = "\n"
+	}
 	if selectReq.InputSerialization.CSV != nil {
 		options := &s3select.Options{
 			HasHeader:            selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone,
+			RecordDelimiter:      selectReq.InputSerialization.CSV.RecordDelimiter,
 			FieldDelimiter:       selectReq.InputSerialization.CSV.FieldDelimiter,
 			Comments:             selectReq.InputSerialization.CSV.Comments,
 			Name:                 "S3Object", // Default table name for all objects
