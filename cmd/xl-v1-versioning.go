@@ -40,9 +40,6 @@ const (
 	// XL json versioning path
 	xlVersioningJSONFile = "versioning.json"
 
-	// XL object sub directory which contains all object versions
-	xlVersioningDir = "versions"
-
 	// Add new constants here.
 )
 

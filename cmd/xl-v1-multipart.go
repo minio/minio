@@ -749,7 +749,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		// } else {
 		// objectVersionID = "null"
 		// }
-		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
+		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
 			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp, objectVersionIndex})

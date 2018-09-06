@@ -224,15 +224,14 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 			if err == nil {
 				// FIXME: Use proper version
 				if versioning.ObjectVersions[0].Id != "" {
-					object = pathJoin(object, xlVersioningDir, versioning.ObjectVersions[0].Id)
+					object = pathJoin(object, versioning.ObjectVersions[0].Id)
 				}
-
 			}
 			if err != nil && err != errFileNotFound {
 				return toObjectErr(err, bucket, object)
 			}
 		} else {
-			object = pathJoin(object, xlVersioningDir, version)
+			object = pathJoin(object, version)
 		}
 	}
 
@@ -492,7 +491,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 			}
 		}
 
-		versionedObject = pathJoin(object, xlVersioningDir, version)
+		versionedObject = pathJoin(object, version)
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -863,7 +862,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// 	// FIXME: Ideally remove this hack
 		// 	//objectVersionID = "null"
 		// }
-		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
+		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
 			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp, objectVersionIndex})

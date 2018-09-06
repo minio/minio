@@ -112,7 +112,6 @@ type VersionResponse struct {
 	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
 }
 
-
 type DeleteMarkerResponse struct {
 	Key          string
 	VersionID    string `xml:"VersionId"`
