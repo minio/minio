@@ -41,7 +41,19 @@ export class ObjectsBulkActions extends React.Component {
       showDeleteConfirmation: false
     }
   }
-
+  handleDownload() {
+    const {
+      checkedObjects,
+      clearChecked,
+      downloadChecked,
+      downloadObject
+    } = this.props
+    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith("/")) {
+      downloadObject(checkedObjects[0])
+    } else {
+      downloadChecked()
+    }
+  }
   deleteChecked() {
     const { deleteChecked } = this.props
     deleteChecked()
@@ -71,7 +83,6 @@ export class ObjectsBulkActions extends React.Component {
     const {
       checkedObjects,
       checkedObjectsCount,
-      downloadChecked,
       object,
       showShareObjectModal,
       clearChecked
@@ -114,7 +125,7 @@ export class ObjectsBulkActions extends React.Component {
           <button
             id="download-checked"
             className="object-actions__item"
-            onClick={downloadChecked}
+            onClick={this.handleDownload.bind(this)}
             disabled={!checkedObjectsCount}
           >
             <img src={iconDownload} alt="" />
@@ -154,6 +165,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
+    downloadObject: object => dispatch(actions.downloadObject(object)),
     downloadChecked: () => dispatch(actions.downloadCheckedObjects()),
     clearChecked: () => dispatch(actions.resetCheckedList()),
     deleteChecked: () => dispatch(actions.deleteCheckedObjects()),

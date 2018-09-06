@@ -23,6 +23,19 @@ import * as actionsAlert from "../alert/actions"
 import web from "../web"
 
 export class PolicyInput extends React.Component {
+  constructor (props) {
+    super(props)
+    this.state = {
+      permissionSelected: READ_ONLY
+    }
+  }
+
+  handlePermission(e) {
+    this.setState({
+      permissionSelected: e.target.value
+    })
+  }
+
   componentDidMount() {
     const { currentBucket, fetchPolicies } = this.props
     fetchPolicies(currentBucket)
@@ -52,7 +65,7 @@ export class PolicyInput extends React.Component {
       .SetBucketPolicy({
         bucketName: currentBucket,
         prefix: this.prefix.value,
-        policy: this.policy.value
+        policy: this.state.permissionSelected
       })
       .then(() => {
         fetchPolicies(currentBucket)
@@ -85,6 +98,7 @@ export class PolicyInput extends React.Component {
                 defaultChecked
                 value={READ_ONLY}
                 ref={policy => (this.policy = policy)}
+                onChange={this.handlePermission.bind(this)}
               />
               <i>R</i>
             </div>
@@ -94,7 +108,10 @@ export class PolicyInput extends React.Component {
                 type="radio"
                 name="policy-permission"
                 value={WRITE_ONLY}
+
                 ref={policy => (this.policy = policy)}
+                onChange={this.handlePermission.bind(this)}
+
               />
               <i>W</i>
             </div>
@@ -105,6 +122,8 @@ export class PolicyInput extends React.Component {
                 name="policy-permission"
                 value={READ_WRITE}
                 ref={policy => (this.policy = policy)}
+                onChange={this.handlePermission.bind(this)}
+
               />
               <i>RW</i>
             </div>
