@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -136,11 +137,17 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
+	// Get port to listen on from gateway address
+	_, gatewayPort, pErr := net.SplitHostPort(gatewayAddr)
+	if pErr != nil {
+		logger.FatalIf(pErr, "Unable to start gateway")
+	}
+
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the server")
+	logger.FatalIf(checkPortAvailability(gatewayPort), "Unable to start the gateway")
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
