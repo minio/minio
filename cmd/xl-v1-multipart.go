@@ -736,12 +736,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	versionedObject := object
 	if globalVersioningSys.IsConfigured(bucket) {
 		var xlVersioning xlVersioningV1
-		var objectVersionID string
-		if globalVersioningSys.IsEnabled(bucket) {
-			objectVersionID = mustGetUUID()
-		} else {
-			objectVersionID = "null"
-		}
 		xlVersioning, err = xl.getObjectVersioning(ctx, bucket, object)
 		if err != nil {
 			if err == errFileNotFound {
@@ -750,10 +744,15 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 				return ObjectInfo{}, toObjectErr(err, bucket, object)
 			}
 		}
+		// if globalVersioningSys.IsEnabled(bucket) {
+		objectVersionID, objectVersionIndex := xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
+		// } else {
+		// objectVersionID = "null"
+		// }
 		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp, objectVersionIndex})
 			xlVersioning.ModTime = timeStamp
 			tempVersioning := mustGetUUID()
 			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)

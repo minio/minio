@@ -157,6 +157,7 @@ func parseXLObjectVersions(xlMetaBuf []byte) []xlObjectVersion {
 		version.Id = v.Get("id").String()
 		version.DeleteMarker = v.Get("deleteMarker").Bool()
 		version.TimeStamp = v.Get("timeStamp").Time()
+		version.Index = v.Get("index").Uint()
 		objectVersion[i] = version
 	}
 	return objectVersion

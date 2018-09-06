@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"crypto/sha1"
+	"encoding/hex"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -57,9 +59,10 @@ type xlVersioningV1 struct {
 }
 
 type xlObjectVersion struct {
-	Id           string `json:"id"`           // Object version id
-	DeleteMarker bool   `json:"deleteMarker"` // Delete marker for this version
-	TimeStamp    time.Time `json:"timeStamp"` // Timestamp for this version
+	Id           string    `json:"id"`           // Object version id
+	DeleteMarker bool      `json:"deleteMarker"` // Delete marker for this version
+	TimeStamp    time.Time `json:"timeStamp"`    // Timestamp for this version
+	Index        uint64    `json:"index"`        // Index for when version was created (top of stack)
 }
 
 // newXLVersioningV1 - initializes new xlVersioningV1, adds version
@@ -76,6 +79,29 @@ func newXLVersioningV1() (xlVersioning xlVersioningV1) {
 // string, format and erasure info fields.
 func (m xlVersioningV1) IsValid() bool {
 	return isXLVersioningFormatValid(m.Version, m.Format)
+}
+
+// DeriveVersionId derives a pseudo-random, yet deterministic, versionId
+// It is meant to generate identical versionIds across replicated buckets
+func (m xlVersioningV1) DeriveVersionId(object, etag string) (string, uint64) {
+
+	indexMax := uint64(0) // Find largest index number
+	for _, ov := range m.ObjectVersions {
+		if indexMax < ov.Index {
+			indexMax = ov.Index
+		}
+	}
+
+	index := indexMax + 1
+
+	h := sha1.New()
+	// Derive hash from concatenation of key name of object, incrementing index and etag
+	// Note that the etag can be empty for delete markers
+	s := fmt.Sprintf("%s;%d;%s", object, index, etag)
+	h.Write([]byte(s))
+	bs := h.Sum(nil)
+
+	return hex.EncodeToString(bs), index
 }
 
 // Verifies if the backend format versioning is sane by validating
