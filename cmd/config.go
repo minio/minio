@@ -37,26 +37,49 @@ const (
 
 	// Minio configuration file.
 	minioConfigFile = "config.json"
+
+	// Minio backup file
+	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(objAPI ObjectLayer, config *serverConfig) error {
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
 	if err := quick.CheckData(config); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(config)
+	data, err := json.MarshalIndent(config, "", "\t")
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	if globalEtcdClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		_, err := globalEtcdClient.Put(ctx, configFile, string(data))
+		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		_, err := globalEtcdClient.Put(timeoutCtx, configFile, string(data))
 		defer cancel()
 		return err
 	}
 
+	// Create a backup of the current config
+	reader, err := readConfig(ctx, objAPI, configFile)
+	if err == nil {
+		var oldData []byte
+		oldData, err = ioutil.ReadAll(reader)
+		if err != nil {
+			return err
+		}
+		backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
+		err = saveConfig(objAPI, backupConfigFile, oldData)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err != errConfigNotFound {
+			return err
+		}
+	}
+
+	// Save the new config in the std config path
 	return saveConfig(objAPI, configFile, data)
 }
 
@@ -214,7 +237,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	return saveServerConfig(objAPI, config)
+	return saveServerConfig(context.Background(), objAPI, config)
 }
 
 // Initialize and load config from remote etcd or local config directory

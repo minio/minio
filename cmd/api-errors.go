@@ -290,6 +290,7 @@ const (
 	ErrEvaluatorBindingDoesNotExist
 	ErrInvalidColumnIndex
 	ErrMissingHeaders
+	ErrAdminConfigNotificationTargetsFailed
 )
 
 // error code to APIError structure, these fields carry respective
@@ -886,6 +887,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "JSON configuration provided has objects with duplicate keys",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminConfigNotificationTargetsFailed: {
+		Code:           "XMinioAdminNotificationTargetsTestFailed",
+		Description:    "Configuration update failed due an unsuccessful attempt to connect to one or more notification servers",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminCredentialsMismatch: {
 		Code:           "XMinioAdminCredentialsMismatch",
 		Description:    "Credentials in config mismatch with server environment variables",
@@ -1443,7 +1449,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case crypto.ErrKMSAuthLogin:
 		apiErr = ErrKMSAuthFailure
-	case context.Canceled, context.DeadlineExceeded:
+	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	}
 	switch err {

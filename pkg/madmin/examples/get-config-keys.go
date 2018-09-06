@@ -38,7 +38,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	configBytes, err := madmClnt.GetConfig()
+	configBytes, err := madmClnt.GetConfigKeys([]string{"notify.amqp.1", "version"})
 	if err != nil {
 		log.Fatalf("failed due to: %v", err)
 	}
