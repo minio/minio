@@ -878,7 +878,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			}
 			// For versioning, ignore ObjectNotFound for cases where
 			// DeleteMarker is at the top
-			if _, ok := err.(ObjectNotFound); globalVersioningSys.IsConfigured(bucket) && ok {
+			if _, ok := err.(ObjectNotFound); globalVersioningSys.IsEnabled(bucket) && ok {
 				continue
 			}
 			return result, toObjectErr(err, bucket, prefix)

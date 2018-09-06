@@ -213,13 +213,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 		return toObjectErr(err, bucket, object)
 	}
 
-	if version != "" && !globalVersioningSys.IsConfigured(bucket) {
 		// FIXME: check the behavior of AWS S3
+	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
 		return toObjectErr(errInvalidArgument, bucket, object)
 	}
 
-	if globalVersioningSys.IsConfigured(bucket) {
-		if version == "" {
+	if globalVersioningSys.IsEnabled(bucket) {
+		if version == "" { // Version is unspecified, so get lastest version
 			versioning, err := xl.getObjectVersioning(ctx, bucket, object)
 			if err == nil {
 				// FIXME: Use proper version
@@ -465,12 +465,12 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
 	versionedObject := object
-	if version != "" && !globalVersioningSys.IsConfigured(bucket) {
 		// FIXME, see AWS behavior and follow it
+	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
 		return objInfo, toObjectErr(errInvalidArgument, bucket, object)
 	}
 
-	if globalVersioningSys.IsConfigured(bucket) {
+	if globalVersioningSys.IsEnabled(bucket) {
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
 		if err == errFileNotFound {
 			return objInfo, toObjectErr(err, bucket, object)
@@ -848,7 +848,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	versionedObject := object
-	if globalVersioningSys.IsConfigured(bucket) {
+	if globalVersioningSys.IsEnabled(bucket) {
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
 		if err != nil {
 			if err != errFileNotFound {
@@ -856,12 +856,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 			xlVersioning = newXLVersioningV1()
 		}
-		// if globalVersioningSys.IsEnabled(bucket) {
 		objectVersionID, objectVersionIndex := xlVersioning.DeriveVersionId(object, metadata["etag"])
-		// } else {
-		// 	// FIXME: Ideally remove this hack
-		// 	//objectVersionID = "null"
-		// }
 		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
@@ -910,7 +905,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 
 	if !isDir {
 		versionedObject := object
-		if globalVersioningSys.IsConfigured(bucket) {
+		if globalVersioningSys.IsEnabled(bucket) {
 			// FIXME: check the quorum of all versioned objects
 			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
 			if vErr != nil || len(xlVersioning.ObjectVersions) == 0 {

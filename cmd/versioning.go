@@ -69,15 +69,6 @@ func (sys *VersioningSys) Remove(bucketName string) {
 	delete(sys.bucketVersioningMap, bucketName)
 }
 
-// IsConfigured - checks given bucket has versioning configured
-func (sys *VersioningSys) IsConfigured(bucketName string) bool {
-	sys.RLock()
-	defer sys.RUnlock()
-
-	_, found := sys.bucketVersioningMap[bucketName]
-	return found
-}
-
 // IsEnabled - checks given bucket has versioning enabled
 func (sys *VersioningSys) IsEnabled(bucketName string) bool {
 	sys.RLock()

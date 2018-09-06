@@ -82,14 +82,10 @@ func (m xlVersioningV1) IsValid() bool {
 // It is meant to generate identical versionIds across replicated buckets
 func (m xlVersioningV1) DeriveVersionId(object, etag string) (string, uint64) {
 
-	indexMax := uint64(0) // Find largest index number
-	for _, ov := range m.ObjectVersions {
-		if indexMax < ov.Index {
-			indexMax = ov.Index
-		}
+	index := uint64(1)
+	if len(m.ObjectVersions) > 0 {
+		index = m.ObjectVersions[len(m.ObjectVersions)-1].Index + 1
 	}
-
-	index := indexMax + 1
 
 	h := sha1.New()
 	// Derive hash from concatenation of key name of object, incrementing index and etag

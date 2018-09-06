@@ -95,12 +95,6 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if !globalVersioningSys.IsConfigured(bucket) {
-		// FIXME: Add appropriate error
-		writeErrorResponse(w, ErrInternalError, r.URL)
-		return
-	}
-
 	// Minio only allows versioning to be enabled (effectively just once),
 	// thereafter it cannot be suspended.
 	if versioningConfig.Status != "Enabled" {
