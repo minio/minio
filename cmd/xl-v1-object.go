@@ -29,6 +29,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
+	"crypto/sha1"
+	"fmt"
 )
 
 // list all errors which can be ignored in object operations.
@@ -640,34 +642,21 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 	return xl.putObject(ctx, bucket, object, data, metadata)
 }
 
+// deriveVersionId derives a pseudo-random, yet deterministic, versionId
+// It is meant to generate identical versionIds across replicated buckets
+func deriveVersionId(object, etag string, index int) string {
+
+	// Add index to versioning.json
+	// Find max value, add 1
+	h := sha1.New()
+	h.Write([]byte(fmt.Sprintf("%s;%d;%s", object, index, etag)))
+	bs := h.Sum(nil)
+
+	return hex.EncodeToString(bs)
+}
+
 // putObject wrapper for xl PutObject
 func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	versionedObject := object
-	if globalVersioningSys.IsConfigured(bucket) {
-		var objectVersionID string
-		if globalVersioningSys.IsEnabled(bucket) {
-			objectVersionID = mustGetUUID()
-		} else {
-			// FIXME: Ideally remove this hack
-			objectVersionID = "null"
-		}
-		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
-		if err != nil {
-			if err != errFileNotFound {
-				return ObjectInfo{}, toObjectErr(err, bucket, object)
-			}
-			xlVersioning = newXLVersioningV1()
-		}
-		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
-		defer func() {
-			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
-			xlVersioning.ModTime = timeStamp
-			tempVersioning := mustGetUUID()
-			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
-		}()
-	}
 
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
@@ -874,6 +863,33 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 	}
 
+	versionedObject := object
+	if globalVersioningSys.IsConfigured(bucket) {
+		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+		if err != nil {
+			if err != errFileNotFound {
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+			xlVersioning = newXLVersioningV1()
+		}
+		var objectVersionID string
+		if globalVersioningSys.IsEnabled(bucket) {
+			objectVersionID = deriveVersionId(object, metadata["etag"], len(xlVersioning.ObjectVersions)+1)
+		} else {
+			// FIXME: Ideally remove this hack
+			//objectVersionID = "null"
+		}
+		versionedObject = pathJoin(object, xlVersioningDir, objectVersionID)
+		defer func() {
+			timeStamp := time.Now().UTC()
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
+			xlVersioning.ModTime = timeStamp
+			tempVersioning := mustGetUUID()
+			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+		}()
+	}
+
 	// Rename the successfully written temporary object to final location.
 	if _, err = renameObject(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, versionedObject, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -918,7 +934,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 				return vErr
 			} else {
 				// Add Delete Marker to versioning info (without any corresponding sub directory)
-				objectVersionID := mustGetUUID()
+				objectVersionID := deriveVersionId(object, "", len(xlVersioning.ObjectVersions)+1)
 				timeStamp := time.Now().UTC()
 				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, true, timeStamp})
 				xlVersioning.ModTime = timeStamp
