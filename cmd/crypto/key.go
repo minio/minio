@@ -124,7 +124,7 @@ func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucke
 	}
 
 	if n, err := sio.Decrypt(&decryptedKey, bytes.NewReader(sealedKey.Key[:]), unsealConfig); n != 32 || err != nil {
-		return err // TODO(aead): upgrade sio to use sio.Error
+		return ErrSecretKeyMismatch
 	}
 	copy(key[:], decryptedKey.Bytes())
 	return nil

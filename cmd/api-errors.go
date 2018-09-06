@@ -1435,7 +1435,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrSSEEncryptedObject
 	case errInvalidSSEParameters:
 		apiErr = ErrInvalidSSECustomerParameters
-	case crypto.ErrInvalidCustomerKey:
+	case crypto.ErrInvalidCustomerKey, crypto.ErrSecretKeyMismatch:
 		apiErr = ErrAccessDenied // no access without correct key
 	case crypto.ErrIncompatibleEncryptionMethod:
 		apiErr = ErrIncompatibleEncryptionMethod
