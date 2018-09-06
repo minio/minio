@@ -434,6 +434,7 @@ func resetGlobalIsXL() {
 
 func resetGlobalIsEnvs() {
 	globalIsEnvCreds = false
+	globalIsEnvWORM = false
 	globalIsEnvBrowser = false
 	globalIsEnvRegion = false
 	globalIsStorageClass = false

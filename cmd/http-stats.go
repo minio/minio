@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,22 +27,50 @@ import (
 	"go.uber.org/atomic"
 )
 
+func getRequestResource(r *http.Request) string {
+	if r == nil {
+		// http.Request is nil when non-HTTP data (like TLS record) is read/written.
+		return ""
+	}
+
+	if globalDomainName != "" {
+		host := r.Header.Get("Host")
+		if strings.HasSuffix(host, "."+globalDomainName) {
+			return "/" + strings.TrimSuffix(host, "."+globalDomainName) + r.URL.Path
+		}
+	}
+
+	return r.URL.Path
+}
+
 // ConnStats - Network statistics
 // Count total input/output transferred bytes during
 // the server's life.
 type ConnStats struct {
-	totalInputBytes  atomic.Uint64
-	totalOutputBytes atomic.Uint64
+	totalInputBytes     atomic.Uint64
+	totalOutputBytes    atomic.Uint64
+	totalRPCInputBytes  atomic.Uint64
+	totalRPCOutputBytes atomic.Uint64
 }
 
 // Increase total input bytes
-func (s *ConnStats) incInputBytes(n int) {
-	s.totalInputBytes.Add(uint64(n))
+func (s *ConnStats) incInputBytes(r *http.Request, n int) {
+	resource := getRequestResource(r)
+	if resource == minioReservedBucketPath || strings.HasPrefix(resource, minioReservedBucketPath+"/") {
+		s.totalRPCInputBytes.Add(uint64(n))
+	} else {
+		s.totalInputBytes.Add(uint64(n))
+	}
 }
 
 // Increase total output bytes
-func (s *ConnStats) incOutputBytes(n int) {
-	s.totalOutputBytes.Add(uint64(n))
+func (s *ConnStats) incOutputBytes(r *http.Request, n int) {
+	resource := getRequestResource(r)
+	if resource == minioReservedBucketPath || strings.HasPrefix(resource, minioReservedBucketPath+"/") {
+		s.totalRPCOutputBytes.Add(uint64(n))
+	} else {
+		s.totalOutputBytes.Add(uint64(n))
+	}
 }
 
 // Return total input bytes

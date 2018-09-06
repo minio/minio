@@ -546,7 +546,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary
 	// object to delete.
-	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj)
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
 
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
@@ -715,7 +715,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		newUniqueID := mustGetUUID()
 
 		// Delete successfully renamed object.
-		defer xl.deleteObject(ctx, minioMetaTmpBucket, newUniqueID)
+		defer xl.deleteObject(ctx, minioMetaTmpBucket, newUniqueID, writeQuorum, false)
 
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
@@ -774,36 +774,32 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 // deleteObject - wrapper for delete object, deletes an object from
 // all the disks in parallel, including `xl.json` associated with the
 // object.
-func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) error {
+func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int, isDir bool) error {
+	var disks []StorageAPI
+	var err error
+
+	tmpObj := mustGetUUID()
+	if bucket == minioMetaTmpBucket {
+		tmpObj = object
+		disks = xl.getDisks()
+	} else {
+		if isDir {
+			disks, err = renameObjectDir(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, writeQuorum)
+		} else {
+			disks, err = renameObject(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, writeQuorum)
+		}
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
-	var writeQuorum int
-	var err error
-
-	isDir := hasSuffix(object, slashSeparator)
-
-	if !isDir {
-		// Read metadata associated with the object from all disks.
-		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-		// get Quorum for this object
-		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
-		if err != nil {
-			return err
-		}
-		err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-		if err != nil {
-			return err
-		}
-	} else {
-		// WriteQuorum is defaulted to N/2 + 1 for directories
-		writeQuorum = len(xl.getDisks())/2 + 1
-	}
-
 	// Initialize list of errors.
-	var dErrs = make([]error, len(xl.getDisks()))
+	var dErrs = make([]error, len(disks))
 
-	for index, disk := range xl.getDisks() {
+	for index, disk := range disks {
 		if disk == nil {
 			dErrs[index] = errDiskNotFound
 			continue
@@ -815,9 +811,9 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 			if isDir {
 				// DeleteFile() simply tries to remove a directory
 				// and will succeed only if that directory is empty.
-				e = disk.DeleteFile(bucket, object)
+				e = disk.DeleteFile(minioMetaTmpBucket, tmpObj)
 			} else {
-				e = cleanupDir(ctx, disk, bucket, object)
+				e = cleanupDir(ctx, disk, minioMetaTmpBucket, tmpObj)
 			}
 			if e != nil && e != errVolumeNotFound {
 				dErrs[index] = e
@@ -847,20 +843,27 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if hasSuffix(object, slashSeparator) {
-		// Delete the object on all disks.
-		if err = xl.deleteObject(ctx, bucket, object); err != nil {
+	if !xl.isObject(bucket, object) && !xl.isObjectDir(bucket, object) {
+		return ObjectNotFound{bucket, object}
+	}
+
+	var writeQuorum int
+	var isObjectDir = hasSuffix(object, slashSeparator)
+
+	if isObjectDir {
+		writeQuorum = len(xl.getDisks())/2 + 1
+	} else {
+		// Read metadata associated with the object from all disks.
+		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		// get Quorum for this object
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
+		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}
 
-	// Validate object exists.
-	if !xl.isObject(bucket, object) {
-		return ObjectNotFound{bucket, object}
-	} // else proceed to delete the object.
-
 	// Delete the object on all disks.
-	if err = xl.deleteObject(ctx, bucket, object); err != nil {
+	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, isObjectDir); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

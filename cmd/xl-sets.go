@@ -168,6 +168,34 @@ func (s *xlSets) reInitDisks(refFormat *formatXLV3, storageDisks []StorageAPI, f
 	return xlDisks
 }
 
+// connectDisksWithQuorum is same as connectDisks but waits
+// for quorum number of formatted disks to be online in
+// any given sets.
+func (s *xlSets) connectDisksWithQuorum() {
+	var onlineDisks int
+	for onlineDisks < (len(s.endpoints)/2)+1 {
+		for _, endpoint := range s.endpoints {
+			if s.isConnected(endpoint) {
+				continue
+			}
+			disk, format, err := connectEndpoint(endpoint)
+			if err != nil {
+				printEndpointError(endpoint, err)
+				continue
+			}
+			i, j, err := findDiskIndex(s.format, format)
+			if err != nil {
+				// Close the internal connection to avoid connection leaks.
+				disk.Close()
+				printEndpointError(endpoint, err)
+				continue
+			}
+			s.xlDisks[i][j] = disk
+			onlineDisks++
+		}
+	}
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
@@ -260,8 +288,8 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
 	}
 
-	// Connect disks right away.
-	s.connectDisks()
+	// Connect disks right away, but wait until we have `format.json` quorum.
+	s.connectDisksWithQuorum()
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)

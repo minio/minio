@@ -21,7 +21,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -816,11 +815,8 @@ func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, par
 		return lupr, err
 	}
 
-	defer func() {
-		// always drain output (response body)
-		io.CopyN(ioutil.Discard, resp.Body, 512)
-		resp.Body.Close()
-	}()
+	// always drain output (response body)
+	defer minio.CloseResponse(resp.Body)
 
 	err = xml.NewDecoder(resp.Body).Decode(&lupr)
 	if err != nil {

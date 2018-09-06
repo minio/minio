@@ -48,7 +48,7 @@ func TestBuffConnReadTimeout(t *testing.T) {
 		if terr != nil {
 			t.Fatalf("failed to accept new connection. %v", terr)
 		}
-		bufconn := newBufConn(tcpConn, 1*time.Second, 1*time.Second, nil, nil)
+		bufconn := newBufConn(tcpConn, 1*time.Second, 1*time.Second)
 		defer bufconn.Close()
 
 		// Read a line

@@ -328,12 +328,16 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			return toJSONError(authErr)
 		}
 
-		// Error out anonymous (non-owner) has no access download or upload objects.
-		if !readable && !writable {
-			return errAuthentication
+		reply.Writable = writable
+		if !readable {
+			// Error out if anonymous user (non-owner) has no access to download or upload objects
+			if !writable {
+				return errAuthentication
+			}
+			// return empty object list if access is write only
+			return nil
 		}
 
-		reply.Writable = writable
 	}
 
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)

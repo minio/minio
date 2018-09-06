@@ -223,7 +223,7 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 	// delete the tmp path later in case we fail to rename (ignore
 	// returned errors) - this will be a no-op in case of a rename
 	// success.
-	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempUploadIDPath)
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempUploadIDPath, writeQuorum, false)
 
 	// Attempt to rename temp upload object to actual upload path object
 	_, rErr := renameObject(ctx, disks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, writeQuorum)
@@ -361,7 +361,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	tmpPartPath := path.Join(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart)
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
 	if data.Size() > 0 {
 		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); err != nil {
 			return pi, toObjectErr(pErr, bucket, object)
@@ -752,7 +752,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		newUniqueID := mustGetUUID()
 
 		// Delete success renamed object.
-		defer xl.deleteObject(ctx, minioMetaTmpBucket, newUniqueID)
+		defer xl.deleteObject(ctx, minioMetaTmpBucket, newUniqueID, writeQuorum, false)
 
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
@@ -790,34 +790,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	// Success, return object info.
 	return xlMeta.ToObjectInfo(bucket, object), nil
-}
-
-// Wrapper which removes all the uploaded parts.
-func (xl xlObjects) cleanupUploadedParts(ctx context.Context, uploadIDPath string, writeQuorum int) error {
-	var errs = make([]error, len(xl.getDisks()))
-	var wg = &sync.WaitGroup{}
-
-	// Cleanup uploadID for all disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Cleanup each uploadID in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			err := cleanupDir(ctx, disk, minioMetaMultipartBucket, uploadIDPath)
-			if err != nil {
-				errs[index] = err
-			}
-		}(index, disk)
-	}
-
-	// Wait for all the cleanups to finish.
-	wg.Wait()
-
-	return reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 }
 
 // AbortMultipartUpload - aborts an ongoing multipart operation
@@ -859,7 +831,7 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	}
 
 	// Cleanup all uploaded parts.
-	if err = xl.cleanupUploadedParts(ctx, uploadIDPath, writeQuorum); err != nil {
+	if err = xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum, false); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
@@ -911,12 +883,7 @@ func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk
 				continue
 			}
 			if now.Sub(fi.ModTime) > expiry {
-				// Quorum value will need to be figured out using readAllXLMetadata() and objectQuorumFromMeta()
-				// But we can avoid these calls as we do not care if xl.cleanupUploadedParts() meets quorum
-				// when it removes files. We igore the error message from xl.cleanupUploadedParts() as we can't
-				// return it to any client. Hence we set quorum to 0.
-				quorum := 0
-				xl.cleanupUploadedParts(ctx, uploadIDPath, quorum)
+				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, len(xl.getDisks())/2+1, false)
 			}
 		}
 	}

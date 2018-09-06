@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -72,6 +73,44 @@ func isHTTPMethod(s string) bool {
 	return false
 }
 
+func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource string, host string, err error) {
+	var data []byte
+	for dataLen := 0; methodLen+dataLen < maxHeaderBytes; dataLen += 8 {
+		if data, err = bufConn.Peek(methodLen + dataLen); err != nil {
+			return "", "", err
+		}
+
+		tokens := strings.Split(string(data), "\n")
+		if len(tokens) < 2 {
+			continue
+		}
+
+		if resource == "" {
+			resource = strings.SplitN(tokens[0][methodLen:], " ", 2)[0]
+		}
+
+		for _, token := range tokens[1:] {
+			if token == "" || !strings.HasSuffix(token, "\r") {
+				continue
+			}
+
+			// HTTP headers are case insensitive, so we should simply convert
+			// each tokens to their lower case form to match 'host' header.
+			token = strings.ToLower(token)
+			if strings.HasPrefix(token, "host: ") {
+				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
+				return resource, host, nil
+			}
+		}
+
+		if tokens[len(tokens)-1] == "\r" {
+			break
+		}
+	}
+
+	return resource, host, nil
+}
+
 type acceptResult struct {
 	conn net.Conn
 	err  error
@@ -87,8 +126,9 @@ type httpListener struct {
 	tcpKeepAliveTimeout    time.Duration
 	readTimeout            time.Duration
 	writeTimeout           time.Duration
-	updateBytesReadFunc    func(int) // function to be called to update bytes read in BufConn.
-	updateBytesWrittenFunc func(int) // function to be called to update bytes written in BufConn.
+	maxHeaderBytes         int
+	updateBytesReadFunc    func(*http.Request, int) // function to be called to update bytes read in BufConn.
+	updateBytesWrittenFunc func(*http.Request, int) // function to be called to update bytes written in BufConn.
 }
 
 // isRoutineNetErr returns true if error is due to a network timeout,
@@ -134,8 +174,7 @@ func (listener *httpListener) start() {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
 
-		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout,
-			listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
+		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout)
 
 		// Peek bytes of maximum length of all HTTP methods.
 		data, err := bufconn.Peek(methodMaxLen)
@@ -158,14 +197,39 @@ func (listener *httpListener) start() {
 		// Return bufconn if read data is a valid HTTP method.
 		tokens := strings.SplitN(string(data), " ", 2)
 		if isHTTPMethod(tokens[0]) {
-			if listener.tlsConfig == nil {
-				send(acceptResult{bufconn, nil}, doneCh)
-			} else {
+			if listener.tlsConfig != nil {
 				// As TLS is configured and we got plain text HTTP request,
 				// return 403 (forbidden) error.
 				bufconn.Write(sslRequiredErrMsg)
 				bufconn.Close()
+				return
 			}
+
+			var resource, host string
+			if resource, host, err = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1); err != nil {
+				if !isRoutineNetErr(err) {
+					reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
+					reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
+					ctx := logger.SetReqInfo(context.Background(), reqInfo)
+					logger.LogIf(ctx, err)
+				}
+				bufconn.Close()
+				return
+			}
+
+			header := make(http.Header)
+			if host != "" {
+				header.Add("Host", host)
+			}
+			bufconn.setRequest(&http.Request{
+				Method: tokens[0],
+				URL:    &url.URL{Path: resource},
+				Host:   bufconn.LocalAddr().String(),
+				Header: header,
+			})
+			bufconn.setUpdateFuncs(listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
+
+			send(acceptResult{bufconn, nil}, doneCh)
 			return
 		}
 
@@ -182,8 +246,7 @@ func (listener *httpListener) start() {
 			}
 
 			// Check whether the connection contains HTTP request or not.
-			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout,
-				listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
+			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout)
 
 			// Peek bytes of maximum length of all HTTP methods.
 			data, err = bufconn.Peek(methodMaxLen)
@@ -201,6 +264,30 @@ func (listener *httpListener) start() {
 			// Return bufconn if read data is a valid HTTP method.
 			tokens := strings.SplitN(string(data), " ", 2)
 			if isHTTPMethod(tokens[0]) {
+				var resource, host string
+				if resource, host, err = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1); err != nil {
+					if !isRoutineNetErr(err) {
+						reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
+						reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
+						ctx := logger.SetReqInfo(context.Background(), reqInfo)
+						logger.LogIf(ctx, err)
+					}
+					bufconn.Close()
+					return
+				}
+
+				header := make(http.Header)
+				if host != "" {
+					header.Add("Host", host)
+				}
+				bufconn.setRequest(&http.Request{
+					Method: tokens[0],
+					URL:    &url.URL{Path: resource},
+					Host:   bufconn.LocalAddr().String(),
+					Header: header,
+				})
+				bufconn.setUpdateFuncs(listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
+
 				send(acceptResult{bufconn, nil}, doneCh)
 				return
 			}
@@ -296,8 +383,9 @@ func newHTTPListener(serverAddrs []string,
 	tcpKeepAliveTimeout time.Duration,
 	readTimeout time.Duration,
 	writeTimeout time.Duration,
-	updateBytesReadFunc func(int),
-	updateBytesWrittenFunc func(int)) (listener *httpListener, err error) {
+	maxHeaderBytes int,
+	updateBytesReadFunc func(*http.Request, int),
+	updateBytesWrittenFunc func(*http.Request, int)) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 
@@ -316,7 +404,9 @@ func newHTTPListener(serverAddrs []string,
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = listen("tcp4", serverAddr); err != nil {
-			return nil, err
+			if l, err = fallbackListen("tcp4", serverAddr); err != nil {
+				return nil, err
+			}
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
@@ -333,6 +423,7 @@ func newHTTPListener(serverAddrs []string,
 		tcpKeepAliveTimeout:    tcpKeepAliveTimeout,
 		readTimeout:            readTimeout,
 		writeTimeout:           writeTimeout,
+		maxHeaderBytes:         maxHeaderBytes,
 		updateBytesReadFunc:    updateBytesReadFunc,
 		updateBytesWrittenFunc: updateBytesWrittenFunc,
 	}
