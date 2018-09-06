@@ -117,12 +117,16 @@ EXAMPLES:
 }
 
 func mantaGatewayMain(ctx *cli.Context) {
-	// Validate gateway arguments.
-	host := ctx.Args().First()
-	// Validate gateway arguments.
-	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	args := ctx.Args()
+	if !ctx.Args().Present() {
+		args = cli.Args{"https://us-east.manta.joyent.com"}
+	}
 
-	minio.StartGateway(ctx, &Manta{host})
+	// Validate gateway arguments.
+	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), args.First()), "Invalid argument")
+
+	// Start the gateway..
+	minio.StartGateway(ctx, &Manta{args.First()})
 }
 
 // Manta implements Gateway.
@@ -139,17 +143,22 @@ func (g *Manta) Name() string {
 // talk to manta remote backend.
 func (g *Manta) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
+	var secure bool
 	var signer authentication.Signer
 	var endpoint = defaultMantaURL
 	ctx := context.Background()
 
 	if g.host != "" {
-		endpoint, _, err = minio.ParseGatewayEndpoint(g.host)
+		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
+		if secure {
+			endpoint = "https://" + endpoint
+		} else {
+			endpoint = "http://" + endpoint
+		}
 	}
-
 	if overrideRoot, ok := os.LookupEnv("MANTA_ROOT"); ok {
 		mantaRoot = overrideRoot
 	}

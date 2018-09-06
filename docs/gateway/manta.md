@@ -20,6 +20,27 @@ export MANTA_KEY_MATERIAL=~/.ssh/id_rsa
 export MANTA_SUBUSER=devuser
 minio gateway manta
 ```
+
+## Run Minio Gateway for Manta Object Storage Custom Endpoints
+### Using Docker
+```
+docker run -p 9000:9000 --name manta-s3 \
+ -e "MINIO_ACCESS_KEY=joyentaccountname" \
+ -e "MINIO_SECRET_KEY=joyentkeyid" \
+ -e "MANTA_KEY_MATERIAL=~/.ssh/id_rsa" \
+ -e "MANTA_SUBUSER=devuser"
+ minio/minio gateway manta https://manta_service_endpoint:port
+```
+
+### Using Binary
+```
+export MINIO_ACCESS_KEY=joyentaccountname
+export MINIO_SECRET_KEY=joyentkeyid
+export MANTA_KEY_MATERIAL=~/.ssh/id_rsa
+export MANTA_SUBUSER=devuser
+minio gateway manta https://manta_service_endpoint:port
+```
+
 ## Test using Minio Browser
 Minio Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
