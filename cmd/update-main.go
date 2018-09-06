@@ -324,7 +324,7 @@ func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode s
 	if resp == nil {
 		return content, fmt.Errorf("No response from server to download URL %s", releaseChecksumURL)
 	}
-	defer resp.Body.Close()
+	defer CloseResponse(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return content, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
@@ -471,7 +471,7 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 	if err != nil {
 		return updateStatusMsg, err
 	}
-	defer resp.Body.Close()
+	defer CloseResponse(resp.Body)
 
 	// FIXME: add support for gpg verification as well.
 	if err = update.Apply(resp.Body,

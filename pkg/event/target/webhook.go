@@ -23,6 +23,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -89,6 +91,7 @@ func (target *WebhookTarget) Send(eventData event.Event) error {
 	}
 
 	// FIXME: log returned error. ignore time being.
+	io.Copy(ioutil.Discard, resp.Body)
 	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {

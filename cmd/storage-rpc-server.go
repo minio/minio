@@ -127,7 +127,7 @@ type ReadFileArgs struct {
 	Vol          string
 	Path         string
 	Offset       int64
-	Buffer       []byte
+	Length       int64
 	Algo         BitrotAlgorithm
 	ExpectedHash []byte
 	Verified     bool
@@ -140,13 +140,14 @@ func (receiver *storageRPCReceiver) ReadFile(args *ReadFileArgs, reply *[]byte) 
 		verifier = NewBitrotVerifier(args.Algo, args.ExpectedHash)
 	}
 
-	n, err := receiver.local.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer, verifier)
+	buf := make([]byte, args.Length)
+	n, err := receiver.local.ReadFile(args.Vol, args.Path, args.Offset, buf, verifier)
 	// Ignore io.ErrEnexpectedEOF for short reads i.e. less content available than requested.
 	if err == io.ErrUnexpectedEOF {
 		err = nil
 	}
 
-	*reply = args.Buffer[0:n]
+	*reply = buf[0:n]
 	return err
 }
 

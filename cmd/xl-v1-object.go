@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"io"
@@ -161,54 +160,6 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	pipeReader.Close()
 
 	return objInfo, nil
-}
-
-func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error) {
-
-	// Acquire lock
-	lock := xl.nsMutex.NewNSLock(bucket, object)
-	if err = lock.GetRLock(globalObjectTimeout); err != nil {
-		return objInfo, nil, err
-	}
-
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return objInfo, nil, err
-	}
-
-	if hasSuffix(object, slashSeparator) {
-		if !xl.isObjectDir(bucket, object) {
-			return objInfo, nil, toObjectErr(errFileNotFound, bucket, object)
-		}
-		var e error
-		if objInfo, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
-			return objInfo, nil, toObjectErr(e, bucket, object)
-		}
-		objReader := NewGetObjectReader(bytes.NewReader(nil), lock, nil)
-		return objInfo, objReader, nil
-	}
-
-	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
-	if err != nil {
-		return objInfo, nil, toObjectErr(err, bucket, object)
-	}
-
-	startOffset, readLength := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, readLength = rs.GetOffsetLength(objInfo.Size)
-	}
-
-	pr, pw := io.Pipe()
-	objReader := NewGetObjectReader(pr, lock, nil)
-	go func() {
-		err := xl.getObject(ctx, bucket, object, startOffset, readLength, pw, "")
-		if err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		pw.Close()
-	}()
-
-	return objInfo, objReader, nil
 }
 
 // GetObject - reads an object erasured coded across multiple
@@ -892,24 +843,27 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if hasSuffix(object, slashSeparator) {
-		// Delete the object on all disks.
-		if err = xl.deleteObject(ctx, bucket, object, len(xl.getDisks())/2+1, true); err != nil {
+	if !xl.isObject(bucket, object) && !xl.isObjectDir(bucket, object) {
+		return ObjectNotFound{bucket, object}
+	}
+
+	var writeQuorum int
+	var isObjectDir = hasSuffix(object, slashSeparator)
+
+	if isObjectDir {
+		writeQuorum = len(xl.getDisks())/2 + 1
+	} else {
+		// Read metadata associated with the object from all disks.
+		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		// get Quorum for this object
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
+		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}
 
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-
-	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
 	// Delete the object on all disks.
-	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, false); err != nil {
+	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, isObjectDir); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

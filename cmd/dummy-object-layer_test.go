@@ -59,10 +59,6 @@ func (api *DummyObjectLayer) ListObjectsV2(ctx context.Context, bucket, prefix, 
 	return
 }
 
-func (api *DummyObjectLayer) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error) {
-	return
-}
-
 func (api *DummyObjectLayer) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
 	return
 }

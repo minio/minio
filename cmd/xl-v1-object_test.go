@@ -71,11 +71,14 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		object      string
 		expectedErr error
 	}{
-		{".test", "obj", BucketNameInvalid{Bucket: ".test"}},
-		{"----", "obj", BucketNameInvalid{Bucket: "----"}},
+		{".test", "dir/obj", BucketNameInvalid{Bucket: ".test"}},
+		{"----", "dir/obj", BucketNameInvalid{Bucket: "----"}},
 		{"bucket", "", ObjectNameInvalid{Bucket: "bucket", Object: ""}},
 		{"bucket", "doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "doesnotexist"}},
-		{"bucket", "obj", nil},
+		{"bucket", "dir/doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "dir/doesnotexist"}},
+		{"bucket", "dir", ObjectNotFound{Bucket: "bucket", Object: "dir"}},
+		{"bucket", "dir/", ObjectNotFound{Bucket: "bucket", Object: "dir/"}},
+		{"bucket", "dir/obj", nil},
 	}
 
 	// Create an instance of xl backend
@@ -84,14 +87,13 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make bucket for Test 7 to pass
 	err = xl.MakeBucketWithLocation(context.Background(), "bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create object "obj" under bucket "bucket" for Test 7 to pass
-	_, err = xl.PutObject(context.Background(), "bucket", "obj", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
+	// Create object "dir/obj" under bucket "bucket" for Test 7 to pass
+	_, err = xl.PutObject(context.Background(), "bucket", "dir/obj", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 	}
