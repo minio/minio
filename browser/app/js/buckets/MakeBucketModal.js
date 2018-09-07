@@ -31,14 +31,19 @@ export class MakeBucketModal extends React.Component {
     const bucket = this.state.bucketName
     if (bucket) {
       makeBucket(bucket)
-      this.hideModal()
+      this.clearBucketName()
     }
   }
-  hideModal() {
+  clearBucketName() {
     this.setState({
       bucketName: ""
     })
-    this.props.hideMakeBucketModal()
+  }
+  componentDidMount() {
+    this.props.onRef(this)
+  }
+  componentWillUnmount() {
+    this.props.onRef(undefined)
   }
   render() {
     return (

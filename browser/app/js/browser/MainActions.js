@@ -65,6 +65,7 @@ export class MainActions extends React.Component {
         addNewActive: false
       })
     }
+    this.makeBucket.clearBucketName()
   }
 
   render() {
@@ -103,11 +104,11 @@ export class MainActions extends React.Component {
                 className="add-new__item add-new__item--bucket"
                 onClick={
                   this.state.makeBucketActive
-                    ? ""
+                    ? undefined
                     : this.openMakeBucket.bind(this)
                 }
               >
-                <MakeBucketModal />
+                <MakeBucketModal onRef={ref => (this.makeBucket = ref)} />
               </div>
             )}
             <div />
