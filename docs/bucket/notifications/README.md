@@ -431,7 +431,7 @@ An example of Redis configuration is as follows:
 "redis": {
     "1": {
         "enable": true,
-		"format": "namespace",
+        "format": "namespace",
         "address": "127.0.0.1:6379",
         "password": "yoursecret",
         "key": "bucketevents"
