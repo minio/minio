@@ -58,6 +58,7 @@ func restartProcess() error {
 
 	// Pass on the environment and replace the old count key with the new one.
 	cmd := exec.Command(argv0, os.Args[1:]...)
+	cmd.Env = os.Environ()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Start()
