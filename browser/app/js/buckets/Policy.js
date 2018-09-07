@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE, NONE } from "../constants"
-
 import React from "react"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
+import { NONE } from "../constants"
 
 export class Policy extends React.Component {
   removePolicy(e) {
