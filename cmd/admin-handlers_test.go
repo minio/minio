@@ -101,7 +101,17 @@ var (
 			"1": {
 				"enable": false,
 				"brokers": null,
-				"topic": ""
+				"topic": "",
+				"tls" : {
+					"enable" : false,
+					"skipVerify" : false,
+					"clientAuth" : 0
+				},
+				"sasl" : {
+					"enable" : false,
+					"username" : "",
+					"password" : ""
+				}
 			}
 		},
 		"mqtt": {
