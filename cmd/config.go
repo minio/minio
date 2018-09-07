@@ -55,7 +55,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	if globalEtcdClient != nil {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		_, err := globalEtcdClient.Put(timeoutCtx, configFile, string(data))
+		_, err = globalEtcdClient.Put(timeoutCtx, configFile, string(data))
 		defer cancel()
 		return err
 	}

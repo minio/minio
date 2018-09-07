@@ -114,11 +114,6 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 	}
 
-	// In distributed setup users need to set ENVs always.
-	if !globalIsEnvCreds && globalIsDistXL {
-		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to start distributed server mode")
-	}
-
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBoolFlag(browser)
 		if err != nil {
