@@ -91,7 +91,7 @@ export class ChangePassword extends React.Component {
         })
       })
 
-    this.props.hideChangePassword(this.props.value)
+    this.props.hideChangePassword()
   }
 
   generateAuth() {
