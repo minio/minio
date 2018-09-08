@@ -24,7 +24,7 @@ export const About = ({ serverInfo, hideAbout }) => {
       <div className="settings__panel__inner">
         <div className="about">
           <div className="about__item">
-            <div className="about__title">Veron</div>
+            <div className="about__title">Version</div>
             <div className="about__value">{version}</div>
           </div>
 
