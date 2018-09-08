@@ -104,6 +104,8 @@ func toStorageErr(err error) error {
 type StorageRPCClient struct {
 	*RPCClient
 	connected bool
+	// Plain error of the last RPC call
+	lastRPCError error
 }
 
 // Stringer provides a canonicalized representation of network device.
@@ -112,6 +114,11 @@ func (client *StorageRPCClient) String() string {
 	// Remove the storage RPC path prefix, internal paths are meaningless. why?
 	url.Path = strings.TrimPrefix(url.Path, storageServicePath)
 	return url.String()
+}
+
+// LastError - returns the last RPC call result, nil or error if any
+func (client *StorageRPCClient) LastError() error {
+	return client.lastRPCError
 }
 
 // Close - closes underneath RPC client.
@@ -125,14 +132,22 @@ func (client *StorageRPCClient) IsOnline() bool {
 	return client.connected
 }
 
+func (client *StorageRPCClient) connect() {
+	err := client.Call(storageServiceName+".Connect", &AuthArgs{}, &VoidReply{})
+	client.lastRPCError = err
+	client.connected = err == nil
+}
+
 func (client *StorageRPCClient) call(handler string, args interface {
 	SetAuthArgs(args AuthArgs)
 }, reply interface{}) error {
+
 	if !client.connected {
 		return errDiskNotFound
 	}
 
 	err := client.Call(handler, args, reply)
+	client.lastRPCError = err
 	if err == nil {
 		return nil
 	}
@@ -318,6 +333,7 @@ func newStorageRPC(endpoint Endpoint) *StorageRPCClient {
 	logger.FatalIf(err, "Unable to parse storage RPC Host", context.Background())
 	rpcClient, err := NewStorageRPCClient(host, endpoint.Path)
 	logger.FatalIf(err, "Unable to initialize storage RPC client", context.Background())
-	rpcClient.connected = rpcClient.Call(storageServiceName+".Connect", &AuthArgs{}, &VoidReply{}) == nil
+	// Attempt first try connection and save error if any.
+	rpcClient.connect()
 	return rpcClient
 }

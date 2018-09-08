@@ -274,6 +274,10 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
+func (s *posix) LastError() error {
+	return nil
+}
+
 func (s *posix) Close() error {
 	close(s.stopUsageCh)
 	s.connected = false

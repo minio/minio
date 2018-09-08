@@ -27,7 +27,9 @@ type StorageAPI interface {
 
 	// Storage operations.
 	IsOnline() bool // Returns true if disk is online.
+	LastError() error
 	Close() error
+
 	DiskInfo() (info DiskInfo, err error)
 
 	// Volume operations.
