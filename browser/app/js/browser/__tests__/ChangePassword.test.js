@@ -34,7 +34,7 @@ jest.mock("../../web", () => ({
   })
 }))
 
-describe("ChangePasswordModal", () => {
+describe("ChangePassword", () => {
   const serverInfo = {
     version: "test",
     memory: "test",

@@ -18,7 +18,7 @@ import React from "react"
 import { shallow } from "enzyme"
 import { About } from "../About"
 
-describe("AboutModal", () => {
+describe("About", () => {
   const serverInfo = {
     version: "test",
     memory: "test",
