@@ -44,7 +44,7 @@ export const SideBar = ({ sidebarOpen }) => {
         </div>
       </div>
 
-      {web.LoggedIn() && <BucketSearch />}
+      {loggedIn && <BucketSearch />}
 
       <div className="buckets">
         <BucketList />

@@ -26,7 +26,9 @@ import { pathSlice } from "../utils"
 export class BucketList extends React.Component {
   componentWillMount() {
     const { fetchBuckets, setBucketList, selectBucket } = this.props
-    if (web.LoggedIn()) {
+    const loggedIn = web.LoggedIn()
+
+    if (loggedIn) {
       fetchBuckets()
     } else {
       const { bucket, prefix } = pathSlice(history.location.pathname)
