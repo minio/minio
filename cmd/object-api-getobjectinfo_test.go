@@ -34,15 +34,14 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
-
-	// Put a regular object
-	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/asiapics.jpg", mustGetHashReader(t, bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil)
+	opts := ObjectOptions{}
+	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/asiapics.jpg", mustGetHashReader(t, bytes.NewBufferString("asiapics"), int64(len("asiapics")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	// Put an empty directory
-	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/empty-dir/", mustGetHashReader(t, bytes.NewBufferString(""), int64(len("")), "", ""), nil)
+	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/empty-dir/", mustGetHashReader(t, bytes.NewBufferString(""), int64(len("")), "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -83,7 +82,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-getobjectinfo", "Asia/empty-dir/", resultCases[1], nil, true},
 	}
 	for i, testCase := range testCases {
-		result, err := obj.GetObjectInfo(context.Background(), testCase.bucketName, testCase.objectName)
+		result, err := obj.GetObjectInfo(context.Background(), testCase.bucketName, testCase.objectName, opts)
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}

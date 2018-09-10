@@ -21,6 +21,8 @@ import (
 	"context"
 	"io"
 	"strings"
+
+	"github.com/minio/minio-go/pkg/encrypt"
 )
 
 // Core - Inherits Client and adds new methods to expose the low level S3 APIs.
@@ -68,7 +70,7 @@ func (c Core) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string
 }
 
 // PutObject - Upload object. Uploads using single PUT call.
-func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Base64, sha256Hex string, metadata map[string]string) (ObjectInfo, error) {
+func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Base64, sha256Hex string, metadata map[string]string, sse encrypt.ServerSide) (ObjectInfo, error) {
 	opts := PutObjectOptions{}
 	m := make(map[string]string)
 	for k, v := range metadata {
@@ -89,6 +91,7 @@ func (c Core) PutObject(bucket, object string, data io.Reader, size int64, md5Ba
 		}
 	}
 	opts.UserMetadata = m
+	opts.ServerSideEncryption = sse
 	return c.putObjectDo(context.Background(), bucket, object, data, md5Base64, sha256Hex, size, opts)
 }
 
@@ -104,8 +107,8 @@ func (c Core) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, de
 }
 
 // PutObjectPart - Upload an object part.
-func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, data io.Reader, size int64, md5Base64, sha256Hex string) (ObjectPart, error) {
-	return c.uploadPart(context.Background(), bucket, object, uploadID, data, partID, md5Base64, sha256Hex, size, nil)
+func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, data io.Reader, size int64, md5Base64, sha256Hex string, sse encrypt.ServerSide) (ObjectPart, error) {
+	return c.uploadPart(context.Background(), bucket, object, uploadID, data, partID, md5Base64, sha256Hex, size, sse)
 }
 
 // ListObjectParts - List uploaded parts of an incomplete upload.x

@@ -610,7 +610,7 @@ func (h *healSequence) healBucket(bucket string) error {
 		if h.objPrefix != "" {
 			// Check if an object named as the objPrefix exists,
 			// and if so heal it.
-			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix)
+			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix, ObjectOptions{})
 			if err == nil {
 				err = h.healObject(bucket, h.objPrefix)
 				if err != nil {

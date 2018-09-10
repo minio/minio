@@ -513,7 +513,7 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 // indicates the total length of the object.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (t *tritonObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	// Start offset cannot be negative.
 	if startOffset < 0 {
 		logger.LogIf(ctx, fmt.Errorf("Unexpected error"))
@@ -545,7 +545,7 @@ func (t *tritonObjects) GetObject(ctx context.Context, bucket, object string, st
 // uses Triton equivalent GetBlobProperties.
 //
 // https://apidocs.joyent.com/manta/api.html#GetObject
-func (t *tritonObjects) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	info, err := t.client.Objects().GetInfo(ctx, &storage.GetInfoInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	})
@@ -583,7 +583,7 @@ func (d dummySeeker) Seek(offset int64, whence int) (int64, error) {
 // CreateBlockBlobFromReader.
 //
 // https://apidocs.joyent.com/manta/api.html#PutObject
-func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
 		ContentLength: uint64(data.Size()),
 		ObjectPath:    path.Join(mantaRoot, bucket, object),
@@ -602,14 +602,14 @@ func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, da
 		return objInfo, err
 	}
 
-	return t.GetObjectInfo(ctx, bucket, object)
+	return t.GetObjectInfo(ctx, bucket, object, opts)
 }
 
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Manta Snaplinks API.
 //
 // https://apidocs.joyent.com/manta/api.html#PutSnapLink
-func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = t.client.SnapLinks().Put(ctx, &storage.PutSnapLinkInput{
 		SourcePath: path.Join(mantaRoot, srcBucket, srcObject),
 		LinkPath:   path.Join(mantaRoot, destBucket, destObject),
@@ -618,7 +618,7 @@ func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, de
 		return objInfo, err
 	}
 
-	return t.GetObjectInfo(ctx, destBucket, destObject)
+	return t.GetObjectInfo(ctx, destBucket, destObject, dstOpts)
 }
 
 // DeleteObject - Delete a blob in Manta, uses Triton equivalent DeleteBlob API.

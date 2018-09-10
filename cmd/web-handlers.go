@@ -411,7 +411,7 @@ next:
 		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
 			// Deny if WORM is enabled
 			if globalWORMEnabled {
-				if _, err = objectAPI.GetObjectInfo(context.Background(), args.BucketName, objectName); err == nil {
+				if _, err = objectAPI.GetObjectInfo(context.Background(), args.BucketName, objectName, ObjectOptions{}); err == nil {
 					return toJSONError(errMethodNotAllowed)
 				}
 			}
@@ -653,16 +653,16 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
-
+	opts := ObjectOptions{}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object); err == nil {
+		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object, opts); err == nil {
 			writeWebErrorResponse(w, errMethodNotAllowed)
 			return
 		}
 	}
 
-	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata)
+	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -703,7 +703,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
+	opts := ObjectOptions{}
 	getObject := objectAPI.GetObject
 	if web.CacheAPI() != nil {
 		getObject = web.CacheAPI().GetObject
@@ -712,7 +712,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	if web.CacheAPI() != nil {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 	}
-	objInfo, err := getObjectInfo(context.Background(), bucket, object)
+	objInfo, err := getObjectInfo(context.Background(), bucket, object, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -745,7 +745,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, ""); err != nil {
+	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, "", opts); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -814,10 +814,11 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	if web.CacheAPI() != nil {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 	}
+	opts := ObjectOptions{}
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := getObjectInfo(context.Background(), args.BucketName, objectName)
+			info, err := getObjectInfo(context.Background(), args.BucketName, objectName, opts)
 			if err != nil {
 				return err
 			}
@@ -853,7 +854,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, ""); err != nil {
+			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
 				return err
 			}
 			if err = httpWriter.Close(); err != nil {

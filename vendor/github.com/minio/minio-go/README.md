@@ -139,7 +139,7 @@ The full API Reference is available here.
 
 ### API Reference : File Object Operations
 * [`FPutObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
-* [`FGetObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
+* [`FGetObject`](https://docs.minio.io/docs/golang-client-api-reference#FGetObject)
 * [`FPutObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#FPutObjectWithContext)
 * [`FGetObjectWithContext`](https://docs.minio.io/docs/golang-client-api-reference#FGetObjectWithContext)
 
@@ -183,6 +183,10 @@ The full API Reference is available here.
 * [getbucketpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketpolicy.go)
 * [listbucketpolicies.go](https://github.com/minio/minio-go/blob/master/examples/s3/listbucketpolicies.go)
  
+### Full Examples : Bucket lifecycle Operations
+* [setbucketlifecycle.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketlifecycle.go)
+* [getbucketlifecycle.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketlifecycle.go)
+
 ### Full Examples : Bucket notification Operations
 * [setbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketnotification.go)
 * [getbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketnotification.go)

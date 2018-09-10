@@ -622,7 +622,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata)
+	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

@@ -742,7 +742,7 @@ func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -831,7 +831,7 @@ func applyMetadataToGCSAttrs(metadata map[string]string, attrs *storage.ObjectAt
 }
 
 // GetObjectInfo - reads object info and replies back ObjectInfo
-func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object string) (minio.ObjectInfo, error) {
+func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -849,7 +849,7 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data *hash.Reader, metadata map[string]string) (minio.ObjectInfo, error) {
+func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -888,7 +888,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, d
 
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
-	srcInfo minio.ObjectInfo) (minio.ObjectInfo, error) {
+	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
 
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)
@@ -917,7 +917,7 @@ func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object str
 }
 
 // NewMultipartUpload - upload object in multiple parts
-func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key string, metadata map[string]string) (uploadID string, err error) {
+func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
 	// generate new uploadid
 	uploadID = minio.MustGetUUID()
 
@@ -1030,7 +1030,7 @@ func (l *gcsGateway) checkUploadIDExists(ctx context.Context, bucket string, key
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data *hash.Reader) (minio.PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data *hash.Reader, opts minio.ObjectOptions) (minio.PartInfo, error) {
 	if err := l.checkUploadIDExists(ctx, bucket, key, uploadID); err != nil {
 		return minio.PartInfo{}, err
 	}

@@ -579,18 +579,18 @@ func (s *xlSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err err
 // --- Object Operations ---
 
 // GetObject - reads an object from the hashedSet based on the object name.
-func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
-	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag)
+func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
+	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 // PutObject - writes an object to hashedSet based on the object name.
-func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
-	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, metadata)
+func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, metadata, opts)
 }
 
 // GetObjectInfo - reads object metadata from the hashedSet based on the object name.
-func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
-	return s.getHashedSet(object).GetObjectInfo(ctx, bucket, object)
+func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	return s.getHashedSet(object).GetObjectInfo(ctx, bucket, object, opts)
 }
 
 // DeleteObject - deletes an object from the hashedSet based on the object name.
@@ -599,14 +599,14 @@ func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string)
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
-func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
+func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
 
 	// Check if this request is only metadata update.
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
 	if cpSrcDstSame && srcInfo.metadataOnly {
-		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo)
+		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 	}
 
 	// Hold write lock on destination since in both cases
@@ -632,7 +632,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	go func() {
-		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 			}
@@ -645,7 +645,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 		}
 	}()
 
-	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined)
+	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
 }
 
 // Returns function "listDir" of the type listDirFunc.
@@ -833,19 +833,19 @@ func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMa
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	return s.getHashedSet(object).NewMultipartUpload(ctx, bucket, object, metadata)
+func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
+	return s.getHashedSet(object).NewMultipartUpload(ctx, bucket, object, metadata, opts)
 }
 
 // Copies a part of an object from source hashedSet to destination hashedSet.
 func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo ObjectInfo) (partInfo PartInfo, err error) {
+	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (partInfo PartInfo, err error) {
 
 	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
 
 	go func() {
-		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 				return
@@ -857,12 +857,12 @@ func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destB
 		}
 	}()
 
-	return destSet.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, srcInfo.Reader)
+	return destSet.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, srcInfo.Reader, dstOpts)
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
-func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (info PartInfo, err error) {
-	return s.getHashedSet(object).PutObjectPart(ctx, bucket, object, uploadID, partID, data)
+func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
+	return s.getHashedSet(object).PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 }
 
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.

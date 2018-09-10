@@ -414,7 +414,7 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
@@ -504,7 +504,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offset int64, length int64, writer io.Writer, etag string) (err error) {
+func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
 	}
@@ -710,7 +710,7 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
+func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		objectLock := fs.nsMutex.NewNSLock(bucket, object)
@@ -754,7 +754,7 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	if err := checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}

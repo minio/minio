@@ -61,7 +61,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	for i := 0; i < b.N; i++ {
 		// insert the object.
 		objInfo, err := obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
+			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata, ObjectOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -97,7 +97,8 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for NewMultipartUpload.
 	metadata := make(map[string]string)
-	uploadID, err = obj.NewMultipartUpload(context.Background(), bucket, object, metadata)
+	opts := ObjectOptions{}
+	uploadID, err = obj.NewMultipartUpload(context.Background(), bucket, object, metadata, opts)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			md5hex = getMD5Hash([]byte(textPartData))
 			var partInfo PartInfo
 			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, j,
-				mustGetHashReader(b, bytes.NewBuffer(textPartData), int64(len(textPartData)), md5hex, sha256hex))
+				mustGetHashReader(b, bytes.NewBuffer(textPartData), int64(len(textPartData)), md5hex, sha256hex), opts)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -203,7 +204,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		// insert the object.
 		var objInfo ObjectInfo
 		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
+			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata, ObjectOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -218,7 +219,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var buffer = new(bytes.Buffer)
-		err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer, "")
+		err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer, "", ObjectOptions{})
 		if err != nil {
 			b.Error(err)
 		}
@@ -303,7 +304,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		for pb.Next() {
 			// insert the object.
 			objInfo, err := obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-				mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
+				mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata, ObjectOptions{})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -343,7 +344,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		// insert the object.
 		var objInfo ObjectInfo
 		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata)
+			mustGetHashReader(b, bytes.NewBuffer(textData), int64(len(textData)), md5hex, sha256hex), metadata, ObjectOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -359,7 +360,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard, "")
+			err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard, "", ObjectOptions{})
 			if err != nil {
 				b.Error(err)
 			}
