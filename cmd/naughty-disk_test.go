@@ -52,6 +52,10 @@ func (d *naughtyDisk) IsOnline() bool {
 	return d.disk.IsOnline()
 }
 
+func (d *naughtyDisk) LastError() (err error) {
+	return nil
+}
+
 func (d *naughtyDisk) Close() (err error) {
 	if err = d.calcError(); err != nil {
 		return err
