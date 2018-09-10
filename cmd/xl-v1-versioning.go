@@ -59,7 +59,6 @@ type xlObjectVersion struct {
 	Id           string    `json:"id"`                     // Object version id
 	DeleteMarker bool      `json:"deleteMarker,omitempty"` // Delete marker for this version
 	TimeStamp    time.Time `json:"timeStamp"`              // Timestamp for this version
-	Index        uint64    `json:"index"`                  // Index for when version was created (top of stack)
 }
 
 // newXLVersioningV1 - initializes new xlVersioningV1, adds version
@@ -80,21 +79,18 @@ func (m xlVersioningV1) IsValid() bool {
 
 // DeriveVersionId derives a pseudo-random, yet deterministic, versionId
 // It is meant to generate identical versionIds across replicated buckets
-func (m xlVersioningV1) DeriveVersionId(object, etag string) (string, uint64) {
-
-	index := uint64(1)
-	if len(m.ObjectVersions) > 0 {
-		index = m.ObjectVersions[len(m.ObjectVersions)-1].Index + 1
-	}
+func (m xlVersioningV1) DeriveVersionId(object, etag string) string {
 
 	h := sha1.New()
 	// Derive hash from concatenation of key name of object, incrementing index and etag
 	// Note that the etag can be empty for delete markers
-	s := fmt.Sprintf("%s;%d;%s", object, index, etag)
+	s := fmt.Sprintf("%s;%d;%s", object, len(m.ObjectVersions)+1, etag)
 	h.Write([]byte(s))
 	bs := h.Sum(nil)
 
-	return hex.EncodeToString(bs), index
+	fmt.Println(hex.EncodeToString(bs), "<--", s)
+
+	return hex.EncodeToString(bs)
 }
 
 // Verifies if the backend format versioning is sane by validating

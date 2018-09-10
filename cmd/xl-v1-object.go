@@ -857,12 +857,11 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 			xlVersioning = newXLVersioningV1()
 		}
-		var objectVersionIndex uint64
-		objectVersionID, objectVersionIndex = xlVersioning.DeriveVersionId(object, metadata["etag"])
+		objectVersionID = xlVersioning.DeriveVersionId(object, metadata["etag"])
 		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp, objectVersionIndex})
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
 			xlVersioning.ModTime = timeStamp
 			tempVersioning := mustGetUUID()
 			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
@@ -918,9 +917,10 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 				return vErr
 			} else {
 				// Add Delete Marker to versioning info (without any corresponding sub directory)
-				objectVersionID, objectVersionIndex := xlVersioning.DeriveVersionId(object, "")
+				objectVersionID := xlVersioning.DeriveVersionId(object, "")
+				// Check if we need to pass along the version Id in the header (as for put object)
 				timeStamp := time.Now().UTC()
-				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, true, timeStamp, objectVersionIndex})
+				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, true, timeStamp})
 				xlVersioning.ModTime = timeStamp
 				tempVersioning := mustGetUUID()
 				_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)

@@ -733,6 +733,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		}
 	}
 
+	objectVersionID := ""
 	versionedObject := object
 	if globalVersioningSys.IsEnabled(bucket) {
 		var xlVersioning xlVersioningV1
@@ -744,11 +745,11 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 				return ObjectInfo{}, toObjectErr(err, bucket, object)
 			}
 		}
-		objectVersionID, objectVersionIndex := xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
+		objectVersionID = xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
 		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp, objectVersionIndex})
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
 			xlVersioning.ModTime = timeStamp
 			tempVersioning := mustGetUUID()
 			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
