@@ -791,8 +791,14 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(err, bucket, object)
 	}
 
+	// Pass along object version ID (if any)
+	oi = xlMeta.ToObjectInfo(bucket, object)
+	if objectVersionID != "" {
+		oi.VersionId = objectVersionID
+	}
+
 	// Success, return object info.
-	return xlMeta.ToObjectInfo(bucket, object), nil
+	return oi, nil
 }
 
 // Wrapper which removes all the uploaded parts.

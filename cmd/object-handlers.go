@@ -839,7 +839,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objInfo.VersionId != "" {
-		w.Header().Set("VersionId", "\""+objInfo.VersionId+"\"")
+		w.Header().Set("x-amz-version-id", "\""+objInfo.VersionId+"\"")
 	}
 
 	writeSuccessResponseHeadersOnly(w)
