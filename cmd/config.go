@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"os"
 	"path"
 	"runtime"
 	"time"
@@ -227,6 +228,8 @@ func NewConfigSys() *ConfigSys {
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) error {
+	defer os.Rename(getConfigFile(), getConfigFile()+".deprecated")
+
 	// Verify if backend already has the file.
 	if err := checkServerConfig(context.Background(), objAPI); err != errConfigNotFound {
 		return err
@@ -234,7 +237,13 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) error {
 
 	var config = &serverConfig{}
 	if _, err := Load(getConfigFile(), config); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
+		// Read from deprecate file as well if necessary.
+		if _, err = Load(getConfigFile()+".deprecated", config); err != nil {
+			return err
+		}
 	}
 
 	return saveServerConfig(context.Background(), objAPI, config)
@@ -258,11 +267,11 @@ func initConfig(objAPI ObjectLayer) error {
 			if err := migrateConfig(); err != nil {
 				return err
 			}
-
-			// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
-			if err := migrateConfigToMinioSys(objAPI); err != nil {
-				return err
-			}
+		}
+		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
+		// to '<export_path>/.minio.sys/config/config.json'
+		if err := migrateConfigToMinioSys(objAPI); err != nil {
+			return err
 		}
 	}
 

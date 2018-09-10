@@ -265,6 +265,12 @@ func serverMain(ctx *cli.Context) {
 				globalActiveCred = config.Credential
 			}
 
+			if os.IsNotExist(err) {
+				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
+					globalActiveCred = config.Credential
+				}
+			}
+
 			if globalActiveCred.IsValid() {
 				// Credential is valid don't throw an error instead print a message regarding deprecation of 'config.json'
 				// based model and proceed to use it for now in distributed setup.
