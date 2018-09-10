@@ -49,7 +49,7 @@ minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/te
 
 *Note*
 
-Please remember that defining and exporting credential environment variables, `MINIO_ACCESS_KEY` and  `MINIO_SECRET_KEY`, is **mandatory** on Distributed Deployments. It is also required to define and export domain environment variable, `MINIO_DOMAIN`, if domain information is needed to be set.
+Please remember that defining and exporting credential environment variables, `MINIO_ACCESS_KEY` and  `MINIO_SECRET_KEY`, is **mandatory** on distributed deployments. It is also required to define and export domain environment variable, `MINIO_DOMAIN`, if domain information is needed to be set.
 
 ## Cloud Scale Deployment
 
