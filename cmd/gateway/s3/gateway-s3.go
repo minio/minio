@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"io"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -180,8 +181,23 @@ func newS3(url, accessKey, secretKey string) (*miniogo.Core, error) {
 
 // NewGatewayLayer returns s3 ObjectLayer.
 func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+	accessKey, ok := os.LookupEnv("AWS_ACCESS_KEY_ID")
+	if !ok {
+		accessKey, ok = os.LookupEnv("AWS_ACCESS_KEY")
+		if !ok {
+			accessKey = creds.AccessKey
+		}
+	}
+	secretKey, ok := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+	if !ok {
+		secretKey, ok = os.LookupEnv("AWS_SECRET_KEY")
+		if !ok {
+			secretKey = creds.SecretKey
+		}
+	}
+
 	// Probe S3 signature with input credentials.
-	clnt, err := newS3(g.host, creds.AccessKey, creds.SecretKey)
+	clnt, err := newS3(g.host, accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
