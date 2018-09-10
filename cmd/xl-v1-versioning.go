@@ -56,10 +56,10 @@ type xlVersioningV1 struct {
 }
 
 type xlObjectVersion struct {
-	Id           string    `json:"id"`           // Object version id
-	DeleteMarker bool      `json:"deleteMarker"` // Delete marker for this version
-	TimeStamp    time.Time `json:"timeStamp"`    // Timestamp for this version
-	Index        uint64    `json:"index"`        // Index for when version was created (top of stack)
+	Id           string    `json:"id"`                     // Object version id
+	DeleteMarker bool      `json:"deleteMarker,omitempty"` // Delete marker for this version
+	TimeStamp    time.Time `json:"timeStamp"`              // Timestamp for this version
+	Index        uint64    `json:"index"`                  // Index for when version was created (top of stack)
 }
 
 // newXLVersioningV1 - initializes new xlVersioningV1, adds version

@@ -88,6 +88,9 @@ type ObjectInfo struct {
 	// Hex encoded unique entity tag of the object.
 	ETag string
 
+	// VersionId when bucket versioning is enabled.
+	VersionId string
+
 	// A standard MIME type describing the format of the object.
 	ContentType string
 

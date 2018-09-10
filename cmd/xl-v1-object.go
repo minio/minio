@@ -847,6 +847,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 	}
 
+	objectVersionID := ""
 	versionedObject := object
 	if globalVersioningSys.IsEnabled(bucket) {
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
@@ -856,7 +857,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 			xlVersioning = newXLVersioningV1()
 		}
-		objectVersionID, objectVersionIndex := xlVersioning.DeriveVersionId(object, metadata["etag"])
+		var objectVersionIndex uint64
+		objectVersionID, objectVersionIndex = xlVersioning.DeriveVersionId(object, metadata["etag"])
 		versionedObject = pathJoin(object, objectVersionID)
 		defer func() {
 			timeStamp := time.Now().UTC()
@@ -887,6 +889,10 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		ContentType:     xlMeta.Meta["content-type"],
 		ContentEncoding: xlMeta.Meta["content-encoding"],
 		UserDefined:     xlMeta.Meta,
+	}
+
+	if objectVersionID != "" {
+		objInfo.VersionId = objectVersionID
 	}
 
 	// Success, return object info.

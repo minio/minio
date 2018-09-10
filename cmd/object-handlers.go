@@ -838,6 +838,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if objInfo.VersionId != "" {
+		w.Header().Set("VersionId", "\""+objInfo.VersionId+"\"")
+	}
+
 	writeSuccessResponseHeadersOnly(w)
 
 	// Get host and port from Request.RemoteAddr.
