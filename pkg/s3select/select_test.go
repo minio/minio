@@ -48,6 +48,7 @@ func TestCheckForDuplicates(t *testing.T) {
 func TestMyProcessing(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -96,6 +97,7 @@ func TestMyProcessing(t *testing.T) {
 func TestMyRowIndexResults(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -271,6 +273,7 @@ func TestMyParser(t *testing.T) {
 	for _, table := range tables {
 		options := &Options{
 			HasHeader:            false,
+			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
 			Comments:             "",
 			Name:                 "S3Object", // Default table name for all objects
@@ -346,6 +349,7 @@ func TestMyAggregationFunc(t *testing.T) {
 func TestToStringAgg(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -380,6 +384,7 @@ func TestToStringAgg(t *testing.T) {
 func TestMyRowColLiteralResults(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -459,6 +464,7 @@ func TestMyWhereEval(t *testing.T) {
 	for _, table := range tables {
 		options := &Options{
 			HasHeader:            false,
+			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
 			Comments:             "",
 			Name:                 "S3Object", // Default table name for all objects
@@ -610,6 +616,7 @@ func TestInterpreter(t *testing.T) {
 	for _, table := range tables {
 		options := &Options{
 			HasHeader:            false,
+			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
 			Comments:             "",
 			Name:                 "S3Object", // Default table name for all objects
@@ -651,6 +658,7 @@ func TestInterpreter(t *testing.T) {
 func TestMyXMLFunction(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -689,6 +697,7 @@ func TestMyXMLFunction(t *testing.T) {
 func TestMyProtocolFunction(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -732,6 +741,7 @@ func TestMyProtocolFunction(t *testing.T) {
 func TestMyInfoProtocolFunctions(t *testing.T) {
 	options := &Options{
 		HasHeader:            true,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -773,6 +783,7 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 func TestMyErrorProtocolFunctions(t *testing.T) {
 	options := &Options{
 		HasHeader:            false,
+		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
 		Comments:             "",
 		Name:                 "S3Object", // Default table name for all objects
@@ -1007,6 +1018,7 @@ func TestMyValids(t *testing.T) {
 	for _, table := range tables {
 		options := &Options{
 			HasHeader:            false,
+			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
 			Comments:             "",
 			Name:                 "S3Object", // Default table name for all objects

@@ -29,6 +29,7 @@ import (
 	"net/http"
 
 	gzip "github.com/klauspost/pgzip"
+	"github.com/minio/minio/pkg/ioutil"
 )
 
 const (
@@ -79,6 +80,9 @@ type Options struct {
 	// HasHeader when true, will treat the first row as a header row.
 	HasHeader bool
 
+	// RecordDelimiter is the string that records are delimited by.
+	RecordDelimiter string
+
 	// FieldDelimiter is the string that fields are delimited by.
 	FieldDelimiter string
 
@@ -127,7 +131,8 @@ func NewInput(opts *Options) (*Input, error) {
 		tempBytesScanned = opts.StreamSize
 		myReader = bzip2.NewReader(opts.ReadFrom)
 	}
-
+	// DelimitedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
+	normalizedReader := ioutil.NewDelimitedReader(myReader, []rune(opts.RecordDelimiter))
 	progress := &statInfo{
 		BytesScanned:   tempBytesScanned,
 		BytesProcessed: 0,
@@ -135,7 +140,7 @@ func NewInput(opts *Options) (*Input, error) {
 	}
 	reader := &Input{
 		options: opts,
-		reader:  csv.NewReader(myReader),
+		reader:  csv.NewReader(normalizedReader),
 		stats:   progress,
 	}
 	reader.firstRow = nil
