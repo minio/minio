@@ -661,7 +661,7 @@ func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffs
 	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag)
 }
 
-// GetObject - reads an object from the hashedSet based on the object name.
+// GetObjectVersion - reads an object from the hashedSet based on the object name and version.
 func (s *xlSets) GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) error {
 	return s.getHashedSet(object).GetObjectVersion(ctx, bucket, object, version, startOffset, length, writer, etag)
 }
@@ -676,6 +676,7 @@ func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string) (objI
 	return s.getHashedSet(object).GetObjectInfo(ctx, bucket, object)
 }
 
+// GetObjectInfoVersion - reads object metadata from the hashedSet based on the object name and version.
 func (s *xlSets) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
 	return s.getHashedSet(object).GetObjectInfoVersion(ctx, bucket, object, version)
 }
