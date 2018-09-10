@@ -37,8 +37,8 @@ const (
 	// XL meta format string.
 	xlVersioningFormat = "xl"
 
-	// XL json versioning path
-	xlVersioningJSONFile = "versioning.json"
+	// XL json versions file
+	xlVersioningJSONFile = "versions.json"
 
 	// Add new constants here.
 )
