@@ -372,7 +372,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
 	}
 
-	versionID := ""
+	versionId := ""
 
 	cpSrcURL, err := url.Parse(cpSrcPath)
 	if err != nil {
@@ -380,7 +380,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
 		return
 	} else {
-		versionID = cpSrcURL.Query().Get("versionId")
+		versionId = cpSrcURL.Query().Get("versionId")
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcURL.Path)
@@ -397,7 +397,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	srcInfo, err := objectAPI.GetObjectInfoVersion(ctx, srcBucket, srcObject, versionID)
+	srcInfo, err := objectAPI.GetObjectInfoVersion(ctx, srcBucket, srcObject, versionId)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -434,7 +434,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// We have to copy metadata only if source and destination are same.
 	// this changes for encryption which can be observed below.
-	if cpSrcDstSame {
+	if cpSrcDstSame && !globalVersioningSys.IsEnabled(dstBucket) {
 		srcInfo.metadataOnly = true
 	}
 
@@ -588,7 +588,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		var dstRecords []dns.SrvRecord
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
 			go func() {
-				if gerr := objectAPI.GetObjectVersion(ctx, srcBucket, srcObject, versionID, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+				if gerr := objectAPI.GetObjectVersion(ctx, srcBucket, srcObject, versionId, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag); gerr != nil {
 					pipeWriter.CloseWithError(gerr)
 					writeErrorResponse(w, ErrInternalError, r.URL)
 					return
@@ -617,7 +617,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	} else {
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
-		objInfo, err = objectAPI.CopyObjectVersion(ctx, srcBucket, srcObject, versionID, dstBucket, dstObject, srcInfo)
+		objInfo, err = objectAPI.CopyObjectVersion(ctx, srcBucket, srcObject, versionId, dstBucket, dstObject, srcInfo)
 		if err != nil {
 			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -629,6 +629,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
+
+	if versionId != "" {
+		// Add version id for source object
+		w.Header().Set("x-amz-copy-source-version-id", "\""+versionId+"\"")
+	}
+
+	if objInfo.VersionId != "" {
+		// Add version id for destination object
+		w.Header().Set("x-amz-version-id", "\""+objInfo.VersionId+"\"")
+	}
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
