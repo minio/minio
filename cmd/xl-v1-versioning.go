@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"crypto/sha1"
-	"encoding/hex"
 	"github.com/minio/minio/cmd/logger"
+	"encoding/base64"
 )
 
 // XL versioning constants.
@@ -86,11 +86,11 @@ func (m xlVersioningV1) DeriveVersionId(object, etag string) string {
 	// Note that the etag can be empty for delete markers
 	s := fmt.Sprintf("%s;%d;%s", object, len(m.ObjectVersions)+1, etag)
 	h.Write([]byte(s))
-	bs := h.Sum(nil)
+	bts := h.Sum(nil)
 
 	fmt.Println(hex.EncodeToString(bs), "<--", s)
 
-	return hex.EncodeToString(bs)
+	return base64.RawURLEncoding.EncodeToString(bts)
 }
 
 // Verifies if the backend format versioning is sane by validating
