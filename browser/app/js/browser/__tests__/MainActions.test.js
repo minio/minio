@@ -34,7 +34,7 @@ describe("MainActions", () => {
   it("should not show any actions when user has not LoggedIn and prefixWritable is false", () => {
     const wrapper = shallow(<MainActions />)
     expect(wrapper.find("#show-make-bucket").length).toBe(0)
-    expect(wrapper.find("#file-input").length).toBe(0)
+    expect(wrapper.find("#add-new-upload").length).toBe(0)
   })
 
   it("should show only file upload action when user has not LoggedIn and prefixWritable is true", () => {
