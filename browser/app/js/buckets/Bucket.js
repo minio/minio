@@ -65,7 +65,7 @@ export class Bucket extends React.Component {
         onClick={e => {
           e.preventDefault()
           this.hideBucketDropdown.bind(this)
-          setTimeout(function() {
+          setTimeout(() => {
             selectBucket(bucket)
           })
         }}
