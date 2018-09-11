@@ -73,11 +73,12 @@ func isHTTPMethod(s string) bool {
 	return false
 }
 
-func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource string, host string, err error) {
+func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource string, host string) {
 	var data []byte
-	for dataLen := 0; methodLen+dataLen < maxHeaderBytes; dataLen += 8 {
-		if data, err = bufConn.Peek(methodLen + dataLen); err != nil {
-			return "", "", err
+	for dataLen := 0; methodLen+dataLen < maxHeaderBytes; dataLen += 4 {
+		data, _ = bufConn.Peek(methodLen + dataLen)
+		if len(data) == 0 {
+			return resource, host
 		}
 
 		tokens := strings.Split(string(data), "\n")
@@ -99,7 +100,7 @@ func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource 
 			token = strings.ToLower(token)
 			if strings.HasPrefix(token, "host: ") {
 				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
-				return resource, host, nil
+				return resource, host
 			}
 		}
 
@@ -108,7 +109,7 @@ func getResourceHost(bufConn *BufConn, maxHeaderBytes, methodLen int) (resource 
 		}
 	}
 
-	return resource, host, nil
+	return resource, host
 }
 
 type acceptResult struct {
@@ -206,16 +207,7 @@ func (listener *httpListener) start() {
 			}
 
 			var resource, host string
-			if resource, host, err = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1); err != nil {
-				if !isRoutineNetErr(err) {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-					reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-					ctx := logger.SetReqInfo(context.Background(), reqInfo)
-					logger.LogIf(ctx, err)
-				}
-				bufconn.Close()
-				return
-			}
+			resource, host = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1)
 
 			header := make(http.Header)
 			if host != "" {
@@ -265,16 +257,7 @@ func (listener *httpListener) start() {
 			tokens := strings.SplitN(string(data), " ", 2)
 			if isHTTPMethod(tokens[0]) {
 				var resource, host string
-				if resource, host, err = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1); err != nil {
-					if !isRoutineNetErr(err) {
-						reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-						reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-						ctx := logger.SetReqInfo(context.Background(), reqInfo)
-						logger.LogIf(ctx, err)
-					}
-					bufconn.Close()
-					return
-				}
+				resource, host = getResourceHost(bufconn, listener.maxHeaderBytes, len(tokens[0])+1)
 
 				header := make(http.Header)
 				if host != "" {
