@@ -477,7 +477,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 			return objInfo, err
 		}
 
-		if version == "" { // Version is unspecified, so get last version
+		if version == "" && len(xlVersioning.ObjectVersions) > 0 { // Version is unspecified, so get last version
 			version = xlVersioning.ObjectVersions[len(xlVersioning.ObjectVersions)-1].Id
 		}
 
