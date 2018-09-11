@@ -270,7 +270,8 @@ func initConfig(objAPI ObjectLayer) error {
 		}
 		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
 		// to '<export_path>/.minio.sys/config/config.json'
-		if err := migrateConfigToMinioSys(objAPI); err != nil {
+		// ignore if the file doesn't exist.
+		if err := migrateConfigToMinioSys(objAPI); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
