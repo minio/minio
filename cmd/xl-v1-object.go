@@ -219,12 +219,11 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 	}
 
 	if globalVersioningSys.IsEnabled(bucket) {
-		if version == "" { // Version is unspecified, so get lastest version
+		if version == "" { // Version is unspecified, so get latest version
 			versioning, err := xl.getObjectVersioning(ctx, bucket, object)
 			if err == nil {
-				// FIXME: Use proper version
-				if versioning.ObjectVersions[0].Id != "" {
-					object = pathJoin(object, versioning.ObjectVersions[0].Id)
+				if len(versioning.ObjectVersions) > 0 {
+					object = pathJoin(object, versioning.ObjectVersions[len(versioning.ObjectVersions)-1].Id)
 				}
 			}
 			if err != nil && err != errFileNotFound {
