@@ -436,7 +436,9 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 		return nil, nil, err
 	}
 
-	for i, v := range versioning.ObjectVersions {
+	// Scan from the back (latest version first, same behaviour as AWS)
+	for i := len(versioning.ObjectVersions)-1; i >= 0; i-- {
+		v := versioning.ObjectVersions[i]
 		if !v.DeleteMarker {
 			versions = append(versions, VersionInfo{
 				Key:       object,
