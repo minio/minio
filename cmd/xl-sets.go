@@ -682,7 +682,7 @@ func (s *xlSets) GetObjectInfoVersion(ctx context.Context, bucket, object, versi
 }
 
 // DeleteObject - deletes an object from the hashedSet based on the object name.
-func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string) (err error) {
+func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string) (versionId string, err error) {
 	return s.getHashedSet(object).DeleteObject(ctx, bucket, object)
 }
 

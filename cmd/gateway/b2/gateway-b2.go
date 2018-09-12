@@ -550,21 +550,21 @@ func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string,
 }
 
 // DeleteObject deletes a blob in bucket
-func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object string) error {
+func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object string) (versionId string, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
-		return err
+		return
 	}
 	reader, err := bkt.DownloadFileByName(l.ctx, object, 0, 1)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return b2ToObjectError(err, bucket, object)
+		return "", b2ToObjectError(err, bucket, object)
 	}
 	io.Copy(ioutil.Discard, reader)
 	reader.Close()
 	err = bkt.File(reader.ID, object).DeleteFileVersion(l.ctx)
 	logger.LogIf(ctx, err)
-	return b2ToObjectError(err, bucket, object)
+	return "", b2ToObjectError(err, bucket, object)
 }
 
 // ListMultipartUploads lists all multipart uploads.

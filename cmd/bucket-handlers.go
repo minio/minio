@@ -320,7 +320,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-		dErrs[index] = deleteObject(ctx, bucket, object.ObjectName)
+		_, dErr := deleteObject(ctx, bucket, object.ObjectName)
+		dErrs[index] = dErr
 	}
 
 	// Collect deleted objects and errors if any.

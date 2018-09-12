@@ -741,13 +741,13 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 
 // DeleteObject - Deletes a blob on azure container, uses Azure
 // equivalent DeleteBlob API.
-func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) error {
+func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
-	err := blob.Delete(nil)
+	err = blob.Delete(nil)
 	if err != nil {
-		return azureToObjectError(err, bucket, object)
+		return "", azureToObjectError(err, bucket, object)
 	}
-	return nil
+	return "", nil
 }
 
 // ListMultipartUploads - It's decided not to support List Multipart Uploads, hence returning empty result.

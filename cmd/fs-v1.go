@@ -922,20 +922,20 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
-func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) error {
+func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 	// Acquire a write lock before deleting the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
-	if err := objectLock.GetLock(globalOperationTimeout); err != nil {
-		return err
+	if err = objectLock.GetLock(globalOperationTimeout); err != nil {
+		return
 	}
 	defer objectLock.Unlock()
 
-	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
-		return err
+	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
+		return
 	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return toObjectErr(err, bucket)
+	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
+		return "", toObjectErr(err, bucket)
 	}
 
 	minioMetaBucketDir := pathJoin(fs.fsPath, minioMetaBucket)
@@ -948,23 +948,23 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 		}
 		if lerr != nil && lerr != errFileNotFound {
 			logger.LogIf(ctx, lerr)
-			return toObjectErr(lerr, bucket, object)
+			return "", toObjectErr(lerr, bucket, object)
 		}
 	}
 
 	// Delete the object.
-	if err := fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
-		return toObjectErr(err, bucket, object)
+	if err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
 		err := fsDeleteFile(ctx, minioMetaBucketDir, fsMetaPath)
 		if err != nil && err != errFileNotFound {
-			return toObjectErr(err, bucket, object)
+			return "", toObjectErr(err, bucket, object)
 		}
 	}
-	return nil
+	return "", nil
 }
 
 // Returns function "listDir" of the type listDirFunc.

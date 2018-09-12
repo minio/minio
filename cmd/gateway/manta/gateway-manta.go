@@ -615,13 +615,13 @@ func (t *tritonObjects) CopyObject(ctx context.Context, srcBucket, srcObject, de
 // DeleteObject - Delete a blob in Manta, uses Triton equivalent DeleteBlob API.
 //
 // https://apidocs.joyent.com/manta/api.html#DeleteObject
-func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string) error {
-	if err := t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
+func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
+	if err = t.client.Objects().Delete(ctx, &storage.DeleteObjectInput{
 		ObjectPath: path.Join(mantaRoot, bucket, object),
 	}); err != nil {
 		logger.LogIf(ctx, err)
-		return err
+		return
 	}
 
-	return nil
+	return "", nil
 }

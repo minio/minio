@@ -664,19 +664,19 @@ func (l *ossObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 }
 
 // DeleteObject deletes a blob in bucket.
-func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) error {
+func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return ossToObjectError(err, bucket, object)
+		return "", ossToObjectError(err, bucket, object)
 	}
 
 	err = bkt.DeleteObject(object)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return ossToObjectError(err, bucket, object)
+		return "", ossToObjectError(err, bucket, object)
 	}
-	return nil
+	return "", nil
 }
 
 // fromOSSClientListMultipartsInfo converts oss ListMultipartUploadResult to ListMultipartsInfo

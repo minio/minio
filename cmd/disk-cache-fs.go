@@ -226,7 +226,7 @@ func (cfs *cacheFSObjects) purge() {
 							object.AccTime.After(expiry) {
 							continue
 						}
-						if err = cfs.DeleteObject(ctx, bucket.Name, object.Name); err != nil {
+						if _, err = cfs.DeleteObject(ctx, bucket.Name, object.Name); err != nil {
 							logger.LogIf(ctx, err)
 							continue
 						}
@@ -290,7 +290,8 @@ func (cfs *cacheFSObjects) Get(ctx context.Context, bucket, object string, start
 
 // Deletes the cached object
 func (cfs *cacheFSObjects) Delete(ctx context.Context, bucket, object string) (err error) {
-	return cfs.DeleteObject(ctx, bucket, object)
+	_, err = cfs.DeleteObject(ctx, bucket, object)
+	return
 }
 
 // convenience function to check if object is cached on this cacheFSObjects

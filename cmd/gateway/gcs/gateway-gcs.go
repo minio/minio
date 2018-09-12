@@ -893,14 +893,14 @@ func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject
 }
 
 // DeleteObject - Deletes a blob in bucket
-func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string) error {
-	err := l.client.Bucket(bucket).Object(object).Delete(l.ctx)
+func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string) (versionId string, err error) {
+	err = l.client.Bucket(bucket).Object(object).Delete(l.ctx)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return gcsToObjectError(err, bucket, object)
+		return "", gcsToObjectError(err, bucket, object)
 	}
 
-	return nil
+	return "", nil
 }
 
 // NewMultipartUpload - upload object in multiple parts

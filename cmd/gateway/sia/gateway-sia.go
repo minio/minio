@@ -558,10 +558,11 @@ func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string
 }
 
 // DeleteObject deletes a blob in bucket
-func (s *siaObjects) DeleteObject(ctx context.Context, bucket string, object string) error {
+func (s *siaObjects) DeleteObject(ctx context.Context, bucket string, object string) (versionId string, err error) {
 	// Tell Sia daemon to delete the object
 	var siaObj = path.Join(s.RootDir, bucket, object)
-	return post(ctx, s.Address, "/renter/delete/"+siaObj, "", s.password)
+	err = post(ctx, s.Address, "/renter/delete/"+siaObj, "", s.password)
+	return "", err
 }
 
 // siaObjectInfo represents object info stored on Sia

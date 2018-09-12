@@ -379,14 +379,14 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 }
 
 // DeleteObject deletes a blob in bucket
-func (l *s3Objects) DeleteObject(ctx context.Context, bucket string, object string) error {
-	err := l.Client.RemoveObject(bucket, object)
+func (l *s3Objects) DeleteObject(ctx context.Context, bucket string, object string) (versionId string, err error) {
+	err = l.Client.RemoveObject(bucket, object)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return minio.ErrorRespToObjectError(err, bucket, object)
+		return "", minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return nil
+	return "", nil
 }
 
 // ListMultipartUploads lists all multipart uploads.

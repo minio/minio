@@ -900,10 +900,9 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 // deleteObject - wrapper for delete object, deletes an object from
 // all the disks in parallel, including `xl.json` associated with the
 // object.
-func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) error {
+func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 
 	var writeQuorum int
-	var err error
 
 	isDir := hasSuffix(object, slashSeparator)
 
@@ -913,18 +912,18 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 			// FIXME: check the quorum of all versioned objects
 			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
 			if vErr != nil || len(xlVersioning.ObjectVersions) == 0 {
-				return vErr
+				return versionId, vErr
 			} else {
 				// Add Delete Marker to versioning info (without any corresponding sub directory)
-				objectVersionID := xlVersioning.DeriveVersionId(object, "")
+				versionId = xlVersioning.DeriveVersionId(object, "")
 				// Check if we need to pass along the version Id in the header (as for put object)
 				timeStamp := time.Now().UTC()
-				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, true, timeStamp})
+				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, true, timeStamp})
 				xlVersioning.ModTime = timeStamp
 				tempVersioning := mustGetUUID()
 				_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
 				_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
-				return err
+				return
 			}
 		}
 		// Read metadata associated with the object from all disks.
@@ -932,11 +931,11 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
 		if err != nil {
-			return err
+			return
 		}
 		err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 		if err != nil {
-			return err
+			return
 		}
 	} else {
 		// WriteQuorum is defaulted to N/2 + 1 for directories
@@ -976,43 +975,43 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) err
 	wg.Wait()
 
 	// return errors if any during deletion
-	return reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
+	return versionId, reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
-func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (err error) {
+func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 	// Acquire a write lock before deleting the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if perr := objectLock.GetLock(globalOperationTimeout); perr != nil {
-		return perr
+		return versionId, perr
 	}
 	defer objectLock.Unlock()
 
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
-		return err
+		return
 	}
 
 	if hasSuffix(object, slashSeparator) {
 		// Delete the object on all disks.
-		if err = xl.deleteObject(ctx, bucket, object); err != nil {
-			return toObjectErr(err, bucket, object)
+		if _, err = xl.deleteObject(ctx, bucket, object); err != nil {
+			return versionId, toObjectErr(err, bucket, object)
 		}
 	}
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
-		return ObjectNotFound{bucket, object}
+		return versionId, ObjectNotFound{bucket, object}
 	} // else proceed to delete the object.
 
 	// Delete the object on all disks.
-	if err = xl.deleteObject(ctx, bucket, object); err != nil {
-		return toObjectErr(err, bucket, object)
+	if versionId, err = xl.deleteObject(ctx, bucket, object); err != nil {
+		return versionId, toObjectErr(err, bucket, object)
 	}
 
 	// Success.
-	return nil
+	return
 }
 
 func (xl xlObjects) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {

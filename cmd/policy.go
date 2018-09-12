@@ -220,7 +220,7 @@ func removePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName stri
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	if err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
+	if _, err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucketName}
 		}
