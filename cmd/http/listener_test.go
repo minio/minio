@@ -393,11 +393,11 @@ func TestHTTPListenerAccept(t *testing.T) {
 		{[]string{"localhost:0"}, nil, "GET / HTTP/1.0\r\nHost: example.org\r\n\r\n", "200 OK\r\n", "GET / HTTP/1.0\r\n"},
 		{[]string{nonLoopBackIP + ":0"}, nil, "POST / HTTP/1.0\r\nHost: example.org\r\n\r\n", "200 OK\r\n", "POST / HTTP/1.0\r\n"},
 		{[]string{nonLoopBackIP + ":0"}, nil, "HEAD / HTTP/1.0\r\nhost: example.org\r\n\r\n", "200 OK\r\n", "HEAD / HTTP/1.0\r\n"},
-		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, "CONNECT \r\nHost: www.example.org\r\n\r\n", "200 OK\r\n", "CONNECT \r\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, nil, "CONNECT / HTTP/1.0\r\nHost: www.example.org\r\n\r\n", "200 OK\r\n", "CONNECT / HTTP/1.0\r\n"},
 		{[]string{"localhost:0"}, tlsConfig, "GET / HTTP/1.0\r\nHost: example.org\r\n\r\n", "200 OK\r\n", "GET / HTTP/1.0\r\n"},
 		{[]string{nonLoopBackIP + ":0"}, tlsConfig, "POST / HTTP/1.0\r\nHost: example.org\r\n\r\n", "200 OK\r\n", "POST / HTTP/1.0\r\n"},
 		{[]string{nonLoopBackIP + ":0"}, tlsConfig, "HEAD / HTTP/1.0\r\nhost: example.org\r\n\r\n", "200 OK\r\n", "HEAD / HTTP/1.0\r\n"},
-		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "CONNECT \r\nHost: www.example.org\r\n\r\n", "200 OK\r\n", "CONNECT \r\n"},
+		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "CONNECT / HTTP/1.0\r\nHost: www.example.org\r\n\r\n", "200 OK\r\n", "CONNECT / HTTP/1.0\r\n"},
 	}
 
 	for i, testCase := range testCases {
@@ -643,11 +643,25 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 				}
 			}()
 
+			if !testCase.secureClient && testCase.tlsConfig != nil {
+				buf := make([]byte, len(sslRequiredErrMsg))
+				var n int
+				n, err = io.ReadFull(conn, buf)
+				if err != nil {
+					t.Fatalf("Test %d: reply read: expected = <nil> got = %v", i+1, err)
+				} else if n != len(buf) {
+					t.Fatalf("Test %d: reply length: expected = %v got = %v", i+1, len(buf), n)
+				} else if !bytes.Equal(buf, sslRequiredErrMsg) {
+					t.Fatalf("Test %d: reply: expected = %v got = %v", i+1, string(sslRequiredErrMsg), string(buf))
+				}
+				continue
+			}
+
 			_, err = bufio.NewReader(conn).ReadString('\n')
 			if err == nil {
-				t.Fatalf("Test %d: reply read: expected = EOF got = <nil>", i+1)
+				t.Errorf("Test %d: reply read: expected = EOF got = <nil>", i+1)
 			} else if err.Error() != "EOF" {
-				t.Fatalf("Test %d: reply read: expected = EOF got = %v", i+1, err)
+				t.Errorf("Test %d: reply read: expected = EOF got = %v", i+1, err)
 			}
 
 			conn.Close()
