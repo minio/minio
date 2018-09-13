@@ -262,3 +262,32 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 
 	return versionId, nil
 }
+
+// deleteObjectVersion is a convenient wrapper to delete an object, this
+// is a common function to be called from object handlers and
+// web handlers.
+func deleteObjectVersion(ctx context.Context, obj ObjectLayer, bucket, object, version string, r *http.Request) (err error) {
+
+	err = obj.DeleteObjectVersion(ctx, bucket, object, version);
+	if err != nil {
+		return
+	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, _ := net.SplitHostPort(handlers.GetSourceIP(r))
+
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  event.ObjectRemovedDelete,
+		BucketName: bucket,
+		Object: ObjectInfo{
+			Name: object,
+		},
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
+
+	return
+}

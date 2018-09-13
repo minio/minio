@@ -64,6 +64,7 @@ type cacheObjects struct {
 
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObjectFn            func(ctx context.Context, bucket, object string) (versionId string, err error)
+	DeleteObjectVersionFn     func(ctx context.Context, bucket, object, version string) (err error)
 	ListObjectsFn             func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2Fn           func(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListBucketsFn             func(ctx context.Context) (buckets []BucketInfo, err error)
@@ -99,6 +100,7 @@ type CacheObjectLayer interface {
 
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error)
+	DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error)
 
 	// Multipart operations.
 	NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error)
@@ -548,7 +550,7 @@ func (c cacheObjects) GetBucketInfo(ctx context.Context, bucket string) (bucketI
 	return
 }
 
-// Delete Object deletes from cache as well if backend operation succeeds
+// DeleteObject deletes from cache as well if backend operation succeeds
 func (c cacheObjects) DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 	if versionId, err = c.DeleteObjectFn(ctx, bucket, object); err != nil {
 		return
@@ -561,6 +563,11 @@ func (c cacheObjects) DeleteObject(ctx context.Context, bucket, object string) (
 		dcache.DeleteObject(ctx, bucket, object)
 	}
 	return
+}
+
+// DeleteObjectVersion - not implemented for caching
+func (c cacheObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
+	return NotImplemented{}
 }
 
 // Returns true if object should be excluded from cache
@@ -902,6 +909,9 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 		},
 		DeleteObjectFn: func(ctx context.Context, bucket, object string) (versionId string, err error) {
 			return newObjectLayerFn().DeleteObject(ctx, bucket, object)
+		},
+		DeleteObjectVersionFn: func(ctx context.Context, bucket, object, version string) (err error) {
+			return newObjectLayerFn().DeleteObjectVersion(ctx, bucket, object, version)
 		},
 		ListObjectsFn: func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 			return newObjectLayerFn().ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)

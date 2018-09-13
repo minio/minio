@@ -1595,15 +1595,26 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	// Ignore delete object errors while replying to client, since we are
-	// supposed to reply only 204. Additionally log the error for
-	// investigation.
-	versionId, _ := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r)
+	versionId := r.URL.Query().Get("versionId")
 
-	if versionId != "" {
+	if versionId == "" {
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+		// Ignore delete object errors while replying to client, since we are
+		// supposed to reply only 204. Additionally log the error for
+		// investigation.
+		versionIdResponse, _ := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r)
+
+		if versionIdResponse != "" {
+			w.Header().Set("x-amz-version-id", versionIdResponse)
+			w.Header().Set("x-amz-delete-marker", "true")
+		}
+	} else {
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+		// Ignore delete object errors while replying to client, since we are
+		// supposed to reply only 204. Additionally log the error for
+		// investigation.
+		deleteObjectVersion(ctx, objectAPI, bucket, object, versionId, r)
 		w.Header().Set("x-amz-version-id", versionId)
-		w.Header().Set("x-amz-delete-marker", "true")
 	}
 
 	writeSuccessNoContent(w)

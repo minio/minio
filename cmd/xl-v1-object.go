@@ -909,12 +909,10 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 // object.
 func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (versionId string, err error) {
 
-	var writeQuorum int
+	// WriteQuorum is defaulted to N/2 + 1 for directories
+	writeQuorum := len(xl.getDisks())/2 + 1
 
-	isDir := hasSuffix(object, slashSeparator)
-
-	if !isDir {
-		versionedObject := object
+	if !hasSuffix(object, slashSeparator) {
 		if globalVersioningSys.IsEnabled(bucket) {
 			// FIXME: check the quorum of all versioned objects
 			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
@@ -934,7 +932,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 			}
 		}
 		// Read metadata associated with the object from all disks.
-		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, versionedObject)
+		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
 		if err != nil {
@@ -944,10 +942,18 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 		if err != nil {
 			return
 		}
-	} else {
-		// WriteQuorum is defaulted to N/2 + 1 for directories
-		writeQuorum = len(xl.getDisks())/2 + 1
 	}
+
+	err = xl.deleteObjectAcrossDisks(ctx, bucket, object, writeQuorum)
+	return
+}
+
+// deleteObjectAcrossDisks - wrapper for delete object, deletes an object from
+// all the disks in parallel, including `xl.json` associated with the
+// object.
+func (xl xlObjects) deleteObjectAcrossDisks(ctx context.Context, bucket, path string, writeQuorum int) (err error) {
+
+	isDir := hasSuffix(path, slashSeparator)
 
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -968,9 +974,9 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 			if isDir {
 				// DeleteFile() simply tries to remove a directory
 				// and will succeed only if that directory is empty.
-				e = disk.DeleteFile(bucket, object)
+				e = disk.DeleteFile(bucket, path)
 			} else {
-				e = cleanupDir(ctx, disk, bucket, object)
+				e = cleanupDir(ctx, disk, bucket, path)
 			}
 			if e != nil && e != errVolumeNotFound {
 				dErrs[index] = e
@@ -982,7 +988,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 	wg.Wait()
 
 	// return errors if any during deletion
-	return versionId, reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
+	return reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply
@@ -1019,6 +1025,101 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (ve
 
 	// Success.
 	return
+}
+
+// deleteObjectVersioned - wrapper for delete object, deletes an object from
+// all the disks in parallel, including `xl.json` associated with the
+// object.
+func (xl xlObjects) deleteObjectVersioned(ctx context.Context, bucket, object, version string) (versionId string, err error) {
+
+	// WriteQuorum is defaulted to N/2 + 1 for directories
+	writeQuorum := len(xl.getDisks())/2 + 1
+
+	if !hasSuffix(pathJoin(object, version), slashSeparator) {
+		// Read metadata associated with the objectVersioned from all disks.
+		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, pathJoin(object, version))
+		// get Quorum for this objectVersioned
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
+		if err != nil {
+			return
+		}
+		err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+		if err != nil {
+			return
+		}
+	}
+
+	// return errors if any during deletion
+	err = xl.deleteObjectAcrossDisks(ctx, bucket, pathJoin(object, version), writeQuorum)
+	return
+}
+
+// DeleteObjectVersion - deletes a specific version of an object, this call doesn't necessary reply
+// any error as it is not necessary for the handler to reply back a
+// response to the client request.
+func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
+
+	// Acquire a write lock before deleting the object.
+	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	if perr := objectLock.GetLock(globalOperationTimeout); perr != nil {
+		return perr
+	}
+	defer objectLock.Unlock()
+
+	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
+		return err
+	} else if version == "" {
+		return toObjectErr(errInvalidArgument, bucket, object, version)
+	}
+
+	if !globalVersioningSys.IsEnabled(bucket) {
+		// FIXME: Check with AWS for appropriate error
+		return toObjectErr(errInvalidArgument, bucket, object)
+	}
+
+	xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
+	if vErr != nil {
+		return vErr
+	}
+
+	// Find index for this version
+	idx := len(xlVersioning.ObjectVersions)
+	for i, vo := range xlVersioning.ObjectVersions {
+		if version == vo.Id {
+			idx = i
+			break
+		}
+	}
+
+	if idx >= len(xlVersioning.ObjectVersions) {
+		// FIXME: Check with AWS: invalid version
+		return toObjectErr(errInvalidArgument, bucket, object, version)
+	}
+
+	if !xlVersioning.ObjectVersions[idx].DeleteMarker {
+		// Delete the actual version of this object from all disks
+		if _, err = xl.deleteObjectVersioned(ctx, bucket, object, version); err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+
+	// Purge version from array
+	xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions[:idx], xlVersioning.ObjectVersions[idx+1:]...)
+
+	// Check if we still have any versions left
+	if len(xlVersioning.ObjectVersions) > 0 {
+		// Commit with the removed version across all disks
+		tempVersioning := mustGetUUID()
+		_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+		_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+	} else {
+		// Delete the complete contents of this object from all disks
+		if err = xl.deleteObjectAcrossDisks(ctx, bucket, object, len(xl.getDisks())/2 + 1); err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+
+	return nil
 }
 
 func (xl xlObjects) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {

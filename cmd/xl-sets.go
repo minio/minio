@@ -686,6 +686,11 @@ func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string)
 	return s.getHashedSet(object).DeleteObject(ctx, bucket, object)
 }
 
+// DeleteObjectVersion - deletes a specific version of an object from the hashedSet based on the object name.
+func (s *xlSets) DeleteObjectVersion(ctx context.Context, bucket string, object, version string) (err error) {
+	return s.getHashedSet(object).DeleteObjectVersion(ctx, bucket, object, version)
+}
+
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
 func (s *xlSets) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)

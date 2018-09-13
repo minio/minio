@@ -37,6 +37,10 @@ func (a GatewayUnsupported) GetObjectInfoVersion(ctx context.Context, bucket, ob
 	return ObjectInfo{}, NotImplemented{}
 }
 
+func (a GatewayUnsupported) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
+	return NotImplemented{}
+}
+
 func (a GatewayUnsupported) CopyObjectVersion(ctx context.Context, srcBucket, srcObject, version, destBucket, destObject string, srcInfo ObjectInfo) (objInfo ObjectInfo, err error) {
 	return ObjectInfo{}, NotImplemented{}
 }

@@ -967,6 +967,11 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) (v
 	return "", nil
 }
 
+// DeleteObjectVersion - not implemented for FS
+func (fs *FSObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
+	return NotImplemented{}
+}
+
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
