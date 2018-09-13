@@ -10,21 +10,11 @@
   }
 }
 
-.policy__bucket {
-  background-color: darken($policy-item-bg, 3%);
-  padding: 7px 10px;
-  border-radius: $border-radius 0 0 $border-radius;
-}
-
-
 .policy__prefix {
   flex: 1 1 auto;
-}
-
-.policy__prefix__inner {
-  display: flex;
 
   & > input[type=text] {
+    display: flex;
     border: 0;
     background-color: $policy-item-bg;
     @include size(100%, $button-height);

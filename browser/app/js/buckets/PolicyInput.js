@@ -23,7 +23,7 @@ import * as actionsAlert from "../alert/actions"
 import web from "../web"
 
 export class PolicyInput extends React.Component {
-  constructor (props) {
+  constructor(props) {
     super(props)
     this.state = {
       permissionSelected: READ_ONLY
@@ -75,16 +75,11 @@ export class PolicyInput extends React.Component {
   }
 
   render() {
-    const { bucket } = this.props
     return (
       <div className="policy__header">
         <div className="policy__prefix">
           <div className="policy__label">Prefix</div>
-
-          <div className="policy__prefix__inner">
-            <div className="policy__bucket">{bucket + "/"}</div>
-            <input type="text" ref={prefix => (this.prefix = prefix)} />
-          </div>
+          <input type="text" ref={prefix => (this.prefix = prefix)} />
         </div>
 
         <div className="policy__permission">
@@ -108,10 +103,8 @@ export class PolicyInput extends React.Component {
                 type="radio"
                 name="policy-permission"
                 value={WRITE_ONLY}
-
                 ref={policy => (this.policy = policy)}
                 onChange={this.handlePermission.bind(this)}
-
               />
               <i>W</i>
             </div>
@@ -123,7 +116,6 @@ export class PolicyInput extends React.Component {
                 value={READ_WRITE}
                 ref={policy => (this.policy = policy)}
                 onChange={this.handlePermission.bind(this)}
-
               />
               <i>RW</i>
             </div>
