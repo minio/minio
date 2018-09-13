@@ -437,17 +437,22 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 	}
 
 	// Scan from the back (latest version first, same behaviour as AWS)
-	for i := len(versioning.ObjectVersions)-1; i >= 0; i-- {
+	for i := len(versioning.ObjectVersions) - 1; i >= 0; i-- {
 		v := versioning.ObjectVersions[i]
 		if !v.DeleteMarker {
+			// Fetch info for this version
+			obj, err := xl.getObjectInfoVersion(ctx, bucket, object, v.Id)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			versions = append(versions, VersionInfo{
-				Key:       object,
-				VersionID: v.Id,
-				IsLatest:  i == len(versioning.ObjectVersions)-1,
-				// FIXME: Get size / etag / StorageClass from xl.json
-				Size:         123456789,                          // obj.Size,
-				ETag:         "0123456789abcdef0123456789abcdef", // obj.ETag,
-				StorageClass: "STANDARD",                         // obj.StorageClass,
+				Key:          object,
+				VersionID:    v.Id,
+				IsLatest:     i == len(versioning.ObjectVersions)-1,
+				Size:         obj.Size,
+				ETag:         obj.ETag,
+				StorageClass: obj.StorageClass,
 				LastModified: v.TimeStamp,
 			})
 		} else {
