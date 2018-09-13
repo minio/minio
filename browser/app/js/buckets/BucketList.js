@@ -67,8 +67,12 @@ const mapDispatchToProps = dispatch => {
   return {
     fetchBuckets: () => dispatch(actionsBuckets.fetchBuckets()),
     setBucketList: buckets => dispatch(actionsBuckets.setList(buckets)),
-    selectBucket: bucket => dispatch(actionsBuckets.selectBucket(bucket))
+    selectBucket: (bucket, prefix) =>
+      dispatch(actionsBuckets.selectBucket(bucket, prefix))
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(BucketList)
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(BucketList)
