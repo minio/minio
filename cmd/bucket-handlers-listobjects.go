@@ -104,7 +104,7 @@ func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r
 	//	listObjectsV2 = api.CacheAPI().ListObjectsV2
 	//}
 
-	// Inititiate a list objects operation based on the input params.
+	// Initiate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
 	listObjectsVersionsInfo, err := listObjectsVersions(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxkeys)
@@ -224,7 +224,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Extract all the litsObjectsV1 query params to their native values.
+	// Extract all the listObjectsV1 query params to their native values.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
 	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
