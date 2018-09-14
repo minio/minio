@@ -29,7 +29,7 @@ var printEndpointError = func() func(Endpoint, error) {
 	printOnce := make(map[Endpoint]map[string]bool)
 
 	return func(endpoint Endpoint, err error) {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.Host)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.String())
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		m, ok := printOnce[endpoint]
 		if !ok {

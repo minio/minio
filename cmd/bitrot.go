@@ -138,7 +138,9 @@ func (b *bitrotReader) ReadChunk(offset int64, length int64) ([]byte, error) {
 	if b.buf == nil {
 		b.buf = make([]byte, b.endOffset-offset)
 		if _, err := b.disk.ReadFile(b.volume, b.filePath, offset, b.buf, b.verifier); err != nil {
-			logger.LogIf(context.Background(), err)
+			ctx := context.Background()
+			logger.GetReqInfo(ctx).AppendTags("disk", b.disk.String())
+			logger.LogIf(ctx, err)
 			return nil, err
 		}
 	}
