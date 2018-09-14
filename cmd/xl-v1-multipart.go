@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"path"
 	"sort"
 	"strconv"
@@ -351,14 +352,6 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
 
-	if data.Size() >= 0 {
-		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(),
-			onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
-			return pi, toObjectErr(pErr, bucket, object)
-
-		}
-	}
-
 	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
@@ -380,16 +373,16 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
 		buffer = buffer[:xlMeta.Erasure.BlockSize]
 	}
-
-	writers := make([]*bitrotWriter, len(onlineDisks))
+	writers := make([]io.Writer, len(onlineDisks))
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
 		}
-		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, DefaultBitrotAlgorithm)
+		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	n, err := erasure.Encode(ctx, data, writers, buffer, erasure.dataBlocks+1)
+	closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -455,7 +448,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 		partsMetadata[i].Stat = xlMeta.Stat
 		partsMetadata[i].Parts = xlMeta.Parts
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, DefaultBitrotAlgorithm, writers[i].Sum()})
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, DefaultBitrotAlgorithm, bitrotWriterSum(writers[i])})
 	}
 
 	// Write all the checksum metadata.

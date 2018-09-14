@@ -42,7 +42,7 @@ type Client struct {
 }
 
 // Call - make a REST call.
-func (c *Client) Call(method string, values url.Values, body io.Reader) (reply io.ReadCloser, err error) {
+func (c *Client) Call(method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	req, err := http.NewRequest(http.MethodPost, c.url.String()+"/"+method+"?"+values.Encode(), body)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,9 @@ func (c *Client) Call(method string, values url.Values, body io.Reader) (reply i
 
 	req.Header.Set("Authorization", "Bearer "+c.newAuthToken())
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
-
+	if length > 0 {
+		req.ContentLength = length
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err

@@ -57,25 +57,6 @@ func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, wri
 	return reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 }
 
-// prepareFile hints the bottom layer to optimize the creation of a new object
-func (xl xlObjects) prepareFile(ctx context.Context, bucket, object string, size int64, onlineDisks []StorageAPI, blockSize int64, dataBlocks, writeQuorum int) error {
-	pErrs := make([]error, len(onlineDisks))
-	// Calculate the real size of the part in one disk.
-	actualSize := getErasureShardFileSize(blockSize, size, dataBlocks)
-	// Prepare object creation in a all disks
-	for index, disk := range onlineDisks {
-		if disk != nil {
-			if err := disk.PrepareFile(bucket, object, actualSize); err != nil {
-				// Save error to reduce it later
-				pErrs[index] = err
-				// Ignore later access to disk which generated the error
-				onlineDisks[index] = nil
-			}
-		}
-	}
-	return reduceWriteQuorumErrs(ctx, pErrs, objectOpIgnoredErrs, writeQuorum)
-}
-
 /// Object Operations
 
 // CopyObject - copy object source object to destination object.
@@ -348,22 +329,24 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			partLength = length - totalBytesRead
 		}
 
+		tillOffset := erasure.ShardFileTillOffset(partOffset, partLength, partSize)
 		// Get the checksums of the current part.
-		bitrotReaders := make([]*bitrotReader, len(onlineDisks))
+		readers := make([]io.ReaderAt, len(onlineDisks))
 		for index, disk := range onlineDisks {
 			if disk == OfflineDisk {
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
-			endOffset := getErasureShardFileEndOffset(partOffset, partLength, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-			bitrotReaders[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), checksumInfo.Algorithm, endOffset, checksumInfo.Hash)
+			readers[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
-
-		err := erasure.Decode(ctx, writer, bitrotReaders, partOffset, partLength, partSize)
+		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize)
+		// Note: we should not be defer'ing the following closeBitrotReaders() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
+		// we return from this function.
+		closeBitrotReaders(readers)
 		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
-		for i, r := range bitrotReaders {
+		for i, r := range readers {
 			if r == nil {
 				onlineDisks[i] = OfflineDisk
 			}
@@ -681,7 +664,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
-
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -793,6 +775,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		var curPartSize int64
 		curPartSize, err = calculatePartSizeFromIdx(ctx, data.Size(), globalPutPartSize, partIdx)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
@@ -800,27 +783,24 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// This is only an optimization.
 		var curPartReader io.Reader
 
-		if curPartSize >= 0 {
-			pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum)
-			if pErr != nil {
-				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
-			}
-		}
-
 		if curPartSize < data.Size() {
 			curPartReader = io.LimitReader(reader, curPartSize)
 		} else {
 			curPartReader = reader
 		}
 
-		writers := make([]*bitrotWriter, len(onlineDisks))
+		writers := make([]io.Writer, len(onlineDisks))
 		for i, disk := range onlineDisks {
 			if disk == nil {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, DefaultBitrotAlgorithm)
+			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(curPartSize), DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
+
 		n, erasureErr := erasure.Encode(ctx, curPartReader, writers, buffer, erasure.dataBlocks+1)
+		// Note: we should not be defer'ing the following closeBitrotWriters() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
+		// we return from this function.
+		closeBitrotWriters(writers)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
@@ -853,7 +833,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 				continue
 			}
 			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, data.ActualSize())
-			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, w.Sum()})
+			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, bitrotWriterSum(w)})
 		}
 
 		// We wrote everything, break out.

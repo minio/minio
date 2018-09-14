@@ -77,7 +77,8 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	logger.Disable = true
+	// Uncomment the following line to see trace logs during unit tests.
+	// logger.AddTarget(console.New())
 }
 
 // concurreny level for certain parallel tests.

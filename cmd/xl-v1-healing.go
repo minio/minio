@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"path"
 	"sync"
 
@@ -405,14 +406,15 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	latestDisks = shuffleDisks(latestDisks, latestMeta.Erasure.Distribution)
 	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
+	for i := range outDatedDisks {
+		if outDatedDisks[i] == nil {
+			continue
+		}
+		partsMetadata[i] = newXLMetaFromXLMeta(latestMeta)
+	}
 
 	// We write at temporary location and then rename to final location.
 	tmpID := mustGetUUID()
-
-	// Checksum of the part files. checkSumInfos[index] will
-	// contain checksums of all the part files in the
-	// outDatedDisks[index]
-	checksumInfos := make([][]ChecksumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed
 	// part to .minio/tmp/uuid/ which needs to be renamed later to
@@ -423,29 +425,31 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 		return result, toObjectErr(err, bucket, object)
 	}
 
+	erasureInfo := latestMeta.Erasure
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
-		erasureInfo := latestMeta.Erasure
-		var algorithm BitrotAlgorithm
-		bitrotReaders := make([]*bitrotReader, len(latestDisks))
+		partActualSize := latestMeta.Parts[partIndex].ActualSize
+		partNumber := latestMeta.Parts[partIndex].Number
+		tillOffset := erasure.ShardFileTillOffset(0, partSize, partSize)
+		checksumInfo := erasureInfo.GetChecksumInfo(partName)
+		readers := make([]io.ReaderAt, len(latestDisks))
 		for i, disk := range latestDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			info := partsMetadata[i].Erasure.GetChecksumInfo(partName)
-			algorithm = info.Algorithm
-			endOffset := getErasureShardFileEndOffset(0, partSize, partSize, erasureInfo.BlockSize, erasure.dataBlocks)
-			bitrotReaders[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), algorithm, endOffset, info.Hash)
+			readers[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
-		bitrotWriters := make([]*bitrotWriter, len(outDatedDisks))
+		writers := make([]io.Writer, len(outDatedDisks))
 		for i, disk := range outDatedDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			bitrotWriters[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), algorithm)
+			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), tillOffset, checksumInfo.Algorithm, erasure.ShardSize())
 		}
-		hErr := erasure.Heal(ctx, bitrotReaders, bitrotWriters, partSize)
+		hErr := erasure.Heal(ctx, readers, writers, partSize)
+		closeBitrotReaders(readers)
+		closeBitrotWriters(writers)
 		if hErr != nil {
 			return result, toObjectErr(hErr, bucket, object)
 		}
@@ -457,14 +461,13 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			}
 			// A non-nil stale disk which did not receive
 			// a healed part checksum had a write error.
-			if bitrotWriters[i] == nil {
+			if writers[i] == nil {
 				outDatedDisks[i] = nil
 				disksToHealCount--
 				continue
 			}
-			// append part checksums
-			checksumInfos[i] = append(checksumInfos[i],
-				ChecksumInfo{partName, algorithm, bitrotWriters[i].Sum()})
+			partsMetadata[i].AddObjectPart(partNumber, partName, "", partSize, partActualSize)
+			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, checksumInfo.Algorithm, bitrotWriterSum(writers[i])})
 		}
 
 		// If all disks are having errors, we give up.
@@ -479,7 +482,6 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			continue
 		}
 		partsMetadata[index] = latestMeta
-		partsMetadata[index].Erasure.Checksums = checksumInfos[index]
 	}
 
 	// Generate and write `xl.json` generated from other disks.

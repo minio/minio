@@ -133,27 +133,7 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// PrepareFileHandler - fallocate() space for a file.
-func (s *storageRESTServer) PrepareFileHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	filePath := vars[storageRESTFilePath]
-	fileSizeStr := vars[storageRESTLength]
-	fileSize, err := strconv.Atoi(fileSizeStr)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	err = s.storage.PrepareFile(volume, filePath, int64(fileSize))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-	}
-}
-
-// AppendFileHandler - append to a file.
+// AppendFileHandler - append data from the request to the file specified.
 func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -162,11 +142,6 @@ func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Req
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
 
-	if r.ContentLength < 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
 	buf := make([]byte, r.ContentLength)
 	_, err := io.ReadFull(r.Body, buf)
 	if err != nil {
@@ -174,6 +149,27 @@ func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	err = s.storage.AppendFile(volume, filePath, buf)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
+// CreateFileHandler - fallocate() space for a file and copy the contents from the request.
+func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+
+	fileSizeStr := vars[storageRESTLength]
+	fileSize, err := strconv.Atoi(fileSizeStr)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	err = s.storage.CreateFile(volume, filePath, int64(fileSize), r.Body)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -285,6 +281,34 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 	w.Write(buf)
 }
 
+// ReadFileHandler - read section of a file.
+func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+	offset, err := strconv.Atoi(vars[storageRESTOffset])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	length, err := strconv.Atoi(vars[storageRESTLength])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	rc, err := s.storage.ReadFileStream(volume, filePath, int64(offset), int64(length))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	defer rc.Close()
+	w.Header().Set("Content-Length", strconv.Itoa(length))
+	io.Copy(w, rc)
+}
+
 // ListDirHandler - list a directory.
 func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -359,18 +383,21 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteVol).HandlerFunc(httpTraceHdrs(server.DeleteVolHandler)).Queries(restQueries(storageRESTVolume)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodListVols).HandlerFunc(httpTraceHdrs(server.ListVolsHandler))
 
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodPrepareFile).HandlerFunc(httpTraceHdrs(server.PrepareFileHandler)).
-			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodAppendFile).HandlerFunc(httpTraceHdrs(server.AppendFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodWriteAll).HandlerFunc(httpTraceHdrs(server.WriteAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodCreateFile).HandlerFunc(httpTraceHdrs(server.CreateFileHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
+
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatFile).HandlerFunc(httpTraceHdrs(server.StatFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadAll).HandlerFunc(httpTraceHdrs(server.ReadAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFile).HandlerFunc(httpTraceHdrs(server.ReadFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength, storageRESTBitrotAlgo, storageRESTBitrotHash)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).

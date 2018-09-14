@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -161,7 +160,6 @@ func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
 	object string) ([]StorageAPI, []error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
-	buffer := []byte{}
 	dataErrs := make([]error, len(onlineDisks))
 
 	for i, onlineDisk := range onlineDisks {
@@ -170,31 +168,26 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			continue
 		}
 
+		erasureInfo := partsMetadata[i].Erasure
+		erasure, err := NewErasure(ctx, erasureInfo.DataBlocks, erasureInfo.ParityBlocks, erasureInfo.BlockSize)
+		if err != nil {
+			dataErrs[i] = err
+			continue
+		}
+
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
 		for _, part := range partsMetadata[i].Parts {
-			partPath := filepath.Join(object, part.Name)
-			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(part.Name)
-			verifier := NewBitrotVerifier(checksumInfo.Algorithm, checksumInfo.Hash)
-
-			// verification happens even if a 0-length
-			// buffer is passed
-			_, hErr := onlineDisk.ReadFile(bucket, partPath, 0, buffer, verifier)
-
-			isCorrupt := false
-			if hErr != nil {
-				isCorrupt = strings.HasPrefix(hErr.Error(), "Bitrot verification mismatch - expected ")
-			}
-			switch {
-			case isCorrupt:
-				fallthrough
-			case hErr == errFileNotFound, hErr == errVolumeNotFound:
-				dataErrs[i] = hErr
-				break
-			case hErr != nil:
-				logger.LogIf(ctx, hErr)
-				dataErrs[i] = hErr
+			checksumInfo := erasureInfo.GetChecksumInfo(part.Name)
+			tillOffset := erasure.ShardFileTillOffset(0, part.Size, part.Size)
+			err = bitrotCheckFile(onlineDisk, bucket, pathJoin(object, part.Name), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+			if err != nil {
+				isCorrupt := strings.HasPrefix(err.Error(), "Bitrot verification mismatch - expected ")
+				if !isCorrupt && err != errFileNotFound && err != errVolumeNotFound {
+					logger.LogIf(ctx, err)
+				}
+				dataErrs[i] = err
 				break
 			}
 		}

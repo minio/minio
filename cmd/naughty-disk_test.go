@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"io"
 	"sync"
 )
 
@@ -124,11 +125,18 @@ func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []b
 	return d.disk.ReadFile(volume, path, offset, buf, verifier)
 }
 
-func (d *naughtyDisk) PrepareFile(volume, path string, length int64) error {
+func (d *naughtyDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+	if err := d.calcError(); err != nil {
+		return nil, err
+	}
+	return d.disk.ReadFileStream(volume, path, offset, length)
+}
+
+func (d *naughtyDisk) CreateFile(volume, path string, size int64, reader io.Reader) error {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.PrepareFile(volume, path, length)
+	return d.disk.CreateFile(volume, path, size, reader)
 }
 
 func (d *naughtyDisk) AppendFile(volume, path string, buf []byte) error {
