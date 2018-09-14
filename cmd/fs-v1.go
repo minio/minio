@@ -510,8 +510,9 @@ func (fs *FSObjects) GetObjectVersion(ctx context.Context, bucket, object, versi
 	return fs.GetObject(ctx, bucket, object, offset, length, writer, etag)
 }
 
-func (fs *FSObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
-	return fs.GetObjectInfo(ctx, bucket, object)
+func (fs *FSObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, dm bool, e error) {
+	oi, e = fs.GetObjectInfo(ctx, bucket, object)
+	return
 }
 
 // GetObject - reads an object from the disk.

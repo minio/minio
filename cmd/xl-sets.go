@@ -677,7 +677,7 @@ func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string) (objI
 }
 
 // GetObjectInfoVersion - reads object metadata from the hashedSet based on the object name and version.
-func (s *xlSets) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
+func (s *xlSets) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
 	return s.getHashedSet(object).GetObjectInfoVersion(ctx, bucket, object, version)
 }
 
@@ -870,7 +870,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		if hasSuffix(walkResult.entry, slashSeparator) {
 			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoDir(ctx, bucket, walkResult.entry)
 		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfoVersion(ctx, bucket, walkResult.entry, "")
+			objInfo, _, err = s.getHashedSet(walkResult.entry).getObjectInfoVersion(ctx, bucket, walkResult.entry, "")
 		}
 		if err != nil {
 			// Ignore errFileNotFound as the object might have got

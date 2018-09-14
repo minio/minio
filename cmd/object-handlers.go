@@ -86,8 +86,9 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	getObjectInfoVersion := objectAPI.GetObjectInfoVersion
 	if versionID == "" && api.CacheAPI() != nil {
-		getObjectInfoVersion = func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
-			return api.CacheAPI().GetObjectInfo(ctx, bucket, object)
+		getObjectInfoVersion = func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
+			objInfo, err = api.CacheAPI().GetObjectInfo(ctx, bucket, object)
+			return
 		}
 	}
 
@@ -103,7 +104,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfoVersion(ctx, bucket, object, versionID)
+				_, _, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -113,8 +114,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	objInfo, err := getObjectInfoVersion(ctx, bucket, object, versionID)
+	objInfo, deleteMarker, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 	if err != nil {
+		if deleteMarker {
+			w.Header().Set("x-amz-delete-marker", "true")
+		}
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -397,7 +401,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	srcInfo, err := objectAPI.GetObjectInfoVersion(ctx, srcBucket, srcObject, versionId)
+	srcInfo, _, err := objectAPI.GetObjectInfoVersion(ctx, srcBucket, srcObject, versionId)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

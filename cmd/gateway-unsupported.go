@@ -33,8 +33,8 @@ func (a GatewayUnsupported) GetObjectVersion(ctx context.Context, bucket, object
 	return NotImplemented{}
 }
 
-func (a GatewayUnsupported) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
-	return ObjectInfo{}, NotImplemented{}
+func (a GatewayUnsupported) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, dm bool, e error) {
+	return ObjectInfo{}, false, NotImplemented{}
 }
 
 func (a GatewayUnsupported) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {

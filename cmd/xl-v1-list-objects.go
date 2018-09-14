@@ -104,7 +104,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 		} else {
 			// Set the Mode to a "regular" file.
 			var err error
-			objInfo, err = xl.getObjectInfoVersion(ctx, bucket, entry, "")
+			objInfo, _, err = xl.getObjectInfoVersion(ctx, bucket, entry, "")
 			if err != nil {
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),

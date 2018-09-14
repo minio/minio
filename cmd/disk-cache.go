@@ -60,7 +60,7 @@ type cacheObjects struct {
 	GetObjectFn            func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
 	GetObjectInfoFn        func(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
 	GetObjectVersionFn     func(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
-	GetObjectInfoVersionFn func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error)
+	GetObjectInfoVersionFn func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error)
 
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObjectFn            func(ctx context.Context, bucket, object string) (versionId string, err error)
@@ -96,7 +96,7 @@ type CacheObjectLayer interface {
 	GetObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error)
 
 	GetObjectVersion(ctx context.Context, bucket, object, version string, startOffset int64, length int64, writer io.Writer, etag string) (err error)
-	GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error)
+	GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error)
 
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) (versionId string, err error)
@@ -297,8 +297,8 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string) 
 	return objInfo, nil
 }
 
-func (c cacheObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (ObjectInfo, error) {
-	return ObjectInfo{}, NotImplemented{}
+func (c cacheObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (ObjectInfo, bool, error) {
+	return ObjectInfo{}, false, NotImplemented{}
 }
 
 // Returns function "listDir" of the type listDirFunc.

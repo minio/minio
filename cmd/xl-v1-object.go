@@ -222,8 +222,10 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 		if version == "" { // Version is unspecified, so get latest version
 			versioning, err := xl.getObjectVersioning(ctx, bucket, object)
 			if err == nil {
-				if len(versioning.ObjectVersions) > 0 {
-					object = pathJoin(object, versioning.ObjectVersions[len(versioning.ObjectVersions)-1].Id)
+				if len(versioning.ObjectVersions) > 0  &&
+					!versioning.ObjectVersions[len(versioning.ObjectVersions)-1].DeleteMarker {
+						version = versioning.ObjectVersions[len(versioning.ObjectVersions)-1].Id
+						object = pathJoin(object, version)
 				}
 			}
 			if err != nil && err != errFileNotFound {
@@ -376,38 +378,39 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 }
 
 func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
-	return xl.GetObjectInfoVersion(ctx, bucket, object, "")
+	oi, _, e = xl.GetObjectInfoVersion(ctx, bucket, object, "")
+	return oi, e
 }
 
 // GetObjectInfoVersion - reads object metadata and replies back ObjectInfo.
-func (xl xlObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, e error) {
+func (xl xlObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, version string) (oi ObjectInfo, dm bool, e error) {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
-		return oi, err
+		return oi, dm, err
 	}
 	defer objectLock.RUnlock()
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return oi, err
+		return oi, dm, err
 	}
 
 	if hasSuffix(object, slashSeparator) {
 		if !xl.isObjectDir(bucket, object) {
-			return oi, toObjectErr(errFileNotFound, bucket, object)
+			return oi, dm, toObjectErr(errFileNotFound, bucket, object)
 		}
 		if oi, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
-			return oi, toObjectErr(e, bucket, object)
+			return oi, dm, toObjectErr(e, bucket, object)
 		}
-		return oi, nil
+		return oi, dm,nil
 	}
 
-	info, err := xl.getObjectInfoVersion(ctx, bucket, object, version)
+	info, dm, err := xl.getObjectInfoVersion(ctx, bucket, object, version)
 	if err != nil {
-		return oi, toObjectErr(err, bucket, object)
+		return oi, dm, toObjectErr(err, bucket, object)
 	}
 
-	return info, nil
+	return info, dm, nil
 }
 
 func (xl xlObjects) getObjectVersioning(ctx context.Context, bucket, object string) (versioning xlVersioningV1, err error) {
@@ -441,7 +444,7 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 		v := versioning.ObjectVersions[i]
 		if !v.DeleteMarker {
 			// Fetch info for this version
-			obj, err := xl.getObjectInfoVersion(ctx, bucket, object, v.Id)
+			obj, _, err := xl.getObjectInfoVersion(ctx, bucket, object, v.Id)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -469,19 +472,19 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
 	versionedObject := object
-		// FIXME, see AWS behavior and follow it
+	// FIXME, see AWS behavior and follow it
 	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
-		return objInfo, toObjectErr(errInvalidArgument, bucket, object)
+		return objInfo, deleteMarker, toObjectErr(errInvalidArgument, bucket, object)
 	}
 
 	if globalVersioningSys.IsEnabled(bucket) {
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
 		if err == errFileNotFound {
-			return objInfo, toObjectErr(err, bucket, object)
+			return objInfo, deleteMarker, toObjectErr(err, bucket, object)
 		} else if !(err == nil && len(xlVersioning.ObjectVersions) > 0) {
-			return objInfo, err
+			return objInfo, deleteMarker, err
 		}
 
 		if version == "" && len(xlVersioning.ObjectVersions) > 0 { // Version is unspecified, so get last version
@@ -492,8 +495,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 		for _, objVersion := range xlVersioning.ObjectVersions {
 			if version == objVersion.Id && objVersion.DeleteMarker {
 				// Requested version is a Delete Marker, so return that object does not exist
-				// FIXME: Add "x-amz-delete-marker: true" response header
-				return objInfo, toObjectErr(errFileNotFound, bucket, object)
+				return objInfo, true, toObjectErr(errFileNotFound, bucket, object)
 			}
 		}
 
@@ -506,11 +508,11 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 	// get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
-		return objInfo, err
+		return objInfo, deleteMarker, err
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return objInfo, reducedErr
+		return objInfo, deleteMarker, reducedErr
 	}
 
 	// List all the file commit ids from parts metadata.
@@ -522,10 +524,10 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime)
 	if err != nil {
-		return objInfo, err
+		return objInfo, deleteMarker, err
 	}
 
-	return xlMeta.ToObjectInfo(bucket, object), nil
+	return xlMeta.ToObjectInfo(bucket, object), deleteMarker, nil
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
