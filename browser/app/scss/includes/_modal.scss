@@ -38,9 +38,10 @@
 }
 
 .modal__sub-title {
-  margin: -12px 0 20px;
+  margin: -12px 0 30px;
   font-size: $font-size-sm;
   color: $modal-sub-title-color;
+  word-wrap: break-word;
 }
 
 .modal__icon {

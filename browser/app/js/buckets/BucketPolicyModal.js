@@ -32,10 +32,8 @@ export const BucketPolicyModal = ({
         <div className="modal">
           <div className="modal__content">
             <i className="modal__close" onClick={hideBucketPolicy} />
-            <div className="modal__title">
-              Bucket Policy (
-              {currentBucket})
-            </div>
+            <div className="modal__title">Bucket Policy</div>
+            <div className="modal__sub-title">{currentBucket}</div>
 
             <div className="policy">
               <PolicyInput bucket={currentBucket} />
