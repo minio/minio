@@ -88,8 +88,6 @@ func (m xlVersioningV1) DeriveVersionId(object, etag string) string {
 	h.Write([]byte(s))
 	bts := h.Sum(nil)
 
-	fmt.Println(hex.EncodeToString(bs), "<--", s)
-
 	return base64.RawURLEncoding.EncodeToString(bts)
 }
 
