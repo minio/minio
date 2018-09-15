@@ -160,8 +160,8 @@ func checkServerConfig(ctx context.Context, objAPI ObjectLayer) error {
 	}
 
 	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
-		// Convert ObjectNotFound, Quorum errors into errConfigNotFound
-		if isErrObjectNotFound(err) || isInsufficientReadQuorum(err) {
+		// Convert ObjectNotFound to errConfigNotFound
+		if isErrObjectNotFound(err) {
 			return errConfigNotFound
 		}
 		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
@@ -187,8 +187,8 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*by
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
 	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
-		// Convert ObjectNotFound, IncompleteBody and Quorum errors into errConfigNotFound
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
+		// Convert ObjectNotFound and IncompleteBody errors into errConfigNotFound
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errConfigNotFound
 		}
 
@@ -218,7 +218,32 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
-	return initConfig(objAPI)
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Initializing configuration needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			err := initConfig(objAPI)
+			if err != nil {
+				if isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+					logger.Info("Waiting for configuration to be initialized..")
+					continue
+				}
+				return err
+			}
+
+			return nil
+		}
+	}
 }
 
 // NewConfigSys - creates new config system object.

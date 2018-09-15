@@ -395,3 +395,9 @@ func isInsufficientReadQuorum(err error) bool {
 	_, ok := err.(InsufficientReadQuorum)
 	return ok
 }
+
+// isInsufficientWriteQuorum - Check if error type is InsufficientWriteQuorum.
+func isInsufficientWriteQuorum(err error) bool {
+	_, ok := err.(InsufficientWriteQuorum)
+	return ok
+}
