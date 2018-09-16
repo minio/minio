@@ -17,6 +17,8 @@
 package s3select
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -33,8 +35,8 @@ type SelectFuncs struct {
 
 // RunSqlParser allows us to easily bundle all the functions from above and run
 // them in the appropriate order.
-func (reader *Input) runSelectParser(selectExpression string, myRow chan *Row) {
-	reqCols, alias, myLimit, whereClause, aggFunctionNames, myFuncs, myErr := reader.ParseSelect(selectExpression)
+func runSelectParser(selectExpression string, inputType SelectQuery, myRow chan *Row) {
+	reqCols, alias, myLimit, whereClause, aggFunctionNames, myFuncs, myErr := ParseSelect(selectExpression, inputType)
 	if myErr != nil {
 		rowStruct := &Row{
 			err: myErr,
@@ -42,13 +44,14 @@ func (reader *Input) runSelectParser(selectExpression string, myRow chan *Row) {
 		myRow <- rowStruct
 		return
 	}
-	reader.processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, myRow, myFuncs)
+
+	inputType.processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, myRow, myFuncs)
 }
 
 // ParseSelect parses the SELECT expression, and effectively tokenizes it into
 // its separate parts. It returns the requested column names,alias,limit of
 // records, and the where clause.
-func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
+func ParseSelect(sqlInput string, inputType SelectQuery) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
 	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
 
 	stmt, err := sqlparser.Parse(sqlInput)
@@ -147,7 +150,7 @@ func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int64, inte
 		if stmt.OrderBy != nil {
 			return nil, "", 0, nil, nil, nil, ErrParseUnsupportedToken
 		}
-		if err := reader.parseErrs(columnNames, whereClause, alias, myFuncs); err != nil {
+		if err := parseErrs(columnNames, whereClause, alias, myFuncs, inputType); err != nil {
 			return nil, "", 0, nil, nil, nil, err
 		}
 		return columnNames, alias, limit, whereClause, functionNames, myFuncs, nil
@@ -282,6 +285,64 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 	}
 }
 
+// This is the main function, It goes row by row and for records which validate
+// the where clause it currently prints the appropriate row given the requested
+// columns.
+func (reader *JSONInput) processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int64, functionNames []string, myRow chan *Row, myFunc *SelectFuncs) {
+	functionFlag := false
+	counter := -1
+	filtrCount := 0
+	if limitOfRecords == 0 {
+		limitOfRecords = math.MaxInt64
+	}
+	for {
+		readerJSON := reader.jsonRead()
+		out, err := json.Marshal(readerJSON)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		individualRecord := string(out)
+		reader.stats.BytesProcessed += int64(len(out))
+		if readerJSON == nil {
+			if functionFlag {
+				rowStruct := &Row{
+					record: individualRecord + "\n",
+				}
+				myRow <- rowStruct
+			}
+			close(myRow)
+			return
+		}
+
+		if int64(filtrCount) == limitOfRecords && limitOfRecords != 0 {
+			close(myRow)
+			return
+		}
+		//The call to the where function clause,ensures that the rows we print match our where clause.
+		condition, myErr := jsonWhereClause(individualRecord, alias, whereClause)
+		if myErr != nil {
+			rowStruct := &Row{
+				err: myErr,
+			}
+			myRow <- rowStruct
+			return
+		}
+
+		if condition {
+			// if its an asterix we just print everything in the row
+			if reqColNames[0] == "*" && functionNames[0] == "" {
+				rowStruct := &Row{
+					record: individualRecord + "\n",
+				}
+				myRow <- rowStruct
+			}
+			filtrCount++
+		}
+		counter++
+
+	}
+}
+
 // printAsterix helps to print out the entire row if an asterix is used.
 func (reader *Input) printAsterix(record []string) string {
 	myRow := record[0]
@@ -292,12 +353,19 @@ func (reader *Input) printAsterix(record []string) string {
 }
 
 // processColumnNames is a function which allows for cleaning of column names.
-func (reader *Input) processColumnNames(reqColNames []string, alias string) error {
-	for i := 0; i < len(reqColNames); i++ {
-		// The code below basically cleans the column name of its alias and other
-		// syntax, so that we can extract its pure name.
-		reqColNames[i] = cleanCol(reqColNames[i], alias)
+func processColumnNames(reqColNames []string, alias string, inputType SelectQuery) error {
+	switch inputType.(type) {
+	case *Input:
+		for i := 0; i < len(reqColNames); i++ {
+			// The code below basically cleans the column name of its alias and other
+			// syntax, so that we can extract its pure name.
+			reqColNames[i] = cleanCol(reqColNames[i], alias)
+		}
+
+	case *JSONInput:
+		// Clean for Json
 	}
+
 	return nil
 }
 

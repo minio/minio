@@ -186,12 +186,41 @@ func (reader *Input) evaluateFuncErr(myVal *sqlparser.FuncExpr) error {
 	return nil
 }
 
+// evaluateFuncErr is a function that flags errors in nested functions.
+func (reader *JSONInput) evaluateFuncErr(myVal *sqlparser.FuncExpr) error {
+	if myVal == nil {
+		return nil
+	}
+	if !supportedFunc(myVal.Name.CompliantName()) {
+		return ErrUnsupportedSQLOperation
+	}
+	for i := 0; i < len(myVal.Exprs); i++ {
+		switch tempArg := myVal.Exprs[i].(type) {
+		case *sqlparser.StarExpr:
+			return ErrParseUnsupportedCallWithStar
+		case *sqlparser.AliasedExpr:
+			switch col := tempArg.Expr.(type) {
+			case *sqlparser.FuncExpr:
+				if err := reader.evaluateFuncErr(col); err != nil {
+					return err
+				}
+			case *sqlparser.ColName:
+				if err := reader.colNameErrs([]string{col.Name.CompliantName()}); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // evaluateIsExpr is a function for evaluating expressions of the form "column
 // is ...."
 func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []string, columnNames map[string]int, alias string) (bool, error) {
 	operator := myFunc.Operator
 	var colName string
 	var myVal string
+
 	switch myIs := myFunc.Expr.(type) {
 	// case for literal val
 	case *sqlparser.SQLVal:
