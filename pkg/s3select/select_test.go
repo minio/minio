@@ -677,7 +677,7 @@ func TestMyXMLFunction(t *testing.T) {
 		expectedStat     int
 		expectedProgress int
 	}{
-		{159, 165},
+		{150, 156},
 	}
 	for _, table := range tables {
 		myVal, _ := s3s.createStatXML()
@@ -764,7 +764,7 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 		expectedStat       int
 		expectedProgress   int
 	}{
-		{myVal, myOtherVal, 242, 252},
+		{myVal, myOtherVal, 233, 243},
 	}
 	for _, table := range tables {
 		var currBuf = &bytes.Buffer{}

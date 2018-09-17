@@ -242,6 +242,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			OutputFieldDelimiter: selectReq.OutputSerialization.CSV.FieldDelimiter,
 			StreamSize:           objInfo.Size,
 			HeaderOpt:            selectReq.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
+			Progress:             selectReq.RequestProgress.Enabled,
 		}
 		s3s, err := s3select.NewInput(options)
 		if err != nil {
