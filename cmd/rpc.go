@@ -26,7 +26,14 @@ import (
 
 	xrpc "github.com/minio/minio/cmd/rpc"
 	xnet "github.com/minio/minio/pkg/net"
+	xtime "github.com/minio/minio/pkg/time"
 )
+
+// minRPCRetryTimeout - minimum RPC retry timeout on network failure is one minute.
+const minRPCRetryTimeout = 1 * time.Minute
+
+// maxRPCRetryTimeout - maximum RPC retry timeout on network failure is 30 minute.
+const maxRPCRetryTimeout = 30 * time.Minute
 
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
@@ -161,10 +168,10 @@ type RPCClient struct {
 	args        RPCClientArgs
 	authToken   string
 	rpcClient   *xrpc.Client
-	retryTicker *time.Ticker
+	retryTicker *xtime.ExponentTicker
 }
 
-func (client *RPCClient) setRetryTicker(ticker *time.Ticker) {
+func (client *RPCClient) setRetryTicker(ticker *xtime.ExponentTicker) {
 	if ticker == nil {
 		client.RLock()
 		isNil := client.retryTicker == nil
@@ -217,7 +224,7 @@ func (client *RPCClient) Call(serviceMethod string, args interface {
 		}
 
 		if isNetError(err) {
-			client.setRetryTicker(time.NewTicker(xrpc.DefaultRPCTimeout))
+			client.setRetryTicker(xtime.NewExponentTicker(minRPCRetryTimeout, maxRPCRetryTimeout))
 		} else {
 			client.setRetryTicker(nil)
 		}
