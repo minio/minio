@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,6 +31,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -182,26 +184,66 @@ func contains(slice interface{}, elem interface{}) bool {
 	return false
 }
 
+// profilerWrapper is created becauses pkg/profiler doesn't
+// provide any API to calculate the profiler file path in the
+// disk since the name of this latter is randomly generated.
+type profilerWrapper struct {
+	stopFn func()
+	pathFn func() string
+}
+
+func (p profilerWrapper) Stop() {
+	p.stopFn()
+}
+
+func (p profilerWrapper) Path() string {
+	return p.pathFn()
+}
+
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
-func startProfiler(profiler string) interface {
+func startProfiler(profilerType, dirPath string) (interface {
 	Stop()
-} {
-	// Enable profiler if ``_MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
-	switch profiler {
-	case "cpu":
-		return profile.Start(profile.CPUProfile, profile.NoShutdownHook)
-	case "mem":
-		return profile.Start(profile.MemProfile, profile.NoShutdownHook)
-	case "block":
-		return profile.Start(profile.BlockProfile, profile.NoShutdownHook)
-	default:
-		return nil
+	Path() string
+}, error) {
+
+	var err error
+	if dirPath == "" {
+		dirPath, err = ioutil.TempDir("", "profile")
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	var profiler interface {
+		Stop()
+	}
+
+	// Enable profiler, supported types are [cpu, mem, block].
+	switch profilerType {
+	case "cpu":
+		profiler = profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "mem":
+		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "block":
+		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	default:
+		return nil, errors.New("profiler type unknown")
+	}
+
+	return &profilerWrapper{
+		stopFn: profiler.Stop,
+		pathFn: func() string {
+			return filepath.Join(dirPath, profilerType+".pprof")
+		},
+	}, nil
 }
 
 // Global profiler to be used by service go-routine.
 var globalProfiler interface {
+	// Stop the profiler
 	Stop()
+	// Return the path of the profiling file
+	Path() string
 }
 
 // dump the request into a string in JSON format.
