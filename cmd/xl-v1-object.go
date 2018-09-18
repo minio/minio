@@ -1091,8 +1091,7 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	}
 
 	if idx >= len(xlVersioning.ObjectVersions) {
-		// FIXME: Check with AWS: invalid version
-		return toObjectErr(errInvalidArgument, bucket, object, version)
+		return toObjectErr(errInvalidVersionId)
 	}
 
 	if !xlVersioning.ObjectVersions[idx].DeleteMarker {

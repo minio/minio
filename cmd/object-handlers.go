@@ -1627,7 +1627,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		// Ignore delete object errors while replying to client, since we are
 		// supposed to reply only 204. Additionally log the error for
 		// investigation.
-		deleteObjectVersion(ctx, objectAPI, bucket, object, versionId, r)
+		if err := deleteObjectVersion(ctx, objectAPI, bucket, object, versionId, r); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 		w.Header().Set("x-amz-version-id", versionId)
 	}
 
