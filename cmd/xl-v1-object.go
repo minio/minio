@@ -1071,12 +1071,9 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
 		return err
 	} else if version == "" {
-		return toObjectErr(errInvalidArgument, bucket, object, version)
-	}
-
-	if !globalVersioningSys.IsEnabled(bucket) {
-		// FIXME: Check with AWS for appropriate error
 		return toObjectErr(errInvalidArgument, bucket, object)
+	} else if !globalVersioningSys.IsEnabled(bucket) {
+		return toObjectErr(errInvalidVersionId, bucket, object)
 	}
 
 	xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
