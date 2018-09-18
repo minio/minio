@@ -235,15 +235,20 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	versionID := r.URL.Query().Get("versionId")
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
 		return
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
+	getObjectInfoVersion := objectAPI.GetObjectInfoVersion
+	if !globalVersioningSys.IsEnabled(bucket) && api.CacheAPI() != nil {
+		getObjectInfoVersion = func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
+			objInfo, err = api.CacheAPI().GetObjectInfo(ctx, bucket, object)
+			return
+		}
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
@@ -258,7 +263,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object)
+				_, _, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -268,9 +273,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object)
+	objInfo, _, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		if versionID != "" && err == errInvalidVersionId {
+			// AWS S3 returns BadRequest on HEAD calls for invalid version ids
+			writeErrorResponseHeadersOnly(w, ErrBadRequest)
+		} else {
+			writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		}
 		return
 	}
 

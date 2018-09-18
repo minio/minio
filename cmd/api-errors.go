@@ -128,6 +128,7 @@ const (
 	ErrSlowDown
 	ErrInvalidPrefixMarker
 	ErrInvalidVersionId
+	ErrBadRequest
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -544,6 +545,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidVersionId: {
 		Code:           "InvalidArgument",
 		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBadRequest: {
+		Code:           "BadEequest",
+		Description:    "Bad request",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
