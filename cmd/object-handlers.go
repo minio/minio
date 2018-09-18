@@ -85,7 +85,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	getObjectInfoVersion := objectAPI.GetObjectInfoVersion
-	if versionID == "" && api.CacheAPI() != nil {
+	if !globalVersioningSys.IsEnabled(bucket) && api.CacheAPI() != nil {
 		getObjectInfoVersion = func(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
 			objInfo, err = api.CacheAPI().GetObjectInfo(ctx, bucket, object)
 			return
