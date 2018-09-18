@@ -127,6 +127,7 @@ const (
 	ErrMaximumExpires
 	ErrSlowDown
 	ErrInvalidPrefixMarker
+	ErrInvalidVersionId
 	// Add new error codes here.
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -540,6 +541,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Invalid marker prefix combination",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidVersionId: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
@@ -888,6 +894,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrAccessDenied // no access without correct key
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
+	case errInvalidVersionId:
+		apiErr = ErrInvalidVersionId
 	}
 
 	if apiErr != ErrNone {

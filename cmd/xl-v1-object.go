@@ -471,12 +471,12 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 	return versions, deleteMarkers, nil
 }
 
-// getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
+// getObjectInfoVersion - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
 	versionedObject := object
 	// FIXME, see AWS behavior and follow it
 	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
-		return objInfo, deleteMarker, toObjectErr(errInvalidArgument, bucket, object)
+		return objInfo, deleteMarker, toObjectErr(errInvalidVersionId)
 	}
 
 	if globalVersioningSys.IsEnabled(bucket) {
