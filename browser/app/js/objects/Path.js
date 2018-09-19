@@ -34,13 +34,12 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
         dirPath.push(dir)
         let dirPath_ = dirPath.join("/") + "/"
         return (
-          <span
-            className="path__item"
-            key={i}
-            onClick={e => onPrefixClick(e, dirPath_)}
-          >
-            {dir}
-          </span>
+          <div className="path__item">
+            <span key={i} onClick={e => onPrefixClick(e, dirPath_)}>
+              {dir}
+            </span>
+            <i className="path__separator" />
+          </div>
         )
       }
     })
@@ -60,9 +59,10 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
     >
       {dirPath.length > 2 ? prevLink : ""}
 
-      <span className="path__item" onClick={e => onPrefixClick(e, "")}>
-        {currentBucket}
-      </span>
+      <div className="path__item" onClick={e => onPrefixClick(e, "")}>
+        <span>{currentBucket}</span>
+        <i className="path__separator" />
+      </div>
       {path}
     </div>
   )

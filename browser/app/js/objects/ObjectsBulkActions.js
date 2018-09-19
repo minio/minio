@@ -108,7 +108,7 @@ export class ObjectsBulkActions extends React.Component {
             disabled={!checkedObjectsCount}
           >
             <img src={iconDelete} alt="" />
-            Delete selected
+            <span>Delete selected</span>
           </button>
 
           {loggedIn && (
@@ -119,7 +119,7 @@ export class ObjectsBulkActions extends React.Component {
               disabled={checkedObjectsCount != 1}
             >
               <img src={iconShare} alt="" />
-              Share
+              <span>Share</span>
             </button>
           )}
           <button
@@ -129,8 +129,9 @@ export class ObjectsBulkActions extends React.Component {
             disabled={!checkedObjectsCount}
           >
             <img src={iconDownload} alt="" />
-            Download
-            {checkedObjects.length > 1 ? " all as zip" : " object"}
+            <span>
+              Download {checkedObjects.length > 1 ? " all as zip" : " object"}
+            </span>
           </button>
           <span
             id="close-bulk-actions"
@@ -138,7 +139,7 @@ export class ObjectsBulkActions extends React.Component {
             onClick={clearChecked}
           >
             <img src={iconClose} alt="" />
-            Cancel
+            <span>Cancel</span>
           </span>
         </div>
 

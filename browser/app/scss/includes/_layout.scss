@@ -1,6 +1,5 @@
 #main {
   @include size(100%, 100%);
-  min-width: 1200px; // TODO: Has to go when doing responsive
   display: flex;
 }
 
@@ -10,4 +9,12 @@
   position: relative;
   display: flex;
   flex-direction: column;
+
+  @include media-breakpoint-up(sm) {
+    padding: 20px 20px 0;
+  }
+
+  @include media-breakpoint-down(xs) {
+    padding: 10px 10px 0;
+  }
 }

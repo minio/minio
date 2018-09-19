@@ -3,9 +3,49 @@
   background-color: $sidebar-bg;
   overflow: auto;
   flex: 0 0 auto;
-  @include size($sidebar-width, 100%);
   display: flex;
   flex-direction: column;
+  transition: transform 300ms;
+  @include size($sidebar-width, 100%);
+
+  @include media-breakpoint-down(sm) {
+    position: fixed;
+    z-index: $sidebar-mobile-z-index;
+    left: 0;
+    top: 0;
+    transform: translate3d(-$sidebar-width, 0, 0);
+  }
+}
+
+.sidebar--toggled {
+  @include media-breakpoint-down(sm) {
+    transform: translate3d(0, 0, 0);
+  }
+
+  @include media-breakpoint-down(xs) {
+    width: 100%;
+  }
+}
+
+.sidebar__close {
+  @include media-breakpoint-up(md) {
+    display: none;
+  }
+
+  @include media-breakpoint-down(sm) {
+    @include size(23px, 23px);
+    background: $modal-close-icon no-repeat center;
+    position: absolute;
+    right: 15px;
+    top: 23px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 300ms;
+
+    &:hover {
+      background-color: $white;
+    }
+  }
 }
 
 
@@ -15,6 +55,7 @@
   align-items: center;
   padding: 18px;
   flex: 0 0 auto;
+  margin-bottom: 5px;
 }
 
 .logo__img {
@@ -39,7 +80,7 @@
 .bucket-search {
   border-radius: 3px;
   position: relative;
-  padding: 15px 20px 0;
+  padding: 0 20px;
 }
 
 .bucket-search__text {
@@ -246,5 +287,22 @@
 @media(max-height: $breakpoint-max-height - 1) {
   .sidebar__bottom {
     display: none;
+  }
+}
+
+
+// Backdrop
+.sidebar__backdrop {
+  @include media-breakpoint-up(md) {
+    display: none;
+  }
+
+  @include media-breakpoint-down(sm) {
+    @include size(100%, 100%);
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: $sidebar-backdrop-z-index;
+    cursor: pointer;
   }
 }

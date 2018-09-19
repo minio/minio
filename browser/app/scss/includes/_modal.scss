@@ -63,7 +63,6 @@
 .modal__close {
   @include size(23px, 23px);
   background: $modal-close-icon no-repeat center;
-  background-size: 9px;
   position: absolute;
   right: 15px;
   top: 15px;

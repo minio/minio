@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   flex: 1 1 100%;
+  min-height: 37px;
   margin-left: -5px;
 }
 
@@ -11,42 +12,64 @@
 }
 
 .path__item {
-  position: relative;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
 
-  &:not(:nth-last-child(4)) {
-    border-radius: 2px;
-    margin-right: 25px;
-    padding: 3px 5px;
+  &:only-child,
+  &:last-child {
+    .path__separator {
+      display: none;
+    }
   }
 
   &:not(:nth-last-child(-n+3)) {
     display: none;
   }
 
-  &:not(:last-child) {
-    &:after {
-      position: absolute;
-      content: '';
-      @include size(7px, 11px);
-      background: $path-seperator-icon no-repeat center;
-      right: -15px;
-      top: 6px;
+  & > span {
+    padding: 5px;
+    @include text-truncate();
+    border-radius: $border-radius;
+    display: block;
+    position: relative;
+    line-height: 100%;
+
+    @include media-breakpoint-up(sm) {
+      max-width: 150px;
+    }
+
+    @include media-breakpoint-down(xs) {
+      max-width: 40px;
+      font-size: $font-size-sm;
     }
   }
 
-  &:hover {
-    background-color: $path-item-hover-bg;
+  &:not(:last-child) {
+    & > span {
+      cursor: pointer;
+
+      &:hover {
+        background-color: $path-item-hover-bg;
+      }
+    }
   }
+}
+
+.path__separator {
+  @include size(7px, 11px);
+  background: $path-seperator-icon no-repeat center;
+  margin: 0 5px;
+  position: relative;
+  top: 1px;
 }
 
 .path__back {
   position: absolute;
-  left: 5px;
-  top: -7px;
+  left: 0;
+  top: 0;
   cursor: pointer;
   @include size(37px, 37px);
-  border-radius: 3px;
+  border-radius: $border-radius;
   background: $objects-icon-bg $path-back-icon no-repeat center;
   will-change: background-color;
   transition: background-color 300ms;

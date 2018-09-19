@@ -17,7 +17,7 @@
   max-width: 400px;
   width: 100%;
   text-align: center;
-  padding: 30px 0;
+  padding: 30px 10px;
 }
 
 .login__btn {
@@ -68,22 +68,28 @@
   display: flex;
   flex: 0 0 100px;
   align-items: center;
+  justify-content: center;
+}
 
-  @media(max-height: $breakpoint-max-height - 1) {
+.login__host {
+  @include media-breakpoint-up(sm) {
+    color: $theme-color-muted;
+
+    & > img {
+      vertical-align: top;
+      margin: -1px 5px 0 0;
+    }
+  }
+
+  @include media-breakpoint-down(xs) {
     display: none;
   }
 }
 
-.login__host {
-  color: $theme-color-muted;
-
-  & > img {
-    vertical-align: top;
-    margin: -1px 5px 0 0;
-  }
-}
-
 .login__logo {
-  margin-left: auto;
   width: $login-logo-width;
+
+  @include media-breakpoint-up(sm) {
+    margin-left: auto;
+  }
 }

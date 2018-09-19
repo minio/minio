@@ -46,10 +46,11 @@ export const ObjectItem = ({
       htmlFor={id}
       className={classNames({
         objects__row: true,
-        "objects__row--checked": checked
+        "objects__row--checked": checked,
+        "objects__row--folder": getDataType(name, contentType) === "folder"
       })}
     >
-      <div className="objects__item">
+      <div className="objects__item objects__item--icon">
         <div
           className={
             "objects__icon objects__icon--" + getDataType(name, contentType)

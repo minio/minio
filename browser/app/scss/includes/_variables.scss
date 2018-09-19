@@ -22,7 +22,7 @@ $theme-color-dark: #263238;
 $theme-color-light: #d3e0ec;
 $theme-color-grey: #f6f9fa;
 $theme-color-muted: #99a9b1;
-$theme-color-hover: #f4f4f4;
+$theme-color-hover: #f0f7fa;
 
 
 // Fonts
@@ -55,12 +55,14 @@ $header-z-index: 100;
 $logo-container-width: 280px;
 $guest-login-bg: $red;
 $guest-login-hover-bg: darken($red, 10%);
+$sidebar-toggle-icon: url(../img/icons/menu.svg);
 
 
 // Sidebar
 $sidebar-width: 225px;
 $sidebar-bg: #f5f7f8;
-$sidebar-z-index: $header-z-index + 1;
+$sidebar-mobile-z-index: $header-z-index + 2;
+$sidebar-backdrop-z-index: $sidebar-mobile-z-index - 1;
 $sidebar-bottom-color: lighten($body-color, 10%);
 $sidebar-bottom-bg: darken($sidebar-bg, 5%);
 $storage-bg: $white;
@@ -68,7 +70,7 @@ $storage-fill-bg: #2dbcff;
 
 
 // Buckets
-$buckets-item-hover-bg: #dee4e7;
+$buckets-item-hover-bg: #e8eef1;
 $buckets-item-color: $body-color;
 $buckets-item-active-color: #effaff;
 $buckets-item-active-bg: $theme-color-dark;
@@ -86,14 +88,20 @@ $path-back-icon: url(../img/icons/path-previous.svg);
 $path-back-bg: #f5f7f8;
 
 
+// Icons
+$icon-bg: #f0f7fa;
+
+
 // Objects
 $objects-row-checked-bg: #e4f2f9;
 $objects-row-hover-bg: #f0f7fa;
-$objects-row-checked-border-color: rgba($white, 0.1) !important;
-$objects-icon-bg: #f0f7fa;
+$objects-icon-bg: $icon-bg;
 $objects-icon-border-color: #dce8ec;
-$objects-header-border-color: #f1f5f7;
+$objects-header-border-color: #f0f7fa;
 $objects-loading-color: #effaff;
+$objects-icon-size: 37px;
+$objects-row-mobile-border-color: $objects-row-checked-bg;
+$objects-row-min-height: 57px;
 
 
 // Settings
@@ -101,10 +109,6 @@ $settings-menu-bg: $theme-color-dark;
 $settings-z-index: 100;
 $settings-backdrop-z-index: $settings-z-index - 1;
 $settings-menu-expand-width: 500px;
-
-
-// Icons
-$icon-hover-bg: #f5f7f8;
 
 
 // Add new

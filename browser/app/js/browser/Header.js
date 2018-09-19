@@ -19,7 +19,9 @@ import Path from "../objects/Path"
 import SettingsMenu from "./SettingsMenu"
 import web from "../web"
 import { minioBrowserPrefix } from "../constants"
+import { connect } from "react-redux"
 import classNames from "classnames"
+import * as actionsCommon from "./actions"
 import iconMore from "../../img/icons/more.svg"
 
 export class Header extends React.Component {
@@ -66,9 +68,12 @@ export class Header extends React.Component {
 
   render() {
     const loggedIn = web.LoggedIn()
+    const { toggleSidebar } = this.props
 
     return (
       <header className="header">
+        <div className="sidebar-toggle" onClick={toggleSidebar} />
+
         <Path />
 
         {loggedIn ? (
@@ -102,4 +107,16 @@ export class Header extends React.Component {
   }
 }
 
-export default Header
+const mapStateToProps = state => {
+  return {
+    sidebarOpen: state.browser.sidebarOpen
+  }
+}
+
+const mapDispatchToProps = dispatch => {
+  return {
+    toggleSidebar: () => dispatch(actionsCommon.toggleSidebar())
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Header)

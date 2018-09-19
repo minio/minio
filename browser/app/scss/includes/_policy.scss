@@ -56,12 +56,11 @@
 }
 
 .policy__item__remove {
-  @include size(21px, 21px);
+  @include size(23px, 23px);
   opacity: 0;
   transform: scale(0);
   position: absolute;
   background: $policy-close-icon no-repeat center;
-  background-size: 9px;
   top: 14px;
   right: 10px;
   border-radius: 50%;

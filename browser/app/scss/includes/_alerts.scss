@@ -2,16 +2,19 @@
   position: fixed;
   margin: 0;
   color: $white;
-  width: 100%;
   padding: 18px 35px 18px 20px;
   z-index: $alert-z-index;
+  width: calc(100% - 20px);
+
+  @include media-breakpoint-up(sm) {
+    max-width: $alert-max-width;
+  }
 
   &:not(.alert--progress) {
     border-radius: $border-radius;
-    max-width: $alert-max-width;
-    right: 20px;
-    top: 20px;
     box-shadow: $alert-box-shadow;
+    right: 10px;
+    top: 10px;
   }
 }
 
@@ -22,14 +25,13 @@
 
 
 .alert__close {
-  @include size(23px, 23px);
+  @include size(25px, 25px);
   background: $alert-close-icon no-repeat center;
-  background-size: 9px;
   cursor: pointer;
   margin-left: auto;
   transition: background-color 300ms;
   position: absolute;
-  top: 15px;
+  top: 13px;
   right: 15px;
   border-radius: 50%;
 

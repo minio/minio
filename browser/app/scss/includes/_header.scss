@@ -1,9 +1,17 @@
 .header {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex: 0 0 auto;
-  padding: 20px 25px 12px;
+  margin-bottom: 15px;
+  padding: 0 5px;
+
+  @include media-breakpoint-down(xs) {
+    padding: 10px 15px;
+    margin: -10px -10px 0;
+    box-shadow: 0 0 10px rgba($black, 0.1);
+    z-index: $header-z-index;
+  }
 }
 
 .guest-login {
@@ -17,5 +25,25 @@
   &:hover {
     background-color: $guest-login-hover-bg;
     color: $white;
+  }
+}
+
+.sidebar-toggle {
+  @include media-breakpoint-down(sm) {
+    @include size(37px, 37px);
+    background: $icon-bg $sidebar-toggle-icon no-repeat center center;
+    transition: background-color 200ms;
+    cursor: pointer;
+    border-radius: $border-radius;
+    flex-shrink: 0;
+    margin-right: 12px;
+
+    &:hover {
+      background-color: darken($icon-bg, 3%);
+    }
+  }
+
+  @include media-breakpoint-up(md) {
+    display: none;
   }
 }

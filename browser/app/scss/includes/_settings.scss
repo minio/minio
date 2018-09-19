@@ -75,11 +75,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
+  border-radius: $border-radius;
   cursor: pointer;
+  transition: background-color 300ms;
 
   &:hover {
-    background-color: $icon-hover-bg;
+    background-color: $theme-color-hover;
   }
 }
 
@@ -97,7 +98,13 @@
 }
 
 .settings__menu--expand {
-  width: $settings-menu-expand-width;
+  @include media-breakpoint-up(sm) {
+    width: $settings-menu-expand-width;
+  }
+
+  @include media-breakpoint-down(xs) {
+    width: 100%;
+  }
 }
 
 .settings__nav {
@@ -131,7 +138,7 @@
   right: 0;
   top: 0;
   width: 100%;
-  padding: 30px;
+  padding: 25px;
   transition: opacity 300ms, transform 500ms;
   opacity: 0.01;
   z-index: 0;

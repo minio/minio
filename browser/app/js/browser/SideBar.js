@@ -28,34 +28,46 @@ import StorageInfo from "./StorageInfo"
 
 const loggedIn = web.LoggedIn()
 
-export const SideBar = ({ sidebarOpen }) => {
-  return (
-    <aside
-      className={classNames({
-        sidebar: true,
-        toggled: sidebarOpen
-      })}
-    >
-      <div className="logo">
-        <img className="logo__img" src={logo} alt="" />
-        <div className="logo__text">
-          <small>Minio</small>
-          Browser
-        </div>
-      </div>
+export class SideBar extends React.Component {
+  render() {
+    const { sidebarOpen, closeSidebar } = this.props
 
-      {loggedIn && <BucketSearch />}
+    return (
+      <React.Fragment>
+        <aside
+          className={classNames({
+            sidebar: true,
+            "sidebar--toggled": sidebarOpen
+          })}
+        >
+          <i className="close sidebar__close" onClick={closeSidebar} />
 
-      <div className="buckets">
-        <BucketList />
-      </div>
+          <div className="logo">
+            <img className="logo__img" src={logo} alt="" />
+            <div className="logo__text">
+              <small>Minio</small>
+              Browser
+            </div>
+          </div>
 
-      <div className="sidebar__bottom">
-        <Host />
-        {loggedIn && <StorageInfo />}
-      </div>
-    </aside>
-  )
+          {loggedIn && <BucketSearch />}
+
+          <div className="buckets">
+            <BucketList />
+          </div>
+
+          <div className="sidebar__bottom">
+            <Host />
+            {loggedIn && <StorageInfo />}
+          </div>
+        </aside>
+
+        {sidebarOpen && (
+          <div className="sidebar__backdrop" onClick={closeSidebar} />
+        )}
+      </React.Fragment>
+    )
+  }
 }
 
 const mapStateToProps = state => {
@@ -66,7 +78,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    clickOutside: () => dispatch(actionsCommon.closeSidebar())
+    closeSidebar: () => dispatch(actionsCommon.closeSidebar())
   }
 }
 
