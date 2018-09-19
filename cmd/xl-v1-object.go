@@ -491,12 +491,13 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 			version = xlVersioning.ObjectVersions[len(xlVersioning.ObjectVersions)-1].Id
 		}
 
-		// Scan for a Delete Marker
-		for _, objVersion := range xlVersioning.ObjectVersions {
-			if version == objVersion.Id && objVersion.DeleteMarker {
-				// Requested version is a Delete Marker, so return that object does not exist
-				return objInfo, true, toObjectErr(errFileNotFound, bucket, object)
-			}
+		// Find index for this version
+		idx, found := xlVersioning.FindVersion(version)
+		if !found {
+			return objInfo, deleteMarker, toObjectErr(errInvalidVersionId)
+		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
+			// Requested version is a Delete Marker, so return that object does not exist
+			return objInfo, true, toObjectErr(errFileNotFound, bucket, object)
 		}
 
 		versionedObject = pathJoin(object, version)
@@ -1082,19 +1083,10 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	}
 
 	// Find index for this version
-	idx := len(xlVersioning.ObjectVersions)
-	for i, vo := range xlVersioning.ObjectVersions {
-		if version == vo.Id {
-			idx = i
-			break
-		}
-	}
-
-	if idx >= len(xlVersioning.ObjectVersions) {
+	idx, found := xlVersioning.FindVersion(version)
+	if !found {
 		return toObjectErr(errInvalidVersionId)
-	}
-
-	if !xlVersioning.ObjectVersions[idx].DeleteMarker {
+	} else if !xlVersioning.ObjectVersions[idx].DeleteMarker {
 		// Delete the actual version of this object from all disks
 		if _, err = xl.deleteObjectVersioned(ctx, bucket, object, version); err != nil {
 			return toObjectErr(err, bucket, object)

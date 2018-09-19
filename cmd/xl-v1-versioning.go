@@ -91,6 +91,18 @@ func (m xlVersioningV1) DeriveVersionId(object, etag string) string {
 	return base64.RawURLEncoding.EncodeToString(bts)
 }
 
+// FindVersion gets the corresponding index of a version (if any)
+func (m xlVersioningV1) FindVersion(version string) (idx int, found bool) {
+	idx = len(m.ObjectVersions)
+	for i, vo := range m.ObjectVersions {
+		if version == vo.Id {
+			idx, found = i, true
+			return
+		}
+	}
+	return
+}
+
 // Verifies if the backend format versioning is sane by validating
 // the version string and format style.
 func isXLVersioningFormatValid(version, format string) bool {
