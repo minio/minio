@@ -68,3 +68,24 @@ func parseCopyPartRange(rangeString string, resourceSize int64) (offset, length 
 
 	return hrange.GetOffsetLength(resourceSize)
 }
+
+func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
+	hrange, err = parseRequestRangeSpec(rangeString)
+	if err != nil {
+		return nil, err
+	}
+	if hrange.IsSuffixLength || hrange.Start < 0 || hrange.End < 0 {
+		return nil, errInvalidRange
+	}
+	return hrange, nil
+}
+
+func checkCopyPartRangeWithSize(rs *HTTPRangeSpec, resourceSize int64) (err error) {
+	if rs == nil {
+		return nil
+	}
+	if rs.IsSuffixLength || rs.Start >= resourceSize || rs.End >= resourceSize {
+		return errInvalidRangeSource
+	}
+	return nil
+}

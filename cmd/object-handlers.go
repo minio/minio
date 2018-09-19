@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/xml"
-	"fmt"
 	"io"
 	goioutil "io/ioutil"
 	"net"
@@ -72,7 +71,6 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // on an SQL expression. In the request, along with the sql expression, you must
 // also specify a data serialization format (JSON, CSV) of the object.
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
-
 	ctx := newContext(r, w, "SelectObject")
 
 	// Fetch object stat info.
@@ -156,7 +154,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header)
+	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, false)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -351,7 +349,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, false)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -604,6 +602,11 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
+// Notice: The S3 client can send secret keys in headers for encryption related jobs,
+// the handler should ensure to remove these keys before sending them to the object layer.
+// Currently these keys are:
+//   - X-Amz-Server-Side-Encryption-Customer-Key
+//   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObject")
 
@@ -649,12 +652,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	var srcOpts, dstOpts ObjectOptions
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject, srcOpts)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -664,12 +661,39 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if objectAPI.IsEncryptionSupported() {
-		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
-			writeErrorResponse(w, apiErr, r.URL)
-			return
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
+
+	// Get request range.
+	var rs *HTTPRangeSpec
+	rangeHeader := r.Header.Get("x-amz-copy-source-range")
+	if rangeHeader != "" {
+		var parseRangeErr error
+		if rs, parseRangeErr = parseRequestRangeSpec(rangeHeader); parseRangeErr != nil {
+			// Handle only errInvalidRange. Ignore other
+			// parse error and treat it as regular Get
+			// request like Amazon S3.
+			if parseRangeErr == errInvalidRange {
+				writeErrorResponse(w, ErrInvalidRange, r.URL)
+				return
+			}
+
+			// log the error.
+			logger.LogIf(ctx, parseRangeErr)
 		}
 	}
+
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, cpSrcDstSame)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	defer gr.Close()
+	srcInfo := gr.ObjInfo
 
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
 	if checkCopyObjectPreconditions(w, r, srcInfo) {
@@ -682,21 +706,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
 	// We have to copy metadata only if source and destination are same.
 	// this changes for encryption which can be observed below.
 	if cpSrcDstSame {
 		srcInfo.metadataOnly = true
 	}
 
-	var writer io.WriteCloser = pipeWriter
-	var reader io.Reader = pipeReader
+	var reader io.Reader = gr
 
 	srcInfo.Reader, err = hash.NewReader(reader, srcInfo.Size, "", "")
 	if err != nil {
-		pipeWriter.CloseWithError(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -717,7 +736,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				newKey, err = ParseSSECustomerRequest(r)
 			}
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -729,7 +747,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			// Get the old key which needs to be rotated.
 			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -737,7 +754,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				encMetadata[k] = v
 			}
 			if err = rotateKey(oldKey, newKey, srcBucket, srcObject, encMetadata); err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -746,14 +762,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			srcInfo.metadataOnly = true
 		} else {
 			if sseCopyC || sseCopyS3 {
-				// Source is encrypted make sure to save the encrypted size.
-				writer = ioutil.LimitedWriter(writer, 0, srcInfo.Size)
-				writer, srcInfo.Size, err = DecryptAllBlocksCopyRequest(writer, r, srcBucket, srcObject, srcInfo)
-				if err != nil {
-					pipeWriter.CloseWithError(err)
-					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-					return
-				}
 				// We are not only copying just metadata instead
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
@@ -765,7 +773,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if sseC || sseS3 {
 				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
-					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
 				}
@@ -776,20 +783,29 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				if !sseCopyC && !sseCopyS3 {
 					size = srcInfo.EncryptedSize()
 				}
+			} else {
+				if sseCopyC || sseCopyS3 {
+					size, _ = srcInfo.DecryptedSize()
+					delete(srcInfo.UserDefined, crypto.SSEIV)
+					delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
+					delete(srcInfo.UserDefined, crypto.SSECSealedKey)
+					delete(srcInfo.UserDefined, crypto.SSEMultipart)
+					delete(srcInfo.UserDefined, crypto.S3SealedKey)
+					delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
+					delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
+				}
 			}
 
 			srcInfo.Reader, err = hash.NewReader(reader, size, "", "") // do not try to verify encrypted content
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 		}
 	}
-	srcInfo.Writer = writer
+
 	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
 	if err != nil {
-		pipeWriter.CloseWithError(err)
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
@@ -800,13 +816,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.UserDefined[k] = v
 	}
 
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(srcInfo.UserDefined)
+
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects. Apply this restriction also when
 	// metadataOnly is true indicating that we are not overwriting the object.
 	// if encryption is enabled we do not need explicit "REPLACE" metadata to
 	// be enabled as well - this is to allow for key-rotation.
 	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly && !crypto.SSEC.IsEncrypted(srcInfo.UserDefined) {
-		pipeWriter.CloseWithError(fmt.Errorf("invalid copy dest"))
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(w, ErrInvalidCopyDest, r.URL)
@@ -844,27 +862,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		var dstRecords []dns.SrvRecord
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
-			go func() {
-				if gerr := objectAPI.GetObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
-					pipeWriter.CloseWithError(gerr)
-					writeErrorResponse(w, ErrInternalError, r.URL)
-					return
-				}
-				// Close writer explicitly to indicate data has been written
-				srcInfo.Writer.Close()
-			}()
-
 			// Send PutObject request to appropriate instance (in federated deployment)
 			host, port := getRandomHostPort(dstRecords)
 			client, rerr := getRemoteInstanceClient(host, port)
 			if rerr != nil {
-				pipeWriter.CloseWithError(rerr)
 				writeErrorResponse(w, ErrInternalError, r.URL)
 				return
 			}
 			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
 			if rerr != nil {
-				pipeWriter.CloseWithError(rerr)
 				writeErrorResponse(w, ErrInternalError, r.URL)
 				return
 			}
@@ -876,13 +882,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// object is same then only metadata is updated.
 		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		if err != nil {
-			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
 	}
-
-	pipeReader.Close()
 
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
@@ -911,6 +914,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 // PutObjectHandler - PUT Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
+// Notice: The S3 client can send secret keys in headers for encryption related jobs,
+// the handler should ensure to remove these keys before sending them to the object layer.
+// Currently these keys are:
+//   - X-Amz-Server-Side-Encryption-Customer-Key
+//   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObject")
 
@@ -1080,6 +1088,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(metadata)
+
 	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
 		putObject = api.CacheAPI().PutObject
 	}
@@ -1127,6 +1138,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 /// Multipart objectAPIHandlers
 
 // NewMultipartUploadHandler - New multipart upload.
+// Notice: The S3 client can send secret keys in headers for encryption related jobs,
+// the handler should ensure to remove these keys before sending them to the object layer.
+// Currently these keys are:
+//   - X-Amz-Server-Side-Encryption-Customer-Key
+//   - X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NewMultipartUpload")
 
@@ -1192,6 +1208,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	for k, v := range encMetadata {
 		metadata[k] = v
 	}
+
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(metadata)
 
 	newMultipartUpload := objectAPI.NewMultipartUpload
 	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
@@ -1262,11 +1281,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 	var srcOpts, dstOpts ObjectOptions
-	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject, srcOpts)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -1276,20 +1290,38 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	if objectAPI.IsEncryptionSupported() {
-		if apiErr, _ := DecryptCopyObjectInfo(&srcInfo, r.Header); apiErr != ErrNone {
-			writeErrorResponse(w, apiErr, r.URL)
-			return
-		}
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
 	// Get request range.
-	var startOffset, length int64
+	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get("x-amz-copy-source-range")
-	if startOffset, length, err = parseCopyPartRange(rangeHeader, srcInfo.Size); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("rangeHeader", rangeHeader)
-		logger.LogIf(ctx, err)
-		writeCopyPartErr(w, err, r.URL)
+	if rangeHeader != "" {
+		var parseRangeErr error
+		if rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader); parseRangeErr != nil {
+			// Handle only errInvalidRange
+			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+			logger.GetReqInfo(ctx).AppendTags("rangeHeader", rangeHeader)
+			logger.LogIf(ctx, parseRangeErr)
+			writeCopyPartErr(w, parseRangeErr, r.URL)
+			return
+
+		}
+	}
+
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, false)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	defer gr.Close()
+	srcInfo := gr.ObjInfo
+
+	// Special care for CopyObjectPart
+	if partRangeErr := checkCopyPartRangeWithSize(rs, srcInfo.Size); partRangeErr != nil {
+		writeCopyPartErr(w, partRangeErr, r.URL)
 		return
 	}
 
@@ -1298,21 +1330,19 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Get the object offset & length
+	startOffset, length, _ := rs.GetOffsetLength(srcInfo.Size)
+
 	/// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	var writer io.WriteCloser = pipeWriter
-	var reader io.Reader = pipeReader
+	var reader io.Reader = gr
 	var getLength = length
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "")
 	if err != nil {
-		pipeWriter.CloseWithError(err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -1320,22 +1350,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1)
 		if err != nil {
-			pipeWriter.CloseWithError(err)
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
-		}
-		sseCopyC := crypto.SSECopy.IsRequested(r.Header)
-		sseCopyS3 := crypto.S3.IsEncrypted(srcInfo.UserDefined)
-		if sseCopyC || sseCopyS3 {
-			// Response writer should be limited early on for decryption upto required length,
-			// additionally also skipping mod(offset)64KiB boundaries.
-			writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-			writer, startOffset, getLength, err = DecryptBlocksRequest(writer, r, srcBucket, srcObject, startOffset, length, srcInfo, true)
-			if err != nil {
-				pipeWriter.CloseWithError(err)
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
-			}
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
 			if !hasServerSideEncryptionHeader(r.Header) {
@@ -1346,7 +1362,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
 				if err != nil {
-					pipeWriter.CloseWithError(err)
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
 				}
@@ -1354,7 +1369,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			var objectEncryptionKey []byte
 			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -1367,7 +1381,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			partEncryptionKey := mac.Sum(nil)
 			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
@@ -1376,13 +1389,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			size := info.EncryptedSize()
 			srcInfo.Reader, err = hash.NewReader(reader, size, "", "")
 			if err != nil {
-				pipeWriter.CloseWithError(err)
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 		}
 	}
-	srcInfo.Writer = writer
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket,
@@ -1391,9 +1402,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-
-	// Close the pipe after successful operation.
-	pipeReader.Close()
 
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
 	encodedSuccessResponse := encodeResponse(response)

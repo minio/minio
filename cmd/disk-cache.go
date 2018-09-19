@@ -58,7 +58,7 @@ type cacheObjects struct {
 	// file path patterns to exclude from cache
 	exclude []string
 	// Object functions pointing to the corresponding functions of backend implementation.
-	GetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error)
+	GetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error)
 	GetObjectFn               func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -90,7 +90,7 @@ type CacheObjectLayer interface {
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string) error
 	// Object operations.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error)
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -183,9 +183,9 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 	return metadata
 }
 
-func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error) {
 
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h)
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock)
 
 	if c.isCacheExclude(bucket, object) || !bkReader.ObjInfo.IsCacheable() {
 		return bkReader, bkErr
@@ -210,7 +210,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return bkReader, bkErr
 	}
 
-	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h); cacheErr == nil {
+	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, writeLock); cacheErr == nil {
 		if backendDown {
 			// If the backend is down, serve the request from cache.
 			return cacheReader, nil

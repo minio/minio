@@ -418,35 +418,19 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 // update metadata.
 func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	// Hold write lock on destination since in both cases
-	// - if source and destination are same
-	// - if source and destination are different
-	// it is the sole mutating state.
-	objectDWLock := fs.nsMutex.NewNSLock(dstBucket, dstObject)
-	if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
-		return oi, err
-	}
-	defer objectDWLock.Unlock()
-	// if source and destination are different, we have to hold
-	// additional read lock as well to protect against writes on
-	// source.
 	if !cpSrcDstSame {
-		// Hold read locks on source object only if we are
-		// going to read data from source object.
-		objectSRLock := fs.nsMutex.NewNSLock(srcBucket, srcObject)
-		if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+		objectDWLock := fs.nsMutex.NewNSLock(dstBucket, dstObject)
+		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 			return oi, err
 		}
-		defer objectSRLock.RUnlock()
+		defer objectDWLock.Unlock()
 	}
+
 	if _, err := fs.statBucketDir(ctx, srcBucket); err != nil {
 		return oi, toObjectErr(err, srcBucket)
 	}
 
 	if cpSrcDstSame && srcInfo.metadataOnly {
-		// Close any writer which was initialized.
-		defer srcInfo.Writer.Close()
-
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
@@ -478,20 +462,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
 
-	go func() {
-		if gerr := fs.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, !cpSrcDstSame); gerr != nil {
-			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				logger.LogIf(ctx, gerr)
-			}
-			return
-		}
-		// Close writer explicitly signaling we wrote all data.
-		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			logger.LogIf(ctx, gerr)
-			return
-		}
-	}()
-
 	objInfo, err := fs.putObject(ctx, dstBucket, dstObject, srcInfo.Reader, srcInfo.UserDefined)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
@@ -502,7 +472,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 // GetObjectNInfo - returns object info and a reader for object
 // content.
-func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -511,13 +481,23 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket)
 	}
 
+	var nsUnlocker func()
+
 	// Lock the object before reading.
 	lock := fs.nsMutex.NewNSLock(bucket, object)
-	if err = lock.GetRLock(globalObjectTimeout); err != nil {
-		logger.LogIf(ctx, err)
-		return nil, err
+	if writeLock {
+		if err = lock.GetLock(globalObjectTimeout); err != nil {
+			logger.LogIf(ctx, err)
+			return nil, err
+		}
+		nsUnlocker = lock.Unlock
+	} else {
+		if err = lock.GetRLock(globalObjectTimeout); err != nil {
+			logger.LogIf(ctx, err)
+			return nil, err
+		}
+		nsUnlocker = lock.RUnlock
 	}
-	nsUnlocker := lock.RUnlock
 
 	// For a directory, we need to send an reader that returns no bytes.
 	if hasSuffix(object, slashSeparator) {
@@ -533,22 +513,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	// Take a rwPool lock for NFS gateway type deployment
-	rwPoolUnlocker := func() {}
-	if bucket != minioMetaBucket {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
-		_, err = fs.rwPool.Open(fsMetaPath)
-		if err != nil && err != errFileNotFound {
-			logger.LogIf(ctx, err)
-			nsUnlocker()
-			return nil, toObjectErr(err, bucket, object)
-		}
-		// Need to clean up lock after getObject is
-		// completed.
-		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
-	}
-
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker)
 	if rErr != nil {
 		return nil, rErr
 	}
@@ -557,7 +522,6 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
 	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
 	if err != nil {
-		rwPoolUnlocker()
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
@@ -572,7 +536,6 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		err = InvalidRange{off, length, size}
 		logger.LogIf(ctx, err)
 		closeFn()
-		rwPoolUnlocker()
 		nsUnlocker()
 		return nil, err
 	}

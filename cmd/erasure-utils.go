@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/minio/cmd/logger"
@@ -90,7 +91,9 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
-			logger.LogIf(ctx, err)
+			if !strings.Contains(err.Error(), "read/write on closed pipe") {
+				logger.LogIf(ctx, err)
+			}
 			return 0, err
 		}
 

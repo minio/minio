@@ -379,11 +379,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+
+			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+
 			cFns = append(cleanUpFns, cFns...)
 			// Attach decrypter on inputReader
 			var decReader io.Reader
 			decReader, err = DecryptBlocksRequestR(inputReader, h,
-				off, length, seqNumber, partStart, oi, false)
+				off, length, seqNumber, partStart, oi, copySource)
 			if err != nil {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {

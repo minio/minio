@@ -616,7 +616,7 @@ func (a *azureObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, writeLock bool) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
 	objInfo, err = a.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 	if err != nil {

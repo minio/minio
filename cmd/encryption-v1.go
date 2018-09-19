@@ -123,8 +123,6 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 
 // This function rotates old to new key.
 func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map[string]string) error {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	switch {
 	default:
 		return errObjectTampered
@@ -155,8 +153,6 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 }
 
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) ([]byte, error) {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	var sealedKey crypto.SealedKey
 	if sseS3 {
 		if globalKMS == nil {
@@ -245,7 +241,6 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, 0, metadata)
 }
 
@@ -325,7 +320,6 @@ func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, 
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -342,7 +336,6 @@ func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string,
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptReader(client, key, bucket, object, 0, metadata)
 }
 
@@ -444,7 +437,6 @@ func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket,
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -513,13 +505,6 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
-
-	// make sure we do not save the key by accident
-	if d.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
 
 	// Limit the reader, so the decryptor doesnt receive bytes
 	// from the next part (different DARE stream)
@@ -635,13 +620,6 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
-
-	// make sure we do not save the key by accident
-	if w.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
 
 	// make sure to provide a NopCloser such that a Close
 	// on sio.decryptWriter doesn't close the underlying writer's
