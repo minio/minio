@@ -186,7 +186,7 @@ func NewLockRPCServer() (*xrpc.Server, error) {
 // Register distributed NS lock handlers.
 func registerDistNSLockRouter(router *mux.Router) {
 	rpcServer, err := NewLockRPCServer()
-	logger.FatalIf(err, "Unable to initialize Lock RPC Server", context.Background())
+	logger.FatalIf(err, "Unable to initialize Lock RPC Server")
 
 	// Start lock maintenance from all lock servers.
 	go startLockMaintenance(globalLockServer)

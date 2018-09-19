@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"path"
 
 	"github.com/gorilla/mux"
@@ -81,7 +80,7 @@ func NewAdminRPCServer() (*xrpc.Server, error) {
 // registerAdminRPCRouter - creates and registers Admin RPC server and its router.
 func registerAdminRPCRouter(router *mux.Router) {
 	rpcServer, err := NewAdminRPCServer()
-	logger.FatalIf(err, "Unable to initialize Lock RPC Server", context.Background())
+	logger.FatalIf(err, "Unable to initialize Lock RPC Server")
 	subrouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 	subrouter.Path(adminServiceSubPath).HandlerFunc(httpTraceHdrs(rpcServer.ServeHTTP))
 }
