@@ -765,9 +765,10 @@
 			"revisionTime": "2017-12-16T07:03:16Z"
 		},
 		{
+			"checksumSHA1": "C3yiSMdTQxSY3xqKJzMV9T+KnIc=",
 			"path": "github.com/pkg/profile",
-			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
-			"revisionTime": "2016-05-18T16:56:57+10:00"
+			"revision": "057bc52a47ec3c79498dda63f4a6f8298725e976",
+			"revisionTime": "2018-08-09T11:22:05Z"
 		},
 		{
 			"checksumSHA1": "3NL4uu8RZhI2d+/SEmVOHPT390c=",

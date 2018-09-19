@@ -98,7 +98,9 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 func handleCommonEnvVars() {
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
+		var err error
+		globalProfiler, err = startProfiler(profiler, "")
+		logger.FatalIf(err, "Unable to setup a profiler")
 	}
 
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")

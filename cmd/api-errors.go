@@ -1727,7 +1727,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 // getAPIError provides API Error for input API error code.
 func getAPIError(code APIErrorCode) APIError {
-	return errorCodeResponse[code]
+	if apiErr, ok := errorCodeResponse[code]; ok {
+		return apiErr
+	}
+	return errorCodeResponse[ErrInternalError]
 }
 
 // getErrorResponse gets in standard error and resource value and
