@@ -651,7 +651,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if objInfo.VersionId != "" {
 		// Add version id for destination object
-		w.Header().Set("x-amz-version-id", "\""+objInfo.VersionId+"\"")
+		w.Header().Set("x-amz-version-id", objInfo.VersionId)
 	}
 
 	// Write success response.
@@ -863,7 +863,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objInfo.VersionId != "" {
-		w.Header().Set("x-amz-version-id", "\""+objInfo.VersionId+"\"")
+		w.Header().Set("x-amz-version-id", objInfo.VersionId)
 	}
 
 	writeSuccessResponseHeadersOnly(w)
