@@ -74,24 +74,15 @@ func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 	go func() {
 		defer close(errCh)
 
-		var wg sync.WaitGroup
 		for _, id := range targetids {
 			if target, ok := list.targets[id]; ok {
-				wg.Add(1)
-				go func(id TargetID, target Target) {
-					defer wg.Done()
-					if err := target.Close(); err != nil {
-						errCh <- TargetIDErr{
-							ID:  id,
-							Err: err,
-						}
+				if err := target.Close(); err != nil {
+					errCh <- TargetIDErr{
+						ID:  id,
+						Err: err,
 					}
-				}(id, target)
+				}
 			}
-		}
-		wg.Wait()
-
-		for _, id := range targetids {
 			delete(list.targets, id)
 		}
 	}()
