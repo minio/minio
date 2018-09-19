@@ -213,27 +213,34 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 		return toObjectErr(err, bucket, object)
 	}
 
-		// FIXME: check the behavior of AWS S3
 	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
 		return toObjectErr(errInvalidArgument, bucket, object)
 	}
 
 	if globalVersioningSys.IsEnabled(bucket) {
-		if version == "" { // Version is unspecified, so get latest version
-			versioning, err := xl.getObjectVersioning(ctx, bucket, object)
-			if err == nil {
-				if len(versioning.ObjectVersions) > 0  &&
-					!versioning.ObjectVersions[len(versioning.ObjectVersions)-1].DeleteMarker {
-						version = versioning.ObjectVersions[len(versioning.ObjectVersions)-1].Id
-						object = pathJoin(object, version)
-				}
-			}
-			if err != nil && err != errFileNotFound {
-				return toObjectErr(err, bucket, object)
-			}
-		} else {
-			object = pathJoin(object, version)
+		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+		if err == errFileNotFound {
+			return toObjectErr(err, bucket, object)
+		} else if err != nil {
+			return err
+		} else if len(xlVersioning.ObjectVersions) == 0 {
+			return toObjectErr(errInvalidArgument, bucket, object)
 		}
+
+		if version == "" { // Version is unspecified, so get last version
+			version = xlVersioning.ObjectVersions[len(xlVersioning.ObjectVersions)-1].Id
+		}
+
+		// Find index for this version
+		idx, found := xlVersioning.FindVersion(version)
+		if !found {
+			return toObjectErr(errInvalidVersionId)
+		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
+			// Requested version is a Delete Marker, so return that object does not exist
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+
+		object = pathJoin(object, version)
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -474,7 +481,7 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 // getObjectInfoVersion - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, version string) (objInfo ObjectInfo, deleteMarker bool, err error) {
 	versionedObject := object
-	// FIXME, see AWS behavior and follow it
+
 	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
 		return objInfo, deleteMarker, toObjectErr(errInvalidVersionId)
 	}
@@ -483,11 +490,13 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
 		if err == errFileNotFound {
 			return objInfo, deleteMarker, toObjectErr(err, bucket, object)
-		} else if !(err == nil && len(xlVersioning.ObjectVersions) > 0) {
+		} else if err != nil {
 			return objInfo, deleteMarker, err
+		} else if len(xlVersioning.ObjectVersions) == 0 {
+			return objInfo, deleteMarker, toObjectErr(errInvalidArgument, bucket, object)
 		}
 
-		if version == "" && len(xlVersioning.ObjectVersions) > 0 { // Version is unspecified, so get last version
+		if version == "" { // Version is unspecified, so get last version
 			version = xlVersioning.ObjectVersions[len(xlVersioning.ObjectVersions)-1].Id
 		}
 
