@@ -166,6 +166,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
 		return
 	}
+	if selectReq.InputSerialization.CSV == nil || selectReq.OutputSerialization.CSV == nil {
+		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+		return
+	}
 	if selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoUse &&
 		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone &&
 		selectReq.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoIgnore &&
