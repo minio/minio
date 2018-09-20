@@ -19,16 +19,27 @@ import thunk from "redux-thunk"
 import * as actionsObjects from "../actions"
 import * as alertActions from "../../alert/actions"
 import { minioBrowserPrefix } from "../../constants"
+import history from "../../history"
 
 jest.mock("../../web", () => ({
-  LoggedIn: jest.fn(() => true).mockReturnValueOnce(false),
-  ListObjects: jest.fn(() => {
-    return Promise.resolve({
-      objects: [{ name: "test1" }, { name: "test2" }],
-      istruncated: false,
-      nextmarker: "test2",
-      writable: false
-    })
+  LoggedIn: jest
+    .fn(() => true)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(false)
+    .mockReturnValueOnce(false),
+  ListObjects: jest.fn(({ bucketName }) => {
+    if (bucketName === "test-deny") {
+      return Promise.reject({
+        message: "listobjects is denied"
+      })
+    } else {
+      return Promise.resolve({
+        objects: [{ name: "test1" }, { name: "test2" }],
+        istruncated: false,
+        nextmarker: "test2",
+        writable: false
+      })
+    }
   }),
   RemoveObject: jest.fn(({ bucketName, objects }) => {
     if (!bucketName) {
@@ -113,6 +124,9 @@ describe("Objects actions", () => {
     })
     const expectedActions = [
       {
+        type: "alert/CLEAR"
+      },
+      {
         type: "objects/SET_LIST",
         objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
@@ -144,6 +158,9 @@ describe("Objects actions", () => {
     })
     const expectedActions = [
       {
+        type: "alert/CLEAR"
+      },
+      {
         type: "objects/APPEND_LIST",
         objects: [{ name: "test1" }, { name: "test2" }],
         marker: "test2",
@@ -157,6 +174,43 @@ describe("Objects actions", () => {
     return store.dispatch(actionsObjects.fetchObjects(true)).then(() => {
       const actions = store.getActions()
       expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("creates objects/RESET_LIST after failing to fetch the objects from bucket with ListObjects denied for LoggedIn users", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test-deny" },
+      objects: { currentPrefix: "" }
+    })
+    const expectedActions = [
+      {
+        type: "alert/CLEAR"
+      },
+      {
+        type: "alert/SET",
+        alert: {
+          type: "danger",
+          message: "listobjects is denied",
+          id: alertActions.alertId
+        }
+      },
+      {
+        type: "object/RESET_LIST"
+      }
+    ]
+    return store.dispatch(actionsObjects.fetchObjects()).then(() => {
+      const actions = store.getActions()
+      expect(actions).toEqual(expectedActions)
+    })
+  })
+
+  it("redirect to login after failing to fetch the objects from bucket for non-LoggedIn users", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test-deny" },
+      objects: { currentPrefix: "" }
+    })
+    return store.dispatch(actionsObjects.fetchObjects()).then(() => {
+      expect(history.location.pathname.endsWith("/login")).toBeTruthy()
     })
   })
 
@@ -198,6 +252,7 @@ describe("Objects actions", () => {
     })
     const expectedActions = [
       { type: "objects/SET_CURRENT_PREFIX", prefix: "abc/" },
+      { type: "alert/CLEAR" },
       { type: "objects/CHECKED_LIST_RESET" }
     ]
     store.dispatch(actionsObjects.selectPrefix("abc/"))
@@ -244,7 +299,11 @@ describe("Objects actions", () => {
     const expectedActions = [
       {
         type: "alert/SET",
-        alert: { type: "danger", message: "Invalid bucket", id: 0 }
+        alert: {
+          type: "danger",
+          message: "Invalid bucket",
+          id: alertActions.alertId
+        }
       }
     ]
     return store.dispatch(actionsObjects.deleteObject("obj1")).then(() => {

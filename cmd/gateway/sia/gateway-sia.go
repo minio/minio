@@ -233,13 +233,13 @@ func apiGet(ctx context.Context, addr, call, apiPassword string) (*http.Response
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		logger.LogIf(ctx, MethodNotSupported{call})
 		return nil, MethodNotSupported{call}
 	}
 	if non2xx(resp.StatusCode) {
 		err := decodeError(resp)
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
@@ -266,13 +266,13 @@ func apiPost(ctx context.Context, addr, call, vals, apiPassword string) (*http.R
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		return nil, MethodNotSupported{call}
 	}
 
 	if non2xx(resp.StatusCode) {
 		err := decodeError(resp)
-		resp.Body.Close()
+		minio.CloseResponse(resp.Body)
 		return nil, err
 	}
 	return resp, nil
@@ -285,7 +285,7 @@ func post(ctx context.Context, addr, call, vals, apiPassword string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	minio.CloseResponse(resp.Body)
 	return nil
 }
 
@@ -295,7 +295,7 @@ func list(ctx context.Context, addr string, apiPassword string, obj *renterFiles
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer minio.CloseResponse(resp.Body)
 
 	if resp.StatusCode == http.StatusNoContent {
 		logger.LogIf(ctx, fmt.Errorf("Expecting a response, but API returned %s", resp.Status))
@@ -313,7 +313,7 @@ func get(ctx context.Context, addr, call, apiPassword string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	minio.CloseResponse(resp.Body)
 	return nil
 }
 
@@ -431,28 +431,7 @@ func (s *siaObjects) ListObjects(ctx context.Context, bucket string, prefix stri
 	return loi, nil
 }
 
-func (s *siaObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec) (objInfo minio.ObjectInfo, reader io.ReadCloser, err error) {
-	objInfo, err = s.GetObjectInfo(ctx, bucket, object)
-	if err != nil {
-		return objInfo, reader, err
-	}
-
-	startOffset, length := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, length = rs.GetOffsetLength(objInfo.Size)
-	}
-
-	pr, pw := io.Pipe()
-	objReader := minio.NewGetObjectReader(pr, nil, nil)
-	go func() {
-		err := s.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag)
-		pw.CloseWithError(err)
-	}()
-
-	return objInfo, objReader, nil
-}
-
-func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(dstFile)
 
@@ -533,7 +512,7 @@ func (s *siaObjects) findSiaObject(ctx context.Context, bucket, object string) (
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object string) (minio.ObjectInfo, error) {
+func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	so, err := s.findSiaObject(ctx, bucket, object)
 	if err != nil {
 		return minio.ObjectInfo{}, err
@@ -550,7 +529,7 @@ func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	writer, err := os.Create(srcFile)
 	if err != nil {

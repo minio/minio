@@ -57,8 +57,8 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := objLayer.StorageInfo(ctx)
-	// Gateways don't provide disk info
-	if s.Backend.Type == Unknown {
+	// Gateways don't provide disk info, also handle special case for NAS gateway.
+	if s.Backend.Type == Unknown || s.Backend.Type == BackendFS {
 		// ListBuckets to confirm gateway backend is up
 		if _, err := objLayer.ListBuckets(ctx); err != nil {
 			writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
@@ -84,6 +84,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	// If all exported local disks have errored, we simply let kubernetes
 	// take us down.
 	if totalLocalDisks == erroredDisks {

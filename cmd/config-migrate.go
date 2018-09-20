@@ -2428,7 +2428,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 
 	srvConfig.Version = "28"
 	srvConfig.KMS = crypto.KMSConfig{}
-	if err = saveServerConfig(objAPI, srvConfig); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
 	}
 

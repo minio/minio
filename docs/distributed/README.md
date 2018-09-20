@@ -40,91 +40,56 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quicks
 
 To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes.
 
-*Note* 
+*Note*
 
-- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
+- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, it is **mandatory** to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing Minio server command.
+- All the nodes running distributed Minio need to be on homogenous environments i.e same operating system, same number of disks and same interconnects.
+- `MINIO_DOMAIN` environment variable should be defined and exported if domain is needed to be set.
 - Minio distributed mode requires fresh directories. If required, the drives can be shared with other applications. You can do this by using a sub-directory exclusive to minio. For example, if you have mounted your volume under `/export`, pass `/export/data` as arguments to Minio server.
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
-- Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers. 
-- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution. 
+- Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers.
+- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution.
 
-Example 1: Start distributed Minio instance on 8 nodes with 1 drive each (pictured below), by running this command on all the 8 nodes:
+Example 1: Start distributed Minio instance on 8 nodes with 1 disk each mounted at `/export1` (pictured below), by running this command on all the 8 nodes:
 ![Distributed Minio, 8 nodes with 1 disk each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
 #### GNU/Linux and macOS
 
-```shell
+```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
-               http://192.168.1.13/export3 http://192.168.1.14/export4 \
-               http://192.168.1.15/export5 http://192.168.1.16/export6 \
-               http://192.168.1.17/export7 http://192.168.1.18/export8
+minio server http://192.168.1.1{1...18}/export1
 ```
 
-#### Windows 
+#### Windows (experimental)
 
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:/data http://192.168.1.12/C:/data ^
-                  http://192.168.1.13/C:/data http://192.168.1.14/C:/data ^
-                  http://192.168.1.15/C:/data http://192.168.1.16/C:/data ^
-                  http://192.168.1.17/C:/data http://192.168.1.18/C:/data
+minio.exe server http://192.168.1.1{1...18}/C:/data
 ```
 
 
-Example 2: Start distributed Minio instance on 4 nodes with 4 drives (pictured below), by running this command on all the 4 nodes:
+Example 2: Start distributed Minio instance on 4 nodes with 4 disks (pictured below), by running this command on all the 4 nodes:
 ![Distributed Minio, 4 nodes with 4 disks each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
 
 #### GNU/Linux and macOS
-
-```shell
+```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.11/export1 http://192.168.1.12/export1 \
-               http://192.168.1.13/export1 http://192.168.1.14/export1 \
-               http://192.168.1.11/export2 http://192.168.1.12/export2 \
-               http://192.168.1.13/export2 http://192.168.1.14/export2 \
-               http://192.168.1.11/export3 http://192.168.1.12/export3 \
-               http://192.168.1.13/export3 http://192.168.1.14/export3 \
-               http://192.168.1.11/export4 http://192.168.1.12/export4 \
-               http://192.168.1.13/export4 http://192.168.1.14/export4
+minio server http://192.168.1.1{1...14}/export{1...4}
 ```
 
-##### Short version of the same command:
-```shell
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.{11...14}/export{1...4}
-```
-
-#### Windows
-
+#### Windows (experimental)
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.12/C:/data1 ^
-                  http://192.168.1.13/C:/data1 http://192.168.1.14/C:/data1 ^
-                  http://192.168.1.11/C:/data2 http://192.168.1.12/C:/data2 ^
-                  http://192.168.1.13/C:/data2 http://192.168.1.14/C:/data2 ^
-                  http://192.168.1.11/C:/data3 http://192.168.1.12/C:/data3 ^
-                  http://192.168.1.13/C:/data3 http://192.168.1.14/C:/data3 ^
-                  http://192.168.1.11/C:/data4 http://192.168.1.12/C:/data4 ^
-                  http://192.168.1.13/C:/data4 http://192.168.1.14/C:/data4
+minio.exe server http://192.168.1.1{1...4}/C:/data{1...4}
 ```
 
-##### Short version of the same command:
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.{1...14}/C:/data{1...4}
-```
-__NOTE:__ `{1...n}` shown in shortened examples above have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally stripe erasure-coded data__
-
+__NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally erasure-code data__
 
 ## 3. Test your setup
-
-To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). 
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
 - [Minio Large Bucket Suppport Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)

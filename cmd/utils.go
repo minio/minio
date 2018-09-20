@@ -23,14 +23,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -180,26 +184,66 @@ func contains(slice interface{}, elem interface{}) bool {
 	return false
 }
 
+// profilerWrapper is created becauses pkg/profiler doesn't
+// provide any API to calculate the profiler file path in the
+// disk since the name of this latter is randomly generated.
+type profilerWrapper struct {
+	stopFn func()
+	pathFn func() string
+}
+
+func (p profilerWrapper) Stop() {
+	p.stopFn()
+}
+
+func (p profilerWrapper) Path() string {
+	return p.pathFn()
+}
+
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
-func startProfiler(profiler string) interface {
+func startProfiler(profilerType, dirPath string) (interface {
 	Stop()
-} {
-	// Enable profiler if ``_MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
-	switch profiler {
-	case "cpu":
-		return profile.Start(profile.CPUProfile, profile.NoShutdownHook)
-	case "mem":
-		return profile.Start(profile.MemProfile, profile.NoShutdownHook)
-	case "block":
-		return profile.Start(profile.BlockProfile, profile.NoShutdownHook)
-	default:
-		return nil
+	Path() string
+}, error) {
+
+	var err error
+	if dirPath == "" {
+		dirPath, err = ioutil.TempDir("", "profile")
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	var profiler interface {
+		Stop()
+	}
+
+	// Enable profiler, supported types are [cpu, mem, block].
+	switch profilerType {
+	case "cpu":
+		profiler = profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "mem":
+		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "block":
+		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	default:
+		return nil, errors.New("profiler type unknown")
+	}
+
+	return &profilerWrapper{
+		stopFn: profiler.Stop,
+		pathFn: func() string {
+			return filepath.Join(dirPath, profilerType+".pprof")
+		},
+	}, nil
 }
 
 // Global profiler to be used by service go-routine.
 var globalProfiler interface {
+	// Stop the profiler
 	Stop()
+	// Return the path of the profiling file
+	Path() string
 }
 
 // dump the request into a string in JSON format.
@@ -380,4 +424,33 @@ func isNetworkOrHostDown(err error) bool {
 		}
 	}
 	return false
+}
+
+var b512pool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 512)
+		return &buf
+	},
+}
+
+// CloseResponse close non nil response with any response Body.
+// convenient wrapper to drain any remaining data on response body.
+//
+// Subsequently this allows golang http RoundTripper
+// to re-use the same connection for future requests.
+func CloseResponse(respBody io.ReadCloser) {
+	// Callers should close resp.Body when done reading from it.
+	// If resp.Body is not closed, the Client's underlying RoundTripper
+	// (typically Transport) may not be able to re-use a persistent TCP
+	// connection to the server for a subsequent "keep-alive" request.
+	if respBody != nil {
+		// Drain any remaining Body and then close the connection.
+		// Without this closing connection would disallow re-using
+		// the same connection for future uses.
+		//  - http://stackoverflow.com/a/17961593/4465767
+		bufp := b512pool.Get().(*[]byte)
+		defer b512pool.Put(bufp)
+		io.CopyBuffer(ioutil.Discard, respBody, *bufp)
+		respBody.Close()
+	}
 }

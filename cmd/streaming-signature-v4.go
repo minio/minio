@@ -29,6 +29,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/auth"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -41,10 +42,7 @@ const (
 )
 
 // getChunkSignature - get chunk signature.
-func getChunkSignature(seedSignature string, region string, date time.Time, hashedChunk string) string {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
+func getChunkSignature(cred auth.Credentials, seedSignature string, region string, date time.Time, hashedChunk string) string {
 	// Calculate string to sign.
 	stringToSign := signV4ChunkedAlgorithm + "\n" +
 		date.Format(iso8601Format) + "\n" +
@@ -66,10 +64,7 @@ func getChunkSignature(seedSignature string, region string, date time.Time, hash
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
 // returns signature, error otherwise if the signature mismatches or any other
 // error while parsing and validating.
-func calculateSeedSignature(r *http.Request) (signature string, region string, date time.Time, errCode APIErrorCode) {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
+func calculateSeedSignature(cred auth.Credentials, r *http.Request) (signature string, region string, date time.Time, errCode APIErrorCode) {
 	// Copy request.
 	req := *r
 
@@ -156,12 +151,17 @@ var errMalformedEncoding = errors.New("malformed chunked encoding")
 // NewChunkedReader is not needed by normal applications. The http package
 // automatically decodes chunking when reading response bodies.
 func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
-	seedSignature, region, seedDate, errCode := calculateSeedSignature(req)
+	// Access credentials.
+	cred := globalServerConfig.GetCredential()
+
+	seedSignature, region, seedDate, errCode := calculateSeedSignature(cred, req)
 	if errCode != ErrNone {
 		return nil, errCode
 	}
+
 	return &s3ChunkedReader{
 		reader:            bufio.NewReader(req.Body),
+		cred:              cred,
 		seedSignature:     seedSignature,
 		seedDate:          seedDate,
 		region:            region,
@@ -174,6 +174,7 @@ func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
 // AWS Signature V4 chunked reader.
 type s3ChunkedReader struct {
 	reader            *bufio.Reader
+	cred              auth.Credentials
 	seedSignature     string
 	seedDate          time.Time
 	region            string
@@ -298,7 +299,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			// Calculate the hashed chunk.
 			hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
 			// Calculate the chunk signature.
-			newSignature := getChunkSignature(cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
+			newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
 			if !compareSignatureV4(cr.chunkSignature, newSignature) {
 				// Chunk signature doesn't match we return signature does not match.
 				cr.err = errSignatureMismatch

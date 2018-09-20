@@ -62,7 +62,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq" // Register postgres driver
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -106,9 +105,8 @@ func (p PostgreSQLArgs) Validate() error {
 	}
 
 	if p.ConnectionString != "" {
-		if _, err := pq.ParseURL(p.ConnectionString); err != nil {
-			return err
-		}
+		// No pq API doesn't help to validate connection string
+		// prior connection, so no validation for now.
 	} else {
 		// Some fields need to be specified when ConnectionString is unspecified
 		if p.Port == "" {

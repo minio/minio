@@ -168,6 +168,18 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 // EndpointList - list of same type of endpoint.
 type EndpointList []Endpoint
 
+// Nodes - returns number of unique servers.
+func (endpoints EndpointList) Nodes() int {
+	uniqueNodes := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		if uniqueNodes.Contains(endpoint.Host) {
+			continue
+		}
+		uniqueNodes.Add(endpoint.Host)
+	}
+	return len(uniqueNodes)
+}
+
 // IsHTTPS - returns true if secure for URLEndpointType.
 func (endpoints EndpointList) IsHTTPS() bool {
 	return endpoints[0].IsHTTPS()

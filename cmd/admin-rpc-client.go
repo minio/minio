@@ -68,6 +68,22 @@ func (rpcClient *AdminRPCClient) GetConfig() ([]byte, error) {
 	return reply, err
 }
 
+// StartProfiling - starts profiling in the remote server.
+func (rpcClient *AdminRPCClient) StartProfiling(profiler string) error {
+	args := StartProfilingArgs{Profiler: profiler}
+	reply := VoidReply{}
+	return rpcClient.Call(adminServiceName+".StartProfiling", &args, &reply)
+}
+
+// DownloadProfilingData - returns profiling data of the remote server.
+func (rpcClient *AdminRPCClient) DownloadProfilingData() ([]byte, error) {
+	args := AuthArgs{}
+	var reply []byte
+
+	err := rpcClient.Call(adminServiceName+".DownloadProfilingData", &args, &reply)
+	return reply, err
+}
+
 // NewAdminRPCClient - returns new admin RPC client.
 func NewAdminRPCClient(host *xnet.Host) (*AdminRPCClient, error) {
 	scheme := "http"
@@ -112,6 +128,8 @@ type adminCmdRunner interface {
 	ReInitFormat(dryRun bool) error
 	ServerInfo() (ServerInfoData, error)
 	GetConfig() ([]byte, error)
+	StartProfiling(string) error
+	DownloadProfilingData() ([]byte, error)
 }
 
 // adminPeer - represents an entity that implements admin API RPCs.

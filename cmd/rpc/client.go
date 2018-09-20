@@ -22,6 +22,8 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"reflect"
@@ -38,6 +40,28 @@ const DefaultRPCTimeout = 1 * time.Minute
 type Client struct {
 	httpClient *http.Client
 	serviceURL *xnet.URL
+}
+
+// closeResponse close non nil response with any response Body.
+// convenient wrapper to drain any remaining data on response body.
+//
+// Subsequently this allows golang http RoundTripper
+// to re-use the same connection for future requests.
+func closeResponse(body io.ReadCloser) {
+	// Callers should close resp.Body when done reading from it.
+	// If resp.Body is not closed, the Client's underlying RoundTripper
+	// (typically Transport) may not be able to re-use a persistent TCP
+	// connection to the server for a subsequent "keep-alive" request.
+	if body != nil {
+		// Drain any remaining Body and then close the connection.
+		// Without this closing connection would disallow re-using
+		// the same connection for future uses.
+		//  - http://stackoverflow.com/a/17961593/4465767
+		bufp := b512pool.Get().(*[]byte)
+		defer b512pool.Put(bufp)
+		io.CopyBuffer(ioutil.Discard, body, *bufp)
+		body.Close()
+	}
 }
 
 // Call - calls service method on RPC server.
@@ -69,7 +93,7 @@ func (client *Client) Call(serviceMethod string, args, reply interface{}) error 
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer closeResponse(response.Body)
 
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("%v rpc call failed with error code %v", serviceMethod, response.StatusCode)

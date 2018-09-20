@@ -394,34 +394,13 @@ func (l *b2Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 	return loi, nil
 }
 
-func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec) (objInfo minio.ObjectInfo, reader io.ReadCloser, err error) {
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object)
-	if err != nil {
-		return objInfo, reader, err
-	}
-
-	startOffset, length := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, length = rs.GetOffsetLength(objInfo.Size)
-	}
-
-	pr, pw := io.Pipe()
-	objReader := minio.NewGetObjectReader(pr, nil, nil)
-	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag)
-		pw.CloseWithError(err)
-	}()
-
-	return objInfo, objReader, nil
-}
-
 // GetObject reads an object from B2. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *b2Objects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (l *b2Objects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return err
@@ -438,7 +417,7 @@ func (l *b2Objects) GetObject(ctx context.Context, bucket string, object string,
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object string) (objInfo minio.ObjectInfo, err error) {
+func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return objInfo, err
@@ -529,7 +508,7 @@ func (nb *Reader) Read(p []byte) (int, error) {
 }
 
 // PutObject uploads the single upload to B2 backend by using *b2_upload_file* API, uploads upto 5GiB.
-func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, data *h2.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, data *h2.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return objInfo, err
@@ -629,7 +608,7 @@ func (l *b2Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 // Each large file must consist of at least 2 parts, and all of the parts except the
 // last one must be at least 5MB in size. The last part must contain at least one byte.
 // For more information - https://www.backblaze.com/b2/docs/large_files.html
-func (l *b2Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string) (string, error) {
+func (l *b2Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (string, error) {
 	var uploadID string
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
@@ -648,7 +627,7 @@ func (l *b2Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *h2.Reader) (pi minio.PartInfo, err error) {
+func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *h2.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return pi, err
@@ -744,7 +723,7 @@ func (l *b2Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, b2ToObjectError(err, bucket, object, uploadID)
 	}
 
-	return l.GetObjectInfo(ctx, bucket, object)
+	return l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 }
 
 // SetBucketPolicy - B2 supports 2 types of bucket policies:

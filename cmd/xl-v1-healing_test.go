@@ -75,6 +75,7 @@ func TestHealObjectXL(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
+	var opts ObjectOptions
 
 	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
@@ -83,14 +84,14 @@ func TestHealObjectXL(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""))
+		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}

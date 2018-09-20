@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"os"
 	"path"
 	"runtime"
 	"time"
@@ -37,26 +38,49 @@ const (
 
 	// Minio configuration file.
 	minioConfigFile = "config.json"
+
+	// Minio backup file
+	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(objAPI ObjectLayer, config *serverConfig) error {
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
 	if err := quick.CheckData(config); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(config)
+	data, err := json.MarshalIndent(config, "", "\t")
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	if globalEtcdClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		_, err := globalEtcdClient.Put(ctx, configFile, string(data))
+		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		_, err = globalEtcdClient.Put(timeoutCtx, configFile, string(data))
 		defer cancel()
 		return err
 	}
 
+	// Create a backup of the current config
+	reader, err := readConfig(ctx, objAPI, configFile)
+	if err == nil {
+		var oldData []byte
+		oldData, err = ioutil.ReadAll(reader)
+		if err != nil {
+			return err
+		}
+		backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
+		err = saveConfig(objAPI, backupConfigFile, oldData)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err != errConfigNotFound {
+			return err
+		}
+	}
+
+	// Save the new config in the std config path
 	return saveConfig(objAPI, configFile, data)
 }
 
@@ -135,7 +159,8 @@ func checkServerConfig(ctx context.Context, objAPI ObjectLayer) error {
 		return checkServerConfigEtcd(configFile)
 	}
 
-	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile); err != nil {
+	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
+		// Convert ObjectNotFound to errConfigNotFound
 		if isErrObjectNotFound(err) {
 			return errConfigNotFound
 		}
@@ -152,7 +177,7 @@ func saveConfig(objAPI ObjectLayer, configFile string, data []byte) error {
 		return err
 	}
 
-	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil)
+	_, err = objAPI.PutObject(context.Background(), minioMetaBucket, configFile, hashReader, nil, ObjectOptions{})
 	return err
 }
 
@@ -161,9 +186,9 @@ var errConfigNotFound = errors.New("config file not found")
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, ""); err != nil {
-		// Ignore if err is ObjectNotFound or IncompleteBody when bucket is not configured with notification
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) || isInsufficientReadQuorum(err) {
+	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
+		// Convert ObjectNotFound and IncompleteBody errors into errConfigNotFound
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errConfigNotFound
 		}
 
@@ -193,7 +218,32 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
-	return initConfig(objAPI)
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Initializing configuration needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			err := initConfig(objAPI)
+			if err != nil {
+				if isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+					logger.Info("Waiting for configuration to be initialized..")
+					continue
+				}
+				return err
+			}
+
+			return nil
+		}
+	}
 }
 
 // NewConfigSys - creates new config system object.
@@ -203,6 +253,8 @@ func NewConfigSys() *ConfigSys {
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) error {
+	defer os.Rename(getConfigFile(), getConfigFile()+".deprecated")
+
 	// Verify if backend already has the file.
 	if err := checkServerConfig(context.Background(), objAPI); err != errConfigNotFound {
 		return err
@@ -210,10 +262,16 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) error {
 
 	var config = &serverConfig{}
 	if _, err := Load(getConfigFile(), config); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
+		// Read from deprecate file as well if necessary.
+		if _, err = Load(getConfigFile()+".deprecated", config); err != nil {
+			return err
+		}
 	}
 
-	return saveServerConfig(objAPI, config)
+	return saveServerConfig(context.Background(), objAPI, config)
 }
 
 // Initialize and load config from remote etcd or local config directory
@@ -234,11 +292,12 @@ func initConfig(objAPI ObjectLayer) error {
 			if err := migrateConfig(); err != nil {
 				return err
 			}
-
-			// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
-			if err := migrateConfigToMinioSys(objAPI); err != nil {
-				return err
-			}
+		}
+		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
+		// to '<export_path>/.minio.sys/config/config.json'
+		// ignore if the file doesn't exist.
+		if err := migrateConfigToMinioSys(objAPI); err != nil && !os.IsNotExist(err) {
+			return err
 		}
 	}
 

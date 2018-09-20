@@ -121,7 +121,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if object exists.
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object)
+	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

@@ -60,6 +60,10 @@ func registerAdminRouter(router *mux.Router) {
 	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 
+	// Profiling operations
+	adminV1Router.Methods(http.MethodPost).Path("/profiling/start/{profiler}").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler))
+	adminV1Router.Methods(http.MethodGet).Path("/profiling/download").HandlerFunc(httpTraceAll(adminAPI.DownloadProfilingHandler))
+
 	/// Config operations
 
 	// Update credentials
@@ -68,4 +72,9 @@ func registerAdminRouter(router *mux.Router) {
 	adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 	// Set config
 	adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
+
+	// Get config keys/values
+	adminV1Router.Methods(http.MethodGet).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKeysHandler))
+	// Set config keys/values
+	adminV1Router.Methods(http.MethodPut).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKeysHandler))
 }

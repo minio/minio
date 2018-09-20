@@ -61,7 +61,7 @@ func encodeResponseJSON(response interface{}) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec) {
+func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *httpRange) {
 	// set common headers
 	setCommonHeaders(w)
 
@@ -96,9 +96,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// for providing ranged content
-	if rs != nil {
+	if contentRange != nil && contentRange.offsetBegin > -1 {
 		// Override content-length
-		w.Header().Set("Content-Length", strconv.FormatInt(rs.GetLength(objInfo.Size), 10))
-		w.Header().Set("Content-Range", rs.ContentRangeString(objInfo.Size))
+		w.Header().Set("Content-Length", strconv.FormatInt(contentRange.getLength(), 10))
+		w.Header().Set("Content-Range", contentRange.String())
 	}
 }

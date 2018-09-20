@@ -20,12 +20,14 @@ package madmin
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 
 	"github.com/minio/minio/pkg/quick"
 	"github.com/minio/sio"
@@ -85,7 +87,37 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, httpRespToErrorResponse(resp)
 	}
-	defer resp.Body.Close()
+	defer closeResponse(resp)
+
+	return DecryptServerConfigData(adm.secretAccessKey, resp.Body)
+}
+
+// GetConfigKeys - returns partial json or json value from config.json of a minio setup.
+func (adm *AdminClient) GetConfigKeys(keys []string) ([]byte, error) {
+	// No TLS?
+	if !adm.secure {
+		// return nil, fmt.Errorf("credentials/configuration cannot be retrieved over an insecure connection")
+	}
+
+	queryVals := make(url.Values)
+	for _, k := range keys {
+		queryVals.Add(k, "")
+	}
+
+	// Execute GET on /minio/admin/v1/config-keys to get config of a setup.
+	resp, err := adm.executeMethod("GET",
+		requestData{
+			relPath:     "/v1/config-keys",
+			queryValues: queryVals,
+		})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
 
 	return DecryptServerConfigData(adm.secretAccessKey, resp.Body)
 }
@@ -135,6 +167,38 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 	}
 
 	// Execute PUT on /minio/admin/v1/config to set config.
+	resp, err := adm.executeMethod("PUT", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// SetConfigKeys - set config keys supplied as config.json for the setup.
+func (adm *AdminClient) SetConfigKeys(params map[string]string) error {
+	queryVals := make(url.Values)
+	for k, v := range params {
+		encryptedVal, err := EncryptServerConfigData(adm.secretAccessKey, []byte(v))
+		if err != nil {
+			return err
+		}
+		encodedVal := base64.StdEncoding.EncodeToString(encryptedVal)
+		queryVals.Add(k, string(encodedVal))
+	}
+
+	reqData := requestData{
+		relPath:     "/v1/config-keys",
+		queryValues: queryVals,
+	}
+
+	// Execute PUT on /minio/admin/v1/config-keys to set config.
 	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)

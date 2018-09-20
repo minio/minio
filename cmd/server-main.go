@@ -224,11 +224,6 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server environment vars.
 	serverHandleEnvVars()
 
-	// In distributed setup users need to set ENVs always.
-	if !globalIsEnvCreds && globalIsDistXL {
-		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to initialize minio server in distributed mode")
-	}
-
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
 
@@ -258,9 +253,33 @@ func serverMain(ctx *cli.Context) {
 		checkUpdate(mode)
 	}
 
-	// Enforce ENV credentials for distributed setup such that we can create the first config.
-	if globalIsDistXL && !globalIsEnvCreds {
-		logger.Fatal(uiErrInvalidCredentials(nil), "Unable to start the server in distrbuted mode. In distributed mode we require explicit credentials.")
+	// FIXME: This code should be removed in future releases and we should have mandatory
+	// check for ENVs credentials under distributed setup. Until all users migrate we
+	// are intentionally providing backward compatibility.
+	{
+		// Check for backward compatibility and newer style.
+		if !globalIsEnvCreds && globalIsDistXL {
+			// Try to load old config file if any, for backward compatibility.
+			var config = &serverConfig{}
+			if _, err = Load(getConfigFile(), config); err == nil {
+				globalActiveCred = config.Credential
+			}
+
+			if os.IsNotExist(err) {
+				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
+					globalActiveCred = config.Credential
+				}
+			}
+
+			if globalActiveCred.IsValid() {
+				// Credential is valid don't throw an error instead print a message regarding deprecation of 'config.json'
+				// based model and proceed to use it for now in distributed setup.
+				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
+			} else {
+				// Credential is not available anywhere by both means, we cannot start distributed setup anymore, fail eagerly.
+				logger.Fatal(uiErrEnvCredentialsMissingDistributed(nil), "Unable to initialize the server in distributed mode")
+			}
+		}
 	}
 
 	// Set system resources to maximum.
@@ -318,6 +337,9 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(newObject)
 	}
 
+	// Re-enable logging
+	logger.Disable = false
+
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
 
@@ -335,9 +357,6 @@ func serverMain(ctx *cli.Context) {
 		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
-
-	// Re-enable logging
-	logger.Disable = false
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

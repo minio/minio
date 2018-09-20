@@ -78,7 +78,9 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, of
 		}
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			ctx := context.Background()
+			logger.GetReqInfo(ctx).AppendTags("disk", storageDisk.String())
+			logger.LogIf(ctx, err)
 			if IsErr(err, baseErrs...) {
 				offlineDisks++
 				continue

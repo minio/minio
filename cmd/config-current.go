@@ -288,6 +288,102 @@ func (s *serverConfig) loadFromEnvs() {
 	}
 }
 
+// TestNotificationTargets tries to establish connections to all notification
+// targets when enabled. This is a good way to make sure all configurations
+// set by the user can work.
+func (s *serverConfig) TestNotificationTargets() error {
+	for k, v := range s.Notify.AMQP {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewAMQPTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("amqp(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.Elasticsearch {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewElasticsearchTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("elasticsearch(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.Kafka {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewKafkaTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("kafka(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.MQTT {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewMQTTTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.MySQL {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewMySQLTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("mysql(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.NATS {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewNATSTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("nats(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.PostgreSQL {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewPostgreSQLTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("postgreSQL(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
+	for k, v := range s.Notify.Redis {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewRedisTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("redis(%s): %s", k, err.Error())
+		}
+		t.Close()
+
+	}
+
+	return nil
+}
+
 // Returns the string describing a difference with the given
 // configuration object. If the given configuration object is
 // identical, an empty string is returned.
@@ -448,7 +544,7 @@ func newConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(objAPI, globalServerConfig)
+	return saveServerConfig(context.Background(), objAPI, globalServerConfig)
 }
 
 // getValidConfig - returns valid server configuration

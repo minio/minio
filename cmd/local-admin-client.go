@@ -19,7 +19,11 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+
+	"io/ioutil"
 )
 
 // localAdminClient - represents admin operation to be executed locally.
@@ -79,4 +83,41 @@ func (lc localAdminClient) GetConfig() ([]byte, error) {
 	}
 
 	return json.Marshal(globalServerConfig)
+}
+
+// StartProfiling - starts profiling on the local server.
+func (lc localAdminClient) StartProfiling(profiler string) error {
+	if globalProfiler != nil {
+		globalProfiler.Stop()
+	}
+	prof, err := startProfiler(profiler, "")
+	if err != nil {
+		return err
+	}
+	globalProfiler = prof
+	return nil
+}
+
+// DownloadProfilingData - stops and returns profiling data of the local server.
+func (lc localAdminClient) DownloadProfilingData() ([]byte, error) {
+	if globalProfiler == nil {
+		return nil, errors.New("profiler not enabled")
+	}
+
+	profilerPath := globalProfiler.Path()
+
+	// Stop the profiler
+	globalProfiler.Stop()
+
+	profilerFile, err := os.Open(profilerPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(profilerFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

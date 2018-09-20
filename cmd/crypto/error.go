@@ -43,6 +43,10 @@ var (
 	// base64-encoded string or not 256 bits long.
 	ErrInvalidCustomerKey = errors.New("The SSE-C client key is invalid")
 
+	// ErrSecretKeyMismatch indicates that the provided secret key (SSE-C client key / SSE-S3 KMS key)
+	// does not match the secret key used during encrypting the object.
+	ErrSecretKeyMismatch = errors.New("The secret key does not match the secret key used during upload")
+
 	// ErrCustomerKeyMD5Mismatch indicates that the SSE-C key MD5 does not match the
 	// computed MD5 sum. This means that the client provided either the wrong key for
 	// a certain MD5 checksum or the wrong MD5 for a certain key.

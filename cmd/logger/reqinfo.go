@@ -68,6 +68,29 @@ func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	return r
 }
 
+// SetTags - sets key/val to ReqInfo.tags
+func (r *ReqInfo) SetTags(key string, val string) *ReqInfo {
+	if r == nil {
+		return nil
+	}
+	r.Lock()
+	defer r.Unlock()
+	// Search of tag key already exists in tags
+	var updated bool
+	for _, tag := range r.tags {
+		if tag.Key == key {
+			tag.Val = val
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		// Append to the end of tags list
+		r.tags = append(r.tags, KeyVal{key, val})
+	}
+	return r
+}
+
 // GetTags - returns the user defined tags
 func (r *ReqInfo) GetTags() []KeyVal {
 	if r == nil {
@@ -94,6 +117,9 @@ func GetReqInfo(ctx context.Context) *ReqInfo {
 		if ok {
 			return r
 		}
+		r = &ReqInfo{}
+		SetReqInfo(ctx, r)
+		return r
 	}
 	return nil
 }

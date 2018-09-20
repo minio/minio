@@ -98,7 +98,9 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 func handleCommonEnvVars() {
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
+		var err error
+		globalProfiler, err = startProfiler(profiler, "")
+		logger.FatalIf(err, "Unable to setup a profiler")
 	}
 
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -112,11 +114,6 @@ func handleCommonEnvVars() {
 		// credential Envs are set globally.
 		globalIsEnvCreds = true
 		globalActiveCred = cred
-	}
-
-	// In distributed setup users need to set ENVs always.
-	if !globalIsEnvCreds && globalIsDistXL {
-		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to start distributed server mode")
 	}
 
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {

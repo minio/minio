@@ -192,17 +192,18 @@ func TestDiskCache(t *testing.T) {
 	objInfo.ContentType = contentType
 	objInfo.ETag = etag
 	objInfo.UserDefined = httpMeta
+	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
 	hashReader, err := hash.NewReader(byteReader, int64(size), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
+	err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName)
+	cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestDiskCache(t *testing.T) {
 		t.Fatal("Cached content-type does not match")
 	}
 	writer := bytes.NewBuffer(nil)
-	err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "")
+	err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "", opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,6 +267,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	objInfo.ContentType = contentType
 	objInfo.ETag = etag
 	objInfo.UserDefined = httpMeta
+	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
 	hashReader, err := hash.NewReader(byteReader, int64(size), "", "")
@@ -273,16 +275,16 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cache.diskAvailable(int64(size)) {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
+		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
 		if err != errDiskFull {
 			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta)
+		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName)
+		cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,7 +301,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 			t.Fatal("Cached content-type does not match")
 		}
 		writer := bytes.NewBuffer(nil)
-		err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "")
+		err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "", opts)
 		if err != nil {
 			t.Fatal(err)
 		}
