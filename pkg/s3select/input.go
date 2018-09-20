@@ -116,6 +116,13 @@ type Options struct {
 	Progress bool
 }
 
+// aggrType is used to store the Aggregate function.
+// If it is count(*) then result is returned as integer
+type aggrType struct {
+	result []float64
+	cmd    string
+}
+
 // NewInput sets up a new Input, the first row is read when this is run.
 // If there is a problem with reading the first row, the error is returned.
 // Otherwise, the returned reader can be reliably consumed with ReadRecord()

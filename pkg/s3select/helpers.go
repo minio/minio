@@ -676,11 +676,26 @@ func (reader *Input) colNameErrs(columnNames []string) error {
 }
 
 // aggFuncToStr converts an array of floats into a properly formatted string.
-func (reader *Input) aggFuncToStr(myAggVals []float64) string {
-	myRow := strconv.FormatFloat(myAggVals[0], 'f', 6, 64)
-	for i := 1; i < len(myAggVals); i++ {
-		aggregateval := strconv.FormatFloat(myAggVals[i], 'f', 6, 64)
-		myRow = myRow + reader.options.OutputFieldDelimiter + aggregateval
+// In case of Count(*) it returns the int value
+func (reader *Input) aggFuncToStr(myAggVals *aggrType) string {
+	fmt.Println(myAggVals)
+	var myRow string
+	if myAggVals.cmd == "count" {
+		myRow = strconv.FormatInt(int64(myAggVals.result[0]), 10)
+		for i := 1; i < len(myAggVals.result); i++ {
+			aggregateval := strconv.FormatInt(int64(myAggVals.result[0]), 10)
+
+			myRow = myRow + reader.options.OutputFieldDelimiter + aggregateval
+		}
+		fmt.Println(myAggVals, myRow)
+
+	} else {
+
+		myRow = strconv.FormatFloat(myAggVals.result[0], 'f', 6, 64)
+		for i := 1; i < len(myAggVals.result); i++ {
+			aggregateval := strconv.FormatFloat(myAggVals.result[i], 'f', 6, 64)
+			myRow = myRow + reader.options.OutputFieldDelimiter + aggregateval
+		}
 	}
 	return myRow
 }
