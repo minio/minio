@@ -82,9 +82,9 @@ func (m xlVersioningV1) IsValid() bool {
 func (m xlVersioningV1) DeriveVersionId(object, etag string) string {
 
 	h := sha1.New()
-	// Derive hash from concatenation of key name of object, incrementing index and etag
+	// Derive hash from concatenation of the base of the key name of object, an index and the etag
 	// Note that the etag can be empty for delete markers
-	s := fmt.Sprintf("%s;%d;%s", object, len(m.ObjectVersions)+1, etag)
+	s := fmt.Sprintf("%s;%d;%s", path.Base(object), len(m.ObjectVersions)+1, etag)
 	h.Write([]byte(s))
 	bts := h.Sum(nil)
 
