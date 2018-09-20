@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 
+	"cloud.google.com/go/internal/trace"
 	"golang.org/x/net/context"
 	raw "google.golang.org/api/storage/v1"
 )
@@ -25,6 +26,9 @@ import (
 // CopierFrom creates a Copier that can copy src to dst.
 // You can immediately call Run on the returned Copier, or
 // you can configure it first.
+//
+// For Requester Pays buckets, the user project of dst is billed, unless it is empty,
+// in which case the user project of src is billed.
 func (dst *ObjectHandle) CopierFrom(src *ObjectHandle) *Copier {
 	return &Copier{dst: dst, src: src}
 }
@@ -42,7 +46,7 @@ type Copier struct {
 	RewriteToken string
 
 	// ProgressFunc can be used to monitor the progress of a multi-RPC copy
-	// operation. If ProgressFunc is not nil and CopyFrom requires multiple
+	// operation. If ProgressFunc is not nil and copying requires multiple
 	// calls to the underlying service (see
 	// https://cloud.google.com/storage/docs/json_api/v1/objects/rewrite), then
 	// ProgressFunc will be invoked after each call with the number of bytes of
@@ -56,16 +60,31 @@ type Copier struct {
 	// ProgressFunc should return quickly without blocking.
 	ProgressFunc func(copiedBytes, totalBytes uint64)
 
+	// The Cloud KMS key, in the form projects/P/locations/L/keyRings/R/cryptoKeys/K,
+	// that will be used to encrypt the object. Overrides the object's KMSKeyName, if
+	// any.
+	//
+	// Providing both a DestinationKMSKeyName and a customer-supplied encryption key
+	// (via ObjectHandle.Key) on the destination object will result in an error when
+	// Run is called.
+	DestinationKMSKeyName string
+
 	dst, src *ObjectHandle
 }
 
 // Run performs the copy.
-func (c *Copier) Run(ctx context.Context) (*ObjectAttrs, error) {
+func (c *Copier) Run(ctx context.Context) (attrs *ObjectAttrs, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.Copier.Run")
+	defer func() { trace.EndSpan(ctx, err) }()
+
 	if err := c.src.validate(); err != nil {
 		return nil, err
 	}
 	if err := c.dst.validate(); err != nil {
 		return nil, err
+	}
+	if c.DestinationKMSKeyName != "" && c.dst.encryptionKey != nil {
+		return nil, errors.New("storage: cannot use DestinationKMSKeyName with a customer-supplied encryption key")
 	}
 	// Convert destination attributes to raw form, omitting the bucket.
 	// If the bucket is included but name or content-type aren't, the service
@@ -73,29 +92,39 @@ func (c *Copier) Run(ctx context.Context) (*ObjectAttrs, error) {
 	// does not cause any problems.
 	rawObject := c.ObjectAttrs.toRawObject("")
 	for {
-		res, err := c.callRewrite(ctx, c.src, rawObject)
+		res, err := c.callRewrite(ctx, rawObject)
 		if err != nil {
 			return nil, err
 		}
 		if c.ProgressFunc != nil {
-			c.ProgressFunc(res.TotalBytesRewritten, res.ObjectSize)
+			c.ProgressFunc(uint64(res.TotalBytesRewritten), uint64(res.ObjectSize))
 		}
 		if res.Done { // Finished successfully.
 			return newObject(res.Resource), nil
 		}
 	}
-	return nil, nil
 }
 
-func (c *Copier) callRewrite(ctx context.Context, src *ObjectHandle, rawObj *raw.Object) (*raw.RewriteResponse, error) {
-	call := c.dst.c.raw.Objects.Rewrite(src.bucket, src.object, c.dst.bucket, c.dst.object, rawObj)
+func (c *Copier) callRewrite(ctx context.Context, rawObj *raw.Object) (*raw.RewriteResponse, error) {
+	call := c.dst.c.raw.Objects.Rewrite(c.src.bucket, c.src.object, c.dst.bucket, c.dst.object, rawObj)
 
 	call.Context(ctx).Projection("full")
 	if c.RewriteToken != "" {
 		call.RewriteToken(c.RewriteToken)
 	}
+	if c.DestinationKMSKeyName != "" {
+		call.DestinationKmsKeyName(c.DestinationKMSKeyName)
+	}
+	if c.PredefinedACL != "" {
+		call.DestinationPredefinedAcl(c.PredefinedACL)
+	}
 	if err := applyConds("Copy destination", c.dst.gen, c.dst.conds, call); err != nil {
 		return nil, err
+	}
+	if c.dst.userProject != "" {
+		call.UserProject(c.dst.userProject)
+	} else if c.src.userProject != "" {
+		call.UserProject(c.src.userProject)
 	}
 	if err := applySourceConds(c.src.gen, c.src.conds, call); err != nil {
 		return nil, err
@@ -129,6 +158,8 @@ func (dst *ObjectHandle) ComposerFrom(srcs ...*ObjectHandle) *Composer {
 }
 
 // A Composer composes source objects into a destination object.
+//
+// For Requester Pays buckets, the user project of dst is billed.
 type Composer struct {
 	// ObjectAttrs are optional attributes to set on the destination object.
 	// Any attributes must be initialized before any calls on the Composer. Nil
@@ -140,7 +171,10 @@ type Composer struct {
 }
 
 // Run performs the compose operation.
-func (c *Composer) Run(ctx context.Context) (*ObjectAttrs, error) {
+func (c *Composer) Run(ctx context.Context) (attrs *ObjectAttrs, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.Composer.Run")
+	defer func() { trace.EndSpan(ctx, err) }()
+
 	if err := c.dst.validate(); err != nil {
 		return nil, err
 	}
@@ -175,11 +209,16 @@ func (c *Composer) Run(ctx context.Context) (*ObjectAttrs, error) {
 	if err := applyConds("ComposeFrom destination", c.dst.gen, c.dst.conds, call); err != nil {
 		return nil, err
 	}
+	if c.dst.userProject != "" {
+		call.UserProject(c.dst.userProject)
+	}
+	if c.PredefinedACL != "" {
+		call.DestinationPredefinedAcl(c.PredefinedACL)
+	}
 	if err := setEncryptionHeaders(call.Header(), c.dst.encryptionKey, false); err != nil {
 		return nil, err
 	}
 	var obj *raw.Object
-	var err error
 	setClientHeader(call.Header())
 	err = runWithRetry(ctx, func() error { obj, err = call.Do(); return err })
 	if err != nil {

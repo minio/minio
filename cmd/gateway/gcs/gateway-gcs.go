@@ -750,7 +750,13 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 		return gcsToObjectError(err, bucket)
 	}
 
-	object := l.client.Bucket(bucket).Object(key)
+	// GCS storage decompresses a gzipped object by default and returns the data.
+	// Refer to https://cloud.google.com/storage/docs/transcoding#decompressive_transcoding
+	// Need to set `Accept-Encoding` header to `gzip` when issuing a GetObject call, to be able
+	// to download the object in compressed state.
+	// Calling ReadCompressed with true accomplishes that.
+	object := l.client.Bucket(bucket).Object(key).ReadCompressed(true)
+
 	r, err := object.NewRangeReader(l.ctx, startOffset, length)
 	if err != nil {
 		logger.LogIf(ctx, err)
