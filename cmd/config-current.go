@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/miekg/dns"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 
@@ -41,9 +40,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "28"
+const serverConfigVersion = "29"
 
-type serverConfig = serverConfigV28
+type serverConfig = serverConfigV29
 
 var (
 	// globalServerConfig server config.
@@ -97,12 +96,6 @@ func (s *serverConfig) GetCredential() auth.Credentials {
 	return s.Credential
 }
 
-// SetBrowser set if browser is enabled.
-func (s *serverConfig) SetBrowser(b bool) {
-	// Set the new value.
-	s.Browser = BoolFlag(b)
-}
-
 // SetWorm set if worm is enabled.
 func (s *serverConfig) SetWorm(b bool) {
 	// Set the new value.
@@ -124,17 +117,6 @@ func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
 		return storageClass{}, storageClass{}
 	}
 	return s.StorageClass.Standard, s.StorageClass.RRS
-}
-
-// GetBrowser get current credentials.
-func (s *serverConfig) GetBrowser() bool {
-	if globalIsEnvBrowser {
-		return globalIsBrowserEnabled
-	}
-	if s == nil {
-		return true
-	}
-	return bool(s.Browser)
 }
 
 // GetWorm get current credentials.
@@ -188,14 +170,7 @@ func (s *serverConfig) Validate() error {
 	}
 
 	// Region: nothing to validate
-	// Browser, Worm, Cache and StorageClass values are already validated during json unmarshal
-
-	if s.Domain != "" {
-		if _, ok := dns.IsDomainName(s.Domain); !ok {
-			return errors.New("invalid domain name")
-		}
-	}
-
+	// Worm, Cache and StorageClass values are already validated during json unmarshal
 	for _, v := range s.Notify.AMQP {
 		if err := v.Validate(); err != nil {
 			return fmt.Errorf("amqp: %s", err.Error())
@@ -259,20 +234,12 @@ func (s *serverConfig) loadFromEnvs() {
 		s.SetCredential(globalActiveCred)
 	}
 
-	if globalIsEnvBrowser {
-		s.SetBrowser(globalIsBrowserEnabled)
-	}
-
 	if globalIsEnvWORM {
 		s.SetWorm(globalWORMEnabled)
 	}
 
 	if globalIsEnvRegion {
 		s.SetRegion(globalServerRegion)
-	}
-
-	if globalIsEnvDomainName {
-		s.Domain = globalDomainName
 	}
 
 	if globalIsStorageClass {
@@ -395,10 +362,6 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "Credential configuration differs"
 	case s.Region != t.Region:
 		return "Region configuration differs"
-	case s.Browser != t.Browser:
-		return "Browser configuration differs"
-	case s.Domain != t.Domain:
-		return "Domain configuration differs"
 	case s.StorageClass != t.StorageClass:
 		return "StorageClass configuration differs"
 	case !reflect.DeepEqual(s.Cache, t.Cache):
@@ -442,7 +405,6 @@ func newServerConfig() *serverConfig {
 		Version:    serverConfigVersion,
 		Credential: cred,
 		Region:     globalMinioDefaultRegion,
-		Browser:    true,
 		StorageClass: storageClassConfig{
 			Standard: storageClass{},
 			RRS:      storageClass{},
@@ -495,17 +457,11 @@ func (s *serverConfig) loadToCachedConfigs() {
 	if !globalIsEnvCreds {
 		globalActiveCred = s.GetCredential()
 	}
-	if !globalIsEnvBrowser {
-		globalIsBrowserEnabled = s.GetBrowser()
-	}
 	if !globalIsEnvWORM {
 		globalWORMEnabled = s.GetWorm()
 	}
 	if !globalIsEnvRegion {
 		globalServerRegion = s.GetRegion()
-	}
-	if !globalIsEnvDomainName {
-		globalDomainName = s.Domain
 	}
 	if !globalIsStorageClass {
 		globalStandardStorageClass, globalRRStorageClass = s.GetStorageClass()
