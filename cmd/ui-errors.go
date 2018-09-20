@@ -29,6 +29,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	uiErrInvalidDomainValue = newUIErrFn(
+		"Invalid domain value",
+		"Please check the passed value",
+		"Domain can only accept DNS compatible values.",
+	)
+
 	uiErrInvalidErasureSetSize = newUIErrFn(
 		"Invalid erasure set size",
 		"Please check the passed value",

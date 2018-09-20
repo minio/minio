@@ -2411,7 +2411,31 @@ func migrateV27ToV28() error {
 
 // Migrates '.minio.sys/config.json' v27 to v28.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
-	return migrateV27ToV28MinioSys(objAPI)
+	if err := migrateV27ToV28MinioSys(objAPI); err != nil {
+		return err
+	}
+	return migrateV28ToV29MinioSys(objAPI)
+}
+
+func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	srvConfig, err := readServerConfig(context.Background(), objAPI)
+	if err == errConfigNotFound {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+	if srvConfig.Version != "28" {
+		return nil
+	}
+
+	srvConfig.Version = "29"
+	if err = saveServerConfig(context.Background(), objAPI, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "28", "29")
+	return nil
 }
 
 func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {

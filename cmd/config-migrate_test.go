@@ -159,8 +159,8 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 }
 
-// Test if a config migration from v2 to v28 is successfully done
-func TestServerConfigMigrateV2toV28(t *testing.T) {
+// Test if a config migration from v2 to v29 is successfully done
+func TestServerConfigMigrateV2toV29(t *testing.T) {
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
@@ -200,6 +200,10 @@ func TestServerConfigMigrateV2toV28(t *testing.T) {
 	}
 
 	if err := migrateConfigToMinioSys(objLayer); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	if err := migrateMinioSysConfig(objLayer); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
