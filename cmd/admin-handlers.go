@@ -27,6 +27,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -620,7 +621,7 @@ func normalizeJSONKey(input string) (key string) {
 	return
 }
 
-// GetConfigHandler - GET /minio/admin/v1/config-keys
+// GetConfigKeysHandler - GET /minio/admin/v1/config-keys
 // Get some keys in config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigKeysHandler")
@@ -639,43 +640,53 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var keys []string
-	queries := r.URL.Query()
-
-	for k := range queries {
-		keys = append(keys, k)
-	}
-
+	// Get the currently set configuration keys and values
 	config, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
-
-	configData, err := json.Marshal(config)
+	configJSON, err := json.Marshal(config)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
+	configStr := string(configJSON)
 
-	configStr := string(configData)
-	newConfigStr := `{}`
+	// Form a server config structure, "structConfig", with
+	// all valid and possible configuration keys and values
+	var newConfig = newServerConfig()
+	structConfigJSON, err := json.Marshal(newConfig)
+	if err != nil {
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
+		return
+	}
+	structConfig := string(structConfigJSON)
 
-	for _, key := range keys {
-		// sjson.Set does not return an error if key is empty
-		// we should check by ourselves here
-		if key == "" {
-			continue
+	// JSON structure initialization that will be returned
+	jsonResult := `{}`
+
+	// Check if the requested key/s is/are valid
+	queries := r.URL.Query()
+	for key := range queries {
+		val := gjson.Get(structConfig, key)
+		if (gjson.Result{}) == val {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("Configuration key", key)
+			ctx = logger.SetReqInfo(ctx, reqInfo)
+			logger.LogIf(ctx, errors.New("Invalid configuration key"))
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, "Invalid configuration key: "+key, r.URL)
+			return
 		}
-		val := gjson.Get(configStr, key)
-		if j, err := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); err == nil {
-			newConfigStr = j
+		// Append keys and values in json format
+		val = gjson.Get(configStr, key)
+		if j, err := sjson.Set(jsonResult, normalizeJSONKey(key), val.Value()); err == nil {
+			jsonResult = j
 		}
 	}
 
 	password := config.GetCredential().SecretKey
-	econfigData, err := madmin.EncryptServerConfigData(password, []byte(newConfigStr))
+	econfigData, err := madmin.EncryptServerConfigData(password, []byte(jsonResult))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
@@ -758,8 +769,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// If credentials for the server are provided via environment,
-	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		creds := globalServerConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||
@@ -801,6 +810,91 @@ func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
 	}
 }
 
+func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string) {
+	keys := string(elem)
+	var found bool
+	var fullKeyName string
+	// Validation for a single key
+	if expectedKeys.Type == gjson.Null &&
+		expectedKeys.Raw == "" &&
+		expectedKeys.Str == "" &&
+		expectedKeys.Num == 0 &&
+		expectedKeys.Index == 0 {
+		return "Invalid key", ""
+	}
+	// Validation for multiple key names in JSON format
+	var skipChrsFront int
+	var skipChrsEnd int
+	if expectedKeys.Type == gjson.JSON {
+		if len(keys) == 2 {
+			return "Invalid/Empty JSON data", ""
+		}
+		raw := expectedKeys.Raw
+		if keys[:1] == "{" {
+			skipChrsFront = 1
+		} else {
+			skipChrsFront = 0
+		}
+		if keys[len(keys)-1:] == "}" {
+			skipChrsEnd = 1
+		} else {
+			skipChrsEnd = 0
+		}
+		r := regexp.MustCompile(`[^\s":]+|"([^"]*)"`)
+		keys := r.FindAllString(keys[skipChrsFront:len(keys)-skipChrsEnd], -1)
+		rawKeys := regexp.MustCompile(`[,:]`).Split(raw[1:len(raw)-1], -1)
+
+		for i := 0; i < len(keys); i++ {
+			if keys[i][:1] == "{" {
+				if keys[i][1:2] == "\"" {
+					skipChrsFront = 2
+				} else {
+					if keys[i][len(keys[i])-1:] == "\"" {
+						skipChrsEnd = 1
+					} else {
+						skipChrsEnd = 0
+					}
+					return "Invalid JSON format", fullKeyName + "." + keys[i][1:len(keys[i])-skipChrsEnd]
+				}
+				if keys[i][len(keys[i])-1:] == "\"" {
+					skipChrsEnd = 1
+				} else {
+					skipChrsEnd = 0
+				}
+				fullKeyName += "." + keys[i][skipChrsFront:len(keys[i])-skipChrsEnd]
+			} else {
+				if keys[i][:1] == "\"" {
+					skipChrsFront = 1
+					if keys[i][len(keys[i])-1:] == "\"" {
+						skipChrsEnd = 1
+					} else {
+						return "Invalid JSON format", keys[i]
+					}
+
+				} else {
+					return "Invalid JSON format", keys[i]
+				}
+				fullKeyName = keys[i][skipChrsFront : len(keys[i])-skipChrsEnd]
+			}
+			found = false
+			for j := 0; j < len(rawKeys); j++ {
+				if keys[i] == rawKeys[j] {
+					found = true
+					break
+				}
+				j++
+			}
+			if !found {
+				return "Invalid key", fullKeyName
+			}
+			if i+1 < len(keys) && keys[i+1][:1] != "{" {
+				i++
+			}
+		}
+	}
+	return "", ""
+}
+
 // SetConfigKeysHandler - PUT /minio/admin/v1/config-keys
 func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigKeysHandler")
@@ -839,15 +933,21 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
-
 	configStr := string(configBytes)
+
+	var config = newServerConfig()
+	structConfigJSON, err := json.Marshal(config)
+	if err != nil {
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
+		return
+	}
+	structConfig := string(structConfigJSON)
 
 	queries := r.URL.Query()
 	password := globalServerConfig.GetCredential().SecretKey
 
-	// Set key values in the JSON config
 	for k := range queries {
-		// Decode encrypted data associated to the current key
+		// Decode encoded data associated to the current key
 		encryptedElem, dErr := base64.StdEncoding.DecodeString(queries.Get(k))
 		if dErr != nil {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("key", k)
@@ -862,13 +962,30 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 			return
 		}
-		// Calculate the type of the current key from the
-		// original config json
-		jsonFieldType := gjson.Get(configStr, k).Type
-		// Convert passed value to json filed type
-		val, cErr := convertValueType(elem, jsonFieldType)
-		if cErr != nil {
-			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cErr.Error(), r.URL)
+
+		// Compare key against struct config
+		jsonField := gjson.Get(structConfig, k)
+		if (gjson.Result{}) == jsonField {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("Config key", k)
+			// GetReq Info to keep the prev setting
+			ctx = logger.SetReqInfo(ctx, reqInfo)
+			logger.LogIf(ctx, errors.New("Invalid key"))
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, "Invalid KEY: "+k, r.URL)
+			return
+		}
+		if err, k2 := isInvalidJSONField(jsonField, elem); err != "" {
+			if k2 != "" && k2[:1] != "=" {
+				k2 = "." + k2
+			}
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err+": "+k+k2, r.URL)
+			return
+		}
+
+		// Determine type of the current
+		// key from original config json
+		val, cerr := convertValueType(elem, jsonField.Type)
+		if cerr != nil {
+			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cerr.Error(), r.URL)
 			return
 		}
 		// Set the key/value in the new json document
@@ -880,7 +997,6 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	configBytes = []byte(configStr)
 
 	// Validate config
-	var config serverConfig
 	if err = json.Unmarshal(configBytes, &config); err != nil {
 		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
 		return
@@ -907,7 +1023,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, config); err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
