@@ -450,9 +450,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	getObjectNInfo := objectAPI.GetObjectNInfo
+	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
-		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
 	opts := ObjectOptions{}
@@ -477,11 +477,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				getObjectInfo := objectAPI.GetObjectInfo
-				if api.CacheAPI() != nil {
-					getObjectInfo = api.CacheAPI().GetObjectInfo
-				}
-
 				_, err := getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
@@ -492,13 +487,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
-	defer gr.Close()
-	objInfo := gr.ObjInfo
 
 	var encrypted bool
 	if objectAPI.IsEncryptionSupported() {
