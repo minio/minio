@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -330,9 +329,9 @@ func NewStorageRPCClient(host *xnet.Host, endpointPath string) (*StorageRPCClien
 // Initialize new storage rpc client.
 func newStorageRPC(endpoint Endpoint) *StorageRPCClient {
 	host, err := xnet.ParseHost(endpoint.Host)
-	logger.FatalIf(err, "Unable to parse storage RPC Host", context.Background())
+	logger.FatalIf(err, "Unable to parse storage RPC Host")
 	rpcClient, err := NewStorageRPCClient(host, endpoint.Path)
-	logger.FatalIf(err, "Unable to initialize storage RPC client", context.Background())
+	logger.FatalIf(err, "Unable to initialize storage RPC client")
 	// Attempt first try connection and save error if any.
 	rpcClient.connect()
 	return rpcClient
