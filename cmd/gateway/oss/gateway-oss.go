@@ -565,9 +565,13 @@ func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
 		pw.CloseWithError(err)
 	}()
-	// Setup cleanup function to cause the above go-routine to
-	// exit in case of partial read
-	pipeCloser := func() { pr.Close() }
+
+	// Cleanup function to cause the go routine above to exit, in case of incomplete read.
+	pipeCloser := func() {
+		pw.Close()
+		pr.Close()
+	}
+
 	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
 }
 

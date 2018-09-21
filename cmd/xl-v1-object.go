@@ -211,9 +211,12 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		err := xl.getObject(ctx, bucket, object, off, length, pw, "", ObjectOptions{})
 		pw.CloseWithError(err)
 	}()
-	// Cleanup function to cause the go routine above to exit, in
-	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+
+	// Cleanup function to cause the go routine above to exit, in case of incomplete read.
+	pipeCloser := func() {
+		pw.Close()
+		pr.Close()
+	}
 
 	return fn(pr, h, pipeCloser)
 }
