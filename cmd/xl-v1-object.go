@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -140,7 +141,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag, srcOpts); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag, srcOpts, nil); gerr != nil {
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
@@ -201,14 +202,19 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, nsUnlocker)
+	stopCh := make(chan struct{})
+	stopFn := func() {
+		close(stopCh)
+	}
+
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, nsUnlocker, stopFn)
 	if nErr != nil {
 		return nil, nErr
 	}
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := xl.getObject(ctx, bucket, object, off, length, pw, "", ObjectOptions{})
+		err := xl.getObject(ctx, bucket, object, off, length, pw, "", ObjectOptions{}, stopCh)
 		pw.CloseWithError(err)
 	}()
 
@@ -228,11 +234,11 @@ func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startO
 		return err
 	}
 	defer objectLock.RUnlock()
-	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
+	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts, nil)
 }
 
 // getObject wrapper for xl GetObject
-func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
+func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions, stop chan struct{}) error {
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
@@ -321,6 +327,12 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	}
 
 	for ; partIndex <= lastPartIndex; partIndex++ {
+		select {
+		case <-stop:
+			return toObjectErr(errors.New("getobject proactively stopped"), bucket, object)
+		default:
+			// continue
+		}
 		if length == totalBytesRead {
 			break
 		}
