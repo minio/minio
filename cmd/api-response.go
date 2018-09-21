@@ -127,8 +127,8 @@ type ListObjectsVersionsResponse struct {
 	Name   string
 	Prefix string
 
-	VersionIDMarker     string
-	NextVersionIDMarker string
+	VersionIdMarker     string
+	NextVersionIdMarker string
 	KeyMarker           string
 	NextKeyMarker       string
 
@@ -459,16 +459,15 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 }
 
 // generates an ListObjectVersions response for the said bucket with other enumerated options.
-func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, isTruncated bool, maxKeys int, versions []VersionInfo, deleteMarkers []DeleteMarkerInfo) ListObjectsVersionsResponse {
+func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, maxKeys int, resp ListObjectsVersionsInfo) (data ListObjectsVersionsResponse) {
 
-	var data = ListObjectsVersionsResponse{}
 	var owner = Owner{
 		ID: globalMinioDefaultOwnerID,
 	}
 
-	for _, version := range versions {
+	for _, version := range resp.Versions {
 		var content = VersionResponse{}
-		content.VersionID = version.VersionID
+		content.VersionID = version.VersionId
 		content.IsLatest = version.IsLatest
 		content.Key = version.Key
 		content.LastModified = version.LastModified.UTC().Format(timeFormatAMZLong)
@@ -481,9 +480,9 @@ func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, isTru
 		data.Versions = append(data.Versions, content)
 	}
 
-	for _, deleteMarker := range deleteMarkers {
+	for _, deleteMarker := range resp.DeleteMarkers {
 		var content = DeleteMarkerResponse{}
-		content.VersionID = deleteMarker.VersionID
+		content.VersionID = deleteMarker.VersionId
 		content.IsLatest = deleteMarker.IsLatest
 		content.Key = deleteMarker.Key
 		content.LastModified = deleteMarker.LastModified.UTC().Format(timeFormatAMZLong)
@@ -496,10 +495,12 @@ func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, isTru
 	data.Delimiter = delimiter
 	data.Prefix = prefix
 	data.MaxKeys = maxKeys
-	data.IsTruncated = isTruncated
+	data.IsTruncated = resp.IsTruncated
+	data.NextKeyMarker = resp.NextKeyMarker
+	data.NextVersionIdMarker = resp.NextVersionIdMarker
 	data.KeyCount = len(data.Versions) + len(data.DeleteMarkers)
 
-	return data
+	return
 }
 
 // generates CopyObjectResponse from etag and lastModified time.

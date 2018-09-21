@@ -409,7 +409,7 @@ func (xl xlObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, ve
 		if oi, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
 			return oi, dm, toObjectErr(e, bucket, object)
 		}
-		return oi, dm,nil
+		return oi, dm, nil
 	}
 
 	info, dm, err := xl.getObjectInfoVersion(ctx, bucket, object, version)
@@ -439,43 +439,65 @@ func (xl xlObjects) getObjectVersioning(ctx context.Context, bucket, object stri
 }
 
 // getObjectVersions - wrapper for fetching object versions
-func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versionIDMarker string, maxKeys int) (versions []VersionInfo, deleteMarkers []DeleteMarkerInfo, err error) {
+func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versionIdMarker string, maxKeys int) (versions []interface{}, truncated bool, err error) {
 
 	versioning, err := xl.getObjectVersioning(ctx, bucket, object)
 	if err != nil {
-		return nil, nil, err
+		return nil, false, err
 	}
 
-	// Scan from the back (latest version first, same behaviour as AWS)
-	for i := len(versioning.ObjectVersions) - 1; i >= 0; i-- {
+	// Start scanning from the back (latest version first, same behaviour as AWS)
+	i := len(versioning.ObjectVersions) - 1
+
+	// Skip any versions that have been returned in a previous call
+	if versionIdMarker != "" {
+		found := false
+		for ; i >= 0; i-- {
+			if found = versioning.ObjectVersions[i].Id == versionIdMarker; found {
+				i-- // decrease index so as to skip to the next version
+				break
+			}
+		}
+		if !found { // Unable to find matching versionId
+			// FIXME: Return InvalidVersionId??
+			return nil, false, err
+		}
+	}
+
+	for ; i >= 0 && len(versions) < maxKeys; i-- {
 		v := versioning.ObjectVersions[i]
-		if !v.DeleteMarker {
+		if v.DeleteMarker {
+			versions = append(versions, DeleteMarkerInfo{
+				VersionInfoBase: VersionInfoBase{
+					Key:          object,
+					VersionId:    v.Id,
+					IsLatest:     i == len(versioning.ObjectVersions)-1,
+					LastModified: v.TimeStamp,
+				},
+			})
+		} else {
 			// Fetch info for this version
 			obj, _, err := xl.getObjectInfoVersion(ctx, bucket, object, v.Id)
 			if err != nil {
-				return nil, nil, err
+				return nil, false, err
 			}
 
 			versions = append(versions, VersionInfo{
-				Key:          object,
-				VersionID:    v.Id,
-				IsLatest:     i == len(versioning.ObjectVersions)-1,
+				VersionInfoBase: VersionInfoBase{
+					Key:          object,
+					VersionId:    v.Id,
+					IsLatest:     i == len(versioning.ObjectVersions)-1,
+					LastModified: v.TimeStamp,
+				},
 				Size:         obj.Size,
 				ETag:         obj.ETag,
 				StorageClass: obj.StorageClass,
-				LastModified: v.TimeStamp,
-			})
-		} else {
-			deleteMarkers = append(deleteMarkers, DeleteMarkerInfo{
-				Key:          object,
-				VersionID:    v.Id,
-				IsLatest:     i == len(versioning.ObjectVersions)-1,
-				LastModified: v.TimeStamp,
 			})
 		}
 	}
 
-	return versions, deleteMarkers, nil
+	truncated = i > 0 // See if there is more to return (in a future call)
+	return
 }
 
 // getObjectInfoVersion - wrapper for reading object metadata and constructs ObjectInfo.
@@ -1113,7 +1135,7 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 		_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 	} else {
 		// Delete the complete contents of this object from all disks
-		if err = xl.deleteObjectAcrossDisks(ctx, bucket, object, len(xl.getDisks())/2 + 1); err != nil {
+		if err = xl.deleteObjectAcrossDisks(ctx, bucket, object, len(xl.getDisks())/2+1); err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}

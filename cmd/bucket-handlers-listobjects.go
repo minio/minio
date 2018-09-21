@@ -124,7 +124,7 @@ func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r
 		}
 	} */
 
-	response := generateListObjectsVersionsResponse(bucket, prefix, delimiter, listObjectsVersionsInfo.IsTruncated, maxkeys, listObjectsVersionsInfo.Versions, listObjectsVersionsInfo.DeleteMarkers)
+	response := generateListObjectsVersionsResponse(bucket, prefix, delimiter, maxkeys, listObjectsVersionsInfo)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))

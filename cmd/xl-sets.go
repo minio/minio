@@ -444,16 +444,12 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 	return s.getHashedSet(bucket).GetBucketInfo(ctx, bucket)
 }
 
-func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
-	// validate all the inputs for listObjects
-	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, s); err != nil {
+func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIdMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+
+	// validate all the inputs for listObjectsVersions
+	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, versionIdMarker, s); err != nil {
 		return result, err
 	}
-
-	var versionsInfos []VersionInfo
-	var deleteMarkers []DeleteMarkerInfo
-	var eof bool
-	var nextKeyMarker string
 
 	recursive := true
 	if delimiter == slashSeparator {
@@ -483,23 +479,38 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, keyMarker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
+	// Initialize object key to start with
+	entry, end := keyMarker, false
+	var nextKeyMarker, nextVersionIdMarker string
+
+	// Start from assumption that the response is going to be truncated
+	result.IsTruncated = true
+
 	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walkResultCh
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
+		// If no version-id marker specified, then read next entry from channel
+		if versionIdMarker == "" {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				// Closed channel.
+				result.IsTruncated = false
+				break
+			}
+
+			// For any walk error return right away.
+			if walkResult.err != nil {
+				return result, toObjectErr(walkResult.err, bucket, prefix)
+			}
+			entry = walkResult.entry
+			end = walkResult.end
 		}
 
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return result, toObjectErr(walkResult.err, bucket, prefix)
-		}
+		objVersions, versionsTruncated, err := s.getHashedSet(entry).getObjectVersions(ctx, bucket, entry, versionIdMarker, maxKeys-i)
 
-		var objVersions []VersionInfo
-		var delMarkers []DeleteMarkerInfo
-		var err error
-		objVersions, delMarkers, err = s.getHashedSet(walkResult.entry).getObjectVersions(ctx, bucket, walkResult.entry, versionIDMarker, maxKeys-i)
+		// Clear versionIdMarker regardless (never use it a second time), since either:
+		// - we have read all subsequent versions and will move to the next object
+		// - or there are still more versions to be returned during a next call, but using a new nextVersionIdMarker
+		versionIdMarker = ""
+
 		if err != nil {
 			// Ignore errFileNotFound as the object might have got
 			// deleted in the interim period of listing and getObjectInfo(),
@@ -512,28 +523,31 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 			}
 			return result, toObjectErr(err, bucket, prefix)
 		}
-		nextKeyMarker = objVersions[len(objVersions)-1].Key
-		versionsInfos = append(versionsInfos, objVersions...)
-		deleteMarkers = append(deleteMarkers, delMarkers...)
-		i++
-		if walkResult.end {
-			eof = true
+
+		// Copy the versions over
+		for _, v := range objVersions {
+			if vi, ok := v.(VersionInfo); ok {
+				result.Versions = append(result.Versions, vi)
+				nextKeyMarker, nextVersionIdMarker = vi.Key, vi.VersionId
+			} else if dm, ok := v.(DeleteMarkerInfo); ok {
+				result.DeleteMarkers = append(result.DeleteMarkers, dm)
+				nextKeyMarker, nextVersionIdMarker = dm.Key, dm.VersionId
+			}
+			i++
+		}
+
+		if end && !versionsTruncated {
+			result.IsTruncated = false
 			break
 		}
 	}
 
-	params := listParams{bucket, recursive, nextKeyMarker, prefix, false}
-	if !eof {
+	if result.IsTruncated {
+		params := listParams{bucket, recursive, nextKeyMarker, prefix, false}
 		s.listPool.Set(params, walkResultCh, endWalkCh)
-	}
 
-	result = ListObjectsVersionsInfo{IsTruncated: !eof}
-	for _, versionInfo := range versionsInfos {
-		result.NextKeyMarker = versionInfo.Key
-		result.Versions = append(result.Versions, versionInfo)
-	}
-	for _, delMarkerInfo := range deleteMarkers {
-		result.DeleteMarkers = append(result.DeleteMarkers, delMarkerInfo)
+		result.NextKeyMarker = nextKeyMarker
+		result.NextVersionIdMarker = nextVersionIdMarker
 	}
 
 	return result, nil

@@ -247,23 +247,26 @@ type ListObjectsV2Info struct {
 	Prefixes []string
 }
 
-type VersionInfo struct {
+// Base version info
+type VersionInfoBase struct {
 	Key          string
-	VersionID    string
+	VersionId    string
 	IsLatest     bool
 	LastModified time.Time
-	ETag         string
-	Size         int64
-	StorageClass string
 	Owner        Owner
 }
 
+// Regular version info
+type VersionInfo struct {
+	VersionInfoBase
+	ETag         string
+	Size         int64
+	StorageClass string
+}
+
+// Version info for delete markers
 type DeleteMarkerInfo struct {
-	Key          string
-	VersionID    string
-	IsLatest     bool
-	LastModified time.Time
-	Owner        Owner
+	VersionInfoBase
 }
 
 // ListObjectsVersionsInfo - container for list objects versions.
