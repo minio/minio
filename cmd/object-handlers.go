@@ -217,12 +217,14 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		switch {
-		case crypto.S3.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-		case crypto.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-			w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			}
 		}
 	}
 
@@ -345,7 +347,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 
-			// log the error.
 			logger.LogIf(ctx, err)
 		}
 	}
@@ -372,12 +373,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		switch {
-		case crypto.S3.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-		case crypto.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-			w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			}
 		}
 	}
 
@@ -487,22 +490,44 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Get request range.
+	var rs *HTTPRangeSpec
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		var err error
+		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+			// Handle only errInvalidRange. Ignore other
+			// parse error and treat it as regular Get
+			// request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponseHeadersOnly(w, ErrInvalidRange)
+				return
+			}
+
+			logger.LogIf(ctx, err)
+		}
+	}
+
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
 
-	var encrypted bool
 	if objectAPI.IsEncryptionSupported() {
-		if encrypted, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
+			writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 			return
-		} else if encrypted {
-			s3Encrypted := crypto.S3.IsEncrypted(objInfo.UserDefined)
-			if s3Encrypted {
+		}
+	}
+
+	// Set encryption response headers
+	if objectAPI.IsEncryptionSupported() {
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-			} else {
+			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
 				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
 				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
 			}
@@ -515,7 +540,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Set standard object headers.
-	if hErr := setObjectHeaders(w, objInfo, nil); hErr != nil {
+	if hErr := setObjectHeaders(w, objInfo, rs); hErr != nil {
 		writeErrorResponse(w, toAPIErrorCode(hErr), r.URL)
 		return
 	}
@@ -524,7 +549,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
-	w.WriteHeader(http.StatusOK)
+	if rs != nil {
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
@@ -1064,12 +1093,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.S3.IsEncrypted(objInfo.UserDefined) {
-			w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-		}
-		if crypto.SSEC.IsRequested(r.Header) {
-			w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-			w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			case crypto.SSEC.IsRequested(r.Header):
+				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			}
 		}
 	}
 
