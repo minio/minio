@@ -259,7 +259,8 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 	}()
 
 	cleanupBackend := func() { bkReader.Close() }
-	gr = NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, cleanupBackend)
+	cleanupPipe := func() { pipeReader.Close() }
+	gr = NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, cleanupBackend, cleanupPipe)
 	return gr, nil
 }
 
