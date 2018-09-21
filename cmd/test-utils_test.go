@@ -32,6 +32,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -1110,9 +1111,9 @@ const (
 
 func newTestSignedRequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, signer signerType) (*http.Request, error) {
 	if signer == signerV2 {
-		return newTestSignedRequestV2(method, urlStr, contentLength, body, accessKey, secretKey)
+		return newTestSignedRequestV2(method, urlStr, contentLength, body, accessKey, secretKey, nil)
 	}
-	return newTestSignedRequestV4(method, urlStr, contentLength, body, accessKey, secretKey)
+	return newTestSignedRequestV4(method, urlStr, contentLength, body, accessKey, secretKey, nil)
 }
 
 // Returns request with correct signature but with incorrect SHA256.
@@ -1139,7 +1140,7 @@ func newTestSignedBadSHARequest(method, urlStr string, contentLength int64, body
 }
 
 // Returns new HTTP request object signed with signature v2.
-func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, headers map[string]string) (*http.Request, error) {
 	req, err := newTestRequest(method, urlStr, contentLength, body)
 	if err != nil {
 		return nil, err
@@ -1151,6 +1152,10 @@ func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.
 		return req, nil
 	}
 
+	for k, v := range headers {
+		req.Header.Add(k, v)
+	}
+
 	err = signRequestV2(req, accessKey, secretKey)
 	if err != nil {
 		return nil, err
@@ -1160,7 +1165,7 @@ func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.
 }
 
 // Returns new HTTP request object signed with signature v4.
-func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, headers map[string]string) (*http.Request, error) {
 	req, err := newTestRequest(method, urlStr, contentLength, body)
 	if err != nil {
 		return nil, err
@@ -1169,6 +1174,10 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	// Anonymous request return quickly.
 	if accessKey == "" || secretKey == "" {
 		return req, nil
+	}
+
+	for k, v := range headers {
+		req.Header.Add(k, v)
 	}
 
 	err = signRequestV4(req, accessKey, secretKey)
@@ -2330,5 +2339,103 @@ func TestToErrIsNil(t *testing.T) {
 	}
 	if toAPIErrorCode(nil) != ErrNone {
 		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(nil))
+	}
+}
+
+// Uploads an object using DummyDataGen directly via the http
+// handler. Each part in a multipart object is a new DummyDataGen
+// instance (so the part sizes are needed to reconstruct the whole
+// object). When `len(partSizes) == 1`, asMultipart is used to upload
+// the object as multipart with 1 part or as a regular single object.
+//
+// All upload failures are considered test errors - this function is
+// intended as a helper for other tests.
+func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentials, bucketName, objectName string,
+	partSizes []int64, metadata map[string]string, asMultipart bool) {
+
+	if len(partSizes) == 0 {
+		t.Fatalf("Cannot upload an object without part sizes")
+	}
+	if len(partSizes) > 1 {
+		asMultipart = true
+	}
+
+	checkRespErr := func(rec *httptest.ResponseRecorder, exp int) {
+		if rec.Code != exp {
+			b, err := ioutil.ReadAll(rec.Body)
+			t.Fatalf("Expected: %v, Got: %v, Body: %s, err: %v", exp, rec.Code, string(b), err)
+		}
+	}
+
+	if !asMultipart {
+		srcData := NewDummyDataGen(partSizes[0], 0)
+		req, err := newTestSignedRequestV4("PUT", getPutObjectURL("", bucketName, objectName),
+			partSizes[0], srcData, creds.AccessKey, creds.SecretKey, metadata)
+		if err != nil {
+			t.Fatalf("Unexpected err: %#v", err)
+		}
+		rec := httptest.NewRecorder()
+		apiRouter.ServeHTTP(rec, req)
+		checkRespErr(rec, http.StatusOK)
+	} else {
+		// Multipart upload - each part is a new DummyDataGen
+		// (so the part lengths are required to verify the
+		// object when reading).
+
+		// Initiate mp upload
+		reqI, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
+			0, nil, creds.AccessKey, creds.SecretKey, metadata)
+		if err != nil {
+			t.Fatalf("Unexpected err: %#v", err)
+		}
+		rec := httptest.NewRecorder()
+		apiRouter.ServeHTTP(rec, reqI)
+		checkRespErr(rec, http.StatusOK)
+		decoder := xml.NewDecoder(rec.Body)
+		multipartResponse := &InitiateMultipartUploadResponse{}
+		err = decoder.Decode(multipartResponse)
+		if err != nil {
+			t.Fatalf("Error decoding the recorded response Body")
+		}
+		upID := multipartResponse.UploadID
+
+		// Upload each part
+		var cp []CompletePart
+		cumulativeSum := int64(0)
+		for i, partLen := range partSizes {
+			partID := i + 1
+			partSrc := NewDummyDataGen(partLen, cumulativeSum)
+			cumulativeSum += partLen
+			req, errP := newTestSignedRequestV4("PUT",
+				getPutObjectPartURL("", bucketName, objectName, upID, fmt.Sprintf("%d", partID)),
+				partLen, partSrc, creds.AccessKey, creds.SecretKey, metadata)
+			if errP != nil {
+				t.Fatalf("Unexpected err: %#v", errP)
+			}
+			rec = httptest.NewRecorder()
+			apiRouter.ServeHTTP(rec, req)
+			checkRespErr(rec, http.StatusOK)
+			etag := rec.Header().Get("ETag")
+			if etag == "" {
+				t.Fatalf("Unexpected empty etag")
+			}
+			cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
+		}
+
+		// Call CompleteMultipart API
+		compMpBody, err := xml.Marshal(CompleteMultipartUpload{Parts: cp})
+		if err != nil {
+			t.Fatalf("Unexpected err: %#v", err)
+		}
+		reqC, errP := newTestSignedRequestV4("POST",
+			getCompleteMultipartUploadURL("", bucketName, objectName, upID),
+			int64(len(compMpBody)), bytes.NewReader(compMpBody),
+			creds.AccessKey, creds.SecretKey, metadata)
+		if errP != nil {
+			t.Fatalf("Unexpected err: %#v", errP)
+		}
+		rec = httptest.NewRecorder()
+		apiRouter.ServeHTTP(rec, reqC)
+		checkRespErr(rec, http.StatusOK)
 	}
 }

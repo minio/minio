@@ -431,6 +431,28 @@ func (s *siaObjects) ListObjects(ctx context.Context, bucket string, prefix stri
 	return loi, nil
 }
 
+// GetObjectNInfo - returns object info and locked object ReadCloser
+func (s *siaObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+	var objInfo minio.ObjectInfo
+	objInfo, err = s.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var startOffset, length int64
+	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		err := s.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		pw.CloseWithError(err)
+	}()
+	return minio.NewGetObjectReaderFromReader(pr, objInfo), nil
+}
+
 func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(dstFile)

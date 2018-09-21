@@ -68,7 +68,7 @@ ENVIRONMENT VARIABLES:
 
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-	
+
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
@@ -544,6 +544,28 @@ func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, s
 		return ossToObjectError(err, bucket, key)
 	}
 	return nil
+}
+
+// GetObjectNInfo - returns object info and locked object ReadCloser
+func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+	var objInfo minio.ObjectInfo
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var startOffset, length int64
+	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		pw.CloseWithError(err)
+	}()
+	return minio.NewGetObjectReaderFromReader(pr, objInfo), nil
 }
 
 // GetObject reads an object on OSS. Supports additional
