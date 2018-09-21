@@ -464,7 +464,7 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 		}
 	}
 
-	for ; i >= 0 && len(versions) < maxKeys; i-- {
+	for ; i >= 0; i-- {
 		v := versioning.ObjectVersions[i]
 		if v.DeleteMarker {
 			versions = append(versions, DeleteMarkerInfo{
@@ -493,6 +493,9 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 				ETag:         obj.ETag,
 				StorageClass: obj.StorageClass,
 			})
+		}
+		if len(versions) >= maxKeys {
+			break // exit early when we have enough elements
 		}
 	}
 
