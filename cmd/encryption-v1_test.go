@@ -632,7 +632,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen int64 = pkgSz + 32
+			var rLen = pkgSz + 32
 			if test.decSz < pkgSz {
 				rLen = test.decSz + 32
 			}
@@ -648,7 +648,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen int64 = (pkgSz + 32) * 2
+			var rLen = (pkgSz + 32) * 2
 			if test.decSz < 2*pkgSz {
 				rLen = (pkgSz + 32) + (test.decSz - pkgSz + 32)
 			}
@@ -663,7 +663,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
-			var rLen int64 = (pkgSz + 32) * 2
+			var rLen = (pkgSz + 32) * 2
 			if test.decSz-pkgSz < 2*pkgSz {
 				rLen = (pkgSz + 32) + (test.decSz - pkgSz + 32*2)
 			}
