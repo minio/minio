@@ -40,7 +40,7 @@ export class SideBar extends React.Component {
             "sidebar--toggled": sidebarOpen
           })}
         >
-          <i className="close sidebar__close" onClick={closeSidebar} />
+          <i className="sidebar__close" onClick={closeSidebar} />
 
           <div className="logo">
             <img className="logo__img" src={logo} alt="" />

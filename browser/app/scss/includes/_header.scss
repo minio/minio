@@ -4,7 +4,7 @@
   align-items: center;
   flex: 0 0 auto;
   margin-bottom: 15px;
-  padding: 0 5px;
+  padding: 0 0 0 5px;
 
   @include media-breakpoint-down(xs) {
     padding: 10px 15px;
@@ -29,21 +29,7 @@
 }
 
 .sidebar-toggle {
-  @include media-breakpoint-down(sm) {
-    @include size(37px, 37px);
-    background: $icon-bg $sidebar-toggle-icon no-repeat center center;
-    transition: background-color 200ms;
-    cursor: pointer;
-    border-radius: $border-radius;
-    flex-shrink: 0;
-    margin-right: 12px;
-
-    &:hover {
-      background-color: darken($icon-bg, 3%);
-    }
-  }
-
-  @include media-breakpoint-up(md) {
-    display: none;
-  }
+  @include icon($sidebar-toggle-icon);
+  flex-shrink: 0;
+  margin-right: 12px;
 }

@@ -71,17 +71,7 @@
 }
 
 .settings__toggle {
-  @include size(30px, 30px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: $border-radius;
-  cursor: pointer;
-  transition: background-color 300ms;
-
-  &:hover {
-    background-color: $theme-color-hover;
-  }
+  @include icon($settings-toggle-icon);
 }
 
 .settings__menu {

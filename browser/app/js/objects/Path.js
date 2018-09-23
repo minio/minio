@@ -59,7 +59,7 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
     >
       {dirPath.length > 2 ? prevLink : ""}
 
-      <div className="path__item" onClick={e => onPrefixClick(e, "")}>
+      <div className="path__item path__item--bucket" onClick={e => onPrefixClick(e, "")}>
         <span>{currentBucket}</span>
         <i className="path__separator" />
       </div>

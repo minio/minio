@@ -85,3 +85,19 @@
     @content;
   }
 }
+
+
+// Icon
+@mixin icon($icon) {
+  @include size(37px, 37px);
+  background: $icon-bg $icon no-repeat center center;
+  transition: background-color 200ms;
+  cursor: pointer;
+  border-radius: $border-radius;
+  flex-shrink: 0;
+  display: inherit;
+
+  &:hover {
+    background-color: darken($icon-bg, 3%);
+  }
+}

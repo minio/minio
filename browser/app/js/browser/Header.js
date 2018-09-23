@@ -22,7 +22,6 @@ import { minioBrowserPrefix } from "../constants"
 import { connect } from "react-redux"
 import classNames from "classnames"
 import * as actionsCommon from "./actions"
-import iconMore from "../../img/icons/more.svg"
 
 export class Header extends React.Component {
   constructor(props) {
@@ -87,9 +86,7 @@ export class Header extends React.Component {
             <i
               onClick={this.openSettingsMenu.bind(this)}
               className="settings__toggle"
-            >
-              <img src={iconMore} alt="" />
-            </i>
+            />
 
             {this.state.settingsActive && (
               <SettingsMenu
