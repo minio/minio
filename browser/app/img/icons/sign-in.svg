@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="16px" height="17px" viewBox="0 0 16 17" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
+    <title>Untitled</title>
+    <desc>Created with Sketch.</desc>
+    <defs>
+        <path d="M0.517484795,10.768051 C0.609772068,10.9707551 0.711194454,11.1684222 0.82122596,11.3605261 C2.06082705,13.5247455 4.39309695,14.982904 7.06593802,14.982904 C10.399037,14.982904 13.2025237,12.7153644 14.0179216,9.63876171 C14.1741556,9.04927055 14.2574022,8.43007682 14.2574022,7.79143979 C14.2574022,3.81970378 11.037674,0.599975586 7.06593802,0.599975586 C4.2125439,0.599975586 1.74728685,2.26178795 0.58520695,4.67037262 C0.544102412,4.75556793 0.504628337,4.84169757 0.466825221,4.92872102" id="path-1"></path>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Group" transform="translate(1.000000, 0.200012)">
+            <mask id="mask-2" fill="white">
+                <use xlink:href="#path-1"></use>
+            </mask>
+            <use id="Oval" stroke="#9BACB4" xlink:href="#path-1"></use>
+        </g>
+        <path d="M1.2,8.2 L9.5,8.2" id="Line" stroke="#9BACB4" stroke-linecap="square"></path>
+        <polygon id="Triangle" fill="#9BACB4" points="12.8170797 8.05630388 8.81707974 12.0563039 9.5 8.5 9.5 8 8.81707974 4.05630388"></polygon>
+    </g>
+</svg>

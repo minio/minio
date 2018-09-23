@@ -1,21 +1,23 @@
 // Form Controls
-@mixin form-item-input($color, $border-color, $border-focus-color) {
+@mixin form-item-input($color, $bg, $focus-border-color) {
   color: $color !important;
-  border-color: $border-color;
+  background-color: $bg !important;
+  border-color: $bg;
 
   &:focus {
-    border-color: $border-focus-color;
+    border-color: $focus-border-color;
+    background-color: transparent !important;
   }
 }
 
 .form-item {
   &:not(:last-child) {
-    margin-bottom: 25px;
+    margin-bottom: 20px;
   }
 
   &:not(.form-item--dark) {
     .form-item__input {
-      @include form-item-input($form-input-color, $form-input-border-color, $form-input-focus-border-color);
+      @include form-item-input($form-input-color, $form-input-bg, $form-input-focus-border-color);
 
       @include placeholder {
         color: $form-placeholder-color
@@ -29,7 +31,7 @@
   
   &.form-item--dark {
     .form-item__input {
-      @include form-item-input($form-input-dark-color, $form-input-dark-border-color, $form-input-dark-focus-border-color);
+      @include form-item-input($form-input-dark-color, $form-input-dark-bg, $form-input-dark-focus-border-color);
     }
     
     .form-item__label {
@@ -46,13 +48,13 @@
 }
 
 .form-item__input {
-  border-width: 0 0 1px 0;
+  border-width: 2px;
   border-style: solid;
   font-size: $form-input-font-size;
-  background-color: transparent !important;
-  transition: border-color 300ms;
-  @include size(100%, $form-input-height);
+  transition: border-color 300ms, background-coloe 300ms;
   box-shadow: none;
+  border-radius: $border-radius;
+  @include size(100%, $form-input-height);
 
   @include placeholder {
     opacity: 1;

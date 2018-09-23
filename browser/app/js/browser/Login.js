@@ -16,13 +16,13 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import logo from "../../img/logo.svg"
 import Alert from "../alert/Alert"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
 import { Redirect } from "react-router-dom"
 
-import iconGlobe from "../../img/icons/globe.svg"
+import iconSignIn from "../../img/icons/sign-in.svg"
+import loginImg from "../../img/login-img.svg"
 
 export class Login extends React.Component {
   constructor(props) {
@@ -96,7 +96,7 @@ export class Login extends React.Component {
       <React.Fragment>
         {alertBox}
         <div className="login">
-          <div className="login__main">
+          <div className="login__inner">
             <form
               className="login__form"
               onSubmit={this.handleSubmit.bind(this)}
@@ -133,16 +133,25 @@ export class Login extends React.Component {
                 />
               </div>
 
-              <button className="login__btn" type="submit" />
+              <button className="login__btn" type="submit">
+                <img src={iconSignIn} alt="" />
+                Sign In
+              </button>
+              <div className="login__host">{window.location.host}</div>
             </form>
-          </div>
 
-          <div className="login__bottom">
-            <div className="login__host">
-              <img src={iconGlobe} alt="" />
-              {window.location.host}
+            <div className="login__texts">
+              <h3>Minio</h3>
+              <h2>Browser</h2>
+              <p>
+                Morbi leo risus, porta ac consectetur acvestibulum at erosonec
+                id elit non mi porta gravida at eget metus. Donec sed odio dui.
+                Maecenas faucibus mollis interdum.{" "}
+              </p>
+              <div className="login_img">
+                <img src={loginImg} alt="" />
+              </div>
             </div>
-            <img className="login__logo" src={logo} alt="" />
           </div>
         </div>
       </React.Fragment>

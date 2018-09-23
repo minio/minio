@@ -1,5 +1,5 @@
 .set-expire {
-  border: 1px solid $form-input-border-color;
+  border: 1px solid red;
   margin: 35px 0 30px;
   position: relative;
   display: flex;
@@ -23,7 +23,7 @@
   @include user-select(none);
 
   &:not(:last-child) {
-    border-right: 1px solid $form-input-border-color;
+    border-right: 1px solid red;
   }
 }
 

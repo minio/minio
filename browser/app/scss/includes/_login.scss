@@ -1,83 +1,79 @@
 .login {
   display: flex;
-  flex-direction: column;
   width: 100%;
   background-color: $login-bg;
-  padding: 10px;
-}
-
-.login__main {
-  flex: 1 0 auto;
-  display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+}
+
+.login__inner {
+  background-color: $login-inner-bg;
+  border-radius: 10px;
+  max-width: $login-inner-max-width;
+  max-height: $login-inner-max-height;
+  display: flex;
+  flex: 1;
+
+  @include media-breakpoint-up(sm) {
+    width: 90vw;
+    height: 90vh;
+  }
+
+  @include media-breakpoint-down(xs) {
+    @include size(100%, 100%);
+  }
 }
 
 .login__form {
-  max-width: 400px;
-  width: 100%;
-  text-align: center;
-  padding: 30px 10px;
-}
+  align-self: center;
 
-.login__btn {
-  @include size($login-button-size, $login-button-size);
-  border: 0;
-  background-color: $login-button-bg;
-  border-radius: 50%;
-  position: relative;
-  overflow: hidden;
-  transition: background-color 250ms;
-  cursor: pointer;
-
-  &:before,
-  &:after {
-    content: '';
-    @include size(100%, 100%);
-    position: absolute;
-    left: 0;
-    top: 0;
-    background: $login-button-icon no-repeat center;
-    will-change: opacity, transform;
-    transition: opacity 250ms, transform 250ms;
-    cursor: pointer;
+  @include media-breakpoint-up(sm) {
+    padding: 0 40px;
+    min-width: 300px;
+    flex: 1 1 500px;
   }
 
-  &:before {
-    opacity: 0;
-    transform: translate3d(-$login-button-size/2, 0, 0);
+  @include media-breakpoint-down(xs) {
+    width: 100%;
+    padding: 20px;
   }
-
-  &:hover {
-    background-color: $login-button-hover-bg;
-
-    &:before {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-
-    &:after {
-      transform: translate3d($login-button-size/2, 0, 0);
-      opacity: 0;
-    }
-  }
-}
-
-.login__bottom {
-  padding: 20px 40px;
-  display: flex;
-  flex: 0 0 100px;
-  align-items: center;
-  justify-content: center;
 }
 
 .login__host {
-  @include media-breakpoint-up(sm) {
-    color: $theme-color-muted;
+  text-align: center;
+  margin-top: 10px;
+  font-size: $font-size-sm;
+  color: $theme-color-muted;
+}
 
-    & > img {
-      vertical-align: top;
-      margin: -1px 5px 0 0;
+.login__texts {
+  @include media-breakpoint-up(sm) {
+    background-color: $theme-color-dark;
+    padding: 0 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-radius: 0 10px 10px 0;
+    flex: 1 1 auto;
+    color: $login-text-color;
+    font-size: $font-size-base + 1;
+
+    & > h2, h3 {
+      color: $white;
+      text-transform: uppercase;
+      line-height: 100%;
+      font-weight: normal;
+      margin: 0;
+    }
+
+    & > h2 {
+      font-size: 35px;
+      margin-left: -1px;
+    }
+
+    & > h3 {
+      font-size: 20px;
     }
   }
 
@@ -86,10 +82,53 @@
   }
 }
 
-.login__logo {
-  width: $login-logo-width;
+.login_img {
+  position: relative;
+  align-self: flex-start;
+  margin-top: 5px;
+  overflow: hidden;
 
-  @include media-breakpoint-up(sm) {
-    margin-left: auto;
+  &:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    @include size(250px, 100%);
+    z-index: 1;
+    background-image: linear-gradient( 45deg, rgba(0,0,0,0) 0%, rgb(38,50,56) 100%);
+
+  }
+
+  & > img {
+    max-width: 100%;
+    max-height: 50px;
+  }
+}
+
+.login__btn {
+  @include size(100%, $form-input-height);
+  border: 0;
+  border-radius: $border-radius;
+  background-color: $theme-color-dark;
+  color: $button-dark-color;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 300ms, padding 300ms;
+
+  & > img {
+    margin: 2px 10px 0 0;
+    position: relative;
+    transition: transform 300ms;
+  }
+
+  &:hover {
+    background-color: lighten($theme-color-dark, 7%);
+    padding-right: 50px;
+
+    & > img {
+      transform: translateX(80px);
+    }
   }
 }

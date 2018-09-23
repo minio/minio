@@ -36,6 +36,13 @@
   @if $bg == map-get($button-variants, light) {
     color: $body-color;
   }
+  @else if $bg == map-get($button-variants, dark) {
+    color: $button-dark-color;
+    
+    &:hover {
+      color: $white;
+    }
+  }
   @else {
     color: $white;
   }
