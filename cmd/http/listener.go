@@ -35,6 +35,10 @@ import (
 
 var sslRequiredErrMsg = []byte("HTTP/1.0 403 Forbidden\r\n\r\nSSL required")
 
+var malformedErrMsgFn = func(data interface{}) string {
+	return fmt.Sprintf("HTTP/1.0 400 Bad Request\r\n\r\n%s", data)
+}
+
 // HTTP methods.
 var methods = []string{
 	http.MethodGet,
@@ -263,6 +267,7 @@ func (listener *httpListener) start() {
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
 			}
+			bufconn.Write([]byte(malformedErrMsgFn(err)))
 			bufconn.Close()
 			return
 		}
@@ -272,8 +277,9 @@ func (listener *httpListener) start() {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
 			reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
 			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, fmt.Errorf("malformed HTTP invalid HTTP method %s", method))
-
+			err = fmt.Errorf("malformed HTTP invalid HTTP method %s", method)
+			logger.LogIf(ctx, err)
+			bufconn.Write([]byte(malformedErrMsgFn(err)))
 			bufconn.Close()
 			return
 		}
