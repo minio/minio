@@ -32,4 +32,8 @@
   @include icon($sidebar-toggle-icon);
   flex-shrink: 0;
   margin-right: 12px;
+
+  @include media-breakpoint-up(md) {
+    display: none;
+  }
 }

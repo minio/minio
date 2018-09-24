@@ -105,7 +105,7 @@
   & > a {
     display: block;
     padding: 10px 15px;
-    color: $theme-color-light;
+    color: $theme-invert-text-color;
     position: relative;
     transform: translate3d(50%, 0, 0);
     transition: transform 300ms, opacity 300ms;
@@ -114,7 +114,8 @@
     border-radius: 2px;
 
     &:hover {
-      background-color: darken($theme-color-dark, 5%);
+      background-color: $theme-invert-hover-bg;
+      color: $theme-invert-text-hover-color;
     }
   }
 }
@@ -144,7 +145,7 @@
 
 .settings__panel__inner {
   padding: 25px;
-  background-color: darken($settings-menu-bg, 8%);
+  background-color: $settings-panel-bg;
   border-radius: 2px;
   margin-bottom: 10px;
 }

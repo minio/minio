@@ -1,5 +1,5 @@
 .object-actions {
-  background-color: $theme-color-dark;
+  background-color: $theme-invert-bg;
   padding: 11px;
   position: absolute;
   top: 0;
@@ -25,7 +25,7 @@
 .object-actions__item {
   display: inline-block;
   padding: 10px 12px;
-  color: $theme-color-light;
+  color: $theme-invert-text-color;
   border-radius: 2px;
   border: 0;
   background-color: transparent;
@@ -34,8 +34,12 @@
     cursor: pointer;
 
     &:hover {
-      background-color: rgba($white, 0.05);
-      color: $white;
+      background-color: $theme-invert-hover-bg;
+      color: $theme-invert-text-hover-color;
+
+      & > img {
+        opacity: 1;
+      }
     }
   }
 
@@ -47,6 +51,7 @@
     vertical-align: middle;
     position: relative;
     top: -2px;
+    opacity: 0.85;
   }
 
   & > span {

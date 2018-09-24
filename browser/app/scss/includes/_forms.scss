@@ -11,7 +11,7 @@
 }
 
 .form-item {
-  &:not(:last-child) {
+  &:not(:last-child):not(:only-child) {
     margin-bottom: 20px;
   }
 
@@ -42,7 +42,7 @@
 
 .form-item__label {
   font-weight: normal;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   display: block;
   font-size: $form-input-font-size;
 }
@@ -51,10 +51,12 @@
   border-width: 2px;
   border-style: solid;
   font-size: $form-input-font-size;
-  transition: border-color 300ms, background-coloe 300ms;
+  transition: border-color 300ms, background-color 300ms;
   box-shadow: none;
   border-radius: $border-radius;
-  @include size(100%, $form-input-height);
+  padding: 0 10px;
+  width: 100%;
+  height: $form-input-height;
 
   @include placeholder {
     opacity: 1;
@@ -98,7 +100,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 10px;
+    padding: 0 12px;
     background-color: $select-group-bg;
     transition: background-color 300ms, color 300ms;
     font-size: $font-size-sm;

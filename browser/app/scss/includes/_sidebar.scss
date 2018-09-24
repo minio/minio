@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   transition: transform 300ms;
+  padding: 20px 15px 0;
   @include size($sidebar-width, 100%);
 
   @include media-breakpoint-down(sm) {
@@ -41,9 +42,10 @@
     border-radius: 50%;
     cursor: pointer;
     transition: background-color 300ms;
+    background-size: 9px;
 
     &:hover {
-      background-color: $white;
+      background-color: $theme-invert-hover-bg;
     }
   }
 }
@@ -53,19 +55,20 @@
 .logo {
   display: flex;
   align-items: center;
-  padding: 18px;
   flex: 0 0 auto;
-  margin-bottom: 5px;
+  margin-bottom: 25px;
 }
 
 .logo__img {
+  margin-left: 2px;
   width: 18px;
 }
 
 .logo__text {
-  padding-left: 11px;
+  padding-left: 12px;
   font-size: $font-size-base + 3;
   line-height: 100%;
+  color: $logo-color;
 
   & > small {
     margin: 1px 0 0 1px;
@@ -78,31 +81,30 @@
 
 // Buckets Search
 .bucket-search {
-  border-radius: 3px;
   position: relative;
-  padding: 0 20px;
+  margin-bottom: 10px;
 }
 
 .bucket-search__text {
-  color: $theme-color-dark;
-  @include size(100%, 33px);
+  color: $theme-invert-text-color;
+  @include size(100%, $form-input-height);
   border: 0;
-  padding: 0 20px 0 27px;
-  background: transparent url(../img/icons/search.svg) no-repeat left 2px top 10px;
+  padding: 0 15px 0 33px;
+  background: $theme-invert-hover-bg url(../img/icons/search.svg) no-repeat left 12px center;
   background-size: 12px;
-  border-bottom: 1px solid $bucket-search-border-color;
+  border-radius: $border-radius;
   will-change: background-position, border-color, padding-left;
   transition: border-color 250ms, padding-left 250ms, background-position 250ms;
 
 
   &:focus {
     border-color: darken($bucket-search-border-color, 15%);
-    padding-left: 0;
+    padding-left: 15px;
     background-position: left -15px top 10px;
   }
 
   @include placeholder {
-    color: $body-color;
+    color: $theme-invert-text-muted-color;
   }
 }
 
@@ -112,7 +114,6 @@
   flex: 1 1 auto;
   overflow: hidden;
   height: 100%;
-  padding: 0 12px 0;
 }
 
 .buckets__inner {
@@ -132,7 +133,7 @@
   background-image: $bucket-item-icon;
   background-position: left 10px center;
   background-repeat: no-repeat;
-  transition: background-color 350ms;
+  transition: background-color 300ms, opacity 300ms;
 
   & > span {
     display: block;
@@ -141,13 +142,8 @@
 
   &:not(.buckets__item--active) {
     &:hover {
-      color: $buckets-item-color;
       background-color: $buckets-item-hover-bg;
     }
-  }
-
-  & > span {
-    @include text-truncate();
   }
 }
 
@@ -207,7 +203,7 @@
   width: 100%;
   z-index: 1;
   padding: 10px 0;
-  background-color: darken($buckets-item-active-bg, 5%);
+  background-color: $bucket-actions-bg;
   border-radius: 0 0 $border-radius $border-radius;
   will-change: transform, opacity;
   opacity: 0;
@@ -255,10 +251,7 @@
     background-color: $sidebar-bottom-bg;
     padding: 15px;
     color: $sidebar-bottom-color;
-  }
-
-  .storage {
-
+    margin-bottom: 15px;
   }
 
   .storage__bar {

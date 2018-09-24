@@ -12,20 +12,6 @@
 
 .policy__prefix {
   flex: 1 1 auto;
-
-  & > input[type=text] {
-    display: flex;
-    border: 0;
-    background-color: $policy-item-bg;
-    @include size(100%, $button-height);
-    padding: 0 10px;
-    border-radius: 0 $border-radius $border-radius 0;
-    color: $form-input-color;
-
-    @include placeholder {
-      color: $form-placeholder-color;
-    }
-  }
 }
 
 .policy__label {
@@ -44,7 +30,7 @@
     display: block;
     margin-top: 5px;
     font-size: $font-size-sm;
-    color: $theme-color-muted;
+    color: $theme-text-muted-color;
   }
 
   &:hover {

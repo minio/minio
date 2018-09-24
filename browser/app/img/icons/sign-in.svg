@@ -13,7 +13,7 @@
             </mask>
             <use id="Oval" stroke="#9BACB4" xlink:href="#path-1"></use>
         </g>
-        <path d="M1.2,8.2 L9.5,8.2" id="Line" stroke="#9BACB4" stroke-linecap="square"></path>
-        <polygon id="Triangle" fill="#9BACB4" points="12.8170797 8.05630388 8.81707974 12.0563039 9.5 8.5 9.5 8 8.81707974 4.05630388"></polygon>
+        <path d="M1.2,8.2 L9.5,8.2" id="Line" stroke="#b9cdd6" stroke-linecap="square"></path>
+        <polygon id="Triangle" fill="#b9cdd6" points="12.8170797 8.05630388 8.81707974 12.0563039 9.5 8.5 9.5 8 8.81707974 4.05630388"></polygon>
     </g>
 </svg>

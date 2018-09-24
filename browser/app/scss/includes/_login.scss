@@ -44,12 +44,12 @@
   text-align: center;
   margin-top: 10px;
   font-size: $font-size-sm;
-  color: $theme-color-muted;
+  color: $theme-text-muted-color;
 }
 
 .login__texts {
   @include media-breakpoint-up(sm) {
-    background-color: $theme-color-dark;
+    background-color: $theme-invert-bg;
     padding: 0 50px;
     display: flex;
     flex-direction: column;
@@ -109,7 +109,7 @@
   @include size(100%, $form-input-height);
   border: 0;
   border-radius: $border-radius;
-  background-color: $theme-color-dark;
+  background-color: $theme-invert-bg;
   color: $button-dark-color;
   display: flex;
   align-items: center;
@@ -124,7 +124,7 @@
   }
 
   &:hover {
-    background-color: lighten($theme-color-dark, 7%);
+    background-color: $theme-invert-hover-bg;
     padding-right: 50px;
 
     & > img {

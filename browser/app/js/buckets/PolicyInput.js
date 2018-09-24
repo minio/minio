@@ -79,7 +79,13 @@ export class PolicyInput extends React.Component {
       <div className="policy__header">
         <div className="policy__prefix">
           <div className="policy__label">Prefix</div>
-          <input type="text" ref={prefix => (this.prefix = prefix)} />
+          <div className="form-item">
+            <input
+              type="text"
+              className="form-item__input"
+              ref={prefix => (this.prefix = prefix)}
+            />
+          </div>
         </div>
 
         <div className="policy__permission">

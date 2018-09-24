@@ -41,7 +41,7 @@ $object-types:
     top: 10px;
     z-index: 1;
     transition: background 300ms;
-    background: rgba($theme-color-dark, 0.75) url(../img/icons/upload.svg) no-repeat center;
+    background: rgba($theme-invert-bg, 0.5) url(../img/icons/upload.svg) no-repeat center;
     border-radius: 2px;
   }
 }
@@ -212,7 +212,7 @@ $object-types:
   .objects__item--size,
   .objects__item--modified {
     font-size: $font-size-sm;
-    color: $theme-color-muted;
+    color: $theme-text-muted-color;
   }
 
   .objects__item--icon {
@@ -264,49 +264,18 @@ $object-types:
 .objects__sort--desc {
   & > i {
     &:nth-child(1) {
-      width:100%;
+      width: 100%;
       transition-delay: 200ms;
     }
 
     &:nth-child(2) {
-      width:66.66%;
+      width: 66.66%;
       transition-delay: 100ms;
     }
 
     &:nth-child(3) {
-      width:33.33%;
+      width: 33.33%;
       transition-delay: 0ms;
     }
   }
 }
-
-.objects__loading {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  text-align: center;
-
-  & > span {
-    background-color: $theme-color-dark;
-    border-radius: $border-radius $border-radius 0 0;
-    padding: 8px 15px;
-    display: inline-block;
-    color: $objects-loading-color;
-    animation: objects-loader 1000ms infinite;
-    font-size: $font-size-sm;
-  }
-}
-
-@keyframes objects-loader {
-  0%   {
-    color:rgba($objects-loading-color, 0.25);
-  }
-  50%  {
-    color: $objects-loading-color
-  }
-  100% {
-    color:rgba($objects-loading-color, 0.25);
-  }
-}
-
-

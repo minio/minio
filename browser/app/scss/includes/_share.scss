@@ -1,8 +1,9 @@
 .set-expire {
-  border: 1px solid red;
+  border: 2px solid $form-input-focus-border-color;
   margin: 35px 0 30px;
   position: relative;
   display: flex;
+  border-radius: $border-radius;
 
   &:before {
     content: '';
@@ -23,13 +24,13 @@
   @include user-select(none);
 
   &:not(:last-child) {
-    border-right: 1px solid red;
+    border-right: 2px solid $form-input-focus-border-color;
   }
 }
 
 .set-expire__title {
   font-size: $font-size-sm;
-  color: $theme-color-muted;
+  color: $theme-text-muted-color;
   margin-bottom: 3px;
 }
 
@@ -46,7 +47,7 @@
     border: 0;
     padding: 0;
     @include size(100%, 25px);
-    color: $theme-color-dark;
+    color: $theme-invert-bg;
     -moz-appearance:textfield;
     margin: 0;
 
@@ -62,12 +63,12 @@
   position: absolute;
   @include size(20px, 20px);
   background: $set-expire-handle-icon no-repeat center;
-  background-size: 10px;
+  background-size: 20px;
   left: 50%;
   margin-left: -10px;
   cursor: pointer;
-  opacity: 0.5;
   transition: opacity 300ms;
+  opacity: 0.25;
 
   &:hover {
     opacity: 1;

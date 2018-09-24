@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="10" height="8"><path d="M9.5 2L8.443.942 5 4.377 1.558.942.5 2 5 6.5z" fill="#fff" fill-rule="evenodd"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="10px" height="7px" viewBox="0 0 10 7" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
+    <title>Untitled</title>
+    <desc>Created with Sketch.</desc>
+    <defs></defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="dropdown-toggle" fill="#E5EDF1">
+            <polygon id="Shape" points="9.5 2 8.443 0.942 5 4.377 1.558 0.942 0.5 2 5 6.5"></polygon>
+        </g>
+    </g>
+</svg>

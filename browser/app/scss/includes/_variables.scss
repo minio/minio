@@ -18,11 +18,19 @@ $amber: #ffc721;
 
 
 // Theme Colors
-$theme-color-dark: #263238;
-$theme-color-light: #d3e0ec;
-$theme-color-grey: #f6f9fa;
-$theme-color-muted: #a1bdca;
-$theme-color-hover: #f0f7fa;
+$theme-invert-bg: #263238;
+$theme-invert-hover-bg: #1f2b31;
+$theme-invert-active-bg: #2f3e46;
+$theme-invert-text-color: #b9cdd6;
+$theme-invert-text-hover-color: #e5edf1;
+$theme-invert-text-active-color: $theme-invert-text-hover-color;
+$theme-invert-text-muted-color: #859eab;
+
+$theme-grey-bg: #f4f7f9;
+$theme-hover-bg: $theme-grey-bg;
+$theme-active-bg: #e4f2f9;
+$theme-text-muted-color: #88a2ad;
+$theme-border-color: #e8eef1;
 
 
 // Fonts
@@ -43,7 +51,7 @@ $link-hover-color: darken($link-color, 10%);
 
 
 // Headings
-$headings-color: $theme-color-dark;
+$headings-color: $theme-invert-bg;
 
 
 // Border Radius
@@ -56,56 +64,59 @@ $logo-container-width: 280px;
 $guest-login-bg: $red;
 $guest-login-hover-bg: darken($red, 10%);
 $sidebar-toggle-icon: url(../img/icons/menu.svg);
+$logo-color: $theme-invert-text-active-color;
 
 
 // Sidebar
 $sidebar-width: 225px;
-$sidebar-bg: #f5f7f8;
+$sidebar-bg: $theme-invert-bg;
 $sidebar-mobile-z-index: $header-z-index + 2;
 $sidebar-backdrop-z-index: $sidebar-mobile-z-index - 1;
-$sidebar-bottom-color: lighten($body-color, 10%);
-$sidebar-bottom-bg: darken($sidebar-bg, 5%);
-$storage-bg: $white;
-$storage-fill-bg: #2dbcff;
+$sidebar-bottom-color: $theme-invert-text-muted-color;
+$sidebar-bottom-bg: $theme-invert-hover-bg;
+$storage-bg: $theme-invert-active-bg;
+$storage-fill-bg: $white;
 
 
 // Buckets
-$buckets-item-hover-bg: #e8eef1;
-$buckets-item-color: $body-color;
-$buckets-item-active-color: #effaff;
-$buckets-item-active-bg: $theme-color-dark;
-$bucket-search-border-color: #dee6ea;
+$buckets-item-color: $theme-invert-text-muted-color;
+$buckets-item-active-color: $theme-invert-text-active-color;
+$buckets-item-hover-bg: $theme-invert-hover-bg;
+$buckets-item-active-bg: $theme-invert-active-bg;
+$bucket-actions-bg: lighten($theme-invert-active-bg, 3%);
+
+
 $bucket-item-icon: url(../img/icons/bucket.svg);
 $bucket-item-active-icon: url(../img/icons/bucket-active.svg);
-$buckets-dropdown-item-color: #8ea3ad;
-$buckets-dropdown-item-hover-color: $white;
+$buckets-dropdown-item-color: $theme-invert-text-color;
+$buckets-dropdown-item-hover-color: $theme-invert-text-hover-color;
 
+$bucket-search-border-color: #dee6ea;
 
 // Path
-$path-item-hover-bg: $theme-color-hover;
+$path-item-hover-bg: $theme-hover-bg;
 $path-seperator-icon: url(../img/icons/chevron-right.svg);
 $path-back-icon: url(../img/icons/path-previous.svg);
-$path-back-bg: #f5f7f8;
 
 
 // Icons
-$icon-bg: #f0f7fa;
+$icon-bg: $theme-grey-bg;
 
 
 // Objects
-$objects-row-checked-bg: #e4f2f9;
-$objects-row-hover-bg: #f0f7fa;
+$objects-row-checked-bg: $theme-active-bg;
+$objects-row-hover-bg: $theme-hover-bg;
 $objects-icon-bg: $icon-bg;
-$objects-icon-border-color: #dce8ec;
-$objects-header-border-color: #f0f7fa;
-$objects-loading-color: #effaff;
+$objects-icon-border-color: $theme-border-color;
+$objects-header-border-color: $theme-border-color;
 $objects-icon-size: 37px;
 $objects-row-mobile-border-color: $objects-row-checked-bg;
 $objects-row-min-height: 57px;
 
 
 // Settings
-$settings-menu-bg: $theme-color-dark;
+$settings-menu-bg: $theme-invert-bg;
+$settings-panel-bg: darken($settings-menu-bg, 5%);
 $settings-z-index: 100;
 $settings-backdrop-z-index: $settings-z-index - 1;
 $settings-menu-expand-width: 500px;
@@ -123,31 +134,31 @@ $button-variants: (
   danger: #ff6b68,
   success: #32c787,
   warning: #FF9800,
-  light: #f2f4f5,
-  dark: #161c20
+  light: $theme-grey-bg,
+  dark: #1c2429
 );
 $button-font-size: $font-size-base - 1;
-$button-default-color: #455a64;
-$button-height: 30px;
-$button-dark-color: #9bacb4;
+$button-height: 36px;
+$button-dark-color: $theme-invert-text-color;
 
 // About
-$about-title-color: #e3edf5;
-$about-value-color: #a3b1bd;
+$about-title-color: $theme-invert-text-color;
+$about-value-color: $theme-invert-text-muted-color;
 
 
 // Form
-$form-input-height: 40px;
+$form-input-height: $button-height;
 $form-input-font-size: $font-size-base - 1;
-$form-input-color: #607985;
-$form-input-dark-color: #f5f7f8;
-$form-input-label-color: #000;
-$form-input-dark-label-color: #6a7b84;
+$form-input-color: $body-color;
+$form-input-label-color: $headings-color;
 $form-placeholder-color: #81a0af;
-$form-input-bg: #f4f7f9;
-$form-input-dark-bg: #000;
+$form-input-bg: $theme-grey-bg;
 $form-input-focus-border-color: #dfe9ef;
-$form-input-dark-focus-border-color: red;
+
+$form-input-dark-color: $theme-invert-text-color;
+$form-input-dark-label-color: $theme-invert-text-muted-color;
+$form-input-dark-bg: #27333a;
+$form-input-dark-focus-border-color: #35454e;
 
 
 // Alert
@@ -160,30 +171,30 @@ $alert-variants: (
 $alert-max-width: 500px;
 $alert-box-shadow: 0 5px 10px rgba($black, 0.1);
 $alert-z-index: 10000;
-$alert-progress-bg: $theme-color-dark;
+$alert-progress-bg: $theme-invert-bg;
 $alert-sub-color: rgba($white, 0.5);
 $alert-close-icon: url(../img/icons/close.svg);
 
 
 // Modal
 $modal-z-index: $alert-z-index - 1;
-$modal-bg: rgba($theme-color-dark, 0.1);
+$modal-bg: rgba($black, 0.1);
 $modal-content-bg: $white;
 $modal-width: 500px;
-$modal-title-color: $theme-color-dark;
-$modal-sub-title-color: #839198;
+$modal-title-color: $theme-invert-bg;
+$modal-sub-title-color: $theme-text-muted-color;
 $modal-dialog-width: 300px;
-$modal-close-icon: url(../img/icons/close-dark.svg);
-$modal-close-hover-bg: $theme-color-hover;
+$modal-close-icon: url(../img/icons/close.svg);
+$modal-close-hover-bg: $theme-hover-bg;
 
 
 // Select Group
-$select-group-bg: $theme-color-grey;
+$select-group-bg: $theme-grey-bg;
 $select-group-item-checked-bg: $blue;
 
 
 // Policy
-$policy-item-bg: $theme-color-grey;
+$policy-item-bg: $theme-grey-bg;
 $policy-close-icon: $modal-close-icon;
 
 
@@ -192,11 +203,11 @@ $set-expire-handle-icon: url(../img/icons/chevron-right.svg);
 
 
 // Login
-$login-bg: #f5f7f8;
+$login-bg: $theme-grey-bg;
 $login-inner-bg: $white;
 $login-inner-max-width: 1100px;
 $login-inner-max-height: 550px;
-$login-text-color: #9bacb4;
+$login-text-color: $theme-invert-text-muted-color;
 
 
 // Progress
