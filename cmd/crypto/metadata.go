@@ -32,6 +32,14 @@ func IsMultiPart(metadata map[string]string) bool {
 	return false
 }
 
+// RemoveSensitiveEntries removes confidential encryption
+// information - e.g. the SSE-C key - from the metadata map.
+// It has the same semantics as RemoveSensitiveHeaders.
+func RemoveSensitiveEntries(metadata map[string]string) { // The functions is tested in TestRemoveSensitiveHeaders for compatibility reasons
+	delete(metadata, SSECKey)
+	delete(metadata, SSECopyKey)
+}
+
 // IsEncrypted returns true if the object metadata indicates
 // that it was uploaded using some form of server-side-encryption.
 //
