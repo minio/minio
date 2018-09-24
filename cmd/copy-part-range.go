@@ -69,6 +69,8 @@ func parseCopyPartRange(rangeString string, resourceSize int64) (offset, length 
 	return hrange.GetOffsetLength(resourceSize)
 }
 
+// parseCopyPartRangeSpec transforms a range string (e.g. bytes=3-4) to HTTPRangeSpec
+// and returns errors if weird values
 func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
 	hrange, err = parseRequestRangeSpec(rangeString)
 	if err != nil {
@@ -80,6 +82,9 @@ func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err erro
 	return hrange, nil
 }
 
+// checkCopyPartRangeWithSize adds more check to the range string in case of
+// copy object part. This API requires having specific start and end  range values
+// e.g. 'bytes=3-10'. Other use cases will be rejected.
 func checkCopyPartRangeWithSize(rs *HTTPRangeSpec, resourceSize int64) (err error) {
 	if rs == nil {
 		return nil

@@ -1333,6 +1333,17 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Get the object offset & length
 	startOffset, length, _ := rs.GetOffsetLength(srcInfo.Size)
 
+	if objectAPI.IsEncryptionSupported() {
+		if crypto.IsEncrypted(srcInfo.UserDefined) {
+			decryptedSize, decryptErr := srcInfo.DecryptedSize()
+			if decryptErr != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			startOffset, length, _ = rs.GetOffsetLength(decryptedSize)
+		}
+	}
+
 	/// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
