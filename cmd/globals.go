@@ -230,8 +230,6 @@ var (
 	globalKMSKeyID string
 	// Allocated KMS
 	globalKMS crypto.KMS
-	// KMS config
-	globalKMSConfig crypto.KMSConfig
 
 	// Is compression include extensions/content-types set.
 	globalIsEnvCompression bool
