@@ -280,7 +280,6 @@ type ListObjectsVersionsInfo struct {
 	KeyMarker     string
 	NextKeyMarker string
 
-	// FIXME: Implement chuncked responses for versioned lists
 	VersionIdMarker     string
 	NextVersionIdMarker string
 

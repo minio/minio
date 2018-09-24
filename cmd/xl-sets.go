@@ -485,6 +485,8 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 
 	// Start from assumption that the response is going to be truncated
 	result.IsTruncated = true
+	result.KeyMarker = keyMarker
+	result.VersionIdMarker = versionIdMarker
 
 	for i := 0; i < maxKeys; {
 		// If no version-id marker specified, then read next entry from channel

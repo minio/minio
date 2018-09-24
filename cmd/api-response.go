@@ -128,9 +128,9 @@ type ListObjectsVersionsResponse struct {
 	Prefix string
 
 	VersionIdMarker     string
-	NextVersionIdMarker string
+	NextVersionIdMarker string `xml:"NextVersionIdMarker,omitempty"`
 	KeyMarker           string
-	NextKeyMarker       string
+	NextKeyMarker       string `xml:"NextKeyMarker,omitempty"`
 
 	Versions      []VersionResponse      `xml:"Version"`
 	DeleteMarkers []DeleteMarkerResponse `xml:"DeleteMarker"`
@@ -496,7 +496,9 @@ func generateListObjectsVersionsResponse(bucket, prefix, delimiter string, maxKe
 	data.Prefix = prefix
 	data.MaxKeys = maxKeys
 	data.IsTruncated = resp.IsTruncated
+	data.KeyMarker = resp.KeyMarker
 	data.NextKeyMarker = resp.NextKeyMarker
+	data.VersionIdMarker = resp.VersionIdMarker
 	data.NextVersionIdMarker = resp.NextVersionIdMarker
 	data.KeyCount = len(data.Versions) + len(data.DeleteMarkers)
 
