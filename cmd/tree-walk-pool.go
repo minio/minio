@@ -24,16 +24,17 @@ import (
 
 // Global lookup timeout.
 const (
-	globalLookupTimeout = time.Minute * 30 // 30minutes.
+	globalLookupTimeout = time.Minute * 30 // 30 minutes.
 )
 
 // listParams - list object params used for list object map
 type listParams struct {
-	bucket    string
-	recursive bool
-	marker    string
-	prefix    string
-	heal      bool
+	bucket          string
+	recursive       bool
+	marker          string
+	prefix          string
+	heal            bool
+	versionIdMarker string
 }
 
 // errWalkAbort - returned by doTreeWalk() if it returns prematurely.

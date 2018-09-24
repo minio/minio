@@ -456,7 +456,7 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, keyMarker, prefix, false})
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, keyMarker, prefix, false, versionIdMarker})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
@@ -543,7 +543,7 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 	}
 
 	if result.IsTruncated {
-		params := listParams{bucket, recursive, nextKeyMarker, prefix, false}
+		params := listParams{bucket, recursive, nextKeyMarker, prefix, false, nextVersionIdMarker}
 		s.listPool.Set(params, walkResultCh, endWalkCh)
 
 		result.NextKeyMarker = nextKeyMarker
@@ -843,7 +843,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, false, ""})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
@@ -912,7 +912,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix, false, ""}
 	if !eof {
 		s.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -1488,7 +1488,7 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 	}
 
 	// "heal" true for listObjectsHeal() and false for listObjects()
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, true})
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, true, ""})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
@@ -1537,7 +1537,7 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, true}
+	params := listParams{bucket, recursive, nextMarker, prefix, true, ""}
 	if !eof {
 		s.listPool.Set(params, walkResultCh, endWalkCh)
 	}
