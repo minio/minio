@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // healStatusSummary - overall short summary of a healing sequence
@@ -610,7 +612,7 @@ func (h *healSequence) healBucket(bucket string) error {
 		if h.objPrefix != "" {
 			// Check if an object named as the objPrefix exists,
 			// and if so heal it.
-			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix)
+			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix, ObjectOptions{})
 			if err == nil {
 				err = h.healObject(bucket, h.objPrefix)
 				if err != nil {
@@ -622,17 +624,40 @@ func (h *healSequence) healBucket(bucket string) error {
 		return nil
 	}
 
+	entries := runtime.NumCPU() * globalEndpoints.Nodes()
+
 	marker := ""
 	isTruncated := true
 	for isTruncated {
+		if globalHTTPServer != nil {
+			// Wait at max 1 minute for an inprogress request
+			// before proceeding to heal
+			waitCount := 60
+			// Any requests in progress, delay the heal.
+			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		// Heal numCPU * nodes objects at a time.
 		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, bucket,
-			h.objPrefix, marker, "", 1000)
+			h.objPrefix, marker, "", entries)
 		if err != nil {
 			return errFnHealFromAPIErr(err)
 		}
 
-		for _, o := range objectInfos.Objects {
-			if err := h.healObject(o.Bucket, o.Name); err != nil {
+		g := errgroup.WithNErrs(len(objectInfos.Objects))
+		for index := range objectInfos.Objects {
+			index := index
+			g.Go(func() error {
+				o := objectInfos.Objects[index]
+				return h.healObject(o.Bucket, o.Name)
+			}, index)
+		}
+
+		for _, err := range g.Wait() {
+			if err != nil {
 				return err
 			}
 		}

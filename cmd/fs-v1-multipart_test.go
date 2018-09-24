@@ -42,7 +42,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	objectName := "object"
 
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, nil)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, nil, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
@@ -81,7 +81,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 
 	// Test with disk removed.
 	os.RemoveAll(disk)
-	if _, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}); err != nil {
+	if _, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
@@ -105,7 +105,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -114,7 +114,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	sha256sum := ""
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	_, err = fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum))
+	_, err = fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum), ObjectOptions{})
 	if !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -136,7 +136,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -168,14 +168,14 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+	if _, err := fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -202,14 +202,14 @@ func TestAbortMultipartUpload(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, "")); err != nil {
+	if _, err := fs.PutObjectPart(context.Background(), bucketName, objectName, uploadID, 1, mustGetHashReader(t, bytes.NewReader(data), 5, md5Hex, ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 	time.Sleep(time.Second) // Without Sleep on windows, the fs.AbortMultipartUpload() fails with "The process cannot access the file because it is being used by another process."
@@ -234,7 +234,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	_, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+	_, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}

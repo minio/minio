@@ -633,30 +633,27 @@ func (c Client) listObjectParts(bucketName, objectName, uploadID string) (partsI
 	return partsInfo, nil
 }
 
-// findUploadID lists all incomplete uploads and finds the uploadID of the matching object name.
-func (c Client) findUploadID(bucketName, objectName string) (uploadID string, err error) {
+// findUploadIDs lists all incomplete uploads and find the uploadIDs of the matching object name.
+func (c Client) findUploadIDs(bucketName, objectName string) ([]string, error) {
+	var uploadIDs []string
 	// Make list incomplete uploads recursive.
 	isRecursive := true
 	// Turn off size aggregation of individual parts, in this request.
 	isAggregateSize := false
-	// latestUpload to track the latest multipart info for objectName.
-	var latestUpload ObjectMultipartInfo
 	// Create done channel to cleanup the routine.
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 	// List all incomplete uploads.
 	for mpUpload := range c.listIncompleteUploads(bucketName, objectName, isRecursive, isAggregateSize, doneCh) {
 		if mpUpload.Err != nil {
-			return "", mpUpload.Err
+			return nil, mpUpload.Err
 		}
 		if objectName == mpUpload.Key {
-			if mpUpload.Initiated.Sub(latestUpload.Initiated) > 0 {
-				latestUpload = mpUpload
-			}
+			uploadIDs = append(uploadIDs, mpUpload.UploadID)
 		}
 	}
 	// Return the latest upload id.
-	return latestUpload.UploadID, nil
+	return uploadIDs, nil
 }
 
 // getTotalMultipartSize - calculate total uploaded size for the a given multipart object.

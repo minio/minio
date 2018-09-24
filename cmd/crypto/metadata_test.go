@@ -326,15 +326,20 @@ func TestS3CreateMetadata(t *testing.T) {
 	_ = S3.CreateMetadata(nil, "", []byte{}, SealedKey{Algorithm: InsecureSealAlgorithm})
 }
 
-var ssecCreateMetadataTests = []SealedKey{
-	{Algorithm: SealAlgorithm},
-	{IV: [32]byte{0xff}, Key: [64]byte{0x7e}, Algorithm: SealAlgorithm},
+var ssecCreateMetadataTests = []struct {
+	KeyID         string
+	SealedDataKey []byte
+	SealedKey     SealedKey
+}{
+	{KeyID: "", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
 }
 
 func TestSSECCreateMetadata(t *testing.T) {
 	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
 	logger.Disable = true
-	for i, test := range s3CreateMetadataTests {
+	for i, test := range ssecCreateMetadataTests {
 		metadata := SSEC.CreateMetadata(nil, test.SealedKey)
 		sealedKey, err := SSEC.ParseMetadata(metadata)
 		if err != nil {

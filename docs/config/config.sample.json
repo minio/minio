@@ -1,13 +1,11 @@
 {
-    "version": "28",
+    "version": "29",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
     },
     "region": "us-east-1",
-    "browser": "on",
     "worm": "off",
-    "domain": "",
     "storageclass": {
         "standard": "",
         "rrs": ""
@@ -136,4 +134,3 @@
         }
     }
 }
-

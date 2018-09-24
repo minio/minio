@@ -117,6 +117,9 @@ func GetReqInfo(ctx context.Context) *ReqInfo {
 		if ok {
 			return r
 		}
+		r = &ReqInfo{}
+		SetReqInfo(ctx, r)
+		return r
 	}
 	return nil
 }

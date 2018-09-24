@@ -254,7 +254,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testCase.bucketName),
-			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey)
+			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -268,7 +268,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testCase.bucketName),
-			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey)
+			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -304,7 +304,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	nilBucket := "dummy-bucket"
 
 	nilReq, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", nilBucket),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -346,7 +346,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testPolicy.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -360,7 +360,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testPolicy.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -417,7 +417,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("GET", getGetPolicyURL("", testCase.bucketName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
@@ -456,7 +456,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("GET", getGetPolicyURL("", testCase.bucketName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -511,7 +511,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	nilBucket := "dummy-bucket"
 
 	nilReq, err := newTestSignedRequestV4("GET", getGetPolicyURL("", nilBucket),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -591,7 +591,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testPolicy.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -641,7 +641,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for Delete bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("DELETE", getDeletePolicyURL("", testCase.bucketName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -663,7 +663,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testPolicy.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -680,7 +680,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for Delete bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("DELETE", getDeletePolicyURL("", testCase.bucketName),
-			0, nil, testCase.accessKey, testCase.secretKey)
+			0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
@@ -714,7 +714,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 	nilBucket := "dummy-bucket"
 
 	nilReq, err := newTestSignedRequestV4("DELETE", getDeletePolicyURL("", nilBucket),
-		0, nil, "", "")
+		0, nil, "", "", nil)
 
 	if err != nil {
 		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)

@@ -56,23 +56,25 @@ func parseCredentialHeader(credElement string, region string) (ch credentialHead
 		return ch, ErrMissingCredTag
 	}
 	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
-	if len(credElements) != 5 {
+	if len(credElements) < 5 {
 		return ch, ErrCredMalformed
 	}
-	if !auth.IsAccessKeyValid(credElements[0]) {
+	accessKey := strings.Join(credElements[:len(credElements)-4], "/") // The access key may contain one or more `/`
+	if !auth.IsAccessKeyValid(accessKey) {
 		return ch, ErrInvalidAccessKeyID
 	}
 	// Save access key id.
 	cred := credentialHeader{
-		accessKey: credElements[0],
+		accessKey: accessKey,
 	}
+	credElements = credElements[len(credElements)-4:]
 	var e error
-	cred.scope.date, e = time.Parse(yyyymmdd, credElements[1])
+	cred.scope.date, e = time.Parse(yyyymmdd, credElements[0])
 	if e != nil {
 		return ch, ErrMalformedCredentialDate
 	}
 
-	cred.scope.region = credElements[2]
+	cred.scope.region = credElements[1]
 	// Verify if region is valid.
 	sRegion := cred.scope.region
 	// Region is set to be empty, we use whatever was sent by the
@@ -87,14 +89,14 @@ func parseCredentialHeader(credElement string, region string) (ch credentialHead
 		return ch, ErrAuthorizationHeaderMalformed
 
 	}
-	if credElements[3] != "s3" {
+	if credElements[2] != "s3" {
 		return ch, ErrInvalidService
 	}
-	cred.scope.service = credElements[3]
-	if credElements[4] != "aws4_request" {
+	cred.scope.service = credElements[2]
+	if credElements[3] != "aws4_request" {
 		return ch, ErrInvalidRequestVersion
 	}
-	cred.scope.request = credElements[4]
+	cred.scope.request = credElements[3]
 	return cred, ErrNone
 }
 

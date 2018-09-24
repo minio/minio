@@ -29,6 +29,7 @@ import (
 	"net/http"
 
 	gzip "github.com/klauspost/pgzip"
+	"github.com/minio/minio/pkg/ioutil"
 )
 
 const (
@@ -42,19 +43,19 @@ const (
 // progress represents a struct that represents the format for XML of the
 // progress messages
 type progress struct {
-	BytesScanned   int64  `xml:"BytesScanned"`
-	BytesProcessed int64  `xml:"BytesProcessed"`
-	BytesReturned  int64  `xml:"BytesReturned"`
-	Xmlns          string `xml:"xmlns,attr"`
+	XMLName        xml.Name `xml:"Progress" json:"-"`
+	BytesScanned   int64    `xml:"BytesScanned"`
+	BytesProcessed int64    `xml:"BytesProcessed"`
+	BytesReturned  int64    `xml:"BytesReturned"`
 }
 
 // stats represents a struct that represents the format for XML of the stat
 // messages
 type stats struct {
-	BytesScanned   int64  `xml:"BytesScanned"`
-	BytesProcessed int64  `xml:"BytesProcessed"`
-	BytesReturned  int64  `xml:"BytesReturned"`
-	Xmlns          string `xml:"xmlns,attr"`
+	XMLName        xml.Name `xml:"Stats" json:"-"`
+	BytesScanned   int64    `xml:"BytesScanned"`
+	BytesProcessed int64    `xml:"BytesProcessed"`
+	BytesReturned  int64    `xml:"BytesReturned"`
 }
 
 // StatInfo is a struct that represents the
@@ -78,6 +79,9 @@ type Input struct {
 type Options struct {
 	// HasHeader when true, will treat the first row as a header row.
 	HasHeader bool
+
+	// RecordDelimiter is the string that records are delimited by.
+	RecordDelimiter string
 
 	// FieldDelimiter is the string that fields are delimited by.
 	FieldDelimiter string
@@ -107,6 +111,9 @@ type Options struct {
 
 	// Whether Header is "USE" or another
 	HeaderOpt bool
+
+	// Progress enabled, enable/disable progress messages.
+	Progress bool
 }
 
 // NewInput sets up a new Input, the first row is read when this is run.
@@ -117,25 +124,29 @@ func NewInput(opts *Options) (*Input, error) {
 	myReader := opts.ReadFrom
 	var tempBytesScanned int64
 	tempBytesScanned = 0
-	if opts.Compressed == "GZIP" {
+	switch opts.Compressed {
+	case "GZIP":
 		tempBytesScanned = opts.StreamSize
 		var err error
 		if myReader, err = gzip.NewReader(opts.ReadFrom); err != nil {
 			return nil, ErrTruncatedInput
 		}
-	} else if opts.Compressed == "BZIP2" {
+	case "BZIP2":
 		tempBytesScanned = opts.StreamSize
 		myReader = bzip2.NewReader(opts.ReadFrom)
 	}
 
+	// DelimitedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
+	normalizedReader := ioutil.NewDelimitedReader(myReader, []rune(opts.RecordDelimiter))
 	progress := &statInfo{
 		BytesScanned:   tempBytesScanned,
 		BytesProcessed: 0,
 		BytesReturned:  0,
 	}
+
 	reader := &Input{
 		options: opts,
-		reader:  csv.NewReader(myReader),
+		reader:  csv.NewReader(normalizedReader),
 		stats:   progress,
 	}
 	reader.firstRow = nil
@@ -232,13 +243,11 @@ func (reader *Input) createStatXML() (string, error) {
 		reader.stats.BytesProcessed = reader.options.StreamSize
 		reader.stats.BytesScanned = reader.stats.BytesProcessed
 	}
-	statXML := stats{
+	out, err := xml.Marshal(&stats{
 		BytesScanned:   reader.stats.BytesScanned,
 		BytesProcessed: reader.stats.BytesProcessed,
 		BytesReturned:  reader.stats.BytesReturned,
-		Xmlns:          "",
-	}
-	out, err := xml.Marshal(statXML)
+	})
 	if err != nil {
 		return "", err
 	}
@@ -250,16 +259,14 @@ func (reader *Input) createProgressXML() (string, error) {
 	if reader.options.HasHeader {
 		reader.stats.BytesProcessed += processSize(reader.header)
 	}
-	if !(reader.options.Compressed != "NONE") {
+	if reader.options.Compressed == "NONE" {
 		reader.stats.BytesScanned = reader.stats.BytesProcessed
 	}
-	progressXML := &progress{
+	out, err := xml.Marshal(&progress{
 		BytesScanned:   reader.stats.BytesScanned,
 		BytesProcessed: reader.stats.BytesProcessed,
 		BytesReturned:  reader.stats.BytesReturned,
-		Xmlns:          "",
-	}
-	out, err := xml.Marshal(progressXML)
+	})
 	if err != nil {
 		return "", err
 	}
@@ -350,20 +357,23 @@ func (reader *Input) Execute(writer io.Writer) error {
 			}
 
 		case <-progressTicker.C:
-			progressPayload, err := reader.createProgressXML()
-			if err != nil {
-				return err
+			// Send progress messages only if requested by client.
+			if reader.options.Progress {
+				progressPayload, err := reader.createProgressXML()
+				if err != nil {
+					return err
+				}
+				progressMessage := reader.writeProgressMessage(progressPayload, curBuf)
+				_, err = progressMessage.WriteTo(writer)
+				flusher, ok := writer.(http.Flusher)
+				if ok {
+					flusher.Flush()
+				}
+				if err != nil {
+					return err
+				}
+				curBuf.Reset()
 			}
-			progressMessage := reader.writeProgressMessage(progressPayload, curBuf)
-			_, err = progressMessage.WriteTo(writer)
-			flusher, ok := writer.(http.Flusher)
-			if ok {
-				flusher.Flush()
-			}
-			if err != nil {
-				return err
-			}
-			curBuf.Reset()
 		case <-continuationTimer.C:
 			message := reader.writeContinuationMessage(curBuf)
 			_, err := message.WriteTo(writer)

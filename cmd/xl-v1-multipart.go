@@ -240,7 +240,7 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string) (string, error) {
+func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) (string, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, xl); err != nil {
 		return "", err
 	}
@@ -256,7 +256,7 @@ func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object strin
 // data is read from an existing object.
 //
 // Implements S3 compatible Upload Part Copy API.
-func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
+func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
 	// Hold read locks on source object only if we are
 	// going to read data from source object.
 	objectSRLock := xl.nsMutex.NewNSLock(srcBucket, srcObject)
@@ -270,7 +270,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 	}
 
 	go func() {
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 			}
@@ -283,7 +283,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 		}
 	}()
 
-	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader)
+	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -297,7 +297,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(ctx, bucket, object, xl); err != nil {
 		return pi, err
 	}

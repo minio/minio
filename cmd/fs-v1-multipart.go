@@ -209,7 +209,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string) (string, error) {
+func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) (string, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, fs); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
@@ -249,7 +249,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo ObjectInfo) (pi PartInfo, e error) {
+	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
 
 	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, fs); err != nil {
 		return pi, toObjectErr(err)
@@ -257,7 +257,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 
 	// Initialize pipe.
 	go func() {
-		if gerr := fs.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag); gerr != nil {
+		if gerr := fs.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
 			if gerr = srcInfo.Writer.Close(); gerr != nil {
 				logger.LogIf(ctx, gerr)
 				return
@@ -271,7 +271,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 		}
 	}()
 
-	partInfo, err := fs.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader)
+	partInfo, err := fs.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -283,7 +283,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (pi PartInfo, e error) {
+func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(ctx, bucket, object, fs); err != nil {
 		return pi, toObjectErr(err, bucket)
 	}

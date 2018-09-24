@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All Rights Reserved.
+// Copyright 2014 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"unicode/utf8"
 
 	"golang.org/x/net/context"
@@ -36,6 +37,8 @@ type Writer struct {
 	// SendCRC specifies whether to transmit a CRC32C field. It should be set
 	// to true in addition to setting the Writer's CRC32C field, because zero
 	// is a valid CRC and normally a zero would not be transmitted.
+	// If a CRC32C is sent, and the data written does not match the checksum,
+	// the write will be rejected.
 	SendCRC32C bool
 
 	// ChunkSize controls the maximum number of bytes of the object that the
@@ -45,9 +48,22 @@ type Writer struct {
 	// to the nearest multiple of 256K. If zero, chunking will be disabled and
 	// the object will be uploaded in a single request.
 	//
-	// ChunkSize will default to a reasonable value. Any custom configuration
-	// must be done before the first Write call.
+	// ChunkSize will default to a reasonable value. If you perform many concurrent
+	// writes of small objects, you may wish set ChunkSize to a value that matches
+	// your objects' sizes to avoid consuming large amounts of memory.
+	//
+	// ChunkSize must be set before the first Write call.
 	ChunkSize int
+
+	// ProgressFunc can be used to monitor the progress of a large write.
+	// operation. If ProgressFunc is not nil and writing requires multiple
+	// calls to the underlying service (see
+	// https://cloud.google.com/storage/docs/json_api/v1/how-tos/resumable-upload),
+	// then ProgressFunc will be invoked after each call with the number of bytes of
+	// content copied so far.
+	//
+	// ProgressFunc should return quickly without blocking.
+	ProgressFunc func(int64)
 
 	ctx context.Context
 	o   *ObjectHandle
@@ -56,8 +72,10 @@ type Writer struct {
 	pw     *io.PipeWriter
 
 	donec chan struct{} // closed after err and obj are set.
-	err   error
 	obj   *ObjectAttrs
+
+	mu  sync.Mutex
+	err error
 }
 
 func (w *Writer) open() error {
@@ -70,12 +88,15 @@ func (w *Writer) open() error {
 	if !utf8.ValidString(attrs.Name) {
 		return fmt.Errorf("storage: object name %q is not valid UTF-8", attrs.Name)
 	}
+	if attrs.KMSKeyName != "" && w.o.encryptionKey != nil {
+		return errors.New("storage: cannot use KMSKeyName with a customer-supplied encryption key")
+	}
 	pr, pw := io.Pipe()
 	w.pw = pw
 	w.opened = true
 
 	if w.ChunkSize < 0 {
-		return errors.New("storage: Writer.ChunkSize must non-negative")
+		return errors.New("storage: Writer.ChunkSize must be non-negative")
 	}
 	mediaOpts := []googleapi.MediaOption{
 		googleapi.ChunkSize(w.ChunkSize),
@@ -98,20 +119,50 @@ func (w *Writer) open() error {
 			Media(pr, mediaOpts...).
 			Projection("full").
 			Context(w.ctx)
+		if w.ProgressFunc != nil {
+			call.ProgressUpdater(func(n, _ int64) { w.ProgressFunc(n) })
+		}
+		if attrs.KMSKeyName != "" {
+			call.KmsKeyName(attrs.KMSKeyName)
+		}
+		if attrs.PredefinedACL != "" {
+			call.PredefinedAcl(attrs.PredefinedACL)
+		}
 		if err := setEncryptionHeaders(call.Header(), w.o.encryptionKey, false); err != nil {
+			w.mu.Lock()
 			w.err = err
-			pr.CloseWithError(w.err)
+			w.mu.Unlock()
+			pr.CloseWithError(err)
 			return
 		}
 		var resp *raw.Object
 		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
 		if err == nil {
+			if w.o.userProject != "" {
+				call.UserProject(w.o.userProject)
+			}
 			setClientHeader(call.Header())
-			resp, err = call.Do()
+			// If the chunk size is zero, then no chunking is done on the Reader,
+			// which means we cannot retry: the first call will read the data, and if
+			// it fails, there is no way to re-read.
+			if w.ChunkSize == 0 {
+				resp, err = call.Do()
+			} else {
+				// We will only retry here if the initial POST, which obtains a URI for
+				// the resumable upload, fails with a retryable error. The upload itself
+				// has its own retry logic.
+				err = runWithRetry(w.ctx, func() error {
+					var err2 error
+					resp, err2 = call.Do()
+					return err2
+				})
+			}
 		}
 		if err != nil {
+			w.mu.Lock()
 			w.err = err
-			pr.CloseWithError(w.err)
+			w.mu.Unlock()
+			pr.CloseWithError(err)
 			return
 		}
 		w.obj = newObject(resp)
@@ -120,9 +171,17 @@ func (w *Writer) open() error {
 }
 
 // Write appends to w. It implements the io.Writer interface.
+//
+// Since writes happen asynchronously, Write may return a nil
+// error even though the write failed (or will fail). Always
+// use the error returned from Writer.Close to determine if
+// the upload was successful.
 func (w *Writer) Write(p []byte) (n int, err error) {
-	if w.err != nil {
-		return 0, w.err
+	w.mu.Lock()
+	werr := w.err
+	w.mu.Unlock()
+	if werr != nil {
+		return 0, werr
 	}
 	if !w.opened {
 		if err := w.open(); err != nil {
@@ -145,11 +204,15 @@ func (w *Writer) Close() error {
 		return err
 	}
 	<-w.donec
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	return w.err
 }
 
 // CloseWithError aborts the write operation with the provided error.
 // CloseWithError always returns nil.
+//
+// Deprecated: cancel the context passed to NewWriter instead.
 func (w *Writer) CloseWithError(err error) error {
 	if !w.opened {
 		return nil

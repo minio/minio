@@ -74,6 +74,14 @@ const (
 	SSEAlgorithmKMS = "aws:kms"
 )
 
+// RemoveSensitiveHeaders removes confidential encryption
+// information - e.g. the SSE-C key - from the HTTP headers.
+// It has the same semantics as RemoveSensitiveEntires.
+func RemoveSensitiveHeaders(h http.Header) {
+	h.Del(SSECKey)
+	h.Del(SSECopyKey)
+}
+
 // S3 represents AWS SSE-S3. It provides functionality to handle
 // SSE-S3 requests.
 var S3 = s3{}

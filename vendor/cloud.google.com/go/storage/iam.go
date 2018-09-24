@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package storage
 
 import (
 	"cloud.google.com/go/iam"
+	"cloud.google.com/go/internal/trace"
 	"golang.org/x/net/context"
 	raw "google.golang.org/api/storage/v1"
 	iampb "google.golang.org/genproto/googleapis/iam/v1"
@@ -23,21 +24,30 @@ import (
 
 // IAM provides access to IAM access control for the bucket.
 func (b *BucketHandle) IAM() *iam.Handle {
-	return iam.InternalNewHandleClient(&iamClient{raw: b.c.raw}, b.name)
+	return iam.InternalNewHandleClient(&iamClient{
+		raw:         b.c.raw,
+		userProject: b.userProject,
+	}, b.name)
 }
 
 // iamClient implements the iam.client interface.
 type iamClient struct {
-	raw *raw.Service
+	raw         *raw.Service
+	userProject string
 }
 
-func (c *iamClient) Get(ctx context.Context, resource string) (*iampb.Policy, error) {
-	req := c.raw.Buckets.GetIamPolicy(resource)
-	setClientHeader(req.Header())
+func (c *iamClient) Get(ctx context.Context, resource string) (p *iampb.Policy, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.IAM.Get")
+	defer func() { trace.EndSpan(ctx, err) }()
+
+	call := c.raw.Buckets.GetIamPolicy(resource)
+	setClientHeader(call.Header())
+	if c.userProject != "" {
+		call.UserProject(c.userProject)
+	}
 	var rp *raw.Policy
-	var err error
 	err = runWithRetry(ctx, func() error {
-		rp, err = req.Context(ctx).Do()
+		rp, err = call.Context(ctx).Do()
 		return err
 	})
 	if err != nil {
@@ -46,23 +56,34 @@ func (c *iamClient) Get(ctx context.Context, resource string) (*iampb.Policy, er
 	return iamFromStoragePolicy(rp), nil
 }
 
-func (c *iamClient) Set(ctx context.Context, resource string, p *iampb.Policy) error {
+func (c *iamClient) Set(ctx context.Context, resource string, p *iampb.Policy) (err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.IAM.Set")
+	defer func() { trace.EndSpan(ctx, err) }()
+
 	rp := iamToStoragePolicy(p)
-	req := c.raw.Buckets.SetIamPolicy(resource, rp)
-	setClientHeader(req.Header())
+	call := c.raw.Buckets.SetIamPolicy(resource, rp)
+	setClientHeader(call.Header())
+	if c.userProject != "" {
+		call.UserProject(c.userProject)
+	}
 	return runWithRetry(ctx, func() error {
-		_, err := req.Context(ctx).Do()
+		_, err := call.Context(ctx).Do()
 		return err
 	})
 }
 
-func (c *iamClient) Test(ctx context.Context, resource string, perms []string) ([]string, error) {
-	req := c.raw.Buckets.TestIamPermissions(resource, perms)
-	setClientHeader(req.Header())
+func (c *iamClient) Test(ctx context.Context, resource string, perms []string) (permissions []string, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.IAM.Test")
+	defer func() { trace.EndSpan(ctx, err) }()
+
+	call := c.raw.Buckets.TestIamPermissions(resource, perms)
+	setClientHeader(call.Header())
+	if c.userProject != "" {
+		call.UserProject(c.userProject)
+	}
 	var res *raw.TestIamPermissionsResponse
-	var err error
 	err = runWithRetry(ctx, func() error {
-		res, err = req.Context(ctx).Do()
+		res, err = call.Context(ctx).Do()
 		return err
 	})
 	if err != nil {

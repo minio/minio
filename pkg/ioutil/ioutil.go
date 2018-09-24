@@ -126,3 +126,34 @@ func (nopCloser) Close() error { return nil }
 func NopCloser(w io.Writer) io.WriteCloser {
 	return nopCloser{w}
 }
+
+// SkipReader skips a given number of bytes and then returns all
+// remaining data.
+type SkipReader struct {
+	io.Reader
+
+	skipCount int64
+}
+
+func (s *SkipReader) Read(p []byte) (int, error) {
+	l := int64(len(p))
+	if l == 0 {
+		return 0, nil
+	}
+	for s.skipCount > 0 {
+		if l > s.skipCount {
+			l = s.skipCount
+		}
+		n, err := s.Reader.Read(p[:l])
+		if err != nil {
+			return 0, err
+		}
+		s.skipCount -= int64(n)
+	}
+	return s.Reader.Read(p)
+}
+
+// NewSkipReader - creates a SkipReader
+func NewSkipReader(r io.Reader, n int64) io.Reader {
+	return &SkipReader{r, n}
+}

@@ -17,13 +17,16 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -273,6 +276,121 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// StartProfilingResult contains the status of the starting
+// profiling action in a given server
+type StartProfilingResult struct {
+	NodeName string `json:"nodeName"`
+	Success  bool   `json:"success"`
+	Error    string `json:"error"`
+}
+
+// StartProfilingHandler - POST /minio/admin/v1/profiling/start/{profiler}
+// ----------
+// Enable profiling information
+func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	profiler := vars["profiler"]
+
+	startProfilingResult := make([]StartProfilingResult, len(globalAdminPeers))
+
+	// Call StartProfiling function on all nodes and save results
+	wg := sync.WaitGroup{}
+	for i, peer := range globalAdminPeers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			result := StartProfilingResult{NodeName: peer.addr}
+			if err := peer.cmdRunner.StartProfiling(profiler); err != nil {
+				result.Error = err.Error()
+				return
+			}
+			result.Success = true
+			startProfilingResult[idx] = result
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Create JSON result and send it to the client
+	startProfilingResultInBytes, err := json.Marshal(startProfilingResult)
+	if err != nil {
+		writeCustomErrorResponseJSON(w, http.StatusInternalServerError, err.Error(), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, []byte(startProfilingResultInBytes))
+}
+
+// dummyFileInfo represents a dummy representation of a profile data file
+// present only in memory, it helps to generate the zip stream.
+type dummyFileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	sys     interface{}
+}
+
+func (f dummyFileInfo) Name() string       { return f.name }
+func (f dummyFileInfo) Size() int64        { return f.size }
+func (f dummyFileInfo) Mode() os.FileMode  { return f.mode }
+func (f dummyFileInfo) ModTime() time.Time { return f.modTime }
+func (f dummyFileInfo) IsDir() bool        { return f.isDir }
+func (f dummyFileInfo) Sys() interface{}   { return f.sys }
+
+// DownloadProfilingHandler - POST /minio/admin/v1/profiling/download
+// ----------
+// Download profiling information of all nodes in a zip format
+func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Return 200 OK
+	w.WriteHeader(http.StatusOK)
+
+	// Initialize a zip writer which will provide a zipped content
+	// of profiling data of all nodes
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+
+	for i, peer := range globalAdminPeers {
+		// Get profiling data from a node
+		data, err := peer.cmdRunner.DownloadProfilingData()
+		if err != nil {
+			logger.LogIf(context.Background(), fmt.Errorf("Unable to download profiling data from node `%s`, reason: %s", peer.addr, err.Error()))
+			continue
+		}
+
+		// Send profiling data to zip as file
+		header, err := zip.FileInfoHeader(dummyFileInfo{
+			name:    fmt.Sprintf("profiling-%d", i),
+			size:    int64(len(data)),
+			mode:    0600,
+			modTime: time.Now().UTC(),
+			isDir:   false,
+			sys:     nil,
+		})
+		if err != nil {
+			continue
+		}
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			continue
+		}
+		if _, err = io.Copy(writer, bytes.NewBuffer(data)); err != nil {
+			return
+		}
+	}
 }
 
 // extractHealInitParams - Validates params for heal init API.

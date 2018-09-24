@@ -39,8 +39,8 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations         | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`SetCredentials`](#SetCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | |
-| | |            | [`GetConfigKeys`](#GetConfigKeys) |                                     |
+| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`StartProfiling`](#StartProfiling) |
+| | |            | [`GetConfigKeys`](#GetConfigKeys) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) |                                     |
 
 
@@ -384,4 +384,57 @@ __Example__
     }
     log.Println("New credentials successfully set.")
 
+```
+
+<a name="StartProfiling"></a>
+### StartProfiling(profiler string) error
+Ask all nodes to start profiling using the specified profiler mode
+
+__Example__
+
+``` go
+    startProfilingResults, err = madmClnt.StartProfiling("cpu")
+    if err != nil {
+            log.Fatalln(err)
+    }
+    for _, result := range startProfilingResults {
+        if !result.Success {
+            log.Printf("Unable to start profiling on node `%s`, reason = `%s`\n", result.NodeName, result.Error)
+        } else {
+            log.Printf("Profiling successfully started on node `%s`\n", result.NodeName)
+        }
+    }
+
+```
+
+<a name="DownloadProfilingData"></a>
+### DownloadProfilingData() ([]byte, error)
+Download profiling data of all nodes in a zip format.
+
+__Example__
+
+``` go
+    profilingData, err := madmClnt.DownloadProfilingData()
+    if err != nil {
+            log.Fatalln(err)
+    }
+
+    profilingFile, err := os.Create("/tmp/profiling-data.zip")
+    if err != nil {
+            log.Fatal(err)
+    }
+
+    if _, err := io.Copy(profilingFile, profilingData); err != nil {
+            log.Fatal(err)
+    }
+
+    if err := profilingFile.Close(); err != nil {
+            log.Fatal(err)
+    }
+
+    if err := profilingData.Close(); err != nil {
+            log.Fatal(err)
+    }
+
+    log.Println("Profiling data successfully downloaded.")
 ```

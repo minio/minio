@@ -64,7 +64,6 @@ export const fetchObjects = append => {
       buckets: { currentBucket },
       objects: { currentPrefix, marker }
     } = getState()
-    dispatch(alertActions.clear())
     if (currentBucket) {
       return web
         .ListObjects({
@@ -93,7 +92,13 @@ export const fetchObjects = append => {
         })
         .catch(err => {
           if (web.LoggedIn()) {
-            dispatch(alertActions.set({ type: "danger", message: err.message }))
+            dispatch(
+              alertActions.set({
+                type: "danger",
+                message: err.message,
+                autoClear: true
+              })
+            )
             dispatch(resetList())
           } else {
             history.push("/login")

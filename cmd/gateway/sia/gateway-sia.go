@@ -431,7 +431,32 @@ func (s *siaObjects) ListObjects(ctx context.Context, bucket string, prefix stri
 	return loi, nil
 }
 
-func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+// GetObjectNInfo - returns object info and locked object ReadCloser
+func (s *siaObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+	var objInfo minio.ObjectInfo
+	objInfo, err = s.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var startOffset, length int64
+	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		err := s.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		pw.CloseWithError(err)
+	}()
+	// Setup cleanup function to cause the above go-routine to
+	// exit in case of partial read
+	pipeCloser := func() { pr.Close() }
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
+}
+
+func (s *siaObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	dstFile := path.Join(s.TempDir, minio.MustGetUUID())
 	defer os.Remove(dstFile)
 
@@ -512,7 +537,7 @@ func (s *siaObjects) findSiaObject(ctx context.Context, bucket, object string) (
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
-func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object string) (minio.ObjectInfo, error) {
+func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	so, err := s.findSiaObject(ctx, bucket, object)
 	if err != nil {
 		return minio.ObjectInfo{}, err
@@ -529,7 +554,7 @@ func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	writer, err := os.Create(srcFile)
 	if err != nil {

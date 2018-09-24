@@ -26,6 +26,7 @@ import (
 	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
+	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -98,7 +99,9 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 func handleCommonEnvVars() {
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
+		var err error
+		globalProfiler, err = startProfiler(profiler, "")
+		logger.FatalIf(err, "Unable to setup a profiler")
 	}
 
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -114,15 +117,10 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 	}
 
-	// In distributed setup users need to set ENVs always.
-	if !globalIsEnvCreds && globalIsDistXL {
-		logger.Fatal(uiErrEnvCredentialsMissingServer(nil), "Unable to start distributed server mode")
-	}
-
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBoolFlag(browser)
 		if err != nil {
-			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Unable to validate MINIO_BROWSER environment variable")
+			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Invalid MINIO_BROWSER environment variable")
 		}
 
 		// browser Envs are set globally, this does not represent
@@ -151,6 +149,11 @@ func handleCommonEnvVars() {
 	}
 
 	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
+	if globalDomainName != "" {
+		if _, ok := dns2.IsDomainName(globalDomainName); !ok {
+			logger.Fatal(uiErrInvalidDomainValue(nil).Msg("Unknown value `%s`", globalDomainName), "Invalid MINIO_DOMAIN environment variable")
+		}
+	}
 
 	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
 	if ok {

@@ -71,18 +71,6 @@ export MINIO_REGION="my_region"
 minio server /data
 ```
 
-#### Browser
-|Field|Type|Description|
-|:---|:---|:---|
-|``browser``| _string_ | Enable or disable access to web UI. By default it is set to `on`. You may override this field with ``MINIO_BROWSER`` environment variable.|
-
-Example:
-
-```sh
-export MINIO_BROWSER=off
-minio server /data
-```
-
 #### Worm
 |Field|Type|Description|
 |:---|:---|:---|
@@ -92,20 +80,6 @@ Example:
 
 ```sh
 export MINIO_WORM=on
-minio server /data
-```
-
-### Domain
-|Field|Type|Description|
-|:---|:---|:---|
-|``domain``| _string_ | Enable virtual-host-style requests i.e http://bucket.mydomain.com/object|
-
-By default, Minio supports path-style requests which look like http://mydomain.com/bucket/object. MINIO_DOMAIN environmental variable (or `domain` in config.json) can be used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the mattched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
-
-Example:
-
-```sh
-export MINIO_DOMAIN=mydomain.com
 minio server /data
 ```
 
@@ -139,6 +113,26 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 |``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](https://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
 |``notify.mysql``| |[Configure to publish Minio events via MySql target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MySQL)|
 |``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
+
+## Environment only settings
+
+#### Browser
+Enable or disable access to web UI. By default it is set to `on`. You may override this field with ``MINIO_BROWSER`` environment variable.
+
+Example:
+```sh
+export MINIO_BROWSER=off
+minio server /data
+```
+
+### Domain
+By default, Minio supports path-style requests which look like http://mydomain.com/bucket/object. MINIO_DOMAIN environmental variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the mattched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
+
+Example:
+```sh
+export MINIO_DOMAIN=mydomain.com
+minio server /data
+```
 
 ## Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)

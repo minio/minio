@@ -69,7 +69,6 @@ type JSONType string
 // Constants for JSONTypes.
 const (
 	JSONDocumentType JSONType = "Document"
-	JSONStreamType            = "Stream"
 	JSONLinesType             = "Lines"
 )
 
@@ -80,6 +79,7 @@ type ObjectSelectRequest struct {
 	ExpressionType     QueryExpressionType
 	InputSerialization struct {
 		CompressionType SelectCompressionType
+		Parquet         *struct{}
 		CSV             *struct {
 			FileHeaderInfo       CSVFileHeaderInfo
 			RecordDelimiter      string
@@ -103,6 +103,9 @@ type ObjectSelectRequest struct {
 		JSON *struct {
 			RecordDelimiter string
 		}
+	}
+	RequestProgress struct {
+		Enabled bool
 	}
 }
 
