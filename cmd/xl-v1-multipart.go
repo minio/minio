@@ -269,20 +269,6 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 		return pi, err
 	}
 
-	go func() {
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
-			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				logger.LogIf(ctx, gerr)
-			}
-			return
-		}
-		// Close writer explicitly signaling we wrote all data.
-		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			logger.LogIf(ctx, gerr)
-			return
-		}
-	}()
-
 	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)

@@ -43,6 +43,9 @@ func setCommonHeaders(w http.ResponseWriter) {
 		w.Header().Set("X-Amz-Bucket-Region", region)
 	}
 	w.Header().Set("Accept-Ranges", "bytes")
+
+	// Remove sensitive information
+	crypto.RemoveSensitiveHeaders(w.Header())
 }
 
 // Encodes the response headers into XML format.

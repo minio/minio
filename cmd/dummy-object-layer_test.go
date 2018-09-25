@@ -60,7 +60,7 @@ func (api *DummyObjectLayer) ListObjectsV2(ctx context.Context, bucket, prefix, 
 	return
 }
 
-func (api *DummyObjectLayer) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+func (api *DummyObjectLayer) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lock LockType) (gr *GetObjectReader, err error) {
 	return
 }
 
