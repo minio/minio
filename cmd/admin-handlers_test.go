@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,173 +34,173 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/tidwall/gjson"
 )
 
 var (
 	configJSON = []byte(`{
-	"version": "28",
-	"credential": {
-		"accessKey": "minio",
-		"secretKey": "minio123"
-	},
-	"region": "",
-	"browser": "on",
-	"worm": "off",
-	"domain": "",
-	"storageclass": {
-		"standard": "",
-		"rrs": ""
-	},
-	"cache": {
-		"drives": [],
-		"expiry": 90,
-		"maxuse": 80,
-		"exclude": []
-	},
-	"kms": {
-		"vault": {
-			"endpoint": "",
-			"auth": {
-				"type": "",
-				"approle": {
-					"id": "",
-					"secret": ""
+		"version": "28",
+		"credential": {
+			"accessKey": "minio",
+			"secretKey": "minio123"
+		},
+		"region": "",
+		"browser": "on",
+		"worm": "off",
+		"domain": "",
+		"storageclass": {
+			"standard": "",
+			"rrs": ""
+		},
+		"cache": {
+			"drives": [],
+			"expiry": 90,
+			"maxuse": 80,
+			"exclude": []
+		},
+		"kms": {
+			"vault": {
+				"endpoint": "",
+				"auth": {
+					"type": "",
+					"approle": {
+						"id": "",
+						"secret": ""
+					}
+				},
+				"key-id": {
+					"name": "",
+					"version": 0
+				}
+			}
+		},
+		"notify": {
+			"amqp": {
+				"1": {
+					"enable": false,
+					"url": "",
+					"exchange": "",
+					"routingKey": "",
+					"exchangeType": "",
+					"deliveryMode": 0,
+					"mandatory": false,
+					"immediate": false,
+					"durable": false,
+					"internal": false,
+					"noWait": false,
+					"autoDeleted": false
 				}
 			},
-			"key-id": {
-				"name": "",
-				"version": 0
-			}
-		}
-	},
-	"notify": {
-		"amqp": {
-			"1": {
-				"enable": false,
-				"url": "",
-				"exchange": "",
-				"routingKey": "",
-				"exchangeType": "",
-				"deliveryMode": 0,
-				"mandatory": false,
-				"immediate": false,
-				"durable": false,
-				"internal": false,
-				"noWait": false,
-				"autoDeleted": false
-			}
-		},
-		"elasticsearch": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"url": "",
-				"index": ""
-			}
-		},
-		"kafka": {
-			"1": {
-				"enable": false,
-				"brokers": null,
-				"topic": "",
-				"tls" : {
-					"enable" : false,
-					"skipVerify" : false,
-					"clientAuth" : 0
-				},
-				"sasl" : {
-					"enable" : false,
-					"username" : "",
-					"password" : ""
-				}
-			}
-		},
-		"mqtt": {
-			"1": {
-				"enable": false,
-				"broker": "",
-				"topic": "",
-				"qos": 0,
-				"clientId": "",
-				"username": "",
-				"password": "",
-				"reconnectInterval": 0,
-				"keepAliveInterval": 0
-			}
-		},
-		"mysql": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"dsnString": "",
-				"table": "",
-				"host": "",
-				"port": "",
-				"user": "",
-				"password": "",
-				"database": ""
-			}
-		},
-		"nats": {
-			"1": {
-				"enable": false,
-				"address": "",
-				"subject": "",
-				"username": "",
-				"password": "",
-				"token": "",
-				"secure": false,
-				"pingInterval": 0,
-				"streaming": {
+			"elasticsearch": {
+				"1": {
 					"enable": false,
-					"clusterID": "",
-					"clientID": "",
-					"async": false,
-					"maxPubAcksInflight": 0
+					"format": "",
+					"url": "",
+					"index": ""
+				}
+			},
+			"kafka": {
+				"1": {
+					"enable": false,
+					"brokers": null,
+					"topic": "",
+					"tls" : {
+						"enable" : false,
+						"skipVerify" : false,
+						"clientAuth" : 0
+					},
+					"sasl" : {
+						"enable" : false,
+						"username" : "",
+						"password" : ""
+					}
+				}
+			},
+			"mqtt": {
+				"1": {
+					"enable": false,
+					"broker": "",
+					"topic": "",
+					"qos": 0,
+					"clientId": "",
+					"username": "",
+					"password": "",
+					"reconnectInterval": 0,
+					"keepAliveInterval": 0
+				}
+			},
+			"mysql": {
+				"1": {
+					"enable": false,
+					"format": "",
+					"dsnString": "",
+					"table": "",
+					"host": "",
+					"port": "",
+					"user": "",
+					"password": "",
+					"database": ""
+				}
+			},
+			"nats": {
+				"1": {
+					"enable": false,
+					"address": "",
+					"subject": "",
+					"username": "",
+					"password": "",
+					"token": "",
+					"secure": false,
+					"pingInterval": 0,
+					"streaming": {
+						"enable": false,
+						"clusterID": "",
+						"clientID": "",
+						"async": false,
+						"maxPubAcksInflight": 0
+					}
+				}
+			},
+			"postgresql": {
+				"1": {
+					"enable": false,
+					"format": "",
+					"connectionString": "",
+					"table": "",
+					"host": "",
+					"port": "",
+					"user": "",
+					"password": "",
+					"database": ""
+				}
+			},
+			"redis": {
+				"1": {
+					"enable": false,
+					"format": "",
+					"address": "",
+					"password": "",
+					"key": ""
+				}
+			},
+			"webhook": {
+				"1": {
+					"enable": false,
+					"endpoint": ""
 				}
 			}
 		},
-		"postgresql": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"connectionString": "",
-				"table": "",
-				"host": "",
-				"port": "",
-				"user": "",
-				"password": "",
-				"database": ""
-			}
-		},
-		"redis": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"address": "",
-				"password": "",
-				"key": ""
-			}
-		},
-		"webhook": {
-			"1": {
-				"enable": false,
-				"endpoint": ""
+		"logger": {
+			"console": {
+				"enabled": true
+			},
+			"http": {
+				"1": {
+				"enabled": false,
+				"endpoint": "http://user:example@localhost:9001/api/endpoint"
+				}
 			}
 		}
-	    },
-	    "logger": {
-		"console": {
-		    "enabled": true
-		},
-		"http": {
-		    "1": {
-			"enabled": false,
-			"endpoint": "http://user:example@localhost:9001/api/endpoint"
-		    }
-		}
-	    }
-
 	}`)
 )
 
@@ -1009,5 +1010,62 @@ func TestHealStartNStatusHandler(t *testing.T) {
 		if results.Summary == healStoppedStatus {
 			t.Errorf("heal sequence stopped unexpectedly")
 		}
+	}
+}
+
+func runCheckValidJSONFieldsFunc(keyValue string, expectPass bool) error {
+	// Setup a base server config JSON structure to compare
+	// key name in "keyValue" parameter that'll be validated
+	var config = newServerConfig()
+	structConfigJSON, err := json.Marshal(config)
+	if err != nil {
+		return errors.New("Could not construct the template JSON file structure")
+	}
+	structConfig := string(structConfigJSON)
+
+	// Get the key and value from "keyValue"
+	splitKeyValue := strings.Split(keyValue, "=")
+	key := splitKeyValue[0]
+	value := []byte(splitKeyValue[1])
+
+	jsonField := gjson.Get(structConfig, key)
+
+	// Expect a PASS for "region"
+	if err := checkValidJSONFields(jsonField, value); err != nil {
+		if expectPass {
+			return errors.New("Failed to validate: Expected pass, but test failed for: " + keyValue)
+		}
+		return nil
+	}
+	if expectPass {
+		return nil
+	}
+	return errors.New("Failed to validate: Expected failure, but test passed for: " + keyValue)
+}
+
+func TestCheckValidJSONFields(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	if err := runCheckValidJSONFieldsFunc("region=us-east-1", true); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
+	}
+	if err := runCheckValidJSONFieldsFunc("regionnn=us-east-1", false); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
+	}
+	if err := runCheckValidJSONFieldsFunc("cache.expiry=100", true); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
+	}
+	if err := runCheckValidJSONFieldsFunc("cachex.maxuse=99", false); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
+	}
+	if err := runCheckValidJSONFieldsFunc("notify.amqp.1.enable=true", true); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
+	}
+	if err := runCheckValidJSONFieldsFunc("notify.amqp.1.enabled=true", false); err != nil {
+		t.Fatal("Config set key input validation failure. " + err.Error())
 	}
 }

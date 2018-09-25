@@ -66,6 +66,15 @@ var (
 	}
 )
 
+// Regexps for server configuration key name validation
+var (
+	// To remove ":", " " characters from the list of expected key:value pairs
+	regexpKeysCleanup = regexp.MustCompile(`[^\s":]+|"([^"]*)"`)
+
+	// To Split user specified key:value pair at characters ":" or ","
+	regexpRawKeysSplit = regexp.MustCompile(`[,:]`)
+)
+
 // VersionHandler - GET /minio/admin/version
 // -----------
 // Returns Administration API version
@@ -559,6 +568,18 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Helper function for GetConfigHandler and SetConfigHandler
+func getGJson(ctx context.Context, structConfig, key string) (gjson.Result, error) {
+	// Compare key against struct config
+	jsonField := gjson.Get(structConfig, key)
+	if (gjson.Result{}) == jsonField {
+		logger.GetReqInfo(ctx).SetTags("Configuration key", key)
+		logger.LogIf(ctx, errors.New("Invalid configuration key"))
+		return jsonField, errors.New("Invalid configuration key: " + key)
+	}
+	return jsonField, nil
+}
+
 // GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -667,20 +688,16 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	// JSON structure initialization that will be returned
 	jsonResult := `{}`
 
-	// Check if the requested key/s is/are valid
+	// Check if the requested key(s) are valid
 	queries := r.URL.Query()
 	for key := range queries {
-		val := gjson.Get(structConfig, key)
-		if (gjson.Result{}) == val {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("Configuration key", key)
-			ctx = logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, errors.New("Invalid configuration key"))
-			writeCustomErrorResponseJSON(w, ErrNoSuchKey, "Invalid configuration key: "+key, r.URL)
+		if _, err := getGJson(ctx, structConfig, key); err != nil {
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error(), r.URL)
 			return
 		}
 		// Append keys and values in json format
-		val = gjson.Get(configStr, key)
-		if j, err := sjson.Set(jsonResult, normalizeJSONKey(key), val.Value()); err == nil {
+		jsonField := gjson.Get(configStr, key)
+		if j, err := sjson.Set(jsonResult, normalizeJSONKey(key), jsonField.Value()); err == nil {
 			jsonResult = j
 		}
 	}
@@ -769,6 +786,9 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// If credentials for the server are provided via
+	// environment variables, then credentials in the
+	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		creds := globalServerConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||
@@ -810,24 +830,35 @@ func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
 	}
 }
 
-func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string) {
+func checkValidJSONFields(expectedKeys gjson.Result, elem []byte) error {
+	// This function validates user provided keys/configuration
+	// parameters by commparing them with expected keys collected
+	// from server configuration template and returns the
+	// names of the keys in dot notation when an invalid key is encountered
 	keys := string(elem)
 	var found bool
 	var fullKeyName string
 	// Validation for a single key
+
 	if expectedKeys.Type == gjson.Null &&
 		expectedKeys.Raw == "" &&
 		expectedKeys.Str == "" &&
 		expectedKeys.Num == 0 &&
 		expectedKeys.Index == 0 {
-		return "Invalid key", ""
+		// Key is not initialized at all, it doesn't have
+		// type, index, nothing. It is invalid.
+		// There is no need to send back anything, since
+		// key information is already within caller's knowledge.
+		return errors.New("")
 	}
-	// Validation for multiple key names in JSON format
+	// Define variables to skip JSON characters
+	// "{" and "}" for validation purposes
 	var skipChrsFront int
 	var skipChrsEnd int
+	// Validation for keys in JSON format
 	if expectedKeys.Type == gjson.JSON {
 		if len(keys) == 2 {
-			return "Invalid/Empty JSON data", ""
+			return nil
 		}
 		raw := expectedKeys.Raw
 		if keys[:1] == "{" {
@@ -840,11 +871,16 @@ func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string)
 		} else {
 			skipChrsEnd = 0
 		}
-		r := regexp.MustCompile(`[^\s":]+|"([^"]*)"`)
-		keys := r.FindAllString(keys[skipChrsFront:len(keys)-skipChrsEnd], -1)
-		rawKeys := regexp.MustCompile(`[,:]`).Split(raw[1:len(raw)-1], -1)
+		// Remove characters ":", " " and multiples of them
+		// from the list of expected key:value pair
+		keys := regexpKeysCleanup.FindAllString(keys[skipChrsFront:len(keys)-skipChrsEnd], -1)
+		// Split user specified key:value pair at characters ":" or ","
+		rawKeys := regexpRawKeysSplit.Split(raw[1:len(raw)-1], -1)
 
+		// Loop through expected keys to see if
+		// user provided key names are correct/valid
 		for i := 0; i < len(keys); i++ {
+			// if JSON snippet starts with "{"
 			if keys[i][:1] == "{" {
 				if keys[i][1:2] == "\"" {
 					skipChrsFront = 2
@@ -854,7 +890,7 @@ func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string)
 					} else {
 						skipChrsEnd = 0
 					}
-					return "Invalid JSON format", fullKeyName + "." + keys[i][1:len(keys[i])-skipChrsEnd]
+					return errors.New(fullKeyName + "." + keys[i][1:len(keys[i])-skipChrsEnd])
 				}
 				if keys[i][len(keys[i])-1:] == "\"" {
 					skipChrsEnd = 1
@@ -863,19 +899,22 @@ func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string)
 				}
 				fullKeyName += "." + keys[i][skipChrsFront:len(keys[i])-skipChrsEnd]
 			} else {
+				// if JSON snippet does NOT start with "{"
 				if keys[i][:1] == "\"" {
 					skipChrsFront = 1
 					if keys[i][len(keys[i])-1:] == "\"" {
 						skipChrsEnd = 1
 					} else {
-						return "Invalid JSON format", keys[i]
+						return errors.New(keys[i])
 					}
 
 				} else {
-					return "Invalid JSON format", keys[i]
+					return errors.New(keys[i])
 				}
 				fullKeyName = keys[i][skipChrsFront : len(keys[i])-skipChrsEnd]
 			}
+			// Decide if the key has been found in the base
+			// JSON structure, that is validated
 			found = false
 			for j := 0; j < len(rawKeys); j++ {
 				if keys[i] == rawKeys[j] {
@@ -885,14 +924,17 @@ func isInvalidJSONField(expectedKeys gjson.Result, elem []byte) (string, string)
 				j++
 			}
 			if !found {
-				return "Invalid key", fullKeyName
+				return errors.New(fullKeyName)
 			}
+			// Increment the index to skip the next key index,
+			// if not JSON. This means the next index is a value,
+			// hence it needs to be ignored.
 			if i+1 < len(keys) && keys[i+1][:1] != "{" {
 				i++
 			}
 		}
 	}
-	return "", ""
+	return nil
 }
 
 // SetConfigKeysHandler - PUT /minio/admin/v1/config-keys
@@ -950,9 +992,8 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		// Decode encoded data associated to the current key
 		encryptedElem, dErr := base64.StdEncoding.DecodeString(queries.Get(k))
 		if dErr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("key", k)
-			ctx = logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, dErr)
+			logger.GetReqInfo(ctx).SetTags("Configuration key", k)
+			logger.LogIf(ctx, errors.New("Invalid configuration k"))
 			writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 			return
 		}
@@ -963,26 +1004,17 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		// Compare key against struct config
-		jsonField := gjson.Get(structConfig, k)
-		if (gjson.Result{}) == jsonField {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("Config key", k)
-			// GetReq Info to keep the prev setting
-			ctx = logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, errors.New("Invalid key"))
-			writeCustomErrorResponseJSON(w, ErrNoSuchKey, "Invalid KEY: "+k, r.URL)
+		jsonField, err := getGJson(ctx, structConfig, k)
+		if err != nil {
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error(), r.URL)
 			return
 		}
-		if err, k2 := isInvalidJSONField(jsonField, elem); err != "" {
-			if k2 != "" && k2[:1] != "=" {
-				k2 = "." + k2
-			}
-			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err+": "+k+k2, r.URL)
+		if err := checkValidJSONFields(jsonField, elem); err != nil {
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error()+": "+k+"."+err.Error(), r.URL)
 			return
 		}
 
-		// Determine type of the current
-		// key from original config json
+		// Determine type of the current key from original config json
 		val, cerr := convertValueType(elem, jsonField.Type)
 		if cerr != nil {
 			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cerr.Error(), r.URL)
