@@ -787,8 +787,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
 func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
@@ -920,8 +918,6 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
 // UpdateCredsHandler - POST /minio/admin/v1/config/credential

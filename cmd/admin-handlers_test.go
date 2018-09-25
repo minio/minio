@@ -713,16 +713,6 @@ func TestSetConfigHandler(t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
-	var wg sync.WaitGroup
-
-	// SetConfigHandler restarts minio setup - need to start a
-	// signal receiver to receive on globalServiceSignalCh.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		testServiceSignalReceiver(restartCmd, t)
-	}()
-
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
@@ -782,9 +772,6 @@ func TestSetConfigHandler(t *testing.T) {
 			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
 		}
 	}
-
-	// Wait until testServiceSignalReceiver finishes its execution
-	wg.Wait()
 }
 
 func TestAdminServerInfo(t *testing.T) {
