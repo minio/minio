@@ -432,7 +432,7 @@ func (s *siaObjects) ListObjects(ctx context.Context, bucket string, prefix stri
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (s *siaObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, writeLock bool) (gr *minio.GetObjectReader, err error) {
+func (s *siaObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
 	objInfo, err = s.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
 	if err != nil {

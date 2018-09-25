@@ -166,20 +166,24 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
-func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error) {
-	var nsUnlocker func()
+func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType) (gr *GetObjectReader, err error) {
+	var nsUnlocker = func() {}
+
 	// Acquire lock
-	lock := xl.nsMutex.NewNSLock(bucket, object)
-	if writeLock {
-		if err = lock.GetLock(globalObjectTimeout); err != nil {
-			return nil, err
+	if lockType != noLock {
+		lock := xl.nsMutex.NewNSLock(bucket, object)
+		switch lockType {
+		case writeLock:
+			if err = lock.GetLock(globalObjectTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.Unlock
+		case readLock:
+			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.RUnlock
 		}
-		nsUnlocker = lock.Unlock
-	} else {
-		if err = lock.GetRLock(globalObjectTimeout); err != nil {
-			return nil, err
-		}
-		nsUnlocker = lock.RUnlock
 	}
 
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {

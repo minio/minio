@@ -472,7 +472,8 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 // GetObjectNInfo - returns object info and a reader for object
 // content.
-func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, writeLock bool) (gr *GetObjectReader, err error) {
+func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType) (gr *GetObjectReader, err error) {
+
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -481,22 +482,25 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket)
 	}
 
-	var nsUnlocker func()
+	var nsUnlocker = func() {}
 
-	// Lock the object before reading.
-	lock := fs.nsMutex.NewNSLock(bucket, object)
-	if writeLock {
-		if err = lock.GetLock(globalObjectTimeout); err != nil {
-			logger.LogIf(ctx, err)
-			return nil, err
+	if lockType != noLock {
+		// Lock the object before reading.
+		lock := fs.nsMutex.NewNSLock(bucket, object)
+		switch lockType {
+		case writeLock:
+			if err = lock.GetLock(globalObjectTimeout); err != nil {
+				logger.LogIf(ctx, err)
+				return nil, err
+			}
+			nsUnlocker = lock.Unlock
+		case readLock:
+			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+				logger.LogIf(ctx, err)
+				return nil, err
+			}
+			nsUnlocker = lock.RUnlock
 		}
-		nsUnlocker = lock.Unlock
-	} else {
-		if err = lock.GetRLock(globalObjectTimeout); err != nil {
-			logger.LogIf(ctx, err)
-			return nil, err
-		}
-		nsUnlocker = lock.RUnlock
 	}
 
 	// For a directory, we need to send an reader that returns no bytes.
@@ -513,7 +517,22 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker)
+	// Take a rwPool lock for NFS gateway type deployment
+	rwPoolUnlocker := func() {}
+	if bucket != minioMetaBucket && lockType != noLock {
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+		_, err = fs.rwPool.Open(fsMetaPath)
+		if err != nil && err != errFileNotFound {
+			logger.LogIf(ctx, err)
+			nsUnlocker()
+			return nil, toObjectErr(err, bucket, object)
+		}
+		// Need to clean up lock after getObject is
+		// completed.
+		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
+	}
+
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker, rwPoolUnlocker)
 	if rErr != nil {
 		return nil, rErr
 	}
@@ -522,6 +541,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
 	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
 	if err != nil {
+		rwPoolUnlocker()
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
@@ -536,6 +556,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		err = InvalidRange{off, length, size}
 		logger.LogIf(ctx, err)
 		closeFn()
+		rwPoolUnlocker()
 		nsUnlocker()
 		return nil, err
 	}

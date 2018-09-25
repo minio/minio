@@ -154,7 +154,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, false)
+	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -349,7 +349,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, false)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -687,7 +687,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, cpSrcDstSame)
+	var lock = noLock
+	if !cpSrcDstSame {
+		lock = readLock
+	}
+
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1311,7 +1316,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, false)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
