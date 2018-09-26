@@ -166,7 +166,7 @@ func startLockMaintenance(lkSrv *lockRPCReceiver) {
 	for {
 		// Verifies every minute for locks held more than 2minutes.
 		select {
-		case <-globalServiceDoneCh:
+		case <-GlobalServiceDoneCh:
 			return
 		case <-ticker.C:
 			lkSrv.lockMaintenance(lockValidityCheckInterval)

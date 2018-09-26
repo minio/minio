@@ -117,11 +117,11 @@ func (c Core) ListObjectParts(bucket, object, uploadID string, partNumberMarker 
 }
 
 // CompleteMultipartUpload - Concatenate uploaded parts and commit to an object.
-func (c Core) CompleteMultipartUpload(bucket, object, uploadID string, parts []CompletePart) error {
-	_, err := c.completeMultipartUpload(context.Background(), bucket, object, uploadID, completeMultipartUpload{
+func (c Core) CompleteMultipartUpload(bucket, object, uploadID string, parts []CompletePart) (string, error) {
+	res, err := c.completeMultipartUpload(context.Background(), bucket, object, uploadID, completeMultipartUpload{
 		Parts: parts,
 	})
-	return err
+	return res.ETag, err
 }
 
 // AbortMultipartUpload - Abort an incomplete upload.

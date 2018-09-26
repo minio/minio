@@ -597,3 +597,17 @@ func (g *GetObjectReader) Read(p []byte) (n int, err error) {
 	}
 	return
 }
+
+// CleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
+// encryption metadata that was sent by minio gateway
+func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
+	var newMeta = make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
+			newMeta[strings.TrimPrefix(k, "X-Amz-Meta-")] = v
+		} else {
+			newMeta[k] = v
+		}
+	}
+	return newMeta
+}
