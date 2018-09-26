@@ -203,4 +203,10 @@ Example 1:
 		"Please check the passed value",
 		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_ATTR=\"A,B,C\"",
 	)
+
+	uiErrInvalidGWSSEValue = newUIErrFn(
+		"Invalid gateway sse value",
+		"Please check the passed value",
+		"MINIO_GW_SSE: Gateway SSE accepts only S3, C and KMS as valid values. Delimit by `;` to set more than one value",
+	)
 )
