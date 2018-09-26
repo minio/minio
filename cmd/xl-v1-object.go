@@ -458,8 +458,23 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 				break
 			}
 		}
-		if !found { // Unable to find matching versionId, so error out with invalid version id
-			return nil, false, toObjectErr(errInvalidVersionId)
+		if !found {
+			// Unable to find matching versionId that must have been valid before
+			// (or otherwise we would not have resumed from the tree walking).
+			// As such this versionId must have been deleted in the mean time.
+			// Unfortunately we have lost its previous position in the version history,
+			// and we have two options to proceed:
+			// - continue from top of the version stack
+			// - exit out while returning no new versions
+			// The first option has the risk of returning duplicate versions but
+			// works as expected when running list-object-versions and delete-objects in
+			// a loop.
+			// The second option has the risk of skipping versions because we do not know
+			// what has been returned.
+			// As such we opt for the first option as the best alternative.
+
+			// Fall back to scanning from the top of the version history
+			i = len(versioning.ObjectVersions) - 1
 		}
 	}
 
