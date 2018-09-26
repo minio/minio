@@ -190,7 +190,7 @@ func newPosix(path string) (*posix, error) {
 	}
 
 	if !p.diskMount {
-		go p.diskUsage(globalServiceDoneCh)
+		go p.diskUsage(GlobalServiceDoneCh)
 	}
 
 	// Success.

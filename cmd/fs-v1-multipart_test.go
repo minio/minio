@@ -36,7 +36,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 
 	// Close the go-routine, we are going to
 	// manually start it and test in this test case.
-	globalServiceDoneCh <- struct{}{}
+	GlobalServiceDoneCh <- struct{}{}
 
 	bucketName := "bucket"
 	objectName := "object"
@@ -47,14 +47,14 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go fs.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, globalServiceDoneCh)
+	go fs.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, GlobalServiceDoneCh)
 
 	// Wait for 40ms such that - we have given enough time for
 	// cleanup routine to kick in.
 	time.Sleep(40 * time.Millisecond)
 
 	// Close the routine we do not need it anymore.
-	globalServiceDoneCh <- struct{}{}
+	GlobalServiceDoneCh <- struct{}{}
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {

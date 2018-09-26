@@ -77,10 +77,11 @@ const (
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
-	// Expiry duration after which the multipart uploads are deemed stale.
-	globalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
-	// Cleanup interval when the stale multipart cleanup is initiated.
-	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
+	// GlobalMultipartExpiry - Expiry duration after which the multipart uploads are deemed stale.
+	GlobalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
+	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
+
 	// Refresh interval to update in-memory bucket policy cache.
 	globalRefreshBucketPolicyInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
@@ -228,8 +229,8 @@ var (
 
 	// KMS key id
 	globalKMSKeyID string
-	// Allocated KMS
-	globalKMS crypto.KMS
+	// GlobalKMS - Allocated KMS
+	GlobalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
 
@@ -258,7 +259,11 @@ var (
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
 
+	// GlobalGatewaySSE sse options
+	GlobalGatewaySSE []string
+
 	// Add new variable global values here.
+
 )
 
 // global colors.

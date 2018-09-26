@@ -355,7 +355,7 @@ func TestGetDecryptedRange_Issue50(t *testing.T) {
 			"content-type":                         "application/octet-stream",
 			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
 		},
-		Parts: []objectPartInfo{
+		Parts: []ObjectPartInfo{
 			{
 				Number:     1,
 				Name:       "part.1",
@@ -503,7 +503,7 @@ func TestGetDecryptedRange(t *testing.T) {
 	var (
 		// make a multipart object-info given part sizes
 		mkMPObj = func(sizes []int64) ObjectInfo {
-			r := make([]objectPartInfo, len(sizes))
+			r := make([]ObjectPartInfo, len(sizes))
 			sum := int64(0)
 			for i, s := range sizes {
 				r[i].Number = i

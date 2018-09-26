@@ -97,7 +97,7 @@ func partsMetaFromModTimes(modTimes []time.Time, algorithm BitrotAlgorithm, chec
 			Stat: statInfo{
 				ModTime: modTime,
 			},
-			Parts: []objectPartInfo{
+			Parts: []ObjectPartInfo{
 				{
 					Name: "part.1",
 				},

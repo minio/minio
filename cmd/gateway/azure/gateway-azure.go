@@ -981,7 +981,7 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 }
 
 // ListObjectParts - Use Azure equivalent GetBlockList.
-func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int) (result minio.ListPartsInfo, err error) {
+func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, err
 	}

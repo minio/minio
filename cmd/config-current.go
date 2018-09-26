@@ -271,7 +271,7 @@ func (s *serverConfig) loadFromEnvs() {
 		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
-	if globalKMS != nil {
+	if GlobalKMS != nil {
 		s.KMS = globalKMSConfig
 	}
 
@@ -534,10 +534,10 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
-	if globalKMS == nil {
+	if GlobalKMS == nil {
 		globalKMSConfig = s.KMS
 		if kms, err := crypto.NewVault(globalKMSConfig); err == nil {
-			globalKMS = kms
+			GlobalKMS = kms
 			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
 		}
 	}
