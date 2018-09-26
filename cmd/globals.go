@@ -78,9 +78,9 @@ const (
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
 	// Expiry duration after which the multipart uploads are deemed stale.
-	globalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	GlobalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
 	// Cleanup interval when the stale multipart cleanup is initiated.
-	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
+	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 	// Refresh interval to update in-memory bucket policy cache.
 	globalRefreshBucketPolicyInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
@@ -255,7 +255,10 @@ var (
 	// OPA policy system.
 	globalPolicyOPA *iampolicy.Opa
 
+	// GlobalGatewaySSE sse options
+	GlobalGatewaySSE []string
 	// Add new variable global values here.
+
 )
 
 // global colors.
