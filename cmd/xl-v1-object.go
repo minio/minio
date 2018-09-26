@@ -526,7 +526,7 @@ func (xl xlObjects) renameCorruptedObject(ctx context.Context, bucket, object st
 			},
 		}
 
-		validMeta.Parts = []objectPartInfo{
+		validMeta.Parts = []ObjectPartInfo{
 			{
 				Number: 1,
 				Name:   "part.1",

@@ -627,8 +627,16 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	pReader := NewPutObjReader(rawReader, nil, nil)
 	var objectEncryptionKey []byte
 
+	// This request header needs to be set prior to setting ObjectOptions
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
+	// get gateway encryption options
+	var opts ObjectOptions
+	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
+		return
 	}
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
@@ -656,7 +664,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, metadata, ObjectOptions{})
+	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, metadata, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

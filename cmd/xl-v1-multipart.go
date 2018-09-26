@@ -493,7 +493,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 // Implements S3 compatible ListObjectParts API. The resulting
 // ListPartsInfo structure is marshaled directly into XML and
 // replied back to the client.
-func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
+func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, e error) {
 	if err := checkListPartsArgs(ctx, bucket, object, xl); err != nil {
 		return result, err
 	}
@@ -656,7 +656,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	var currentXLMeta = xlMeta
 
 	// Allocate parts similar to incoming slice.
-	xlMeta.Parts = make([]objectPartInfo, len(parts))
+	xlMeta.Parts = make([]ObjectPartInfo, len(parts))
 
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
@@ -695,7 +695,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		objectActualSize += currentXLMeta.Parts[partIdx].ActualSize
 
 		// Add incoming parts.
-		xlMeta.Parts[i] = objectPartInfo{
+		xlMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			ETag:       part.ETag,
 			Size:       currentXLMeta.Parts[partIdx].Size,

@@ -1,9 +1,9 @@
 ### Backend format `xl.json`
 
 ```go
-// objectPartInfo Info of each part kept in the multipart metadata
+// ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
-type objectPartInfo struct {
+type ObjectPartInfo struct {
 	Number int    `json:"number"`
 	Name   string `json:"name"`
 	ETag   string `json:"etag"`
@@ -49,6 +49,6 @@ type xlMetaV1 struct {
 	// Metadata map for current object `xl.json`.
 	Meta map[string]string `json:"meta,omitempty"`
 	// Captures all the individual object `xl.json`.
-	Parts []objectPartInfo `json:"parts,omitempty"`
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 ```

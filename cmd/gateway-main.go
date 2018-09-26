@@ -136,6 +136,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
+	// Handle gateway specific env
+	handleGatewayEnvVars()
+
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
 		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
@@ -226,6 +229,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Load globalServerConfig from etcd
 		_ = globalConfigSys.Init(newObject)
 	}
+
 	// Load logger subsystem
 	loadLoggers()
 
@@ -265,7 +269,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
 		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but gateway does not support encryption")
 	}
-
+	if len(GlobalGatewaySSE) != 0 && GlobalKMS == nil {
+		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS not enabled"), "Unable to start gateway with sse")
+	}
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject

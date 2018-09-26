@@ -103,7 +103,7 @@ type ObjectInfo struct {
 	UserDefined map[string]string
 
 	// List of individual parts, maximum size of upto 10,000
-	Parts []objectPartInfo `json:"-"`
+	Parts []ObjectPartInfo `json:"-"`
 
 	// Implements writer and reader used by CopyObject API
 	Writer       io.WriteCloser `json:"-"`
