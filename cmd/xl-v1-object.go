@@ -507,7 +507,7 @@ func renameCorruptedObject(ctx context.Context, bucket, object string, validMeta
 			Algorithm: validMeta.Erasure.Checksums[0].Algorithm,
 			Hash:      alg.Sum(nil),
 		}
-		validMeta.Parts[0] = objectPartInfo{
+		validMeta.Parts[0] = ObjectPartInfo{
 			Number: 1,
 			Name:   "part.1",
 		}
