@@ -445,6 +445,11 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 }
 
 func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIdMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
+	if !globalVersioningSys.IsEnabled(bucket) {
+		// AWS S3 returns special "null" version ids when versioning is not enabled,
+		// but since Minio does not allow "null" versions, return an error
+		return result, toObjectErr(errInvalidArgument)
+	}
 
 	// validate all the inputs for listObjectsVersions
 	// NB versionIdMarker is checked further down (as it is tied to the keyMarker)
