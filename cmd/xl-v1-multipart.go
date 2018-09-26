@@ -643,7 +643,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	var currentXLMeta = xlMeta
 
 	// Allocate parts similar to incoming slice.
-	xlMeta.Parts = make([]objectPartInfo, len(parts))
+	xlMeta.Parts = make([]ObjectPartInfo, len(parts))
 
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
@@ -690,7 +690,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		objectActualSize += currentXLMeta.Parts[partIdx].ActualSize
 
 		// Add incoming parts.
-		xlMeta.Parts[i] = objectPartInfo{
+		xlMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			ETag:       part.ETag,
 			Size:       currentXLMeta.Parts[partIdx].Size,
