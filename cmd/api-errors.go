@@ -291,6 +291,7 @@ const (
 	ErrInvalidColumnIndex
 	ErrMissingHeaders
 	ErrAdminConfigNotificationTargetsFailed
+	ErrAdminProfilerNotEnabled
 )
 
 // error code to APIError structure, these fields carry respective
@@ -890,6 +891,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrAdminConfigNotificationTargetsFailed: {
 		Code:           "XMinioAdminNotificationTargetsTestFailed",
 		Description:    "Configuration update failed due an unsuccessful attempt to connect to one or more notification servers",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminProfilerNotEnabled: {
+		Code:           "XMinioAdminProfilerNotEnabled",
+		Description:    "Unable to perform the requested operation because profiling is not enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminCredentialsMismatch: {
