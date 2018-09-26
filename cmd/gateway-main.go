@@ -244,9 +244,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()
-
-	// Initialize IAM sys.
-	go globalIAMSys.Init(newObject)
+	if globalEtcdClient != nil {
+		// Initialize IAM sys.
+		go globalIAMSys.Init(newObject)
+	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

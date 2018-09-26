@@ -83,6 +83,8 @@ go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOW
 }
 ```
 
+These credentials can now be used to perform Minio API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://docs.minio.io/docs/api-assume-role-with-client-grants).
+
 ## Explore Further
 - [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
 - [The Minio documentation website](https://docs.minio.io)
