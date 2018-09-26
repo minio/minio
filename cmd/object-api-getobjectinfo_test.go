@@ -41,7 +41,7 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// Put an empty directory
-	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/empty-dir/", mustGetHashReader(t, bytes.NewBufferString(""), int64(len("")), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "test-getobjectinfo", "Asia/empty-dir/", mustGetHashReader(t, bytes.NewBufferString(""), int64(len("")), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}

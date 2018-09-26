@@ -21,6 +21,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
@@ -54,11 +56,11 @@ const (
 	// SSEIVSize is the size of the IV data
 	SSEIVSize = 32 // 32 bytes
 
-	// SSE dare package block size.
-	sseDAREPackageBlockSize = 64 * 1024 // 64KiB bytes
+	// SSEDAREPackageBlockSize - SSE dare package block size.
+	SSEDAREPackageBlockSize = 64 * 1024 // 64KiB bytes
 
-	// SSE dare package meta padding bytes.
-	sseDAREPackageMetaSize = 32 // 32 bytes
+	// SSEDAREPackageMetaSize - SSE dare package meta padding bytes.
+	SSEDAREPackageMetaSize = 32 // 32 bytes
 
 )
 
@@ -412,8 +414,8 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 		return reader, nil
 	}
 
-	partDecRelOffset := int64(seqNumber) * sseDAREPackageBlockSize
-	partEncRelOffset := int64(seqNumber) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	partDecRelOffset := int64(seqNumber) * SSEDAREPackageBlockSize
+	partEncRelOffset := int64(seqNumber) * (SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
 
 	w := &DecryptBlocksReader{
 		reader:            inputReader,
@@ -478,7 +480,7 @@ type DecryptBlocksReader struct {
 	// Current part index
 	partIndex int
 	// Parts information
-	parts          []objectPartInfo
+	parts          []ObjectPartInfo
 	header         http.Header
 	bucket, object string
 	metadata       map[string]string
@@ -594,7 +596,7 @@ type DecryptBlocksWriter struct {
 	// Current part index
 	partIndex int
 	// Parts information
-	parts          []objectPartInfo
+	parts          []ObjectPartInfo
 	req            *http.Request
 	bucket, object string
 	metadata       map[string]string
@@ -745,6 +747,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 	}
 
 	seqNumber, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
+
 	var partStartIndex int
 	var partStartOffset = startOffset
 	// Skip parts until final offset maps to a particular part offset.
@@ -767,8 +770,8 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		partStartOffset -= int64(decryptedSize)
 	}
 
-	startSeqNum := partStartOffset / sseDAREPackageBlockSize
-	partEncRelOffset := int64(startSeqNum) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	startSeqNum := partStartOffset / SSEDAREPackageBlockSize
+	partEncRelOffset := int64(startSeqNum) * (SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
 
 	w := &DecryptBlocksWriter{
 		writer:            client,
@@ -799,6 +802,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		delete(objInfo.UserDefined, crypto.S3SealedKey)
 		delete(objInfo.UserDefined, crypto.S3KMSKeyID)
 		delete(objInfo.UserDefined, crypto.S3KMSSealedKey)
+		delete(objInfo.UserDefined, crypto.SSEHeader)
 	}
 	if w.copySource {
 		w.customerKeyHeader = r.Header.Get(crypto.SSECopyKey)
@@ -860,9 +864,9 @@ func getEncryptedMultipartsOffsetLength(offset, length int64, obj ObjectInfo) (u
 
 // getEncryptedSinglePartOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
 func getEncryptedSinglePartOffsetLength(offset, length int64, objInfo ObjectInfo) (seqNumber uint32, encOffset int64, encLength int64) {
-	onePkgSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	onePkgSize := int64(SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
 
-	seqNumber = uint32(offset / sseDAREPackageBlockSize)
+	seqNumber = uint32(offset / SSEDAREPackageBlockSize)
 	encOffset = int64(seqNumber) * onePkgSize
 	// The math to compute the encrypted length is always
 	// originalLength i.e (offset+length-1) to be divided under
@@ -870,10 +874,10 @@ func getEncryptedSinglePartOffsetLength(offset, length int64, objInfo ObjectInfo
 	// block. This is then multiplied by final package size which
 	// is basically 64KiB + 32. Finally negate the encrypted offset
 	// to get the final encrypted length on disk.
-	encLength = ((offset+length)/sseDAREPackageBlockSize)*onePkgSize - encOffset
+	encLength = ((offset+length)/SSEDAREPackageBlockSize)*onePkgSize - encOffset
 
 	// Check for the remainder, to figure if we need one extract package to read from.
-	if (offset+length)%sseDAREPackageBlockSize > 0 {
+	if (offset+length)%SSEDAREPackageBlockSize > 0 {
 		encLength += onePkgSize
 	}
 
@@ -986,11 +990,11 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	// partStart is always found in the loop above,
 	// because off is validated.
 
-	sseDAREEncPackageBlockSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
-	startPkgNum := (off - cumulativeSum) / sseDAREPackageBlockSize
+	sseDAREEncPackageBlockSize := int64(SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
+	startPkgNum := (off - cumulativeSum) / SSEDAREPackageBlockSize
 
 	// Now we can calculate the number of bytes to skip
-	skipLen = (off - cumulativeSum) % sseDAREPackageBlockSize
+	skipLen = (off - cumulativeSum) % SSEDAREPackageBlockSize
 
 	encOff = encCumulativeSum + startPkgNum*sseDAREEncPackageBlockSize
 	// Locate the part containing the end of the required range
@@ -1007,7 +1011,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	}
 	// partEnd is always found in the loop above, because off and
 	// length are validated.
-	endPkgNum := (endOffset - cumulativeSum) / sseDAREPackageBlockSize
+	endPkgNum := (endOffset - cumulativeSum) / SSEDAREPackageBlockSize
 	// Compute endEncOffset with one additional DARE package (so
 	// we read the package containing the last desired byte).
 	endEncOffset := encCumulativeSum + (endPkgNum+1)*sseDAREEncPackageBlockSize
@@ -1096,4 +1100,141 @@ func DecryptObjectInfo(info ObjectInfo, headers http.Header) (encrypted bool, er
 		_, err = info.DecryptedSize()
 	}
 	return
+}
+
+// The customer key in the header is used by the gateway for encryption in the case of
+// s3 gateway double encryption. A new client key is derived from the customer provided
+// key to be sent to the s3 backend for encryption at the backend.
+func deriveClientKey(header http.Header, headerName, bucket, object string) ([32]byte, error) {
+	var key [32]byte
+	clientKey, err := base64.StdEncoding.DecodeString(header.Get(headerName))
+	if err != nil || len(clientKey) != 32 { // The client key must be 256 bits long
+		return key, crypto.ErrInvalidCustomerKey
+	}
+	mac := hmac.New(sha256.New, clientKey)
+	mac.Write([]byte(crypto.SSEC.String()))
+	mac.Write([]byte(path.Join(bucket, object)))
+	mac.Sum(key[:0])
+	return key, nil
+}
+
+// extract encryption options for pass through to backend in the case of gateway
+func extractEncryptionOption(header http.Header, copySource bool) (opts ObjectOptions, err error) {
+	var clientKey []byte
+	var sse encrypt.ServerSide
+
+	if copySource {
+		if crypto.SSECopy.IsRequested(header) {
+			clientKey, err = base64.StdEncoding.DecodeString(header.Get(crypto.SSECopyKey))
+			if err != nil || len(clientKey) != 32 { // The client key must be 256 bits long
+				return opts, crypto.ErrInvalidCustomerKey
+			}
+			if sse, err = encrypt.NewSSEC(clientKey); err != nil {
+				return
+			}
+			return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(sse)}, nil
+		}
+		return
+	}
+
+	if crypto.SSEC.IsRequested(header) {
+		clientKey, err = base64.StdEncoding.DecodeString(header.Get(crypto.SSECKey))
+		if err != nil || len(clientKey) != 32 { // The client key must be 256 bits long
+			return opts, crypto.ErrInvalidCustomerKey
+		}
+		if sse, err = encrypt.NewSSEC(clientKey); err != nil {
+			return
+		}
+		return ObjectOptions{ServerSideEncryption: sse}, nil
+	}
+	if crypto.S3.IsRequested(header) {
+		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
+	}
+	return opts, nil
+}
+
+// get ObjectOptions for GET calls from encryption headers
+func getEncryptionOpts(r *http.Request, bucket, object string) (ObjectOptions, error) {
+	var (
+		encryption encrypt.ServerSide
+		opts       ObjectOptions
+	)
+	if GlobalGatewaySSE != nil {
+		for _, k := range GlobalGatewaySSE {
+			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
+				derivedKey, err := deriveClientKey(r.Header, crypto.SSECKey, bucket, object)
+				if err != nil {
+					return opts, err
+				}
+				encryption, err = encrypt.NewSSEC(derivedKey[:])
+				if err != nil {
+					return opts, err
+				}
+				return ObjectOptions{ServerSideEncryption: encryption}, nil
+			}
+		}
+	}
+	// default case of passing encryption headers to backend
+	return extractEncryptionOption(r.Header, false)
+}
+
+// get ObjectOptions for PUT calls from encryption headers
+func putEncryptionOpts(r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+	if GlobalGatewaySSE != nil {
+		for _, k := range GlobalGatewaySSE {
+			// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
+			// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
+			if k == GatewaySSES3 && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
+				opts = ObjectOptions{ServerSideEncryption: encrypt.ServerSide(encrypt.NewSSE())}
+			}
+			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
+				return getEncryptionOpts(r, bucket, object)
+			}
+		}
+	}
+	// default case of passing encryption headers to backend
+	return extractEncryptionOption(r.Header, false)
+}
+
+// get ObjectOptions for Copy calls for encryption headers provided on the target side
+func copyDstEncryptionOpts(r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+	if GlobalGatewaySSE != nil {
+		for _, k := range GlobalGatewaySSE {
+			// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
+			// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in CopyObjectPart calls
+			if k == GatewaySSES3 && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
+				opts = ObjectOptions{ServerSideEncryption: encrypt.ServerSide(encrypt.NewSSE())}
+			}
+			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
+				return getEncryptionOpts(r, bucket, object)
+			}
+		}
+	}
+	// default case of passing encryption headers to backend
+	return extractEncryptionOption(r.Header, false)
+}
+
+// get ObjectOptions for Copy calls for encryption headers provided on the source side
+func copySrcEncryptionOpts(r *http.Request, bucket, object string) (ObjectOptions, error) {
+	var (
+		ssec encrypt.ServerSide
+		opts ObjectOptions
+	)
+	if GlobalGatewaySSE != nil {
+		for _, k := range GlobalGatewaySSE {
+			if k == GatewaySSEC && crypto.SSECopy.IsRequested(r.Header) {
+				derivedKey, err := deriveClientKey(r.Header, crypto.SSECopyKey, bucket, object)
+				if err != nil {
+					return opts, err
+				}
+				ssec, err = encrypt.NewSSEC(derivedKey[:])
+				if err != nil {
+					return opts, err
+				}
+				return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(ssec)}, nil
+			}
+		}
+	}
+	// default case of passing encryption headers to backend
+	return extractEncryptionOption(r.Header, true)
 }

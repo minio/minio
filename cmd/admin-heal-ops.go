@@ -240,7 +240,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 				delete(ahs.healSeqMap, h.path)
 				return
 
-			case <-globalServiceDoneCh:
+			case <-GlobalServiceDoneCh:
 				// server could be restarting - need
 				// to exit immediately
 				return

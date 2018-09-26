@@ -35,11 +35,11 @@ const (
 var globalServiceSignalCh chan serviceSignal
 
 // Global service done channel.
-var globalServiceDoneCh chan struct{}
+var GlobalServiceDoneCh chan struct{}
 
 // Initialize service mutex once.
 func init() {
-	globalServiceDoneCh = make(chan struct{}, 1)
+	GlobalServiceDoneCh = make(chan struct{}, 1)
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 

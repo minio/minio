@@ -67,6 +67,16 @@ Optionally set `MINIO_SSE_VAULT_CAPATH` as the path to a directory of PEM-encode
 export MINIO_SSE_VAULT_CAPATH=/home/user/custom-pems
 ```
 
+To enable encryption at gateway MINIO_GW_SSE environment variable needs to be set to "s3" for sse-s3
+and "c" for sse-c encryption at gateway. More than one encryption option can be set, delimited by ";". If MINIO_GW_SSE is not set, any SSE headers will be passed to S3 backend.
+```sh
+export MINIO_GW_SSE="s3;c"
+export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
+export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
+export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
+minio gateway s3
+```
 ### 4. Test your setup
 
 To test this setup, start minio server with environment variables set in Step 3, and server is ready to handle SSE-S3 requests.

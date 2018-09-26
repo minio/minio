@@ -113,7 +113,7 @@ type fsMetaV1 struct {
 	// Metadata map for current object.
 	Meta map[string]string `json:"meta,omitempty"`
 	// parts info for current object - used in encryption.
-	Parts []objectPartInfo `json:"parts,omitempty"`
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 
 // IsValid - tells if the format is sane by validating the version
@@ -207,9 +207,9 @@ func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
 	return metaMap
 }
 
-func parseFSPartsArray(fsMetaBuf []byte) []objectPartInfo {
+func parseFSPartsArray(fsMetaBuf []byte) []ObjectPartInfo {
 	// Get xlMetaV1.Parts array
-	var partsArray []objectPartInfo
+	var partsArray []ObjectPartInfo
 
 	partsArrayResult := gjson.GetBytes(fsMetaBuf, "parts")
 	partsArrayResult.ForEach(func(key, part gjson.Result) bool {
@@ -219,7 +219,7 @@ func parseFSPartsArray(fsMetaBuf []byte) []objectPartInfo {
 		etag := gjson.Get(partJSON, "etag").String()
 		size := gjson.Get(partJSON, "size").Int()
 		actualSize := gjson.Get(partJSON, "actualSize").Int()
-		partsArray = append(partsArray, objectPartInfo{
+		partsArray = append(partsArray, ObjectPartInfo{
 			Number:     int(number),
 			Name:       name,
 			ETag:       etag,

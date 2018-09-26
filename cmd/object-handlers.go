@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/readahead"
 	miniogo "github.com/minio/minio-go"
+	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -95,6 +96,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	// get gateway encryption options
+	opts, err := getEncryptionOpts(r, bucket, object)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
@@ -123,7 +130,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 					getObjectInfo = api.CacheAPI().GetObjectInfo
 				}
 
-				_, err := getObjectInfo(ctx, bucket, object, ObjectOptions{})
+				_, err = getObjectInfo(ctx, bucket, object, ObjectOptions{})
 				if toAPIErrorCode(ctx, err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -144,6 +151,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrEmptyRequestBody, r.URL)
 		return
 	}
+
 	var selectReq s3select.ObjectSelectRequest
 	if err := xmlDecoder(r.Body, &selectReq, r.ContentLength); err != nil {
 		writeErrorResponse(w, ErrMalformedXML, r.URL)
@@ -164,7 +172,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, ObjectOptions{})
+	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
@@ -241,6 +249,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
+		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
@@ -312,8 +321,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	var opts ObjectOptions
-
+	// get gateway encryption options
+	opts, err := getEncryptionOpts(r, bucket, object)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
@@ -342,7 +355,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 					getObjectInfo = api.CacheAPI().GetObjectInfo
 				}
 
-				_, err := getObjectInfo(ctx, bucket, object, opts)
+				_, err = getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(ctx, err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -361,7 +374,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		var err error
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
@@ -385,6 +397,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	objInfo := gr.ObjInfo
 
 	if objectAPI.IsEncryptionSupported() {
+		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
@@ -484,7 +497,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	var opts ObjectOptions
+	opts, err := getEncryptionOpts(r, bucket, object)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
+
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
@@ -506,7 +524,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				_, err := getObjectInfo(ctx, bucket, object, opts)
+				_, err = getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(ctx, err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -520,7 +538,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		var err error
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
@@ -541,6 +558,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if objectAPI.IsEncryptionSupported() {
+		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
 			writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 			return
@@ -591,7 +609,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		host, port = "", ""
 	}
-
 	// Notify object accessed via a HEAD request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedHead,
@@ -692,6 +709,24 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	var srcOpts, dstOpts ObjectOptions
+	srcOpts, err = copySrcEncryptionOpts(r, srcBucket, srcObject)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	// convert copy src encryption options for GET calls
+	var getOpts = ObjectOptions{}
+	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
+	if getSSE != srcOpts.ServerSideEncryption {
+		getOpts.ServerSideEncryption = getSSE
+	}
+	dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, nil)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -898,7 +933,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 		}
 	}
-
 	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
@@ -1177,7 +1211,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
-	opts := ObjectOptions{}
+	// get gateway encryption options
+	var opts ObjectOptions
+	opts, err = putEncryptionOpts(r, bucket, object, nil)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
@@ -1281,8 +1321,15 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	opts := ObjectOptions{}
+	// get gateway encryption options
+	var opts ObjectOptions
+	var err error
 
+	opts, err = putEncryptionOpts(r, bucket, object, nil)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -1290,7 +1337,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 			return
 		}
@@ -1308,7 +1355,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) {
-			if err := setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
+			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
@@ -1414,7 +1461,29 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
 		return
 	}
+
 	var srcOpts, dstOpts ObjectOptions
+	srcOpts, err = copySrcEncryptionOpts(r, srcBucket, srcObject)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	// convert copy src and dst encryption options for GET/PUT calls
+	var getOpts = ObjectOptions{}
+	if srcOpts.ServerSideEncryption != nil {
+		getOpts.ServerSideEncryption = encrypt.SSE(srcOpts.ServerSideEncryption)
+	}
+	dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, nil)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	srcInfo, err := objectAPI.GetObjectInfo(ctx, srcBucket, srcObject, getOpts)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -1445,13 +1514,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, srcOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 	defer gr.Close()
-	srcInfo := gr.ObjInfo
+	srcInfo = gr.ObjInfo
 
 	actualPartSize := srcInfo.Size
 	if crypto.IsEncrypted(srcInfo.UserDefined) {
@@ -1527,6 +1596,17 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
+		li, lerr := objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1)
+		if lerr != nil {
+			writeErrorResponse(w, toAPIErrorCode(lerr), r.URL)
+			return
+		}
+		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
+		dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, li.UserDefined)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 		if crypto.IsEncrypted(li.UserDefined) {
 			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
@@ -1748,7 +1828,15 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	opts := ObjectOptions{}
+	// get gateway encryption options
+	var opts ObjectOptions
+	if crypto.SSEC.IsRequested(r.Header) {
+		opts, err = putEncryptionOpts(r, bucket, object, nil)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+	}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
@@ -1765,10 +1853,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
+		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
 		if crypto.IsEncrypted(li.UserDefined) {
 			isEncrypted = true
 			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				return
+			}
+			opts, err = putEncryptionOpts(r, bucket, object, li.UserDefined)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 			var key []byte
