@@ -97,7 +97,7 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 }
 
 // Checks for all ListObjects arguments validity.
-func checkListObjsVersionsArgs(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, obj ObjectLayer) error {
+func checkListObjsVersionsArgs(ctx context.Context, bucket, prefix, delimiter, keyMarker string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should

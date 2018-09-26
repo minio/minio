@@ -458,9 +458,8 @@ func (xl xlObjects) getObjectVersions(ctx context.Context, bucket, object, versi
 				break
 			}
 		}
-		if !found { // Unable to find matching versionId
-			// FIXME: Return InvalidVersionId??
-			return nil, false, err
+		if !found { // Unable to find matching versionId, so error out with invalid version id
+			return nil, false, toObjectErr(errInvalidVersionId)
 		}
 	}
 

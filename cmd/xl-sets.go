@@ -447,7 +447,8 @@ func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo B
 func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIdMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {
 
 	// validate all the inputs for listObjectsVersions
-	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, versionIdMarker, s); err != nil {
+	// NB versionIdMarker is checked further down (as it is tied to the keyMarker)
+	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, s); err != nil {
 		return result, err
 	}
 
@@ -458,6 +459,11 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 
 	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, keyMarker, prefix, false, versionIdMarker})
 	if walkResultCh == nil {
+		if versionIdMarker != "" {
+			// If there is a versionIdMarker and we are not getting a previous tree walker,
+			// then the versionIdMarker that has been passed in must be invalid
+			return result, toObjectErr(errInvalidVersionId)
+		}
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
 			entry = strings.TrimSuffix(entry, slashSeparator)
