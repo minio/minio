@@ -234,7 +234,7 @@ func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 
 	for {
 		select {
-		case <-globalServiceDoneCh:
+		case <-GlobalServiceDoneCh:
 			return
 		case <-s.disksConnectDoneCh:
 			return
@@ -288,7 +288,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 			nsMutex:  mutex,
 			bp:       bp,
 		}
-		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 	}
 
 	// Connect disks right away, but wait until we have `format.json` quorum.

@@ -91,7 +91,7 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 		appendFileMap: make(map[string]*fsAppendFile),
 	}
 
-	go fsObjects.cleanupStaleMultipartUploads(context.Background(), globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+	go fsObjects.cleanupStaleMultipartUploads(context.Background(), GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 
 	cacheFS := cacheFSObjects{
 		FSObjects:       fsObjects,
@@ -158,7 +158,7 @@ func (cfs *cacheFSObjects) purgeTrash() {
 
 	for {
 		select {
-		case <-globalServiceDoneCh:
+		case <-GlobalServiceDoneCh:
 			return
 		case <-ticker.C:
 			trashPath := path.Join(cfs.fsPath, minioMetaBucket, cacheTrashDir)

@@ -515,7 +515,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	fsMeta := fsMetaV1{}
 
 	// Allocate parts similar to incoming slice.
-	fsMeta.Parts = make([]objectPartInfo, len(parts))
+	fsMeta.Parts = make([]ObjectPartInfo, len(parts))
 
 	entries, err := readDir(uploadIDDir)
 	if err != nil {
@@ -560,7 +560,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 			partSize = actualSize
 		}
 
-		fsMeta.Parts[i] = objectPartInfo{
+		fsMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			ETag:       part.ETag,
 			Size:       fi.Size(),

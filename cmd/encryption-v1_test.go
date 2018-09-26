@@ -503,7 +503,7 @@ func TestGetDecryptedRange(t *testing.T) {
 	var (
 		// make a multipart object-info given part sizes
 		mkMPObj = func(sizes []int64) ObjectInfo {
-			r := make([]objectPartInfo, len(sizes))
+			r := make([]ObjectPartInfo, len(sizes))
 			sum := int64(0)
 			for i, s := range sizes {
 				r[i].Number = i
