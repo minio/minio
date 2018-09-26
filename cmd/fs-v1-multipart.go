@@ -353,7 +353,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 // Implements S3 compatible ListObjectParts API. The resulting
 // ListPartsInfo structure is unmarshalled directly into XML and
 // replied back to the client.
-func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result ListPartsInfo, e error) {
+func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, e error) {
 	if err := checkListPartsArgs(ctx, bucket, object, fs); err != nil {
 		return result, toObjectErr(err)
 	}
@@ -515,7 +515,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	fsMeta := fsMetaV1{}
 
 	// Allocate parts similar to incoming slice.
-	fsMeta.Parts = make([]objectPartInfo, len(parts))
+	fsMeta.Parts = make([]ObjectPartInfo, len(parts))
 
 	entries, err := readDir(uploadIDDir)
 	if err != nil {
@@ -560,7 +560,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 			partSize = actualSize
 		}
 
-		fsMeta.Parts[i] = objectPartInfo{
+		fsMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			ETag:       part.ETag,
 			Size:       fi.Size(),

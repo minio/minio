@@ -431,7 +431,7 @@ func TestGetActualSize(t *testing.T) {
 					"X-Minio-Internal-actual-size": "100000001",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
-				Parts: []objectPartInfo{
+				Parts: []ObjectPartInfo{
 					{
 						Size:       39235668,
 						ActualSize: 67108864,
@@ -450,7 +450,7 @@ func TestGetActualSize(t *testing.T) {
 					"X-Minio-Internal-actual-size": "841",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
-				Parts: []objectPartInfo{},
+				Parts: []ObjectPartInfo{},
 			},
 			result: 841,
 		},
@@ -459,7 +459,7 @@ func TestGetActualSize(t *testing.T) {
 				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
-				Parts: []objectPartInfo{},
+				Parts: []ObjectPartInfo{},
 			},
 			result: -1,
 		},
@@ -482,7 +482,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 	}{
 		{
 			objInfo: ObjectInfo{
-				Parts: []objectPartInfo{
+				Parts: []ObjectPartInfo{
 					{
 						Size:       39235668,
 						ActualSize: 67108864,
@@ -499,7 +499,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				Parts: []objectPartInfo{
+				Parts: []ObjectPartInfo{
 					{
 						Size:       39235668,
 						ActualSize: 67108864,
@@ -516,7 +516,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				Parts: []objectPartInfo{
+				Parts: []ObjectPartInfo{
 					{
 						Size:       39235668,
 						ActualSize: 67108864,

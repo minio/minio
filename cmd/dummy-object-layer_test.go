@@ -99,7 +99,7 @@ func (api *DummyObjectLayer) PutObjectPart(ctx context.Context, bucket, object, 
 	return
 }
 
-func (api *DummyObjectLayer) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
+func (api *DummyObjectLayer) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	return
 }
 

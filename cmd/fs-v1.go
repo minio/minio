@@ -152,10 +152,10 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	if !fs.diskMount {
-		go fs.diskUsage(globalServiceDoneCh)
+		go fs.diskUsage(GlobalServiceDoneCh)
 	}
 
-	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil

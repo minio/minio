@@ -162,6 +162,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
+	// Handle gateway specific env
+	handleGatewayEnvVars()
+
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
 		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")

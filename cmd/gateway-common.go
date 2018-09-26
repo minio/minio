@@ -18,7 +18,10 @@ package cmd
 
 import (
 	"net/http"
+	"os"
+	"strings"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 
 	minio "github.com/minio/minio-go"
@@ -30,7 +33,26 @@ var (
 
 	// MustGetUUID function alias.
 	MustGetUUID = mustGetUUID
+
+	// IsMinAllowedPartSize function alias.
+	IsMinAllowedPartSize = isMinAllowedPartSize
+
+	// GetCompleteMultipartMD5 functon alias.
+	GetCompleteMultipartMD5 = getCompleteMultipartMD5
+
+	// Contains function alias.
+	Contains = contains
+
+	// ExtractETag provides extractETag function alias.
+	ExtractETag = extractETag
+	// CleanMetadataKeys provides cleanMetadataKeys function alias.
+	CleanMetadataKeys = cleanMetadataKeys
 )
+
+// StatInfo -  alias for statInfo
+type StatInfo struct {
+	statInfo
+}
 
 // AnonErrToObjectErr - converts standard http codes into meaningful object layer errors.
 func AnonErrToObjectErr(statusCode int, params ...string) error {
@@ -320,4 +342,35 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	return err
+}
+
+// parse gateway sse env variable
+func parseGatewaySSE(s string) ([]string, error) {
+	l := strings.Split(s, ";")
+	gwSlice := make([]string, len(l))
+	for _, val := range l {
+		v := strings.ToUpper(val)
+		if v == GatewaySSES3 || v == GatewaySSEC {
+			gwSlice = append(gwSlice, v)
+			continue
+		}
+		return nil, uiErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
+	}
+	return gwSlice, nil
+}
+
+// handle gateway env vars
+func handleGatewayEnvVars() {
+	gwsse, ok := os.LookupEnv("MINIO_GW_SSE")
+	if ok {
+		gwsseSlice, err := parseGatewaySSE(gwsse)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_GW_SSE value (`%s`)", gwsse)
+		}
+		GlobalGatewaySSE = gwsseSlice
+	}
+
+	if len(gwsse) != 0 && GlobalKMS == nil {
+		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GW_SSE set but KMS not enabled"), "Unable to start gateway with sse")
+	}
 }
