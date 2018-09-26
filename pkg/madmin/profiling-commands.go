@@ -92,7 +92,6 @@ func (adm *AdminClient) DownloadProfilingData() (io.ReadCloser, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		closeResponse(resp)
 		return nil, httpRespToErrorResponse(resp)
 	}
 

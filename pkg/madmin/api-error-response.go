@@ -73,6 +73,7 @@ func httpRespToErrorResponse(resp *http.Response) error {
 			Message: "Failed to parse server response.",
 		}
 	}
+	closeResponse(resp)
 	return errResp
 }
 
