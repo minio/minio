@@ -40,11 +40,8 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 
 func testAdminCmdRunnerSignalService(t *testing.T, client adminCmdRunner) {
-	tmpGlobalServiceSignalCh := globalServiceSignalCh
+	defer func(sigChan chan serviceSignal) { globalServiceSignalCh = sigChan }(globalServiceSignalCh)
 	globalServiceSignalCh = make(chan serviceSignal, 10)
-	defer func() {
-		globalServiceSignalCh = tmpGlobalServiceSignalCh
-	}()
 
 	testCases := []struct {
 		signal    serviceSignal

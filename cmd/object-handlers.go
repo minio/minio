@@ -857,6 +857,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
 
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		// Encryption parameters not applicable for this object.
@@ -1244,6 +1247,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
@@ -1372,6 +1378,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	var encMetadata = map[string]string{}
 
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
