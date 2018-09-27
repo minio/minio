@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="9px" height="7px" viewBox="0 0 9 7" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
+    <title>Untitled</title>
+    <desc>Created with Sketch.</desc>
+    <defs></defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Group">
+            <path d="M0.5,3.5 L6,3.5" id="Line" stroke="#455A64" stroke-linecap="square"></path>
+            <polygon id="Triangle" fill="#455A64" points="8.51550293 3.5 5.51550293 6.5 5.51550293 0.5"></polygon>
+        </g>
+    </g>
+</svg>

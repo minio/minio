@@ -34,7 +34,12 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
         dirPath.push(dir)
         let dirPath_ = dirPath.join("/") + "/"
         return (
-          <div className="path__item">
+          <div
+            className={classNames({
+              path__item: true,
+              "path__item--active": currentPrefix === dirPath_
+            })}
+          >
             <span key={i} onClick={e => onPrefixClick(e, dirPath_)}>
               {dir}
             </span>
@@ -46,9 +51,7 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
   }
 
   let dirPrev = dirPath.slice(0, -1).join("/") + "/"
-  let prevLink = (
-    <div className="path__back" onClick={e => onPrefixClick(e, dirPrev)} />
-  )
+  let prevLink = <i onClick={e => onPrefixClick(e, dirPrev)} />
 
   return (
     <div
@@ -57,9 +60,18 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
         "path--has-back": dirPath.length > 2
       })}
     >
-      {dirPath.length > 2 ? prevLink : ""}
+      {dirPath.length > 2 && (
+        <div className="path__back path__back--desktop">{prevLink}</div>
+      )}
 
-      <div className="path__item path__item--bucket" onClick={e => onPrefixClick(e, "")}>
+      {dirPath.length > 0 && (
+        <div className="path__back path__back--mobile">{prevLink}</div>
+      )}
+
+      <div
+        className="path__item path__item--home"
+        onClick={e => onPrefixClick(e, "")}
+      >
         <span>{currentBucket}</span>
         <i className="path__separator" />
       </div>

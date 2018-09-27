@@ -3,7 +3,6 @@
   align-items: center;
   flex: 1 1 100%;
   min-height: 37px;
-  margin-left: -5px;
 }
 
 .path__item {
@@ -17,26 +16,28 @@
     }
   }
 
-  &:not(:nth-last-child(-n+3)) {
-    display: none;
+  @include media-breakpoint-up(sm) {
+    &:not(:nth-last-child(-n+3)) {
+      display: none;
+    }
+  }
+
+  @include media-breakpoint-down(xs) {
+    &:not(:nth-last-child(-n+1)) {
+      display: none;
+    }
   }
 
   & > span {
-    padding: 5px;
+    height: $objects-icon-size;
     @include text-truncate();
     border-radius: $border-radius;
-    display: block;
     position: relative;
     line-height: 100%;
-
-    @include media-breakpoint-up(sm) {
-      max-width: 150px;
-    }
-
-    @include media-breakpoint-down(xs) {
-      max-width: 40px;
-      font-size: $font-size-sm;
-    }
+    max-width: 180px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
   }
 
   &:not(:last-child) {
@@ -50,15 +51,43 @@
   }
 }
 
+.path__item--home {
+  & > span {
+    background: $path-home-icon no-repeat center left 10px;
+    padding-left: 35px;
+
+    @include media-breakpoint-up(md) {
+      background-color: $path-home-bg;
+      margin-right: 10px;
+    }
+  }
+}
+
 .path__separator {
-  @include size(7px, 11px);
+  @include size(9px, 7px);
   background: $path-seperator-icon no-repeat center;
   margin: 0 5px;
   position: relative;
   top: 1px;
+  opacity: 0.75;
 }
 
 .path__back {
-  @include icon($path-back-icon);
-  margin-right: 5px;
+  margin-right: 7px;
+
+  & > i {
+    @include icon($path-back-icon);
+  }
+
+  &--mobile {
+    @include media-breakpoint-up(sm) {
+      display: none;
+    }
+  }
+
+  &--desktop {
+    @include media-breakpoint-down(xs) {
+      display: none;
+    }
+  }
 }
