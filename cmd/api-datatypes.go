@@ -28,6 +28,7 @@ const (
 // ObjectIdentifier carries key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`
+	VersionId  string `xml:"VersionId,omitempty"`
 }
 
 // createBucketConfiguration container for bucket configuration request from client.
