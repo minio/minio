@@ -580,8 +580,8 @@ func (s *xlSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err err
 // --- Object Operations ---
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType) (gr *GetObjectReader, err error) {
-	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs, h, lockType)
+func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 }
 
 // GetObject - reads an object from the hashedSet based on the object name.

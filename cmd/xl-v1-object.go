@@ -166,7 +166,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
-func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType) (gr *GetObjectReader, err error) {
+func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var nsUnlocker = func() {}
 
 	// Acquire lock
@@ -220,7 +220,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := xl.getObject(ctx, bucket, object, off, length, pw, "", ObjectOptions{})
+		err := xl.getObject(ctx, bucket, object, off, length, pw, "", opts)
 		pw.CloseWithError(err)
 	}()
 	// Cleanup function to cause the go routine above to exit, in

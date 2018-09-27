@@ -154,7 +154,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock)
+	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -287,6 +287,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+	var opts ObjectOptions
 
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
@@ -316,7 +317,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 					getObjectInfo = api.CacheAPI().GetObjectInfo
 				}
 
-				_, err := getObjectInfo(ctx, bucket, object, ObjectOptions{})
+				_, err := getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
 				}
@@ -349,7 +350,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -456,7 +457,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	opts := ObjectOptions{}
+	var opts ObjectOptions
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
@@ -692,7 +693,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		lock = readLock
 	}
 
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, srcOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1316,7 +1317,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, srcOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
