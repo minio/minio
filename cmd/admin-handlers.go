@@ -355,8 +355,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Return 200 OK
-	w.WriteHeader(http.StatusOK)
+	profilingDataFound := false
 
 	// Initialize a zip writer which will provide a zipped content
 	// of profiling data of all nodes
@@ -370,6 +369,8 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 			logger.LogIf(context.Background(), fmt.Errorf("Unable to download profiling data from node `%s`, reason: %s", peer.addr, err.Error()))
 			continue
 		}
+
+		profilingDataFound = true
 
 		// Send profiling data to zip as file
 		header, err := zip.FileInfoHeader(dummyFileInfo{
@@ -390,6 +391,11 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		if _, err = io.Copy(writer, bytes.NewBuffer(data)); err != nil {
 			return
 		}
+	}
+
+	if !profilingDataFound {
+		writeErrorResponseJSON(w, ErrAdminProfilerNotEnabled, r.URL)
+		return
 	}
 }
 
