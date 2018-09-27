@@ -97,17 +97,10 @@ func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r
 		return
 	}
 
-	listObjectsVersions := objectAPI.ListObjectVersions
-
-	// FIXME: shall we cache listing objects versions
-	// if api.CacheAPI() != nil {
-	//	listObjectsV2 = api.CacheAPI().ListObjectsV2
-	//}
-
 	// Initiate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
-	listObjectsVersionsInfo, err := listObjectsVersions(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxkeys)
+	listObjectsVersionsInfo, err := objectAPI.ListObjectVersions(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxkeys)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
