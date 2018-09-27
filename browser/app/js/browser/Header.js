@@ -16,55 +16,18 @@
 
 import React from "react"
 import Path from "../objects/Path"
-import SettingsMenu from "./SettingsMenu"
 import web from "../web"
 import { minioBrowserPrefix } from "../constants"
 import { connect } from "react-redux"
-import classNames from "classnames"
 import * as actionsCommon from "./actions"
+import history from "../history"
 
 export class Header extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      settingsActive: false,
-      settingsClosing: false,
-      settingsEnters: false
-    }
+  logout(e) {
+    e.preventDefault()
+    web.Logout()
+    history.replace("/login")
   }
-
-  openSettingsMenu() {
-    this.setState({
-      settingsClosing: false,
-      settingsEnters: false,
-      settingsActive: true
-    })
-
-    setTimeout(() => {
-      this.setState({
-        settingsEnters: true
-      })
-    }, 1)
-  }
-
-  closeSettingsMenu() {
-    this.setState({
-      settingsClosing: true
-    })
-
-    setTimeout(() => {
-      this.setState({
-        settingsEnters: false
-      })
-    }, 450)
-
-    setTimeout(() => {
-      this.setState({
-        settingsActive: false
-      })
-    }, 750)
-  }
-
   render() {
     const loggedIn = web.LoggedIn()
     const { toggleSidebar } = this.props
@@ -76,24 +39,7 @@ export class Header extends React.Component {
         <Path />
 
         {loggedIn ? (
-          <div
-            className={classNames({
-              settings: true,
-              "settings--active": this.state.settingsEnters,
-              "settings--closing": this.state.settingsClosing
-            })}
-          >
-            <i
-              onClick={this.openSettingsMenu.bind(this)}
-              className="settings__toggle"
-            />
-
-            {this.state.settingsActive && (
-              <SettingsMenu
-                closeSettingsMenu={this.closeSettingsMenu.bind(this)}
-              />
-            )}
-          </div>
+          <a onClick={this.logout} className="sign-out" />
         ) : (
           <a className="guest-login" href={minioBrowserPrefix + "/login"}>
             Login
