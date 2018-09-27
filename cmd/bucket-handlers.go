@@ -305,7 +305,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	deleteObject := objectAPI.DeleteObject
-	if api.CacheAPI() != nil {
+	if !globalVersioningSys.IsEnabled(bucket) && api.CacheAPI() != nil {
 		deleteObject = api.CacheAPI().DeleteObject
 	}
 
@@ -320,7 +320,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-		_, dErr := deleteObject(ctx, bucket, object.ObjectName)
+		var dErr error
+		if object.VersionId != "" {
+			dErr = objectAPI.DeleteObjectVersion(ctx, bucket, object.ObjectName, object.VersionId)
+		} else {
+			versionId := ""
+			versionId, dErr = deleteObject(ctx, bucket, object.ObjectName)
+			if versionId != "" {
+				fmt.Println("return versionid", versionId)
+			}
+		}
 		dErrs[index] = dErr
 	}
 
