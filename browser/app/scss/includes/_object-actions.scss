@@ -1,6 +1,6 @@
 .object-actions {
   background-color: $theme-invert-bg;
-  padding: 11px;
+  padding: 8px;
   position: absolute;
   top: 0;
   transform: translate3d(0, -101%, 0);
@@ -13,7 +13,7 @@
   @include media-breakpoint-up(sm) {
     left: 20px;
     width: calc(100% - 40px);
-    border-radius: 0 0 $border-radius $border-radius;
+    border-radius: 0 0 $border-radius+1 $border-radius+1;
   }
 
   @include media-breakpoint-down(xs) {
@@ -24,34 +24,30 @@
 
 .object-actions__item {
   display: inline-block;
-  padding: 10px 12px;
-  color: $theme-invert-text-color;
+  padding: 10px 15px;
+  color: $theme-invert-text-muted-color;
   border-radius: 2px;
   border: 0;
   background-color: transparent;
+  transition: color 300ms, background 300ms;
+  cursor: pointer;
 
-  &:not(:disabled) {
-    cursor: pointer;
+  &:hover {
+    background-color: $theme-invert-hover-bg;
+    color: $theme-invert-text-hover-color;
 
-    &:hover {
-      background-color: $theme-invert-hover-bg;
-      color: $theme-invert-text-hover-color;
-
-      & > img {
-        opacity: 1;
-      }
+    & > svg {
+      fill: $theme-invert-text-hover-color;
     }
   }
 
-  &:disabled {
-    opacity: 0.5;
-  }
-
-  & > img {
+  & > svg {
     vertical-align: middle;
     position: relative;
-    top: -2px;
-    opacity: 0.85;
+    top: -1px;
+    opacity: 0.9;
+    fill: $theme-invert-text-muted-color;
+    transition: fill 300ms;
   }
 
   & > span {
@@ -67,6 +63,10 @@
   transform: translate3d(0, 0, 0);
   opacity: 1;
   pointer-events: auto;
+
+  & + .header {
+    opacity: 0;
+  }
 }
 
 .object-actions__close {

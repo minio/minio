@@ -1,6 +1,4 @@
 * {
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-font-smoothing: antialiased;
   box-sizing: border-box;
 
   &:focus,
@@ -19,6 +17,8 @@ body {
   background-color: $body-bg;
   font-size: $font-size-base;
   color: $body-color;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, h6 {

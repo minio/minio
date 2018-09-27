@@ -1,12 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="11px" height="13px" viewBox="0 0 11 13" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-    <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
-    <title>Untitled</title>
-    <desc>Created with Sketch.</desc>
-    <defs></defs>
-    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="download" fill="#e5edf1" fill-rule="nonzero">
-            <path d="M11,4.588 L7.857,4.588 L7.857,0 L3.143,0 L3.143,4.588 L0,4.588 L5.5,9.941 L11,4.588 Z M0,11.471 L0,13 L11,13 L11,11.471 L0,11.471 Z" id="Shape"></path>
-        </g>
-    </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="12" height="14"><path d="M11.338 5.088H8.195V.5H3.48v4.588H.338l5.5 5.353 5.5-5.353zm-11 6.883v1.53h11v-1.53h-11z" fill="#ECF2F5" fill-rule="nonzero"/></svg>

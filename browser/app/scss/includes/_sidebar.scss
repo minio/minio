@@ -35,7 +35,7 @@
 
   @include media-breakpoint-down(sm) {
     @include size(23px, 23px);
-    background: $modal-close-icon no-repeat center;
+    background: $sidebar-close-icon no-repeat center;
     position: absolute;
     right: 15px;
     top: 23px;
@@ -60,12 +60,12 @@
 }
 
 .logo__img {
-  margin-left: 2px;
+  margin-left: 5px;
   width: 18px;
 }
 
 .logo__text {
-  padding-left: 12px;
+  padding-left: 11px;
   font-size: $font-size-base + 3;
   line-height: 100%;
   color: $logo-color;
@@ -89,7 +89,7 @@
   color: $theme-invert-text-color;
   @include size(100%, $form-input-height);
   border: 0;
-  padding: 0 15px 0 33px;
+  padding: 0 15px 0 35px;
   background: $theme-invert-hover-bg url(../img/icons/search.svg) no-repeat left 12px center;
   background-size: 12px;
   border-radius: $border-radius;
@@ -114,6 +114,8 @@
   flex: 1 1 auto;
   overflow: hidden;
   height: 100%;
+  position: relative;
+  margin-bottom: 5px;
 }
 
 .buckets__inner {
@@ -131,7 +133,7 @@
   color: $buckets-item-color;
   border-radius: $border-radius;
   background-image: $bucket-item-icon;
-  background-position: left 10px center;
+  background-position: left 10px top 11px;
   background-repeat: no-repeat;
   transition: background-color 300ms, opacity 300ms;
 

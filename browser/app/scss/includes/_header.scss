@@ -3,8 +3,9 @@
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  margin-bottom: 15px;
-  padding: 0 0 0 5px;
+  margin-bottom: 12px;
+  padding: 5px;
+  transition: opacity 300ms;
 
   @include media-breakpoint-down(xs) {
     padding: 10px 15px;
@@ -31,9 +32,14 @@
 .sidebar-toggle {
   @include icon($sidebar-toggle-icon);
   flex-shrink: 0;
-  margin-right: 12px;
+  margin-right: 10px;
 
   @include media-breakpoint-up(md) {
     display: none;
   }
+}
+
+.sign-out {
+  @include icon($sign-out-icon);
+  margin-left: auto;
 }

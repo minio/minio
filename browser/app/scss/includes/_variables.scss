@@ -21,16 +21,16 @@ $amber: #ffc721;
 $theme-invert-bg: #263238;
 $theme-invert-hover-bg: #1f2b31;
 $theme-invert-active-bg: #2f3e46;
-$theme-invert-text-color: #b9cdd6;
-$theme-invert-text-hover-color: #e5edf1;
+$theme-invert-text-color: #e5edf1;
+$theme-invert-text-hover-color: $white;
 $theme-invert-text-active-color: $theme-invert-text-hover-color;
 $theme-invert-text-muted-color: #859eab;
 
-$theme-grey-bg: #f4f7f9;
-$theme-hover-bg: $theme-grey-bg;
+$theme-grey-bg: #edf5fb;
+$theme-hover-bg: lighten($theme-grey-bg, 1.5%);
 $theme-active-bg: #e4f2f9;
 $theme-text-muted-color: #88a2ad;
-$theme-border-color: #e8eef1;
+$theme-border-color: #edf5fb;
 
 
 // Fonts
@@ -65,6 +65,7 @@ $guest-login-bg: $red;
 $guest-login-hover-bg: darken($red, 10%);
 $sidebar-toggle-icon: url(../img/icons/menu.svg);
 $logo-color: $theme-invert-text-active-color;
+$sign-out-icon: url(../img/icons/sign-out.svg);
 
 
 // Sidebar
@@ -76,6 +77,7 @@ $sidebar-bottom-color: $theme-invert-text-muted-color;
 $sidebar-bottom-bg: $theme-invert-hover-bg;
 $storage-bg: $theme-invert-active-bg;
 $storage-fill-bg: $white;
+$sidebar-close-icon: url(../img/icons/close-dark.svg);
 
 
 // Buckets
@@ -84,19 +86,19 @@ $buckets-item-active-color: $theme-invert-text-active-color;
 $buckets-item-hover-bg: $theme-invert-hover-bg;
 $buckets-item-active-bg: $theme-invert-active-bg;
 $bucket-actions-bg: lighten($theme-invert-active-bg, 3%);
-
-
 $bucket-item-icon: url(../img/icons/bucket.svg);
 $bucket-item-active-icon: url(../img/icons/bucket-active.svg);
 $buckets-dropdown-item-color: $theme-invert-text-color;
 $buckets-dropdown-item-hover-color: $theme-invert-text-hover-color;
-
 $bucket-search-border-color: #dee6ea;
+
 
 // Path
 $path-item-hover-bg: $theme-hover-bg;
-$path-seperator-icon: url(../img/icons/chevron-right.svg);
+$path-seperator-icon: url(../img/icons/path-seperator.svg);
 $path-back-icon: url(../img/icons/path-previous.svg);
+$path-home-icon: url(../img/icons/home.svg);
+$path-home-bg: $theme-grey-bg;
 
 
 // Icons
@@ -110,17 +112,8 @@ $objects-icon-bg: $icon-bg;
 $objects-icon-border-color: $theme-border-color;
 $objects-header-border-color: $theme-border-color;
 $objects-icon-size: 37px;
-$objects-row-mobile-border-color: $objects-row-checked-bg;
+$objects-row-mobile-border-color: $theme-grey-bg;
 $objects-row-min-height: 57px;
-
-
-// Settings
-$settings-menu-bg: $theme-invert-bg;
-$settings-panel-bg: darken($settings-menu-bg, 5%);
-$settings-z-index: 100;
-$settings-backdrop-z-index: $settings-z-index - 1;
-$settings-menu-expand-width: 500px;
-$settings-toggle-icon: url(../img/icons/options.svg);
 
 
 // Add new
@@ -141,6 +134,7 @@ $button-font-size: $font-size-base - 1;
 $button-height: 36px;
 $button-dark-color: $theme-invert-text-color;
 
+
 // About
 $about-title-color: $theme-invert-text-color;
 $about-value-color: $theme-invert-text-muted-color;
@@ -152,9 +146,8 @@ $form-input-font-size: $font-size-base - 1;
 $form-input-color: $body-color;
 $form-input-label-color: $headings-color;
 $form-placeholder-color: #81a0af;
-$form-input-bg: $theme-grey-bg;
+$form-input-bg: #f3f8fb;
 $form-input-focus-border-color: #dfe9ef;
-
 $form-input-dark-color: $theme-invert-text-color;
 $form-input-dark-label-color: $theme-invert-text-muted-color;
 $form-input-dark-bg: #27333a;
@@ -178,13 +171,13 @@ $alert-close-icon: url(../img/icons/close.svg);
 
 // Modal
 $modal-z-index: $alert-z-index - 1;
-$modal-bg: rgba($black, 0.1);
+$modal-bg: rgba($theme-invert-bg, 0.1);
 $modal-content-bg: $white;
 $modal-width: 500px;
 $modal-title-color: $theme-invert-bg;
 $modal-sub-title-color: $theme-text-muted-color;
 $modal-dialog-width: 300px;
-$modal-close-icon: url(../img/icons/close.svg);
+$modal-close-icon: url(../img/icons/close-dark.svg);
 $modal-close-hover-bg: $theme-hover-bg;
 
 
@@ -194,7 +187,7 @@ $select-group-item-checked-bg: $blue;
 
 
 // Policy
-$policy-item-bg: $theme-grey-bg;
+$policy-item-bg: $form-input-bg;
 $policy-close-icon: $modal-close-icon;
 
 

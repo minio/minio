@@ -91,6 +91,7 @@ $object-types:
           bottom: 0;
           @include size(calc(100% - (#{$objects-icon-size} + 15px)), 1px);
           background-color: $objects-row-mobile-border-color;
+          z-index: -1;
         }
       }
     }
@@ -102,7 +103,7 @@ $object-types:
         background-color: $objects-row-hover-bg;
 
         .objects__icon {
-          background-color: $white;
+          background-color: darken($objects-icon-bg, 2.5%);
         }
       }
     }
