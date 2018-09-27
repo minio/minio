@@ -96,50 +96,6 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 	return nil
 }
 
-// Checks for all ListObjects arguments validity.
-func checkListObjsVersionsArgs(ctx context.Context, bucket, prefix, delimiter, keyMarker string, obj ObjectLayer) error {
-	// Verify if bucket exists before validating object name.
-	// This is done on purpose since the order of errors is
-	// important here bucket does not exist error should
-	// happen before we return an error for invalid object name.
-	// FIXME: should be moved to handler layer.
-	if err := checkBucketExist(ctx, bucket, obj); err != nil {
-		return err
-	}
-	// Validates object prefix validity after bucket exists.
-	if !IsValidObjectPrefix(prefix) {
-		logger.LogIf(ctx, ObjectNameInvalid{
-			Bucket: bucket,
-			Object: prefix,
-		})
-		return ObjectNameInvalid{
-			Bucket: bucket,
-			Object: prefix,
-		}
-	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashSeparator {
-		logger.LogIf(ctx, UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-		return UnsupportedDelimiter{
-			Delimiter: delimiter,
-		}
-	}
-	// FIXME: better validation of keyMarker, compare with AWS
-	if keyMarker != "" && !hasPrefix(keyMarker, prefix) {
-		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
-			Marker: keyMarker,
-			Prefix: prefix,
-		})
-		return InvalidMarkerPrefixCombination{
-			Marker: keyMarker,
-			Prefix: prefix,
-		}
-	}
-	return nil
-}
-
 // Checks for all ListMultipartUploads arguments validity.
 func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, obj ObjectLayer) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, delimiter, obj); err != nil {

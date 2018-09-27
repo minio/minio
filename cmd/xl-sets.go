@@ -453,7 +453,7 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 
 	// validate all the inputs for listObjectsVersions
 	// NB versionIdMarker is checked further down (as it is tied to the keyMarker)
-	if err := checkListObjsVersionsArgs(ctx, bucket, prefix, delimiter, keyMarker, s); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, delimiter, s); err != nil {
 		return result, err
 	}
 
