@@ -27,6 +27,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -506,10 +507,16 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
+	var wg sync.WaitGroup
+
 	// Setting up a go routine to simulate ServerRouter's
 	// handleServiceSignals for stop and restart commands.
 	if cmd == restartCmd {
-		go testServiceSignalReceiver(cmd, t)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testServiceSignalReceiver(cmd, t)
+		}()
 	}
 	credentials := globalServerConfig.GetCredential()
 
@@ -545,6 +552,9 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
 			http.StatusOK, rec.Code, string(resp))
 	}
+
+	// Wait until testServiceSignalReceiver() called in a goroutine quits.
+	wg.Wait()
 }
 
 // Test for service status management REST API.
@@ -699,9 +709,15 @@ func TestSetConfigHandler(t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
+	var wg sync.WaitGroup
+
 	// SetConfigHandler restarts minio setup - need to start a
 	// signal receiver to receive on globalServiceSignalCh.
-	go testServiceSignalReceiver(restartCmd, t)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		testServiceSignalReceiver(restartCmd, t)
+	}()
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
@@ -762,6 +778,9 @@ func TestSetConfigHandler(t *testing.T) {
 			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
 		}
 	}
+
+	// Wait until testServiceSignalReceiver finishes its execution
+	wg.Wait()
 }
 
 func TestAdminServerInfo(t *testing.T) {
