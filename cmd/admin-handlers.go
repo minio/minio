@@ -286,9 +286,9 @@ type StartProfilingResult struct {
 	Error    string `json:"error"`
 }
 
-// StartProfilingHandler - POST /minio/admin/v1/profiling/start/{profiler}
+// StartProfilingHandler - POST /minio/admin/v1/profiling/start?profilerType={profilerType}
 // ----------
-// Enable profiling information
+// Enable server profiling
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
@@ -297,7 +297,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars["profiler"]
+	profiler := vars["profilerType"]
 
 	startProfilingResult := make([]StartProfilingResult, len(globalAdminPeers))
 
