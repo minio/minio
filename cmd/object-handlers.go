@@ -1538,6 +1538,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Set etag.
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 
+	if objInfo.VersionId != "" {
+		w.Header().Set("x-amz-version-id", objInfo.VersionId)
+	}
+
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
