@@ -319,11 +319,8 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		return err
 	}
 	go func() {
-		if err = GetObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag, opts); err != nil {
-			pipeWriter.CloseWithError(err)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
+		gerr := GetObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag, opts)
+		pipeWriter.CloseWithError(gerr) // Close writer explicitly signaling we wrote all data.
 	}()
 	err = dcache.Put(ctx, bucket, object, hashReader, c.getMetadata(objInfo), opts)
 	if err != nil {

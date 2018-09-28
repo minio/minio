@@ -738,25 +738,20 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	if srcInfo.IsCompressed() && !isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
-		var sreader io.Reader
-		var swriter io.Writer
-
 		// Open a pipe for compression.
-		// Where snappyWriter is piped to srcInfo.Reader.
-		// gr writes to snappyWriter.
-		snappyReader, snappyWriter := io.Pipe()
-		reader = snappyReader
+		// Where pipeWriter is piped to srcInfo.Reader.
+		// gr writes to pipeWriter.
+		pipeReader, pipeWriter := io.Pipe()
+		reader = pipeReader
 		length = -1
 
-		swriter = snappy.NewWriter(snappyWriter)
-		sreader = gr
+		snappyWriter := snappy.NewWriter(pipeWriter)
 
 		go func() {
-			defer snappyWriter.Close()
 			// Compress the decompressed source object.
-			if _, err = io.Copy(swriter, sreader); err != nil {
-				return
-			}
+			_, cerr := io.Copy(snappyWriter, gr)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
 		}()
 	} else {
 		// Remove the metadata for remote calls.
@@ -1102,7 +1097,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	var hashError error
 	actualSize := size
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
@@ -1113,21 +1107,21 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		pipeReader, pipeWriter := io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		var actualReader *hash.Reader
+		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
+
 		go func() {
-			defer pipeWriter.Close()
-			defer snappyWriter.Close()
 			// Writing to the compressed writer.
-			_, err = io.CopyN(snappyWriter, actualReader, actualSize)
-			if err != nil {
-				hashError = err
-				return
-			}
+			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
+
 		}()
+
 		// Set compression metrics.
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
@@ -1195,15 +1189,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
 			}
 		}
-	}
-
-	if hashError != nil {
-		if hashError == io.ErrUnexpectedEOF {
-			writeErrorResponse(w, ErrIncompleteBody, r.URL)
-		} else {
-			writeErrorResponse(w, toAPIErrorCode(hashError), r.URL)
-		}
-		return
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -1458,25 +1443,20 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	// Need to decompress only for range-enabled copy parts.
 	if srcInfo.IsCompressed() && rangeHeader != "" {
-		var sreader io.Reader
-		var swriter io.Writer
-
 		// Open a pipe for compression.
-		// Where snappyWriter is piped to srcInfo.Reader.
-		// gr writes to snappyWriter.
-		snappyReader, snappyWriter := io.Pipe()
-		reader = snappyReader
+		// Where pipeWriter is piped to srcInfo.Reader.
+		// gr writes to pipeWriter.
+		pipeReader, pipeWriter := io.Pipe()
+		reader = pipeReader
 		length = -1
 
-		swriter = snappy.NewWriter(snappyWriter)
-		sreader = gr
+		snappyWriter := snappy.NewWriter(pipeWriter)
 
 		go func() {
-			defer snappyWriter.Close()
 			// Compress the decompressed source object.
-			if _, err = io.Copy(swriter, sreader); err != nil {
-				return
-			}
+			_, cerr := io.Copy(snappyWriter, gr)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
 		}()
 	} else {
 		reader = gr
@@ -1692,21 +1672,21 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if objectAPI.IsCompressionSupported() && compressPart {
 		pipeReader, pipeWriter = io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+
+		var actualReader *hash.Reader
+		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
+
 		go func() {
-			defer pipeWriter.Close()
-			defer snappyWriter.Close()
 			// Writing to the compressed writer.
-			_, err = io.CopyN(snappyWriter, actualReader, actualSize)
-			if err != nil {
-				// The ErrorResponse is already written in putObjectPart Handle.
-				return
-			}
+			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
 		}()
+
 		// Set compression metrics.
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
