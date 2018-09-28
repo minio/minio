@@ -651,7 +651,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reader := r.Body
-	var hashError error
 	actualSize := size
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
@@ -662,21 +661,20 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		pipeReader, pipeWriter := io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
-		actualReader, err := hash.NewReader(reader, size, "", "", actualSize)
+		var actualReader *hash.Reader
+		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
+
 		go func() {
-			defer pipeWriter.Close()
-			defer snappyWriter.Close()
 			// Writing to the compressed writer.
-			_, err = io.CopyN(snappyWriter, actualReader, actualSize)
-			if err != nil {
-				hashError = err
-				return
-			}
+			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
 		}()
+
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
 		reader = pipeReader
@@ -699,11 +697,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
-		return
-	}
-
-	if hashError != nil {
-		writeWebErrorResponse(w, hashError)
 		return
 	}
 
@@ -776,18 +769,14 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	var startOffset int64
 	var writer io.Writer
-	var decompressReader *io.PipeReader
-	var compressWriter *io.PipeWriter
 	if objInfo.IsCompressed() {
-		var pipeErr error
-
 		// The decompress metrics are set.
 		snappyStartOffset := 0
 		snappyLength := actualSize
 
 		// Open a pipe for compression
 		// Where compressWriter is actually passed to the getObject
-		decompressReader, compressWriter = io.Pipe()
+		decompressReader, compressWriter := io.Pipe()
 		snappyReader := snappy.NewReader(decompressReader)
 
 		// The limit is set to the actual size.
@@ -795,13 +784,13 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1) //For closures.
 		go func() {
 			defer wg.Done()
+
 			// Finally, writes to the client.
-			if _, pipeErr = io.Copy(responseWriter, snappyReader); pipeErr != nil {
-				return
-			}
+			_, perr := io.Copy(responseWriter, snappyReader)
+
 			// Close the compressWriter if the data is read already.
 			// Closing the pipe, releases the writer passed to the getObject.
-			compressWriter.Close()
+			compressWriter.CloseWithError(perr)
 		}()
 		writer = compressWriter
 	} else {
@@ -906,8 +895,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	opts := ObjectOptions{}
 	var length int64
 	for _, object := range args.Objects {
-		var decompressReader *io.PipeReader
-		var compressWriter *io.PipeWriter
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
 			info, err := getObjectInfo(context.Background(), args.BucketName, objectName, opts)
@@ -947,15 +934,13 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			var writer io.Writer
 
 			if info.IsCompressed() {
-				var pipeErr error
-
 				// The decompress metrics are set.
 				snappyStartOffset := 0
 				snappyLength := actualSize
 
 				// Open a pipe for compression
 				// Where compressWriter is actually passed to the getObject
-				decompressReader, compressWriter = io.Pipe()
+				decompressReader, compressWriter := io.Pipe()
 				snappyReader := snappy.NewReader(decompressReader)
 
 				// The limit is set to the actual size.
@@ -964,12 +949,11 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				go func() {
 					defer wg.Done()
 					// Finally, writes to the client.
-					if _, pipeErr = io.Copy(responseWriter, snappyReader); pipeErr != nil {
-						return
-					}
+					_, perr := io.Copy(responseWriter, snappyReader)
+
 					// Close the compressWriter if the data is read already.
 					// Closing the pipe, releases the writer passed to the getObject.
-					compressWriter.Close()
+					compressWriter.CloseWithError(perr)
 				}()
 				writer = compressWriter
 			} else {
