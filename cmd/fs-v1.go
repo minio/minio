@@ -662,7 +662,10 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 	buf := make([]byte, int(bufSize))
 
 	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
-	logger.LogIf(ctx, err)
+	// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
+	if err == io.ErrClosedPipe {
+		err = nil
+	}
 	return toObjectErr(err, bucket, object)
 }
 
@@ -882,7 +885,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, errInvalidArgument
 	}
@@ -1323,5 +1326,10 @@ func (fs *FSObjects) IsNotificationSupported() bool {
 
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (fs *FSObjects) IsEncryptionSupported() bool {
+	return true
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (fs *FSObjects) IsCompressionSupported() bool {
 	return true
 }

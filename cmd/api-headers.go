@@ -104,7 +104,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		if err != nil {
 			return err
 		}
-
+	case objInfo.IsCompressed():
+		totalObjectSize = objInfo.GetActualSize()
+		if totalObjectSize < 0 {
+			return errInvalidDecompressedSize
+		}
 	default:
 		totalObjectSize = objInfo.Size
 	}

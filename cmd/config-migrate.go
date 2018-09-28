@@ -2387,6 +2387,7 @@ func migrateV27ToV28() error {
 
 	// config V28 is backward compatible with V27, load the old
 	// config file in serverConfigV28 struct and initialize KMSConfig
+
 	srvConfig := &serverConfigV28{}
 	_, err := quick.LoadConfig(configFile, globalEtcdClient, srvConfig)
 	if os.IsNotExist(err) {
@@ -2409,12 +2410,40 @@ func migrateV27ToV28() error {
 	return nil
 }
 
-// Migrates '.minio.sys/config.json' v27 to v28.
+// Migrates '.minio.sys/config.json' to v30.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	if err := migrateV27ToV28MinioSys(objAPI); err != nil {
 		return err
 	}
-	return migrateV28ToV29MinioSys(objAPI)
+	if err := migrateV28ToV29MinioSys(objAPI); err != nil {
+		return err
+	}
+	return migrateV29ToV30MinioSys(objAPI)
+}
+
+func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	srvConfig, err := readServerConfig(context.Background(), objAPI)
+	if err == errConfigNotFound {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config file. %v", err)
+	}
+	if srvConfig.Version != "29" {
+		return nil
+	}
+
+	srvConfig.Version = "30"
+	// Init compression config.For future migration, Compression config needs to be copied over from previous version.
+	srvConfig.Compression.Enabled = false
+	srvConfig.Compression.Extensions = globalCompressExtensions
+	srvConfig.Compression.MimeTypes = globalCompressMimeTypes
+	if err = saveServerConfig(context.Background(), objAPI, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from  29  to  30 . %v", err)
+	}
+
+	logger.Info(configMigrateMSGTemplate, configFile, "29", "30")
+	return nil
 }
 
 func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
@@ -2431,7 +2460,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 
 	srvConfig.Version = "29"
 	if err = saveServerConfig(context.Background(), objAPI, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
+		return fmt.Errorf("Failed to migrate config from â28â to â29â. %v", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "28", "29")
@@ -2453,7 +2482,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	srvConfig.Version = "28"
 	srvConfig.KMS = crypto.KMSConfig{}
 	if err = saveServerConfig(context.Background(), objAPI, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
+		return fmt.Errorf("Failed to migrate config from â27â to â28â. %v", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")

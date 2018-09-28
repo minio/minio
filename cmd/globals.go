@@ -227,6 +227,23 @@ var (
 	globalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
+
+	// Is compression include extensions/content-types set.
+	globalIsEnvCompression bool
+
+	// Is compression enabeld.
+	globalIsCompressionEnabled = false
+
+	// Include-list for compression.
+	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json"}
+	globalCompressMimeTypes  = []string{"text/csv", "text/plain", "application/json"}
+
+	// Some standard object extensions which we strictly dis-allow for compression.
+	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z"}
+
+	// Some standard content-types which we strictly dis-allow for compression.
+	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
+
 	// Add new variable global values here.
 )
 
