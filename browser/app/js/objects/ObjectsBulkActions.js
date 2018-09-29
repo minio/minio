@@ -29,11 +29,6 @@ import {
   SHARE_OBJECT_EXPIRY_MINUTES
 } from "../constants"
 
-import iconDelete from "../../img/icons/trash.svg"
-import iconShare from "../../img/icons/share.svg"
-import iconDownload from "../../img/icons/download.svg"
-import iconClose from "../../img/icons/close.svg"
-
 export class ObjectsBulkActions extends React.Component {
   constructor(props) {
     super(props)
@@ -42,12 +37,7 @@ export class ObjectsBulkActions extends React.Component {
     }
   }
   handleDownload() {
-    const {
-      checkedObjects,
-      clearChecked,
-      downloadChecked,
-      downloadObject
-    } = this.props
+    const { checkedObjects, downloadChecked, downloadObject } = this.props
     if (checkedObjects.length === 1 && !checkedObjects[0].endsWith("/")) {
       downloadObject(checkedObjects[0])
     } else {
@@ -112,6 +102,16 @@ export class ObjectsBulkActions extends React.Component {
       )
     }
 
+    let downloadLabel
+
+    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith("/")) {
+      downloadLabel = "Download Object"
+    } else if (checkedObjects.length === 1 && checkedObjects[0].endsWith("/")) {
+      downloadLabel = "Download as zip"
+    } else {
+      downloadLabel = "Download all as zip"
+    }
+
     return (
       <React.Fragment>
         <div
@@ -140,9 +140,7 @@ export class ObjectsBulkActions extends React.Component {
             disabled={!checkedObjectsCount}
           >
             {icons.download}
-            <span>
-              Download {checkedObjects.length > 1 ? " all as zip" : " object"}
-            </span>
+            <span>{downloadLabel}</span>
           </button>
           {loggedIn &&
             checkedObjectsCount == 1 && (
