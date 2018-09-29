@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -521,6 +522,9 @@ func (h *healSequence) traverseAndHeal() {
 	// Start with format healing
 	checkErr(h.healDiskFormat)
 
+	// Start healing the config.
+	checkErr(h.healConfig)
+
 	// Heal buckets and objects
 	checkErr(h.healBuckets)
 
@@ -529,6 +533,29 @@ func (h *healSequence) traverseAndHeal() {
 	}
 
 	close(h.traverseAndHealDoneCh)
+}
+
+// healConfig - heals config.json, retrun value indicates if a failure occurred.
+func (h *healSequence) healConfig() error {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	configBackupFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
+	for _, cfg := range []string{configFile, configBackupFile} {
+		res, err := objectAPI.HealObject(h.ctx, minioMetaBucket, cfg, h.settings.DryRun)
+		if err != nil {
+			return err
+		}
+		res.Type = madmin.HealItemBucketMetadata
+		if err = h.pushHealResultItem(res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // healDiskFormat - heals format.json, return value indicates if a
