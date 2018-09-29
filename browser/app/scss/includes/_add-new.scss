@@ -4,6 +4,7 @@
   right: 20px;
   display: flex;
   align-items: center;
+  z-index: $add-new-z-index;
 }
 
 .add-new__toggle,
@@ -68,6 +69,8 @@
 }
 
 .add-new--active {
+  z-index: $add-new-z-index;
+
   .add-new__toggle {
     transform: scale(0.85);
 

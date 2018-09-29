@@ -1,0 +1,21 @@
+.backdrop {
+  position: fixed;
+  @include size(100%, 100%);
+  left: 0;
+  top: 0;
+  cursor: pointer;
+}
+
+.backdrop--add-new {
+  z-index: $add-new-z-index - 1;
+}
+
+.backdrop--sidebar {
+  @include media-breakpoint-up(md) {
+    display: none;
+  }
+
+  @include media-breakpoint-down(sm) {
+    z-index: $sidebar-backdrop-z-index;
+  }
+}

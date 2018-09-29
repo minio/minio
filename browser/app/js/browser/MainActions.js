@@ -21,7 +21,6 @@ import classNames from "classnames"
 import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
 import { getPrefixWritable } from "../objects/selectors"
-import ClickOutHandler from "react-onclickout"
 import MakeBucketModal from "../buckets/MakeBucketModal"
 import ReactTooltip from "react-tooltip"
 
@@ -75,7 +74,7 @@ export class MainActions extends React.Component {
 
     if (loggedIn || prefixWritable) {
       return (
-        <ClickOutHandler onClickOut={this.closeMakeBucket.bind(this)}>
+        <React.Fragment>
           <div
             className={classNames({
               "add-new": true,
@@ -127,7 +126,13 @@ export class MainActions extends React.Component {
               />
             )}
           </div>
-        </ClickOutHandler>
+          {this.state.addNewActive && (
+            <div
+              className="backdrop backdrop--add-new"
+              onClick={this.closeMakeBucket.bind(this)}
+            />
+          )}
+        </React.Fragment>
       )
     } else {
       return <noscript />

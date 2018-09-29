@@ -284,20 +284,3 @@
     display: none;
   }
 }
-
-
-// Backdrop
-.sidebar__backdrop {
-  @include media-breakpoint-up(md) {
-    display: none;
-  }
-
-  @include media-breakpoint-down(sm) {
-    @include size(100%, 100%);
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: $sidebar-backdrop-z-index;
-    cursor: pointer;
-  }
-}

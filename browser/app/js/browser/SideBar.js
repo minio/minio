@@ -63,7 +63,7 @@ export class SideBar extends React.Component {
         </aside>
 
         {sidebarOpen && (
-          <div className="sidebar__backdrop" onClick={closeSidebar} />
+          <div className="backdrop backdrop--sidebar" onClick={closeSidebar} />
         )}
       </React.Fragment>
     )
