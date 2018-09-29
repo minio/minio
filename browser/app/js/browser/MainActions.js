@@ -23,6 +23,7 @@ import * as uploadsActions from "../uploads/actions"
 import { getPrefixWritable } from "../objects/selectors"
 import ClickOutHandler from "react-onclickout"
 import MakeBucketModal from "../buckets/MakeBucketModal"
+import ReactTooltip from "react-tooltip"
 
 export class MainActions extends React.Component {
   constructor(props) {
@@ -90,6 +91,8 @@ export class MainActions extends React.Component {
             <label
               htmlFor="add-new-upload"
               className="add-new__item add-new__item--upload"
+              data-tip="Upload Objects"
+              data-for="tooltip-main-actions"
             >
               <input
                 type="file"
@@ -102,6 +105,8 @@ export class MainActions extends React.Component {
               <div
                 id="show-make-bucket"
                 className="add-new__item add-new__item--bucket"
+                data-tip="Create New Bucket"
+                data-for="tooltip-main-actions"
                 onClick={
                   this.state.makeBucketActive
                     ? undefined
@@ -112,6 +117,15 @@ export class MainActions extends React.Component {
               </div>
             )}
             <div />
+
+            {!this.state.makeBucketActive && (
+              <ReactTooltip
+                id="tooltip-main-actions"
+                effect="solid"
+                place="left"
+                className="tooltip"
+              />
+            )}
           </div>
         </ClickOutHandler>
       )

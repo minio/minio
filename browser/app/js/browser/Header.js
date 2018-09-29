@@ -21,6 +21,7 @@ import { minioBrowserPrefix } from "../constants"
 import { connect } from "react-redux"
 import * as actionsCommon from "./actions"
 import history from "../history"
+import ReactTooltip from 'react-tooltip'
 
 export class Header extends React.Component {
   logout(e) {
@@ -39,7 +40,20 @@ export class Header extends React.Component {
         <Path />
 
         {loggedIn ? (
-          <a onClick={this.logout} className="sign-out" />
+          <React.Fragment>
+            <a
+              data-tip="Sign Out"
+              data-for="tooltip-sign-out"
+              onClick={this.logout}
+              className="sign-out"
+            />
+            <ReactTooltip
+              id="tooltip-sign-out"
+              effect="solid"
+              place="left"
+              className="tooltip"
+            />
+          </React.Fragment>
         ) : (
           <a className="guest-login" href={minioBrowserPrefix + "/login"}>
             Login

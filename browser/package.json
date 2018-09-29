@@ -79,6 +79,7 @@
     "react-onclickout": "^2.0.8",
     "react-redux": "^5.0.6",
     "react-router-dom": "^4.2.0",
+    "react-tooltip": "^3.8.4",
     "redux": "^3.7.2",
     "redux-mock-store": "^1.5.1",
     "redux-thunk": "^2.2.0",

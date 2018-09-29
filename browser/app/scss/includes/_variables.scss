@@ -207,3 +207,9 @@ $login-text-color: $theme-invert-text-muted-color;
 $progress-bg: rgba($white, 0.1);
 $progress-bar-height: 2px;
 $progress-bar-bg: $white;
+
+
+// Tooltip
+$tooltip-bg: $theme-invert-bg;
+$tooltip-color: $theme-invert-text-color;
+$tooltip-arrow-size: 6px;

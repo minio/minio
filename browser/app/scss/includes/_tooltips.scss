@@ -1,0 +1,37 @@
+.tooltip {
+  &.__react_component_tooltip {
+    border-radius: $border-radius;
+    background-color: $tooltip-bg;
+    color: $tooltip-color;
+    font-size: $font-size-sm;
+    padding: 8px 12px;
+
+    &:after {
+      border-width: 6px;
+    }
+
+    &.place-bottom:after {
+      border-bottom-color: $tooltip-bg;
+      margin-left: -6px;
+    }
+
+    &.place-top:after {
+      border-top-color: $tooltip-bg;
+      margin-left: -6px;
+    }
+
+    &.place-left:after {
+      border-left-color: $tooltip-bg;
+      margin-top: -6px;
+    }
+
+    &.place-right:after {
+      border-right-color: $tooltip-bg;
+      margin-top: -6px;
+    }
+
+    &.show {
+      opacity: 1;
+    }
+  }
+}

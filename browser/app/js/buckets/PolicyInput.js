@@ -21,6 +21,7 @@ import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
+import ReactTooltip from "react-tooltip"
 
 export class PolicyInput extends React.Component {
   constructor(props) {
@@ -92,7 +93,11 @@ export class PolicyInput extends React.Component {
           <div className="policy__label">Permission</div>
 
           <div className="select-group">
-            <div className="select-group__item">
+            <div
+              className="select-group__item"
+              data-tip="Read Only"
+              data-for="tooltip-permission"
+            >
               <input
                 type="radio"
                 name="policy-permission"
@@ -104,7 +109,11 @@ export class PolicyInput extends React.Component {
               <i>R</i>
             </div>
 
-            <div className="select-group__item">
+            <div
+              className="select-group__item"
+              data-tip="Write Only"
+              data-for="tooltip-permission"
+            >
               <input
                 type="radio"
                 name="policy-permission"
@@ -115,7 +124,11 @@ export class PolicyInput extends React.Component {
               <i>W</i>
             </div>
 
-            <div className="select-group__item">
+            <div
+              className="select-group__item"
+              data-tip="Read and Write"
+              data-for="tooltip-permission"
+            >
               <input
                 type="radio"
                 name="policy-permission"
@@ -126,6 +139,13 @@ export class PolicyInput extends React.Component {
               <i>RW</i>
             </div>
           </div>
+
+          <ReactTooltip
+            id="tooltip-permission"
+            effect="solid"
+            place="bottom"
+            className="tooltip"
+          />
         </div>
 
         <button
