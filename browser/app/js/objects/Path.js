@@ -35,14 +35,13 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
         let dirPath_ = dirPath.join("/") + "/"
         return (
           <div
+            key={i}
             className={classNames({
               path__item: true,
               "path__item--active": currentPrefix === dirPath_
             })}
           >
-            <span key={i} onClick={e => onPrefixClick(e, dirPath_)}>
-              {dir}
-            </span>
+            <span onClick={e => onPrefixClick(e, dirPath_)}>{dir}</span>
             <i className="path__separator" />
           </div>
         )
