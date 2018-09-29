@@ -205,6 +205,10 @@ func healBucketMetadata(xl xlObjects, bucket string, dryRun bool) (
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		result, healErr := xl.HealObject(ctx, minioMetaBucket, metaPath, dryRun)
+		// If object is not found, skip the file.
+		if isErrObjectNotFound(healErr) {
+			return nil
+		}
 		if healErr != nil {
 			return healErr
 		}
@@ -604,13 +608,6 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 // and later the disk comes back up again, heal on the object
 // should delete it.
 func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
-	defer func() {
-		// If object is not found, ignore the error.
-		if isErrObjectNotFound(err) {
-			err = nil
-		}
-	}()
-
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)
