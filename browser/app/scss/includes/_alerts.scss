@@ -8,13 +8,13 @@
   transition: opacity 300ms, transform 300ms, background-color 300ms;
   min-height: $alert-min-height;
 
-  @include media-breakpoint-up(sm) {
-    max-width: $alert-max-width;
-  }
-
   &:not(.alert--progress) {
-    border-radius: $border-radius;
+    @include media-breakpoint-up(sm) {
+      max-width: $alert-max-width;
+    }
+
     box-shadow: $alert-box-shadow;
+    border-radius: $border-radius;
     right: 20px;
     top: 20px;
   }
@@ -64,7 +64,8 @@
 }
 
 .alert--progress {
-  left: 0;
+  right: 0;
   bottom: 0;
   background-color: $alert-progress-bg;
+  width: 100%;
 }

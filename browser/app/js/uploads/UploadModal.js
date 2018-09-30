@@ -24,9 +24,6 @@ import AbortConfirmModal from "./AbortConfirmModal"
 export class UploadModal extends React.Component {
   render() {
     const { uploads, showAbort, showAbortModal } = this.props
-    if (showAbort) {
-      return <AbortConfirmModal />
-    }
 
     // If we don't have any files uploading, don't show anything.
     let numberUploading = Object.keys(uploads).length
@@ -59,18 +56,22 @@ export class UploadModal extends React.Component {
       "..."
 
     return (
-      <div className="alert alert--progress">
-        <i className="alert__close" onClick={showAbortModal} />
+      <React.Fragment>
+        <div className="alert alert--progress">
+          <i className="alert__close" onClick={showAbortModal} />
 
-        {text}
-        <div className="progress">
-          <i className="progress__bar" style={progressBarStyle} />
+          {text}
+          <div className="progress">
+            <i className="progress__bar" style={progressBarStyle} />
+          </div>
+
+          <div className="alert__sub">
+            {humanize.filesize(totalLoaded)} ({percent.toFixed(2)} %)
+          </div>
         </div>
 
-        <div className="alert__sub">
-          {humanize.filesize(totalLoaded)} ({percent.toFixed(2)} %)
-        </div>
-      </div>
+        <AbortConfirmModal showAbort={showAbort} />
+      </React.Fragment>
     )
   }
 }
