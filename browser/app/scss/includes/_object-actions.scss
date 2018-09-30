@@ -3,9 +3,6 @@
   padding: 8px;
   position: absolute;
   top: 0;
-  transform: translate3d(0, -101%, 0);
-  opacity: 0;
-  pointer-events: none;
   z-index: $header-z-index + 1;
   will-change: opacity, transform;
   transition: opacity 250ms, transform 250ms;
@@ -19,6 +16,28 @@
   @include media-breakpoint-down(xs) {
     left: 0;
     width: 100%;
+  }
+
+  &--enter {
+    transform: translate3d(0, -101%, 0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &--enter-done {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    pointer-events: auto;
+
+    & + .header {
+      opacity: 0;
+    }
+  }
+
+  &--exit {
+    transform: translate3d(0, -101%, 0);
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
@@ -56,16 +75,6 @@
     @include media-breakpoint-down(xs) {
       display: none;
     }
-  }
-}
-
-.object-actions--active {
-  transform: translate3d(0, 0, 0);
-  opacity: 1;
-  pointer-events: auto;
-
-  & + .header {
-    opacity: 0;
   }
 }
 

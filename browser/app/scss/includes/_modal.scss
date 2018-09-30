@@ -8,11 +8,27 @@
   z-index: $modal-z-index;
   background-color: $modal-bg;
   overflow: auto;
+  transition: opacity 300ms, transform 300ms;
 
   &:not(.modal--dialog) {
     .modal__content {
       max-width: $modal-width;
     }
+  }
+
+  &--enter {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+
+  &--enter-done {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  &--exit {
+    opacity: 0;
+    transform: scale(1.25);
   }
 }
 

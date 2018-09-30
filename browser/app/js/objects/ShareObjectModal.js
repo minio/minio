@@ -19,6 +19,7 @@ import { connect } from "react-redux"
 import CopyToClipboard from "react-copy-to-clipboard"
 import * as objectsActions from "./actions"
 import * as alertActions from "../alert/actions"
+import Modal from "../components/Modal"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
@@ -87,115 +88,113 @@ export class ShareObjectModal extends React.Component {
   }
 
   render() {
-    const { shareObjectDetails, shareObject, hideShareObject } = this.props
+    const { shareObjectDetails, hideShareObject, showShareObject } = this.props
     return (
-      <div className="modal">
-        <div className="modal__content">
-          <div className="form-item">
-            <label className="form-item__label">Shareable Link</label>
-            <input
-              type="text"
-              className="form-item__input"
-              ref={node => (this.copyTextInput = node)}
-              readOnly="readOnly"
-              value={window.location.protocol + "//" + shareObjectDetails.url}
-              onClick={() => this.copyTextInput.select()}
-            />
-          </div>
+      <Modal modalShow={showShareObject} modalClose={hideShareObject}>
+        <div className="form-item">
+          <label className="form-item__label">Shareable Link</label>
+          <input
+            type="text"
+            className="form-item__input"
+            ref={node => (this.copyTextInput = node)}
+            readOnly="readOnly"
+            value={window.location.protocol + "//" + shareObjectDetails.url}
+            onClick={() => this.copyTextInput.select()}
+          />
+        </div>
 
-          <div className="form-item">
-            <label className="form-item__label">Expires in (Max 7 days)</label>
-            <div className="set-expire">
-              <div className="set-expire__item">
-                <i
-                  id="increase-days"
-                  className="set-expire__handle set-expire__handle--inc"
-                  onClick={() => this.updateExpireValue("days", 1)}
-                />
-                <div className="set-expire__title">Days</div>
-                <div className="set-expire__value">
-                  <input
-                    ref="expireDays"
-                    type="number"
-                    min={0}
-                    max={7}
-                    value={this.state.expiry.days}
-                    readOnly="readOnly"
-                  />
-                </div>
-                <i
-                  id="decrease-days"
-                  className="set-expire__handle set-expire__handle--dec"
-                  onClick={() => this.updateExpireValue("days", -1)}
+        <div className="form-item">
+          <label className="form-item__label">Expires in (Max 7 days)</label>
+          <div className="set-expire">
+            <div className="set-expire__item">
+              <i
+                id="increase-days"
+                className="set-expire__handle set-expire__handle--inc"
+                onClick={() => this.updateExpireValue("days", 1)}
+              />
+              <div className="set-expire__title">Days</div>
+              <div className="set-expire__value">
+                <input
+                  ref="expireDays"
+                  type="number"
+                  min={0}
+                  max={7}
+                  value={this.state.expiry.days}
+                  readOnly="readOnly"
                 />
               </div>
-              <div className="set-expire__item">
-                <i
-                  id="increase-hours"
-                  className="set-expire__handle set-expire__handle--inc"
-                  onClick={() => this.updateExpireValue("hours", 1)}
-                />
-                <div className="set-expire__title">Hours</div>
-                <div className="set-expire__value">
-                  <input
-                    ref="expireHours"
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={this.state.expiry.hours}
-                    readOnly="readOnly"
-                  />
-                </div>
-                <i
-                  className="set-expire__handle set-expire__handle--dec"
-                  id="decrease-hours"
-                  onClick={() => this.updateExpireValue("hours", -1)}
-                />
-              </div>
-              <div className="set-expire__item">
-                <i
-                  id="increase-minutes"
-                  className="set-expire__handle set-expire__handle--inc"
-                  onClick={() => this.updateExpireValue("minutes", 1)}
-                />
-                <div className="set-expire__title">Minutes</div>
-                <div className="set-expire__value">
-                  <input
-                    ref="expireMins"
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={this.state.expiry.minutes}
-                    readOnly="readOnly"
-                  />
-                </div>
-                <i
-                  id="decrease-minutes"
-                  className="set-expire__handle set-expire__handle--dec"
-                  onClick={() => this.updateExpireValue("minutes", -1)}
+              <i
+                id="decrease-days"
+                className="set-expire__handle set-expire__handle--dec"
+                onClick={() => this.updateExpireValue("days", -1)}
+              />
+            </div>
+            <div className="set-expire__item">
+              <i
+                id="increase-hours"
+                className="set-expire__handle set-expire__handle--inc"
+                onClick={() => this.updateExpireValue("hours", 1)}
+              />
+              <div className="set-expire__title">Hours</div>
+              <div className="set-expire__value">
+                <input
+                  ref="expireHours"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={this.state.expiry.hours}
+                  readOnly="readOnly"
                 />
               </div>
+              <i
+                className="set-expire__handle set-expire__handle--dec"
+                id="decrease-hours"
+                onClick={() => this.updateExpireValue("hours", -1)}
+              />
+            </div>
+            <div className="set-expire__item">
+              <i
+                id="increase-minutes"
+                className="set-expire__handle set-expire__handle--inc"
+                onClick={() => this.updateExpireValue("minutes", 1)}
+              />
+              <div className="set-expire__title">Minutes</div>
+              <div className="set-expire__value">
+                <input
+                  ref="expireMins"
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={this.state.expiry.minutes}
+                  readOnly="readOnly"
+                />
+              </div>
+              <i
+                id="decrease-minutes"
+                className="set-expire__handle set-expire__handle--dec"
+                onClick={() => this.updateExpireValue("minutes", -1)}
+              />
             </div>
           </div>
-
-          <div className="modal__actions">
-            <button className="button button--light" onClick={hideShareObject}>
-              Cancel
-            </button>
-            <CopyToClipboard
-              text={window.location.protocol + "//" + shareObjectDetails.url}
-              onCopy={this.onUrlCopied.bind(this)}
-            >
-              <button className="button button--success">Copy Link</button>
-            </CopyToClipboard>
-          </div>
         </div>
-      </div>
+
+        <div className="modal__actions">
+          <button className="button button--light" onClick={hideShareObject}>
+            Cancel
+          </button>
+          <CopyToClipboard
+            text={window.location.protocol + "//" + shareObjectDetails.url}
+            onCopy={this.onUrlCopied.bind(this)}
+          >
+            <button className="button button--success">Copy Link</button>
+          </CopyToClipboard>
+        </div>
+      </Modal>
     )
   }
 }
 
-const mapStateToProps = (state, ownProps) => {
+const mapStateToProps = state => {
   return {
     shareObjectDetails: state.objects.shareObject
   }

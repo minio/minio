@@ -80,6 +80,7 @@
     "react-redux": "^5.0.6",
     "react-router-dom": "^4.2.0",
     "react-tooltip": "^3.8.4",
+    "react-transition-group": "^2.5.0",
     "redux": "^3.7.2",
     "redux-mock-store": "^1.5.1",
     "redux-thunk": "^2.2.0",

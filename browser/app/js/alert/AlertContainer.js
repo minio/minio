@@ -20,9 +20,6 @@ import Alert from "./Alert"
 import * as alertActions from "./actions"
 
 export const AlertContainer = ({ alert, clearAlert }) => {
-  if (!alert.message) {
-    return ""
-  }
   return <Alert {...alert} onDismiss={clearAlert} />
 }
 

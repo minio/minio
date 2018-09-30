@@ -19,6 +19,7 @@ import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import PolicyInput from "./PolicyInput"
 import Policy from "./Policy"
+import Modal from "../components/Modal"
 
 export const BucketPolicyModal = ({
   showBucketPolicy,
@@ -27,35 +28,27 @@ export const BucketPolicyModal = ({
   policies
 }) => {
   return (
-    <React.Fragment>
-      {showBucketPolicy && (
-        <div className="modal">
-          <div className="modal__content">
-            <i className="modal__close" onClick={hideBucketPolicy} />
-            <div className="modal__title">Bucket Policy</div>
-            <div className="modal__sub-title">{currentBucket}</div>
+    <Modal
+      modalShow={showBucketPolicy}
+      showClose={true}
+      modalClose={hideBucketPolicy}
+      modalTitle="Bucket Policy"
+      modalSubtitle={currentBucket}
+    >
+      <div className="policy">
+        <PolicyInput bucket={currentBucket} />
 
-            <div className="policy">
-              <PolicyInput bucket={currentBucket} />
+        <div className="policy__body">
+          {policies.length > 0 && (
+            <div className="policy__label">Available Policies</div>
+          )}
 
-              <div className="policy__body">
-                {policies.length > 0 && (
-                  <div className="policy__label">Available Policies</div>
-                )}
-
-                {policies.map((policy, i) => (
-                  <Policy
-                    key={i}
-                    prefix={policy.prefix}
-                    policy={policy.policy}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+          {policies.map((policy, i) => (
+            <Policy key={i} prefix={policy.prefix} policy={policy.policy} />
+          ))}
         </div>
-      )}
-    </React.Fragment>
+      </div>
+    </Modal>
   )
 }
 

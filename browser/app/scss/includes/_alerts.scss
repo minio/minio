@@ -4,7 +4,9 @@
   color: $white;
   padding: 18px 35px 18px 20px;
   z-index: $alert-z-index;
-  width: calc(100% - 20px);
+  width: calc(100% - 40px);
+  transition: opacity 300ms, transform 300ms, background-color 300ms;
+  min-height: $alert-min-height;
 
   @include media-breakpoint-up(sm) {
     max-width: $alert-max-width;
@@ -13,8 +15,23 @@
   &:not(.alert--progress) {
     border-radius: $border-radius;
     box-shadow: $alert-box-shadow;
-    right: 10px;
-    top: 10px;
+    right: 20px;
+    top: 20px;
+  }
+
+  &--enter {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+
+  &--enter-done {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  &--exit {
+    opacity: 0;
+    transform: translate3d(0, -30px, 0);
   }
 }
 
@@ -25,13 +42,13 @@
 
 
 .alert__close {
-  @include size(25px, 25px);
+  @include size(23px, 23px);
   background: $alert-close-icon no-repeat center;
   cursor: pointer;
   margin-left: auto;
   transition: background-color 300ms;
   position: absolute;
-  top: 13px;
+  top: 14px;
   right: 15px;
   border-radius: 50%;
 

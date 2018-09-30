@@ -16,17 +16,41 @@
 
 import React from "react"
 import classNames from "classnames"
+import { CSSTransition } from "react-transition-group"
 
-const Alert = ({ show, type, message, onDismiss }) => (
-  <div
-    className={classNames({
-      alert: true,
-      [`alert--${type}`]: true
-    })}
-  >
-    <div className="alert__message">{message}</div>
-    <i className="alert__close" onClick={onDismiss} />
-  </div>
-)
+export class Alert extends React.Component {
+  render() {
+    const { show, type, message, onDismiss } = this.props
+    const AlertProps = {
+      unmountOnExit: true,
+      timeout: {
+        enter: 10,
+        exit: 300
+      },
+      classNames: {
+        enter: "alert--enter",
+        enterDone: "alert--enter-done",
+        exit: "alert--exit",
+        exitDone: "alert--exit-done"
+      }
+    }
+
+    return (
+      <CSSTransition in={show} {...AlertProps}>
+        {state => (
+          <div
+            className={classNames({
+              alert: true,
+              [`alert--${type}`]: true
+            })}
+          >
+            <div className="alert__message">{message}</div>
+            <i className="alert__close" onClick={onDismiss} />
+          </div>
+        )}
+      </CSSTransition>
+    )
+  }
+}
 
 export default Alert

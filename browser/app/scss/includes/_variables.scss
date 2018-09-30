@@ -163,6 +163,7 @@ $alert-variants: (
   warning: $amber
 );
 $alert-max-width: 500px;
+$alert-min-height: 52px;
 $alert-box-shadow: 0 5px 10px rgba($black, 0.1);
 $alert-z-index: 10000;
 $alert-progress-bg: $theme-invert-bg;
