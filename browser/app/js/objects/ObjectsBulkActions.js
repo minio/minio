@@ -105,12 +105,12 @@ export class ObjectsBulkActions extends React.Component {
     }
 
     let downloadLabel
-    if (checkedObjects.length === 1 && !checkedObjects[0].endsWith("/")) {
-      downloadLabel = "Download Object"
-    } else if (checkedObjects.length === 1 && checkedObjects[0].endsWith("/")) {
+    if (checkedObjects.length === 1 && checkedObjects[0].endsWith("/")) {
       downloadLabel = "Download as zip"
-    } else {
+    } else if (checkedObjectsCount > 1) {
       downloadLabel = "Download all as zip"
+    } else {
+      downloadLabel = "Download Object"
     }
 
     const actionsProps = {
