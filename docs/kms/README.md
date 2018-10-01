@@ -14,7 +14,7 @@ Vault as Key Management System requires following to be configured in Vault
 - AppRole based authentication with read/update policy for transit backend. In particular, read and update policy
   are required for the generate data key endpoint and decrypt key endpoint.
 
-### Environment variables
+### 3. Environment variables
 
 You'll need the Vault endpoint, AppRole ID, AppRole SecretID, encryption key-ring name before starting Minio server with Vault as KMS
 
@@ -24,6 +24,11 @@ export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
 export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
 export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
 minio server ~/export
+```
+
+Optionally set `MINIO_SSE_VAULT_CAPATH` is the path to a directory of PEM-encoded CA cert files to verify the Vault server SSL certificate.
+```
+export MINIO_SSE_VAULT_CAPATH=/home/user/custom-pems
 ```
 
 ### 4. Test your setup
