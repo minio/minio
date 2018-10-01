@@ -129,7 +129,7 @@ $button-variants: (
   success: #32c787,
   warning: #FF9800,
   light: $theme-grey-bg,
-  dark: #1c2429
+  dark: $theme-invert-bg
 );
 $button-font-size: $font-size-base - 1;
 $button-height: 36px;
@@ -202,6 +202,7 @@ $login-bg: $theme-grey-bg;
 $login-inner-bg: $white;
 $login-inner-max-width: 1100px;
 $login-inner-max-height: 550px;
+$login-text-bg: $theme-invert-bg;
 $login-text-color: $theme-invert-text-muted-color;
 
 

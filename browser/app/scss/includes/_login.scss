@@ -49,7 +49,7 @@
 
 .login__texts {
   @include media-breakpoint-up(sm) {
-    background-color: $theme-invert-bg;
+    background-color: $login-text-bg;
     padding: 0 50px;
     display: flex;
     flex-direction: column;
