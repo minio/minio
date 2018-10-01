@@ -969,8 +969,8 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) (v
 }
 
 // DeleteObjectVersion - not implemented for FS
-func (fs *FSObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
-	return NotImplemented{}
+func (fs *FSObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (deleteMarker bool, err error) {
+	return false, NotImplemented{}
 }
 
 // Returns function "listDir" of the type listDirFunc.

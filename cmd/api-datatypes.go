@@ -31,6 +31,14 @@ type ObjectIdentifier struct {
 	VersionId  string `xml:"VersionId,omitempty"`
 }
 
+// ObjectIdentifierDeleted carries information for the object that is deleted.
+type ObjectIdentifierDeleted struct {
+	ObjectName            string `xml:"Key"`
+	VersionId             string `xml:"VersionId,omitempty"`
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
+	DeleteMarkerVersionId string `xml:"DeleteMarkerVersionId,omitempty"`
+}
+
 // createBucketConfiguration container for bucket configuration request from client.
 // Used for parsing the location from the request body for MakeBucketbucket.
 type createBucketLocationConfiguration struct {

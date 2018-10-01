@@ -1081,7 +1081,7 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (ve
 // deleteObjectVersioned - wrapper for delete object, deletes an object from
 // all the disks in parallel, including `xl.json` associated with the
 // object.
-func (xl xlObjects) deleteObjectVersioned(ctx context.Context, bucket, object, version string) (versionId string, err error) {
+func (xl xlObjects) deleteObjectVersioned(ctx context.Context, bucket, object, version string) (err error) {
 
 	// WriteQuorum is defaulted to N/2 + 1 for directories
 	writeQuorum := len(xl.getDisks())/2 + 1
@@ -1108,36 +1108,38 @@ func (xl xlObjects) deleteObjectVersioned(ctx context.Context, bucket, object, v
 // DeleteObjectVersion - deletes a specific version of an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
-func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (err error) {
+func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (deleteMarker bool, err error) {
 
 	// Acquire a write lock before deleting the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if perr := objectLock.GetLock(globalOperationTimeout); perr != nil {
-		return perr
+		return false, perr
 	}
 	defer objectLock.Unlock()
 
-	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
-		return err
+	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
+		return false, err
 	} else if version == "" {
-		return toObjectErr(errInvalidArgument, bucket, object)
+		return false, toObjectErr(errInvalidArgument, bucket, object)
 	} else if !globalVersioningSys.IsEnabled(bucket) {
-		return toObjectErr(errInvalidVersionId, bucket, object)
+		return false, toObjectErr(errInvalidVersionId, bucket, object)
 	}
 
 	xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
 	if vErr != nil {
-		return vErr
+		return false, vErr
 	}
 
 	// Find index for this version
 	idx, found := xlVersioning.FindVersion(version)
 	if !found {
-		return toObjectErr(errInvalidVersionId)
-	} else if !xlVersioning.ObjectVersions[idx].DeleteMarker {
+		return false, toObjectErr(errInvalidVersionId)
+	}
+	deleteMarker = xlVersioning.ObjectVersions[idx].DeleteMarker
+	if !deleteMarker {
 		// Delete the actual version of this object from all disks
-		if _, err = xl.deleteObjectVersioned(ctx, bucket, object, version); err != nil {
-			return toObjectErr(err, bucket, object)
+		if err = xl.deleteObjectVersioned(ctx, bucket, object, version); err != nil {
+			return deleteMarker, toObjectErr(err, bucket, object)
 		}
 	}
 
@@ -1153,11 +1155,13 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	} else {
 		// Delete the complete contents of this object from all disks
 		if err = xl.deleteObjectAcrossDisks(ctx, bucket, object, len(xl.getDisks())/2+1); err != nil {
-			return toObjectErr(err, bucket, object)
+			err = toObjectErr(err, bucket, object)
+			return deleteMarker, err
 		}
 	}
 
-	return nil
+	err = nil
+	return deleteMarker, err
 }
 
 func (xl xlObjects) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (result ListObjectsVersionsInfo, err error) {

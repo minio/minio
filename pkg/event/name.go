@@ -37,6 +37,7 @@ const (
 	ObjectCreatedPut
 	ObjectRemovedAll
 	ObjectRemovedDelete
+	ObjectRemovedVersion
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -47,7 +48,7 @@ func (name Name) Expand() []Name {
 	case ObjectCreatedAll:
 		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut}
 	case ObjectRemovedAll:
-		return []Name{ObjectRemovedDelete}
+		return []Name{ObjectRemovedDelete, ObjectRemovedVersion}
 	default:
 		return []Name{name}
 	}
@@ -76,6 +77,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:*"
 	case ObjectRemovedDelete:
 		return "s3:ObjectRemoved:Delete"
+	case ObjectRemovedVersion:
+		return "s3:ObjectRemoved:Version"
 	}
 
 	return ""
@@ -146,6 +149,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedAll, nil
 	case "s3:ObjectRemoved:Delete":
 		return ObjectRemovedDelete, nil
+	case "s3:ObjectRemoved:Version":
+		return ObjectRemovedVersion, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

@@ -233,13 +233,13 @@ func isETagEqual(left, right string) bool {
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request) (versionId string, err error) {
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request) (newVersionId string, err error) {
 	deleteObject := obj.DeleteObject
-	if cache != nil {
+	if !globalVersioningSys.IsEnabled(bucket) && cache != nil {
 		deleteObject = cache.DeleteObject
 	}
 	// Proceed to delete the object.
-	versionId, err = deleteObject(ctx, bucket, object);
+	newVersionId, err = deleteObject(ctx, bucket, object)
 	if err != nil {
 		return
 	}
@@ -252,7 +252,8 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		EventName:  event.ObjectRemovedDelete,
 		BucketName: bucket,
 		Object: ObjectInfo{
-			Name: object,
+			Name:      object,
+			VersionId: newVersionId,
 		},
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
@@ -260,28 +261,29 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		Port:      port,
 	})
 
-	return versionId, nil
+	return newVersionId, nil
 }
 
 // deleteObjectVersion is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObjectVersion(ctx context.Context, obj ObjectLayer, bucket, object, version string, r *http.Request) (err error) {
+func deleteObjectVersion(ctx context.Context, obj ObjectLayer, bucket, object, version string, r *http.Request) (deleteMarker bool, err error) {
 
-	err = obj.DeleteObjectVersion(ctx, bucket, object, version);
+	deleteMarker, err = obj.DeleteObjectVersion(ctx, bucket, object, version)
 	if err != nil {
 		return
 	}
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, _ := net.SplitHostPort(handlers.GetSourceIP(r))
-
-	// Notify object deleted event.
+	
+	// Notify removed version of object event (either a real version or a Delete Marker).
 	sendEvent(eventArgs{
-		EventName:  event.ObjectRemovedDelete,
+		EventName:  event.ObjectRemovedVersion,
 		BucketName: bucket,
 		Object: ObjectInfo{
-			Name: object,
+			Name:      object,
+			VersionId: version,
 		},
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),

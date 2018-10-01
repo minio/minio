@@ -467,6 +467,10 @@ func (args eventArgs) ToEvent() event.Event {
 	creds := globalServerConfig.GetCredential()
 	eventTime := UTCNow()
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
+	versionId := ""
+	if args.Object.VersionId != "" {
+		versionId = args.Object.VersionId
+	}
 
 	newEvent := event.Event{
 		EventVersion:      "2.0",
@@ -489,8 +493,8 @@ func (args eventArgs) ToEvent() event.Event {
 				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{
-				Key:       url.QueryEscape(args.Object.Name),
-				VersionID: "1",
+				Key:       url.QueryEscape(args.Object.VersionId),
+				VersionID: versionId,
 				Sequencer: uniqueID,
 			},
 		},
@@ -501,7 +505,8 @@ func (args eventArgs) ToEvent() event.Event {
 		},
 	}
 
-	if args.EventName != event.ObjectRemovedDelete {
+	if args.EventName != event.ObjectRemovedDelete &&
+		args.EventName != event.ObjectRemovedVersion {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
 		newEvent.S3.Object.ContentType = args.Object.ContentType

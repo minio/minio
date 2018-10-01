@@ -714,7 +714,7 @@ func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string)
 }
 
 // DeleteObjectVersion - deletes a specific version of an object from the hashedSet based on the object name.
-func (s *xlSets) DeleteObjectVersion(ctx context.Context, bucket string, object, version string) (err error) {
+func (s *xlSets) DeleteObjectVersion(ctx context.Context, bucket, object, version string) (deleteMarker bool, err error) {
 	return s.getHashedSet(object).DeleteObjectVersion(ctx, bucket, object, version)
 }
 
