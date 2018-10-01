@@ -21,7 +21,6 @@ import * as actionsAlert from "../alert/actions"
 import web from "../web"
 import { Redirect } from "react-router-dom"
 
-import iconSignIn from "../../img/icons/sign-in.svg"
 import loginImg from "../../img/login-img.svg"
 
 export class Login extends React.Component {
@@ -133,8 +132,10 @@ export class Login extends React.Component {
                 />
               </div>
 
-              <button className="login__btn" type="submit">
-                <img src={iconSignIn} alt="" />
+              <button
+                className="button button--dark button--block"
+                type="submit"
+              >
                 Sign In
               </button>
               <div className="login__host">{window.location.host}</div>

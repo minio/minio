@@ -14,3 +14,7 @@
     @include button-variants($bg);
   }
 }
+
+.button--block {
+  width: 100%;
+}

@@ -104,31 +104,3 @@
     max-height: 50px;
   }
 }
-
-.login__btn {
-  @include size(100%, $form-input-height);
-  border: 0;
-  border-radius: $border-radius;
-  background-color: $theme-invert-bg;
-  color: $button-dark-color;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 300ms, padding 300ms;
-
-  & > img {
-    margin: 2px 10px 0 0;
-    position: relative;
-    transition: transform 300ms;
-  }
-
-  &:hover {
-    background-color: $theme-invert-hover-bg;
-    padding-right: 50px;
-
-    & > img {
-      transform: translateX(80px);
-    }
-  }
-}
