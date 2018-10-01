@@ -621,12 +621,12 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	}
 
 	if appendFallback {
-		fsRemoveFile(ctx, file.filePath)
+		if file != nil {
+			fsRemoveFile(ctx, file.filePath)
+		}
 		for _, part := range parts {
 			partPath := getPartFile(entries, part.PartNumber, part.ETag)
-			partPath = pathJoin(uploadIDDir, partPath)
-			err = mioutil.AppendFile(appendFilePath, partPath)
-			if err != nil {
+			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partPath)); err != nil {
 				logger.LogIf(ctx, err)
 				return oi, toObjectErr(err)
 			}
