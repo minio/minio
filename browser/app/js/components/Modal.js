@@ -2,6 +2,26 @@ import React from "react"
 import { CSSTransition } from "react-transition-group"
 
 export class Modal extends React.Component {
+  constructor(props) {
+    super(props)
+
+    this.modalCloseOnEsc = this.modalCloseOnEsc.bind(this)
+  }
+
+  modalCloseOnEsc(e) {
+    const { modalClose } = this.props
+
+    if (e.keyCode === 27) {
+      modalClose()
+    }
+  }
+  onModalEnter() {
+    document.addEventListener("keydown", this.modalCloseOnEsc, false)
+  }
+  onModalExit() {
+    document.removeEventListener("keydown", this.modalCloseOnEsc, false)
+  }
+
   render() {
     const {
       className,
@@ -25,7 +45,9 @@ export class Modal extends React.Component {
         enterDone: "modal--enter-done",
         exit: "modal--exit",
         exitDone: "modal--exit-done"
-      }
+      },
+      onEntered: this.onModalEnter.bind(this),
+      onExit: this.onModalExit.bind(this)
     }
     let modalClassName = className || ""
 

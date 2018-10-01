@@ -5,6 +5,13 @@
   display: flex;
   align-items: center;
   z-index: $add-new-z-index;
+  transition: transform 400ms, opacity 300ms;
+}
+
+.add-new--hidden {
+  transform: translate3d(0, 50px, 0);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .add-new__toggle,

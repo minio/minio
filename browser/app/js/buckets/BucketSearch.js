@@ -18,16 +18,50 @@ import React from "react"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 
-export const BucketSearch = ({ onChange }) => (
-  <div className="bucket-search">
-    <input
-      className="bucket-search__text"
-      type="text"
-      onChange={e => onChange(e.target.value)}
-      placeholder="Search Buckets..."
-    />
-  </div>
-)
+export class BucketSearch extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      searchValue: ""
+    }
+  }
+
+  clearSearch(e) {
+    if (e.keyCode === 27) {
+      const { onChange } = this.props
+      onChange("")
+      this.setState({
+        searchValue: ""
+      })
+    }
+  }
+
+  searchOnChange(e) {
+    const { onChange } = this.props
+    this.setState({
+      searchValue: e.target.value
+    })
+    onChange(e.target.value)
+  }
+
+  render() {
+    return (
+      <div
+        className="bucket-search"
+        tabIndex="0"
+        onKeyDown={this.clearSearch.bind(this)}
+      >
+        <input
+          className="bucket-search__text"
+          type="text"
+          onChange={this.searchOnChange.bind(this)}
+          placeholder="Search Buckets..."
+          value={this.state.searchValue}
+        />
+      </div>
+    )
+  }
+}
 
 const mapDispatchToProps = dispatch => {
   return {

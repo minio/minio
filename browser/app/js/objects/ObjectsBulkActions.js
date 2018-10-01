@@ -34,9 +34,9 @@ export class ObjectsBulkActions extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showDeleteConfirmation: false,
-      showActions: false
+      showDeleteConfirmation: false
     }
+    this.clearSelected = this.clearSelected.bind(this)
   }
   handleDownload() {
     const { checkedObjects, downloadChecked, downloadObject } = this.props
@@ -69,6 +69,22 @@ export class ObjectsBulkActions extends React.Component {
       SHARE_OBJECT_EXPIRY_HOURS,
       SHARE_OBJECT_EXPIRY_MINUTES
     )
+  }
+
+  clearSelected(e) {
+    const { clearChecked, showShareObjectModal } = this.props
+
+    if (!this.state.showDeleteConfirmation && !showShareObjectModal) {
+      if (e.keyCode === 27) {
+        clearChecked()
+      }
+    }
+  }
+  onActionsEnter() {
+    document.addEventListener("keydown", this.clearSelected, false)
+  }
+  onActionsExit() {
+    document.removeEventListener("keydown", this.clearSelected, false)
   }
 
   render() {
@@ -125,7 +141,9 @@ export class ObjectsBulkActions extends React.Component {
         enterDone: "object-actions--enter-done",
         exit: "object-actions--exit",
         exitDone: "object-actions--exit-done"
-      }
+      },
+      onEntered: this.onActionsEnter.bind(this),
+      onExit: this.onActionsExit.bind(this)
     }
 
     return (

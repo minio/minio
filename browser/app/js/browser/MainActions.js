@@ -20,7 +20,7 @@ import web from "../web"
 import classNames from "classnames"
 import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
-import { getPrefixWritable } from "../objects/selectors"
+import { getPrefixWritable, getCheckedList } from "../objects/selectors"
 import MakeBucketModal from "../buckets/MakeBucketModal"
 import ReactTooltip from "react-tooltip"
 
@@ -68,8 +68,24 @@ export class MainActions extends React.Component {
     this.makeBucket.clearBucketName()
   }
 
+  closeMakeBucketOnEscape(e) {
+    if (this.state.addNewActive) {
+      if (e.keyCode === 27) {
+        this.closeMakeBucket()
+      }
+    }
+  }
+
+  componentDidMount() {
+    document.addEventListener(
+      "keydown",
+      this.closeMakeBucketOnEscape.bind(this),
+      false
+    )
+  }
+
   render() {
-    const { prefixWritable, uploadFile } = this.props
+    const { prefixWritable, uploadFile, checkedObjectsCount } = this.props
     const loggedIn = web.LoggedIn()
 
     if (loggedIn || prefixWritable) {
@@ -79,7 +95,8 @@ export class MainActions extends React.Component {
             className={classNames({
               "add-new": true,
               "add-new--active": this.state.addNewActive,
-              "add-new--bucket": this.state.makeBucketActive
+              "add-new--bucket": this.state.makeBucketActive,
+              "add-new--hidden": checkedObjectsCount > 0
             })}
           >
             <i
@@ -142,7 +159,8 @@ export class MainActions extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    prefixWritable: getPrefixWritable(state)
+    prefixWritable: getPrefixWritable(state),
+    checkedObjectsCount: getCheckedList(state).length
   }
 }
 
