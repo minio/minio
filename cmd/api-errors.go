@@ -1424,6 +1424,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	switch err {
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
+	case errInvalidRange:
+		apiErr = ErrInvalidRange
 	case errDataTooLarge:
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
