@@ -674,13 +674,8 @@ func (fs *FSObjects) createFsJSON(object, fsMetaPath string) error {
 	fsMeta := newFSMetaV1()
 	fsMeta.Meta = make(map[string]string)
 	fsMeta.Meta["etag"] = GenETag()
-	if objectExt := path.Ext(object); objectExt != "" {
-		if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-			fsMeta.Meta["content-type"] = content.ContentType
-		} else {
-			fsMeta.Meta["content-type"] = "application/octet-stream"
-		}
-	}
+	contentType := mimedb.TypeByExtension(path.Ext(object))
+	fsMeta.Meta["content-type"] = contentType
 	wlk, werr := fs.rwPool.Create(fsMetaPath)
 	if werr == nil {
 		_, err := fsMeta.WriteTo(wlk)
@@ -695,13 +690,8 @@ func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 	fsMeta := newFSMetaV1()
 	fsMeta.Meta = make(map[string]string)
 	fsMeta.Meta["etag"] = defaultEtag
-	if objectExt := path.Ext(object); objectExt != "" {
-		if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-			fsMeta.Meta["content-type"] = content.ContentType
-		} else {
-			fsMeta.Meta["content-type"] = "application/octet-stream"
-		}
-	}
+	contentType := mimedb.TypeByExtension(path.Ext(object))
+	fsMeta.Meta["content-type"] = contentType
 	return fsMeta
 }
 

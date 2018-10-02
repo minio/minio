@@ -198,15 +198,8 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 	// establish the writeQuorum using this data
 	writeQuorum := dataBlocks + 1
 
-	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
-		contentType := "application/octet-stream"
-		if objectExt := path.Ext(object); objectExt != "" {
-			content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
-			if ok {
-				contentType = content.ContentType
-			}
-		}
+		contentType := mimedb.TypeByExtension(path.Ext(object))
 		meta["content-type"] = contentType
 	}
 	xlMeta.Stat.ModTime = UTCNow()

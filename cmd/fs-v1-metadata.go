@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"os"
 	pathutil "path"
-	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
@@ -137,11 +136,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 
 	// Guess content-type from the extension if possible.
 	if m.Meta["content-type"] == "" {
-		if objectExt := pathutil.Ext(object); objectExt != "" {
-			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-				m.Meta["content-type"] = content.ContentType
-			}
-		}
+		m.Meta["content-type"] = mimedb.TypeByExtension(pathutil.Ext(object))
 	}
 
 	if hasSuffix(object, slashSeparator) {

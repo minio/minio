@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
@@ -785,11 +784,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
-		if objectExt := path.Ext(object); objectExt != "" {
-			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-				metadata["content-type"] = content.ContentType
-			}
-		}
+		metadata["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	if xl.isObject(bucket, object) {
