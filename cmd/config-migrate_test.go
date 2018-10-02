@@ -318,7 +318,6 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err := migrateV26ToV27(); err == nil {
 		t.Fatal("migrateConfigV26ToV27() should fail with a corrupted json")
 	}
-
 	if err := migrateV27ToV28(); err == nil {
 		t.Fatal("migrateConfigV27ToV28() should fail with a corrupted json")
 	}

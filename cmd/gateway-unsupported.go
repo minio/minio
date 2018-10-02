@@ -151,3 +151,8 @@ func (a GatewayUnsupported) IsNotificationSupported() bool {
 func (a GatewayUnsupported) IsEncryptionSupported() bool {
 	return false
 }
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (a GatewayUnsupported) IsCompressionSupported() bool {
+	return false
+}

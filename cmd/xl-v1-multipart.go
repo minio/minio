@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -269,20 +270,6 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 		return pi, err
 	}
 
-	go func() {
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
-			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				logger.LogIf(ctx, gerr)
-			}
-			return
-		}
-		// Close writer explicitly signaling we wrote all data.
-		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			logger.LogIf(ctx, gerr)
-			return
-		}
-	}()
-
 	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
@@ -303,7 +290,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return pi, toObjectErr(errInvalidArgument)
 	}
@@ -362,7 +349,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
-	if data.Size() > 0 {
+	if data.Size() > 0 || data.Size() == -1 {
 		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); err != nil {
 			return pi, toObjectErr(pErr, bucket, object)
 
@@ -379,12 +366,12 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size == -1 || size > blockSizeV1:
+		buffer = xl.bp.Get()
+		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size)
-	default:
-		buffer = xl.bp.Get()
-		defer xl.bp.Put(buffer)
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -456,7 +443,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	md5hex := hex.EncodeToString(data.MD5Current())
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n)
+	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, data.ActualSize())
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -491,6 +478,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		LastModified: fi.ModTime,
 		ETag:         md5hex,
 		Size:         fi.Size,
+		ActualSize:   data.ActualSize(),
 	}, nil
 }
 
@@ -644,6 +632,9 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	// Calculate full object size.
 	var objectSize int64
 
+	// Calculate consolidated actual size.
+	var objectActualSize int64
+
 	// Pick one from the first valid metadata.
 	xlMeta, err := pickValidXLMeta(ctx, partsMetadata, modTime, writeQuorum)
 	if err != nil {
@@ -687,15 +678,15 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		}
 
 		// All parts except the last part has to be atleast 5MB.
-		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
+		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].ActualSize) {
 			logger.LogIf(ctx, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentXLMeta.Parts[partIdx].Size,
+				PartSize:   currentXLMeta.Parts[partIdx].ActualSize,
 				PartETag:   part.ETag,
 			})
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentXLMeta.Parts[partIdx].Size,
+				PartSize:   currentXLMeta.Parts[partIdx].ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
@@ -710,12 +701,16 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		// Save for total object size.
 		objectSize += currentXLMeta.Parts[partIdx].Size
 
+		// Save the consolidated actual size.
+		objectActualSize += currentXLMeta.Parts[partIdx].ActualSize
+
 		// Add incoming parts.
 		xlMeta.Parts[i] = objectPartInfo{
-			Number: part.PartNumber,
-			ETag:   part.ETag,
-			Size:   currentXLMeta.Parts[partIdx].Size,
-			Name:   fmt.Sprintf("part.%d", part.PartNumber),
+			Number:     part.PartNumber,
+			ETag:       part.ETag,
+			Size:       currentXLMeta.Parts[partIdx].Size,
+			Name:       fmt.Sprintf("part.%d", part.PartNumber),
+			ActualSize: currentXLMeta.Parts[partIdx].ActualSize,
 		}
 	}
 
@@ -725,6 +720,9 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["etag"] = s3MD5
+
+	// Save the consolidated actual size.
+	xlMeta.Meta[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
 
 	tempUploadIDPath := uploadID
 

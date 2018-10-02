@@ -29,9 +29,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
@@ -648,7 +650,37 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashReader, err := hash.NewReader(r.Body, size, "", "")
+	reader := r.Body
+	actualSize := size
+
+	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+		// Storing the compression metadata.
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
+
+		pipeReader, pipeWriter := io.Pipe()
+		snappyWriter := snappy.NewWriter(pipeWriter)
+
+		var actualReader *hash.Reader
+		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		if err != nil {
+			writeWebErrorResponse(w, err)
+			return
+		}
+
+		go func() {
+			// Writing to the compressed writer.
+			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
+		}()
+
+		// Set compression metrics.
+		size = -1 // Since compressed size is un-predictable.
+		reader = pipeReader
+	}
+
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -679,6 +711,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 // Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -703,22 +736,28 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	opts := ObjectOptions{}
+	getObjectInfo := objectAPI.GetObjectInfo
 	getObject := objectAPI.GetObject
 	if web.CacheAPI() != nil {
-		getObject = web.CacheAPI().GetObject
-	}
-	getObjectInfo := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
+		getObject = web.CacheAPI().GetObject
 	}
 	objInfo, err := getObjectInfo(context.Background(), bucket, object, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-
 	length := objInfo.Size
+	var actualSize int64
+	if objInfo.IsCompressed() {
+		// Read the decompressed size from the meta.json.
+		actualSize = objInfo.GetActualSize()
+		if actualSize < 0 {
+			return
+		}
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
 			writeWebErrorResponse(w, err)
@@ -730,7 +769,33 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	var startOffset int64
 	var writer io.Writer
-	writer = w
+	if objInfo.IsCompressed() {
+		// The decompress metrics are set.
+		snappyStartOffset := 0
+		snappyLength := actualSize
+
+		// Open a pipe for compression
+		// Where compressWriter is actually passed to the getObject
+		decompressReader, compressWriter := io.Pipe()
+		snappyReader := snappy.NewReader(decompressReader)
+
+		// The limit is set to the actual size.
+		responseWriter := ioutil.LimitedWriter(w, int64(snappyStartOffset), snappyLength)
+		wg.Add(1) //For closures.
+		go func() {
+			defer wg.Done()
+
+			// Finally, writes to the client.
+			_, perr := io.Copy(responseWriter, snappyReader)
+
+			// Close the compressWriter if the data is read already.
+			// Closing the pipe, releases the writer passed to the getObject.
+			compressWriter.CloseWithError(perr)
+		}()
+		writer = compressWriter
+	} else {
+		writer = w
+	}
 	if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(objInfo.UserDefined) {
 		// Response writer should be limited early on for decryption upto required length,
 		// additionally also skipping mod(offset)64KiB boundaries.
@@ -743,12 +808,17 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
+
 	httpWriter := ioutil.WriteOnClose(writer)
 
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
 	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, "", opts); err != nil {
+		httpWriter.Close()
+		if objInfo.IsCompressed() {
+			wg.Wait()
+		}
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -757,6 +827,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			writeWebErrorResponse(w, err)
 			return
 		}
+	}
+	if objInfo.IsCompressed() {
+		// Wait for decompression go-routine to retire.
+		wg.Wait()
 	}
 }
 
@@ -771,6 +845,7 @@ type DownloadZipArgs struct {
 
 // Takes a list of objects and creates a zip file that sent as the response body.
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -818,6 +893,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 	}
 	opts := ObjectOptions{}
+	var length int64
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
@@ -825,7 +901,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			length := info.Size
+			length = info.Size
 			if objectAPI.IsEncryptionSupported() {
 				if _, err = DecryptObjectInfo(info, r.Header); err != nil {
 					writeWebErrorResponse(w, err)
@@ -835,20 +911,54 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 					length, _ = info.DecryptedSize()
 				}
 			}
+			length = info.Size
+			var actualSize int64
+			if info.IsCompressed() {
+				// Read the decompressed size from the meta.json.
+				actualSize = info.GetActualSize()
+				// Set the info.Size to the actualSize.
+				info.Size = actualSize
+			}
 			header := &zip.FileHeader{
 				Name:               strings.TrimPrefix(objectName, args.Prefix),
 				Method:             zip.Deflate,
 				UncompressedSize64: uint64(length),
 				UncompressedSize:   uint32(length),
 			}
-			wr, err := archive.CreateHeader(header)
+			zipWriter, err := archive.CreateHeader(header)
 			if err != nil {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
 			var startOffset int64
 			var writer io.Writer
-			writer = wr
+
+			if info.IsCompressed() {
+				// The decompress metrics are set.
+				snappyStartOffset := 0
+				snappyLength := actualSize
+
+				// Open a pipe for compression
+				// Where compressWriter is actually passed to the getObject
+				decompressReader, compressWriter := io.Pipe()
+				snappyReader := snappy.NewReader(decompressReader)
+
+				// The limit is set to the actual size.
+				responseWriter := ioutil.LimitedWriter(zipWriter, int64(snappyStartOffset), snappyLength)
+				wg.Add(1) //For closures.
+				go func() {
+					defer wg.Done()
+					// Finally, writes to the client.
+					_, perr := io.Copy(responseWriter, snappyReader)
+
+					// Close the compressWriter if the data is read already.
+					// Closing the pipe, releases the writer passed to the getObject.
+					compressWriter.CloseWithError(perr)
+				}()
+				writer = compressWriter
+			} else {
+				writer = zipWriter
+			}
 			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {
 				// Response writer should be limited early on for decryption upto required length,
 				// additionally also skipping mod(offset)64KiB boundaries.
@@ -861,6 +971,11 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
 			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
+				httpWriter.Close()
+				if info.IsCompressed() {
+					// Wait for decompression go-routine to retire.
+					wg.Wait()
+				}
 				return err
 			}
 			if err = httpWriter.Close(); err != nil {
@@ -868,6 +983,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 					writeWebErrorResponse(w, err)
 					return err
 				}
+			}
+			if info.IsCompressed() {
+				// Wait for decompression go-routine to retire.
+				wg.Wait()
 			}
 			return nil
 		}

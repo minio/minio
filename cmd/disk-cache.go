@@ -58,7 +58,7 @@ type cacheObjects struct {
 	// file path patterns to exclude from cache
 	exclude []string
 	// Object functions pointing to the corresponding functions of backend implementation.
-	GetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error)
+	GetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectFn               func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -90,7 +90,7 @@ type CacheObjectLayer interface {
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string) error
 	// Object operations.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -183,9 +183,9 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 	return metadata
 }
 
-func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
+func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h)
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 
 	if c.isCacheExclude(bucket, object) || !bkReader.ObjInfo.IsCacheable() {
 		return bkReader, bkErr
@@ -210,7 +210,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return bkReader, bkErr
 	}
 
-	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h); cacheErr == nil {
+	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts); cacheErr == nil {
 		if backendDown {
 			// If the backend is down, serve the request from cache.
 			return cacheReader, nil
@@ -244,7 +244,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
-	hashReader, herr := hash.NewReader(pipeReader, bkReader.ObjInfo.Size, "", "")
+	hashReader, herr := hash.NewReader(pipeReader, bkReader.ObjInfo.Size, "", "", bkReader.ObjInfo.Size)
 	if herr != nil {
 		bkReader.Close()
 		return nil, herr
@@ -314,16 +314,13 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 	}
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, objInfo.Size, "", "")
+	hashReader, err := hash.NewReader(pipeReader, objInfo.Size, "", "", objInfo.Size)
 	if err != nil {
 		return err
 	}
 	go func() {
-		if err = GetObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag, opts); err != nil {
-			pipeWriter.CloseWithError(err)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
+		gerr := GetObjectFn(ctx, bucket, object, 0, objInfo.Size, io.MultiWriter(writer, pipeWriter), etag, opts)
+		pipeWriter.CloseWithError(gerr) // Close writer explicitly signaling we wrote all data.
 	}()
 	err = dcache.Put(ctx, bucket, object, hashReader, c.getMetadata(objInfo), opts)
 	if err != nil {
@@ -671,13 +668,13 @@ func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r *h
 	objInfo = ObjectInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, r.MD5HexString(), r.SHA256HexString())
+	hashReader, err := hash.NewReader(pipeReader, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, r.MD5HexString(), r.SHA256HexString())
+	cHashReader, err := hash.NewReader(rPipe, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -764,13 +761,13 @@ func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadI
 	info = PartInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, data.MD5HexString(), data.SHA256HexString())
+	hashReader, err := hash.NewReader(pipeReader, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
 	if err != nil {
 		return
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, data.MD5HexString(), data.SHA256HexString())
+	cHashReader, err := hash.NewReader(rPipe, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
 	if err != nil {
 		return
 	}

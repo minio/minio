@@ -75,6 +75,9 @@ build: checks
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
+docker: build
+	@docker build -t $(TAG) . -f Dockerfile.dev
+
 pkg-add:
 	@echo "Adding new package $(PKG)"
 	@${GOPATH}/bin/govendor add $(PKG)

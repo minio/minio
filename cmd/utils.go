@@ -226,6 +226,10 @@ func startProfiler(profilerType, dirPath string) (interface {
 		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
 	case "block":
 		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "mutex":
+		profiler = profile.Start(profile.MutexProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+	case "trace":
+		profiler = profile.Start(profile.TraceProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
 	default:
 		return nil, errors.New("profiler type unknown")
 	}

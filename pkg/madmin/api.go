@@ -176,7 +176,7 @@ func (c *AdminClient) TraceOff() {
 type requestData struct {
 	customHeaders http.Header
 	queryValues   url.Values
-	relPath       string // Url path relative to admin API base endpoint
+	relPath       string // URL path relative to admin API base endpoint
 	content       []byte
 }
 

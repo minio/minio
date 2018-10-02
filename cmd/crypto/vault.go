@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	// VaultEndpointEnv Vault endpoint environment variable
-	VaultEndpointEnv = "MINIO_SSE_VAULT_ENDPOINT"
+	// vaultEndpointEnv Vault endpoint environment variable
+	vaultEndpointEnv = "MINIO_SSE_VAULT_ENDPOINT"
 	// vaultAuthTypeEnv type of vault auth to be used
 	vaultAuthTypeEnv = "MINIO_SSE_VAULT_AUTH_TYPE"
 	// vaultAppRoleIDEnv  Vault AppRole ID environment variable
@@ -40,6 +40,10 @@ const (
 	vaultKeyVersionEnv = "MINIO_SSE_VAULT_KEY_VERSION"
 	// vaultKeyNameEnv Vault Encryption Key Name environment variable
 	vaultKeyNameEnv = "MINIO_SSE_VAULT_KEY_NAME"
+
+	// vaultCAPath is the path to a directory of PEM-encoded CA
+	// cert files to verify the Vault server SSL certificate.
+	vaultCAPath = "MINIO_SSE_VAULT_CAPATH"
 )
 
 var (
@@ -93,7 +97,7 @@ type VaultConfig struct {
 // been set
 func validateVaultConfig(c *VaultConfig) error {
 	if c.Endpoint == "" {
-		return fmt.Errorf("Missing hashicorp vault endpoint - %s is empty", VaultEndpointEnv)
+		return fmt.Errorf("Missing hashicorp vault endpoint - %s is empty", vaultEndpointEnv)
 	}
 	if strings.ToLower(c.Auth.Type) != "approle" {
 		return fmt.Errorf("Unsupported hashicorp vault auth type - %s", vaultAuthTypeEnv)
@@ -110,7 +114,6 @@ func validateVaultConfig(c *VaultConfig) error {
 	if c.Key.Version < 0 {
 		return fmt.Errorf("Invalid value set in environment variable %s", vaultKeyVersionEnv)
 	}
-
 	return nil
 }
 
@@ -134,7 +137,7 @@ func getVaultAccessToken(client *vault.Client, appRoleID, appSecret string) (tok
 // variables and performs validations.
 func NewVaultConfig() (KMSConfig, error) {
 	kc := KMSConfig{}
-	endpoint := os.Getenv(VaultEndpointEnv)
+	endpoint := os.Getenv(vaultEndpointEnv)
 	roleID := os.Getenv(vaultAppRoleIDEnv)
 	roleSecret := os.Getenv(vaultAppSecretIDEnv)
 	keyName := os.Getenv(vaultKeyNameEnv)
@@ -177,9 +180,15 @@ func NewVaultConfig() (KMSConfig, error) {
 // and gets a client token for future api calls.
 func NewVault(kmsConf KMSConfig) (KMS, error) {
 	config := kmsConf.Vault
-	c, err := vault.NewClient(&vault.Config{
+	vconfig := &vault.Config{
 		Address: config.Endpoint,
-	})
+	}
+	if err := vconfig.ConfigureTLS(&vault.TLSConfig{
+		CAPath: os.Getenv(vaultCAPath),
+	}); err != nil {
+		return nil, err
+	}
+	c, err := vault.NewClient(vconfig)
 	if err != nil {
 		return nil, err
 	}
