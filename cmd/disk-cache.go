@@ -185,16 +185,16 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 
 func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+	objInfo, bkErr := c.GetObjectInfoFn(ctx, bucket, object, opts)
 
-	if c.isCacheExclude(bucket, object) || !bkReader.ObjInfo.IsCacheable() {
-		return bkReader, bkErr
+	if c.isCacheExclude(bucket, object) || !objInfo.IsCacheable() {
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
 	// fetch cacheFSObjects if object is currently cached or nearest available cache drive
 	dcache, err := c.cache.getCachedFSLoc(ctx, bucket, object)
 	if err != nil {
-		return bkReader, bkErr
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
 	backendDown := backendDownError(bkErr)
@@ -206,8 +206,8 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return nil, bkErr
 	}
 
-	if !backendDown && filterFromCache(bkReader.ObjInfo.UserDefined) {
-		return bkReader, bkErr
+	if !backendDown && filterFromCache(objInfo.UserDefined) {
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
 	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts); cacheErr == nil {
@@ -216,7 +216,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 			return cacheReader, nil
 		}
 
-		if cacheReader.ObjInfo.ETag == bkReader.ObjInfo.ETag && !isStaleCache(bkReader.ObjInfo) {
+		if cacheReader.ObjInfo.ETag == objInfo.ETag && !isStaleCache(objInfo) {
 			// Object is not stale, so serve from cache
 			return cacheReader, nil
 		}
@@ -230,13 +230,14 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	if rs != nil {
 		// We don't cache partial objects.
-		return bkReader, bkErr
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
-	if !dcache.diskAvailable(bkReader.ObjInfo.Size * cacheSizeMultiplier) {
+	if !dcache.diskAvailable(objInfo.Size * cacheSizeMultiplier) {
 		// cache only objects < 1/100th of disk capacity
-		return bkReader, bkErr
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	if bkErr != nil {
 		return nil, bkErr
 	}
