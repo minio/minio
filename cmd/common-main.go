@@ -161,7 +161,7 @@ func handleCommonEnvVars() {
 
 	globalDomainName, globalIsEnvDomainName = os.LookupEnv("MINIO_DOMAIN")
 	if globalDomainName != "" {
-		if _, ok := dns2.IsDomainName(globalDomainName); !ok {
+		if _, ok = dns2.IsDomainName(globalDomainName); !ok {
 			logger.Fatal(uiErrInvalidDomainValue(nil).Msg("Unknown value `%s`", globalDomainName), "Invalid MINIO_DOMAIN environment variable")
 		}
 	}

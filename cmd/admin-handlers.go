@@ -675,7 +675,7 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			continue
 		}
 		val := gjson.Get(configStr, key)
-		if j, err := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); err == nil {
+		if j, ierr := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); ierr == nil {
 			newConfigStr = j
 		}
 	}
