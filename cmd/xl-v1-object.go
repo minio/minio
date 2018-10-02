@@ -967,20 +967,24 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 		if globalVersioningSys.IsEnabled(bucket) {
 			// FIXME: check the quorum of all versioned objects
 			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
-			if vErr != nil || len(xlVersioning.ObjectVersions) == 0 {
-				return versionId, vErr
-			} else {
-				// Add Delete Marker to versioning info (without any corresponding sub directory)
-				versionId = xlVersioning.DeriveVersionId(object, "")
-				// Check if we need to pass along the version Id in the header (as for put object)
-				timeStamp := time.Now().UTC()
-				xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, true, timeStamp})
-				xlVersioning.ModTime = timeStamp
-				tempVersioning := mustGetUUID()
-				_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-				_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
-				return
+
+			// Ignore any errors for versioned buckets and create the version history regardless
+			if !globalVersioningSys.IsEnabled(bucket) {
+				if vErr != nil || len(xlVersioning.ObjectVersions) == 0 {
+					return versionId, vErr
+				}
 			}
+
+			// Add Delete Marker to versioning info (without any corresponding sub directory)
+			versionId = xlVersioning.DeriveVersionId(object, "")
+			// Check if we need to pass along the version Id in the header (as for put object)
+			timeStamp := time.Now().UTC()
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, true, timeStamp})
+			xlVersioning.ModTime = timeStamp
+			tempVersioning := mustGetUUID()
+			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+			return
 		}
 		// Read metadata associated with the object from all disks.
 		metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
@@ -1064,10 +1068,13 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (ve
 		}
 	}
 
-	// Validate object exists.
-	if !xl.isObject(bucket, object) {
-		return versionId, ObjectNotFound{bucket, object}
-	} // else proceed to delete the object.
+	// For versioned buckets, delete the object regardless (as per S3 spec)
+	if !globalVersioningSys.IsEnabled(bucket) {
+		// Validate object exists.
+		if !xl.isObject(bucket, object) {
+			return versionId, ObjectNotFound{bucket, object}
+		} // else proceed to delete the object.
+	}
 
 	// Delete the object on all disks.
 	if versionId, err = xl.deleteObject(ctx, bucket, object); err != nil {
