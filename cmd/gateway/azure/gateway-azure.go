@@ -616,9 +616,9 @@ func (a *azureObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = a.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = a.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -631,7 +631,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -1147,4 +1147,9 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 	container := a.client.GetContainerReference(bucket)
 	err := container.SetPermissions(perm, nil)
 	return azureToObjectError(err)
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (a *azureObjects) IsCompressionSupported() bool {
+	return false
 }

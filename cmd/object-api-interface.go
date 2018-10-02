@@ -32,6 +32,15 @@ type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 }
 
+// LockType represents required locking for ObjectLayer operations
+type LockType int
+
+const (
+	noLock LockType = iota
+	readLock
+	writeLock
+)
+
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Storage operations.
@@ -54,7 +63,7 @@ type ObjectLayer interface {
 	//
 	// IMPORTANTLY, when implementations return err != nil, this
 	// function MUST NOT return a non-nil ReadCloser.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (reader *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -87,4 +96,7 @@ type ObjectLayer interface {
 	// Supported operations check
 	IsNotificationSupported() bool
 	IsEncryptionSupported() bool
+
+	// Compression support check.
+	IsCompressionSupported() bool
 }

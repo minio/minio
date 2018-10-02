@@ -244,7 +244,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
-	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256))
+	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256), -1)
 	if err != nil {
 		return toAPIErrorCode(err)
 	}

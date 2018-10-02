@@ -328,9 +328,9 @@ func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +343,7 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -537,4 +537,9 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 		return minio.ErrorRespToObjectError(err, bucket, "")
 	}
 	return nil
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *s3Objects) IsCompressionSupported() bool {
+	return false
 }

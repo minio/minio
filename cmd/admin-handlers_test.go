@@ -27,6 +27,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "29",
+	"version": "30",
 	"credential": {
 		"accessKey": "minio",
 		"secretKey": "minio123"
@@ -185,20 +186,24 @@ var (
 				"endpoint": ""
 			}
 		}
-	    },
-	    "logger": {
+	},
+	"logger": {
 		"console": {
-		    "enabled": true
+			"enabled": true
 		},
 		"http": {
-		    "1": {
-			"enabled": false,
-			"endpoint": "http://user:example@localhost:9001/api/endpoint"
-		    }
+			"target1": {
+				"enabled": false,
+				"endpoint": "https://username:password@example.com/api"
+			}
 		}
-	    }
-
-	}`)
+	},
+	"compress": {
+		"enabled": false,
+        	"extensions":[".txt",".log",".csv",".json"],
+        	"mime-types":["text/csv","text/plain","application/json"]
+	}
+}`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
@@ -506,10 +511,16 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
+	var wg sync.WaitGroup
+
 	// Setting up a go routine to simulate ServerRouter's
 	// handleServiceSignals for stop and restart commands.
 	if cmd == restartCmd {
-		go testServiceSignalReceiver(cmd, t)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testServiceSignalReceiver(cmd, t)
+		}()
 	}
 	credentials := globalServerConfig.GetCredential()
 
@@ -545,6 +556,9 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
 			http.StatusOK, rec.Code, string(resp))
 	}
+
+	// Wait until testServiceSignalReceiver() called in a goroutine quits.
+	wg.Wait()
 }
 
 // Test for service status management REST API.
@@ -698,10 +712,6 @@ func TestSetConfigHandler(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
-
-	// SetConfigHandler restarts minio setup - need to start a
-	// signal receiver to receive on globalServiceSignalCh.
-	go testServiceSignalReceiver(restartCmd, t)
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}

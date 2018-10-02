@@ -286,9 +286,9 @@ type StartProfilingResult struct {
 	Error    string `json:"error"`
 }
 
-// StartProfilingHandler - POST /minio/admin/v1/profiling/start/{profiler}
+// StartProfilingHandler - POST /minio/admin/v1/profiling/start?profilerType={profilerType}
 // ----------
-// Enable profiling information
+// Enable server profiling
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
@@ -297,7 +297,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars["profiler"]
+	profiler := vars["profilerType"]
 
 	startProfilingResult := make([]StartProfilingResult, len(globalAdminPeers))
 
@@ -355,8 +355,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Return 200 OK
-	w.WriteHeader(http.StatusOK)
+	profilingDataFound := false
 
 	// Initialize a zip writer which will provide a zipped content
 	// of profiling data of all nodes
@@ -370,6 +369,8 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 			logger.LogIf(context.Background(), fmt.Errorf("Unable to download profiling data from node `%s`, reason: %s", peer.addr, err.Error()))
 			continue
 		}
+
+		profilingDataFound = true
 
 		// Send profiling data to zip as file
 		header, err := zip.FileInfoHeader(dummyFileInfo{
@@ -390,6 +391,11 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		if _, err = io.Copy(writer, bytes.NewBuffer(data)); err != nil {
 			return
 		}
+	}
+
+	if !profilingDataFound {
+		writeErrorResponseJSON(w, ErrAdminProfilerNotEnabled, r.URL)
+		return
 	}
 }
 
@@ -781,8 +787,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
 func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
@@ -914,8 +918,6 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
 // UpdateCredsHandler - POST /minio/admin/v1/config/credential

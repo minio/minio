@@ -519,6 +519,11 @@ func (s *xlSets) IsEncryptionSupported() bool {
 	return s.getHashedSet("").IsEncryptionSupported()
 }
 
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (s *xlSets) IsCompressionSupported() bool {
+	return s.getHashedSet("").IsCompressionSupported()
+}
+
 // DeleteBucket - deletes a bucket on all sets simultaneously,
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
@@ -580,8 +585,8 @@ func (s *xlSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err err
 // --- Object Operations ---
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header) (gr *GetObjectReader, err error) {
-	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs, h)
+func (s *xlSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	return s.getHashedSet(object).GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 }
 
 // GetObject - reads an object from the hashedSet based on the object name.
@@ -615,41 +620,13 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 	}
 
-	// Hold write lock on destination since in both cases
-	// - if source and destination are same
-	// - if source and destination are different
-	// it is the sole mutating state.
-	objectDWLock := destSet.nsMutex.NewNSLock(destBucket, destObject)
-	if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
-		return objInfo, err
-	}
-	defer objectDWLock.Unlock()
-	// if source and destination are different, we have to hold
-	// additional read lock as well to protect against writes on
-	// source.
 	if !cpSrcDstSame {
-		// Hold read locks on source object only if we are
-		// going to read data from source object.
-		objectSRLock := srcSet.nsMutex.NewNSLock(srcBucket, srcObject)
-		if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
+		objectDWLock := destSet.nsMutex.NewNSLock(destBucket, destObject)
+		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 			return objInfo, err
 		}
-		defer objectSRLock.RUnlock()
+		defer objectDWLock.Unlock()
 	}
-
-	go func() {
-		if gerr := srcSet.getObject(ctx, srcBucket, srcObject, 0, srcInfo.Size, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
-			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				logger.LogIf(ctx, gerr)
-			}
-			return
-		}
-		// Close writer explicitly signaling we wrote all data.
-		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			logger.LogIf(ctx, gerr)
-			return
-		}
-	}()
 
 	return destSet.putObject(ctx, destBucket, destObject, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
 }
@@ -846,22 +823,7 @@ func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, 
 // Copies a part of an object from source hashedSet to destination hashedSet.
 func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (partInfo PartInfo, err error) {
-
-	srcSet := s.getHashedSet(srcObject)
 	destSet := s.getHashedSet(destObject)
-
-	go func() {
-		if gerr := srcSet.GetObject(ctx, srcBucket, srcObject, startOffset, length, srcInfo.Writer, srcInfo.ETag, srcOpts); gerr != nil {
-			if gerr = srcInfo.Writer.Close(); gerr != nil {
-				logger.LogIf(ctx, gerr)
-				return
-			}
-		}
-		if gerr := srcInfo.Writer.Close(); gerr != nil {
-			logger.LogIf(ctx, gerr)
-			return
-		}
-	}()
 
 	return destSet.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, srcInfo.Reader, dstOpts)
 }

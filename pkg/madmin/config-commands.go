@@ -94,11 +94,6 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 
 // GetConfigKeys - returns partial json or json value from config.json of a minio setup.
 func (adm *AdminClient) GetConfigKeys(keys []string) ([]byte, error) {
-	// No TLS?
-	if !adm.secure {
-		// return nil, fmt.Errorf("credentials/configuration cannot be retrieved over an insecure connection")
-	}
-
 	queryVals := make(url.Values)
 	for _, k := range keys {
 		queryVals.Add(k, "")

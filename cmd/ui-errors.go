@@ -197,4 +197,10 @@ Example 1:
 		"Please contact Minio at https://slack.minio.io",
 		"",
 	)
+
+	uiErrInvalidCompressionIncludesValue = newUIErrFn(
+		"Invalid compression include value",
+		"Please check the passed value",
+		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_ATTR=\"A,B,C\"",
+	)
 )

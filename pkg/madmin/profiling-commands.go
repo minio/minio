@@ -24,20 +24,20 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 )
 
 // ProfilerType represents the profiler type
-// passed to the profiler subsystem, currently
-// it can be only "cpu", "mem" or "block"
+// passed to the profiler subsystem.
 type ProfilerType string
 
+// Different supported profiler types.
 const (
-	// ProfilerCPU represents CPU profiler type
-	ProfilerCPU = ProfilerType("cpu")
-	// ProfilerMEM represents MEM profiler type
-	ProfilerMEM = ProfilerType("mem")
-	// ProfilerBlock represents Block profiler type
-	ProfilerBlock = ProfilerType("block")
+	ProfilerCPU   ProfilerType = "cpu"   // represents CPU profiler type
+	ProfilerMEM                = "mem"   // represents MEM profiler type
+	ProfilerBlock              = "block" // represents Block profiler type
+	ProfilerMutex              = "mutex" // represents Mutex profiler type
+	ProfilerTrace              = "trace" // represents Trace profiler type
 )
 
 // StartProfilingResult holds the result of starting
@@ -51,9 +51,11 @@ type StartProfilingResult struct {
 // StartProfiling makes an admin call to remotely start profiling on a standalone
 // server or the whole cluster in  case of a distributed setup.
 func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingResult, error) {
-	path := fmt.Sprintf("/v1/profiling/start/%s", profiler)
+	v := url.Values{}
+	v.Set("profilerType", string(profiler))
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath: path,
+		relPath:     "/v1/profiling/start",
+		queryValues: v,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -92,7 +94,6 @@ func (adm *AdminClient) DownloadProfilingData() (io.ReadCloser, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		closeResponse(resp)
 		return nil, httpRespToErrorResponse(resp)
 	}
 
