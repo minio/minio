@@ -21,7 +21,7 @@ $object-types:
 
 .objects__header {
   flex: 0 0 auto;
-  margin-top: 12px;
+  margin-top: 20px;
 
   @include media-breakpoint-down(xs) {
     display: none;
@@ -69,7 +69,6 @@ $object-types:
   will-change: background-color;
   transition: background-color 300ms;
   cursor: pointer;
-  padding: 5px;
   flex-wrap: wrap;
   position: relative;
 
@@ -80,14 +79,25 @@ $object-types:
       border-radius: 2px;
 
       .objects__item--name {
-        padding: 10px 0;
+        padding: 15px 0;
       }
     }
 
     @include media-breakpoint-down(xs) {
-      padding: 10px 15px 10px $objects-icon-size + 25;
       margin: -1px 0;
       min-height: $objects-row-min-height;
+
+      &:not(.objects__row--folder) {
+        padding: 10px 15px 10px $objects-icon-size + 25;
+      }
+
+      &.objects__row--folder {
+        padding: 0 15px 0 $objects-icon-size + 25;
+
+        .objects__item--name {
+          padding: 20px 0;
+        }
+      }
 
       &:not(:last-child) {
         &:after {
@@ -119,6 +129,7 @@ $object-types:
 .objects__row--header {
   @include media-breakpoint-up(sm) {
     position: relative;
+    padding-left: 5px;
 
     &:after {
       position: absolute;
@@ -138,13 +149,11 @@ $object-types:
 }
 
 .objects__row--checked {
+  background-color: $objects-row-checked-bg;
+
   .objects__icon {
     background-color: $white;
   }
-}
-
-.objects__row--checked {
-  background-color: $objects-row-checked-bg;
 
   .objects__item--name {
     pointer-events: none;
@@ -157,6 +166,7 @@ $object-types:
   background-color: $objects-icon-bg;
   background-position: center;
   background-repeat: no-repeat;
+  margin: 5px;
   will-change: background-color;
   transition: background-color 300ms;
 }
@@ -177,7 +187,7 @@ $object-types:
 }
 
 .objects__item {
-  padding-right: 12px;
+  padding-right: 7px;
   position: relative;
 
   &:hover {
@@ -220,8 +230,8 @@ $object-types:
 
   .objects__item--icon {
     position: absolute;
-    left: 15px;
-    top: 10px;
+    left: 10px;
+    top: 5px;
   }
 }
 
