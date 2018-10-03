@@ -70,6 +70,3 @@ var errFirstDiskWait = errors.New("Waiting on other disks")
 
 // error returned when a bucket already exists
 var errBucketAlreadyExists = errors.New("Your previous request to create the named bucket succeeded and you already own it")
-
-// errInvalidVersionId means that an invalid version id specified.
-var errInvalidVersionId = errors.New("Invalid version id specified")

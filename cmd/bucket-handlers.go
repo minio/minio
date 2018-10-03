@@ -356,10 +356,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			deletedObjects = append(deletedObjects, *deletedObjPtrs[index])
 			continue
 		}
+
+		apiErr := toAPIErrorCode(err)
+		if _, ok := err.(InvalidVersionId); ok {
+			// In case of deleting multiple objects, return back NoSuchVersion for invalid version ids
+			apiErr = ErrNoSuchVersion
+		}
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{
-			Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
-			Message: errorCodeResponse[toAPIErrorCode(err)].Description,
+			Code:    errorCodeResponse[apiErr].Code,
+			Message: errorCodeResponse[apiErr].Description,
 			Key:     deleteObjects.Objects[index].ObjectName,
 		})
 	}

@@ -275,7 +275,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, _, err := getObjectInfoVersion(ctx, bucket, object, versionID)
 	if err != nil {
-		if versionID != "" && err == errInvalidVersionId {
+		if _, ok := err.(InvalidVersionId); ok && versionID != "" {
 			// AWS S3 returns BadRequest on HEAD calls for invalid version ids
 			writeErrorResponseHeadersOnly(w, ErrBadRequest)
 		} else {

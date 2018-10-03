@@ -467,7 +467,7 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 		if versionIdMarker != "" {
 			// If there is a versionIdMarker and we are not getting a previous tree walker,
 			// then the versionIdMarker that has been passed in must be invalid
-			return result, toObjectErr(errInvalidVersionId)
+			return result, InvalidVersionId{}
 		}
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {

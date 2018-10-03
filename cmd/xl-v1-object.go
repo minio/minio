@@ -234,7 +234,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 		// Find index for this version
 		idx, found := xlVersioning.FindVersion(version)
 		if !found {
-			return toObjectErr(errInvalidVersionId)
+			return InvalidVersionId{}
 		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
 			// Requested version is a Delete Marker, so return that object does not exist
 			return toObjectErr(errFileNotFound, bucket, object)
@@ -522,7 +522,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 	versionedObject := object
 
 	if version != "" && !globalVersioningSys.IsEnabled(bucket) {
-		return objInfo, deleteMarker, toObjectErr(errInvalidVersionId)
+		return objInfo, deleteMarker, InvalidVersionId{}
 	}
 
 	if globalVersioningSys.IsEnabled(bucket) {
@@ -542,7 +542,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 		// Find index for this version
 		idx, found := xlVersioning.FindVersion(version)
 		if !found {
-			return objInfo, deleteMarker, toObjectErr(errInvalidVersionId)
+			return objInfo, deleteMarker, InvalidVersionId{}
 		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
 			// Requested version is a Delete Marker, so return that object does not exist
 			return objInfo, true, toObjectErr(errFileNotFound, bucket, object)
@@ -1129,7 +1129,7 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	} else if version == "" {
 		return false, toObjectErr(errInvalidArgument, bucket, object)
 	} else if !globalVersioningSys.IsEnabled(bucket) {
-		return false, toObjectErr(errInvalidVersionId, bucket, object)
+		return false, InvalidVersionId{}
 	}
 
 	xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
@@ -1140,7 +1140,7 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	// Find index for this version
 	idx, found := xlVersioning.FindVersion(version)
 	if !found {
-		return false, toObjectErr(errInvalidVersionId)
+		return false, InvalidVersionId{}
 	}
 	deleteMarker = xlVersioning.ObjectVersions[idx].DeleteMarker
 	if !deleteMarker {

@@ -83,6 +83,7 @@ const (
 	ErrNoSuchBucketPolicy
 	ErrNoSuchKey
 	ErrNoSuchUpload
+	ErrNoSuchVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrRequestTimeTooSkewed
@@ -547,6 +548,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Invalid version id specified",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrNoSuchVersion: {
+		Code:           "NoSuchVersion",
+		Description:    "The specified version does not exist.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrBadRequest: {
 		Code:           "BadEequest",
 		Description:    "Bad request",
@@ -900,8 +906,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrAccessDenied // no access without correct key
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
-	case errInvalidVersionId:
-		apiErr = ErrInvalidVersionId
 	}
 
 	if apiErr != ErrNone {
@@ -1004,6 +1008,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedNotification
 	case BackendDown:
 		apiErr = ErrBackendDown
+	case InvalidVersionId:
+		apiErr = ErrInvalidVersionId
 	default:
 		apiErr = ErrInternalError
 	}
