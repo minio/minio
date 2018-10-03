@@ -49,7 +49,7 @@ export const Path = ({ currentBucket, currentPrefix, selectPrefix }) => {
     })
   }
 
-  let dirPrev = dirPath.slice(0, -1).join("/") + "/"
+  let dirPrev = dirPath.length > 1 ? dirPath.slice(0, -1).join("/") + "/" : ""
   let prevLink = <i onClick={e => onPrefixClick(e, dirPrev)} />
 
   return (
