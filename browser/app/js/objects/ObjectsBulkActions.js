@@ -126,7 +126,7 @@ export class ObjectsBulkActions extends React.Component {
     } else if (checkedObjectsCount > 1) {
       downloadLabel = "Download all as zip"
     } else {
-      downloadLabel = "Download Object"
+      downloadLabel = "Download object"
     }
 
     const actionsProps = {
