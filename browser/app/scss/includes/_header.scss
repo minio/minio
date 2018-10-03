@@ -3,13 +3,11 @@
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  margin-bottom: 12px;
   padding: 5px;
   transition: opacity 300ms;
 
   @include media-breakpoint-down(xs) {
     padding: 10px 15px;
-    margin: -10px -10px 0;
     box-shadow: 0 0 10px rgba($black, 0.1);
     z-index: $header-z-index;
   }

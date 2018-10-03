@@ -21,6 +21,11 @@ $object-types:
 
 .objects__header {
   flex: 0 0 auto;
+  margin-top: 12px;
+
+  @include media-breakpoint-down(xs) {
+    display: none;
+  }
 }
 
 .objects__body {
@@ -67,9 +72,10 @@ $object-types:
   padding: 5px;
   flex-wrap: wrap;
   position: relative;
-  margin-bottom: 2px;
 
   &:not(.objects__row--header) {
+    margin-bottom: 2px;
+
     @include media-breakpoint-up(sm) {
       border-radius: 2px;
 
@@ -79,7 +85,7 @@ $object-types:
     }
 
     @include media-breakpoint-down(xs) {
-      padding: 10px 5px 10px $objects-icon-size + 15;
+      padding: 10px 15px 10px $objects-icon-size + 25;
       margin: -1px 0;
       min-height: $objects-row-min-height;
 
@@ -87,9 +93,9 @@ $object-types:
         &:after {
           position: absolute;
           content: '';
-          left: $objects-icon-size + 15;
+          left: $objects-icon-size + 25;
           bottom: 0;
-          @include size(calc(100% - (#{$objects-icon-size} + 15px)), 1px);
+          @include size(calc(100% - (#{$objects-icon-size} + 40px)), 1px);
           background-color: $objects-row-mobile-border-color;
           z-index: -1;
         }
@@ -128,10 +134,6 @@ $object-types:
       padding: 5px 0;
       @include user-select(none);
     }
-  }
-
-  @include media-breakpoint-down(xs) {
-    display: none;
   }
 }
 
@@ -218,7 +220,7 @@ $object-types:
 
   .objects__item--icon {
     position: absolute;
-    left: 5px;
+    left: 15px;
     top: 10px;
   }
 }

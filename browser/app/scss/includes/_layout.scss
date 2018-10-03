@@ -13,8 +13,4 @@
   @include media-breakpoint-up(sm) {
     padding: 20px 20px 0;
   }
-
-  @include media-breakpoint-down(xs) {
-    padding: 10px 10px 0;
-  }
 }
