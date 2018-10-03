@@ -173,7 +173,8 @@ export class ObjectsBulkActions extends React.Component {
               <span>{downloadLabel}</span>
             </button>
             {loggedIn &&
-              checkedObjectsCount == 1 && (
+              checkedObjectsCount == 1 &&
+              !checkedObjects[0].endsWith("/") && (
                 <button
                   id="share-checked"
                   className="object-actions__item"
