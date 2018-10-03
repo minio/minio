@@ -18,6 +18,8 @@ import React from "react"
 import classNames from "classnames"
 import BucketDropdown from "./BucketDropdown"
 import ClickOutHandler from "react-onclickout"
+import * as actionsCommon from "../browser/actions"
+import { connect } from "react-redux"
 
 export class Bucket extends React.Component {
   constructor(props) {
@@ -53,7 +55,7 @@ export class Bucket extends React.Component {
   }
 
   render() {
-    const { bucket, isActive, selectBucket } = this.props
+    const { bucket, isActive, selectBucket, closeSidebar } = this.props
 
     return (
       <div
@@ -68,6 +70,10 @@ export class Bucket extends React.Component {
           setTimeout(() => {
             selectBucket(bucket)
           })
+
+          setTimeout(() => {
+            closeSidebar()
+          }, 400)
         }}
       >
         <span>{bucket}</span>
@@ -94,4 +100,16 @@ export class Bucket extends React.Component {
   }
 }
 
-export default Bucket
+const mapStateToProps = state => {
+  return {
+    sidebarOpen: state.browser.sidebarOpen
+  }
+}
+
+const mapDispatchToProps = dispatch => {
+  return {
+    closeSidebar: () => dispatch(actionsCommon.closeSidebar())
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Bucket)
