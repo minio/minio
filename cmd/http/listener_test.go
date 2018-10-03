@@ -657,11 +657,8 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 				continue
 			}
 
-			s, err := bufio.NewReader(conn).ReadString('\n')
-			if err != nil {
-				t.Errorf("Test %d: reply read: expected = <nil>, got = %s", i+1, err)
-			} else if !strings.Contains(s, "HTTP/1.0 400 Bad Request") {
-				t.Errorf("Test %d: reply read: expected = 'HTTP/1.0 400 Bad Request' got = %s", i+1, s)
+			if _, err = bufio.NewReader(conn).ReadString('\n'); err != io.EOF {
+				t.Errorf("Test %d: reply read: expected = io.EOF, got = %s", i+1, err)
 			}
 
 			conn.Close()
