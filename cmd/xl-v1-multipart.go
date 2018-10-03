@@ -739,6 +739,11 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	if xl.isObject(bucket, object) {
+		// Deny if WORM is enabled
+		if globalWORMEnabled {
+			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+		}
+
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -764,13 +769,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			// Request 4: CompleteMultipartUpload --part 2
 			// N.B. 1st part is not present. This part should be removed from the storage.
 			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
-		}
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if xl.isObject(bucket, object) {
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 		}
 	}
 

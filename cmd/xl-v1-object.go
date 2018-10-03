@@ -788,6 +788,11 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	if xl.isObject(bucket, object) {
+		// Deny if WORM is enabled
+		if globalWORMEnabled {
+			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+		}
+
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -814,13 +819,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Write unique `xl.json` for each disk.
 	if onlineDisks, err = writeUniqueXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if xl.isObject(bucket, object) {
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-		}
 	}
 
 	// Rename the successfully written temporary object to final location.
