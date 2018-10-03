@@ -54,6 +54,12 @@ export class Bucket extends React.Component {
     }, 300)
   }
 
+  hideBucketDropdownOnEscape(e) {
+    if (e.keyCode === 27) {
+      this.hideBucketDropdown()
+    }
+  }
+
   render() {
     const { bucket, isActive, selectBucket, closeSidebar } = this.props
 
@@ -77,24 +83,24 @@ export class Bucket extends React.Component {
         }}
       >
         <span>{bucket}</span>
-        {isActive && (
-          <div className="buckets__dropdown">
-            <i
-              className="buckets__toggle"
-              onClick={
-                this.state.bucketDropdownActive
-                  ? this.hideBucketDropdown.bind(this)
-                  : this.showBucketDropdown.bind(this)
-              }
-            />
+        <div className="buckets__dropdown">
+          <i
+            tabIndex="0"
+            className="buckets__toggle"
+            onClick={
+              this.state.bucketDropdownActive
+                ? this.hideBucketDropdown.bind(this)
+                : this.showBucketDropdown.bind(this)
+            }
+            onKeyDown={this.hideBucketDropdownOnEscape.bind(this)}
+          />
 
-            {this.state.bucketDropdownActive && (
-              <ClickOutHandler onClickOut={this.hideBucketDropdown.bind(this)}>
-                <BucketDropdown bucket={bucket} />
-              </ClickOutHandler>
-            )}
-          </div>
-        )}
+          {this.state.bucketDropdownActive && (
+            <ClickOutHandler onClickOut={this.hideBucketDropdown.bind(this)}>
+              <BucketDropdown bucket={bucket} />
+            </ClickOutHandler>
+          )}
+        </div>
       </div>
     )
   }

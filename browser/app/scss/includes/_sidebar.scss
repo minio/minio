@@ -90,7 +90,7 @@
   @include size(100%, $form-input-height);
   border: 0;
   padding: 0 15px 0 35px;
-  background: $theme-invert-hover-bg url(../img/icons/search.svg) no-repeat left 12px center;
+  background: $theme-invert-hover-bg $buckets-search-icon no-repeat left 12px center;
   background-size: 12px;
   border-radius: $border-radius;
   will-change: background-position, border-color, padding-left;
@@ -98,7 +98,7 @@
 
 
   &:focus {
-    border-color: darken($bucket-search-border-color, 15%);
+    border-color: darken($buckets-search-border-color, 15%);
     padding-left: 15px;
     background-position: left -15px top 10px;
   }
@@ -132,7 +132,7 @@
   padding: 10px 10px 10px 35px;
   color: $buckets-item-color;
   border-radius: $border-radius;
-  background-image: $bucket-item-icon;
+  background-image: $buckets-item-icon;
   background-position: left 10px top 11px;
   background-repeat: no-repeat;
   transition: background-color 300ms, opacity 300ms;
@@ -147,11 +147,17 @@
       background-color: $buckets-item-hover-bg;
     }
   }
+
+  &:hover {
+    .buckets__toggle {
+      opacity: 1;
+    }
+  }
 }
 
 .buckets__item--active {
   background-color: $buckets-item-active-bg;
-  background-image: $bucket-item-active-icon;
+  background-image: $buckets-item-active-icon;
   padding-right: 25px;
 
   &, &:hover {
@@ -168,32 +174,32 @@
   opacity: 0;
   transition: opacity 300ms;
 
-  &:before,
-  &:after {
+  &:before {
     content: '';
-    @include size(100%, 100%);
-    background: url(../img/icons/dropdown-toggle.svg) no-repeat center;
+    @include size(10px, 6px);
+    background: $buckets-dropdown-toggle-icon no-repeat center;
     position: absolute;
     right: 0;
-    transition: top 300ms, opacity 200ms;
-  }
-
-  &:before{
+    left: 0;
     top: 0;
-    opacity: 1;
-  }
-
-  &:after {
-    transform: rotate(-180deg);
-    top: -50%;
-    opacity: 0;
+    bottom: 0;
+    margin: auto;
+    transition: transform 200ms;
   }
 }
 
-.buckets__item--active:hover,
 .buckets__item--enters {
   .buckets__toggle {
     opacity: 1;
+
+    &:before {
+      transform: rotate(180deg);
+    }
+  }
+
+  .buckets__actions {
+    opacity: 1;
+    transform: translate3d(0,0,0);
   }
 }
 
@@ -203,9 +209,9 @@
   top: 100%;
   margin-top: -1px;
   width: 100%;
-  z-index: 1;
+  z-index: 3;
   padding: 10px 0;
-  background-color: $bucket-actions-bg;
+  background-color: $buckets-actions-bg;
   border-radius: 0 0 $border-radius $border-radius;
   will-change: transform, opacity;
   opacity: 0;
@@ -225,26 +231,6 @@
     }
   }
 }
-
-.buckets__item--enters {
-  .buckets__toggle {
-    &:before{
-      top: 50%;
-      opacity: 0;
-    }
-
-    &:after {
-      top: 0;
-      opacity: 1;
-    }
-  }
-
-  .buckets__actions {
-    opacity: 1;
-    transform: translate3d(0,0,0);
-  }
-}
-
 
 // Bottom
 @media(min-height: $breakpoint-max-height) {

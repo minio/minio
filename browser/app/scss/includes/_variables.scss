@@ -85,13 +85,14 @@ $buckets-item-color: $theme-invert-text-muted-color;
 $buckets-item-active-color: $theme-invert-text-active-color;
 $buckets-item-hover-bg: $theme-invert-hover-bg;
 $buckets-item-active-bg: $theme-invert-active-bg;
-$bucket-actions-bg: lighten($theme-invert-active-bg, 3%);
-$bucket-item-icon: url(../img/icons/bucket.svg);
-$bucket-item-active-icon: url(../img/icons/bucket-active.svg);
+$buckets-actions-bg: lighten($theme-invert-active-bg, 3%);
+$buckets-item-icon: url(../img/icons/bucket.svg);
+$buckets-item-active-icon: url(../img/icons/bucket-active.svg);
 $buckets-dropdown-item-color: $theme-invert-text-color;
 $buckets-dropdown-item-hover-color: $theme-invert-text-hover-color;
-$bucket-search-border-color: #dee6ea;
-
+$buckets-search-border-color: #dee6ea;
+$buckets-search-icon: url(../img/icons/search.svg);
+$buckets-dropdown-toggle-icon: url(../img/icons/dropdown-toggle.svg);
 
 // Path
 $path-item-hover-bg: $theme-hover-bg;
