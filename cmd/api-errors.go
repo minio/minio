@@ -554,7 +554,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBadRequest: {
-		Code:           "BadEequest",
+		Code:           "BadRequest",
 		Description:    "Bad request",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
