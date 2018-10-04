@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -677,9 +678,20 @@ func (reader *Input) colNameErrs(columnNames []string) error {
 
 // aggFuncToStr converts an array of floats into a properly formatted string.
 func (reader *Input) aggFuncToStr(myAggVals []float64) string {
-	myRow := strconv.FormatFloat(myAggVals[0], 'f', 6, 64)
+	var myRow string
+	var aggregateval string
+	if myAggVals[0] == math.Trunc(myAggVals[0]) {
+		myRow = strconv.FormatInt(int64(myAggVals[0]), 10)
+	} else {
+		myRow = strconv.FormatFloat(myAggVals[0], 'f', 6, 64)
+	}
+
 	for i := 1; i < len(myAggVals); i++ {
-		aggregateval := strconv.FormatFloat(myAggVals[i], 'f', 6, 64)
+		if myAggVals[i] == math.Trunc(myAggVals[i]) {
+			aggregateval = strconv.FormatInt(int64(myAggVals[i]), 10)
+		} else {
+			aggregateval = strconv.FormatFloat(myAggVals[i], 'f', 6, 64)
+		}
 		myRow = myRow + reader.options.OutputFieldDelimiter + aggregateval
 	}
 	return myRow
