@@ -159,6 +159,12 @@
   &, &:hover {
     color: $buckets-item-active-color;
   }
+
+  @include media-breakpoint-down(sm) {
+    .buckets__toggle {
+      opacity: 1;
+    }
+  }
 }
 
 .buckets__toggle {

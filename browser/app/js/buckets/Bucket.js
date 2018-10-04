@@ -77,9 +77,11 @@ export class Bucket extends React.Component {
             selectBucket(bucket)
           })
 
-          setTimeout(() => {
-            closeSidebar()
-          }, 400)
+          if (e.target.className != "buckets__toggle") {
+            setTimeout(() => {
+              closeSidebar()
+            }, 300)
+          }
         }}
       >
         <span>{bucket}</span>
