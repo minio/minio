@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -527,10 +528,18 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 
 	router := mux.NewRouter()
 	httpServer := httptest.NewServer(router)
-	endpoint, err := NewEndpoint(httpServer.URL + endpointPath)
+
+	url, err := xnet.ParseURL(httpServer.URL)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	url.Path = endpointPath
+
+	endpoint, err := NewEndpoint(url.String())
 	if err != nil {
 		t.Fatalf("NewEndpoint failed %v", endpoint)
 	}
+
 	registerStorageRESTHandlers(router, EndpointList{endpoint})
 	restClient := newStorageRESTClient(endpoint)
 

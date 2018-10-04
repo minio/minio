@@ -254,6 +254,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.Write(buf)
 }
 
