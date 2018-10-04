@@ -163,7 +163,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 	filtrCount := 0
 	functionFlag := false
 	// My values is used to store our aggregation values if we need to store them.
-	myAggVals := make([]float64, len(reqColNames))
+	myAggVals := &aggrType{result: make([]float64, len(reqColNames))}
 	var columns []string
 	// LowercasecolumnsMap is used in accordance with hasDuplicates so that we can
 	// raise the error "Ambigious" if a case insensitive column is provided and we
@@ -360,12 +360,14 @@ func (reader *Input) processColNameLiteral(record []string, reqColNames []string
 // aggregationFunctions is a function which performs the actual aggregation
 // methods on the given row, it uses an array defined the the main parsing
 // function to keep track of values.
-func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, columnsMap map[string]int, storeReqCols []string, storeFunctions []string, record []string) error {
+
+func aggregationFunctions(counter int, filtrCount int, myAggVals *aggrType, columnsMap map[string]int, storeReqCols []string, storeFunctions []string, record []string) error {
 	for i := 0; i < len(storeFunctions); i++ {
 		if storeFunctions[i] == "" {
 			i++
 		} else if storeFunctions[i] == "count" {
-			myAggVals[i]++
+			myAggVals.cmd = "count"
+			myAggVals.result[i]++
 		} else {
 			// If column names are provided as an index it'll use this if statement instead of the else/
 			var convAggFloat float64
@@ -381,31 +383,31 @@ func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, colu
 			// This if statement is for calculating the min.
 			if storeFunctions[i] == "min" {
 				if counter == -1 {
-					myAggVals[i] = math.MaxFloat64
+					myAggVals.result[i] = math.MaxFloat64
 				}
-				if convAggFloat < myAggVals[i] {
-					myAggVals[i] = convAggFloat
+				if convAggFloat < myAggVals.result[i] {
+					myAggVals.result[i] = convAggFloat
 				}
 
 			} else if storeFunctions[i] == "max" {
 				// This if statement is for calculating the max.
 				if counter == -1 {
-					myAggVals[i] = math.SmallestNonzeroFloat64
+					myAggVals.result[i] = math.SmallestNonzeroFloat64
 				}
-				if convAggFloat > myAggVals[i] {
-					myAggVals[i] = convAggFloat
+				if convAggFloat > myAggVals.result[i] {
+					myAggVals.result[i] = convAggFloat
 				}
 
 			} else if storeFunctions[i] == "sum" {
 				// This if statement is for calculating the sum.
-				myAggVals[i] += convAggFloat
+				myAggVals.result[i] += convAggFloat
 
 			} else if storeFunctions[i] == "avg" {
 				// This if statement is for calculating the average.
 				if filtrCount == 0 {
-					myAggVals[i] = convAggFloat
+					myAggVals.result[i] = convAggFloat
 				} else {
-					myAggVals[i] = (convAggFloat + (myAggVals[i] * float64(filtrCount))) / float64((filtrCount + 1))
+					myAggVals.result[i] = (convAggFloat + (myAggVals.result[i] * float64(filtrCount))) / float64((filtrCount + 1))
 				}
 			} else {
 				return ErrParseNonUnaryAgregateFunctionCall

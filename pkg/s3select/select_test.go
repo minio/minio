@@ -316,7 +316,7 @@ func TestMyAggregationFunc(t *testing.T) {
 	tables := []struct {
 		counter        int
 		filtrCount     int
-		myAggVals      []float64
+		myAggVals      *aggrType
 		columnsMap     map[string]int
 		storeReqCols   []string
 		storeFunctions []string
@@ -324,21 +324,21 @@ func TestMyAggregationFunc(t *testing.T) {
 		err            error
 		expectedVal    float64
 	}{
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"count"}, []string{"1", "2"}, nil, 11},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"min"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"max"}, []string{"1", "2"}, nil, 10},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"sum"}, []string{"1", "2"}, nil, 11},
-		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, []string{"1", "2"}, nil, 5.500},
-		{10, 5, []float64{0.000}, columnsMap, []string{"Col1"}, []string{"random"}, []string{"1", "2"}, ErrParseNonUnaryAgregateFunctionCall, 0},
-		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 10},
+		{10, 5, &aggrType{[]float64{10, 11, 12, 13, 14}, ""}, columnsMap, []string{"Col1"}, []string{"count"}, []string{"1", "2"}, nil, 11},
+		{10, 5, &aggrType{[]float64{10}, ""}, columnsMap, []string{"Col1"}, []string{"min"}, []string{"1", "2"}, nil, 1},
+		{10, 5, &aggrType{[]float64{10}, ""}, columnsMap, []string{"Col1"}, []string{"max"}, []string{"1", "2"}, nil, 10},
+		{10, 5, &aggrType{[]float64{10}, ""}, columnsMap, []string{"Col1"}, []string{"sum"}, []string{"1", "2"}, nil, 11},
+		{1, 1, &aggrType{[]float64{10}, ""}, columnsMap, []string{"Col1"}, []string{"avg"}, []string{"1", "2"}, nil, 5.500},
+		{10, 5, &aggrType{[]float64{0.0000}, ""}, columnsMap, []string{"Col1"}, []string{"random"}, []string{"1", "2"}, ErrParseNonUnaryAgregateFunctionCall, 0},
+		{0, 5, &aggrType{[]float64{0}, ""}, columnsMap, []string{"0"}, []string{"count"}, []string{"1", "2"}, nil, 1},
+		{10, 5, &aggrType{[]float64{10}, ""}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 10},
 	}
 	for _, table := range tables {
 		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.columnsMap, table.storeReqCols, table.storeFunctions, table.record)
 		if table.err != err {
 			t.Error()
 		}
-		if table.myAggVals[0] != table.expectedVal {
+		if table.myAggVals.result[0] != table.expectedVal {
 			t.Error()
 		}
 
@@ -365,14 +365,14 @@ func TestToStringAgg(t *testing.T) {
 		t.Error(err)
 	}
 	tables := []struct {
-		myAggVal []float64
-		expected string
+		myAggVals *aggrType
+		expected  string
 	}{
-		{[]float64{10, 11, 12, 13, 14}, "10.000000,11.000000,12.000000,13.000000,14.000000"},
-		{[]float64{10}, "10.000000"},
+		{&aggrType{[]float64{10, 11, 12, 13, 14}, ""}, "10.000000,11.000000,12.000000,13.000000,14.000000"},
+		{&aggrType{[]float64{10}, ""}, "10.000000"},
 	}
 	for _, table := range tables {
-		val := s3s.aggFuncToStr(table.myAggVal)
+		val := s3s.aggFuncToStr(table.myAggVals)
 		if val != table.expected {
 			t.Error()
 		}
