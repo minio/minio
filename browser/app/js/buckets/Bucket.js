@@ -106,16 +106,10 @@ export class Bucket extends React.Component {
   }
 }
 
-const mapStateToProps = state => {
-  return {
-    sidebarOpen: state.browser.sidebarOpen
-  }
-}
-
 const mapDispatchToProps = dispatch => {
   return {
     closeSidebar: () => dispatch(actionsCommon.closeSidebar())
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(Bucket)
+export default connect(undefined, mapDispatchToProps)(Bucket)
