@@ -242,7 +242,7 @@ func (client *StorageRPCClient) ReadFile(volume string, path string, offset int6
 		Path:     path,
 		Offset:   offset,
 		Length:   int64(len(buffer)),
-		Verified: true, // mark read as verified by default
+		Verified: verifier == nil, // Marked accordingly if verifier is set or not.
 	}
 	if verifier != nil {
 		args.Algo = verifier.algorithm
