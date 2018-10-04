@@ -686,7 +686,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
-	case size == -1 || size > blockSizeV1:
+	case size == -1 || size >= blockSizeV1:
 		buffer = xl.bp.Get()
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
