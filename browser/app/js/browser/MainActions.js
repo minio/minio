@@ -33,12 +33,13 @@ export class MainActions extends React.Component {
     }
   }
 
-  onFileUpload(func, e) {
+  onFileUpload(e) {
+    const { uploadFile } = this.props
     e.preventDefault()
     let files = e.target.files
     let filesToUploadCount = files.length
     for (let i = 0; i < filesToUploadCount; i++) {
-      func(files.item(i))
+      uploadFile(files.item(i))
     }
     e.target.value = null
   }
@@ -65,7 +66,6 @@ export class MainActions extends React.Component {
         addNewActive: false
       })
     }
-    this.makeBucket.clearBucketName()
   }
 
   closeMakeBucketOnEscape(e) {
@@ -85,7 +85,7 @@ export class MainActions extends React.Component {
   }
 
   render() {
-    const { prefixWritable, uploadFile, checkedObjectsCount } = this.props
+    const { prefixWritable, checkedObjectsCount } = this.props
     const loggedIn = web.LoggedIn()
 
     if (loggedIn || prefixWritable) {
@@ -112,7 +112,7 @@ export class MainActions extends React.Component {
             >
               <input
                 type="file"
-                onChange={this.onFileUpload.bind(this, uploadFile)}
+                onChange={this.onFileUpload.bind(this)}
                 id="add-new-upload"
                 multiple={true}
               />
@@ -123,13 +123,9 @@ export class MainActions extends React.Component {
                 className="add-new__item add-new__item--bucket"
                 data-tip="Create New Bucket"
                 data-for="tooltip-main-actions"
-                onClick={
-                  this.state.makeBucketActive
-                    ? undefined
-                    : this.openMakeBucket.bind(this)
-                }
+                onClick={this.openMakeBucket.bind(this)}
               >
-                <MakeBucketModal onRef={ref => (this.makeBucket = ref)} />
+                {this.state.makeBucketActive && <MakeBucketModal />}
               </div>
             )}
             <div />

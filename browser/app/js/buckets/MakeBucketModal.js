@@ -39,12 +39,6 @@ export class MakeBucketModal extends React.Component {
       bucketName: ""
     })
   }
-  componentDidMount() {
-    this.props.onRef(this)
-  }
-  componentWillUnmount() {
-    this.props.onRef(undefined)
-  }
   render() {
     return (
       <form onSubmit={this.onSubmit.bind(this)} className="new-bucket">
@@ -61,17 +55,10 @@ export class MakeBucketModal extends React.Component {
   }
 }
 
-const mapStateToProps = state => {
-  return {
-    showMakeBucketModal: state.buckets.showMakeBucketModal
-  }
-}
-
 const mapDispatchToProps = dispatch => {
   return {
-    makeBucket: bucket => dispatch(actionsBuckets.makeBucket(bucket)),
-    hideMakeBucketModal: () => dispatch(actionsBuckets.hideMakeBucketModal())
+    makeBucket: bucket => dispatch(actionsBuckets.makeBucket(bucket))
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(MakeBucketModal)
+export default connect(undefined, mapDispatchToProps)(MakeBucketModal)
