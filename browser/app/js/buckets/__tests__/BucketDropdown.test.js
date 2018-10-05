@@ -23,26 +23,13 @@ describe("BucketDropdown", () => {
     shallow(<BucketDropdown />)
   })
 
-  it("should call toggleDropdown on dropdown toggle", () => {
-    const spy = jest.spyOn(BucketDropdown.prototype, 'toggleDropdown')
-    const wrapper = shallow(
-      <BucketDropdown />
-    )
-    wrapper
-      .find("Uncontrolled(Dropdown)")
-      .simulate("toggle")
-    expect(spy).toHaveBeenCalled()
-    spy.mockReset()
-    spy.mockRestore()
-  })
-
   it("should call showBucketPolicy when Edit Policy link is clicked", () => {
     const showBucketPolicy = jest.fn()
     const wrapper = shallow(
       <BucketDropdown showBucketPolicy={showBucketPolicy} />
     )
     wrapper
-      .find("li a")
+      .find("a")
       .at(0)
       .simulate("click", { stopPropagation: jest.fn() })
     expect(showBucketPolicy).toHaveBeenCalled()
@@ -54,7 +41,7 @@ describe("BucketDropdown", () => {
       <BucketDropdown bucket={"test"} deleteBucket={deleteBucket} />
     )
     wrapper
-      .find("li a")
+      .find("a")
       .at(1)
       .simulate("click", { stopPropagation: jest.fn() })
     expect(deleteBucket).toHaveBeenCalledWith("test")
