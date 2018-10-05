@@ -176,6 +176,7 @@ const (
 	// Minio storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
+	ErrBucketMustBeEmpty
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -858,6 +859,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrIncorrectContinuationToken: {
 		Code:           "InvalidArgument",
 		Description:    "The continuation token provided is incorrect",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketMustBeEmpty: {
+		Code:           "BucketMustBeEmpty",
+		Description:    "Bucket must be empty for versioning to be enabled.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.

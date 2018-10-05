@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 )
@@ -100,8 +100,16 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	if versioningConfig.Status != "Enabled" {
 		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
 		return
-	} else {
-		// FIXME: Check that bucket is empty in order to allow versioning to be enabled
+	}
+
+	// Make sure that the bucket is empty in order to allow versioning to be enabled
+	result, err := objAPI.ListObjects(ctx, bucket, "", "", "", 1)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	} else if len(result.Objects) > 0 {
+		writeErrorResponse(w, ErrBucketMustBeEmpty, r.URL)
+		return
 	}
 
 	if err = objAPI.SetBucketVersioning(ctx, bucket, versioningConfig); err != nil {
