@@ -36,7 +36,7 @@ describe("Policy", () => {
     expect(wrapper.find(".pmb-list").length).toBe(0)
   })
 
-  it("should call web.setBucketPolicy and fetchPolicies on submit", () => {
+  it("should call web.setBucketPolicy and fetchPolicies on removePolicy", () => {
     const fetchPolicies = jest.fn()
     const wrapper = shallow(
       <Policy 
@@ -46,7 +46,7 @@ describe("Policy", () => {
         fetchPolicies={fetchPolicies}
       />
     )
-    wrapper.find("button").simulate("click", { preventDefault: jest.fn() })
+    wrapper.find(".policy__item__remove").simulate("click", { preventDefault: jest.fn() })
 
     expect(web.SetBucketPolicy).toHaveBeenCalledWith({
       bucketName: "bucket",
@@ -61,8 +61,8 @@ describe("Policy", () => {
 
   it("should change the empty string to '*' while displaying prefixes", () => {
     const wrapper = shallow(
-      <Policy currentBucket={"bucket"} prefix={""} policy={READ_ONLY} />
+      <Policy currentBucket={"bucket"} prefix={""} />
     )
-    expect(wrapper.find(".pmbl-item").at(0).text()).toEqual("*")
+    expect(wrapper.find(".policy__item").at(0).text()).toEqual("*")
   })
 })
