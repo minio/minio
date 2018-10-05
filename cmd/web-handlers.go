@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,6 +45,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
@@ -700,12 +702,21 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:  event.ObjectCreatedPut,
 		BucketName: bucket,
 		Object:     objInfo,
 		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
 }
 
@@ -832,6 +843,24 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		// Wait for decompression go-routine to retire.
 		wg.Wait()
 	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a GET request.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedGet,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
+	})
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -845,6 +874,12 @@ type DownloadZipArgs struct {
 
 // Takes a list of objects and creates a zip file that sent as the response body.
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -988,6 +1023,19 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				// Wait for decompression go-routine to retire.
 				wg.Wait()
 			}
+
+			// Notify object accessed via a GET request.
+			sendEvent(eventArgs{
+				EventName:    event.ObjectAccessedGet,
+				BucketName:   args.BucketName,
+				Object:       info,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         host,
+				Port:         port,
+			})
+
 			return nil
 		}
 
