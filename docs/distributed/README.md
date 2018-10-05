@@ -83,7 +83,7 @@ minio server http://192.168.1.1{1...4}/export{1...4}
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.10{1...4}/C:/data{1...4}
+minio.exe server http://192.168.1.1{1...4}/C:/data{1...4}
 ```
 
 __NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally erasure-code data__
