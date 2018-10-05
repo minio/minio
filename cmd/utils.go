@@ -458,3 +458,13 @@ func CloseResponse(respBody io.ReadCloser) {
 		respBody.Close()
 	}
 }
+
+// Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)
+// If it is passed ["aaaa", "bbbb"], it returns ["aaaa", "{aaaa:.*}", "bbbb", "{bbbb:.*}"]
+func restQueries(keys ...string) []string {
+	var accumulator []string
+	for _, key := range keys {
+		accumulator = append(accumulator, key, "{"+key+":.*}")
+	}
+	return accumulator
+}
