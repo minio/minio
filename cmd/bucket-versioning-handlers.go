@@ -74,31 +74,27 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Error out if Content-Length is missing.
-	// PutBucketPolicy always needs Content-Length.
+	// PutBucketVersioning always needs Content-Length, error out if not
 	if r.ContentLength <= 0 {
 		writeErrorResponse(w, ErrMissingContentLength, r.URL)
 		return
-	}
-
-	// Error out if Content-Length is beyond allowed size.
-	if r.ContentLength > maxBucketVersioningSize {
+	} else if r.ContentLength > maxBucketVersioningSize {
+		// Error out if Content-Length is beyond allowed size
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
-	}
-
-	versioningConfigBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		// FIXME: fix error here
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 	}
 
 	var versioningConfig VersioningConfiguration
 
-	err = xml.Unmarshal(versioningConfigBytes, &versioningConfig)
-	if err != nil {
-		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+	if versioningConfigBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, r.ContentLength)); err != nil {
+		writeErrorResponse(w, ErrBadRequest, r.URL)
 		return
+	} else {
+		err = xml.Unmarshal(versioningConfigBytes, &versioningConfig)
+		if err != nil {
+			writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+			return
+		}
 	}
 
 	// Minio only allows versioning to be enabled (effectively just once),
