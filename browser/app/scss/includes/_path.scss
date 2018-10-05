@@ -35,9 +35,8 @@
     position: relative;
     line-height: 100%;
     max-width: 180px;
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
+    padding: 12px 10px;
+    display: block;
   }
 
   &:not(:last-child) {
