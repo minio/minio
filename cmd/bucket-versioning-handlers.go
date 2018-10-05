@@ -53,6 +53,12 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Only allow versioning to be enabled for erasure code backend
+	if !globalIsXL {
+		writeErrorResponse(w, ErrBadRequest, r.URL)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
