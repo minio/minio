@@ -24,7 +24,6 @@ import {
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
-import * as bucketActions from "../buckets/actions"
 import { minioBrowserPrefix } from "../constants"
 
 export const SET_LIST = "objects/SET_LIST"

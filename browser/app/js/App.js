@@ -15,10 +15,9 @@
  */
 
 import React from "react"
-import { Route, Switch, Redirect } from "react-router-dom"
+import { Route, Switch } from "react-router-dom"
 import Browser from "./browser/Browser"
 import Login from "./browser/Login"
-import web from "./web"
 
 export const App = () => {
   return (

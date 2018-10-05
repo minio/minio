@@ -18,7 +18,6 @@ import React from "react"
 import { connect } from "react-redux"
 import web from "../web"
 import classNames from "classnames"
-import * as actionsBuckets from "../buckets/actions"
 import * as uploadsActions from "../uploads/actions"
 import { getPrefixWritable, getCheckedList } from "../objects/selectors"
 import MakeBucketModal from "../buckets/MakeBucketModal"
@@ -162,8 +161,7 @@ const mapStateToProps = state => {
 
 const mapDispatchToProps = dispatch => {
   return {
-    uploadFile: file => dispatch(uploadsActions.uploadFile(file)),
-    showMakeBucketModal: () => dispatch(actionsBuckets.showMakeBucketModal())
+    uploadFile: file => dispatch(uploadsActions.uploadFile(file))
   }
 }
 

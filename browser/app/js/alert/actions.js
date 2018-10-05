@@ -21,7 +21,7 @@ export let alertId = 0
 
 export const set = alert => {
   const id = alertId++
-  return (dispatch, getState) => {
+  return (dispatch) => {
     if (alert.type !== "danger" || alert.autoClear) {
       setTimeout(() => {
         dispatch({

@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../constants"
-
 import React from "react"
 import { connect } from "react-redux"
 import * as actionsBuckets from "./actions"
 import * as actionsAlert from "../alert/actions"
 import web from "../web"
 import ReactTooltip from "react-tooltip"
+import { READ_ONLY, WRITE_ONLY, READ_WRITE } from "../constants"
 
 export class PolicyInput extends React.Component {
   constructor(props) {

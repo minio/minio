@@ -23,7 +23,7 @@ import iconDanger from "../../img/icons/danger.svg"
 export class AbortConfirmModal extends React.Component {
   abortUploads() {
     const { abort, uploads } = this.props
-    for (var slug in uploads) {
+    for (let slug in uploads) {
       abort(slug)
     }
   }

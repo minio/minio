@@ -64,16 +64,10 @@ export class Header extends React.Component {
   }
 }
 
-const mapStateToProps = state => {
-  return {
-    sidebarOpen: state.browser.sidebarOpen
-  }
-}
-
 const mapDispatchToProps = dispatch => {
   return {
     toggleSidebar: () => dispatch(actionsCommon.toggleSidebar())
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(Header)
+export default connect(undefined, mapDispatchToProps)(Header)
