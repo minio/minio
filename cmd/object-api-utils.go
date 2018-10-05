@@ -49,6 +49,8 @@ const (
 	minioMetaMultipartBucket = minioMetaBucket + "/" + mpartMetaPrefix
 	// Minio Tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
+	// Minio Trash meta prefix
+	minioMetaTrashBucket = minioMetaBucket + "/trash"
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 )

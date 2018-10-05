@@ -90,6 +90,19 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 	return nil
 }
 
+// Cleans up tmp directory of local disks.
+func formatXLCreateTrashLocalEndpoints(endpoints EndpointList) error {
+	for _, endpoint := range endpoints {
+		if !endpoint.IsLocal {
+			continue
+		}
+		if err := mkdirAll(pathJoin(endpoint.Path, minioMetaTrashBucket), 0777); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validate reference format against list of XL formats.
 func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints EndpointList, setCount, drivesPerSet int) error {
 	for i := range formats {
@@ -229,6 +242,10 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 	}
 
 	if err = formatXLCleanupTmpLocalEndpoints(endpoints); err != nil {
+		return nil, err
+	}
+
+	if err = formatXLCreateTrashLocalEndpoints(endpoints); err != nil {
 		return nil, err
 	}
 
