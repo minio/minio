@@ -41,6 +41,9 @@ describe("ObjectsList", () => {
     const wrapper = shallow(
       <ObjectsListContainer currentBucket="test1" isTruncated={true} />
     )
-    expect(wrapper.find(".text-center").prop("style")).toHaveProperty("display", "block")
+    expect(wrapper.find(".objects__loading").prop("style")).toHaveProperty(
+      "display",
+      "block"
+    )
   })
 })

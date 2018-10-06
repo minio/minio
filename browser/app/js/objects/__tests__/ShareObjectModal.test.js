@@ -48,10 +48,7 @@ describe("ShareObjectModal", () => {
         hideShareObject={hideShareObject}
       />
     )
-    wrapper
-      .find("button")
-      .last()
-      .simulate("click")
+    wrapper.find(".button--light").simulate("click")
     expect(hideShareObject).toHaveBeenCalled()
   })
 

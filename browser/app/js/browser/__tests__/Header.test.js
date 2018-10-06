@@ -16,7 +16,7 @@
 
 import React from "react"
 import { shallow } from "enzyme"
-import Header from "../Header"
+import { Header } from "../Header"
 
 jest.mock("../../web", () => ({
   LoggedIn: jest
@@ -34,9 +34,8 @@ describe("Header", () => {
     expect(wrapper.find("a").text()).toBe("Login")
   })
 
-  it("should render SettingsMenu when settings is clicked", () => {
+  it("should render Logout button when the user has LoggedIn", () => {
     const wrapper = shallow(<Header />)
-    wrapper.find(".settings__toggle").simulate("click")
-    expect(wrapper.find("Connect(SettingsMenu)").length).toBe(1)
+    expect(wrapper.find("a").hasClass("sign-out")).toBeTruthy()
   })
 })

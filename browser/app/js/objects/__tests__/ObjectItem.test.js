@@ -25,20 +25,26 @@ describe("ObjectItem", () => {
 
   it("should render with content type", () => {
     const wrapper = shallow(<ObjectItem name={"test.jpg"} contentType={""} />)
-    expect(wrapper.prop("data-type")).toBe("image")
+    expect(
+      wrapper.find(".objects__icon").hasClass("objects__icon--image")
+    ).toBeTruthy()
   })
 
   it("shouldn't call onClick when the object isclicked", () => {
     const onClick = jest.fn()
     const wrapper = shallow(<ObjectItem name={"test"} />)
-    wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    wrapper
+      .find(".objects__item--name")
+      .simulate("click", { preventDefault: jest.fn() })
     expect(onClick).not.toHaveBeenCalled()
   })
 
   it("should call onClick when the folder isclicked", () => {
     const onClick = jest.fn()
     const wrapper = shallow(<ObjectItem name={"test/"} onClick={onClick} />)
-    wrapper.find("a").simulate("click", { preventDefault: jest.fn() })
+    wrapper
+      .find(".objects__item--name")
+      .simulate("click", { preventDefault: jest.fn() })
     expect(onClick).toHaveBeenCalled()
   })
 

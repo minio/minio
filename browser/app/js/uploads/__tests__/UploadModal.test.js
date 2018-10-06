@@ -24,7 +24,12 @@ describe("UploadModal", () => {
   })
 
   it("should render AbortConfirmModal when showAbort is true", () => {
-    const wrapper = shallow(<UploadModal uploads={{}} showAbort={true} />)
+    const wrapper = shallow(
+      <UploadModal
+        uploads={{ "a-b/-test": { size: 100, loaded: 50, name: "test" } }}
+        showAbort={true}
+      />
+    )
     expect(wrapper.find("Connect(AbortConfirmModal)").length).toBe(1)
   })
 
@@ -39,7 +44,7 @@ describe("UploadModal", () => {
         uploads={{ "a-b/-test": { size: 100, loaded: 50, name: "test" } }}
       />
     )
-    expect(wrapper.find("ProgressBar").length).toBe(1)
+    expect(wrapper.find(".progress").length).toBe(1)
   })
 
   it("should call showAbortModal when close button is clicked", () => {
@@ -50,7 +55,7 @@ describe("UploadModal", () => {
         showAbortModal={showAbortModal}
       />
     )
-    wrapper.find("button").simulate("click")
+    wrapper.find(".alert__close").simulate("click")
     expect(showAbortModal).toHaveBeenCalled()
   })
 })
