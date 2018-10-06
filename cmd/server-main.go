@@ -370,7 +370,7 @@ func serverMain(ctx *cli.Context) {
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Initialize notification system.
-	if err := globalNotificationSys.Init(newObject); err != nil {
+	if err := globalNotificationSys.Init(newObject, false); err != nil {
 		logger.Fatal(err, "Unable to initialize notification system")
 	}
 

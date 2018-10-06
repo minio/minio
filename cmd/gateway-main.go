@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -31,6 +32,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/event"
 )
 
 func init() {
@@ -46,6 +48,18 @@ var (
 		HideHelpCommand: true,
 	}
 )
+
+func handleNotifyEnvVar(targetList **event.TargetList) {
+	notifiers := os.Getenv("MINIO_GATEWAY_NOTIFY")
+	if notifiers == "" {
+		return
+	}
+	cfg := newServerConfig()
+	if err := json.Unmarshal([]byte(notifiers), cfg); err != nil {
+		logger.LogIf(context.Background(), err)
+	}
+	*targetList = getNotificationTargets(cfg)
+}
 
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
@@ -191,6 +205,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, EndpointList{})
+	handleNotifyEnvVar(&globalNotificationSys.targetList)
+	globalNotificationSys.Init(nil, true)
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

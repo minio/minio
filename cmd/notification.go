@@ -36,6 +36,7 @@ import (
 // NotificationSys - notification system.
 type NotificationSys struct {
 	sync.RWMutex
+	notifyAll                  bool
 	targetList                 *event.TargetList
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
@@ -313,8 +314,15 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	return saveConfig(objAPI, configFile, data)
 }
 
-// Init - initializes notification system from notification.xml and listener.json of all buckets.
-func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
+// Init - initializes notification system from notification.xml and
+// listener.json of all buckets unless notifyAll is set. When
+// notifyAll is set, all bucket notification messages are sent to all
+// configured notification targets.
+func (sys *NotificationSys) Init(objAPI ObjectLayer, notifyAll bool) error {
+	if notifyAll {
+		sys.notifyAll = notifyAll
+		return nil
+	}
 	if objAPI == nil {
 		return errInvalidArgument
 	}
@@ -430,9 +438,14 @@ func (sys *NotificationSys) send(bucketName string, eventData event.Event, targe
 
 // Send - sends event data to all matching targets.
 func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
-	sys.RLock()
-	targetIDSet := sys.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
-	sys.RUnlock()
+	var targetIDSet event.TargetIDSet
+	if sys.notifyAll {
+		targetIDSet = event.NewTargetIDSet(sys.targetList.List()...)
+	} else {
+		sys.RLock()
+		targetIDSet = sys.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
+		sys.RUnlock()
+	}
 	if len(targetIDSet) == 0 {
 		return nil
 	}
