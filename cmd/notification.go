@@ -241,10 +241,10 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	defer objLock.Unlock()
+	defer objLock.RUnlock()
 
 	reader, e := readConfig(ctx, objAPI, configFile)
 	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
@@ -265,7 +265,6 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 		return nil
 	}
 
-	activeListenerList := []ListenBucketNotificationArgs{}
 	for _, args := range listenerList {
 		found, err := isLocalHost(args.Addr.Name)
 		if err != nil {
@@ -301,16 +300,9 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			logger.LogIf(ctx, err)
 			return err
 		}
-		activeListenerList = append(activeListenerList, args)
 	}
 
-	data, err := json.Marshal(activeListenerList)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	return saveConfig(objAPI, configFile, data)
+	return nil
 }
 
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
