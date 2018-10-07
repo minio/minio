@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,7 +151,7 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	// Initializing notification needs a retry mechanism for
+	// Initializing policy needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
@@ -160,7 +161,9 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 		case _ = <-retryTimerCh:
 			// Load PolicySys once during boot.
 			if err := sys.refresh(objAPI); err != nil {
-				if err == errDiskNotFound || isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
 					logger.Info("Waiting for policy subsystem to be initialized..")
 					continue
 				}

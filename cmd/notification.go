@@ -345,7 +345,9 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		select {
 		case _ = <-retryTimerCh:
 			if err := sys.refresh(objAPI); err != nil {
-				if err == errDiskNotFound || isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
 					logger.Info("Waiting for notification subsystem to be initialized..")
 					continue
 				}
