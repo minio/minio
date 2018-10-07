@@ -77,7 +77,7 @@ const (
 // hasServerSideEncryptionHeader returns true if the given HTTP header
 // contains server-side-encryption.
 func hasServerSideEncryptionHeader(header http.Header) bool {
-	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
+	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header) || crypto.S3KMS.IsRequested(header)
 }
 
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.

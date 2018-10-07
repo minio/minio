@@ -1476,10 +1476,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			if !hasServerSideEncryptionHeader(r.Header) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
-				return
-			}
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
@@ -1718,10 +1714,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			if !hasServerSideEncryptionHeader(r.Header) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
-				return
-			}
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
