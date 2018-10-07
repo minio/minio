@@ -305,6 +305,28 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	return nil
 }
 
+func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
+	buckets, err := objAPI.ListBuckets(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, bucket := range buckets {
+		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
+		if err != nil && err != errNoSuchNotifications {
+			return err
+		}
+		if err == errNoSuchNotifications {
+			continue
+		}
+		sys.AddRulesMap(bucket.Name, config.ToRulesMap())
+		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
 func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
@@ -322,32 +344,12 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 	for {
 		select {
 		case _ = <-retryTimerCh:
-			buckets, err := objAPI.ListBuckets(context.Background())
-			if err != nil {
-				if err == errDiskNotFound {
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound || isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
 					logger.Info("Waiting for notification subsystem to be initialized..")
 					continue
 				}
 				return err
-			}
-			for _, bucket := range buckets {
-				ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
-				config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
-				if err != nil {
-					if isInsufficientReadQuorum(err) {
-						logger.Info("Waiting for notification subsystem to be initialized..")
-						continue
-					}
-					if err != errNoSuchNotifications {
-						return err
-					}
-				} else {
-					sys.AddRulesMap(bucket.Name, config.ToRulesMap())
-				}
-
-				if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
-					return err
-				}
 			}
 			return nil
 		}
