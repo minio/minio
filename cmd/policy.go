@@ -131,25 +131,44 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	// Load PolicySys once during boot.
-	if err := sys.refresh(objAPI); err != nil {
-		return err
-	}
-
-	// Refresh PolicySys in background.
-	go func() {
-		ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-globalServiceDoneCh:
-				return
-			case <-ticker.C:
-				sys.refresh(objAPI)
+	defer func() {
+		// Refresh PolicySys in background.
+		go func() {
+			ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-globalServiceDoneCh:
+					return
+				case <-ticker.C:
+					sys.refresh(objAPI)
+				}
 			}
-		}
+		}()
 	}()
-	return nil
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Initializing notification needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			// Load PolicySys once during boot.
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound || isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+					logger.Info("Waiting for policy subsystem to be initialized..")
+					continue
+				}
+				return err
+			}
+			return nil
+		}
+	}
 }
 
 // NewPolicySys - creates new policy system.

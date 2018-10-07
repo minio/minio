@@ -311,28 +311,47 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
-		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
-		if err != nil {
-			if !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	// Initializing notification needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			buckets, err := objAPI.ListBuckets(context.Background())
+			if err != nil {
+				if err == errDiskNotFound {
+					logger.Info("Waiting for notification subsystem to be initialized..")
+					continue
+				}
 				return err
 			}
-		} else {
-			sys.AddRulesMap(bucket.Name, config.ToRulesMap())
-		}
+			for _, bucket := range buckets {
+				ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+				config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
+				if err != nil {
+					if isInsufficientReadQuorum(err) {
+						logger.Info("Waiting for notification subsystem to be initialized..")
+						continue
+					}
+					if err != errNoSuchNotifications {
+						return err
+					}
+				} else {
+					sys.AddRulesMap(bucket.Name, config.ToRulesMap())
+				}
 
-		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
-			return err
+				if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 	}
-
-	return nil
 }
 
 // AddRulesMap - adds rules map for bucket name.
