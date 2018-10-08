@@ -370,8 +370,9 @@ func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, colu
 			// If column names are provided as an index it'll use this if statement instead of the else/
 			var convAggFloat float64
 			if representsInt(storeReqCols[i]) {
-				myIndex, _ := strconv.Atoi(storeReqCols[i])
-				convAggFloat, _ = strconv.ParseFloat(record[myIndex], 64)
+				colIndex, _ := strconv.Atoi(storeReqCols[i])
+				// colIndex is 1-based
+				convAggFloat, _ = strconv.ParseFloat(record[colIndex-1], 64)
 
 			} else {
 				// case that the columns are in the form of named columns rather than indices.
