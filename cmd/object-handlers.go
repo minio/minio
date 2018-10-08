@@ -84,7 +84,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -620,7 +623,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -966,7 +969,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1227,7 +1230,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1319,7 +1322,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1541,7 +1544,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
