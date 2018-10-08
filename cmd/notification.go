@@ -241,10 +241,10 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	defer objLock.Unlock()
+	defer objLock.RUnlock()
 
 	reader, e := readConfig(ctx, objAPI, configFile)
 	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
@@ -265,7 +265,6 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 		return nil
 	}
 
-	activeListenerList := []ListenBucketNotificationArgs{}
 	for _, args := range listenerList {
 		found, err := isLocalHost(args.Addr.Name)
 		if err != nil {
@@ -301,16 +300,31 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			logger.LogIf(ctx, err)
 			return err
 		}
-		activeListenerList = append(activeListenerList, args)
 	}
 
-	data, err := json.Marshal(activeListenerList)
+	return nil
+}
+
+func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
+	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
-
-	return saveConfig(objAPI, configFile, data)
+	for _, bucket := range buckets {
+		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
+		if err != nil && err != errNoSuchNotifications {
+			return err
+		}
+		if err == errNoSuchNotifications {
+			continue
+		}
+		sys.AddRulesMap(bucket.Name, config.ToRulesMap())
+		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
@@ -319,28 +333,29 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
-		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
-		if err != nil {
-			if !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	// Initializing notification needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for notification subsystem to be initialized..")
+					continue
+				}
 				return err
 			}
-		} else {
-			sys.AddRulesMap(bucket.Name, config.ToRulesMap())
-		}
-
-		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
-			return err
+			return nil
 		}
 	}
-
-	return nil
 }
 
 // AddRulesMap - adds rules map for bucket name.

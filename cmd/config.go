@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -234,7 +235,8 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 		case _ = <-retryTimerCh:
 			err := initConfig(objAPI)
 			if err != nil {
-				if isInsufficientReadQuorum(err) || isInsufficientWriteQuorum(err) {
+				if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
 					logger.Info("Waiting for configuration to be initialized..")
 					continue
 				}

@@ -174,7 +174,7 @@ func (s *xlSets) reInitDisks(refFormat *formatXLV3, storageDisks []StorageAPI, f
 // any given sets.
 func (s *xlSets) connectDisksWithQuorum() {
 	var onlineDisks int
-	for onlineDisks < (len(s.endpoints)/2)+1 {
+	for onlineDisks < len(s.endpoints)/2 {
 		for _, endpoint := range s.endpoints {
 			if s.isConnected(endpoint) {
 				continue
