@@ -70,6 +70,12 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	}
 }
 
+// This function replaces "",'' with `` for the select parser
+func cleanExpr(expr string) string {
+	r := strings.NewReplacer("\"", "`", "'", "`")
+	return r.Replace(expr)
+}
+
 // SelectObjectContentHandler - GET Object?select
 // ----------
 // This implementation of the GET operation retrieves object content based
@@ -250,7 +256,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			Name:                 "S3Object", // Default table name for all objects
 			ReadFrom:             gr,
 			Compressed:           string(selectReq.InputSerialization.CompressionType),
-			Expression:           selectReq.Expression,
+			Expression:           cleanExpr(selectReq.Expression),
 			OutputFieldDelimiter: selectReq.OutputSerialization.CSV.FieldDelimiter,
 			StreamSize:           objInfo.Size,
 			HeaderOpt:            selectReq.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
@@ -261,7 +267,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
 		}
-		_, _, _, _, _, _, err = s3s.ParseSelect(selectReq.Expression)
+		_, _, _, _, _, _, err = s3s.ParseSelect(options.Expression)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return

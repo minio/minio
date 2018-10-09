@@ -50,7 +50,6 @@ func (reader *Input) runSelectParser(selectExpression string, myRow chan *Row) {
 // records, and the where clause.
 func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
 	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
-
 	stmt, err := sqlparser.Parse(sqlInput)
 	var whereClause interface{}
 	var alias string

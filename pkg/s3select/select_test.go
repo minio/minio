@@ -253,6 +253,7 @@ func TestMyParser(t *testing.T) {
 		{"SELECT count(*) FROM S3OBJECT AS A WHERE col_name = 'Name' LIMIT 5", nil, []string{"*"}, "A", 5, []string{"count"}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT sum(col_name),sum(col_other) FROM S3OBJECT AS A WHERE col_name = 'Name' LIMIT 5", nil, []string{"col_name", "col_other"}, "A", 5, []string{"sum", "sum"}, []string{"col_name", "col_other"}},
 		{"SELECT A.col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT A.`col name` FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A WHERE randomname > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A WHERE A._11 > 5", ErrInvalidColumnIndex, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
