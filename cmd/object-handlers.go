@@ -1057,22 +1057,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		putObject = objectAPI.PutObject
 	)
 	reader = r.Body
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+
+	// Check if put is allowed
+	if s3Err = isPutAllowed(rAuthType, bucket, object, r); s3Err != ErrNone {
+		writeErrorResponse(w, s3Err, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Err = newSignV4ChunkedReader(r)
@@ -1119,7 +1111,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
 			snappyWriter.Close()
 			pipeWriter.CloseWithError(cerr)
-
 		}()
 
 		// Set compression metrics.
@@ -1611,41 +1602,30 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
 		reader    io.Reader
+		s3Error   APIErrorCode
 	)
 	reader = r.Body
 
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error = isPutAllowed(rAuthType, bucket, object, r); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
+		if s3Error = isReqAuthenticatedV2(r); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
+		if s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
