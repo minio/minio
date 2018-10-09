@@ -104,7 +104,7 @@ func (sys *VersioningSys) refresh(objAPI ObjectLayer) error {
 	return nil
 }
 
-// Init - initializes versioning system from versioning.json of all buckets.
+// Init - initializes versioning system from versioning.json for all buckets.
 func (sys *VersioningSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
@@ -117,7 +117,7 @@ func (sys *VersioningSys) Init(objAPI ObjectLayer) error {
 
 	// Refresh VersioningSys in background.
 	go func() {
-		ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
+		ticker := time.NewTicker(globalRefreshBucketVersioningInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -148,18 +148,15 @@ func getVersioningConfig(objAPI ObjectLayer, bucketName string) (*VersioningConf
 		if err == errConfigNotFound {
 			return &VersioningConfiguration{
 				XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
-			}, nil
+			}, BucketVersioningNotFound{Bucket: bucketName}
 		}
 		return nil, err
 	}
 
 	var versioningConfig VersioningConfiguration
-	versioningConfigBytes, err := ioutil.ReadAll(reader)
-	if err != nil {
+	if versioningConfigBytes, err := ioutil.ReadAll(reader); err != nil {
 		return nil, err
-	}
-	err = xml.Unmarshal(versioningConfigBytes, &versioningConfig)
-	if err != nil {
+	} else if err = xml.Unmarshal(versioningConfigBytes, &versioningConfig); err != nil {
 		return nil, err
 	}
 	return &versioningConfig, nil
@@ -175,4 +172,18 @@ func saveVersioningConfig(objAPI ObjectLayer, bucketName string, versioning Vers
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketVersioningConfig)
 
 	return saveConfig(objAPI, configFile, data)
+}
+
+func removeVersioningConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) error {
+	// Construct path to versioning.json for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, bucketName, bucketVersioningConfig)
+
+	if _, err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
+		if _, ok := err.(ObjectNotFound); ok {
+			return BucketVersioningNotFound{Bucket: bucketName}
+		}
+		return err
+	}
+
+	return nil
 }

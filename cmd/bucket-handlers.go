@@ -775,6 +775,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	globalNotificationSys.RemoveNotification(bucket)
 	globalPolicySys.Remove(bucket)
+	globalVersioningSys.Remove(bucket)
 	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	if globalDNSConfig != nil {

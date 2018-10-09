@@ -192,6 +192,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	globalNotificationSys.RemoveNotification(args.BucketName)
 	globalPolicySys.Remove(args.BucketName)
+	globalVersioningSys.Remove(args.BucketName)
 	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
 
 	if globalDNSConfig != nil {

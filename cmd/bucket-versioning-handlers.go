@@ -153,16 +153,16 @@ func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// FIXME: fetch configuration from cache instead
-
 	// Read bucket versioning configuration
-	bucketVersioning, err := objAPI.GetBucketVersioning(ctx, bucket)
+	versioning, err := objAPI.GetBucketVersioning(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
+		if _, ok := err.(BucketVersioningNotFound); !ok {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
-	versioningData, err := xml.Marshal(bucketVersioning)
+	versioningData, err := xml.Marshal(versioning)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

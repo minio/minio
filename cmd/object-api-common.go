@@ -92,6 +92,9 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 
 	// Delete listener config, if present - ignore any errors.
 	removeListenerConfig(ctx, objAPI, bucket)
+
+	// Delete bucket versioning info, if present - ignore any errors.
+	removeVersioningConfig(ctx, objAPI, bucket)
 }
 
 // Depending on the disk type network or local, initialize storage API.

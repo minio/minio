@@ -48,6 +48,7 @@ type DeleteBucketArgs struct {
 func (receiver *peerRPCReceiver) DeleteBucket(args *DeleteBucketArgs, reply *VoidReply) error {
 	globalNotificationSys.RemoveNotification(args.BucketName)
 	globalPolicySys.Remove(args.BucketName)
+	globalVersioningSys.Remove(args.BucketName)
 	return nil
 }
 
