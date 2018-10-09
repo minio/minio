@@ -58,6 +58,16 @@ func (rpcClient *PeerRPCClient) RemoveBucketPolicy(bucketName string) error {
 	return rpcClient.Call(peerServiceName+".RemoveBucketPolicy", &args, &reply)
 }
 
+// SetBucketVersioning - calls set bucket policy RPC.
+func (rpcClient *PeerRPCClient) SetBucketVersioning(bucketName string, versioning VersioningConfiguration) error {
+	args := SetBucketVersioningArgs{
+		BucketName: bucketName,
+		Versioning: versioning,
+	}
+	reply := VoidReply{}
+	return rpcClient.Call(peerServiceName+".SetBucketVersioning", &args, &reply)
+}
+
 // PutBucketNotification - calls put bukcet notification RPC.
 func (rpcClient *PeerRPCClient) PutBucketNotification(bucketName string, rulesMap event.RulesMap) error {
 	args := PutBucketNotificationArgs{

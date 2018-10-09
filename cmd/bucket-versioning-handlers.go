@@ -120,7 +120,8 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	}
 
 	globalVersioningSys.Set(bucket, versioningConfig)
-	// FIXME: update other nodes
+	// Update status of other nodes
+	globalNotificationSys.SetBucketVersioning(ctx, bucket, versioningConfig)
 
 	// Success.
 	writeSuccessNoContent(w)

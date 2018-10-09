@@ -51,6 +51,19 @@ func (receiver *peerRPCReceiver) DeleteBucket(args *DeleteBucketArgs, reply *Voi
 	return nil
 }
 
+// SetBucketVersioningArgs - set bucket versioning RPC arguments.
+type SetBucketVersioningArgs struct {
+	AuthArgs
+	BucketName string
+	Versioning VersioningConfiguration
+}
+
+// SetBucketVersioning - handles set bucket versioning RPC call which sets global versioning status for the bucket
+func (receiver *peerRPCReceiver) SetBucketVersioning(args *SetBucketVersioningArgs, reply *VoidReply) error {
+	globalVersioningSys.Set(args.BucketName, args.Versioning)
+	return nil
+}
+
 // SetBucketPolicyArgs - set bucket policy RPC arguments.
 type SetBucketPolicyArgs struct {
 	AuthArgs
