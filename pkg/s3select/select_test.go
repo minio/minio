@@ -331,7 +331,7 @@ func TestMyAggregationFunc(t *testing.T) {
 		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, []string{"1", "2"}, nil, 5.500},
 		{10, 5, []float64{0.000}, columnsMap, []string{"Col1"}, []string{"random"}, []string{"1", "2"}, ErrParseNonUnaryAgregateFunctionCall, 0},
 		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 10},
+		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 1},
 	}
 	for _, table := range tables {
 		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.columnsMap, table.storeReqCols, table.storeFunctions, table.record)
