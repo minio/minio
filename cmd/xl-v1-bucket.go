@@ -81,18 +81,6 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 		return toObjectErr(err, bucket)
 	}
 
-	var versioningConfig = VersioningConfiguration{
-		XMLNS:  "http://s3.amazonaws.com/doc/2006-03-01/",
-		Status: "", // The initial response (from S3) for newly created bucket is empty
-	}
-
-	if err = xl.SetBucketVersioning(ctx, bucket, versioningConfig); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
-	globalVersioningSys.Set(bucket, versioningConfig)
-	// FIXME: update other nodes
-
 	return nil
 }
 
