@@ -35,6 +35,7 @@ func TestCheckForDuplicates(t *testing.T) {
 		{[]string{"name", "id", "last_name", "last_name"}, make(map[string]int), make(map[string]bool), make(map[string]int), ErrAmbiguousFieldName},
 		{[]string{"name", "id", "last_name", "another_name"}, make(map[string]int), make(map[string]bool), make(map[string]int), nil},
 	}
+
 	for _, table := range tables {
 		err := checkForDuplicates(table.myReq, table.myHeaders, table.myDup, table.myLow)
 		if err != table.myErr {
@@ -46,7 +47,7 @@ func TestCheckForDuplicates(t *testing.T) {
 // Test for the function which processes columnnames to make sure that they are
 // compatible with spaces.
 func TestMyProcessing(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -58,7 +59,7 @@ func TestMyProcessing(t *testing.T) {
 		OutputFieldDelimiter: ",",
 		StreamSize:           20,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -67,8 +68,8 @@ func TestMyProcessing(t *testing.T) {
 		myHeaders  map[string]int
 		myDup      map[string]bool
 		myLow      map[string]int
-		myOpts     *Options
-		input      *Input
+		myOpts     *CSVOptions
+		input      *CSVInput
 		length     int
 		testOutput string
 		myErr      error
@@ -95,7 +96,7 @@ func TestMyProcessing(t *testing.T) {
 // TestMyRowIndexResults is a unit test which makes sure that the rows that are
 // being printed are appropriate to the query being requested.
 func TestMyRowIndexResults(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -107,38 +108,42 @@ func TestMyRowIndexResults(t *testing.T) {
 		OutputFieldDelimiter: ",",
 		StreamSize:           20,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
 	tables := []struct {
-		myReq     []string
-		myHeaders map[string]int
-		myDup     map[string]bool
-		myLow     map[string]int
-		myOpts    *Options
-		input     *Input
-		myRecord  []string
-		myTarget  string
-		myAsterix string
-		columns   []string
-		err       error
+		myReq               []string
+		myHeaders           map[string]int
+		myDup               map[string]bool
+		myLow               map[string]int
+		myOpts              *CSVOptions
+		input               *CSVInput
+		myRecord            string
+		myTarget            string
+		myAsterix           string
+		columns             []string
+		myStrRec            string
+		myColumnsMap        map[string]int
+		myUnMarshlledRecord map[string]interface{}
+		err                 error
 	}{
-		{[]string{"1", "2"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, []string{"target", "random", "hello", "stuff"}, "target,random", "target,random,hello,stuff", []string{"1", "2", "3", "4"}, nil},
-		{[]string{"2", "3", "4"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, []string{"random", "hullo", "thing", "stuff"}, "hullo,thing,stuff", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, nil},
-		{[]string{"3", "2"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, []string{"random", "hullo", "thing", "stuff"}, "thing,hullo", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, nil},
-		{[]string{"11", "1"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, []string{"random", "hullo", "thing", "stuff"}, "", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, ErrInvalidColumnIndex},
+		{[]string{"1", "2"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, "{\"_0\":\"random\",\"_1\":\"hullo\",\"_2\":\"thing\",\"_3\":\"stuff\"}", "random,hullo", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, "", map[string]int{"_0": 0, "_1": 1, "_2": 2, "_3": 3}, map[string]interface{}{"_0": "random", "_1": "hullo", "_2": "thing", "_3": "stuff"}, nil},
+		{[]string{"2", "3", "4"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, "{\"_0\":\"random\",\"_1\":\"hullo\",\"_2\":\"thing\",\"_3\":\"stuff\"}", "hullo,thing,stuff", "random,hullo,thing,stuff", []string{"1", "2", "3", "", "4"}, "", map[string]int{"_0": 0, "_1": 1, "_2": 2, "_3": 3}, map[string]interface{}{"_0": "random", "_1": "hullo", "_2": "thing", "_3": "stuff"}, nil},
+		{[]string{"3", "2"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, "{\"_0\":\"random\",\"_1\":\"hullo\",\"_2\":\"thing\",\"_3\":\"stuff\"}", "thing,hullo", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, "", map[string]int{"_0": 0, "_1": 1, "_2": 2, "_3": 3}, map[string]interface{}{"_0": "random", "_1": "hullo", "_2": "thing", "_3": "stuff"}, nil},
+		{[]string{"11", "1"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, s3s, "{\"_0\":\"random\",\"_1\":\"hullo\",\"_2\":\"thing\",\"_3\":\"stuff\"}", "", "random,hullo,thing,stuff", []string{"1", "2", "3", "4"}, "", map[string]int{"_0": 0, "_1": 1, "_2": 2, "_3": 3}, map[string]interface{}{"_0": "random", "_1": "hullo", "_2": "thing", "_3": "stuff"}, ErrInvalidColumnIndex},
 	}
 	for _, table := range tables {
 		checkForDuplicates(table.columns, table.myHeaders, table.myDup, table.myLow)
-		myRow, err := s3s.processColNameIndex(table.myRecord, table.myReq, table.columns)
+		myRow, err := processColNameIndex(table.myRecord, table.myReq, table.columns, s3s)
 		if err != table.err {
 			t.Error()
 		}
 		if myRow != table.myTarget {
 			t.Error()
 		}
-		myRow = table.input.printAsterix(table.myRecord)
+
+		myRow = printAllColumns(convertToSlice(table.myColumnsMap, table.myUnMarshlledRecord, table.myRecord), s3s)
 		if myRow != table.myAsterix {
 			t.Error()
 		}
@@ -254,16 +259,16 @@ func TestMyParser(t *testing.T) {
 		{"SELECT sum(col_name),sum(col_other) FROM S3OBJECT AS A WHERE col_name = 'Name' LIMIT 5", nil, []string{"col_name", "col_other"}, "A", 5, []string{"sum", "sum"}, []string{"col_name", "col_other"}},
 		{"SELECT A.col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
-		{"SELECT A._col_name FROM S3OBJECT AS A WHERE randomname > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT A._col_name FROM S3OBJECT AS A WHERE randomname > 5", ErrParseInvalidPathComponent, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A WHERE A._11 > 5", ErrInvalidColumnIndex, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT COALESCE(col_name,col_other) FROM S3OBJECT AS A WHERE A._3 > 5", nil, []string{""}, "A", 0, []string{""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT COALESCE(col_name,col_other),COALESCE(col_name,col_other) FROM S3OBJECT AS A WHERE A._3 > 5", nil, []string{"", ""}, "A", 0, []string{"", ""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT COALESCE(col_name,col_other) ,col_name , COALESCE(col_name,col_other) FROM S3OBJECT AS A WHERE col_name > 5", nil, []string{"", "col_name", ""}, "A", 0, []string{"", "", ""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT NULLIF(col_name,col_other) ,col_name , COALESCE(col_name,col_other) FROM S3OBJECT AS A WHERE col_name > 5", nil, []string{"", "col_name", ""}, "A", 0, []string{"", "", ""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT NULLIF(col_name,col_other) FROM S3OBJECT AS A WHERE col_name > 5", nil, []string{""}, "A", 0, []string{""}, []string{"col_name", "col_other", "name3", "name4"}},
-		{"SELECT NULLIF(randomname,col_other) FROM S3OBJECT AS A WHERE col_name > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
-		{"SELECT col_name FROM S3OBJECT AS A WHERE COALESCE(random,5) > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
-		{"SELECT col_name FROM S3OBJECT AS A WHERE NULLIF(random,5) > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT NULLIF(randomname,col_other) FROM S3OBJECT AS A WHERE col_name > 5", ErrParseInvalidPathComponent, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT col_name FROM S3OBJECT AS A WHERE COALESCE(random,5) > 5", ErrParseInvalidPathComponent, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT col_name FROM S3OBJECT AS A WHERE NULLIF(random,5) > 5", ErrParseInvalidPathComponent, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT col_name FROM S3OBJECT AS A WHERE LOWER(col_name) BETWEEN 5 AND 7", nil, []string{"col_name"}, "A", 0, []string{""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT UPPER(col_name) FROM S3OBJECT AS A WHERE LOWER(col_name) BETWEEN 5 AND 7", nil, []string{""}, "A", 0, []string{""}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT UPPER(*) FROM S3OBJECT AS A WHERE LOWER(col_name) BETWEEN 5 AND 7", ErrParseUnsupportedCallWithStar, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
@@ -271,7 +276,7 @@ func TestMyParser(t *testing.T) {
 		{"SELECT COALESCE(col_name,col_name) FROM S3OBJECT AS A WHERE NULLIF(LOWER(col_name),col_name) BETWEEN 5 AND 7", nil, []string{""}, "A", 0, []string{""}, []string{"col_name", "col_other", "name3", "name4"}},
 	}
 	for _, table := range tables {
-		options := &Options{
+		options := &CSVOptions{
 			HasHeader:            false,
 			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
@@ -284,12 +289,12 @@ func TestMyParser(t *testing.T) {
 			StreamSize:           20,
 			HeaderOpt:            true,
 		}
-		s3s, err := NewInput(options)
+		s3s, err := NewCSVInput(options)
 		if err != nil {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		reqCols, alias, myLimit, _, aggFunctionNames, _, err := s3s.ParseSelect(table.myQuery)
+		reqCols, alias, myLimit, _, aggFunctionNames, _, err := ParseSelect(table.myQuery, s3s)
 		if table.err != err {
 			t.Error()
 		}
@@ -320,21 +325,22 @@ func TestMyAggregationFunc(t *testing.T) {
 		columnsMap     map[string]int
 		storeReqCols   []string
 		storeFunctions []string
-		record         []string
+		record         string
 		err            error
 		expectedVal    float64
 	}{
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"count"}, []string{"1", "2"}, nil, 11},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"min"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"max"}, []string{"1", "2"}, nil, 10},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"sum"}, []string{"1", "2"}, nil, 11},
-		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, []string{"1", "2"}, nil, 5.500},
-		{10, 5, []float64{0.000}, columnsMap, []string{"Col1"}, []string{"random"}, []string{"1", "2"}, ErrParseNonUnaryAgregateFunctionCall, 0},
-		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 1},
+		{10, 5, []float64{10, 11, 12, 13, 14}, columnsMap, []string{"Col1"}, []string{"count"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 11},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"min"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 1},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"max"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 10},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"sum"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 11},
+		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 5.500},
+		{10, 5, []float64{0.0000}, columnsMap, []string{"Col1"}, []string{"random"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", ErrParseNonUnaryAgregateFunctionCall, 0},
+		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 1},
+		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, "{\"_1\":\"1\",\"_2\":\"2\"}", nil, 1},
 	}
+
 	for _, table := range tables {
-		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.columnsMap, table.storeReqCols, table.storeFunctions, table.record)
+		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.storeReqCols, table.storeFunctions, table.record)
 		if table.err != err {
 			t.Error()
 		}
@@ -347,7 +353,7 @@ func TestMyAggregationFunc(t *testing.T) {
 
 // Unit Tests for the function which converts a float array to string.
 func TestToStringAgg(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -360,7 +366,7 @@ func TestToStringAgg(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -375,7 +381,7 @@ func TestToStringAgg(t *testing.T) {
 		{[]float64{10}, "10"},
 	}
 	for _, table := range tables {
-		val := s3s.aggFuncToStr(table.myAggVal)
+		val := aggFuncToStr(table.myAggVal, s3s)
 		if val != table.expected {
 			t.Error()
 		}
@@ -385,7 +391,7 @@ func TestToStringAgg(t *testing.T) {
 // TestMyRowColLiteralResults is a unit test which makes sure that the rows that
 // are being printed are appropriate to the query being requested.
 func TestMyRowColLiteralResults(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -398,7 +404,7 @@ func TestMyRowColLiteralResults(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -407,22 +413,20 @@ func TestMyRowColLiteralResults(t *testing.T) {
 		myHeaders map[string]int
 		myDup     map[string]bool
 		myLow     map[string]int
-		myOpts    *Options
+		myOpts    *CSVOptions
 		tempList  []string
-		input     *Input
-		myRecord  []string
+		input     *CSVInput
+		myRecord  string
 		myTarget  string
 		columns   []string
 		err       error
 	}{
-		{[]string{"draft", "year"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"draft", "year"}, s3s, []string{"target", "random", "hello", "stuff"}, "target,random", []string{"draft", "year", "random", "another"}, nil},
-		{[]string{"year", "draft"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"year", "draft"}, s3s, []string{"draft", "2012", "thing", "stuff"}, "2012,draft", []string{"draft", "year", "random", "another"}, nil},
-		{[]string{"yearrandomstuff", "draft"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"yearrandomstuff", "draft"}, s3s, []string{"draft", "2012", "thing", "stuff"}, "", []string{"draft", "year", "random", "another"}, ErrMissingHeaders},
-		{[]string{"draft", "randomstuff"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"yearrandomstuff", "draft"}, s3s, []string{"draft", "2012", "thing", "stuff"}, "", []string{"draft", "year", "random", "another"}, ErrMissingHeaders},
+		{[]string{"draft", "year"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"draft", "year"}, s3s, "{\"draft\":\"target\",\"year\":\"random\",\"random\":\"hello\",\"another\":\"stuff\"}", "target,random", []string{"draft", "year", "random", "another"}, nil},
+		{[]string{"year", "draft"}, make(map[string]int), make(map[string]bool), make(map[string]int), options, []string{"year", "draft"}, s3s, "{\"draft\":\"draft\",\"year\":\"2012\",\"random\":\"thing\",\"another\":\"stuff\"}", "2012,draft", []string{"draft", "year", "random", "another"}, nil},
 	}
 	for _, table := range tables {
 		checkForDuplicates(table.columns, table.myHeaders, table.myDup, table.myLow)
-		myRow, err := table.input.processColNameLiteral(table.myRecord, table.myReq, table.tempList, table.myHeaders, nil)
+		myRow, err := processColNameLiteral(table.myRecord, table.myReq, nil, s3s)
 		if err != table.err {
 			t.Error()
 		}
@@ -440,32 +444,32 @@ func TestMyWhereEval(t *testing.T) {
 	columnsMap["Col2"] = 1
 	tables := []struct {
 		myQuery  string
-		record   []string
+		record   map[string]interface{}
 		err      error
 		expected bool
 		header   []string
 	}{
-		{"SELECT * FROM S3OBJECT", []string{"record_1,record_2,record_3,record_4"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 < -1", []string{"0", "1"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 < -1 OR Col2 > 15", []string{"151", "12"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 > -1 AND Col2 > 15", []string{"151", "12"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 > 1.00", []string{"151.0000", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 > 100", []string{"random", "12"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 BETWEEN 100 AND 0", []string{"151", "12"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT WHERE Col1 BETWEEN 100.0 AND 0.0", []string{"151", "12"}, nil, false, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE A.1 BETWEEN 160 AND 150", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE A._1 BETWEEN 160 AND 0", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE A._1 BETWEEN 0 AND 160", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT A._1 LIKE 'r%'", []string{"record_1,record_2,record_3,record_4"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT s._2 FROM S3Object s WHERE s._2 = 'Steven'", []string{"record_1", "Steven", "Steven", "record_4"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE Col1 BETWEEN 0 AND 160", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE Col1 BETWEEN 160 AND 0", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE UPPER(Col1) BETWEEN 160 AND 0", []string{"151", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE UPPER(Col1) = 'RANDOM'", []string{"random", "12"}, nil, true, []string{"Col1", "Col2"}},
-		{"SELECT * FROM S3OBJECT AS A WHERE LOWER(UPPER(Col1) = 'random'", []string{"random", "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT", map[string]interface{}{"Col1": "record_1", "Col2": "record_1"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 < -1", map[string]interface{}{"Col1": "0", "Col2": "1"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 < -1 OR Col2 > 15", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 > -1 AND Col2 > 15", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 > 1.00", map[string]interface{}{"Col1": "151.0000", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 > 100", map[string]interface{}{"Col1": "random", "Col2": "12"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 BETWEEN 100 AND 0", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT WHERE Col1 BETWEEN 100.0 AND 0.0", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, false, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE A.1 BETWEEN 160 AND 150", map[string]interface{}{"_1": "151", "_2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE A._1 BETWEEN 160 AND 0", map[string]interface{}{"_1": "151", "_2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE A._1 BETWEEN 0 AND 160", map[string]interface{}{"_1": "151", "_2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT A._1 LIKE 'r%'", map[string]interface{}{"1": "record_1", "2": "record_2", "3": "record_3", "4": "record_4"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT s._2 FROM S3Object s WHERE s._2 = 'Steven'", map[string]interface{}{"_1": "record_1", "_2": "Steven", "_3": "Steven", "_4": "record_4"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE Col1 BETWEEN 0 AND 160", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE Col1 BETWEEN 160 AND 0", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE UPPER(Col1) BETWEEN 160 AND 0", map[string]interface{}{"Col1": "151", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE UPPER(Col1) = 'RANDOM'", map[string]interface{}{"Col1": "random", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
+		{"SELECT * FROM S3OBJECT AS A WHERE LOWER(UPPER(Col1) = 'random'", map[string]interface{}{"Col1": "random", "Col2": "12"}, nil, true, []string{"Col1", "Col2"}},
 	}
 	for _, table := range tables {
-		options := &Options{
+		options := &CSVOptions{
 			HasHeader:            false,
 			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
@@ -478,14 +482,14 @@ func TestMyWhereEval(t *testing.T) {
 			StreamSize:           20,
 			HeaderOpt:            true,
 		}
-		s3s, err := NewInput(options)
+		s3s, err := NewCSVInput(options)
 		s3s.header = table.header
 
 		if err != nil {
 			t.Error(err)
 		}
-		_, alias, _, whereClause, _, _, _ := s3s.ParseSelect(table.myQuery)
-		myVal, err := matchesMyWhereClause(table.record, columnsMap, alias, whereClause)
+		_, alias, _, whereClause, _, _, _ := ParseSelect(table.myQuery, s3s)
+		myVal, err := matchesMyWhereClause(table.record, alias, whereClause)
 		if table.err != err {
 			t.Error()
 		}
@@ -609,7 +613,7 @@ func TestInterpreter(t *testing.T) {
 		err     error
 		header  []string
 	}{
-		{"Select random from S3OBJECT", make(chan *Row), ErrMissingHeaders, []string{"name1", "name2", "name3", "name4"}},
+		{"Select random from S3OBJECT", make(chan *Row), ErrParseInvalidPathComponent, []string{"name1", "name2", "name3", "name4"}},
 		{"Select * from S3OBJECT as A WHERE name2 > 5.00", make(chan *Row), nil, []string{"name1", "name2", "name3", "name4"}},
 		{"Select * from S3OBJECT", make(chan *Row), nil, []string{"name1", "name2", "name3", "name4"}},
 		{"Select A_1 from S3OBJECT as A", make(chan *Row), nil, []string{"1", "2", "3", "4"}},
@@ -617,7 +621,7 @@ func TestInterpreter(t *testing.T) {
 		{"Select * from S3OBJECT WHERE name1 > 5.00", make(chan *Row), nil, []string{"name1", "name2", "name3", "name4"}},
 	}
 	for _, table := range tables {
-		options := &Options{
+		options := &CSVOptions{
 			HasHeader:            false,
 			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
@@ -630,17 +634,17 @@ func TestInterpreter(t *testing.T) {
 			StreamSize:           20,
 			HeaderOpt:            true,
 		}
-		s3s, err := NewInput(options)
+		s3s, err := NewCSVInput(options)
 		if err != nil {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		reqCols, alias, myLimit, whereClause, aggFunctionNames, _, err := s3s.ParseSelect(table.myQuery)
+		reqCols, alias, myLimit, whereClause, aggFunctionNames, _, err := ParseSelect(table.myQuery, s3s)
 		if err != table.err {
 			t.Fatal()
 		}
 		if err == nil {
-			go s3s.processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, table.myChan, nil)
+			go processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, table.myChan, nil, s3s)
 			select {
 			case row, ok := <-table.myChan:
 				if ok && len(row.record) > 0 {
@@ -659,7 +663,7 @@ func TestInterpreter(t *testing.T) {
 // TestMyXMLFunction is a function that provides unit testing for the XML
 // creating function.
 func TestMyXMLFunction(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -672,7 +676,7 @@ func TestMyXMLFunction(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -698,7 +702,7 @@ func TestMyXMLFunction(t *testing.T) {
 // TestMyProtocolFunction is a function which provides unit testing for several
 // of the functions which write the binary protocol.
 func TestMyProtocolFunction(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -711,7 +715,7 @@ func TestMyProtocolFunction(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	_, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -724,15 +728,15 @@ func TestMyProtocolFunction(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currentMessage = &bytes.Buffer{}
-		if len(s3s.writeRecordMessage(table.payloadMsg, currentMessage).Bytes()) != table.expectedRecord {
+		if len(writeRecordMessage(table.payloadMsg, currentMessage).Bytes()) != table.expectedRecord {
 			t.Error()
 		}
 		currentMessage.Reset()
-		if len(s3s.writeEndMessage(currentMessage).Bytes()) != table.expectedEnd {
+		if len(writeEndMessage(currentMessage).Bytes()) != table.expectedEnd {
 			t.Error()
 		}
 		currentMessage.Reset()
-		if len(s3s.writeContinuationMessage(currentMessage).Bytes()) != 57 {
+		if len(writeContinuationMessage(currentMessage).Bytes()) != 57 {
 			t.Error()
 		}
 		currentMessage.Reset()
@@ -742,7 +746,7 @@ func TestMyProtocolFunction(t *testing.T) {
 // TestMyInfoProtocolFunctions is a function which provides unit testing for the
 // stat and progress messages of the protocols.
 func TestMyInfoProtocolFunctions(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            true,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -754,7 +758,7 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 		OutputFieldDelimiter: ",",
 		StreamSize:           20,
 	}
-	s3s, err := NewInput(options)
+	s3s, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -771,11 +775,11 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currBuf = &bytes.Buffer{}
-		if len(s3s.writeStatMessage(table.payloadStatMsg, currBuf).Bytes()) != table.expectedStat {
+		if len(writeStatMessage(table.payloadStatMsg, currBuf).Bytes()) != table.expectedStat {
 			t.Error()
 		}
 		currBuf.Reset()
-		if len(s3s.writeProgressMessage(table.payloadProgressMsg, currBuf).Bytes()) != table.expectedProgress {
+		if len(writeProgressMessage(table.payloadProgressMsg, currBuf).Bytes()) != table.expectedProgress {
 			t.Error()
 		}
 	}
@@ -784,7 +788,7 @@ func TestMyInfoProtocolFunctions(t *testing.T) {
 // TestMyErrorProtocolFunctions is a function which provides unit testing for
 // the error message type of protocol.
 func TestMyErrorProtocolFunctions(t *testing.T) {
-	options := &Options{
+	options := &CSVOptions{
 		HasHeader:            false,
 		RecordDelimiter:      "\n",
 		FieldDelimiter:       ",",
@@ -797,7 +801,7 @@ func TestMyErrorProtocolFunctions(t *testing.T) {
 		StreamSize:           20,
 		HeaderOpt:            true,
 	}
-	s3s, err := NewInput(options)
+	_, err := NewCSVInput(options)
 	if err != nil {
 		t.Error(err)
 	}
@@ -812,7 +816,7 @@ func TestMyErrorProtocolFunctions(t *testing.T) {
 	}
 	for _, table := range tables {
 		var currentMessage = &bytes.Buffer{}
-		if len(s3s.writeErrorMessage(table.err, currentMessage).Bytes()) != table.expectedError {
+		if len(writeErrorMessage(table.err, currentMessage).Bytes()) != table.expectedError {
 			t.Error()
 		}
 
@@ -1016,10 +1020,10 @@ func TestMyValids(t *testing.T) {
 		err        error
 	}{
 		{"SELECT UPPER(NULLIF(draft_year,random_name))", []int{3, 5, 6, 7, 8, 9}, 3, true, []string{"draft_year", "random_name"}, nil},
-		{"SELECT UPPER(NULLIF(draft_year,xandom_name))", []int{3, 5, 6, 7, 8, 9}, 3, true, []string{"draft_year", "random_name"}, ErrMissingHeaders},
+		{"SELECT UPPER(NULLIF(draft_year,xandom_name))", []int{3, 5, 6, 7, 8, 9}, 3, true, []string{"draft_year", "random_name"}, ErrParseInvalidPathComponent},
 	}
 	for _, table := range tables {
-		options := &Options{
+		options := &CSVOptions{
 			HasHeader:            false,
 			RecordDelimiter:      "\n",
 			FieldDelimiter:       ",",
@@ -1032,12 +1036,12 @@ func TestMyValids(t *testing.T) {
 			StreamSize:           20,
 			HeaderOpt:            true,
 		}
-		s3s, err := NewInput(options)
+		s3s, err := NewCSVInput(options)
 		if err != nil {
 			t.Error(err)
 		}
 		s3s.header = table.header
-		_, _, _, _, _, _, err = s3s.ParseSelect(table.myQuery)
+		_, _, _, _, _, _, err = ParseSelect(table.myQuery, s3s)
 		if err != table.err {
 			t.Fatal()
 		}
