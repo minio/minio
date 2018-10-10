@@ -396,8 +396,10 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata), opts.ServerSideEncryption)
+func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	size, _ := data.Size()
+	md5Hex, sha256Hex := data.Checksums()
+	oi, err := l.Client.PutObject(bucket, object, data, size, hash.HexAsBase64(md5Hex), sha256Hex, minio.ToMinioClientMetadata(metadata), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
@@ -451,8 +453,10 @@ func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
-	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
+func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+	size, _ := data.Size()
+	md5Hex, sha256Hex := data.Checksums()
+	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, size, md5Hex, sha256Hex, opts.ServerSideEncryption)
 	if err != nil {
 		return pi, minio.ErrorRespToObjectError(err, bucket, object)
 	}

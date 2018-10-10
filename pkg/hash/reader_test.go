@@ -34,34 +34,33 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.MD5HexString() != "e2fc714c4727ee9395f324cd2e7f331f" {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
+	md5Hex, sha256Hex := r.Checksums()
+	if md5Hex != "e2fc714c4727ee9395f324cd2e7f331f" {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", md5Hex)
 	}
-	if r.SHA256HexString() != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
-		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
+	if sha256Hex != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
+		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", sha256Hex)
 	}
-	if r.MD5Base64String() != "4vxxTEcn7pOV8yTNLn8zHw==" {
-		t.Errorf("Expected md5base64 \"4vxxTEcn7pOV8yTNLn8zHw==\", got \"%s\"", r.MD5Base64String())
+	if md5Base64 := HexAsBase64(md5Hex); md5Base64 != "4vxxTEcn7pOV8yTNLn8zHw==" {
+		t.Errorf("Expected md5base64 \"4vxxTEcn7pOV8yTNLn8zHw==\", got \"%s\"", md5Base64)
 	}
-	if r.Size() != 4 {
-		t.Errorf("Expected size 4, got %d", r.Size())
+	size, actualSize := r.Size()
+	if size != 4 {
+		t.Errorf("Expected size 4, got %d", size)
 	}
-	if r.ActualSize() != 4 {
-		t.Errorf("Expected size 4, got %d", r.ActualSize())
+	if size != 4 {
+		t.Errorf("Expected size 4, got %d", actualSize)
 	}
 	expectedMD5, err := hex.DecodeString("e2fc714c4727ee9395f324cd2e7f331f")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(r.MD5(), expectedMD5) {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
-	}
-	if !bytes.Equal(r.MD5Current(), expectedMD5) {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5Current()))
+	if etag := r.ETag(); !bytes.Equal(etag, expectedMD5) {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", etag)
 	}
 	expectedSHA256, err := hex.DecodeString("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
-	if !bytes.Equal(r.SHA256(), expectedSHA256) {
-		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
+	if sha256 := r.SHA256(); !bytes.Equal(sha256, expectedSHA256) {
+		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", Hex(sha256))
 	}
 }
 
@@ -147,7 +146,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		},
 		// Nested hash reader NewReader() will fail.
 		{
-			src:         &Reader{src: bytes.NewReader([]byte("abcd"))},
+			src:         &hashReader{reader{src: bytes.NewReader([]byte("abcd"))}},
 			size:        4,
 			actualSize:  4,
 			success:     false,

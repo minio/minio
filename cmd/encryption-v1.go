@@ -177,18 +177,20 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 
 }
 
-func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (io.Reader, error) {
+func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (io.Reader, []byte, error) {
 	objectEncryptionKey, err := newEncryptMetadata(key, bucket, object, metadata, sseS3)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20})
 	if err != nil {
-		return nil, crypto.ErrInvalidCustomerKey
+		return nil, nil, crypto.ErrInvalidCustomerKey
 	}
 
-	return reader, nil
+	mac := hmac.New(sha256.New, objectEncryptionKey) // derive etag sealing key
+	mac.Write([]byte("e-tag"))
+	return reader, mac.Sum(nil), nil
 }
 
 // set new encryption metadata from http request headers for SSE-C and generated key from KMS in the case of
@@ -210,19 +212,18 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 // EncryptRequest takes the client provided content and encrypts the data
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
-func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (io.Reader, error) {
-
+func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (io.Reader, []byte, error) {
 	var (
 		key []byte
 		err error
 	)
 	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
-		return nil, crypto.ErrIncompatibleEncryptionMethod
+		return nil, nil, crypto.ErrIncompatibleEncryptionMethod
 	}
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err = ParseSSECustomerRequest(r)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))

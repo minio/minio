@@ -491,7 +491,7 @@ const sha1AtEOF = "hex_digits_at_end"
 // Additionally this reader also verifies Hash encapsulated inside hash.Reader
 // at io.EOF if the verification failed we return an error and do not send
 // the content to server.
-func newB2Reader(r *h2.Reader, size int64) *Reader {
+func newB2Reader(r h2.Reader, size int64) *Reader {
 	return &Reader{
 		r:        r,
 		size:     size,
@@ -505,7 +505,7 @@ func newB2Reader(r *h2.Reader, size int64) *Reader {
 // Hash encapsulated inside hash.Reader at io.EOF if the verification
 // failed we return an error and do not send the content to server.
 type Reader struct {
-	r        *h2.Reader
+	r        h2.Reader
 	size     int64
 	sha1Hash hash.Hash
 
@@ -534,7 +534,7 @@ func (nb *Reader) Read(p []byte) (int, error) {
 }
 
 // PutObject uploads the single upload to B2 backend by using *b2_upload_file* API, uploads upto 5GiB.
-func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, data *h2.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, data h2.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return objInfo, err
@@ -549,7 +549,8 @@ func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string,
 		return objInfo, b2ToObjectError(err, bucket, object)
 	}
 
-	hr := newB2Reader(data, data.Size())
+	size, _ := data.Size()
+	hr := newB2Reader(data, size)
 	var f *b2.File
 	f, err = u.UploadFile(l.ctx, hr, int(hr.Size()), object, contentType, sha1AtEOF, metadata)
 	if err != nil {
@@ -653,7 +654,7 @@ func (l *b2Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *h2.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data h2.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return pi, err
@@ -665,18 +666,18 @@ func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object str
 		return pi, b2ToObjectError(err, bucket, object, uploadID)
 	}
 
-	hr := newB2Reader(data, data.Size())
+	size, _ := data.Size()
+	hr := newB2Reader(data, size)
 	sha1, err := fc.UploadPart(l.ctx, hr, sha1AtEOF, int(hr.Size()), partID)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return pi, b2ToObjectError(err, bucket, object, uploadID)
 	}
-
 	return minio.PartInfo{
 		PartNumber:   partID,
 		LastModified: minio.UTCNow(),
 		ETag:         minio.ToS3ETag(sha1),
-		Size:         data.Size(),
+		Size:         size,
 	}, nil
 }
 

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"path"
 	"sort"
@@ -277,13 +276,13 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(ctx, bucket, object, xl); err != nil {
 		return pi, err
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
+	if size, _ := data.Size(); size < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return pi, toObjectErr(errInvalidArgument)
 	}
@@ -342,8 +341,8 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
-	if data.Size() > 0 || data.Size() == -1 {
-		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
+	if size, _ := data.Size(); size >= -1 {
+		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, size, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
 			return pi, toObjectErr(pErr, bucket, object)
 
 		}
@@ -356,7 +355,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 
 	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
 	var buffer []byte
-	switch size := data.Size(); {
+	switch size, _ := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1 || size >= blockSizeV1:
@@ -384,7 +383,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
-	if n < data.Size() {
+	if size, _ := data.Size(); n < size {
 		logger.LogIf(ctx, IncompleteBody{})
 		return pi, IncompleteBody{}
 	}
@@ -433,10 +432,11 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = UTCNow()
 
-	md5hex := hex.EncodeToString(data.MD5Current())
+	md5hex := hash.Hex(data.ETag())
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, data.ActualSize())
+	_, actualSize := data.Size()
+	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, actualSize)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -471,7 +471,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		LastModified: fi.ModTime,
 		ETag:         md5hex,
 		Size:         fi.Size,
-		ActualSize:   data.ActualSize(),
+		ActualSize:   actualSize,
 	}, nil
 }
 

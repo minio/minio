@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -813,8 +812,9 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
-	if err := checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
+func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+	size, _ := data.Size()
+	if err := checkPutObjectArgs(ctx, bucket, object, fs, size); err != nil {
 		return ObjectInfo{}, err
 	}
 	// Lock the object.
@@ -828,7 +828,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 }
 
 // putObject - wrapper for PutObject
-func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	// No metadata is set, allocate a new one.
 	meta := make(map[string]string)
 	for k, v := range metadata {
@@ -847,7 +847,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
-	if isObjectDir(object, data.Size()) {
+	size, _ := data.Size()
+	if isObjectDir(object, size) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
 			logger.LogIf(ctx, errFileAccessDenied)
@@ -864,7 +865,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
+	if err = checkPutObjectArgs(ctx, bucket, object, fs, size); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -875,7 +876,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
+	if size < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, errInvalidArgument
 	}
@@ -908,23 +909,23 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Allocate a buffer to Read() from request body
 	bufSize := int64(readSizeV1)
-	if size := data.Size(); size > 0 && bufSize > size {
+	if size > 0 && bufSize > size {
 		bufSize = size
 	}
 
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, size)
 	if err != nil {
 		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	fsMeta.Meta["etag"] = hex.EncodeToString(data.MD5Current())
+	fsMeta.Meta["etag"] = hash.Hex(data.ETag())
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < data.Size() {
+	if bytesWritten < size {
 		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, IncompleteBody{}
 	}

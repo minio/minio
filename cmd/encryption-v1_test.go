@@ -362,7 +362,7 @@ func TestEncryptRequest(t *testing.T) {
 		for k, v := range test.header {
 			req.Header.Set(k, v)
 		}
-		_, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
+		_, _, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)

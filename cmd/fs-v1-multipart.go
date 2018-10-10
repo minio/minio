@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -271,7 +270,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
+func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(ctx, bucket, object, fs); err != nil {
 		return pi, toObjectErr(err, bucket)
 	}
@@ -281,7 +280,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	}
 
 	// Validate input data size and it can never be less than -1.
-	if data.Size() < -1 {
+	if size, _ := data.Size(); size < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return pi, toObjectErr(errInvalidArgument)
 	}
@@ -297,14 +296,15 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return pi, toObjectErr(err, bucket, object)
 	}
 
+	size, _ := data.Size()
 	bufSize := int64(readSizeV1)
-	if size := data.Size(); size > 0 && bufSize > size {
+	if size > 0 && bufSize > size {
 		bufSize = size
 	}
 	buf := make([]byte, bufSize)
 
 	tmpPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
-	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, buf, size)
 	if err != nil {
 		fsRemoveFile(ctx, tmpPartPath)
 		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
@@ -312,7 +312,8 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < data.Size() {
+	size, actualSize := data.Size()
+	if bytesWritten < size {
 		fsRemoveFile(ctx, tmpPartPath)
 		return pi, IncompleteBody{}
 	}
@@ -322,11 +323,11 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	// delete in which case we just ignore the error.
 	defer fsRemoveFile(ctx, tmpPartPath)
 
-	etag := hex.EncodeToString(data.MD5Current())
+	etag := hash.Hex(data.ETag())
 	if etag == "" {
 		etag = GenETag()
 	}
-	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
+	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, actualSize))
 
 	if err = fsRenameFile(ctx, tmpPartPath, partPath); err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
@@ -343,7 +344,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		LastModified: fi.ModTime(),
 		ETag:         etag,
 		Size:         fi.Size(),
-		ActualSize:   data.ActualSize(),
+		ActualSize:   actualSize,
 	}, nil
 }
 
