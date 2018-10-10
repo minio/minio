@@ -28,6 +28,10 @@ import (
 const (
 	// XL metadata file carries per object metadata.
 	xlMetaJSONFile = "xl.json"
+
+	// Corrupted suffix for objects that do
+	// not have enough data in all disks.
+	xlCorruptedSuffix = ".CORRUPTED"
 )
 
 // OfflineDisk represents an unavailable disk.
