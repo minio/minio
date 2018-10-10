@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
@@ -69,9 +71,58 @@ const (
 // domain is "SSE-S3".
 func (s3) String() string { return "SSE-S3" }
 
+// UnsealObjectKey extracts and decrypts the sealed object key
+// from the metadata using KMS and returns the decrypted object
+// key.
+func (sse s3) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	keyID, kmsKey, sealedKey, err := sse.ParseMetadata(metadata)
+	if err != nil {
+		return
+	}
+	unsealKey, err := kms.UnsealKey(keyID, kmsKey, Context{bucket: path.Join(bucket, object)})
+	if err != nil {
+		return
+	}
+	err = key.Unseal(unsealKey, sealedKey, sse.String(), bucket, object)
+	return
+}
+
 // String returns the SSE domain as string. For SSE-C the
 // domain is "SSE-C".
 func (ssec) String() string { return "SSE-C" }
+
+// UnsealObjectKey extracts and decrypts the sealed object key
+// from the metadata using the SSE-C client key of the HTTP headers
+// and returns the decrypted object key.
+func (sse ssec) UnsealObjectKey(h http.Header, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	clientKey, err := sse.ParseHTTP(h)
+	if err != nil {
+		return
+	}
+	return unsealObjectKey(clientKey, metadata, bucket, object)
+}
+
+// UnsealObjectKey extracts and decrypts the sealed object key
+// from the metadata using the SSE-Copy client key of the HTTP headers
+// and returns the decrypted object key.
+func (sse ssecCopy) UnsealObjectKey(h http.Header, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	clientKey, err := sse.ParseHTTP(h)
+	if err != nil {
+		return
+	}
+	return unsealObjectKey(clientKey, metadata, bucket, object)
+}
+
+// unsealObjectKey decrypts and returns the sealed object key
+// from the metadata using the SSE-C client key.
+func unsealObjectKey(clientKey [32]byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	sealedKey, err := SSEC.ParseMetadata(metadata)
+	if err != nil {
+		return
+	}
+	err = key.Unseal(clientKey, sealedKey, SSEC.String(), bucket, object)
+	return
+}
 
 // EncryptSinglePart encrypts an io.Reader which must be the
 // the body of a single-part PUT request.
