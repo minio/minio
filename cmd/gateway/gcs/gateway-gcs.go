@@ -880,7 +880,7 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
+func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -893,7 +893,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, d
 	w := object.NewWriter(l.ctx)
 	// Disable "chunked" uploading in GCS client if the size of the data to be uploaded is below
 	// the current chunk-size of the writer. This avoids an unnecessary memory allocation.
-	if data.Size() < int64(w.ChunkSize) {
+	if size, _ := data.Size(); size < int64(w.ChunkSize) {
 		w.ChunkSize = 0
 	}
 	applyMetadataToGCSAttrs(metadata, &w.ObjectAttrs)
@@ -1061,11 +1061,11 @@ func (l *gcsGateway) checkUploadIDExists(ctx context.Context, bucket string, key
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data *hash.Reader, opts minio.ObjectOptions) (minio.PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data hash.Reader, opts minio.ObjectOptions) (minio.PartInfo, error) {
 	if err := l.checkUploadIDExists(ctx, bucket, key, uploadID); err != nil {
 		return minio.PartInfo{}, err
 	}
-	etag := data.MD5HexString()
+	etag, _ := data.Checksums()
 	if etag == "" {
 		// Generate random ETag.
 		etag = minio.GenETag()
@@ -1083,11 +1083,12 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 	}
 	// Make sure to close the object writer upon success.
 	w.Close()
+	size, _ := data.Size()
 	return minio.PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,
 		LastModified: minio.UTCNow(),
-		Size:         data.Size(),
+		Size:         size,
 	}, nil
 
 }

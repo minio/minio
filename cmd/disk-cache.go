@@ -61,14 +61,14 @@ type cacheObjects struct {
 	GetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectFn               func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	PutObjectFn               func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	PutObjectFn               func(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObjectFn            func(ctx context.Context, bucket, object string) error
 	ListObjectsFn             func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2Fn           func(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListBucketsFn             func(ctx context.Context) (buckets []BucketInfo, err error)
 	GetBucketInfoFn           func(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	NewMultipartUploadFn      func(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error)
-	PutObjectPartFn           func(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error)
+	PutObjectPartFn           func(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (info PartInfo, err error)
 	AbortMultipartUploadFn    func(ctx context.Context, bucket, object, uploadID string) error
 	CompleteMultipartUploadFn func(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 	DeleteBucketFn            func(ctx context.Context, bucket string) error
@@ -93,12 +93,12 @@ type CacheObjectLayer interface {
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	PutObject(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
 
 	// Multipart operations.
 	NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error)
-	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error)
+	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (info PartInfo, err error)
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
@@ -647,14 +647,14 @@ func (c cacheObjects) isCacheExclude(bucket, object string) bool {
 }
 
 // PutObject - caches the uploaded object for single Put operations
-func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	putObjectFn := c.PutObjectFn
 	dcache, err := c.cache.getCacheFS(ctx, bucket, object)
 	if err != nil {
 		// disk cache could not be located,execute backend call.
 		return putObjectFn(ctx, bucket, object, r, metadata, opts)
 	}
-	size := r.Size()
+	size, _ := r.Size()
 
 	// fetch from backend if there is no space on cache drive
 	if !dcache.diskAvailable(size * cacheSizeMultiplier) {
@@ -669,13 +669,15 @@ func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r *h
 	objInfo = ObjectInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
+	size, actualSize := r.Size()
+	md5Hex, sha256Hex := r.Checksums()
+	hashReader, err := hash.NewReader(pipeReader, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, r.MD5HexString(), r.SHA256HexString(), r.ActualSize())
+	cHashReader, err := hash.NewReader(rPipe, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -737,7 +739,7 @@ func (c cacheObjects) NewMultipartUpload(ctx context.Context, bucket, object str
 }
 
 // PutObjectPart - uploads part to backend and cache simultaneously.
-func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
+func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
 	putObjectPartFn := c.PutObjectPartFn
 	dcache, err := c.cache.getCacheFS(ctx, bucket, object)
 	if err != nil {
@@ -750,7 +752,7 @@ func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadI
 	}
 
 	// make sure cache has at least cacheSizeMultiplier * size available
-	size := data.Size()
+	size, actualSize := data.Size()
 	if !dcache.diskAvailable(size * cacheSizeMultiplier) {
 		select {
 		case dcache.purgeChan <- struct{}{}:
@@ -762,13 +764,14 @@ func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadI
 	info = PartInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
+	md5Hex, sha256Hex := data.Checksums()
+	hashReader, err := hash.NewReader(pipeReader, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		return
 	}
 	// Initialize pipe to stream data to cache
 	rPipe, wPipe := io.Pipe()
-	cHashReader, err := hash.NewReader(rPipe, size, data.MD5HexString(), data.SHA256HexString(), data.ActualSize())
+	cHashReader, err := hash.NewReader(rPipe, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		return
 	}
@@ -969,7 +972,7 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},
-		PutObjectFn: func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+		PutObjectFn: func(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 			return newObjectLayerFn().PutObject(ctx, bucket, object, data, metadata, opts)
 		},
 		DeleteObjectFn: func(ctx context.Context, bucket, object string) error {
@@ -990,7 +993,7 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 		NewMultipartUploadFn: func(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
 			return newObjectLayerFn().NewMultipartUpload(ctx, bucket, object, metadata, opts)
 		},
-		PutObjectPartFn: func(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
+		PutObjectPartFn: func(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
 			return newObjectLayerFn().PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 		},
 		AbortMultipartUploadFn: func(ctx context.Context, bucket, object, uploadID string) error {

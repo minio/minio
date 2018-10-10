@@ -598,7 +598,7 @@ func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffs
 }
 
 // PutObject - writes an object to hashedSet based on the object name.
-func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, metadata, opts)
 }
 
@@ -832,7 +832,7 @@ func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destB
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
-func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
+func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
 	return s.getHashedSet(object).PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 }
 

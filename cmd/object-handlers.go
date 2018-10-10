@@ -820,7 +820,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				}
 			}
 			if sseC || sseS3 {
-				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
+				reader, _, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
@@ -844,7 +844,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 					delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
 				}
 			}
-
 			srcInfo.Reader, err = hash.NewReader(reader, size, "", "", size) // do not try to verify encrypted content
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1102,7 +1101,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		pipeReader, pipeWriter := io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
-		var actualReader *hash.Reader
+		var actualReader hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1139,13 +1138,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
-			reader, err = EncryptRequest(hashReader, r, bucket, object, metadata)
+			var etagKey []byte
+			reader, etagKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 			info := ObjectInfo{Size: size}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
+			hashReader, err = hash.NewEncryptedReader(reader, hashReader, info.EncryptedSize(), "", "", size, etagKey) // do not try to verify encrypted content
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1656,7 +1656,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		pipeReader, pipeWriter = io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
-		var actualReader *hash.Reader
+		var actualReader hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)

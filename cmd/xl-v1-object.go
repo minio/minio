@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"io"
 	"net/http"
 	"path"
@@ -552,9 +551,10 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
+	size, _ := data.Size()
+	if err = checkPutObjectArgs(ctx, bucket, object, xl, size); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -568,7 +568,7 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 }
 
 // putObject wrapper for xl PutObject
-func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -592,7 +592,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
-	if isObjectDir(object, data.Size()) {
+	size, _ := data.Size()
+	if isObjectDir(object, size) {
 		// Check if an object is present as one of the parent dir.
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
@@ -609,16 +610,16 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
+		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
 
 	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
+	if err = checkPutObjectArgs(ctx, bucket, object, xl, size); err != nil {
 		return ObjectInfo{}, err
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
+	if size < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
@@ -656,7 +657,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
 	var buffer []byte
-	switch size := data.Size(); {
+	switch {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1 || size >= blockSizeV1:
@@ -680,7 +681,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 		// Calculate the size of the current part.
 		var curPartSize int64
-		curPartSize, err = calculatePartSizeFromIdx(ctx, data.Size(), globalPutPartSize, partIdx)
+		curPartSize, err = calculatePartSizeFromIdx(ctx, size, globalPutPartSize, partIdx)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -696,7 +697,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 		}
 
-		if curPartSize < data.Size() {
+		if curPartSize < size {
 			curPartReader = io.LimitReader(reader, curPartSize)
 		} else {
 			curPartReader = reader
@@ -717,12 +718,12 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
 
-		if n < curPartSize && data.Size() > 0 {
+		if n < curPartSize && size > 0 {
 			logger.LogIf(ctx, IncompleteBody{})
 			return ObjectInfo{}, IncompleteBody{}
 		}
 
-		if n == 0 && data.Size() == -1 {
+		if n == 0 && size == -1 {
 			// The last part of a compressed object will always be empty
 			// Since the compressed size is unpredictable.
 			// Hence removing the last (empty) part from all `xl.disks`.
@@ -736,24 +737,25 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// Update the total written size
 		sizeWritten += n
 
+		_, actualSize := data.Size()
 		for i, w := range writers {
 			if w == nil {
 				onlineDisks[i] = nil
 				continue
 			}
-			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, data.ActualSize())
+			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, actualSize)
 			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, w.Sum()})
 		}
 
 		// We wrote everything, break out.
-		if sizeWritten == data.Size() {
+		if sizeWritten == size {
 			break
 		}
 	}
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
-	metadata["etag"] = hex.EncodeToString(data.MD5Current())
+	metadata["etag"] = hash.Hex(data.ETag())
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {

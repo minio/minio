@@ -608,25 +608,20 @@ func (d dummySeeker) Seek(offset int64, whence int) (int64, error) {
 // CreateBlockBlobFromReader.
 //
 // https://apidocs.joyent.com/manta/api.html#PutObject
-func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	size, _ := data.Size()
+	contentMD5, _ := data.Checksums()
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
-		ContentLength: uint64(data.Size()),
+		ContentLength: uint64(size),
 		ObjectPath:    path.Join(mantaRoot, bucket, object),
 		ContentType:   metadata["content-type"],
-		// TODO: Change to `string(data.md5sum)` if/when that becomes an exported field
-		ContentMD5:   metadata["content-md5"],
-		ObjectReader: dummySeeker{data},
-		ForceInsert:  true,
+		ContentMD5:    contentMD5,
+		ObjectReader:  dummySeeker{data},
+		ForceInsert:   true,
 	}); err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
-	if err = data.Verify(); err != nil {
-		t.DeleteObject(ctx, bucket, object)
-		logger.LogIf(ctx, err)
-		return objInfo, err
-	}
-
 	return t.GetObjectInfo(ctx, bucket, object, opts)
 }
 

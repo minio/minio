@@ -632,7 +632,7 @@ func (l *ossObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 }
 
 // ossPutObject creates a new object with the incoming data.
-func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string, data hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -655,7 +655,7 @@ func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string
 }
 
 // PutObject creates a new object with the incoming data.
-func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	return ossPutObject(ctx, l.Client, bucket, object, data, metadata)
 }
 
@@ -773,7 +773,7 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 }
 
 // PutObjectPart puts a part of object in bucket.
-func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -785,7 +785,7 @@ func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		Key:      object,
 		UploadID: uploadID,
 	}
-	size := data.Size()
+	size, _ := data.Size()
 	up, err := bkt.UploadPart(imur, data, size, partID)
 	if err != nil {
 		logger.LogIf(ctx, err)

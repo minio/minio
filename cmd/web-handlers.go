@@ -714,7 +714,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		pipeReader, pipeWriter := io.Pipe()
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
-		var actualReader *hash.Reader
+		var actualReader hash.Reader
 		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)

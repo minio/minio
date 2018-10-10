@@ -18,6 +18,7 @@ package hash
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
@@ -25,34 +26,63 @@ import (
 	"hash"
 	"io"
 
+	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
+	"github.com/minio/sio"
 )
 
 var errNestedReader = errors.New("Nesting of Reader detected, not allowed")
 
-// Reader writes what it reads from an io.Reader to an MD5 and SHA256 hash.Hash.
-// Reader verifies that the content of the io.Reader matches the expected checksums.
-type Reader struct {
-	src        io.Reader
-	size       int64
-	actualSize int64
+// Hex returns the hexadecimal encoding of b.
+func Hex(b []byte) string { return hex.EncodeToString(b) }
 
-	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
-	md5Hash, sha256Hash hash.Hash
+// Base64 returns the base64 encoding of b.
+func Base64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
+
+// HexAsBase64 returns the base64 encoding of the hexadecimal encoded string s.
+func HexAsBase64(s string) string {
+	b, _ := hex.DecodeString(s)
+	return Base64(b)
+}
+
+type Reader interface {
+	io.Reader
+
+	// Size returns the absolute number of bytes the Reader
+	// will return during reading and the actual size of the
+	// underlying object.
+	//
+	// The actual size may differ from the available number of
+	// bytes of the stream - e.g. if the stream is compressed.
+	// It returns -1 for size and actualSize for unlimited data.
+	Size() (size, actualSize int64)
+
+	// Checksums returns the MD5 and the SHA256 hash values as hex
+	// string provided during the Reader initialization. They may
+	// not be equal to the ETag or SHA256 computed during reading.
+	Checksums() (md5, sha256 string)
+
+	// ETag returns the etag hash value of currently read data.
+	// Calling this function multiple times may return different
+	// results if intermixed with Read calls.
+	ETag() []byte
+
+	// SHA256 returns the SHA256 hash value of currently read data.
+	// Calling this function multiple times may return different
+	// results if intermixed with Read calls.
+	SHA256() []byte
 }
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
 // SHA256 sum (if set) of the provided io.Reader at EOF.
-func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
-	if _, ok := src.(*Reader); ok {
+func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (Reader, error) {
+	if _, ok := src.(Reader); ok {
 		return nil, errNestedReader
 	}
-
 	sha256sum, err := hex.DecodeString(sha256Hex)
 	if err != nil {
 		return nil, SHA256Mismatch{}
 	}
-
 	md5sum, err := hex.DecodeString(md5Hex)
 	if err != nil {
 		return nil, BadDigest{}
@@ -65,18 +95,86 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	if size >= 0 {
 		src = io.LimitReader(src, size)
 	}
-	return &Reader{
-		md5sum:     md5sum,
-		sha256sum:  sha256sum,
-		src:        src,
-		size:       size,
-		md5Hash:    md5.New(),
-		sha256Hash: sha256Hash,
-		actualSize: actualSize,
+	return &hashReader{
+		reader{
+			md5sum:     md5sum,
+			sha256sum:  sha256sum,
+			src:        src,
+			size:       size,
+			md5Hash:    md5.New(),
+			sha256Hash: sha256Hash,
+			actualSize: actualSize,
+		},
 	}, nil
 }
 
-func (r *Reader) Read(p []byte) (n int, err error) {
+func NewEncryptedReader(ciphertext io.Reader, plaintext Reader, size int64, md5Hex, sha256Hex string, actualSize int64, sealKey []byte) (Reader, error) {
+	if _, ok := ciphertext.(Reader); ok {
+		return nil, errNestedReader
+	}
+	sha256sum, err := hex.DecodeString(sha256Hex)
+	if err != nil {
+		return nil, SHA256Mismatch{}
+	}
+	md5sum, err := hex.DecodeString(md5Hex)
+	if err != nil {
+		return nil, BadDigest{}
+	}
+
+	var sha256Hash hash.Hash
+	if len(sha256sum) != 0 {
+		sha256Hash = sha256.New()
+	}
+	if size >= 0 {
+		ciphertext = io.LimitReader(ciphertext, size)
+	}
+	if len(sealKey) != 32 {
+		return nil, errors.New("hash: key for sealing the etag must be 32 bytes long")
+	}
+
+	return &cryptoReader{
+		reader: reader{
+			md5sum:     md5sum,
+			sha256sum:  sha256sum,
+			src:        ciphertext,
+			size:       size,
+			md5Hash:    md5.New(),
+			sha256Hash: sha256Hash,
+			actualSize: actualSize,
+		},
+		plaintext: plaintext,
+		key:       sealKey,
+	}, nil
+}
+
+type hashReader struct{ reader }
+
+func (r *hashReader) ETag() []byte { return r.md5Hash.Sum(nil) }
+
+type cryptoReader struct {
+	reader
+	plaintext Reader
+	key       []byte
+}
+
+func (r *cryptoReader) ETag() []byte {
+	var buffer bytes.Buffer
+	if _, err := sio.Encrypt(&buffer, bytes.NewReader(r.plaintext.ETag()), sio.Config{Key: r.key}); err != nil {
+		logger.CriticalIf(context.Background(), errors.New("Failed to seal the ETag")) // Fail if encryption fails - don't return a corrupt etag
+	}
+	return buffer.Bytes()
+}
+
+type reader struct {
+	src        io.Reader
+	size       int64
+	actualSize int64
+
+	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
+	md5Hash, sha256Hash hash.Hash
+}
+
+func (r *reader) Read(p []byte) (n int, err error) {
 	n, err = r.src.Read(p)
 	if n > 0 {
 		r.md5Hash.Write(p[:n])
@@ -87,7 +185,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 
 	// At io.EOF verify if the checksums are right.
 	if err == io.EOF {
-		if cerr := r.Verify(); cerr != nil {
+		if cerr := r.verify(); cerr != nil {
 			return 0, cerr
 		}
 	}
@@ -95,51 +193,18 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Size returns the absolute number of bytes the Reader
-// will return during reading. It returns -1 for unlimited
-// data.
-func (r *Reader) Size() int64 { return r.size }
+func (r *reader) Size() (int64, int64) { return r.size, r.actualSize }
 
-// ActualSize returns the pre-modified size of the object.
-// DecompressedSize - For compressed objects.
-func (r *Reader) ActualSize() int64 { return r.actualSize }
+func (r *reader) Checksums() (string, string) { return Hex(r.md5sum), Hex(r.sha256sum) }
 
-// MD5 - returns byte md5 value
-func (r *Reader) MD5() []byte {
-	return r.md5sum
+func (r *reader) SHA256() []byte {
+	if r.sha256Hash != nil {
+		return r.sha256Hash.Sum(nil)
+	}
+	return nil
 }
 
-// MD5Current - returns byte md5 value of the current state
-// of the md5 hash after reading the incoming content.
-// NOTE: Calling this function multiple times might yield
-// different results if they are intermixed with Reader.
-func (r *Reader) MD5Current() []byte {
-	return r.md5Hash.Sum(nil)
-}
-
-// SHA256 - returns byte sha256 value
-func (r *Reader) SHA256() []byte {
-	return r.sha256sum
-}
-
-// MD5HexString returns hex md5 value.
-func (r *Reader) MD5HexString() string {
-	return hex.EncodeToString(r.md5sum)
-}
-
-// MD5Base64String returns base64 encoded MD5sum value.
-func (r *Reader) MD5Base64String() string {
-	return base64.StdEncoding.EncodeToString(r.md5sum)
-}
-
-// SHA256HexString returns hex sha256 value.
-func (r *Reader) SHA256HexString() string {
-	return hex.EncodeToString(r.sha256sum)
-}
-
-// Verify verifies if the computed MD5 sum and SHA256 sum are
-// equal to the ones specified when creating the Reader.
-func (r *Reader) Verify() error {
+func (r *reader) verify() error {
 	if r.sha256Hash != nil && len(r.sha256sum) > 0 {
 		if sum := r.sha256Hash.Sum(nil); !bytes.Equal(r.sha256sum, sum) {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}

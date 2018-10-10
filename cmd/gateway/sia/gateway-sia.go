@@ -554,14 +554,15 @@ func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	writer, err := os.Create(srcFile)
 	if err != nil {
 		return objInfo, err
 	}
 
-	wsize, err := io.CopyN(writer, data, data.Size())
+	size, _ := data.Size()
+	wsize, err := io.CopyN(writer, data, size)
 	if err != nil {
 		os.Remove(srcFile)
 		return objInfo, err

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -258,7 +257,7 @@ func (cfs *cacheFSObjects) IsOnline() bool {
 }
 
 // Caches the object to disk
-func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) error {
+func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) error {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:
@@ -266,7 +265,8 @@ func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data 
 		}
 		return errDiskFull
 	}
-	if !cfs.diskAvailable(data.Size()) {
+	size, _ := data.Size()
+	if !cfs.diskAvailable(size) {
 		return errDiskFull
 	}
 	if _, err := cfs.GetBucketInfo(ctx, bucket); err != nil {
@@ -301,7 +301,7 @@ func (cfs *cacheFSObjects) Exists(ctx context.Context, bucket, object string) bo
 
 // Identical to fs PutObject operation except that it uses ETag in metadata
 // headers.
-func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, data hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	fs := cfs.FSObjects
 	// Lock the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
@@ -329,7 +329,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
-	if isObjectDir(object, data.Size()) {
+	if size, _ := data.Size(); isObjectDir(object, size) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
@@ -344,7 +344,8 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
+	size, _ := data.Size()
+	if err = checkPutObjectArgs(ctx, bucket, object, fs, size); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -354,7 +355,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
+	if size, _ := data.Size(); size < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, errInvalidArgument
 	}
@@ -387,23 +388,24 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 
 	// Allocate a buffer to Read() from request body
 	bufSize := int64(readSizeV1)
-	if size := data.Size(); size > 0 && bufSize > size {
+	if size, _ := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
 
+	objSize, _ := data.Size()
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, objSize)
 	if err != nil {
 		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fsMeta.Meta["etag"] == "" {
-		fsMeta.Meta["etag"] = hex.EncodeToString(data.MD5Current())
+		fsMeta.Meta["etag"] = hash.Hex(data.ETag())
 	}
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < data.Size() {
+	if size, _ := data.Size(); bytesWritten < size {
 		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, IncompleteBody{}
 	}

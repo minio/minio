@@ -722,8 +722,8 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	if data.Size() < azureBlockSize/10 {
+func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, data hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	if size, _ := data.Size(); size < azureBlockSize/10 {
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
 		if err = blob.CreateBlockBlobFromReader(data, nil); err != nil {
@@ -736,14 +736,14 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, dat
 	if err != nil {
 		return objInfo, err
 	}
-	etag := data.MD5HexString()
+	etag, _ := data.Checksums()
 	if etag == "" {
 		etag = minio.GenETag()
 	}
 
 	blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 	subPartSize, subPartNumber := int64(azureBlockSize), 1
-	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
+	for remainingSize, _ := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
 		// Allow to create zero sized part.
 		if remainingSize == 0 && subPartNumber > 1 {
 			break
@@ -808,7 +808,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, dat
 	}
 
 	// Save md5sum for future processing on the object.
-	metadata["x-amz-meta-md5sum"] = hex.EncodeToString(data.MD5Current())
+	metadata["x-amz-meta-md5sum"] = hash.Hex(data.ETag())
 	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
@@ -923,7 +923,7 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data hash.Reader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return info, err
 	}
@@ -932,13 +932,13 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 		return info, err
 	}
 
-	etag := data.MD5HexString()
+	etag, _ := data.Checksums()
 	if etag == "" {
 		etag = minio.GenETag()
 	}
 
 	subPartSize, subPartNumber := int64(azureBlockSize), 1
-	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
+	for remainingSize, _ := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
 		// Allow to create zero sized part.
 		if remainingSize == 0 && subPartNumber > 1 {
 			break
@@ -960,7 +960,7 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = minio.UTCNow()
-	info.Size = data.Size()
+	info.Size, _ = data.Size()
 	return info, nil
 }
 
