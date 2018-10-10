@@ -28,7 +28,7 @@ describe("DeleteObjectConfirmModal", () => {
     const wrapper = shallow(
       <DeleteObjectConfirmModal deleteObject={deleteObject} />
     )
-    wrapper.find("ConfirmModal").prop("okHandler")()
+    wrapper.find(".button--danger").simulate("click")
     expect(deleteObject).toHaveBeenCalled()
   })
 
@@ -39,7 +39,7 @@ describe("DeleteObjectConfirmModal", () => {
         hideDeleteConfirmModal={hideDeleteConfirmModal}
       />
     )
-    wrapper.find("ConfirmModal").prop("cancelHandler")()
+    wrapper.find(".button--light").simulate("click")
     expect(hideDeleteConfirmModal).toHaveBeenCalled()
   })
 })

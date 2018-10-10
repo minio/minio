@@ -28,13 +28,15 @@ describe("ObjectsHeader", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-asc")
+      wrapper.find("#sort-by-name > div").hasClass("objects__sort--asc")
     ).toBeTruthy()
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc")
+      wrapper.find("#sort-by-size > div").hasClass("objects__sort--asc")
     ).toBeTruthy()
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc")
+      wrapper
+        .find("#sort-by-last-modified > div")
+        .hasClass("objects__sort--asc")
     ).toBeTruthy()
   })
 
@@ -44,7 +46,7 @@ describe("ObjectsHeader", () => {
       <ObjectsHeader sortObjects={sortObjects} sortNameOrder={true} />
     )
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-desc")
+      wrapper.find("#sort-by-name > div").hasClass("objects__sort--desc")
     ).toBeTruthy()
   })
 
@@ -54,7 +56,7 @@ describe("ObjectsHeader", () => {
       <ObjectsHeader sortObjects={sortObjects} sortSizeOrder={true} />
     )
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc")
+      wrapper.find("#sort-by-size > div").hasClass("objects__sort--desc")
     ).toBeTruthy()
   })
 
@@ -64,7 +66,9 @@ describe("ObjectsHeader", () => {
       <ObjectsHeader sortObjects={sortObjects} sortLastModifiedOrder={true} />
     )
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc")
+      wrapper
+        .find("#sort-by-last-modified > div")
+        .hasClass("objects__sort--desc")
     ).toBeTruthy()
   })
 

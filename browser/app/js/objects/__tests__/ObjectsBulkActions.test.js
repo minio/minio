@@ -25,7 +25,7 @@ describe("ObjectsBulkActions", () => {
 
   it("should show actions when checkObjectsCount is more than 0", () => {
     const wrapper = shallow(<ObjectsBulkActions checkedObjects={["test"]} />)
-    expect(wrapper.hasClass("list-actions-toggled")).toBeTruthy()
+    expect(wrapper.find(".object-actions")).toBePresent()
   })
 
   it("should call downloadObject when single object is selected and download button is clicked", () => {
@@ -69,7 +69,10 @@ describe("ObjectsBulkActions", () => {
   it("should call clearChecked when close button is clicked", () => {
     const clearChecked = jest.fn()
     const wrapper = shallow(
-      <ObjectsBulkActions checkedObjects={["test"]} clearChecked={clearChecked} />
+      <ObjectsBulkActions
+        checkedObjects={["test"]}
+        clearChecked={clearChecked}
+      />
     )
     wrapper.find("#close-bulk-actions").simulate("click")
     expect(clearChecked).toHaveBeenCalled()
@@ -95,6 +98,6 @@ describe("ObjectsBulkActions", () => {
     wrapper.find("DeleteObjectConfirmModal").prop("deleteObject")()
     expect(deleteChecked).toHaveBeenCalled()
     wrapper.update()
-    expect(wrapper.find("DeleteObjectConfirmModal").length).toBe(0)
+    expect(wrapper.state("showDeleteConfirmation")).toBeFalsy()
   })
 })

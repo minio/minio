@@ -64,7 +64,7 @@ describe("Path", () => {
       />
     )
     wrapper
-      .find("a")
+      .find(".path__item > span")
       .at(2)
       .simulate("click", { preventDefault: jest.fn() })
     expect(selectPrefix).toHaveBeenCalledWith("a/b/")
