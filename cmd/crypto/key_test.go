@@ -166,3 +166,31 @@ func TestDerivePartKey(t *testing.T) {
 		}
 	}
 }
+
+var sealUnsealETagTests = []string{
+	"",
+	"90682b8e8cc7609c",
+	"90682b8e8cc7609c4671e1d64c73fc30",
+	"90682b8e8cc7609c4671e1d64c73fc307fb3104f",
+}
+
+func TestSealETag(t *testing.T) {
+	var key ObjectKey
+	for i := range key {
+		key[i] = byte(i)
+	}
+	for i, etag := range sealUnsealETagTests {
+		tag, err := hex.DecodeString(etag)
+		if err != nil {
+			t.Errorf("Test %d: failed to decode etag: %s", i, err)
+		}
+		sealedETag := key.SealETag(tag)
+		unsealedETag, err := key.UnsealETag(sealedETag)
+		if err != nil {
+			t.Errorf("Test %d: failed to decrypt etag: %s", i, err)
+		}
+		if !bytes.Equal(unsealedETag, tag) {
+			t.Errorf("Test %d: unsealed etag does not match: got %s - want %s", i, hex.EncodeToString(unsealedETag), etag)
+		}
+	}
+}
