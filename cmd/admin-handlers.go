@@ -27,6 +27,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+<<<<<<< Updated upstream
+=======
+	"regexp"
+	"runtime"
+>>>>>>> Stashed changes
 	"strconv"
 	"strings"
 	"sync"
@@ -565,6 +570,59 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+<<<<<<< Updated upstream
+=======
+// Helper function to get the name of the caller function. If caller
+// function name is "setConfigKeysHandler", then jsonField in getGJson
+// won't be checked for emptiness. We don't want to do the
+// check for map structures like "notify" and "logger" structures
+// to be able to set new map key values, like in set command:
+// "mc admin config set logger.http.<a-new-map-key>.enabled=true".
+// So, empty means user would like to add another entry into the map
+// structure.
+func myCaller() (string, error) {
+	fpcs := make([]uintptr, 1)
+	// Skip 3 levels to get the caller
+	n := runtime.Callers(3, fpcs)
+	if n == 0 {
+		return "", errors.New("No caller")
+	}
+
+	caller := runtime.FuncForPC(fpcs[0] - 1)
+	if caller == nil {
+		return "", errors.New("No caller")
+	}
+	return caller.Name(), nil
+}
+
+func checkKeyForMapType(key string) int {
+	subKeys := strings.Split(key, ".")
+	for index, _ := range subKeys {
+		// if reflect.TypeOf(subKeys[index]) == reflect.Map {
+		return index
+		// }
+	}
+	return -1
+}
+
+// Helper function for GetConfigHandler and SetConfigHandler
+func getGJson(ctx context.Context, structConfig, key string) (gjson.Result, error) {
+	// Compare key against struct config
+	jsonField := gjson.Get(structConfig, key)
+	callerFunc, _ := myCaller()
+	fmt.Println("callerFunc = ", callerFunc)
+	if !strings.Contains(callerFunc, "SetConfigKeysHandler") {
+		if (gjson.Result{}) == jsonField {
+			logger.GetReqInfo(ctx).SetTags("Configuration key", key)
+			err := errors.New("Invalid configuration key: " + key)
+			logger.LogIf(ctx, err)
+			return jsonField, err
+		}
+	}
+	return jsonField, nil
+}
+
+>>>>>>> Stashed changes
 // GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -669,11 +727,21 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	configStr := string(configData)
 	newConfigStr := `{}`
 
+<<<<<<< Updated upstream
 	for _, key := range keys {
 		// sjson.Set does not return an error if key is empty
 		// we should check by ourselves here
 		if key == "" {
 			continue
+=======
+	// Check if the requested key(s) are valid
+	queries := r.URL.Query()
+	for key := range queries {
+		fmt.Println("Get  query key = ", key)
+		if _, err := getGJson(ctx, structConfig, key); err != nil {
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error(), r.URL)
+			return
+>>>>>>> Stashed changes
 		}
 		val := gjson.Get(configStr, key)
 		if j, ierr := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); ierr == nil {
@@ -986,6 +1054,116 @@ func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
 	}
 }
 
+<<<<<<< Updated upstream
+=======
+func checkValidJSONFields(expectedKeys gjson.Result, elem []byte) error {
+	// This function validates user provided keys/configuration
+	// parameters by commparing them with expected keys collected
+	// from server configuration template and returns the
+	// names of the keys in dot notation when an invalid key is encountered
+	keys := string(elem)
+	var found bool
+	var fullKeyName string
+	// Validation for a single key
+	if expectedKeys.Type == gjson.Null &&
+		expectedKeys.Raw == "" &&
+		expectedKeys.Str == "" &&
+		expectedKeys.Num == 0 &&
+		expectedKeys.Index == 0 {
+		// Key is not initialized at all, it doesn't have
+		// type, index, nothing. It is invalid.
+		// There is no need to send back anything, since
+		// key information is already within caller's knowledge.
+		return errors.New("")
+	}
+	// Define variables to skip JSON characters
+	// "{" and "}" for validation purposes
+	var skipChrsFront int
+	var skipChrsEnd int
+	// Validation for keys in JSON format
+	if expectedKeys.Type == gjson.JSON {
+		if len(keys) == 2 {
+			return nil
+		}
+		raw := expectedKeys.Raw
+		if keys[:1] == "{" {
+			skipChrsFront = 1
+		} else {
+			skipChrsFront = 0
+		}
+		if keys[len(keys)-1:] == "}" {
+			skipChrsEnd = 1
+		} else {
+			skipChrsEnd = 0
+		}
+		// Remove characters ":", " " and multiples of them
+		// from the list of expected key:value pair
+		keys := regexpKeysCleanup.FindAllString(keys[skipChrsFront:len(keys)-skipChrsEnd], -1)
+		// Split user specified key:value pair at characters ":" or ","
+		rawKeys := regexpRawKeysSplit.Split(raw[1:len(raw)-1], -1)
+
+		// Loop through expected keys to see if
+		// user provided key names are correct/valid
+		for i := 0; i < len(keys); i++ {
+			// if JSON snippet starts with "{"
+			if keys[i][:1] == "{" {
+				if keys[i][1:2] == "\"" {
+					skipChrsFront = 2
+				} else {
+					if keys[i][len(keys[i])-1:] == "\"" {
+						skipChrsEnd = 1
+					} else {
+						skipChrsEnd = 0
+					}
+					return errors.New(fullKeyName + "." + keys[i][1:len(keys[i])-skipChrsEnd])
+				}
+				if keys[i][len(keys[i])-1:] == "\"" {
+					skipChrsEnd = 1
+				} else {
+					skipChrsEnd = 0
+				}
+				fullKeyName += "." + keys[i][skipChrsFront:len(keys[i])-skipChrsEnd]
+			} else {
+				// if JSON snippet does NOT start with "{"
+				if keys[i][:1] == "\"" {
+					skipChrsFront = 1
+					if keys[i][len(keys[i])-1:] == "\"" {
+						skipChrsEnd = 1
+					} else {
+						return errors.New(keys[i])
+					}
+
+				} else {
+					return errors.New(keys[i])
+				}
+				fullKeyName = keys[i][skipChrsFront : len(keys[i])-skipChrsEnd]
+			}
+			// Decide if the key has been found in the base
+			// JSON structure. Consider validated if found
+			found = false
+			for j := 0; j < len(rawKeys); j++ {
+				fmt.Printf("rawKeys[%v] = %v", j, rawKeys[j])
+				if keys[i] == rawKeys[j] {
+					found = true
+					break
+				}
+				j++
+			}
+			if !found {
+				return errors.New(fullKeyName)
+			}
+			// Increment the index to skip the next key index,
+			// if not JSON. This means the next index is a value,
+			// hence it needs to be ignored.
+			if i+1 < len(keys) && keys[i+1][:1] != "{" {
+				i++
+			}
+		}
+	}
+	return nil
+}
+
+>>>>>>> Stashed changes
 // SetConfigKeysHandler - PUT /minio/admin/v1/config-keys
 func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigKeysHandler")
@@ -1025,8 +1203,19 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+<<<<<<< Updated upstream
 	configStr := string(configBytes)
 
+=======
+	var config = newServerConfig()
+	structConfigJSON, err := json.Marshal(config)
+	if err != nil {
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
+		return
+	}
+	structConfig := string(structConfigJSON)
+	fmt.Printf("\n\n%+v\n\n", structConfig)
+>>>>>>> Stashed changes
 	queries := r.URL.Query()
 	password := globalServerConfig.GetCredential().SecretKey
 
@@ -1047,6 +1236,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 			return
 		}
+<<<<<<< Updated upstream
 		// Calculate the type of the current key from the
 		// original config json
 		jsonFieldType := gjson.Get(configStr, k).Type
@@ -1054,12 +1244,43 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		val, cErr := convertValueType(elem, jsonFieldType)
 		if cErr != nil {
 			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cErr.Error(), r.URL)
+=======
+
+		fmt.Println("Set  query key = ", k)
+		jsonField, err := getGJson(ctx, structConfig, k)
+		if err != nil {
+			writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error(), r.URL)
 			return
 		}
+
+		// *****************************
+		// Check for map key type here
+		// *****************************
+
+		// if err := checkValidJSONFields(jsonField, elem); err != nil {
+		// 	writeCustomErrorResponseJSON(w, ErrNoSuchKey, err.Error()+": "+k+"."+err.Error(), r.URL)
+		// 	return
+		// }
+		fmt.Println("Validation is done", jsonField)
+
+		// Determine type of the current key from original config json
+		val, cerr := convertValueType(elem, jsonField.Type)
+		fmt.Println("val: ", val)
+		fmt.Println("cerr: ", cerr)
+		if cerr != nil {
+			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cerr.Error(), r.URL)
+>>>>>>> Stashed changes
+			return
+		}
+
+		fmt.Println("Entering sjson")
 		// Set the key/value in the new json document
-		if s, sErr := sjson.Set(configStr, normalizeJSONKey(k), val); sErr == nil {
+		s, sErr := sjson.Set(configStr, normalizeJSONKey(k), val)
+		if sErr == nil {
 			configStr = s
 		}
+		fmt.Println("s: ", s)
+		fmt.Println("sErr: ", sErr)
 	}
 
 	configBytes = []byte(configStr)
@@ -1070,11 +1291,13 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
 		return
 	}
+	fmt.Println("Unmarshal done")
 
 	if err = config.Validate(); err != nil {
 		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
 		return
 	}
+	fmt.Println("config.Validate")
 
 	if err = config.TestNotificationTargets(); err != nil {
 		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)

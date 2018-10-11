@@ -425,8 +425,14 @@ func newServerConfig() *serverConfig {
 		Credential: cred,
 		Region:     globalMinioDefaultRegion,
 		StorageClass: storageClassConfig{
-			Standard: storageClass{},
-			RRS:      storageClass{},
+			Standard: storageClass{
+				Scheme: "",
+				Parity: 0,
+			},
+			RRS: storageClass{
+				Scheme: "",
+				Parity: 0,
+			},
 		},
 		Cache: CacheConfig{
 			Drives:  []string{},
