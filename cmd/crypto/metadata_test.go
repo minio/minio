@@ -387,3 +387,53 @@ func TestIsETagSealed(t *testing.T) {
 		}
 	}
 }
+
+var removeInternalEntriesTests = []struct {
+	Metadata, Expected map[string]string
+}{
+	{ // 0
+		Metadata: map[string]string{
+			SSEMultipart:     "",
+			SSEIV:            "",
+			SSESealAlgorithm: "",
+			SSECSealedKey:    "",
+			S3SealedKey:      "",
+			S3KMSKeyID:       "",
+			S3KMSSealedKey:   "",
+		},
+		Expected: map[string]string{},
+	},
+	{ // 1
+		Metadata: map[string]string{
+			SSEMultipart:         "",
+			SSEIV:                "",
+			"X-Amz-Meta-A":       "X",
+			"X-Minio-Internal-B": "Y",
+		},
+		Expected: map[string]string{
+			"X-Amz-Meta-A":       "X",
+			"X-Minio-Internal-B": "Y",
+		},
+	},
+}
+
+func TestRemoveInternalEntries(t *testing.T) {
+	isEqual := func(x, y map[string]string) bool {
+		if len(x) != len(y) {
+			return false
+		}
+		for k, v := range x {
+			if u, ok := y[k]; !ok || v != u {
+				return false
+			}
+		}
+		return true
+	}
+
+	for i, test := range removeInternalEntriesTests {
+		RemoveInternalEntries(test.Metadata)
+		if !isEqual(test.Metadata, test.Expected) {
+			t.Errorf("Test %d: got %v - want %v", i, test.Metadata, test.Expected)
+		}
+	}
+}
