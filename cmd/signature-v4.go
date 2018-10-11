@@ -175,7 +175,14 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 
 	// Verify if the access key id matches.
 	if credHeader.accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		if globalIAMSys == nil {
+			return ErrInvalidAccessKeyID
+		}
+		var ok bool
+		cred, ok = globalIAMSys.GetUser(credHeader.accessKey)
+		if !ok {
+			return ErrInvalidAccessKeyID
+		}
 	}
 
 	// Get signing key.
@@ -211,7 +218,14 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Verify if the access key id matches.
 	if pSignValues.Credential.accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		if globalIAMSys == nil {
+			return ErrInvalidAccessKeyID
+		}
+		var ok bool
+		cred, ok = globalIAMSys.GetUser(pSignValues.Credential.accessKey)
+		if !ok {
+			return ErrInvalidAccessKeyID
+		}
 	}
 
 	// Extract all the signed headers along with its values.
@@ -335,7 +349,14 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 
 	// Verify if the access key id matches.
 	if signV4Values.Credential.accessKey != cred.AccessKey {
-		return ErrInvalidAccessKeyID
+		if globalIAMSys == nil {
+			return ErrInvalidAccessKeyID
+		}
+		var ok bool
+		cred, ok = globalIAMSys.GetUser(signV4Values.Credential.accessKey)
+		if !ok {
+			return ErrInvalidAccessKeyID
+		}
 	}
 
 	// Extract date, if not present throw error.

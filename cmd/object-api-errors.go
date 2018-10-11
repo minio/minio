@@ -378,12 +378,6 @@ func (e BackendDown) Error() string {
 	return "Backend down"
 }
 
-// isErrIncompleteBody - Check if error type is IncompleteBody.
-func isErrIncompleteBody(err error) bool {
-	_, ok := err.(IncompleteBody)
-	return ok
-}
-
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	_, ok := err.(ObjectNotFound)

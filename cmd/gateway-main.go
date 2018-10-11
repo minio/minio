@@ -157,28 +157,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to create configuration directories")
 
-	// Initialize server config.
-	srvCfg := newServerConfig()
-
-	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
-
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
-
-	var cacheConfig = globalServerConfig.GetCacheConfig()
-	if len(cacheConfig.Drives) > 0 {
-		var err error
-		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-	}
-
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
@@ -188,12 +166,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.LogIf(context.Background(), setMaxResources())
 
 	initNSLock(false) // Enable local namespace lock.
-
-	// Create new notification system.
-	globalNotificationSys = NewNotificationSys(globalServerConfig, EndpointList{})
-
-	// Create new policy system.
-	globalPolicySys = NewPolicySys()
 
 	router := mux.NewRouter().SkipClean(true)
 
@@ -206,6 +178,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
+	}
+
+	// Enable STS router if etcd is enabled.
+	if globalEtcdClient != nil {
+		registerSTSRouter(router)
 	}
 
 	// Add API router.
@@ -234,7 +211,51 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 
+	// Create a new config system.
+	globalConfigSys = NewConfigSys()
+
+	// Initialize server config.
+	srvCfg := newServerConfig()
+
+	// Override any values from ENVs.
+	srvCfg.loadFromEnvs()
+
+	// Load values to cached global values.
+	srvCfg.loadToCachedConfigs()
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
+
+	var cacheConfig = globalServerConfig.GetCacheConfig()
+	if len(cacheConfig.Drives) > 0 {
+		var err error
+		// initialize the new disk cache objects.
+		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+	}
+
+	// Load logger subsystem
+	loadLoggers()
+
+	// Re-enable logging
+	logger.Disable = false
+
+	// Create new IAM system.
+	globalIAMSys = NewIAMSys()
+
+	// Initialize IAM sys.
+	go globalIAMSys.Init(newObject)
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
+
+	// Initialize policy system.
 	go globalPolicySys.Init(newObject)
+
+	// Create new notification system.
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
@@ -255,9 +276,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
 	}
-
-	// Reenable logging
-	logger.Disable = false
 
 	handleSignals()
 }

@@ -139,7 +139,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err = saveNotificationConfig(objectAPI, bucketName, config); err != nil {
+	if err = saveNotificationConfig(ctx, objectAPI, bucketName, config); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

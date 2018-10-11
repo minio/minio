@@ -28,16 +28,16 @@ type SetCredsReq struct {
 	SecretKey string `json:"secretKey"`
 }
 
-// SetCredentials - Call Set Credentials API to set new access and
+// SetAdminCredentials - Call Set Credentials API to set new access and
 // secret keys in the specified Minio server
-func (adm *AdminClient) SetCredentials(access, secret string) error {
+func (adm *AdminClient) SetAdminCredentials(access, secret string) error {
 	// Setup request's body
 	body, err := json.Marshal(SetCredsReq{access, secret})
 	if err != nil {
 		return err
 	}
 
-	ebody, err := EncryptServerConfigData(adm.secretAccessKey, body)
+	ebody, err := EncryptData(adm.secretAccessKey, body)
 	if err != nil {
 		return err
 	}
