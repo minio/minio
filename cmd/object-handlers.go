@@ -499,8 +499,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				return
 			}
 
-			// Since we are rotating the keys, make sure to update the metadata.
-			srcInfo.metadataOnly = true
+			if !globalVersioningSys.IsEnabled(dstBucket) {
+				// Since we are rotating the keys, make sure to update the metadata.
+				srcInfo.metadataOnly = true
+			}
 		} else {
 			if sseCopyC {
 				// Source is encrypted make sure to save the encrypted size.
