@@ -79,6 +79,8 @@ func registerAdminRouter(router *mux.Router) {
 	// Set config keys/values
 	adminV1Router.Methods(http.MethodPut).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKeysHandler))
 
+	// -- IAM APIs --
+
 	// Add user IAM
 	adminV1Router.Methods(http.MethodPut).Path("/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 	adminV1Router.Methods(http.MethodPut).Path("/add-user-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddUserPolicy)).Queries("accessKey", "{accessKey:.*}")
@@ -86,5 +88,8 @@ func registerAdminRouter(router *mux.Router) {
 	// Remove user IAM
 	adminV1Router.Methods(http.MethodDelete).Path("/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
 	adminV1Router.Methods(http.MethodDelete).Path("/remove-user-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUserPolicy)).Queries("accessKey", "{accessKey:.*}")
+
+	// List users
+	adminV1Router.Methods(http.MethodGet).Path("/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
 
 }

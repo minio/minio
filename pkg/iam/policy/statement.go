@@ -48,6 +48,8 @@ func (statement Statement) IsAllowed(args Args) bool {
 			}
 
 			resource += args.ObjectName
+		} else {
+			resource += "/"
 		}
 
 		if !statement.Resources.Match(resource) {

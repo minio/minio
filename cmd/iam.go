@@ -205,6 +205,27 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials) error {
 	return nil
 }
 
+// ListUsers - list all users.
+func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+
+	var users = make(map[string]madmin.UserInfo)
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	for k, v := range sys.iamUsersMap {
+		users[k] = madmin.UserInfo{
+			Status: madmin.AccountStatus(v.Status),
+		}
+	}
+
+	return users, nil
+}
+
 // SetUser - set user credentials.
 func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	objectAPI := newObjectLayerFn()

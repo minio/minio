@@ -769,6 +769,48 @@ func (a adminAPIHandlers) RemoveUserPolicy(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ListUsers - GET /minio/admin/v1/list-users
+func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListUsers")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	allCredentials, err := globalIAMSys.ListUsers()
+	if err != nil {
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(allCredentials)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+
+	password := globalServerConfig.GetCredential().SecretKey
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
+}
+
 // AddUser - PUT /minio/admin/v1/add-user?accessKey=<access_key>
 func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddUser")
@@ -815,12 +857,14 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
+
 	var uinfo madmin.UserInfo
 	if err = json.Unmarshal(configBytes, &uinfo); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 		return
 	}
+
 	if err = globalIAMSys.SetUser(accessKey, uinfo); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, ErrInternalError, r.URL)
