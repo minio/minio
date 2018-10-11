@@ -215,12 +215,11 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 			// If the backend is down, serve the request from cache.
 			return cacheReader, nil
 		}
-
 		if cacheReader.ObjInfo.ETag == objInfo.ETag && !isStaleCache(objInfo) {
 			// Object is not stale, so serve from cache
 			return cacheReader, nil
 		}
-
+		cacheReader.Close()
 		// Object is stale, so delete from cache
 		dcache.Delete(ctx, bucket, object)
 	}
@@ -968,6 +967,9 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 		},
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
+		},
+		GetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		},
 		PutObjectFn: func(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 			return newObjectLayerFn().PutObject(ctx, bucket, object, data, metadata, opts)
