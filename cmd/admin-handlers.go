@@ -31,6 +31,9 @@ import (
 =======
 	"regexp"
 	"runtime"
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 	"strconv"
 	"strings"
@@ -571,7 +574,10 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 // Helper function to get the name of the caller function. If caller
 // function name is "setConfigKeysHandler", then jsonField in getGJson
 // won't be checked for emptiness. We don't want to do the
@@ -1215,6 +1221,9 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	}
 	structConfig := string(structConfigJSON)
 	fmt.Printf("\n\n%+v\n\n", structConfig)
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 	queries := r.URL.Query()
 	password := globalServerConfig.GetCredential().SecretKey
@@ -1237,6 +1246,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 		// Calculate the type of the current key from the
 		// original config json
 		jsonFieldType := gjson.Get(configStr, k).Type
@@ -1245,6 +1255,8 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		if cErr != nil {
 			writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, cErr.Error(), r.URL)
 =======
+=======
+>>>>>>> Stashed changes
 
 		fmt.Println("Set  query key = ", k)
 		jsonField, err := getGJson(ctx, structConfig, k)
