@@ -144,8 +144,27 @@ func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error
 			count++
 		}
 	}
+
 	if count < len(partsMetadata)/2 {
 		return xlMetaV1{}, errXLReadQuorum
+	}
+
+	var found, notFound int
+	for _, err := range errs {
+		switch err {
+		case nil:
+			found++
+		case errFileNotFound, errVolumeNotFound:
+			notFound++
+		}
+	}
+
+	if notFound == len(errs) {
+		return xlMetaV1{}, errFileNotFound
+	}
+
+	if found+notFound == len(errs) && found < latestXLMeta.Erasure.DataBlocks {
+		return xlMetaV1{}, errDataLost
 	}
 
 	return latestXLMeta, nil
