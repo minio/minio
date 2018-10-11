@@ -200,7 +200,7 @@ func TestListOnlineDisks(t *testing.T) {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
 
-		_, err = obj.PutObject(context.Background(), bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, ObjectOptions{})
 		if err != nil {
 			t.Fatalf("Failed to putObject %v", err)
 		}
@@ -292,7 +292,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(ctx, bucket, object, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}

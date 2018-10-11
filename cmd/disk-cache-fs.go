@@ -30,7 +30,6 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -258,7 +257,7 @@ func (cfs *cacheFSObjects) IsOnline() bool {
 }
 
 // Caches the object to disk
-func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) error {
+func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *PutObjectReader, metadata map[string]string, opts ObjectOptions) error {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:
@@ -301,7 +300,8 @@ func (cfs *cacheFSObjects) Exists(ctx context.Context, bucket, object string) bo
 
 // Identical to fs PutObject operation except that it uses ETag in metadata
 // headers.
-func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjectReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+	data := r.DataReader
 	fs := cfs.FSObjects
 	// Lock the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)

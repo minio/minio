@@ -37,7 +37,6 @@ import (
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/policy/condition"
 	sha256 "github.com/minio/sha256-simd"
@@ -722,7 +721,8 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.DataReader
 	if data.Size() < azureBlockSize/10 {
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
@@ -923,7 +923,8 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjectReader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	data := r.DataReader
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return info, err
 	}
@@ -1062,7 +1063,7 @@ func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object,
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
-func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return objInfo, err

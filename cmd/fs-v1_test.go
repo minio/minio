@@ -40,7 +40,7 @@ func TestFSParentDirIsObject(t *testing.T) {
 	}
 	objectContent := "12345"
 	objInfo, err := obj.PutObject(context.Background(), bucketName, objectName,
-		mustGetHashReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil, ObjectOptions{})
+		mustGetPutObjectReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestFSShutdown(t *testing.T) {
 
 		objectContent := "12345"
 		obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-		obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil, ObjectOptions{})
+		obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil, ObjectOptions{})
 		return fs, disk
 	}
 
@@ -203,7 +203,7 @@ func TestFSPutObject(t *testing.T) {
 	}
 
 	// With a regular object.
-	_, err := obj.PutObject(context.Background(), bucketName+"non-existent", objectName, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
+	_, err := obj.PutObject(context.Background(), bucketName+"non-existent", objectName, mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
@@ -212,7 +212,7 @@ func TestFSPutObject(t *testing.T) {
 	}
 
 	// With a directory object.
-	_, err = obj.PutObject(context.Background(), bucketName+"non-existent", objectName+"/", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName+"non-existent", objectName+"/", mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), nil, ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
@@ -220,11 +220,11 @@ func TestFSPutObject(t *testing.T) {
 		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
 	}
 
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName+"/1", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName+"/1", mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backend corruption occurred")
 	}
@@ -239,7 +239,7 @@ func TestFSPutObject(t *testing.T) {
 		}
 	}
 
-	_, err = obj.PutObject(context.Background(), bucketName, objectName+"/1/", mustGetHashReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName+"/1/", mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), nil, ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backned corruption occurred")
 	}
@@ -267,7 +267,7 @@ func TestFSDeleteObject(t *testing.T) {
 	objectName := "object"
 
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
+	obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
 
 	// Test with invalid bucket name
 	if err := fs.DeleteObject(context.Background(), "fo", objectName); !isSameType(err, BucketNameInvalid{}) {
