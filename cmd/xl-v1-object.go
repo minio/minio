@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
@@ -452,14 +453,28 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
-	// get Quorum for this object
+	// Get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return objInfo, err
 	}
 
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return objInfo, reducedErr
+	if !strings.HasSuffix(object, xlCorruptedSuffix) {
+		// We can consider an object data not reliable
+		// when xl.json is not found in read quorum disks.
+		var notFoundXLJSON int
+		for _, readErr := range errs {
+			if readErr == errFileNotFound {
+				notFoundXLJSON++
+			}
+		}
+
+		if len(xl.getDisks())-notFoundXLJSON < readQuorum {
+			rename(ctx, xl.getDisks(), bucket, object, bucket, object+xlCorruptedSuffix, true, len(xl.getDisks())/2+1, []error{errFileNotFound})
+			return objInfo, errFileNotFound
+		}
+	} else {
+		readQuorum = len(xl.getDisks()) / 2
 	}
 
 	// List all the file commit ids from parts metadata.
