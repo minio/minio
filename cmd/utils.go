@@ -391,7 +391,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	reqInfo := &logger.ReqInfo{
 		RequestID:  w.Header().Get(responseRequestIDKey),
 		RemoteHost: handlers.GetSourceIP(r),
-		UserAgent:  r.Header.Get("user-agent"),
+		UserAgent:  r.UserAgent(),
 		API:        api,
 		BucketName: bucket,
 		ObjectName: object,

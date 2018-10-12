@@ -32,7 +32,8 @@ import (
 // is returned to the caller.
 type HTTPTarget struct {
 	// Channel of log entries
-	logCh chan logEntry
+	logCh chan interface{}
+
 	// HTTP(s) endpoint
 	endpoint string
 	client   http.Client
@@ -72,14 +73,14 @@ func NewHTTP(endpoint string, transport *http.Transport) LoggingTarget {
 		client: http.Client{
 			Transport: transport,
 		},
-		logCh: make(chan logEntry, 10000),
+		logCh: make(chan interface{}, 10000),
 	}
 
 	h.startHTTPLogger()
 	return &h
 }
 
-func (h *HTTPTarget) send(entry logEntry) error {
+func (h *HTTPTarget) send(entry interface{}) error {
 	select {
 	case h.logCh <- entry:
 	default:

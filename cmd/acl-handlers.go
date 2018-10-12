@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -55,6 +56,8 @@ type accessControlPolicy struct {
 // subresource to return the ACL of a specified bucket.
 func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketACL")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -102,6 +105,8 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 // subresource to return the ACL of a specified object.
 func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObjectACL")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

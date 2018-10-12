@@ -448,6 +448,7 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 	sys.RLock()
 	targetIDSet := sys.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	sys.RUnlock()
+
 	if len(targetIDSet) == 0 {
 		return nil
 	}

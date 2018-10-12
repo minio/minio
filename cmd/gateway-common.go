@@ -224,7 +224,16 @@ func FromMinioClientListBucketResultToV2Info(bucket string, result minio.ListBuc
 	}
 }
 
-// ToMinioClientMetadata converts metadata to map[string][]string
+// ToMinioClientObjectInfoMetadata convertes metadata to map[string][]string
+func ToMinioClientObjectInfoMetadata(metadata map[string]string) map[string][]string {
+	mm := make(map[string][]string, len(metadata))
+	for k, v := range metadata {
+		mm[http.CanonicalHeaderKey(k)] = []string{v}
+	}
+	return mm
+}
+
+// ToMinioClientMetadata converts metadata to map[string]string
 func ToMinioClientMetadata(metadata map[string]string) map[string]string {
 	mm := make(map[string]string)
 	for k, v := range metadata {
