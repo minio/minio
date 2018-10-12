@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Steps to move from version N to version N+1
@@ -269,6 +271,20 @@ func (s *serverConfig) loadFromEnvs() {
 
 	if globalIsEnvCompression {
 		s.SetCompressionConfig(globalCompressExtensions, globalCompressMimeTypes)
+	}
+
+	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
+		if u, err := xnet.ParseURL(jwksURL); err == nil {
+			s.OpenID.JWKS.URL = u
+			s.OpenID.JWKS.PopulatePublicKey()
+		}
+	}
+
+	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
+		if u, err := xnet.ParseURL(opaURL); err == nil {
+			s.Policy.OPA.URL = u
+			s.Policy.OPA.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
+		}
 	}
 }
 

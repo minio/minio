@@ -19,6 +19,7 @@ In this document we will explain in detail on how to configure all the prerequis
 ### 1. Prerequisites
 - [Configuring wso2](./wso2.md)
 - [Configuring opa](./opa.md)
+- [Configuring etcd (optional needed only in gateway or federation mode)](./etcd.md)
 
 ### 2. Setup Minio with WSO2, OPA
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use Minio STS API and Minio server to use these credentials to perform object API operations.
@@ -31,7 +32,21 @@ export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
 minio server /mnt/data
 ```
 
-### 3. Test using full-example.go
+### 3. Setup Minio Gateway with WSO2, OPA, ETCD
+Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use Minio STS API and Minio gateway to use these credentials to perform object API operations.
+
+> NOTE: Minio gateway requires etcd to be configured to use STS API.
+
+```
+export MINIO_ACCESS_KEY=aws_access_key
+export MINIO_SECRET_KEY=aws_secret_key
+export MINIO_IAM_JWKS_URL=https://localhost:9443/oauth2/jwks
+export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
+export MINIO_ETCD_ENDPOINTS=localhost:2379
+minio gateway s3
+```
+
+### 4. Test using full-example.go
 On another terminal run `full-example.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its WSO2. Uses the returned access token response to get new temporary credentials from the Minio server using the STS API call `AssumeRoleWithClientGrants`.
 
 ```
