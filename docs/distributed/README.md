@@ -43,7 +43,7 @@ To start a distributed Minio instance, you just need to pass drive locations as 
 *Note*
 
 - All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, it is **mandatory** to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing Minio server command.
-- All the nodes running distributed Minio need to be on homogeneous environments i.e same operating system, same number of disks and same interconnects.
+- All the nodes running distributed Minio need to be in a homogeneous environment, i.e. same operating system, same number of disks and same interconnects.
 - `MINIO_DOMAIN` environment variable should be defined and exported if domain is needed to be set.
 - Minio distributed mode requires fresh directories. If required, the drives can be shared with other applications. You can do this by using a sub-directory exclusive to minio. For example, if you have mounted your volume under `/export`, pass `/export/data` as arguments to Minio server.
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
