@@ -259,7 +259,11 @@ func (c Client) uploadPart(ctx context.Context, bucketName, objectName, uploadID
 
 	// Set encryption headers, if any.
 	customHeader := make(http.Header)
-	if sse != nil {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPart.html
+	// Server-side encryption is supported by the S3 Multipart Upload actions.
+	// Unless you are using a customer-provided encryption key, you don't need
+	// to specify the encryption parameters in each UploadPart request.
+	if sse != nil && sse.Type() == encrypt.SSEC {
 		sse.Marshal(customHeader)
 	}
 

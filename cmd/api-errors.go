@@ -109,6 +109,7 @@ const (
 	ErrMissingSignTag
 	ErrMissingSignHeadersTag
 	ErrPolicyAlreadyExpired
+	ErrPolicyExtraInputFields
 	ErrMalformedDate
 	ErrMalformedPresignedDate
 	ErrMalformedCredentialDate
@@ -599,6 +600,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrPolicyAlreadyExpired: {
 		Code:           "AccessDenied",
 		Description:    "Invalid according to Policy: Policy expired.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyExtraInputFields: {
+		Code:           "AccessDenied",
+		Description:    "Invalid according to Policy: Extra input fields",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedExpires: {

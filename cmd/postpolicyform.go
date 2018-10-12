@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -223,11 +225,21 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) APIE
 		return ErrPolicyAlreadyExpired
 	}
 
+	// headerSet and signatureSet are used to find any extra imput fields
+	headerSet := set.NewStringSet()
+	signatureSet := set.NewStringSet()
+
+	// Populating headerSet
+	for key := range formValues {
+		headerSet.Add(strings.ToLower(key))
+	}
 	// Flag to indicate if all policies conditions are satisfied
 	condPassed := true
 
 	// Iterate over policy conditions and check them against received form fields
 	for cond, v := range postPolicyForm.Conditions.Policies {
+		// Populating signatureSet
+		signatureSet.Add(strings.TrimPrefix(cond, "$"))
 		// Form fields names are in canonical format, convert conditions names
 		// to canonical for simplification purpose, so `$key` will become `Key`
 		formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(cond, "$"))
@@ -253,6 +265,26 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) APIE
 			return ErrAccessDenied
 		}
 	}
+	// Call to check for extra input values
+	if extraField := getExtraInput(headerSet, signatureSet); extraField != "" {
+		return ErrPolicyExtraInputFields
+	}
 
 	return ErrNone
+}
+
+// Returns extra input fileds
+func getExtraInput(headerSet, signatureSet set.StringSet) string {
+	//  differenceSet keeps a track of the extra input fields:
+	differenceSet := headerSet.Difference(signatureSet)
+	extraInput := ""
+	for differentInputFileds := range differenceSet {
+		if differentInputFileds == "policy" || differentInputFileds == "x-amz-signature" || differentInputFileds == "signature" || differentInputFileds == "file" || strings.HasPrefix(differentInputFileds, "x-ignore-") {
+			continue
+		} else {
+			extraInput = differentInputFileds
+			break
+		}
+	}
+	return extraInput
 }

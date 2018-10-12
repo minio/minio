@@ -33,6 +33,9 @@ func TestPostPolicyForm(t *testing.T) {
 	pp.SetKeyStartsWith("user/user1/filename")
 	pp.SetContentLengthRange(1048579, 10485760)
 	pp.SetSuccessStatusAction("201")
+	pp.SetUserData("algorithm", "AWS4-HMAC-SHA256")
+	pp.SetUserData("date", "20160727T000000Z")
+	pp.SetUserData("credential", "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request")
 
 	type testCase struct {
 		Bucket              string
@@ -44,6 +47,7 @@ func TestPostPolicyForm(t *testing.T) {
 		ContentType         string
 		SuccessActionStatus string
 		Policy              string
+		ExtraField          bool
 		Expired             bool
 		ErrCode             APIErrorCode
 	}
@@ -65,6 +69,8 @@ func TestPostPolicyForm(t *testing.T) {
 		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "incorrect", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", ErrCode: ErrAccessDenied},
 		// Incorrect ContentType
 		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "incorrect", ErrCode: ErrAccessDenied},
+		// Extra Input Field
+		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", SuccessActionStatus: "201", XAmzCredential: "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", ExtraField: true, ErrCode: ErrPolicyExtraInputFields},
 	}
 	// Validate all the test cases.
 	for i, tt := range testCases {
@@ -83,9 +89,14 @@ func TestPostPolicyForm(t *testing.T) {
 			// Expires in 10 days.
 			pp.SetExpires(UTCNow().AddDate(0, 0, 10))
 		}
+		if tt.ExtraField {
+			// Set Extra Field as Input
+			formValues.Set("X-Amz-Foo", tt.XAmzCredential)
+		}
 
 		formValues.Set("Policy", base64.StdEncoding.EncodeToString([]byte(pp.String())))
 		formValues.Set("Success_action_status", tt.SuccessActionStatus)
+
 		policyBytes, err := base64.StdEncoding.DecodeString(base64.StdEncoding.EncodeToString([]byte(pp.String())))
 		if err != nil {
 			t.Fatal(err)
