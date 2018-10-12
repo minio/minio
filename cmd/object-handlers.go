@@ -565,7 +565,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set standard object headers.
 	if hErr := setObjectHeaders(w, objInfo, rs); hErr != nil {
-		writeErrorResponse(w, toAPIErrorCode(hErr), r.URL)
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(hErr))
 		return
 	}
 
