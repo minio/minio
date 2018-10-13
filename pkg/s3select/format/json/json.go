@@ -17,13 +17,11 @@
 package json
 
 import (
-	"compress/bzip2"
 	"encoding/json"
 	"encoding/xml"
 	"io"
 
 	jsoniter "github.com/json-iterator/go"
-	gzip "github.com/klauspost/pgzip"
 	"github.com/minio/minio/pkg/s3select/format"
 )
 
@@ -75,26 +73,11 @@ type jinput struct {
 // Otherwise, the returned reader can be reliably consumed with jsonRead()
 // until jsonRead() returns nil.
 func New(opts *Options) (format.Select, error) {
-	myReader := opts.ReadFrom
-	var tempBytesScanned int64
-	tempBytesScanned = 0
-	switch opts.Compressed {
-	case "GZIP":
-		tempBytesScanned = opts.StreamSize
-		var err error
-		if myReader, err = gzip.NewReader(opts.ReadFrom); err != nil {
-			return nil, format.ErrTruncatedInput
-		}
-	case "BZIP2":
-		tempBytesScanned = opts.StreamSize
-		myReader = bzip2.NewReader(opts.ReadFrom)
-	}
-
 	reader := &jinput{
 		options: opts,
-		reader:  jsoniter.NewDecoder(myReader),
+		reader:  jsoniter.NewDecoder(opts.ReadFrom),
 	}
-	reader.stats.BytesScanned = tempBytesScanned
+	reader.stats.BytesScanned = opts.StreamSize
 	reader.stats.BytesProcessed = 0
 	reader.stats.BytesReturned = 0
 

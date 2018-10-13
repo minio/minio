@@ -33,6 +33,7 @@ import (
 
 	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
+	"github.com/klauspost/readahead"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -251,7 +252,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 	}
 
-	s3s, err := s3select.New(gr, objInfo.Size, selectReq)
+	reader := readahead.NewReader(gr)
+	defer reader.Close()
+
+	s3s, err := s3select.New(reader, objInfo.GetActualSize(), selectReq)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -368,6 +372,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer gr.Close()
+
 	objInfo := gr.ObjInfo
 
 	if objectAPI.IsEncryptionSupported() {
