@@ -27,7 +27,11 @@ import (
 // in plain or json format to the standard output.
 type ConsoleTarget struct{}
 
-func (c *ConsoleTarget) send(entry logEntry) error {
+func (c *ConsoleTarget) send(e interface{}) error {
+	entry, ok := e.(logEntry)
+	if !ok {
+		return fmt.Errorf("Uexpected log entry structure %#v", e)
+	}
 	if jsonFlag {
 		logJSON, err := json.Marshal(&entry)
 		if err != nil {

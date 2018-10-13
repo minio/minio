@@ -228,6 +228,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalServerConfig = srvCfg
 	globalServerConfigMu.Unlock()
 
+	// Load logger subsystem
+	loadLoggers()
+
+	// This is only to uniquely identify each gateway deployments.
+	logger.SetDeploymentID(os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID"))
+
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
 		var err error
@@ -244,9 +250,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()
-
-	// Initialize IAM sys.
-	go globalIAMSys.Init(newObject)
+	if globalEtcdClient != nil {
+		// Initialize IAM sys.
+		go globalIAMSys.Init(newObject)
+	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()

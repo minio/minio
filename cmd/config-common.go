@@ -50,6 +50,20 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 	return buffer.Bytes(), nil
 }
 
+func deleteConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
+	_, err := client.Delete(ctx, configFile)
+	return err
+}
+
+func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
+	return objAPI.DeleteObject(ctx, minioMetaBucket, configFile)
+}
+
+func saveConfigEtcd(ctx context.Context, client *etcd.Client, configFile string, data []byte) error {
+	_, err := client.Put(ctx, configFile, string(data))
+	return err
+}
+
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
 	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
 	if err != nil {
