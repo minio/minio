@@ -40,7 +40,7 @@ func main() {
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser()`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
 | [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`AddUserPolicy`](#AddUserPolicy) | [`StartProfiling`](#StartProfiling) |
-| | |            | [`GetConfigKeys`](#GetConfigKeys) | [`DownloadProfilingData`](#DownloadProfilingData) |
+| | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) |                                     |
 
 
@@ -373,6 +373,22 @@ __Example__
 	if err = madmClnt.AddUserPolicy("newuser", policy); err != nil {
 		log.Fatalln(err)
 	}
+```
+
+<a name="ListUsers"></a>
+### ListUsers() (map[string]UserInfo, error)
+Lists all users on Minio server.
+
+__Example__
+
+``` go
+	users, err := madmClnt.ListUsers(); 
+    if err != nil {
+		log.Fatalln(err)
+	}
+    for k, v := range users {
+        fmt.Printf("User %s Status %s\n", k, v.Status)
+    }
 ```
 
 ## 9. Misc operations
