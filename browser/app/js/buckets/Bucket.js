@@ -28,6 +28,7 @@ export class Bucket extends React.Component {
       bucketDropdownActive: false,
       bucketDropdownEnters: false
     }
+    this.hideBucketDropdown = this.hideBucketDropdown.bind(this)
   }
 
   showBucketDropdown() {
@@ -72,7 +73,6 @@ export class Bucket extends React.Component {
         })}
         onClick={e => {
           e.preventDefault()
-          this.hideBucketDropdown.bind(this)
           setTimeout(() => {
             selectBucket(bucket)
           })
@@ -91,14 +91,14 @@ export class Bucket extends React.Component {
             className="buckets__toggle"
             onClick={
               this.state.bucketDropdownActive
-                ? this.hideBucketDropdown.bind(this)
+                ? this.hideBucketDropdown
                 : this.showBucketDropdown.bind(this)
             }
             onKeyDown={this.hideBucketDropdownOnEscape.bind(this)}
           />
 
           {this.state.bucketDropdownActive && (
-            <ClickOutHandler onClickOut={this.hideBucketDropdown.bind(this)}>
+            <ClickOutHandler onClickOut={this.hideBucketDropdown}>
               <BucketDropdown bucket={bucket} />
             </ClickOutHandler>
           )}

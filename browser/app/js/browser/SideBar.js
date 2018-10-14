@@ -26,10 +26,9 @@ import * as actionsCommon from "./actions"
 import web from "../web"
 import StorageInfo from "./StorageInfo"
 
-const loggedIn = web.LoggedIn()
-
 export class SideBar extends React.Component {
   render() {
+    const loggedIn = web.LoggedIn()
     const { sidebarOpen, closeSidebar } = this.props
 
     return (
