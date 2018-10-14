@@ -56,10 +56,7 @@ export class SideBar extends React.Component {
             <BucketList />
           </div>
 
-          <div className="sidebar__bottom">
-            <Host />
-            {loggedIn && <StorageInfo />}
-          </div>
+          <div className="sidebar__bottom">{loggedIn && <StorageInfo />}</div>
         </aside>
 
         {sidebarOpen && (

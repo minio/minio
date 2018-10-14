@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="14px" height="13px" viewBox="0 0 14 13" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="18px" height="21px" viewBox="0 0 18 21" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
     <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
     <title>Untitled</title>
     <desc>Created with Sketch.</desc>
     <defs></defs>
     <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="text" fill="#567BA8" fill-rule="nonzero">
-            <rect id="Rectangle" x="0" y="3" width="14" height="1"></rect>
-            <rect id="Rectangle" x="0" y="6" width="14" height="1"></rect>
-            <rect id="Rectangle" x="0" y="0" width="14" height="1"></rect>
-            <rect id="Rectangle" x="0" y="9" width="14" height="1"></rect>
-            <rect id="Rectangle" x="0" y="12" width="14" height="1"></rect>
+        <g id="Group" transform="translate(0.400544, 0.980955)">
+            <polygon id="Path-2" stroke="#567BA8" stroke-linecap="round" stroke-linejoin="round" points="0.721389279 18.7150559 16.3849082 18.7150559 16.3849082 5.75214363 10.7072077 0.0744431596 0.717909797 0.0744431596"></polygon>
+            <polyline id="Path-3" stroke="#567BA8" stroke-linejoin="round" points="10.6068981 0.407957621 10.6068981 5.81738006 16.3849082 5.81738006"></polyline>
+            <rect id="Rectangle" fill="#567BA8" fill-rule="nonzero" x="4.20760893" y="9.98326249" width="8.68760016" height="1"></rect>
+            <rect id="Rectangle" fill="#567BA8" fill-rule="nonzero" x="4.20760893" y="11.9185089" width="8.68760016" height="1"></rect>
+            <rect id="Rectangle" fill="#567BA8" fill-rule="nonzero" x="4.20760893" y="8.04801609" width="8.68760016" height="1"></rect>
+            <rect id="Rectangle" fill="#567BA8" fill-rule="nonzero" x="4.20760893" y="13.8537553" width="8.68760016" height="1"></rect>
+            <rect id="Rectangle" fill="#567BA8" fill-rule="nonzero" x="4.20760893" y="15.7890017" width="8.68760016" height="1"></rect>
         </g>
     </g>
 </svg>

@@ -1,13 +1,6 @@
 // Form Controls
 @mixin form-item-input($color, $bg, $focus-border-color) {
-  color: $color !important;
-  background-color: $bg !important;
-  border-color: $bg;
 
-  &:focus {
-    border-color: $focus-border-color;
-    background-color: transparent !important;
-  }
 }
 
 .form-item {
@@ -28,12 +21,12 @@
       color: $form-input-label-color;
     }
   }
-  
+
   &.form-item--dark {
     .form-item__input {
       @include form-item-input($form-input-dark-color, $form-input-dark-bg, $form-input-dark-focus-border-color);
     }
-    
+
     .form-item__label {
       color: $form-input-dark-label-color;
     }
@@ -45,11 +38,10 @@
   margin-bottom: 8px;
   display: block;
   font-size: $form-input-font-size;
+  color: $form-input-label-color;
 }
 
 .form-item__input {
-  border-width: 2px;
-  border-style: solid;
   font-size: $form-input-font-size;
   transition: border-color 300ms, background-color 300ms;
   box-shadow: none;
@@ -57,9 +49,18 @@
   padding: 0 10px;
   width: 100%;
   height: $form-input-height;
+  color: $form-input-color !important;
+  background-color: $form-input-bg !important;
+  border: 1px solid $form-input-border-color !important;
+
+  &:focus {
+    border-color: $form-input-focus-border-color !important;
+    background-color: transparent !important;
+  }
 
   @include placeholder {
     opacity: 1;
+    color: $form-placeholder-color
   }
 }
 

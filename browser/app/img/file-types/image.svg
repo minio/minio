@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="20px" height="11px" viewBox="0 0 20 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="18px" height="21px" viewBox="0 0 18 21" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
     <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
     <title>Untitled</title>
     <desc>Created with Sketch.</desc>
     <defs></defs>
     <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="image" fill="#E85B8B" fill-rule="nonzero">
-            <path d="M11.8181817,-3.27272729e-07 L8.40909087,4.54545424 L11.0000002,7.99999979 L9.54545445,9.09090879 C8.00909125,7.04545425 5.45454541,3.63636332 5.45454541,3.63636332 L-5.45454978e-08,10.9090905 L19.9999999,10.9090905 L11.8181817,-3.27272729e-07 Z" id="Shape"></path>
+        <g id="Group" transform="translate(0.400544, 0.980955)">
+            <polygon id="Path-2" stroke="#E85B8B" stroke-linecap="round" stroke-linejoin="round" points="0.721389279 18.7150559 16.3849082 18.7150559 16.3849082 5.75214363 10.7072077 0.0744431596 0.717909797 0.0744431596"></polygon>
+            <polyline id="Path-3" stroke="#E85B8B" stroke-linejoin="round" points="10.6068981 0.407957621 10.6068981 5.81738006 16.3849082 5.81738006"></polyline>
+            <path d="M9.71510158,8.17140288 L7.53317801,11.0806344 L9.19144011,13.2916504 L8.26048584,13.9898659 C7.27716588,12.6807117 5.64217753,10.4987881 5.64217753,10.4987881 L2.15109973,15.1535584 L14.9517183,15.1535584 L9.71510158,8.17140288 Z" id="Shape" fill="#E85B8B" fill-rule="nonzero"></path>
         </g>
     </g>
 </svg>

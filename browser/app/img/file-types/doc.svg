@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="15px" height="15px" viewBox="0 0 15 15" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="18px" height="21px" viewBox="0 0 18 21" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
     <!-- Generator: Sketch 48.2 (47327) - http://www.bohemiancoding.com/sketch -->
     <title>Untitled</title>
     <desc>Created with Sketch.</desc>
     <defs></defs>
     <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="doc" fill-rule="nonzero">
-            <rect id="Rectangle-2" fill="#567BA8" x="0" y="0" width="15" height="15" rx="2"></rect>
-            <g id="Group-2" transform="translate(3.000000, 3.000000)" fill="#FFFFFF">
-                <rect id="Rectangle" x="0" y="0" width="9" height="1"></rect>
+        <g id="Group" transform="translate(0.400544, 0.980955)">
+            <polygon id="Path-2" stroke="#567BA8" stroke-linecap="round" stroke-linejoin="round" points="0.721389279 18.7150559 16.3849082 18.7150559 16.3849082 5.75214363 10.7072077 0.0744431596 0.717909797 0.0744431596"></polygon>
+            <polyline id="Path-3" stroke="#567BA8" stroke-linejoin="round" points="10.6068981 0.407957621 10.6068981 5.81738006 16.3849082 5.81738006"></polyline>
+            <g id="Group-2" transform="translate(4.051409, 7.900391)" fill="#567BA8" fill-rule="nonzero">
+                <rect id="Rectangle" x="-1.95399252e-14" y="0" width="9" height="1"></rect>
                 <rect id="Rectangle" x="2" y="2" width="5" height="1"></rect>
                 <rect id="Rectangle" x="2" y="6" width="5" height="1"></rect>
-                <rect id="Rectangle" x="0" y="4" width="9" height="1"></rect>
-                <rect id="Rectangle" x="0" y="8" width="9" height="1"></rect>
+                <rect id="Rectangle" x="-1.95399252e-14" y="4" width="9" height="1"></rect>
+                <rect id="Rectangle" x="-1.95399252e-14" y="8" width="9" height="1"></rect>
             </g>
         </g>
     </g>

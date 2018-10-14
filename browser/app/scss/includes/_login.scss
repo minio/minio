@@ -1,28 +1,8 @@
 .login {
-  display: flex;
-  width: 100%;
   background-color: $login-bg;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.login__inner {
-  background-color: $login-inner-bg;
-  border-radius: 10px;
-  max-width: $login-inner-max-width;
-  max-height: $login-inner-max-height;
   display: flex;
   flex: 1;
-
-  @include media-breakpoint-up(sm) {
-    width: 90vw;
-    height: 90vh;
-  }
-
-  @include media-breakpoint-down(xs) {
-    @include size(100%, 100%);
-  }
+  min-height: $login-min-height;
 }
 
 .login__form {
@@ -31,20 +11,13 @@
   @include media-breakpoint-up(sm) {
     padding: 0 40px;
     min-width: 300px;
-    flex: 1 1 500px;
+    flex: 1 1 400px;
   }
 
   @include media-breakpoint-down(xs) {
     width: 100%;
     padding: 20px;
   }
-}
-
-.login__host {
-  text-align: center;
-  margin-top: 10px;
-  font-size: $font-size-sm;
-  color: $theme-text-muted-color;
 }
 
 .login__texts {
@@ -54,7 +27,6 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    border-radius: 0 10px 10px 0;
     flex: 1 1 auto;
     color: $login-text-color;
     font-size: $font-size-base + 1;
@@ -63,17 +35,18 @@
       color: $white;
       text-transform: uppercase;
       line-height: 100%;
-      font-weight: normal;
       margin: 0;
     }
 
     & > h2 {
-      font-size: 35px;
-      margin-left: -1px;
+      font-size: 30px;
+      margin-bottom: 5px;
+      font-weight: bold;
     }
 
     & > h3 {
-      font-size: 20px;
+      font-size: 22px;
+      font-weight: normal;
     }
   }
 

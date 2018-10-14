@@ -34,7 +34,7 @@ $theme-border-color: #edf5fb;
 
 
 // Fonts
-$font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+$font-family: 'Lato', sans-serif;
 $font-size-base: 14px;
 $font-size-sm: $font-size-base - 2;
 $font-weight-bold: 500;
@@ -99,7 +99,6 @@ $path-item-hover-bg: $theme-hover-bg;
 $path-seperator-icon: url(../img/icons/path-seperator.svg);
 $path-back-icon: url(../img/icons/path-previous.svg);
 $path-home-icon: url(../img/icons/home.svg);
-$path-home-bg: $theme-grey-bg;
 
 
 // Icons
@@ -133,7 +132,7 @@ $button-variants: (
   dark: $theme-invert-bg
 );
 $button-font-size: $font-size-base - 1;
-$button-height: 36px;
+$button-height: 37px;
 $button-dark-color: $theme-invert-text-color;
 
 
@@ -143,7 +142,8 @@ $form-input-font-size: $font-size-base - 1;
 $form-input-color: $body-color;
 $form-input-label-color: $headings-color;
 $form-placeholder-color: #81a0af;
-$form-input-bg: #f3f8fb;
+$form-input-bg: #eef4f7;
+$form-input-border-color: $form-input-bg;
 $form-input-focus-border-color: #dfe9ef;
 $form-input-dark-color: $theme-invert-text-color;
 $form-input-dark-label-color: $theme-invert-text-muted-color;
@@ -194,10 +194,8 @@ $set-expire-handle-icon: url(../img/icons/chevron-right.svg);
 
 
 // Login
-$login-bg: $theme-grey-bg;
-$login-inner-bg: $white;
-$login-inner-max-width: 1100px;
-$login-inner-max-height: 550px;
+$login-bg: $white;
+$login-min-height: 300px;
 $login-text-bg: $theme-invert-bg;
 $login-text-color: $theme-invert-text-muted-color;
 

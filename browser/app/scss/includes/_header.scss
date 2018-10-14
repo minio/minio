@@ -3,7 +3,6 @@
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  padding: 5px;
   transition: opacity 300ms;
 
   @include media-breakpoint-down(xs) {

@@ -95,63 +95,54 @@ export class Login extends React.Component {
       <React.Fragment>
         {alertBox}
         <div className="login">
-          <div className="login__inner">
-            <form
-              className="login__form"
-              onSubmit={this.handleSubmit.bind(this)}
-            >
-              <div className="form-item form-item--centered">
-                <input
-                  type="text"
-                  value={this.state.accessKey}
-                  onChange={this.accessKeyChange.bind(this)}
-                  className="form-item__input"
-                  label="Access Key"
-                  id="accessKey"
-                  name="username"
-                  spellCheck="false"
-                  required="required"
-                  placeholder="Access Key"
-                  autoComplete="off"
-                />
-              </div>
+          <form className="login__form" onSubmit={this.handleSubmit.bind(this)}>
+            <div className="form-item form-item--centered">
+              <input
+                type="text"
+                value={this.state.accessKey}
+                onChange={this.accessKeyChange.bind(this)}
+                className="form-item__input"
+                label="Access Key"
+                id="accessKey"
+                name="username"
+                spellCheck="false"
+                required="required"
+                placeholder="Access Key"
+                autoComplete="off"
+              />
+            </div>
 
-              <div className="form-item form-item--centered">
-                <input
-                  value={this.state.secretKey}
-                  onChange={this.secretKeyChange.bind(this)}
-                  className="form-item__input"
-                  label="Secret Key"
-                  id="secretKey"
-                  name="password"
-                  type="password"
-                  spellCheck="false"
-                  required="required"
-                  placeholder="Secret Key"
-                  autoComplete="off"
-                />
-              </div>
+            <div className="form-item form-item--centered">
+              <input
+                value={this.state.secretKey}
+                onChange={this.secretKeyChange.bind(this)}
+                className="form-item__input"
+                label="Secret Key"
+                id="secretKey"
+                name="password"
+                type="password"
+                spellCheck="false"
+                required="required"
+                placeholder="Secret Key"
+                autoComplete="off"
+              />
+            </div>
 
-              <button
-                className="button button--dark button--block"
-                type="submit"
-              >
-                Sign In
-              </button>
-              <div className="login__host">{window.location.host}</div>
-            </form>
+            <button className="button button--dark button--block" type="submit">
+              Sign In
+            </button>
+          </form>
 
-            <div className="login__texts">
-              <h3>Minio</h3>
-              <h2>Browser</h2>
-              <p>
-                Morbi leo risus, porta ac consectetur acvestibulum at erosonec
-                id elit non mi porta gravida at eget metus. Donec sed odio dui.
-                Maecenas faucibus mollis interdum.{" "}
-              </p>
-              <div className="login_img">
-                <img src={loginImg} alt="" />
-              </div>
+          <div className="login__texts">
+            <h2>Minio</h2>
+            <h3>Object Storage</h3>
+            <p>
+              Morbi leo risus, porta ac consectetur acvestibulum at erosonec id
+              elit non mi porta gravida at eget metus. Donec sed odio dui.
+              Maecenas faucibus mollis interdum.{" "}
+            </p>
+            <div className="login_img">
+              <img src={loginImg} alt="" />
             </div>
           </div>
         </div>

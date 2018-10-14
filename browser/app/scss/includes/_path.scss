@@ -51,14 +51,13 @@
 }
 
 .path__item--home {
+  @include media-breakpoint-up(xs) {
+    margin-left: -5px;
+  }
+
   & > span {
     background: $path-home-icon no-repeat center left 10px;
     padding-left: 35px;
-
-    @include media-breakpoint-up(md) {
-      background-color: $path-home-bg;
-      margin-right: 10px;
-    }
   }
 }
 

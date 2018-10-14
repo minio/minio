@@ -241,7 +241,7 @@
     background-color: $sidebar-bottom-bg;
     padding: 15px;
     color: $sidebar-bottom-color;
-    margin-bottom: 15px;
+    margin: 0 -15px;
   }
 
   .storage__bar {
@@ -255,14 +255,6 @@
       background-color: $storage-fill-bg;
       height: 100%;
       display: block;
-    }
-  }
-
-  .host {
-    margin-bottom: 15px;
-
-    & > a {
-      color: $sidebar-bottom-color;
     }
   }
 }
