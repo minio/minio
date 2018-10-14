@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -241,20 +242,19 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	defer objLock.Unlock()
+	defer objLock.RUnlock()
 
-	reader, e := readConfig(ctx, objAPI, configFile)
+	configData, e := readConfig(ctx, objAPI, configFile)
 	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
 		return e
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		err := json.NewDecoder(reader).Decode(&listenerList)
-		if err != nil {
+	if configData != nil {
+		if err := json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -265,7 +265,6 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 		return nil
 	}
 
-	activeListenerList := []ListenBucketNotificationArgs{}
 	for _, args := range listenerList {
 		found, err := isLocalHost(args.Addr.Name)
 		if err != nil {
@@ -301,16 +300,31 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			logger.LogIf(ctx, err)
 			return err
 		}
-		activeListenerList = append(activeListenerList, args)
 	}
 
-	data, err := json.Marshal(activeListenerList)
+	return nil
+}
+
+func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
+	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
-
-	return saveConfig(objAPI, configFile, data)
+	for _, bucket := range buckets {
+		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
+		if err != nil && err != errNoSuchNotifications {
+			return err
+		}
+		if err == errNoSuchNotifications {
+			continue
+		}
+		sys.AddRulesMap(bucket.Name, config.ToRulesMap())
+		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
@@ -319,28 +333,29 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
-		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
-		if err != nil {
-			if !IsErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
+	// Initializing notification needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for notification subsystem to be initialized..")
+					continue
+				}
 				return err
 			}
-		} else {
-			sys.AddRulesMap(bucket.Name, config.ToRulesMap())
-		}
-
-		if err = sys.initListeners(ctx, objAPI, bucket.Name); err != nil {
-			return err
+			return nil
 		}
 	}
-
-	return nil
 }
 
 // AddRulesMap - adds rules map for bucket name.
@@ -433,6 +448,7 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 	sys.RLock()
 	targetIDSet := sys.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	sys.RUnlock()
+
 	if len(targetIDSet) == 0 {
 		return nil
 	}
@@ -550,7 +566,7 @@ func sendEvent(args eventArgs) {
 func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) (*event.Config, error) {
 	// Construct path to notification.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = errNoSuchNotifications
@@ -559,19 +575,19 @@ func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName 
 		return nil, err
 	}
 
-	config, err := event.ParseConfig(reader, globalServerConfig.GetRegion(), globalNotificationSys.targetList)
+	config, err := event.ParseConfig(bytes.NewReader(configData), globalServerConfig.GetRegion(), globalNotificationSys.targetList)
 	logger.LogIf(ctx, err)
 	return config, err
 }
 
-func saveNotificationConfig(objAPI ObjectLayer, bucketName string, config *event.Config) error {
+func saveNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, config *event.Config) error {
 	data, err := xml.Marshal(config)
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 // SaveListener - saves HTTP client currently listening for events to listener.json.
@@ -596,14 +612,14 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		if err = json.NewDecoder(reader).Decode(&listenerList); err != nil {
+	if configData != nil {
+		if err = json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -622,7 +638,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 // RemoveListener - removes HTTP client currently listening for events from listener.json.
@@ -647,14 +663,14 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	}
 	defer objLock.Unlock()
 
-	reader, err := readConfig(ctx, objAPI, configFile)
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
 		return err
 	}
 
 	listenerList := []ListenBucketNotificationArgs{}
-	if reader != nil {
-		if err = json.NewDecoder(reader).Decode(&listenerList); err != nil {
+	if configData != nil {
+		if err = json.Unmarshal(configData, &listenerList); err != nil {
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -681,5 +697,5 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 		return err
 	}
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }

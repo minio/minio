@@ -19,7 +19,7 @@ package cmd
 import "testing"
 
 // Test parseCopyPartRange()
-func TestParseCopyPartRange(t *testing.T) {
+func TestParseCopyPartRangeSpec(t *testing.T) {
 	// Test success cases.
 	successCases := []struct {
 		rangeString string
@@ -29,14 +29,19 @@ func TestParseCopyPartRange(t *testing.T) {
 		{"bytes=2-5", 2, 5},
 		{"bytes=2-9", 2, 9},
 		{"bytes=2-2", 2, 2},
-		{"", 0, 9},
 		{"bytes=0000-0006", 0, 6},
 	}
+	objectSize := int64(10)
 
 	for _, successCase := range successCases {
-		start, length, err := parseCopyPartRange(successCase.rangeString, 10)
+		rs, err := parseCopyPartRangeSpec(successCase.rangeString)
 		if err != nil {
 			t.Fatalf("expected: <nil>, got: %s", err)
+		}
+
+		start, length, err1 := rs.GetOffsetLength(objectSize)
+		if err1 != nil {
+			t.Fatalf("expected: <nil>, got: %s", err1)
 		}
 
 		if start != successCase.offsetBegin {
@@ -61,9 +66,11 @@ func TestParseCopyPartRange(t *testing.T) {
 		"bytes=2 - 5",
 		"bytes=0-0,-1",
 		"bytes=2-5 ",
+		"bytes=-1",
+		"bytes=1-",
 	}
 	for _, rangeString := range invalidRangeStrings {
-		if _, _, err := parseCopyPartRange(rangeString, 10); err == nil {
+		if _, err := parseCopyPartRangeSpec(rangeString); err == nil {
 			t.Fatalf("expected: an error, got: <nil> for range %s", rangeString)
 		}
 	}
@@ -74,8 +81,14 @@ func TestParseCopyPartRange(t *testing.T) {
 		"bytes=20-30",
 	}
 	for _, rangeString := range errorRangeString {
-		if _, _, err := parseCopyPartRange(rangeString, 10); err != errInvalidRangeSource {
-			t.Fatalf("expected: %s, got: %s", errInvalidRangeSource, err)
+		rs, err := parseCopyPartRangeSpec(rangeString)
+		if err == nil {
+			err1 := checkCopyPartRangeWithSize(rs, objectSize)
+			if err1 != errInvalidRangeSource {
+				t.Fatalf("expected: %s, got: %s", errInvalidRangeSource, err)
+			}
+		} else {
+			t.Fatalf("expected: %s, got: <nil>", errInvalidRangeSource)
 		}
 	}
 }

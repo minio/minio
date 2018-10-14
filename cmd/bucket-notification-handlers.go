@@ -44,6 +44,8 @@ var errNoSuchNotifications = errors.New("The specified bucket does not have buck
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketNotification")
 
+	defer logger.AuditLog(ctx, r)
+
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
 
@@ -96,6 +98,8 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketNotification")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -139,7 +143,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err = saveNotificationConfig(objectAPI, bucketName, config); err != nil {
+	if err = saveNotificationConfig(ctx, objectAPI, bucketName, config); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -155,6 +159,8 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 // Client should send prefix/suffix object name to match and events to watch as query parameters.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListenBucketNotification")
+
+	defer logger.AuditLog(ctx, r)
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()

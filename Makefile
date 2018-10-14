@@ -13,7 +13,7 @@ checks:
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
 getdeps:
-	@echo "Installing golint" && go get -u github.com/golang/lint/golint
+	@echo "Installing golint" && go get -u golang.org/x/lint/golint
 	@echo "Installing gocyclo" && go get -u github.com/fzipp/gocyclo
 	@echo "Installing deadcode" && go get -u github.com/remyoudompheng/go-misc/deadcode
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
@@ -74,6 +74,9 @@ coverage: build
 build: checks
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
+
+docker: build
+	@docker build -t $(TAG) . -f Dockerfile.dev
 
 pkg-add:
 	@echo "Adding new package $(PKG)"

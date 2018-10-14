@@ -396,9 +396,9 @@ func (l *b2Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +411,7 @@ func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -839,4 +839,9 @@ func (l *b2Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	_, err = bkt.Update(l.ctx)
 	logger.LogIf(ctx, err)
 	return b2ToObjectError(err)
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *b2Objects) IsCompressionSupported() bool {
+	return false
 }

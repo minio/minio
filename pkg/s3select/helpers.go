@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -54,8 +55,8 @@ func stringInSlice(x string, list []string) bool {
 
 // This function returns the index of a string in a list
 func stringIndex(a string, list []string) int {
-	for i := range list {
-		if list[i] == a {
+	for i, v := range list {
+		if v == a {
 			return i
 		}
 	}
@@ -64,10 +65,8 @@ func stringIndex(a string, list []string) int {
 
 // Returns a true or false, whether a string can be represented as an int.
 func representsInt(s string) bool {
-	if _, err := strconv.Atoi(s); err == nil {
-		return true
-	}
-	return false
+	_, err := strconv.Atoi(s)
+	return err == nil
 }
 
 // The function below processes the where clause into an acutal boolean given a
@@ -235,16 +234,16 @@ func checkValidOperator(operator string) error {
 }
 
 // checkStringType converts the value from the csv to the appropriate one.
-func checkStringType(myTblVal string) interface{} {
-	myInt, isInt := strconv.Atoi(myTblVal)
-	myFloat, isFloat := strconv.ParseFloat(myTblVal, 64)
-	if isInt == nil {
-		return myInt
-	} else if isFloat == nil {
-		return myFloat
-	} else {
-		return myTblVal
+func checkStringType(tblVal string) interface{} {
+	intVal, err := strconv.Atoi(tblVal)
+	if err == nil {
+		return intVal
 	}
+	floatVal, err := strconv.ParseFloat(tblVal, 64)
+	if err == nil {
+		return floatVal
+	}
+	return tblVal
 }
 
 // stringEval is for evaluating the state of string comparison.
@@ -626,31 +625,6 @@ func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) 
 	return nil
 }
 
-// qualityCheck ensures the row has enough separators.
-func qualityCheck(row string, amountOfSep int, sep string) string {
-	for i := 0; i < amountOfSep; i++ {
-		row = row + sep
-	}
-	return row
-}
-
-// writeRow helps to write the row regardless of how many entries.
-func writeRow(myRow string, myEntry string, delimiter string, numOfReqCols int) string {
-	if myEntry == "" && len(myRow) == 0 && numOfReqCols == 1 {
-		return myEntry
-	}
-	if myEntry == "" && len(myRow) == 0 {
-		return myEntry + delimiter
-	}
-	if len(myRow) == 1 && myRow[0] == ',' {
-		return myRow + myEntry
-	}
-	if len(myRow) == 0 {
-		return myEntry
-	}
-	return myRow + delimiter + myEntry
-}
-
 // colNameErrs is a function which makes sure that the headers are requested are
 // present in the file otherwise it throws an error.
 func (reader *Input) colNameErrs(columnNames []string) error {
@@ -676,13 +650,23 @@ func (reader *Input) colNameErrs(columnNames []string) error {
 }
 
 // aggFuncToStr converts an array of floats into a properly formatted string.
-func (reader *Input) aggFuncToStr(myAggVals []float64) string {
-	myRow := strconv.FormatFloat(myAggVals[0], 'f', 6, 64)
-	for i := 1; i < len(myAggVals); i++ {
-		aggregateval := strconv.FormatFloat(myAggVals[i], 'f', 6, 64)
-		myRow = myRow + reader.options.OutputFieldDelimiter + aggregateval
+func (reader *Input) aggFuncToStr(aggVals []float64) string {
+	// Define a number formatting function
+	numToStr := func(f float64) string {
+		if f == math.Trunc(f) {
+			return strconv.FormatInt(int64(f), 10)
+		}
+		return strconv.FormatFloat(f, 'f', 6, 64)
 	}
-	return myRow
+
+	// Display all whole numbers in aggVals as integers
+	vals := make([]string, len(aggVals))
+	for i, v := range aggVals {
+		vals[i] = numToStr(v)
+	}
+
+	// Intersperse field delimiter
+	return strings.Join(vals, reader.options.OutputFieldDelimiter)
 }
 
 // checkForDuplicates ensures we do not have an ambigious column name.

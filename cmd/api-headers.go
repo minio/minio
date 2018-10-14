@@ -43,6 +43,9 @@ func setCommonHeaders(w http.ResponseWriter) {
 		w.Header().Set("X-Amz-Bucket-Region", region)
 	}
 	w.Header().Set("Accept-Ranges", "bytes")
+
+	// Remove sensitive information
+	crypto.RemoveSensitiveHeaders(w.Header())
 }
 
 // Encodes the response headers into XML format.
@@ -101,7 +104,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		if err != nil {
 			return err
 		}
-
+	case objInfo.IsCompressed():
+		totalObjectSize = objInfo.GetActualSize()
+		if totalObjectSize < 0 {
+			return errInvalidDecompressedSize
+		}
 	default:
 		totalObjectSize = objInfo.Size
 	}

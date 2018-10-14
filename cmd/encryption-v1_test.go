@@ -210,11 +210,6 @@ func TestParseSSECustomerRequest(t *testing.T) {
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(crypto.SSECKey)
-		if (err == nil || err == crypto.ErrCustomerKeyMD5Mismatch) && key != "" {
-			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
-		}
-
 	}
 }
 
@@ -331,10 +326,6 @@ func TestParseSSECopyCustomerRequest(t *testing.T) {
 		if err != test.err {
 			t.Errorf("Test %d: Parse returned: %v want: %v", i, err, test.err)
 		}
-		key := request.Header.Get(crypto.SSECopyKey)
-		if (err == nil || err == crypto.ErrCustomerKeyMD5Mismatch) && key != "" {
-			t.Errorf("Test %d: Client key survived parsing - found key: %v", i, key)
-		}
 	}
 }
 
@@ -375,9 +366,6 @@ func TestEncryptRequest(t *testing.T) {
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
-		}
-		if key, ok := test.metadata[crypto.SSECKey]; ok {
-			t.Errorf("Test %d: Client provided key survived in metadata - key: %s", i, key)
 		}
 		if kdf, ok := test.metadata[crypto.SSESealAlgorithm]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionKDF must be part of metadata: %v", i, kdf)

@@ -20,7 +20,7 @@ package logger
 // a single log entry and send it to the log target
 //   e.g. send the log to a http server
 type LoggingTarget interface {
-	send(entry logEntry) error
+	send(entry interface{}) error
 }
 
 // Targets is the set of enabled loggers

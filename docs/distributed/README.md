@@ -14,11 +14,11 @@ Distributed Minio provides protection against multiple node/drive failures and [
 
 A stand-alone Minio server would go down if the server hosting the disks goes offline. In contrast, a distributed Minio setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
 
-For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need at least 5 nodes online to create new objects.
+For example, an 8-node distributed Minio setup with 1 disk per node would continue serving files, even if up to 4 disks are offline. But, you'll need at least 5 disks online to create new objects.
 
 ### Limits
 
-As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 2 and maximum 32 servers. There are no limits on number of disks shared across these servers. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
+As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 2 and maximum 32 servers. There are no limits on number of disks shared across these servers. If you need a multiple tenant setup, you can easily spin up multiple Minio instances managed by orchestration tools like Kubernetes.
 
 Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, 32 servers with 24 drives each and so on.
 
@@ -57,7 +57,7 @@ Example 1: Start distributed Minio instance on 8 nodes with 1 disk each mounted 
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.1{1...18}/export1
+minio server http://192.168.1.1{1...8}/export1
 ```
 
 #### Windows (experimental)
@@ -65,7 +65,7 @@ minio server http://192.168.1.1{1...18}/export1
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.1{1...18}/C:/data
+minio.exe server http://192.168.1.1{1...8}/C:/data
 ```
 
 
@@ -76,7 +76,7 @@ Example 2: Start distributed Minio instance on 4 nodes with 4 disks (pictured be
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.1{1...14}/export{1...4}
+minio server http://192.168.1.1{1...4}/export{1...4}
 ```
 
 #### Windows (experimental)

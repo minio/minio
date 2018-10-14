@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"time"
+
+	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -64,13 +67,29 @@ func isSecretKeyValid(secretKey string) bool {
 
 // Credentials holds access and secret keys.
 type Credentials struct {
-	AccessKey string `json:"accessKey,omitempty"`
-	SecretKey string `json:"secretKey,omitempty"`
+	AccessKey    string    `xml:"AccessKeyId" json:"accessKey,omitempty"`
+	SecretKey    string    `xml:"SecretAccessKey" json:"secretKey,omitempty"`
+	Expiration   time.Time `xml:"Expiration" json:"expiration,omitempty"`
+	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
+	Status       string    `xml:"-" json:"status,omitempty"`
+}
+
+// IsExpired - returns whether Credential is expired or not.
+func (cred Credentials) IsExpired() bool {
+	if cred.Expiration.IsZero() || cred.Expiration == timeSentinel {
+		return false
+	}
+
+	return cred.Expiration.Before(time.Now().UTC())
 }
 
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
-	return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey)
+	// Verify credentials if its enabled or not set.
+	if cred.Status == "enabled" || cred.Status == "" {
+		return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
+	}
+	return false
 }
 
 // Equal - returns whether two credentials are equal or not.
@@ -78,11 +97,14 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 	if !ccred.IsValid() {
 		return false
 	}
-	return cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1
+	return (cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(cred.SessionToken), []byte(ccred.SessionToken)) == 1)
 }
 
-// GetNewCredentials generates and returns new credential.
-func GetNewCredentials() (cred Credentials, err error) {
+var timeSentinel = time.Unix(0, 0).UTC()
+
+// GetNewCredentialsWithMetadata generates and returns new credential with expiry.
+func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
 	readBytes := func(size int) (data []byte, err error) {
 		data = make([]byte, size)
 		var n int
@@ -109,9 +131,30 @@ func GetNewCredentials() (cred Credentials, err error) {
 	if err != nil {
 		return cred, err
 	}
-	cred.SecretKey = string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+	cred.SecretKey = string([]byte(base64.URLEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+	cred.Status = "enabled"
+
+	expiry, ok := m["exp"].(float64)
+	if !ok {
+		cred.Expiration = timeSentinel
+		return cred, nil
+	}
+
+	m["accessKey"] = cred.AccessKey
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
+
+	cred.Expiration = time.Unix(int64(expiry), 0)
+	cred.SessionToken, err = jwt.SignedString([]byte(tokenSecret))
+	if err != nil {
+		return cred, err
+	}
 
 	return cred, nil
+}
+
+// GetNewCredentials generates and returns new credential.
+func GetNewCredentials() (cred Credentials, err error) {
+	return GetNewCredentialsWithMetadata(map[string]interface{}{}, "")
 }
 
 // CreateCredentials returns new credential with the given access key and secret key.
@@ -123,8 +166,9 @@ func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error
 	if !isSecretKeyValid(secretKey) {
 		return cred, ErrInvalidSecretKeyLength
 	}
-
 	cred.AccessKey = accessKey
 	cred.SecretKey = secretKey
+	cred.Expiration = timeSentinel
+	cred.Status = "enabled"
 	return cred, nil
 }

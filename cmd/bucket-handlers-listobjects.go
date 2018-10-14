@@ -21,6 +21,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 
 	"github.com/minio/minio/pkg/policy"
 )
@@ -57,6 +58,8 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 // Minio continues to support ListObjectsV1 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -102,7 +105,17 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsV2Info.Objects {
-		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
+		var actualSize int64
+		if listObjectsV2Info.Objects[i].IsCompressed() {
+			// Read the decompressed size from the meta.json.
+			actualSize = listObjectsV2Info.Objects[i].GetActualSize()
+			if actualSize < 0 {
+				writeErrorResponse(w, ErrInvalidDecompressedSize, r.URL)
+				return
+			}
+			// Set the info.Size to the actualSize.
+			listObjectsV2Info.Objects[i].Size = actualSize
+		} else if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -126,6 +139,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 //
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV1")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -168,7 +183,17 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsInfo.Objects {
-		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
+		var actualSize int64
+		if listObjectsInfo.Objects[i].IsCompressed() {
+			// Read the decompressed size from the meta.json.
+			actualSize = listObjectsInfo.Objects[i].GetActualSize()
+			if actualSize < 0 {
+				writeErrorResponse(w, ErrInvalidDecompressedSize, r.URL)
+				return
+			}
+			// Set the info.Size to the actualSize.
+			listObjectsInfo.Objects[i].Size = actualSize
+		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -176,7 +201,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 			}
 		}
 	}
-
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, listObjectsInfo)
 
 	// Write success response.

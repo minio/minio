@@ -158,17 +158,15 @@ func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error
 //
 // - slice of errors about the state of data files on disk - can have
 //   a not-found error or a hash-mismatch error.
-//
-// - non-nil error if any of the disks failed unexpectedly (i.e. error
-//   other than file not found and not a checksum error).
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
-	object string) ([]StorageAPI, []error, error) {
+	object string) ([]StorageAPI, []error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	buffer := []byte{}
 	dataErrs := make([]error, len(onlineDisks))
 
 	for i, onlineDisk := range onlineDisks {
 		if onlineDisk == nil {
+			dataErrs[i] = errDiskNotFound
 			continue
 		}
 
@@ -196,8 +194,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 				break
 			case hErr != nil:
 				logger.LogIf(ctx, hErr)
-				// abort on unhandled errors
-				return nil, nil, hErr
+				dataErrs[i] = hErr
+				break
 			}
 		}
 
@@ -207,5 +205,5 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 	}
 
-	return availableDisks, dataErrs, nil
+	return availableDisks, dataErrs
 }
