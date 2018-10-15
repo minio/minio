@@ -39,6 +39,9 @@ const (
 	// IAM users directory.
 	iamConfigUsersPrefix = iamConfigPrefix + "/users/"
 
+	// IAM policies directory.
+	iamConfigPoliciesPrefix = iamConfigPrefix + "/policies/"
+
 	// IAM sts directory.
 	iamConfigSTSPrefix = iamConfigPrefix + "/sts/"
 
@@ -52,8 +55,9 @@ const (
 // IAMSys - config system.
 type IAMSys struct {
 	sync.RWMutex
-	iamUsersMap  map[string]auth.Credentials
-	iamPolicyMap map[string]iampolicy.Policy
+	iamUsersMap        map[string]auth.Credentials
+	iamPolicyMap       map[string]string
+	iamCannedPolicyMap map[string]iampolicy.Policy
 }
 
 // Load - load iam.json
@@ -109,87 +113,19 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	}
 }
 
-// SetPolicy - sets policy to given user name.  If policy is empty,
-// existing policy is removed.
-func (sys *IAMSys) SetPolicy(accessKey string, p iampolicy.Policy) error {
+// DeleteCannedPolicy - deletes a canned policy.
+func (sys *IAMSys) DeleteCannedPolicy(policyName string) error {
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
 
-	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
-	data, err := json.Marshal(p)
-	if err != nil {
-		return err
-	}
-
-	if globalEtcdClient != nil {
-		if err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data); err != nil {
-			return err
-		}
-	} else {
-		if err = saveConfig(context.Background(), objectAPI, configFile, data); err != nil {
-			return err
-		}
-	}
-
-	sys.Lock()
-	defer sys.Unlock()
-
-	if p.IsEmpty() {
-		delete(sys.iamPolicyMap, accessKey)
-	} else {
-		sys.iamPolicyMap[accessKey] = p
-	}
-
-	return nil
-}
-
-// SaveTempPolicy - this is used for temporary credentials only.
-func (sys *IAMSys) SaveTempPolicy(accessKey string, p iampolicy.Policy) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	configFile := pathJoin(iamConfigSTSPrefix, accessKey, iamPolicyFile)
-	data, err := json.Marshal(p)
-	if err != nil {
-		return err
-	}
-
-	if globalEtcdClient != nil {
-		if err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data); err != nil {
-			return err
-		}
-	} else {
-		if err = saveConfig(context.Background(), objectAPI, configFile, data); err != nil {
-			return err
-		}
-	}
-
-	sys.Lock()
-	defer sys.Unlock()
-
-	if p.IsEmpty() {
-		delete(sys.iamPolicyMap, accessKey)
-	} else {
-		sys.iamPolicyMap[accessKey] = p
-	}
-
-	return nil
-}
-
-// DeletePolicy - sets policy to given user name.  If policy is empty,
-// existing policy is removed.
-func (sys *IAMSys) DeletePolicy(accessKey string) error {
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
+	if policyName == "" {
+		return errInvalidArgument
 	}
 
 	var err error
-	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
+	configFile := pathJoin(iamConfigPoliciesPrefix, policyName, iamPolicyFile)
 	if globalEtcdClient != nil {
 		err = deleteConfigEtcd(context.Background(), globalEtcdClient, configFile)
 	} else {
@@ -199,9 +135,102 @@ func (sys *IAMSys) DeletePolicy(accessKey string) error {
 	sys.Lock()
 	defer sys.Unlock()
 
-	delete(sys.iamPolicyMap, accessKey)
-
+	delete(sys.iamCannedPolicyMap, policyName)
 	return err
+}
+
+// ListCannedPolicies - lists all canned policies.
+func (sys *IAMSys) ListCannedPolicies() (map[string][]byte, error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+
+	var cannedPolicyMap = make(map[string][]byte)
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	for k, v := range sys.iamCannedPolicyMap {
+		data, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		cannedPolicyMap[k] = data
+	}
+
+	return cannedPolicyMap, nil
+}
+
+// SetCannedPolicy - sets a new canned policy.
+func (sys *IAMSys) SetCannedPolicy(policyName string, p iampolicy.Policy) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	if p.IsEmpty() || policyName == "" {
+		return errInvalidArgument
+	}
+
+	configFile := pathJoin(iamConfigPoliciesPrefix, policyName, iamPolicyFile)
+	data, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objectAPI, configFile, data)
+	}
+	if err != nil {
+		return err
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	sys.iamCannedPolicyMap[policyName] = p
+
+	return nil
+}
+
+// SetUserPolicy - sets policy to given user name.
+func (sys *IAMSys) SetUserPolicy(accessKey, policyName string) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	if _, ok := sys.iamUsersMap[accessKey]; !ok {
+		return errNoSuchUser
+	}
+
+	if _, ok := sys.iamCannedPolicyMap[policyName]; !ok {
+		return errNoSuchPolicy
+	}
+
+	data, err := json.Marshal(policyName)
+	if err != nil {
+		return err
+	}
+
+	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objectAPI, configFile, data)
+	}
+	if err != nil {
+		return err
+	}
+
+	sys.iamPolicyMap[accessKey] = policyName
+	return nil
 }
 
 // DeleteUser - set user credentials.
@@ -212,17 +241,30 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	}
 
 	var err error
-	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
+	pFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
+	iFile := pathJoin(iamConfigUsersPrefix, accessKey, iamIdentityFile)
 	if globalEtcdClient != nil {
-		err = deleteConfigEtcd(context.Background(), globalEtcdClient, configFile)
+		// It is okay to ingnore errors when deleting policy.json for the user.
+		_ = deleteConfigEtcd(context.Background(), globalEtcdClient, pFile)
+		err = deleteConfigEtcd(context.Background(), globalEtcdClient, iFile)
 	} else {
-		err = deleteConfig(context.Background(), objectAPI, configFile)
+		// It is okay to ingnore errors when deleting policy.json for the user.
+		_ = deleteConfig(context.Background(), objectAPI, pFile)
+		err = deleteConfig(context.Background(), objectAPI, iFile)
+	}
+
+	//
+	switch err.(type) {
+	case ObjectNotFound:
+		err = errNoSuchUser
 	}
 
 	sys.Lock()
 	defer sys.Unlock()
 
 	delete(sys.iamUsersMap, accessKey)
+	delete(sys.iamPolicyMap, accessKey)
+
 	return err
 }
 
@@ -240,13 +282,13 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials) error {
 	}
 
 	if globalEtcdClient != nil {
-		if err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data); err != nil {
-			return err
-		}
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
-		if err = saveConfig(context.Background(), objectAPI, configFile, data); err != nil {
-			return err
-		}
+		err = saveConfig(context.Background(), objectAPI, configFile, data)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	sys.Lock()
@@ -270,7 +312,8 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 
 	for k, v := range sys.iamUsersMap {
 		users[k] = madmin.UserInfo{
-			Status: madmin.AccountStatus(v.Status),
+			PolicyName: sys.iamPolicyMap[k],
+			Status:     madmin.AccountStatus(v.Status),
 		}
 	}
 
@@ -291,13 +334,13 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	}
 
 	if globalEtcdClient != nil {
-		if err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data); err != nil {
-			return err
-		}
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
-		if err = saveConfig(context.Background(), objectAPI, configFile, data); err != nil {
-			return err
-		}
+		err = saveConfig(context.Background(), objectAPI, configFile, data)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	sys.Lock()
@@ -332,8 +375,9 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	}
 
 	// If policy is available for given user, check the policy.
-	if p, found := sys.iamPolicyMap[args.AccountName]; found {
-		return p.IsAllowed(args)
+	if name, found := sys.iamPolicyMap[args.AccountName]; found {
+		p, ok := sys.iamCannedPolicyMap[name]
+		return ok && p.IsAllowed(args)
 	}
 
 	// As policy is not available and OPA is not configured, return the owner value.
@@ -343,7 +387,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 var defaultContextTimeout = 5 * time.Minute
 
 // Similar to reloadUsers but updates users, policies maps from etcd server,
-func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policyMap map[string]iampolicy.Policy) error {
+func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policyMap map[string]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	r, err := globalEtcdClient.Get(ctx, prefix, etcd.WithPrefix(), etcd.WithKeysOnly())
 	defer cancel()
@@ -400,18 +444,92 @@ func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policy
 			usersMap[cred.AccessKey] = cred
 		}
 		if perr == nil {
-			var p iampolicy.Policy
-			if err = json.Unmarshal(pdata, &p); err != nil {
+			var policyName string
+			if err = json.Unmarshal(pdata, &policyName); err != nil {
 				return err
 			}
-			policyMap[path.Base(prefix)] = p
+			policyMap[path.Base(prefix)] = policyName
 		}
 	}
 	return nil
 }
 
+func reloadEtcdPolicies(prefix string, cannedPolicyMap map[string]iampolicy.Policy) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+	r, err := globalEtcdClient.Get(ctx, prefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	defer cancel()
+	if err != nil {
+		return err
+	}
+	// No users are created yet.
+	if r.Count == 0 {
+		return nil
+	}
+
+	policies := set.NewStringSet()
+	for _, kv := range r.Kvs {
+		// Extract policy by stripping off the `prefix` value as suffix,
+		// then strip off the remaining basename to obtain the prefix
+		// value, usually in the following form.
+		//
+		//  key := "config/iam/policys/newpolicy/identity.json"
+		//  prefix := "config/iam/policys/"
+		//  v := trim(trim(key, prefix), base(key)) == "newpolicy"
+		//
+		policyName := strings.TrimSuffix(strings.TrimSuffix(string(kv.Key), prefix), path.Base(string(kv.Key)))
+		if !policies.Contains(policyName) {
+			policies.Add(policyName)
+		}
+	}
+
+	// Reload config and policies for all policys.
+	for _, policyName := range policies.ToSlice() {
+		pFile := pathJoin(prefix, policyName, iamPolicyFile)
+		pdata, perr := readConfigEtcd(ctx, globalEtcdClient, pFile)
+		if perr != nil {
+			return perr
+		}
+		var p iampolicy.Policy
+		if err = json.Unmarshal(pdata, &p); err != nil {
+			return err
+		}
+		cannedPolicyMap[path.Base(prefix)] = p
+	}
+	return nil
+}
+
+func reloadPolicies(objectAPI ObjectLayer, prefix string, cannedPolicyMap map[string]iampolicy.Policy) error {
+	marker := ""
+	for {
+		var lo ListObjectsInfo
+		var err error
+		lo, err = objectAPI.ListObjects(context.Background(), minioMetaBucket, prefix, marker, "/", 1000)
+		if err != nil {
+			return err
+		}
+		marker = lo.NextMarker
+		for _, prefix := range lo.Prefixes {
+			pFile := pathJoin(prefix, iamPolicyFile)
+			pdata, perr := readConfig(context.Background(), objectAPI, pFile)
+			if perr != nil {
+				return perr
+			}
+			var p iampolicy.Policy
+			if err = json.Unmarshal(pdata, &p); err != nil {
+				return err
+			}
+			cannedPolicyMap[path.Base(prefix)] = p
+		}
+		if !lo.IsTruncated {
+			break
+		}
+	}
+	return nil
+
+}
+
 // reloadUsers reads an updates users, policies from object layer into user and policy maps.
-func reloadUsers(objectAPI ObjectLayer, prefix string, usersMap map[string]auth.Credentials, policyMap map[string]iampolicy.Policy) error {
+func reloadUsers(objectAPI ObjectLayer, prefix string, usersMap map[string]auth.Credentials, policyMap map[string]string) error {
 	marker := ""
 	for {
 		var lo ListObjectsInfo
@@ -451,11 +569,11 @@ func reloadUsers(objectAPI ObjectLayer, prefix string, usersMap map[string]auth.
 				usersMap[cred.AccessKey] = cred
 			}
 			if perr == nil {
-				var p iampolicy.Policy
-				if err = json.Unmarshal(pdata, &p); err != nil {
+				var policyName string
+				if err = json.Unmarshal(pdata, &policyName); err != nil {
 					return err
 				}
-				policyMap[path.Base(prefix)] = p
+				policyMap[path.Base(prefix)] = policyName
 			}
 		}
 		if !lo.IsTruncated {
@@ -468,9 +586,13 @@ func reloadUsers(objectAPI ObjectLayer, prefix string, usersMap map[string]auth.
 // Refresh IAMSys.
 func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 	iamUsersMap := make(map[string]auth.Credentials)
-	iamPolicyMap := make(map[string]iampolicy.Policy)
+	iamPolicyMap := make(map[string]string)
+	iamCannedPolicyMap := make(map[string]iampolicy.Policy)
 
 	if globalEtcdClient != nil {
+		if err := reloadEtcdPolicies(iamConfigPoliciesPrefix, iamCannedPolicyMap); err != nil {
+			return err
+		}
 		if err := reloadEtcdUsers(iamConfigUsersPrefix, iamUsersMap, iamPolicyMap); err != nil {
 			return err
 		}
@@ -478,6 +600,9 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 			return err
 		}
 	} else {
+		if err := reloadPolicies(objAPI, iamConfigPoliciesPrefix, iamCannedPolicyMap); err != nil {
+			return err
+		}
 		if err := reloadUsers(objAPI, iamConfigUsersPrefix, iamUsersMap, iamPolicyMap); err != nil {
 			return err
 		}
@@ -491,6 +616,7 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 
 	sys.iamUsersMap = iamUsersMap
 	sys.iamPolicyMap = iamPolicyMap
+	sys.iamCannedPolicyMap = iamCannedPolicyMap
 
 	return nil
 }
@@ -498,7 +624,8 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 // NewIAMSys - creates new config system object.
 func NewIAMSys() *IAMSys {
 	return &IAMSys{
-		iamUsersMap:  make(map[string]auth.Credentials),
-		iamPolicyMap: make(map[string]iampolicy.Policy),
+		iamUsersMap:        make(map[string]auth.Credentials),
+		iamPolicyMap:       make(map[string]string),
+		iamCannedPolicyMap: make(map[string]iampolicy.Policy),
 	}
 }

@@ -38,10 +38,10 @@ func main() {
 
 | Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
-| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser()`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`AddUserPolicy`](#AddUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
+| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
-| | |            | [`SetConfigKeys`](#SetConfigKeys) |                                     |
+| | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
 
 ## 1. Constructor
@@ -349,6 +349,20 @@ __Example__
 
 ## 8. IAM operations
 
+<a name="AddCannedPolicy"></a>
+### AddCannedPolicy(policyName string, policy string) error
+Create a new canned policy on Minio server.
+
+__Example__
+
+```
+	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
+
+    if err = madmClnt.AddCannedPolicy("get-only", policy); err != nil {
+		log.Fatalln(err)
+	}
+```
+
 <a name="AddUser"></a>
 ### AddUser(user string, secret string) error
 Add a new user on a Minio server.
@@ -361,16 +375,14 @@ __Example__
 	}
 ```
 
-<a name="AddUserPolicy"></a>
-### AddUserPolicy(user string, policy string) error
-Set a new policy for a given user on Minio server.
+<a name="SetUserPolicy"></a>
+### SetUserPolicy(user string, policyName string) error
+Enable a canned policy `get-only` for a given user on Minio server.
 
 __Example__
 
 ``` go
-	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
-
-	if err = madmClnt.AddUserPolicy("newuser", policy); err != nil {
+	if err = madmClnt.SetUserPolicy("newuser", "get-only"); err != nil {
 		log.Fatalln(err)
 	}
 ```

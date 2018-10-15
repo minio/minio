@@ -9,13 +9,9 @@ In this document we will explain in detail on how to configure multiple users.
 - Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
 
 ### 2. Create a new user and policy
-Create a new user `newuser` on Minio use `mc admin users`, with a `newuser.json`.
-```
-mc admin users add myminio newuser newuser123 /tmp/newuser.json
-```
-
-An example user policy, enables `newuser` to download all objects in my-bucketname.
+Create new canned policy `getonly` with `newuser.json` use `mc admin policies`. This policy enables users to download all objects in my-bucketname.
 ```json
+cat > getonly.json << EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -31,6 +27,14 @@ An example user policy, enables `newuser` to download all objects in my-bucketna
     }
   ]
 }
+EOF
+
+mc admin policies add myminio getonly getonly.json
+```
+
+Create a new user `newuser` on Minio use `mc admin users`, additionally specify `getonly` canned policy for this `newuser`.
+```
+mc admin users add myminio newuser newuser123 getonly
 ```
 
 ### 3. Revoke user

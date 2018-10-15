@@ -187,6 +187,9 @@ const (
 	// new error codes here.
 
 	ErrMalformedJSON
+	ErrAdminNoSuchUser
+	ErrAdminNoSuchPolicy
+	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
@@ -864,6 +867,21 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoSuchUser: {
+		Code:           "XMinioAdminNoSuchUser",
+		Description:    "The specified user does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminNoSuchPolicy: {
+		Code:           "XMinioAdminNoSuchPolicy",
+		Description:    "The canned policy does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminInvalidArgument: {
+		Code:           "XMinioAdminInvalidArgument",
+		Description:    "Invalid arguments specified.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
 		Description:    "The access key is invalid.",
@@ -1428,6 +1446,12 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 	// Verify if the underlying error is signature mismatch.
 	switch err {
+	case errInvalidArgument:
+		apiErr = ErrAdminInvalidArgument
+	case errNoSuchUser:
+		apiErr = ErrAdminNoSuchUser
+	case errNoSuchPolicy:
+		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:
