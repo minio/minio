@@ -470,3 +470,25 @@ func TestIsErrIgnored(t *testing.T) {
 		}
 	}
 }
+
+// Test queries()
+func TestQueries(t *testing.T) {
+	var testCases = []struct {
+		keys      []string
+		keyvalues []string
+	}{
+		{
+			[]string{"aaaa", "bbbb"},
+			[]string{"aaaa", "{aaaa:.*}", "bbbb", "{bbbb:.*}"},
+		},
+	}
+
+	for i, test := range testCases {
+		keyvalues := restQueries(test.keys...)
+		for j := range keyvalues {
+			if keyvalues[j] != test.keyvalues[j] {
+				t.Fatalf("test %d: keyvalues[%d] does not match", i+1, j)
+			}
+		}
+	}
+}

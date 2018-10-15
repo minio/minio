@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,7 +117,7 @@ func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
 			config.Version = policy.DefaultVersion
 
-			if err = savePolicyConfig(objAPI, bucket.Name, config); err != nil {
+			if err = savePolicyConfig(context.Background(), objAPI, bucket.Name, config); err != nil {
 				logger.LogIf(context.Background(), err)
 				return err
 			}
@@ -131,25 +133,46 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	// Load PolicySys once during boot.
-	if err := sys.refresh(objAPI); err != nil {
-		return err
-	}
-
-	// Refresh PolicySys in background.
-	go func() {
-		ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-globalServiceDoneCh:
-				return
-			case <-ticker.C:
-				sys.refresh(objAPI)
+	defer func() {
+		// Refresh PolicySys in background.
+		go func() {
+			ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-globalServiceDoneCh:
+					return
+				case <-ticker.C:
+					sys.refresh(objAPI)
+				}
 			}
-		}
+		}()
 	}()
-	return nil
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Initializing policy needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case _ = <-retryTimerCh:
+			// Load PolicySys once during boot.
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for policy subsystem to be initialized..")
+					continue
+				}
+				return err
+			}
+			return nil
+		}
+	}
 }
 
 // NewPolicySys - creates new policy system.
@@ -192,7 +215,7 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	reader, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(context.Background(), objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketPolicyNotFound{Bucket: bucketName}
@@ -201,10 +224,10 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 		return nil, err
 	}
 
-	return policy.ParseConfig(reader, bucketName)
+	return policy.ParseConfig(bytes.NewReader(configData), bucketName)
 }
 
-func savePolicyConfig(objAPI ObjectLayer, bucketName string, bucketPolicy *policy.Policy) error {
+func savePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, bucketPolicy *policy.Policy) error {
 	data, err := json.Marshal(bucketPolicy)
 	if err != nil {
 		return err
@@ -213,7 +236,7 @@ func savePolicyConfig(objAPI ObjectLayer, bucketName string, bucketPolicy *polic
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	return saveConfig(objAPI, configFile, data)
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 func removePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) error {

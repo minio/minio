@@ -20,15 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
-
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/iam/validator"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Steps to move from version N to version N+1
@@ -40,9 +43,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "29"
+const serverConfigVersion = "31"
 
-type serverConfig = serverConfigV29
+type serverConfig = serverConfigV31
 
 var (
 	// globalServerConfig server config.
@@ -173,59 +176,71 @@ func (s *serverConfig) Validate() error {
 	// Worm, Cache and StorageClass values are already validated during json unmarshal
 	for _, v := range s.Notify.AMQP {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("amqp: %s", err.Error())
+			return fmt.Errorf("amqp: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.Elasticsearch {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("elasticsearch: %s", err.Error())
+			return fmt.Errorf("elasticsearch: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.Kafka {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("kafka: %s", err.Error())
+			return fmt.Errorf("kafka: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.MQTT {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("mqtt: %s", err.Error())
+			return fmt.Errorf("mqtt: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.MySQL {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("mysql: %s", err.Error())
+			return fmt.Errorf("mysql: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.NATS {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("nats: %s", err.Error())
+			return fmt.Errorf("nats: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.PostgreSQL {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("postgreSQL: %s", err.Error())
+			return fmt.Errorf("postgreSQL: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.Redis {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("redis: %s", err.Error())
+			return fmt.Errorf("redis: %s", err)
 		}
 	}
 
 	for _, v := range s.Notify.Webhook {
 		if err := v.Validate(); err != nil {
-			return fmt.Errorf("webhook: %s", err.Error())
+			return fmt.Errorf("webhook: %s", err)
 		}
 	}
 
 	return nil
+}
+
+// SetCompressionConfig sets the current compression config
+func (s *serverConfig) SetCompressionConfig(extensions []string, mimeTypes []string) {
+	s.Compression.Extensions = extensions
+	s.Compression.MimeTypes = mimeTypes
+	s.Compression.Enabled = globalIsCompressionEnabled
+}
+
+// GetCompressionConfig gets the current compression config
+func (s *serverConfig) GetCompressionConfig() compressionConfig {
+	return s.Compression
 }
 
 func (s *serverConfig) loadFromEnvs() {
@@ -252,6 +267,24 @@ func (s *serverConfig) loadFromEnvs() {
 
 	if globalKMS != nil {
 		s.KMS = globalKMSConfig
+	}
+
+	if globalIsEnvCompression {
+		s.SetCompressionConfig(globalCompressExtensions, globalCompressMimeTypes)
+	}
+
+	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
+		if u, err := xnet.ParseURL(jwksURL); err == nil {
+			s.OpenID.JWKS.URL = u
+			s.OpenID.JWKS.PopulatePublicKey()
+		}
+	}
+
+	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
+		if u, err := xnet.ParseURL(opaURL); err == nil {
+			s.Policy.OPA.URL = u
+			s.Policy.OPA.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
+		}
 	}
 }
 
@@ -366,6 +399,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "StorageClass configuration differs"
 	case !reflect.DeepEqual(s.Cache, t.Cache):
 		return "Cache configuration differs"
+	case !reflect.DeepEqual(s.Compression, t.Compression):
+		return "Compression configuration differs"
 	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
@@ -417,6 +452,11 @@ func newServerConfig() *serverConfig {
 		},
 		KMS:    crypto.KMSConfig{},
 		Notify: notifier{},
+		Compression: compressionConfig{
+			Enabled:    false,
+			Extensions: globalCompressExtensions,
+			MimeTypes:  globalCompressMimeTypes,
+		},
 	}
 
 	// Make sure to initialize notification configs.
@@ -480,11 +520,31 @@ func (s *serverConfig) loadToCachedConfigs() {
 			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
 		}
 	}
+
+	if !globalIsCompressionEnabled {
+		compressionConf := s.GetCompressionConfig()
+		globalCompressExtensions = compressionConf.Extensions
+		globalCompressMimeTypes = compressionConf.MimeTypes
+		globalIsCompressionEnabled = compressionConf.Enabled
+	}
+
+	if globalIAMValidators == nil {
+		globalIAMValidators = getAuthValidators(s)
+	}
+
+	if globalPolicyOPA == nil {
+		if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
+			globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
+				URL:       s.Policy.OPA.URL,
+				AuthToken: s.Policy.OPA.AuthToken,
+			})
+		}
+	}
 }
 
-// newConfig - initialize a new server config, saves env parameters if
+// newSrvConfig - initialize a new server config, saves env parameters if
 // found, otherwise use default parameters
-func newConfig(objAPI ObjectLayer) error {
+func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
 	srvCfg := newServerConfig()
 
@@ -533,6 +593,20 @@ func loadConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	return nil
+}
+
+// getAuthValidators - returns ValidatorList which contains
+// enabled providers in server config.
+// A new authentication provider is added like below
+// * Add a new provider in pkg/iam/validator package.
+func getAuthValidators(config *serverConfig) *validator.Validators {
+	validators := validator.NewValidators()
+
+	if config.OpenID.JWKS.URL != nil {
+		validators.Add(validator.NewJWT(config.OpenID.JWKS))
+	}
+
+	return validators
 }
 
 // getNotificationTargets - returns TargetList which contains enabled targets in serverConfig.

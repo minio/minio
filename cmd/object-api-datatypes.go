@@ -258,6 +258,9 @@ type PartInfo struct {
 
 	// Size in bytes of the part.
 	Size int64
+
+	// Decompressed Size.
+	ActualSize int64
 }
 
 // MultipartInfo - represents metadata in progress multipart upload.

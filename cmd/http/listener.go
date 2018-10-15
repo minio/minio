@@ -35,6 +35,8 @@ import (
 
 var sslRequiredErrMsg = []byte("HTTP/1.0 403 Forbidden\r\n\r\nSSL required")
 
+var badRequestMsg = []byte("HTTP/1.0 400 Bad Request\r\n\r\n")
+
 // HTTP methods.
 var methods = []string{
 	http.MethodGet,
@@ -93,7 +95,7 @@ func getPlainText(bufConn *BufConn) (bool, error) {
 	return false, nil
 }
 
-func getResourceHost(bufConn *BufConn, maxHeaderBytes int) (resource string, method string, host string, err error) {
+func getMethodResourceHost(bufConn *BufConn, maxHeaderBytes int) (method string, resource string, host string, err error) {
 	defer bufConn.setReadTimeout()
 
 	var data []byte
@@ -116,11 +118,15 @@ func getResourceHost(bufConn *BufConn, maxHeaderBytes int) (resource string, met
 
 		if method == "" && resource == "" {
 			if i := strings.IndexByte(tokens[0], ' '); i == -1 {
-				return "", "", "", fmt.Errorf("malformed HTTP request %s, from %s", tokens[0], bufConn.LocalAddr())
+				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
 			}
 			httpTokens := strings.SplitN(tokens[0], " ", 3)
 			if len(httpTokens) < 3 {
-				return "", "", "", fmt.Errorf("malformed HTTP request %s, from %s", tokens[0], bufConn.LocalAddr())
+				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
+			}
+			if !isHTTPMethod(httpTokens[0]) {
+				return "", "", "", fmt.Errorf("malformed HTTP request, invalid HTTP method '%s' from '%s'",
+					httpTokens[0], bufConn.LocalAddr())
 			}
 
 			method = httpTokens[0]
@@ -137,7 +143,7 @@ func getResourceHost(bufConn *BufConn, maxHeaderBytes int) (resource string, met
 			token = strings.ToLower(token)
 			if strings.HasPrefix(token, "host: ") {
 				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
-				return resource, method, host, nil
+				return method, resource, host, nil
 			}
 		}
 
@@ -230,6 +236,7 @@ func (listener *httpListener) start() {
 				bufconn.Close()
 				return
 			}
+
 			if ok {
 				// As TLS is configured and we got plain text HTTP request,
 				// return 403 (forbidden) error.
@@ -237,8 +244,10 @@ func (listener *httpListener) start() {
 				bufconn.Close()
 				return
 			}
+
 			// As the listener is configured with TLS, try to do TLS handshake, drop the connection if it fails.
 			tlsConn := tls.Server(bufconn, listener.tlsConfig)
+
 			if err := tlsConn.Handshake(); err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
 				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
@@ -247,10 +256,11 @@ func (listener *httpListener) start() {
 				bufconn.Close()
 				return
 			}
+
 			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout)
 		}
 
-		resource, method, host, err := getResourceHost(bufconn, listener.maxHeaderBytes)
+		method, resource, host, err := getMethodResourceHost(bufconn, listener.maxHeaderBytes)
 		if err != nil {
 			// Peek could fail legitimately when clients abruptly close
 			// connection. E.g. Chrome browser opens connections speculatively to
@@ -262,18 +272,8 @@ func (listener *httpListener) start() {
 				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
+				bufconn.Write(badRequestMsg)
 			}
-			bufconn.Close()
-			return
-		}
-
-		// Return bufconn if read data is a valid HTTP method.
-		if !isHTTPMethod(method) {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-			reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, fmt.Errorf("malformed HTTP invalid HTTP method %s", method))
-
 			bufconn.Close()
 			return
 		}

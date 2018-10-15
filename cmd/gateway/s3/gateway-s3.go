@@ -71,6 +71,9 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
      MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
+  LOGGER:
+     MINIO_LOGGER_HTTP_ENDPOINT: HTTP endpoint URL to log all incoming requests.
+
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
      $ export MINIO_ACCESS_KEY=accesskey
@@ -82,7 +85,13 @@ EXAMPLES:
      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
      $ {{.HelpName}} https://play.minio.io:9000
 
-  3. Start minio gateway server for AWS S3 backend with edge caching enabled.
+  3. Start minio gateway server for AWS S3 backend logging all requests to http endpoint.
+     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     $ export MINIO_LOGGER_HTTP_ENDPOINT="http://localhost:8000/"
+     $ {{.HelpName}} https://play.minio.io:9000
+
+  4. Start minio gateway server for AWS S3 backend with edge caching enabled.
      $ export MINIO_ACCESS_KEY=accesskey
      $ export MINIO_SECRET_KEY=secretkey
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
@@ -328,9 +337,9 @@ func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +352,7 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -401,6 +410,9 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+	// On success, populate the key & metadata so they are present in the notification
+	oi.Key = object
+	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(metadata)
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
 }
@@ -537,4 +549,9 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 		return minio.ErrorRespToObjectError(err, bucket, "")
 	}
 	return nil
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *s3Objects) IsCompressionSupported() bool {
+	return false
 }

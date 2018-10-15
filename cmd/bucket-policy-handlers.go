@@ -40,6 +40,8 @@ const (
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketPolicy")
 
+	defer logger.AuditLog(ctx, r)
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -101,6 +103,8 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteBucketPolicy")
 
+	defer logger.AuditLog(ctx, r)
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -136,6 +140,8 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 // GetBucketPolicyHandler - This HTTP handler returns bucket policy configuration.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketPolicy")
+
+	defer logger.AuditLog(ctx, r)
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {

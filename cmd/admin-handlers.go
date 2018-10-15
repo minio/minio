@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
@@ -43,7 +44,7 @@ import (
 )
 
 const (
-	maxConfigJSONSize = 256 * 1024 // 256KiB
+	maxEConfigJSONSize = 262272
 )
 
 // Type-safe query params.
@@ -286,9 +287,9 @@ type StartProfilingResult struct {
 	Error    string `json:"error"`
 }
 
-// StartProfilingHandler - POST /minio/admin/v1/profiling/start/{profiler}
+// StartProfilingHandler - POST /minio/admin/v1/profiling/start?profilerType={profilerType}
 // ----------
-// Enable profiling information
+// Enable server profiling
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkAdminRequestAuthType(r, "")
 	if adminAPIErr != ErrNone {
@@ -297,7 +298,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars["profiler"]
+	profiler := vars["profilerType"]
 
 	startProfilingResult := make([]StartProfilingResult, len(globalAdminPeers))
 
@@ -355,8 +356,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Return 200 OK
-	w.WriteHeader(http.StatusOK)
+	profilingDataFound := false
 
 	// Initialize a zip writer which will provide a zipped content
 	// of profiling data of all nodes
@@ -370,6 +370,8 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 			logger.LogIf(context.Background(), fmt.Errorf("Unable to download profiling data from node `%s`, reason: %s", peer.addr, err.Error()))
 			continue
 		}
+
+		profilingDataFound = true
 
 		// Send profiling data to zip as file
 		header, err := zip.FileInfoHeader(dummyFileInfo{
@@ -390,6 +392,11 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 		if _, err = io.Copy(writer, bytes.NewBuffer(data)); err != nil {
 			return
 		}
+	}
+
+	if !profilingDataFound {
+		writeErrorResponseJSON(w, ErrAdminProfilerNotEnabled, r.URL)
+		return
 	}
 }
 
@@ -591,7 +598,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	password := config.GetCredential().SecretKey
-	econfigData, err := madmin.EncryptServerConfigData(password, configData)
+	econfigData, err := madmin.EncryptData(password, configData)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
@@ -669,13 +676,13 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			continue
 		}
 		val := gjson.Get(configStr, key)
-		if j, err := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); err == nil {
+		if j, ierr := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); ierr == nil {
 			newConfigStr = j
 		}
 	}
 
 	password := config.GetCredential().SecretKey
-	econfigData, err := madmin.EncryptServerConfigData(password, []byte(newConfigStr))
+	econfigData, err := madmin.EncryptData(password, []byte(newConfigStr))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
@@ -693,6 +700,239 @@ func toAdminAPIErrCode(err error) APIErrorCode {
 		return ErrAdminConfigNoQuorum
 	default:
 		return toAPIErrorCode(err)
+	}
+}
+
+// RemoveUser - DELETE /minio/admin/v1/remove-user?accessKey=<access_key>
+func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RemoveUser")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	accessKey := vars["accessKey"]
+	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+}
+
+// RemoveUserPolicy - DELETE /minio/admin/v1/remove-user-policy?accessKey=<access_key>
+func (a adminAPIHandlers) RemoveUserPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RemoveUserPolicy")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	accessKey := vars["accessKey"]
+	if err := globalIAMSys.DeletePolicy(accessKey); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+}
+
+// ListUsers - GET /minio/admin/v1/list-users
+func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListUsers")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	allCredentials, err := globalIAMSys.ListUsers()
+	if err != nil {
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(allCredentials)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+
+	password := globalServerConfig.GetCredential().SecretKey
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
+}
+
+// AddUser - PUT /minio/admin/v1/add-user?accessKey=<access_key>
+func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AddUser")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	accessKey := vars["accessKey"]
+
+	// Custom IAM policies not allowed for admin user.
+	if accessKey == globalServerConfig.GetCredential().AccessKey {
+		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		return
+	}
+
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
+		// More than maxConfigSize bytes were available
+		writeErrorResponseJSON(w, ErrAdminConfigTooLarge, r.URL)
+		return
+	}
+
+	password := globalServerConfig.GetCredential().SecretKey
+	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
+		return
+	}
+
+	var uinfo madmin.UserInfo
+	if err = json.Unmarshal(configBytes, &uinfo); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
+		return
+	}
+
+	if err = globalIAMSys.SetUser(accessKey, uinfo); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		return
+	}
+}
+
+// AddUserPolicy - PUT /minio/admin/v1/add-user-policy?accessKey=<access_key>
+func (a adminAPIHandlers) AddUserPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AddUserPolicy")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	accessKey := vars["accessKey"]
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	// Custom IAM policies not allowed for admin user.
+	if accessKey == globalServerConfig.GetCredential().AccessKey {
+		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		return
+	}
+
+	// Error out if Content-Length is missing.
+	if r.ContentLength <= 0 {
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+
+	// Error out if Content-Length is beyond allowed size.
+	if r.ContentLength > maxBucketPolicySize {
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		return
+	}
+
+	iamPolicy, err := iampolicy.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+		return
+	}
+
+	// Version in policy must not be empty
+	if iamPolicy.Version == "" {
+		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
+		return
+	}
+
+	if err = globalIAMSys.SetPolicy(accessKey, *iamPolicy); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
 	}
 }
 
@@ -720,22 +960,14 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Read configuration bytes from request body.
-	configBuf := make([]byte, maxConfigJSONSize+1)
-	n, err := io.ReadFull(r.Body, configBuf)
-	if err == nil {
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
 		writeErrorResponseJSON(w, ErrAdminConfigTooLarge, r.URL)
 		return
 	}
-	if err != io.ErrUnexpectedEOF {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
-		return
-	}
 
 	password := globalServerConfig.GetCredential().SecretKey
-	configBytes, err := madmin.DecryptServerConfigData(password, bytes.NewReader(configBuf[:n]))
+	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
@@ -751,8 +983,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	var config serverConfig
-	err = json.Unmarshal(configBytes, &config)
-	if err != nil {
+	if err = json.Unmarshal(configBytes, &config); err != nil {
 		logger.LogIf(ctx, err)
 		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
 		return
@@ -781,8 +1012,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
 func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
@@ -856,7 +1085,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
 			return
 		}
-		elem, dErr := madmin.DecryptServerConfigData(password, bytes.NewBuffer([]byte(encryptedElem)))
+		elem, dErr := madmin.DecryptData(password, bytes.NewBuffer([]byte(encryptedElem)))
 		if dErr != nil {
 			logger.LogIf(ctx, dErr)
 			writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
@@ -914,15 +1143,12 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
-
-	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
-// UpdateCredsHandler - POST /minio/admin/v1/config/credential
+// UpdateAdminCredsHandler - POST /minio/admin/v1/config/credential
 // ----------
-// Update credentials in a minio server. In a distributed setup,
-// update all the servers in the cluster.
-func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
+// Update admin credentials in a minio server
+func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	r *http.Request) {
 
 	ctx := newContext(r, w, "UpdateCredentialsHandler")
@@ -936,7 +1162,7 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	// Avoid setting new credentials when they are already passed
 	// by the environment. Deny if WORM is enabled.
-	if globalIsEnvCreds {
+	if globalIsEnvCreds || globalWORMEnabled {
 		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
@@ -948,22 +1174,14 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Read configuration bytes from request body.
-	configBuf := make([]byte, maxConfigJSONSize+1)
-	n, err := io.ReadFull(r.Body, configBuf)
-	if err == nil {
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
 		writeErrorResponseJSON(w, ErrAdminConfigTooLarge, r.URL)
 		return
 	}
-	if err != io.ErrUnexpectedEOF {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
-		return
-	}
 
 	password := globalServerConfig.GetCredential().SecretKey
-	configBytes, err := madmin.DecryptServerConfigData(password, bytes.NewReader(configBuf[:n]))
+	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(w, ErrAdminConfigBadJSON, r.URL)
@@ -990,6 +1208,9 @@ func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
 
 	// Update local credentials in memory.
 	globalServerConfig.SetCredential(creds)
+
+	// Set active creds.
+	globalActiveCred = creds
 
 	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)

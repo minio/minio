@@ -1,5 +1,5 @@
 {
-    "version": "29",
+    "version": "30",
     "credential": {
         "accessKey": "USWUXHGYZQYFYFFIT3RE",
         "secretKey": "MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03"
@@ -131,6 +131,28 @@
                 "username": "",
                 "password": ""
             }
+        }
+    },
+    "logger": {
+        "console": {
+            "enabled": true
+        },
+        "http": {
+            "1": {
+                "enabled": false,
+                "endpoint": ""
+            }
+        }
+    },
+    "openid": {
+        "jwks": {
+            "url": ""
+        }
+    },
+    "policy": {
+        "opa": {
+            "url": "",
+            "authToken": ""
         }
     }
 }

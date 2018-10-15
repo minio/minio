@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,9 +30,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
@@ -42,7 +45,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -232,10 +237,11 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if web.CacheAPI() != nil {
 		listBuckets = web.CacheAPI().ListBuckets
 	}
-	authErr := webRequestAuthenticate(r)
-	if authErr != nil {
+
+	if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
 		return toJSONError(authErr)
 	}
+
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
@@ -301,32 +307,66 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
+
 	listObjects := objectAPI.ListObjects
 	if web.CacheAPI() != nil {
 		listObjects = web.CacheAPI().ListObjects
 	}
 
-	// Check if anonymous (non-owner) has access to download objects.
-	readable := globalPolicySys.IsAllowed(policy.Args{
-		Action:          policy.GetObjectAction,
-		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, ""),
-		IsOwner:         false,
-		ObjectName:      args.Prefix + "/",
-	})
-	// Check if anonymous (non-owner) has access to upload objects.
-	writable := globalPolicySys.IsAllowed(policy.Args{
-		Action:          policy.PutObjectAction,
-		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, ""),
-		IsOwner:         false,
-		ObjectName:      args.Prefix + "/",
-	})
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		if authErr == errNoAuthToken {
+			// Check if anonymous (non-owner) has access to download objects.
+			readable := globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.GetObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+				ObjectName:      args.Prefix + "/",
+			})
 
-	if authErr := webRequestAuthenticate(r); authErr != nil {
-		if authErr == errAuthentication {
+			// Check if anonymous (non-owner) has access to upload objects.
+			writable := globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.PutObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+				ObjectName:      args.Prefix + "/",
+			})
+
+			reply.Writable = writable
+			if !readable {
+				// Error out if anonymous user (non-owner) has no access to download or upload objects
+				if !writable {
+					return errAuthentication
+				}
+				// return empty object list if access is write only
+				return nil
+			}
+		} else {
 			return toJSONError(authErr)
 		}
+	}
+
+	// For authenticated users apply IAM policy.
+	if authErr == nil {
+		readable := globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.Subject,
+			Action:          iampolicy.Action(policy.GetObjectAction),
+			BucketName:      args.BucketName,
+			ConditionValues: getConditionValues(r, ""),
+			IsOwner:         owner,
+			ObjectName:      args.Prefix + "/",
+		})
+
+		writable := globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.Subject,
+			Action:          iampolicy.Action(policy.PutObjectAction),
+			BucketName:      args.BucketName,
+			ConditionValues: getConditionValues(r, ""),
+			IsOwner:         owner,
+			ObjectName:      args.Prefix + "/",
+		})
 
 		reply.Writable = writable
 		if !readable {
@@ -337,7 +377,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			// return empty object list if access is write only
 			return nil
 		}
-
 	}
 
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
@@ -601,6 +640,10 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 
 // Upload - file upload handler.
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "WebUpload")
+
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -615,18 +658,34 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if authErr := webRequestAuthenticate(r); authErr != nil {
-		if authErr == errAuthentication {
-			writeWebErrorResponse(w, errAuthentication)
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		if authErr == errNoAuthToken {
+			// Check if anonymous (non-owner) has access to upload objects.
+			if !globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.PutObjectAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+				ObjectName:      object,
+			}) {
+				writeWebErrorResponse(w, errAuthentication)
+				return
+			}
+		} else {
+			writeWebErrorResponse(w, authErr)
 			return
 		}
+	}
 
-		// Check if anonymous (non-owner) has access to upload objects.
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
+	// For authenticated users apply IAM policy.
+	if authErr == nil {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.Subject,
+			Action:          iampolicy.Action(policy.PutObjectAction),
 			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
+			IsOwner:         owner,
 			ObjectName:      object,
 		}) {
 			writeWebErrorResponse(w, errAuthentication)
@@ -648,7 +707,37 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashReader, err := hash.NewReader(r.Body, size, "", "")
+	reader := r.Body
+	actualSize := size
+
+	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+		// Storing the compression metadata.
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
+
+		pipeReader, pipeWriter := io.Pipe()
+		snappyWriter := snappy.NewWriter(pipeWriter)
+
+		var actualReader *hash.Reader
+		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		if err != nil {
+			writeWebErrorResponse(w, err)
+			return
+		}
+
+		go func() {
+			// Writing to the compressed writer.
+			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
+			snappyWriter.Close()
+			pipeWriter.CloseWithError(cerr)
+		}()
+
+		// Set compression metrics.
+		size = -1 // Since compressed size is un-predictable.
+		reader = pipeReader
+	}
+
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -656,16 +745,22 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	opts := ObjectOptions{}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(context.Background(), bucket, object, opts); err == nil {
+		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeWebErrorResponse(w, errMethodNotAllowed)
 			return
 		}
 	}
 
-	objInfo, err := putObject(context.Background(), bucket, object, hashReader, metadata, opts)
+	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
+	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
 	}
 
 	// Notify object created event.
@@ -674,11 +769,25 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		BucketName: bucket,
 		Object:     objInfo,
 		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       host,
+		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "WebDownload")
+
+	defer logger.AuditLog(ctx, r)
+
+	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -690,35 +799,62 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	token := r.URL.Query().Get("token")
 
-	if !isAuthTokenValid(token) {
-		// Check if anonymous (non-owner) has access to download objects.
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.GetObjectAction,
+	claims, owner, authErr := webTokenAuthenticate(token)
+	if authErr != nil {
+		if authErr == errNoAuthToken {
+			// Check if anonymous (non-owner) has access to download objects.
+			if !globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.GetObjectAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         false,
+				ObjectName:      object,
+			}) {
+				writeWebErrorResponse(w, errAuthentication)
+				return
+			}
+		} else {
+			writeWebErrorResponse(w, authErr)
+			return
+		}
+	}
+
+	// For authenticated users apply IAM policy.
+	if authErr == nil {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.Subject,
+			Action:          iampolicy.Action(policy.GetObjectAction),
 			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
+			IsOwner:         owner,
 			ObjectName:      object,
 		}) {
 			writeWebErrorResponse(w, errAuthentication)
 			return
 		}
 	}
+
 	opts := ObjectOptions{}
+	getObjectInfo := objectAPI.GetObjectInfo
 	getObject := objectAPI.GetObject
 	if web.CacheAPI() != nil {
+		getObjectInfo = web.CacheAPI().GetObjectInfo
 		getObject = web.CacheAPI().GetObject
 	}
-	getObjectInfo := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
-		getObjectInfo = web.CacheAPI().GetObjectInfo
-	}
-	objInfo, err := getObjectInfo(context.Background(), bucket, object, opts)
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-
 	length := objInfo.Size
+	var actualSize int64
+	if objInfo.IsCompressed() {
+		// Read the decompressed size from the meta.json.
+		actualSize = objInfo.GetActualSize()
+		if actualSize < 0 {
+			return
+		}
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
 			writeWebErrorResponse(w, err)
@@ -730,7 +866,33 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	var startOffset int64
 	var writer io.Writer
-	writer = w
+	if objInfo.IsCompressed() {
+		// The decompress metrics are set.
+		snappyStartOffset := 0
+		snappyLength := actualSize
+
+		// Open a pipe for compression
+		// Where compressWriter is actually passed to the getObject
+		decompressReader, compressWriter := io.Pipe()
+		snappyReader := snappy.NewReader(decompressReader)
+
+		// The limit is set to the actual size.
+		responseWriter := ioutil.LimitedWriter(w, int64(snappyStartOffset), snappyLength)
+		wg.Add(1) //For closures.
+		go func() {
+			defer wg.Done()
+
+			// Finally, writes to the client.
+			_, perr := io.Copy(responseWriter, snappyReader)
+
+			// Close the compressWriter if the data is read already.
+			// Closing the pipe, releases the writer passed to the getObject.
+			compressWriter.CloseWithError(perr)
+		}()
+		writer = compressWriter
+	} else {
+		writer = w
+	}
 	if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(objInfo.UserDefined) {
 		// Response writer should be limited early on for decryption upto required length,
 		// additionally also skipping mod(offset)64KiB boundaries.
@@ -743,12 +905,17 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
+
 	httpWriter := ioutil.WriteOnClose(writer)
 
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	if err = getObject(context.Background(), bucket, object, 0, -1, httpWriter, "", opts); err != nil {
+	if err = getObject(ctx, bucket, object, 0, -1, httpWriter, "", opts); err != nil {
+		httpWriter.Close()
+		if objInfo.IsCompressed() {
+			wg.Wait()
+		}
 		/// No need to print error, response writer already written to.
 		return
 	}
@@ -758,6 +925,34 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if objInfo.IsCompressed() {
+		// Wait for decompression go-routine to retire.
+		wg.Wait()
+	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a GET request.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedGet,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
+	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -771,19 +966,23 @@ type DownloadZipArgs struct {
 
 // Takes a list of objects and creates a zip file that sent as the response body.
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
+	ctx := newContext(r, w, "WebDownloadZip")
+
+	defer logger.AuditLog(ctx, r)
+
+	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
-	getObject := objectAPI.GetObject
-	if web.CacheAPI() != nil {
-		getObject = web.CacheAPI().GetObject
-	}
-	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
+
 	// Auth is done after reading the body to accommodate for anonymous requests
 	// when bucket policy is enabled.
 	var args DownloadZipArgs
@@ -795,14 +994,37 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.URL.Query().Get("token")
-	if !isAuthTokenValid(token) {
+	claims, owner, authErr := webTokenAuthenticate(token)
+	if authErr != nil {
+		if authErr == errNoAuthToken {
+			for _, object := range args.Objects {
+				// Check if anonymous (non-owner) has access to download objects.
+				if !globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.GetObjectAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, ""),
+					IsOwner:         false,
+					ObjectName:      pathJoin(args.Prefix, object),
+				}) {
+					writeWebErrorResponse(w, errAuthentication)
+					return
+				}
+			}
+		} else {
+			writeWebErrorResponse(w, authErr)
+			return
+		}
+	}
+
+	// For authenticated users apply IAM policy.
+	if authErr == nil {
 		for _, object := range args.Objects {
-			// Check if anonymous (non-owner) has access to download objects.
-			if !globalPolicySys.IsAllowed(policy.Args{
-				Action:          policy.GetObjectAction,
+			if !globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.Subject,
+				Action:          iampolicy.Action(policy.GetObjectAction),
 				BucketName:      args.BucketName,
 				ConditionValues: getConditionValues(r, ""),
-				IsOwner:         false,
+				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
 			}) {
 				writeWebErrorResponse(w, errAuthentication)
@@ -811,21 +1033,32 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	getObject := objectAPI.GetObject
+	if web.CacheAPI() != nil {
+		getObject = web.CacheAPI().GetObject
+	}
+	listObjects := objectAPI.ListObjects
+	if web.CacheAPI() != nil {
+		listObjects = web.CacheAPI().ListObjects
+	}
+
 	archive := zip.NewWriter(w)
 	defer archive.Close()
+
 	getObjectInfo := objectAPI.GetObjectInfo
 	if web.CacheAPI() != nil {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 	}
 	opts := ObjectOptions{}
+	var length int64
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := getObjectInfo(context.Background(), args.BucketName, objectName, opts)
+			info, err := getObjectInfo(ctx, args.BucketName, objectName, opts)
 			if err != nil {
 				return err
 			}
-			length := info.Size
+			length = info.Size
 			if objectAPI.IsEncryptionSupported() {
 				if _, err = DecryptObjectInfo(info, r.Header); err != nil {
 					writeWebErrorResponse(w, err)
@@ -835,20 +1068,54 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 					length, _ = info.DecryptedSize()
 				}
 			}
+			length = info.Size
+			var actualSize int64
+			if info.IsCompressed() {
+				// Read the decompressed size from the meta.json.
+				actualSize = info.GetActualSize()
+				// Set the info.Size to the actualSize.
+				info.Size = actualSize
+			}
 			header := &zip.FileHeader{
 				Name:               strings.TrimPrefix(objectName, args.Prefix),
 				Method:             zip.Deflate,
 				UncompressedSize64: uint64(length),
 				UncompressedSize:   uint32(length),
 			}
-			wr, err := archive.CreateHeader(header)
+			zipWriter, err := archive.CreateHeader(header)
 			if err != nil {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
 			var startOffset int64
 			var writer io.Writer
-			writer = wr
+
+			if info.IsCompressed() {
+				// The decompress metrics are set.
+				snappyStartOffset := 0
+				snappyLength := actualSize
+
+				// Open a pipe for compression
+				// Where compressWriter is actually passed to the getObject
+				decompressReader, compressWriter := io.Pipe()
+				snappyReader := snappy.NewReader(decompressReader)
+
+				// The limit is set to the actual size.
+				responseWriter := ioutil.LimitedWriter(zipWriter, int64(snappyStartOffset), snappyLength)
+				wg.Add(1) //For closures.
+				go func() {
+					defer wg.Done()
+					// Finally, writes to the client.
+					_, perr := io.Copy(responseWriter, snappyReader)
+
+					// Close the compressWriter if the data is read already.
+					// Closing the pipe, releases the writer passed to the getObject.
+					compressWriter.CloseWithError(perr)
+				}()
+				writer = compressWriter
+			} else {
+				writer = zipWriter
+			}
 			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {
 				// Response writer should be limited early on for decryption upto required length,
 				// additionally also skipping mod(offset)64KiB boundaries.
@@ -860,7 +1127,12 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err = getObject(context.Background(), args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
+			if err = getObject(ctx, args.BucketName, objectName, 0, length, httpWriter, "", opts); err != nil {
+				httpWriter.Close()
+				if info.IsCompressed() {
+					// Wait for decompression go-routine to retire.
+					wg.Wait()
+				}
 				return err
 			}
 			if err = httpWriter.Close(); err != nil {
@@ -869,6 +1141,23 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 			}
+			if info.IsCompressed() {
+				// Wait for decompression go-routine to retire.
+				wg.Wait()
+			}
+
+			// Notify object accessed via a GET request.
+			sendEvent(eventArgs{
+				EventName:    event.ObjectAccessedGet,
+				BucketName:   args.BucketName,
+				Object:       info,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         host,
+				Port:         port,
+			})
+
 			return nil
 		}
 

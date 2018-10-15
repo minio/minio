@@ -507,9 +507,9 @@ func (t *tritonObjects) ListObjectsV2(ctx context.Context, bucket, prefix, conti
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (t *tritonObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (t *tritonObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = t.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = t.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +522,7 @@ func (t *tritonObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := t.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := t.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -658,4 +658,9 @@ func (t *tritonObjects) DeleteObject(ctx context.Context, bucket, object string)
 	}
 
 	return nil
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (t *tritonObjects) IsCompressionSupported() bool {
+	return false
 }

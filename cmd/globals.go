@@ -34,6 +34,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/iam/validator"
 )
 
 // minio configuration related constants.
@@ -81,6 +83,8 @@ const (
 	globalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 	// Refresh interval to update in-memory bucket policy cache.
 	globalRefreshBucketPolicyInterval = 5 * time.Minute
+	// Refresh interval to update in-memory iam config cache.
+	globalRefreshIAMInterval = 5 * time.Minute
 
 	// Limit of location constraint XML for unauthenticted PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
@@ -132,6 +136,7 @@ var (
 
 	globalNotificationSys *NotificationSys
 	globalPolicySys       *PolicySys
+	globalIAMSys          *IAMSys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -227,6 +232,29 @@ var (
 	globalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
+
+	// Is compression include extensions/content-types set.
+	globalIsEnvCompression bool
+
+	// Is compression enabeld.
+	globalIsCompressionEnabled = false
+
+	// Include-list for compression.
+	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json"}
+	globalCompressMimeTypes  = []string{"text/csv", "text/plain", "application/json"}
+
+	// Some standard object extensions which we strictly dis-allow for compression.
+	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z"}
+
+	// Some standard content-types which we strictly dis-allow for compression.
+	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
+
+	// Authorization validators list.
+	globalIAMValidators *validator.Validators
+
+	// OPA policy system.
+	globalPolicyOPA *iampolicy.Opa
+
 	// Add new variable global values here.
 )
 

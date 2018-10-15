@@ -251,9 +251,6 @@ func TestSSECParse(t *testing.T) {
 		if err == nil && key == zeroKey {
 			t.Errorf("Test %d: parsed client key is zero key", i)
 		}
-		if _, ok := test.Header[SSECKey]; ok {
-			t.Errorf("Test %d: client key is not removed from HTTP headers after parsing", i)
-		}
 	}
 }
 
