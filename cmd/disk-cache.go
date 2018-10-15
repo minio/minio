@@ -186,6 +186,9 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 
 	objInfo, bkErr := c.GetObjectInfoFn(ctx, bucket, object, opts)
+	if bkErr != nil {
+		return nil, bkErr
+	}
 
 	if c.isCacheExclude(bucket, object) || !objInfo.IsCacheable() {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
