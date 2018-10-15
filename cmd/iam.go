@@ -326,18 +326,14 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	sys.RLock()
 	defer sys.RUnlock()
 
-	// If policy is available for given user, check the policy.
-	if p, found := sys.iamPolicyMap[args.AccountName]; found {
-		// If opa is configured, use OPA in conjunction with IAM policies.
-		if globalPolicyOPA != nil {
-			return p.IsAllowed(args) && globalPolicyOPA.IsAllowed(args)
-		}
-		return p.IsAllowed(args)
-	}
-
-	// If no policies are set, let the policy arrive from OPA if any.
+	// If opa is configured, use OPA always.
 	if globalPolicyOPA != nil {
 		return globalPolicyOPA.IsAllowed(args)
+	}
+
+	// If policy is available for given user, check the policy.
+	if p, found := sys.iamPolicyMap[args.AccountName]; found {
+		return p.IsAllowed(args)
 	}
 
 	// As policy is not available and OPA is not configured, return the owner value.
