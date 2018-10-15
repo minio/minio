@@ -34,7 +34,7 @@ const (
 
 // UserInfo carries information about long term users.
 type UserInfo struct {
-	SecretKey string        `json:"secretKey"`
+	SecretKey string        `json:"secretKey,omitempty"`
 	Status    AccountStatus `json:"status"`
 }
 
@@ -61,6 +61,37 @@ func (adm *AdminClient) RemoveUser(accessKey string) error {
 	}
 
 	return nil
+}
+
+// ListUsers - list all users.
+func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
+	reqData := requestData{
+		relPath: "/v1/list-users",
+	}
+
+	// Execute GET on /minio/admin/v1/list-users
+	resp, err := adm.executeMethod("GET", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var users = make(map[string]UserInfo)
+	if err = json.Unmarshal(data, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 // SetUser - sets a user info.
