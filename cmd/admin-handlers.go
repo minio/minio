@@ -106,7 +106,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 	// of read-quorum availability.
 	uptime, err := getPeerUptimes(globalAdminPeers)
 	if err != nil {
-		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		logger.LogIf(context.Background(), err)
 		return
 	}
@@ -731,41 +731,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	accessKey := vars["accessKey"]
 	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		return
-	}
-}
-
-// RemoveUserPolicy - DELETE /minio/admin/v1/remove-user-policy?accessKey=<access_key>
-func (a adminAPIHandlers) RemoveUserPolicy(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveUserPolicy")
-
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(r, "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
-		return
-	}
-
-	vars := mux.Vars(r)
-	accessKey := vars["accessKey"]
-	if err := globalIAMSys.DeletePolicy(accessKey); err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
-		return
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 	}
 }
 
@@ -867,14 +833,140 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	if err = globalIAMSys.SetUser(accessKey, uinfo); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 }
 
-// AddUserPolicy - PUT /minio/admin/v1/add-user-policy?accessKey=<access_key>
-func (a adminAPIHandlers) AddUserPolicy(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AddUserPolicy")
+// ListCannedPolicies - GET /minio/admin/v1/list-canned-policies
+func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListCannedPolicies")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	policies, err := globalIAMSys.ListCannedPolicies()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	if err = json.NewEncoder(w).Encode(policies); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
+// RemoveCannedPolicy - DELETE /minio/admin/v1/remove-canned-policy?name=<policy_name>
+func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RemoveCannedPolicy")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	policyName := vars["name"]
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	if err := globalIAMSys.DeleteCannedPolicy(policyName); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+}
+
+// AddCannedPolicy - PUT /minio/admin/v1/add-canned-policy?name=<policy_name>
+func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AddCannedPolicy")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	policyName := vars["name"]
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	// Error out if Content-Length is missing.
+	if r.ContentLength <= 0 {
+		writeErrorResponseJSON(w, ErrMissingContentLength, r.URL)
+		return
+	}
+
+	// Error out if Content-Length is beyond allowed size.
+	if r.ContentLength > maxBucketPolicySize {
+		writeErrorResponseJSON(w, ErrEntityTooLarge, r.URL)
+		return
+	}
+
+	iamPolicy, err := iampolicy.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponseJSON(w, ErrMalformedPolicy, r.URL)
+		return
+	}
+
+	// Version in policy must not be empty
+	if iamPolicy.Version == "" {
+		writeErrorResponseJSON(w, ErrMalformedPolicy, r.URL)
+		return
+	}
+
+	if err = globalIAMSys.SetCannedPolicy(policyName, *iamPolicy); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+}
+
+// SetUserPolicy - PUT /minio/admin/v1/set-user-policy?accessKey=<access_key>&name=<policy_name>
+func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SetUserPolicy")
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -885,6 +977,7 @@ func (a adminAPIHandlers) AddUserPolicy(w http.ResponseWriter, r *http.Request) 
 
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
+	policyName := vars["name"]
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(r, "")
@@ -901,38 +994,13 @@ func (a adminAPIHandlers) AddUserPolicy(w http.ResponseWriter, r *http.Request) 
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		writeErrorResponseJSON(w, ErrInvalidRequest, r.URL)
 		return
 	}
 
-	// Error out if Content-Length is missing.
-	if r.ContentLength <= 0 {
-		writeErrorResponse(w, ErrMissingContentLength, r.URL)
-		return
-	}
-
-	// Error out if Content-Length is beyond allowed size.
-	if r.ContentLength > maxBucketPolicySize {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
-		return
-	}
-
-	iamPolicy, err := iampolicy.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
-		return
-	}
-
-	// Version in policy must not be empty
-	if iamPolicy.Version == "" {
-		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
-		return
-	}
-
-	if err = globalIAMSys.SetPolicy(accessKey, *iamPolicy); err != nil {
+	if err := globalIAMSys.SetUserPolicy(accessKey, policyName); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, ErrInternalError, r.URL)
-		return
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 	}
 }
 
@@ -1198,7 +1266,7 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 
 	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
 	if err != nil {
-		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 

@@ -46,7 +46,11 @@ func main() {
 	// Create policy
 	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
 
-	if err = madmClnt.AddUserPolicy("newuser", policy); err != nil {
+	if err = madmClnt.AddCannedPolicy("get-only", policy); err != nil {
+		log.Fatalln(err)
+	}
+
+	if err = madmClnt.SetUserPolicy("newuser", "get-only"); err != nil {
 		log.Fatalln(err)
 	}
 }

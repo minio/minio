@@ -34,8 +34,9 @@ const (
 
 // UserInfo carries information about long term users.
 type UserInfo struct {
-	SecretKey string        `json:"secretKey,omitempty"`
-	Status    AccountStatus `json:"status"`
+	SecretKey  string        `json:"secretKey,omitempty"`
+	PolicyName string        `json:"policyName,omitempty"`
+	Status     AccountStatus `json:"status"`
 }
 
 // RemoveUser - remove a user.
@@ -137,43 +138,18 @@ func (adm *AdminClient) AddUser(accessKey, secretKey string) error {
 	return adm.SetUser(accessKey, secretKey, AccountEnabled)
 }
 
-// RemoveUserPolicy - remove a policy for a user.
-func (adm *AdminClient) RemoveUserPolicy(accessKey string) error {
+// SetUserPolicy - adds a policy for a user.
+func (adm *AdminClient) SetUserPolicy(accessKey, policyName string) error {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", accessKey)
+	queryValues.Set("name", policyName)
 
 	reqData := requestData{
-		relPath:     "/v1/remove-user-policy",
+		relPath:     "/v1/set-user-policy",
 		queryValues: queryValues,
 	}
 
-	// Execute DELETE on /minio/admin/v1/remove-user-policy to remove policy.
-	resp, err := adm.executeMethod("DELETE", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
-}
-
-// AddUserPolicy - adds a policy for a user.
-func (adm *AdminClient) AddUserPolicy(accessKey, policy string) error {
-	queryValues := url.Values{}
-	queryValues.Set("accessKey", accessKey)
-
-	reqData := requestData{
-		relPath:     "/v1/add-user-policy",
-		queryValues: queryValues,
-		content:     []byte(policy),
-	}
-
-	// Execute PUT on /minio/admin/v1/add-user-policy to set policy.
+	// Execute PUT on /minio/admin/v1/set-user-policy to set policy.
 	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)
