@@ -162,8 +162,17 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 		return
 	}
 
+	// JWT has requested a custom claim with policy value set.
+	// This is a Minio STS API specific value, this value should
+	// be set and configured on your identity provider as part of
+	// JWT custom claims.
+	var policyName string
+	if v, ok := m["policy"]; ok {
+		policyName, _ = v.(string)
+	}
+
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred); err != nil {
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, ErrSTSInternalError)
 		return

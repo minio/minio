@@ -269,10 +269,44 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 }
 
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
-func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials) error {
+func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyName string) error {
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	// If OPA is not set we honor any policy claims for this
+	// temporary user which match with pre-configured canned
+	// policies for this server.
+	if globalPolicyOPA == nil && policyName != "" {
+		p, ok := sys.iamCannedPolicyMap[policyName]
+		if !ok {
+			return errInvalidArgument
+		}
+		if p.IsEmpty() {
+			delete(sys.iamPolicyMap, accessKey)
+			return nil
+		}
+
+		data, err := json.Marshal(policyName)
+		if err != nil {
+			return err
+		}
+
+		configFile := pathJoin(iamConfigSTSPrefix, accessKey, iamPolicyFile)
+		if globalEtcdClient != nil {
+			err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		} else {
+			err = saveConfig(context.Background(), objectAPI, configFile, data)
+		}
+		if err != nil {
+			return err
+		}
+
+		sys.iamPolicyMap[accessKey] = policyName
 	}
 
 	configFile := pathJoin(iamConfigSTSPrefix, accessKey, iamIdentityFile)
@@ -290,9 +324,6 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials) error {
 	if err != nil {
 		return err
 	}
-
-	sys.Lock()
-	defer sys.Unlock()
 
 	sys.iamUsersMap[accessKey] = cred
 	return nil
