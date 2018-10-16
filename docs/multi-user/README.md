@@ -37,10 +37,10 @@ Create a new user `newuser` on Minio use `mc admin users`, additionally specify 
 mc admin users add myminio newuser newuser123 getonly
 ```
 
-### 3. Revoke user
-Temporarily revoke access for `newuser`.
+### 3. Disable user
+Disable user `newuser`.
 ```
-mc admin users revoke myminio newuser
+mc admin users disable myminio newuser
 ```
 
 ### 4. Remove user
@@ -48,3 +48,14 @@ Remove the user `newuser`.
 ```
 mc admin users remove myminio newuser
 ```
+
+### 5. List all users
+List all enabled and disabled users.
+```
+mc admin users list myminio
+```
+
+## Explore Further
+- [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
+- [Minio Admin Complete Guide](https://docs.minio.io/docs/minio-admin-complete-guide.html)
+- [The Minio documentation website](https://docs.minio.io)
