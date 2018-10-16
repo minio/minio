@@ -38,8 +38,7 @@ import (
 )
 
 const (
-	// disk cache needs to have cacheSizeMultiplier * object size space free for a cache entry to be created.
-	cacheSizeMultiplier  = 100
+	// disk cache needs to have  object size space free for a cache entry to be created.
 	cacheTrashDir        = "trash"
 	cacheCleanupInterval = 10 // in minutes
 )
@@ -231,8 +230,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		// We don't cache partial objects.
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
-	if !dcache.diskAvailable(objInfo.Size * cacheSizeMultiplier) {
-		// cache only objects < 1/100th of disk capacity
+	if !dcache.diskAvailable(objInfo.Size) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
@@ -308,8 +306,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		// We don't cache partial objects.
 		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
-	if !dcache.diskAvailable(objInfo.Size * cacheSizeMultiplier) {
-		// cache only objects < 1/100th of disk capacity
+	if !dcache.diskAvailable(objInfo.Size) {
 		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
 	// Initialize pipe.
@@ -656,7 +653,7 @@ func (c cacheObjects) PutObject(ctx context.Context, bucket, object string, r *h
 	size := r.Size()
 
 	// fetch from backend if there is no space on cache drive
-	if !dcache.diskAvailable(size * cacheSizeMultiplier) {
+	if !dcache.diskAvailable(size) {
 		return putObjectFn(ctx, bucket, object, r, metadata, opts)
 	}
 	// fetch from backend if cache exclude pattern or cache-control
@@ -748,9 +745,9 @@ func (c cacheObjects) PutObjectPart(ctx context.Context, bucket, object, uploadI
 		return putObjectPartFn(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
-	// make sure cache has at least cacheSizeMultiplier * size available
+	// make sure cache has at least size space available
 	size := data.Size()
-	if !dcache.diskAvailable(size * cacheSizeMultiplier) {
+	if !dcache.diskAvailable(size) {
 		select {
 		case dcache.purgeChan <- struct{}{}:
 		default:
