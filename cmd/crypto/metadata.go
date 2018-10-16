@@ -219,3 +219,6 @@ func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err 
 	copy(sealedKey.Key[:], encryptedKey)
 	return sealedKey, nil
 }
+
+// IsETagSealed returns true if the etag seems to be encrypted.
+func IsETagSealed(etag []byte) bool { return len(etag) > 16 }
