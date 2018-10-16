@@ -184,13 +184,7 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 }
 
 func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-
-	objInfo, bkErr := c.GetObjectInfoFn(ctx, bucket, object, opts)
-	if bkErr != nil {
-		return nil, bkErr
-	}
-
-	if c.isCacheExclude(bucket, object) || !objInfo.IsCacheable() {
+	if c.isCacheExclude(bucket, object) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
@@ -200,13 +194,18 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
-	backendDown := backendDownError(bkErr)
-	if bkErr != nil && !backendDown {
+	objInfo, err := c.GetObjectInfoFn(ctx, bucket, object, opts)
+	backendDown := backendDownError(err)
+	if err != nil && !backendDown {
 		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
-		return nil, bkErr
+		return nil, err
+	}
+
+	if !objInfo.IsCacheable() {
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
 	if !backendDown && filterFromCache(objInfo.UserDefined) {
