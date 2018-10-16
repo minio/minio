@@ -80,6 +80,28 @@ func hasServerSideEncryptionHeader(header http.Header) bool {
 	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
 }
 
+// isEncryptedMultipart returns true if the current object is
+// uploaded by the user using multipart mechanism:
+// initiate new multipart, upload part, complete upload
+func isEncryptedMultipart(objInfo ObjectInfo) bool {
+	if len(objInfo.Parts) == 0 {
+		return false
+	}
+	if !crypto.IsMultiPart(objInfo.UserDefined) {
+		return false
+	}
+	for _, part := range objInfo.Parts {
+		_, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return false
+		}
+	}
+	// Further check if this object is uploaded using multipart mechanism
+	// by the user and it is not about XL internally splitting the
+	// object into parts in PutObject()
+	return !(objInfo.backendType == BackendErasure && len(objInfo.ETag) == 32)
+}
+
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
 func ParseSSECopyCustomerRequest(h http.Header, metadata map[string]string) (key []byte, err error) {
@@ -361,7 +383,7 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 // GetEncryptedOffsetLength - returns encrypted offset and length
 // along with sequence number
 func GetEncryptedOffsetLength(startOffset, length int64, objInfo ObjectInfo) (seqNumber uint32, encStartOffset, encLength int64) {
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !isEncryptedMultipart(objInfo) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
 		return
 	}
@@ -378,7 +400,7 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 	bucket, object := oi.Bucket, oi.Name
 
 	// Single part case
-	if len(oi.Parts) == 0 || !crypto.IsMultiPart(oi.UserDefined) {
+	if !isEncryptedMultipart(oi) {
 		var reader io.Reader
 		var err error
 		if copySource {
@@ -708,7 +730,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 	var seqNumber uint32
 	var encStartOffset, encLength int64
 
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !isEncryptedMultipart(objInfo) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
 
 		var writer io.WriteCloser
@@ -870,7 +892,7 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !crypto.IsEncrypted(o.UserDefined) {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	if len(o.Parts) == 0 || !crypto.IsMultiPart(o.UserDefined) {
+	if !isEncryptedMultipart(*o) {
 		size, err := sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered // assign correct error type
@@ -918,7 +940,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	}
 	sizes := []int64{int64(partSize)}
 	decObjSize = sizes[0]
-	if crypto.IsMultiPart(o.UserDefined) {
+	if isEncryptedMultipart(*o) {
 		sizes = make([]int64, len(o.Parts))
 		decObjSize = 0
 		for i, part := range o.Parts {

@@ -22,6 +22,8 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -755,6 +757,9 @@ type serverConfigV28 struct {
 	Logger loggerConfig `json:"logger"`
 }
 
+// serverConfigV29 is just like version '28'.
+type serverConfigV29 serverConfigV28
+
 // compressionConfig represents the compression settings.
 type compressionConfig struct {
 	Enabled    bool     `json:"enabled"`
@@ -765,8 +770,6 @@ type compressionConfig struct {
 // serverConfigV30 is just like version '29', stores additionally
 // extensions and mimetypes fields for compression.
 type serverConfigV30 struct {
-	quick.Config `json:"-"` // ignore interfaces
-
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -791,4 +794,46 @@ type serverConfigV30 struct {
 
 	// Compression configuration
 	Compression compressionConfig `json:"compress"`
+}
+
+// serverConfigV31 is just like version '30', with OPA and OpenID configuration.
+type serverConfigV31 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Worm       BoolFlag         `json:"worm"`
+
+	// Storage class configuration
+	StorageClass storageClassConfig `json:"storageclass"`
+
+	// Cache configuration
+	Cache CacheConfig `json:"cache"`
+
+	// KMS configuration
+	KMS crypto.KMSConfig `json:"kms"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Logger configuration
+	Logger loggerConfig `json:"logger"`
+
+	// Compression configuration
+	Compression compressionConfig `json:"compress"`
+
+	// OpenID configuration
+	OpenID struct {
+		// JWKS validator config.
+		JWKS validator.JWKSArgs `json:"jwks"`
+	} `json:"openid"`
+
+	// External policy enforcements.
+	Policy struct {
+		// OPA configuration.
+		OPA iampolicy.OpaArgs `json:"opa"`
+
+		// Add new external policy enforcements here.
+	} `json:"policy"`
 }

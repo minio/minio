@@ -218,6 +218,8 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 		ContentEncoding: m.Meta["content-encoding"],
 	}
 
+	objInfo.backendType = BackendErasure
+
 	// Extract etag from metadata.
 	objInfo.ETag = extractETag(m.Meta)
 

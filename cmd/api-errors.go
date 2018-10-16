@@ -187,11 +187,15 @@ const (
 	// new error codes here.
 
 	ErrMalformedJSON
+	ErrAdminNoSuchUser
+	ErrAdminNoSuchPolicy
+	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
+	ErrAdminConfigDuplicateKeys
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -863,6 +867,21 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoSuchUser: {
+		Code:           "XMinioAdminNoSuchUser",
+		Description:    "The specified user does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminNoSuchPolicy: {
+		Code:           "XMinioAdminNoSuchPolicy",
+		Description:    "The canned policy does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminInvalidArgument: {
+		Code:           "XMinioAdminInvalidArgument",
+		Description:    "Invalid arguments specified.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
 		Description:    "The access key is invalid.",
@@ -881,11 +900,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrAdminConfigTooLarge: {
 		Code: "XMinioAdminConfigTooLarge",
 		Description: fmt.Sprintf("Configuration data provided exceeds the allowed maximum of %d bytes",
-			maxConfigJSONSize),
+			maxEConfigJSONSize),
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigBadJSON: {
 		Code:           "XMinioAdminConfigBadJSON",
+		Description:    "JSON configuration provided is of incorrect format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigDuplicateKeys: {
+		Code:           "XMinioAdminConfigDuplicateKeys",
 		Description:    "JSON configuration provided has objects with duplicate keys",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
@@ -1422,6 +1446,12 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 	// Verify if the underlying error is signature mismatch.
 	switch err {
+	case errInvalidArgument:
+		apiErr = ErrAdminInvalidArgument
+	case errNoSuchUser:
+		apiErr = ErrAdminNoSuchUser
+	case errNoSuchPolicy:
+		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:
@@ -1435,6 +1465,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
 	// SSE errors
+	case errInvalidEncryptionParameters:
+		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
 	case errInsecureSSERequest:

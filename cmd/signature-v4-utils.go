@@ -100,6 +100,23 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 	return reqRegion == confRegion
 }
 
+// check if the access key is valid and recognized, additionally
+// also returns if the access key is owner/admin.
+func checkKeyValid(accessKey string) (bool, APIErrorCode) {
+	var owner = true
+	if globalServerConfig.GetCredential().AccessKey != accessKey {
+		if globalIAMSys == nil {
+			return false, ErrInvalidAccessKeyID
+		}
+		// Check if the access key is part of users credentials.
+		if _, ok := globalIAMSys.GetUser(accessKey); !ok {
+			return false, ErrInvalidAccessKeyID
+		}
+		owner = false
+	}
+	return owner, ErrNone
+}
+
 // sumHMAC calculate hmac between two input byte array.
 func sumHMAC(key []byte, data []byte) []byte {
 	hash := hmac.New(sha256.New, key)

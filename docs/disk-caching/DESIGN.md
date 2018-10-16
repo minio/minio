@@ -31,7 +31,7 @@ minio server -h
 - The cache drives are required to be a filesystem mount point with [`atime`](http://kerolasa.github.io/filetimes.html) support to be enabled on the drive. Alternatively writable directories with atime support can be specified in MINIO_CACHE_DRIVES
 - Expiration of each cached entry takes user provided expiry as a hint, and defaults to 90 days if not provided.
 - Garbage collection sweep of the expired cache entries happens whenever cache usage is > 80% of drive capacity, GC continues until sufficient disk space is reclaimed.
-- An object is only cached when drive has sufficient disk space, upto 100 times the size of the object.
+- An object is only cached when drive has sufficient disk space.
 
 ## Behavior
 Disk caching caches objects for both **uploaded** and **downloaded** objects i.e
