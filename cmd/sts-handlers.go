@@ -17,15 +17,12 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/xml"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 )
 
@@ -142,22 +139,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 		return
 	}
 
-	policyStr := r.URL.Query().Get("Policy")
-	var p *iampolicy.Policy
-	if policyStr != "" {
-		var data []byte
-		data, err = base64.URLEncoding.DecodeString(policyStr)
-		if err != nil {
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-			return
-		}
-		p, err = iampolicy.ParseConfig(bytes.NewReader(data))
-		if err != nil {
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-			return
-		}
-	}
-
 	vars := mux.Vars(r)
 	m, err := v.Validate(vars["Token"], r.URL.Query().Get("DurationSeconds"))
 	if err != nil {
@@ -186,13 +167,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, ErrSTSInternalError)
 		return
-	}
-	if p != nil {
-		if err = globalIAMSys.SetPolicy(cred.AccessKey, *p); err != nil {
-			logger.LogIf(ctx, err)
-			writeSTSErrorResponse(w, ErrSTSInternalError)
-			return
-		}
 	}
 
 	encodedSuccessResponse := encodeResponse(&AssumeRoleWithClientGrantsResponse{

@@ -795,10 +795,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Save the original size for later use when we want to copy
-	// encrypted file into an unencrypted one.
-	size := srcInfo.Size
-
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !srcInfo.IsCompressed() {
 		var oldKey, newKey []byte
@@ -806,10 +802,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		sseCopyC := crypto.SSECopy.IsRequested(r.Header)
 		sseC := crypto.SSEC.IsRequested(r.Header)
 		sseS3 := crypto.S3.IsRequested(r.Header)
-		if sseC || sseS3 {
-			if sseC {
-				newKey, err = ParseSSECustomerRequest(r)
-			}
+
+		isSourceEncrypted := sseCopyC || sseCopyS3
+		isTargetEncrypted := sseC || sseS3
+
+		if sseC {
+			newKey, err = ParseSSECustomerRequest(r)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -836,42 +834,49 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			// Since we are rotating the keys, make sure to update the metadata.
 			srcInfo.metadataOnly = true
 		} else {
-			if sseCopyC || sseCopyS3 {
+			if isSourceEncrypted || isTargetEncrypted {
 				// We are not only copying just metadata instead
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
 				srcInfo.metadataOnly = false
-				if sseC || sseS3 {
-					size = srcInfo.Size
-				}
 			}
-			if sseC || sseS3 {
+
+			// Calculate the size of the target object
+			var targetSize int64
+
+			switch {
+			case !isSourceEncrypted && !isTargetEncrypted:
+				fallthrough
+			case isSourceEncrypted && isTargetEncrypted:
+				targetSize = srcInfo.Size
+			// Source not encrypted and target encrypted
+			case !isSourceEncrypted && isTargetEncrypted:
+				targetSize = srcInfo.EncryptedSize()
+			case isSourceEncrypted && !isTargetEncrypted:
+				targetSize, _ = srcInfo.DecryptedSize()
+			}
+
+			if isTargetEncrypted {
 				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
 				}
-				// We are not only copying just metadata instead
-				// we are creating a new object at this point, even
-				// if source and destination are same objects.
-				srcInfo.metadataOnly = false
-				if !sseCopyC && !sseCopyS3 {
-					size = srcInfo.EncryptedSize()
-				}
-			} else {
-				if sseCopyC || sseCopyS3 {
-					size, _ = srcInfo.DecryptedSize()
-					delete(srcInfo.UserDefined, crypto.SSEIV)
-					delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
-					delete(srcInfo.UserDefined, crypto.SSECSealedKey)
-					delete(srcInfo.UserDefined, crypto.SSEMultipart)
-					delete(srcInfo.UserDefined, crypto.S3SealedKey)
-					delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
-					delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
-				}
 			}
 
-			srcInfo.Reader, err = hash.NewReader(reader, size, "", "", size) // do not try to verify encrypted content
+			if isSourceEncrypted {
+				// Remove all source encrypted related metadata to
+				// avoid copying them in target object.
+				delete(srcInfo.UserDefined, crypto.SSEIV)
+				delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
+				delete(srcInfo.UserDefined, crypto.SSECSealedKey)
+				delete(srcInfo.UserDefined, crypto.SSEMultipart)
+				delete(srcInfo.UserDefined, crypto.S3SealedKey)
+				delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
+				delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
+			}
+
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
