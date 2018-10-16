@@ -1441,6 +1441,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
 	// SSE errors
+	case errInvalidEncryptionParameters:
+		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
 	case errInsecureSSERequest:
