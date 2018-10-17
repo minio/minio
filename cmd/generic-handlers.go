@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/handlers"
@@ -771,5 +772,19 @@ func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			panic(err) // forward other panic calls
 		}
 	}()
+	h.handler.ServeHTTP(w, r)
+}
+
+func setSSETLSHandler(h http.Handler) http.Handler { return sseTLSHandler{h} }
+
+// sseTLSHandler enforces certain rules for SSE requests which are made / must be made over TLS.
+type sseTLSHandler struct{ handler http.Handler }
+
+func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Deny SSE-C requests if not made over TLS
+	if !globalIsSSL && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+		writeErrorResponseHeadersOnly(w, ErrInsecureSSECustomerRequest)
+		return
+	}
 	h.handler.ServeHTTP(w, r)
 }

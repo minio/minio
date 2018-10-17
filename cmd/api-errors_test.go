@@ -52,7 +52,6 @@ var toAPIErrorCodeTests = []struct {
 	{err: errSignatureMismatch, errCode: ErrSignatureDoesNotMatch},
 
 	// SSE-C errors
-	{err: errInsecureSSERequest, errCode: ErrInsecureSSECustomerRequest},
 	{err: crypto.ErrInvalidCustomerAlgorithm, errCode: ErrInvalidSSECustomerAlgorithm},
 	{err: crypto.ErrMissingCustomerKey, errCode: ErrMissingSSECustomerKey},
 	{err: crypto.ErrInvalidCustomerKey, errCode: ErrInvalidSSECustomerKey},

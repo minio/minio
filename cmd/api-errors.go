@@ -1469,8 +1469,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
-	case errInsecureSSERequest:
-		apiErr = ErrInsecureSSECustomerRequest
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
 	case crypto.ErrInvalidCustomerKey:

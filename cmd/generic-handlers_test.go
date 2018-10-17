@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 
@@ -178,6 +179,42 @@ func TestContainsReservedMetadata(t *testing.T) {
 			t.Errorf("Test %d: contains reserved header but should not fail", i)
 		} else if !contains && test.shouldFail {
 			t.Errorf("Test %d: does not contain reserved header but failed", i)
+		}
+	}
+}
+
+var sseTLSHandlerTests = []struct {
+	Header            http.Header
+	IsTLS, ShouldFail bool
+}{
+	{Header: http.Header{}, IsTLS: false, ShouldFail: false},                                        // 0
+	{Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: false, ShouldFail: true}, // 1
+	{Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: true, ShouldFail: false}, // 2
+	{Header: http.Header{crypto.SSECKey: []string{""}}, IsTLS: true, ShouldFail: false},             // 3
+	{Header: http.Header{crypto.SSECopyAlgorithm: []string{""}}, IsTLS: false, ShouldFail: true},    // 4
+}
+
+func TestSSETLSHandler(t *testing.T) {
+	defer func(isSSL bool) { globalIsSSL = isSSL }(globalIsSSL) // reset globalIsSSL after test
+
+	var okHandler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+	for i, test := range sseTLSHandlerTests {
+		globalIsSSL = test.IsTLS
+
+		w := httptest.NewRecorder()
+		r := new(http.Request)
+		r.Header = test.Header
+
+		h := setSSETLSHandler(okHandler)
+		h.ServeHTTP(w, r)
+
+		switch {
+		case test.ShouldFail && w.Code == http.StatusOK:
+			t.Errorf("Test %d: should fail but status code is HTTP %d", i, w.Code)
+		case !test.ShouldFail && w.Code != http.StatusOK:
+			t.Errorf("Test %d: should not fail but status code is HTTP %d and not 200 OK", i, w.Code)
 		}
 	}
 }

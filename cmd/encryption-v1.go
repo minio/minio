@@ -37,7 +37,6 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errInsecureSSERequest   = errors.New("SSE-C requests require TLS connections")
 	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
 	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
@@ -105,13 +104,6 @@ func isEncryptedMultipart(objInfo ObjectInfo) bool {
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
 func ParseSSECopyCustomerRequest(h http.Header, metadata map[string]string) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
 	if crypto.S3.IsEncrypted(metadata) && crypto.SSECopy.IsRequested(h) {
 		return nil, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -128,13 +120,6 @@ func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
 // ParseSSECustomerHeader parses the SSE-C header fields and returns
 // the client provided key on success.
 func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
 	if crypto.S3.IsRequested(header) && crypto.SSEC.IsRequested(header) {
 		return key, crypto.ErrIncompatibleEncryptionMethod
 	}

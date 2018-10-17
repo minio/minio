@@ -82,6 +82,8 @@ var globalHandlers = []HandlerFunc{
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
 	setAuthHandler,
+	// Enforce rules specific for TLS requests
+	setSSETLSHandler,
 	// filters HTTP headers which are treated as metadata and are reserved
 	// for internal use only.
 	filterReservedMetadata,
