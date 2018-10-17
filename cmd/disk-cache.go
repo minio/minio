@@ -194,29 +194,24 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
+	cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+
 	objInfo, err := c.GetObjectInfoFn(ctx, bucket, object, opts)
-	backendDown := backendDownError(err)
-	if err != nil && !backendDown {
+	if backendDownError(err) && cacheErr == nil {
+		return cacheReader, nil
+	} else if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
-			// Delete the cached entry if backend object was deleted.
+			// Delete cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
 		return nil, err
 	}
 
-	if !objInfo.IsCacheable() {
+	if !objInfo.IsCacheable() || filterFromCache(objInfo.UserDefined) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
-	if !backendDown && filterFromCache(objInfo.UserDefined) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
-	}
-
-	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts); cacheErr == nil {
-		if backendDown {
-			// If the backend is down, serve the request from cache.
-			return cacheReader, nil
-		}
+	if cacheErr == nil {
 		if cacheReader.ObjInfo.ETag == objInfo.ETag && !isStaleCache(objInfo) {
 			// Object is not stale, so serve from cache
 			return cacheReader, nil
@@ -291,7 +286,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		return err
 	}
 
-	if !objInfo.IsCacheable() {
+	if !backendDown && !objInfo.IsCacheable() {
 		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
 
