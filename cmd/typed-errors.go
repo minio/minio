@@ -82,3 +82,6 @@ var errNoSuchUser = errors.New("Specified user does not exist")
 
 // error returned in IAM subsystem when policy doesn't exist.
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
+
+// error returned when access is denied.
+var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
