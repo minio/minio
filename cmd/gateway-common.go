@@ -294,6 +294,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = BucketPolicyNotFound{}
 	case "InvalidBucketName":
 		err = BucketNameInvalid{Bucket: bucket}
+	case "InvalidPart":
+		err = InvalidPart{}
 	case "NoSuchBucket":
 		err = BucketNotFound{Bucket: bucket}
 	case "NoSuchKey":
