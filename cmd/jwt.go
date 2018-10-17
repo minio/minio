@@ -49,7 +49,33 @@ var (
 	errNoAuthToken          = errors.New("JWT token missing")
 )
 
-func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
+func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
+	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
+	if err != nil {
+		return "", err
+	}
+
+	serverCred := globalServerConfig.GetCredential()
+	if serverCred.AccessKey != passedCredential.AccessKey {
+		var ok bool
+		serverCred, ok = globalIAMSys.GetUser(accessKey)
+		if !ok {
+			return "", errInvalidAccessKeyID
+		}
+	}
+
+	if !serverCred.Equal(passedCredential) {
+		return "", errAuthentication
+	}
+
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: UTCNow().Add(expiry).Unix(),
+		Subject:   accessKey,
+	})
+	return jwt.SignedString([]byte(serverCred.SecretKey))
+}
+
+func authenticateJWTAdmin(accessKey, secretKey string, expiry time.Duration) (string, error) {
 	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
 	if err != nil {
 		return "", err
@@ -73,15 +99,15 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 }
 
 func authenticateNode(accessKey, secretKey string) (string, error) {
-	return authenticateJWT(accessKey, secretKey, defaultInterNodeJWTExpiry)
+	return authenticateJWTAdmin(accessKey, secretKey, defaultInterNodeJWTExpiry)
 }
 
 func authenticateWeb(accessKey, secretKey string) (string, error) {
-	return authenticateJWT(accessKey, secretKey, defaultJWTExpiry)
+	return authenticateJWTUsers(accessKey, secretKey, defaultJWTExpiry)
 }
 
 func authenticateURL(accessKey, secretKey string) (string, error) {
-	return authenticateJWT(accessKey, secretKey, defaultURLJWTExpiry)
+	return authenticateJWTUsers(accessKey, secretKey, defaultURLJWTExpiry)
 }
 
 func stsTokenCallback(jwtToken *jwtgo.Token) (interface{}, error) {
