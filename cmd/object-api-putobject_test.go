@@ -159,6 +159,16 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test case 30
 		// valid data with X-Amz-Meta- meta
 		{bucket, object, data, map[string]string{"X-Amz-Meta-AppID": "a42"}, "", int64(len(data)), getMD5Hash(data), nil},
+
+		// Test case 31
+		// Put an empty object with a trailing slash
+		{bucket, "emptydir/", []byte{}, nil, "", 0, getMD5Hash([]byte{}), nil},
+		// Test case 32
+		// Put an object inside the empty directory
+		{bucket, "emptydir/" + object, data, nil, "", int64(len(data)), getMD5Hash(data), nil},
+		// Test case 33
+		// Put the empty object with a trailing slash again (refer to Test case 31), this needs to succeed
+		{bucket, "emptydir/", []byte{}, nil, "", 0, getMD5Hash([]byte{}), nil},
 	}
 
 	for i, testCase := range testCases {
@@ -171,7 +181,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && actualErr != testCase.expectedError {
-			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
+			t.Errorf("Test %d: %s: Expected to fail with error \"%v\", but instead failed with error \"%v\" instead.", i+1, instanceType, testCase.expectedError, actualErr)
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil {

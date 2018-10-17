@@ -627,8 +627,9 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		// Rename the successfully written temporary object to final location.
-		if _, err = rename(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil); err != nil {
+		// Rename the successfully written temporary object to final location. Ignore errFileAccessDenied
+		// error because it means that the target object dir exists and we want to be close to S3 specification.
+		if _, err = rename(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, []error{errFileAccessDenied}); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
