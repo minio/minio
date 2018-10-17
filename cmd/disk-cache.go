@@ -183,10 +183,7 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 }
 
 func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-
-	objInfo, bkErr := c.GetObjectInfoFn(ctx, bucket, object, opts)
-
-	if c.isCacheExclude(bucket, object) || !objInfo.IsCacheable() {
+	if c.isCacheExclude(bucket, object) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
@@ -196,24 +193,24 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
-	backendDown := backendDownError(bkErr)
-	if bkErr != nil && !backendDown {
+	cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+
+	objInfo, err := c.GetObjectInfoFn(ctx, bucket, object, opts)
+	if backendDownError(err) && cacheErr == nil {
+		return cacheReader, nil
+	} else if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
-			// Delete the cached entry if backend object was deleted.
+			// Delete cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
-		return nil, bkErr
+		return nil, err
 	}
 
-	if !backendDown && filterFromCache(objInfo.UserDefined) {
+	if !objInfo.IsCacheable() || filterFromCache(objInfo.UserDefined) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
 	}
 
-	if cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts); cacheErr == nil {
-		if backendDown {
-			// If the backend is down, serve the request from cache.
-			return cacheReader, nil
-		}
+	if cacheErr == nil {
 		if cacheReader.ObjInfo.ETag == objInfo.ETag && !isStaleCache(objInfo) {
 			// Object is not stale, so serve from cache
 			return cacheReader, nil
@@ -285,6 +282,10 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 			dcache.Delete(ctx, bucket, object)
 		}
 		return err
+	}
+
+	if !backendDown && !objInfo.IsCacheable() {
+		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
 
 	if !backendDown && filterFromCache(objInfo.UserDefined) {
