@@ -227,7 +227,7 @@ func Execute(writer io.Writer, inputType SelectQuery) error {
 	defer progressTicker.Stop()
 	defer continuationTimer.Stop()
 	var expression string
-
+	
 	switch inputType.(type) {
 	case *JSONInput:
 		expression = inputType.getExpression()
