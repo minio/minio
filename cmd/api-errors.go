@@ -253,7 +253,6 @@ const (
 	ErrParseUnsupportedAlias
 	ErrParseUnsupportedSyntax
 	ErrParseUnknownOperator
-	ErrParseInvalidPathComponent
 	ErrParseMissingIdentAfterAt
 	ErrParseUnexpectedOperator
 	ErrParseUnexpectedTerm
@@ -292,7 +291,6 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternToken
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
-	ErrInvalidColumnIndex
 	ErrMissingHeaders
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
@@ -1223,11 +1221,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The SQL expression contains an invalid operator.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrParseInvalidPathComponent: {
-		Code:           "ParseInvalidPathComponent",
-		Description:    "The SQL expression contains an invalid path component.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrParseMissingIdentAfterAt: {
 		Code:           "ParseMissingIdentAfterAt",
 		Description:    "Did not find the expected identifier after the @ symbol in the SQL expression.",
@@ -1413,11 +1406,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Time stamp format pattern contains an invalid symbol in the SQL expression.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrInvalidColumnIndex: {
-		Code:           "InvalidColumnIndex",
-		Description:    "Column index in the SQL expression is invalid.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrEvaluatorBindingDoesNotExist: {
 		Code:           "ErrEvaluatorBindingDoesNotExist",
 		Description:    "A column name or a path provided does not exist in the SQL expression",
@@ -1577,8 +1565,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrParseUnsupportedSyntax
 	case s3select.ErrParseUnknownOperator:
 		apiErr = ErrParseUnknownOperator
-	case s3select.ErrParseInvalidPathComponent:
-		apiErr = ErrParseInvalidPathComponent
 	case s3select.ErrParseMissingIdentAfterAt:
 		apiErr = ErrParseMissingIdentAfterAt
 	case s3select.ErrParseUnexpectedOperator:
@@ -1651,8 +1637,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEvaluatorInvalidTimestampFormatPatternToken
 	case s3select.ErrEvaluatorInvalidTimestampFormatPatternSymbol:
 		apiErr = ErrEvaluatorInvalidTimestampFormatPatternSymbol
-	case s3select.ErrInvalidColumnIndex:
-		apiErr = ErrInvalidColumnIndex
 	case s3select.ErrEvaluatorBindingDoesNotExist:
 		apiErr = ErrEvaluatorBindingDoesNotExist
 	case s3select.ErrMissingHeaders:
