@@ -354,10 +354,16 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
+	globalConfigSys = NewConfigSys()
 
-	// Create new policy system.
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
 	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
+	globalNotificationSys.Init(objLayer)
 
 	return testServer
 }
@@ -495,7 +501,7 @@ func resetTestGlobals() {
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	// Initialize server config.
-	if err = newConfig(obj); err != nil {
+	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
 
@@ -1620,11 +1626,13 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return xl.storageDisks
 	}
 
-	// Create new notification system.
-	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
+	globalConfigSys = NewConfigSys()
 
-	// Create new policy system.
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(xl)
+
 	globalPolicySys = NewPolicySys()
+	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
 
 	return xl, nil
 }

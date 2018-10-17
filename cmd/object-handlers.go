@@ -78,13 +78,18 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SelectObject")
 
+	defer logger.AuditLog(ctx, r)
+
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -270,6 +275,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			logger.LogIf(ctx, err)
 		}
 	}
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // GetObjectHandler - GET Object
@@ -278,6 +289,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 // you must have READ access to the object.
 func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -434,6 +447,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:         host,
 		Port:         port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // HeadObjectHandler - HEAD Object
@@ -441,6 +460,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 // The HEAD operation retrieves metadata from an object without returning the object itself.
 func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -531,6 +552,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
 				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+				// Validate the SSE-C Key set in the header.
+				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
+					writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+					return
+				}
 				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
 				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
 			}
@@ -544,7 +570,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set standard object headers.
 	if hErr := setObjectHeaders(w, objInfo, rs); hErr != nil {
-		writeErrorResponse(w, toAPIErrorCode(hErr), r.URL)
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(hErr))
 		return
 	}
 
@@ -575,6 +601,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		Host:         host,
 		Port:         port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // Extract metadata relevant for an CopyObject operation based on conditional
@@ -615,12 +647,14 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObject")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -766,10 +800,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Save the original size for later use when we want to copy
-	// encrypted file into an unencrypted one.
-	size := srcInfo.Size
-
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !srcInfo.IsCompressed() {
 		var oldKey, newKey []byte
@@ -777,10 +807,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		sseCopyC := crypto.SSECopy.IsRequested(r.Header)
 		sseC := crypto.SSEC.IsRequested(r.Header)
 		sseS3 := crypto.S3.IsRequested(r.Header)
-		if sseC || sseS3 {
-			if sseC {
-				newKey, err = ParseSSECustomerRequest(r)
-			}
+
+		isSourceEncrypted := sseCopyC || sseCopyS3
+		isTargetEncrypted := sseC || sseS3
+
+		if sseC {
+			newKey, err = ParseSSECustomerRequest(r)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -807,42 +839,49 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			// Since we are rotating the keys, make sure to update the metadata.
 			srcInfo.metadataOnly = true
 		} else {
-			if sseCopyC || sseCopyS3 {
+			if isSourceEncrypted || isTargetEncrypted {
 				// We are not only copying just metadata instead
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
 				srcInfo.metadataOnly = false
-				if sseC || sseS3 {
-					size = srcInfo.Size
-				}
 			}
-			if sseC || sseS3 {
+
+			// Calculate the size of the target object
+			var targetSize int64
+
+			switch {
+			case !isSourceEncrypted && !isTargetEncrypted:
+				fallthrough
+			case isSourceEncrypted && isTargetEncrypted:
+				targetSize = srcInfo.Size
+			// Source not encrypted and target encrypted
+			case !isSourceEncrypted && isTargetEncrypted:
+				targetSize = srcInfo.EncryptedSize()
+			case isSourceEncrypted && !isTargetEncrypted:
+				targetSize, _ = srcInfo.DecryptedSize()
+			}
+
+			if isTargetEncrypted {
 				reader, err = newEncryptReader(reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
 					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 					return
 				}
-				// We are not only copying just metadata instead
-				// we are creating a new object at this point, even
-				// if source and destination are same objects.
-				srcInfo.metadataOnly = false
-				if !sseCopyC && !sseCopyS3 {
-					size = srcInfo.EncryptedSize()
-				}
-			} else {
-				if sseCopyC || sseCopyS3 {
-					size, _ = srcInfo.DecryptedSize()
-					delete(srcInfo.UserDefined, crypto.SSEIV)
-					delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
-					delete(srcInfo.UserDefined, crypto.SSECSealedKey)
-					delete(srcInfo.UserDefined, crypto.SSEMultipart)
-					delete(srcInfo.UserDefined, crypto.S3SealedKey)
-					delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
-					delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
-				}
 			}
 
-			srcInfo.Reader, err = hash.NewReader(reader, size, "", "", size) // do not try to verify encrypted content
+			if isSourceEncrypted {
+				// Remove all source encrypted related metadata to
+				// avoid copying them in target object.
+				delete(srcInfo.UserDefined, crypto.SSEIV)
+				delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
+				delete(srcInfo.UserDefined, crypto.SSECSealedKey)
+				delete(srcInfo.UserDefined, crypto.SSEMultipart)
+				delete(srcInfo.UserDefined, crypto.S3SealedKey)
+				delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
+				delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
+			}
+
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -948,6 +987,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // PutObjectHandler - PUT Object
@@ -961,12 +1006,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObject")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1057,22 +1104,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		putObject = objectAPI.PutObject
 	)
 	reader = r.Body
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+
+	// Check if put is allowed
+	if s3Err = isPutAllowed(rAuthType, bucket, object, r); s3Err != ErrNone {
+		writeErrorResponse(w, s3Err, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Err = newSignV4ChunkedReader(r)
@@ -1119,7 +1158,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
 			snappyWriter.Close()
 			pipeWriter.CloseWithError(cerr)
-
 		}()
 
 		// Set compression metrics.
@@ -1209,6 +1247,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 /// Multipart objectAPIHandlers
@@ -1222,12 +1266,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NewMultipartUpload")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1314,12 +1360,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObjectPart")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1536,12 +1584,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectPart")
 
+	defer logger.AuditLog(ctx, r)
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
 		return
 	}
@@ -1611,41 +1661,30 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
 		reader    io.Reader
+		s3Error   APIErrorCode
 	)
 	reader = r.Body
 
-	switch rAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error = isPutAllowed(rAuthType, bucket, object, r); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
-	case authTypeAnonymous:
-		if !globalPolicySys.IsAllowed(policy.Args{
-			Action:          policy.PutObjectAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
-			IsOwner:         false,
-			ObjectName:      object,
-		}) {
-			writeErrorResponse(w, ErrAccessDenied, r.URL)
-			return
-		}
+	}
+
+	switch rAuthType {
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		var s3Error APIErrorCode
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
+		if s3Error = isReqAuthenticatedV2(r); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
+		if s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -1787,6 +1826,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AbortMultipartUpload")
 
+	defer logger.AuditLog(ctx, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -1825,6 +1866,8 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 // ListObjectPartsHandler - List object parts
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectParts")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1865,6 +1908,8 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 // CompleteMultipartUploadHandler - Complete multipart upload.
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CompleteMultipartUpload")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1972,6 +2017,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		Host:       host,
 		Port:       port,
 	})
+
+	for k, v := range objInfo.UserDefined {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 /// Delete objectAPIHandlers
@@ -1979,6 +2030,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 // DeleteObjectHandler - delete an object
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteObject")
+
+	defer logger.AuditLog(ctx, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

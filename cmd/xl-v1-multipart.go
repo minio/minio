@@ -343,7 +343,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
 	if data.Size() > 0 || data.Size() == -1 {
-		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); err != nil {
+		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
 			return pi, toObjectErr(pErr, bucket, object)
 
 		}
@@ -359,7 +359,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
-	case size == -1 || size > blockSizeV1:
+	case size == -1 || size >= blockSizeV1:
 		buffer = xl.bp.Get()
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:

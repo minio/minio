@@ -76,3 +76,9 @@ var errBucketAlreadyExists = errors.New("Your previous request to create the nam
 
 // error returned for a negative actual size.
 var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
+
+// error returned in IAM subsystem when user doesn't exist.
+var errNoSuchUser = errors.New("Specified user does not exist")
+
+// error returned in IAM subsystem when policy doesn't exist.
+var errNoSuchPolicy = errors.New("Specified canned policy does not exist")

@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
@@ -452,14 +453,36 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
-	// get Quorum for this object
+	// Get quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return objInfo, err
 	}
 
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return objInfo, reducedErr
+	const xlCorruptedSuffix = ".CORRUPTED"
+
+	// Having read quorum means we have xl.json in at least N/2 disks.
+	if !strings.HasSuffix(object, xlCorruptedSuffix) {
+		// We can consider an object data not reliable
+		// when xl.json is not found in read quorum disks.
+		var notFoundXLJSON int
+		for _, readErr := range errs {
+			if readErr == errFileNotFound {
+				notFoundXLJSON++
+			}
+		}
+		// If xl.json is not present in read quorum disks,
+		// add .CORRUPTED prefix to the current object.
+		if len(xl.getDisks())-notFoundXLJSON < readQuorum {
+			writeQuorum := readQuorum + 1
+			rename(ctx, xl.getDisks(), bucket, object, bucket, object+xlCorruptedSuffix, true, writeQuorum, []error{errFileNotFound})
+			// Return err file not found since we renamed now the corrupted object
+			return objInfo, errFileNotFound
+		}
+	} else {
+		// If this is a corrupted object, change read quorum to N/2 disks
+		// so it will be visible to users, so they can delete it.
+		readQuorum = len(xl.getDisks()) / 2
 	}
 
 	// List all the file commit ids from parts metadata.
