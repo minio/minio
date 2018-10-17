@@ -13,7 +13,7 @@ checks:
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
 getdeps:
-	@echo "Installing golint" && go get -u github.com/golang/lint/golint
+	@echo "Installing golint" && go get -u golang.org/x/lint/golint
 	@echo "Installing gocyclo" && go get -u github.com/fzipp/gocyclo
 	@echo "Installing deadcode" && go get -u github.com/remyoudompheng/go-misc/deadcode
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
