@@ -6,9 +6,9 @@ The Minio Security Token Service (STS) is an endpoint service that enables clien
 
 Following are advantages for using temporary credentials:
 
-- No need embed long-term credentials with an application.
-- No need to provide access to buckets and objects without having to define static credentials.
-- Temporary credentials have a limited lifetime, no need to rotate them or explicitly revoke them when they're no longer needed. After temporary credentials expire, they cannot be reused.
+- Eliminates the need to embed long-term credentials with an application.
+- Eliminates the need to provide access to buckets and objects without having to define static credentials.
+- Temporary credentials have a limited lifetime, there is no need to rotate them or explicitly revoke them. Expired temporary credentials cannot be reused.
 
 ## Identity Federation
 [**Client grants**](./client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS client grants supports WSO2, Keycloak.
@@ -62,5 +62,5 @@ go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOW
 ```
 
 ## Explore Further
-- [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
+- [Minio Admin Complete Guide](https://docs.minio.io/docs/minio-admin-complete-guide.html)
 - [The Minio documentation website](https://docs.minio.io)
