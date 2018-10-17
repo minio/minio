@@ -207,12 +207,6 @@ func (reader *Input) ReadRecord() []string {
 	return row
 }
 
-// convertMySQL Replaces double quote escape for column names with backtick for
-// the MySQL parser
-func convertMySQL(random string) string {
-	return strings.Replace(random, "\"", "`", len(random))
-}
-
 // readHeader reads the header into the header variable if the header is present
 // as the first row of the csv
 func (reader *Input) readHeader() error {
@@ -222,7 +216,7 @@ func (reader *Input) readHeader() error {
 		if readErr != nil {
 			return ErrCSVParsingError
 		}
-		reader.header = reader.firstRow
+		reader.header = cleanHeader(reader.firstRow)
 		reader.firstRow = nil
 		reader.minOutputLength = len(reader.header)
 	} else {
@@ -234,6 +228,14 @@ func (reader *Input) readHeader() error {
 
 	}
 	return nil
+}
+
+// Replace the spaces in columnnames with underscores
+func cleanHeader(columns []string) []string {
+	for i := 0; i < len(columns); i++ {
+		columns[i] = strings.Replace(columns[i], " ", "_", -1)
+	}
+	return columns
 }
 
 // createStatXML is the function which does the marshaling from the stat
@@ -296,7 +298,7 @@ func (reader *Input) Execute(writer io.Writer) error {
 	continuationTimer := time.NewTimer(continuationTime)
 	defer progressTicker.Stop()
 	defer continuationTimer.Stop()
-	go reader.runSelectParser(convertMySQL(reader.options.Expression), myRow)
+	go reader.runSelectParser(reader.options.Expression, myRow)
 	for {
 		select {
 		case row, ok := <-myRow:
