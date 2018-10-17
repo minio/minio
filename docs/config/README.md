@@ -25,13 +25,14 @@ $ tree ~/.minio
 │   └── public.crt
 ```
 
+
 ### Accessing configuration file
 
 All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
 #### Editing configuration file fields
 
-Configuration changes should be done using [mc]((https://docs.minio.io/docs/minio-client-quickstart-guide))
+
 
 ##### Get current configuration for Minio deployment
 
@@ -144,8 +145,7 @@ minio server /data
 
 ### Domain
 
-By default, Minio supports path-style requests which look like http://mydomain.com/bucket/object. MINIO_DOMAIN environmental variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the mattched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
-
+By default, Minio supports path-style requests that are of the format http://mydomain.com/bucket/object. MINIO_DOMAIN environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
 Example:
 
 ```sh

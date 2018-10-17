@@ -18,7 +18,7 @@ minio server -h
 
   7. Start minio server with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
      exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension
-     with expiry upto 40 days.
+     with expiry up to 40 days.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/export{1..24}"
      $ export MINIO_CACHE_EXCLUDE="mybucket/*;*.pdf"
      $ export MINIO_CACHE_EXPIRY=40

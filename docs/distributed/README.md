@@ -43,7 +43,7 @@ To start a distributed Minio instance, you just need to pass drive locations as 
 *Note*
 
 - All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, it is **mandatory** to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing Minio server command.
-- All the nodes running distributed Minio need to be on homogenous environments i.e same operating system, same number of disks and same interconnects.
+- All the nodes running distributed Minio need to be in a homogeneous environment, i.e. same operating system, same number of disks and same interconnects.
 - `MINIO_DOMAIN` environment variable should be defined and exported if domain is needed to be set.
 - Minio distributed mode requires fresh directories. If required, the drives can be shared with other applications. You can do this by using a sub-directory exclusive to minio. For example, if you have mounted your volume under `/export`, pass `/export/data` as arguments to Minio server.
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
@@ -60,31 +60,6 @@ export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server http://192.168.1.1{1...8}/export1
 ```
 
-#### Windows (experimental)
-
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.1{1...8}/C:/data
-```
-
-
-Example 2: Start distributed Minio instance on 4 nodes with 4 disks (pictured below), by running this command on all the 4 nodes:
-![Distributed Minio, 4 nodes with 4 disks each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
-
-#### GNU/Linux and macOS
-```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.1{1...4}/export{1...4}
-```
-
-#### Windows (experimental)
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.1{1...4}/C:/data{1...4}
-```
 
 __NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally erasure-code data__
 
@@ -92,7 +67,7 @@ __NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..4}` will be interp
 To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
-- [Minio Large Bucket Suppport Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
+- [Minio Large Bucket Support Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
