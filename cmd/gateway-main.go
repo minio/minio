@@ -169,6 +169,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	router := mux.NewRouter().SkipClean(true)
 
+	if globalEtcdClient != nil {
+		// Enable STS router if etcd is enabled.
+		registerSTSRouter(router)
+
+		// Enable admin router if etcd is enabled.
+		registerAdminRouter(router)
+	}
+
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
 
@@ -178,11 +186,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
-	}
-
-	// Enable STS router if etcd is enabled.
-	if globalEtcdClient != nil {
-		registerSTSRouter(router)
 	}
 
 	// Add API router.

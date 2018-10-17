@@ -53,12 +53,14 @@ func registerAdminRouter(router *mux.Router) {
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
 
-	/// Heal operations
+	if globalIsDistXL || globalIsXL {
+		/// Heal operations
 
-	// Heal processing endpoint.
-	adminV1Router.Methods(http.MethodPost).Path("/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
-	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
-	adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		// Heal processing endpoint.
+		adminV1Router.Methods(http.MethodPost).Path("/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+	}
 
 	// Profiling operations
 	adminV1Router.Methods(http.MethodPost).Path("/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).
@@ -102,4 +104,7 @@ func registerAdminRouter(router *mux.Router) {
 
 	// List policies
 	adminV1Router.Methods(http.MethodGet).Path("/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
+
+	// If none of the routes match.
+	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandler))
 }
