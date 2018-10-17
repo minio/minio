@@ -205,11 +205,6 @@ func webTokenAuthenticate(token string) (jwtgo.StandardClaims, bool, error) {
 	return claims, owner, nil
 }
 
-func isHTTPRequestValid(req *http.Request) bool {
-	_, _, err := webRequestAuthenticate(req)
-	return err == nil
-}
-
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.

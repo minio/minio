@@ -343,7 +343,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		{"minio", false, token, "specified bucket minio does not exist"},
 		{bucketName, false, token, ""},
 		{bucketName, true, token, "Bucket not empty"},
-		{bucketName, false, "", "Authentication failed"},
+		{bucketName, false, "", "JWT token missing"},
 	}
 
 	for _, test := range testCases {

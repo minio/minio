@@ -74,8 +74,9 @@ type ServerInfoRep struct {
 
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -96,6 +97,14 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 
 	reply.MinioVersion = Version
 	reply.MinioGlobalInfo = getGlobalInfo()
+	// If ENV creds are not set and incoming user is not owner
+	// disable changing credentials.
+	// TODO: fix this in future and allow changing user credentials.
+	v, ok := reply.MinioGlobalInfo["isEnvCreds"].(bool)
+	if ok && !v {
+		reply.MinioGlobalInfo["isEnvCreds"] = !owner
+	}
+
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime
@@ -115,8 +124,9 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *S
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, _, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo(context.Background())
 	reply.UIVersion = browser.UIVersion
@@ -134,8 +144,13 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	// TODO: Allow MakeBucket in future.
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 
 	// Check if bucket is a reserved bucket name or invalid.
@@ -182,8 +197,13 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	// TODO: Allow DeleteBucket in future.
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 
 	ctx := context.Background()
@@ -338,7 +358,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			if !readable {
 				// Error out if anonymous user (non-owner) has no access to download or upload objects
 				if !writable {
-					return errAuthentication
+					return errAccessDenied
 				}
 				// return empty object list if access is write only
 				return nil
@@ -372,7 +392,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		if !readable {
 			// Error out if anonymous user (non-owner) has no access to download or upload objects
 			if !writable {
-				return errAuthentication
+				return errAccessDenied
 			}
 			// return empty object list if access is write only
 			return nil
@@ -435,8 +455,10 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if web.CacheAPI() != nil {
 		listObjects = web.CacheAPI().ListObjects
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
 	}
 
 	if args.BucketName == "" || len(args.Objects) == 0 {
@@ -455,10 +477,32 @@ next:
 				}
 			}
 
+			if !globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.Subject,
+				Action:          iampolicy.Action(policy.DeleteObjectAction),
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         owner,
+				ObjectName:      objectName,
+			}) {
+				return toJSONError(errAccessDenied)
+			}
+
 			if err = deleteObject(nil, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
 				break next
 			}
 			continue
+		}
+
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.Subject,
+			Action:          iampolicy.Action(policy.DeleteObjectAction),
+			BucketName:      args.BucketName,
+			ConditionValues: getConditionValues(r, ""),
+			IsOwner:         owner,
+			ObjectName:      objectName,
+		}) {
+			return toJSONError(errAccessDenied)
 		}
 
 		// For directories, list the contents recursively and remove.
@@ -523,8 +567,12 @@ type GenerateAuthReply struct {
 }
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 	cred, err := auth.GetNewCredentials()
 	if err != nil {
@@ -551,12 +599,14 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
 	}
 
 	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds || globalWORMEnabled {
+	// TODO: Multi-user credentials also cannot be changed from browser.
+	if globalIsEnvCreds || globalWORMEnabled || !owner {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
@@ -588,7 +638,10 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 			reply.PeerErrMsgs[host.String()] = err.Error()
 		}
 	} else {
-		reply.Token = newAuthToken()
+		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
 		reply.UIVersion = browser.UIVersion
 	}
 
@@ -604,8 +657,12 @@ type GetAuthReply struct {
 
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 	creds := globalServerConfig.GetCredential()
 	reply.AccessKey = creds.AccessKey
@@ -622,11 +679,19 @@ type URLTokenReply struct {
 
 // CreateURLToken creates a URL token (short-lived) for GET requests.
 func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
 	}
 
 	creds := globalServerConfig.GetCredential()
+	if !owner {
+		var ok bool
+		creds, ok = globalIAMSys.GetUser(claims.Subject)
+		if !ok {
+			return toJSONError(errInvalidAccessKeyID)
+		}
+	}
 
 	token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
 	if err != nil {
@@ -1211,8 +1276,12 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 
 	bucketPolicy, err := objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
@@ -1260,8 +1329,12 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 
 	bucketPolicy, err := objectAPI.GetBucketPolicy(context.Background(), args.BucketName)
@@ -1307,8 +1380,12 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	_, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	if !owner {
+		return toJSONError(errAccessDenied)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1385,27 +1462,37 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
+		return toJSONError(authErr)
+	}
+	var creds auth.Credentials
+	if !owner {
+		var ok bool
+		creds, ok = globalIAMSys.GetUser(claims.Subject)
+		if !ok {
+			return toJSONError(errInvalidAccessKeyID)
+		}
+	} else {
+		creds = globalServerConfig.GetCredential()
 	}
 
+	region := globalServerConfig.GetRegion()
 	if args.BucketName == "" || args.ObjectName == "" {
 		return &json2.Error{
 			Message: "Bucket and Object are mandatory arguments.",
 		}
 	}
+
 	reply.UIVersion = browser.UIVersion
-	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry)
+	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry, creds, region)
 	return nil
 }
 
 // Returns presigned url for GET method.
-func presignedGet(host, bucket, object string, expiry int64) string {
-	cred := globalServerConfig.GetCredential()
-	region := globalServerConfig.GetRegion()
-
-	accessKey := cred.AccessKey
-	secretKey := cred.SecretKey
+func presignedGet(host, bucket, object string, expiry int64, creds auth.Credentials, region string) string {
+	accessKey := creds.AccessKey
+	secretKey := creds.SecretKey
 
 	date := UTCNow()
 	dateStr := date.Format(iso8601Format)
