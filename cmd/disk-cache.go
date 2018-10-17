@@ -291,6 +291,10 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		return err
 	}
 
+	if !objInfo.IsCacheable() {
+		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
+	}
+
 	if !backendDown && filterFromCache(objInfo.UserDefined) {
 		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
