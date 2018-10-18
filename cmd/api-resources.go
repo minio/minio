@@ -97,10 +97,10 @@ func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadID
 
 // Parse object url queries
 func getObjectResources(values url.Values) (uploadID string, partNumberMarker, maxParts int, encodingType string, errCode APIErrorCode) {
+	var err error
 	errCode = ErrNone
 
 	if values.Get("max-parts") != "" {
-		var err error
 		if maxParts, err = strconv.Atoi(values.Get("max-parts")); err != nil {
 			errCode = ErrInvalidMaxParts
 			return
@@ -108,8 +108,13 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	} else {
 		maxParts = maxPartsList
 	}
+
+	if partNumberMarker, err = strconv.Atoi(values.Get("part-number-marker")); err != nil {
+		errCode = ErrInvalidPartNumberMarker
+		return
+	}
+
 	uploadID = values.Get("uploadId")
-	partNumberMarker, _ = strconv.Atoi(values.Get("part-number-marker"))
 	encodingType = values.Get("encoding-type")
 	return
 }
