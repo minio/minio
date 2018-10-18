@@ -1,10 +1,4 @@
 go_import_path: github.com/minio/minio
-sudo: required
-
-services:
- - docker
-
-dist: trusty
 
 language: go
 
@@ -18,9 +12,11 @@ branches:
 matrix:
   include:
     - os: linux
+      dist: trusty
+      sudo: required
       env:
         - ARCH=x86_64
-      go: 1.10.3
+      go: 1.10.4
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
@@ -29,9 +25,17 @@ matrix:
         - make verify
         - make coverage
         - cd browser && yarn && yarn test && cd ..
+    - os: windows
+      env:
+        - ARCH=x86_64
+      go: 1.10.4
+      script:
+        - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
+        - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 20m "$d"; done
+        - bash buildscripts/go-coverage.sh
 
 before_install:
-- nvm install stable
+ - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then nvm install stable ; fi
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)
