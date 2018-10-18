@@ -471,6 +471,11 @@ func resetGlobalCacheObjectAPI() {
 	globalCacheObjectAPI = nil
 }
 
+// sets globalIAMSys to `nil`.
+func resetGlobalIAMSys() {
+	globalIAMSys = nil
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -494,8 +499,10 @@ func resetTestGlobals() {
 	resetGlobalHealState()
 	//Reset global disk cache flags
 	resetGlobalCacheEnvs()
-	//set globalCacheObjectAPI to nil
+	// Reset globalCacheObjectAPI to nil
 	resetGlobalCacheObjectAPI()
+	// Reset globalIAMSys to `nil`
+	resetGlobalIAMSys()
 }
 
 // Configure the server for the test run.
@@ -1902,9 +1909,11 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	}
 	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
-		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
+		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
 	}
 
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
