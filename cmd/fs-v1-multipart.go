@@ -688,9 +688,18 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		}
 		return toObjectErr(err, bucket, object)
 	}
+
+	// Remove the folder created in tmp
+	tmpFolderPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+	fsRemoveAll(ctx, tmpFolderPath)
+
 	// Ignore the error returned as Windows fails to remove directory if a file in it
 	// is Open()ed by the backgroundAppend()
 	fsRemoveAll(ctx, uploadIDDir)
+
+	// Remove the folder created in multipart
+	multipartFolderPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, getSHA256Hash([]byte(pathJoin(bucket, object))))
+	fsRemoveAll(ctx, multipartFolderPath)
 
 	return nil
 }
