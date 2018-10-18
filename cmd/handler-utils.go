@@ -39,7 +39,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	// be created at default region.
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
-	if err != nil && err != io.EOF {
+	if err != nil && r.ContentLength != 0 {
 		logger.LogIf(context.Background(), err)
 		// Treat all other failures as XML parsing errors.
 		return "", ErrMalformedXML
