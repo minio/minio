@@ -109,9 +109,11 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 		maxParts = maxPartsList
 	}
 
-	if partNumberMarker, err = strconv.Atoi(values.Get("part-number-marker")); err != nil {
-		errCode = ErrInvalidPartNumberMarker
-		return
+	if values.Get("part-number-marker") != "" {
+		if partNumberMarker, err = strconv.Atoi(values.Get("part-number-marker")); err != nil {
+			errCode = ErrInvalidPartNumberMarker
+			return
+		}
 	}
 
 	uploadID = values.Get("uploadId")
