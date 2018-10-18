@@ -1861,7 +1861,11 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		}
 	}
 
-	uploadID, _, _, _ := getObjectResources(r.URL.Query())
+	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 	if err := abortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1890,7 +1894,11 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	uploadID, partNumberMarker, maxParts, _ := getObjectResources(r.URL.Query())
+	uploadID, partNumberMarker, maxParts, _, s3Error := getObjectResources(r.URL.Query())
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 	if partNumberMarker < 0 {
 		writeErrorResponse(w, ErrInvalidPartNumberMarker, r.URL)
 		return
@@ -1941,7 +1949,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Get upload id.
-	uploadID, _, _, _ := getObjectResources(r.URL.Query())
+	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 
 	completeMultipartBytes, err := goioutil.ReadAll(r.Body)
 	if err != nil {

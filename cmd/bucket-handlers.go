@@ -155,7 +155,11 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _, s3Error := getBucketMultipartResources(r.URL.Query())
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 	if maxUploads < 0 {
 		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
 		return
