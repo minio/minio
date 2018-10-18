@@ -218,14 +218,26 @@ func startProfiler(profilerType, dirPath string) (interface {
 		Stop()
 	}
 
-	// Enable profiler, supported types are [cpu, mem, block].
+	var profilerFileName string
+
+	// Enable profiler and set the name of the file that pkg/pprof
+	// library creates to store profiling data.
 	switch profilerType {
 	case "cpu":
 		profiler = profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+		profilerFileName = "cpu.pprof"
 	case "mem":
 		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+		profilerFileName = "mem.pprof"
 	case "block":
 		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+		profilerFileName = "block.pprof"
+	case "mutex":
+		profiler = profile.Start(profile.MutexProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+		profilerFileName = "mutex.pprof"
+	case "trace":
+		profiler = profile.Start(profile.TraceProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
+		profilerFileName = "trace.out"
 	default:
 		return nil, errors.New("profiler type unknown")
 	}
@@ -233,7 +245,7 @@ func startProfiler(profilerType, dirPath string) (interface {
 	return &profilerWrapper{
 		stopFn: profiler.Stop,
 		pathFn: func() string {
-			return filepath.Join(dirPath, profilerType+".pprof")
+			return filepath.Join(dirPath, profilerFileName)
 		},
 	}, nil
 }
@@ -387,7 +399,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	reqInfo := &logger.ReqInfo{
 		RequestID:  w.Header().Get(responseRequestIDKey),
 		RemoteHost: handlers.GetSourceIP(r),
-		UserAgent:  r.Header.Get("user-agent"),
+		UserAgent:  r.UserAgent(),
 		API:        api,
 		BucketName: bucket,
 		ObjectName: object,
@@ -453,4 +465,14 @@ func CloseResponse(respBody io.ReadCloser) {
 		io.CopyBuffer(ioutil.Discard, respBody, *bufp)
 		respBody.Close()
 	}
+}
+
+// Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)
+// If it is passed ["aaaa", "bbbb"], it returns ["aaaa", "{aaaa:.*}", "bbbb", "{bbbb:.*}"]
+func restQueries(keys ...string) []string {
+	var accumulator []string
+	for _, key := range keys {
+		accumulator = append(accumulator, key, "{"+key+":.*}")
+	}
+	return accumulator
 }

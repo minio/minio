@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 	"reflect"
 	"testing"
 )
@@ -293,6 +294,253 @@ func TestCleanMetadataKeys(t *testing.T) {
 	for _, tt := range tests {
 		if got := cleanMetadataKeys(tt.metadata, tt.keys...); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("Test %s failed, expected %v, got %v", tt.name, tt.want, got)
+		}
+	}
+}
+
+// Tests isCompressed method
+func TestIsCompressed(t *testing.T) {
+	testCases := []struct {
+		objInfo ObjectInfo
+		result  bool
+	}{
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+			},
+			result: true,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "golang/snappy/LZ77",
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+			},
+			result: false,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"content-type": "application/octet-stream",
+					"etag": "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+			},
+			result: false,
+		},
+	}
+	for i, test := range testCases {
+		got := test.objInfo.IsCompressed()
+		if got != test.result {
+			t.Errorf("Test %d - expected %v but received %v",
+				i+1, test.result, got)
+		}
+	}
+}
+
+// Tests excludeForCompression.
+func TestExcludeForCompression(t *testing.T) {
+	testCases := []struct {
+		object string
+		header http.Header
+		result bool
+	}{
+		{
+			object: "object.txt",
+			header: http.Header{
+				"Content-Type": []string{"application/zip"},
+			},
+			result: true,
+		},
+		{
+			object: "object.zip",
+			header: http.Header{
+				"Content-Type": []string{"application/XYZ"},
+			},
+			result: true,
+		},
+		{
+			object: "object.json",
+			header: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			result: false,
+		},
+		{
+			object: "object.txt",
+			header: http.Header{
+				"Content-Type": []string{"text/plain"},
+			},
+			result: false,
+		},
+	}
+	for i, test := range testCases {
+		globalIsCompressionEnabled = true
+		got := excludeForCompression(test.header, test.object)
+		globalIsCompressionEnabled = false
+		if got != test.result {
+			t.Errorf("Test %d - expected %v but received %v",
+				i+1, test.result, got)
+		}
+	}
+}
+
+// Test getPartFile function.
+func TestGetPartFile(t *testing.T) {
+	testCases := []struct {
+		entries    []string
+		partNumber int
+		etag       string
+		result     string
+	}{
+		{
+			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
+			partNumber: 1,
+			etag:       "8a034f82cb9cb31140d87d3ce2a9ede3",
+			result:     "00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864",
+		},
+		{
+			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
+			partNumber: 2,
+			etag:       "d73d8ab724016dfb051e2d3584495c54",
+			result:     "00002.d73d8ab724016dfb051e2d3584495c54.32891137",
+		},
+		{
+			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
+			partNumber: 1,
+			etag:       "d73d8ab724016dfb051e2d3584495c54",
+			result:     "",
+		},
+	}
+	for i, test := range testCases {
+		got := getPartFile(test.entries, test.partNumber, test.etag)
+		if got != test.result {
+			t.Errorf("Test %d - expected %s but received %s",
+				i+1, test.result, got)
+		}
+	}
+}
+
+func TestGetActualSize(t *testing.T) {
+	testCases := []struct {
+		objInfo ObjectInfo
+		result  int64
+	}{
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+					"X-Minio-Internal-actual-size": "100000001",
+					"content-type":                 "application/octet-stream",
+					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+				Parts: []objectPartInfo{
+					{
+						Size:       39235668,
+						ActualSize: 67108864,
+					},
+					{
+						Size:       19177372,
+						ActualSize: 32891137,
+					},
+				},
+			},
+			result: 100000001,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+					"X-Minio-Internal-actual-size": "841",
+					"content-type":                 "application/octet-stream",
+					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+				Parts: []objectPartInfo{},
+			},
+			result: 841,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+				Parts: []objectPartInfo{},
+			},
+			result: -1,
+		},
+	}
+	for i, test := range testCases {
+		got := test.objInfo.GetActualSize()
+		if got != test.result {
+			t.Errorf("Test %d - expected %d but received %d",
+				i+1, test.result, got)
+		}
+	}
+}
+
+func TestGetCompressedOffsets(t *testing.T) {
+	testCases := []struct {
+		objInfo           ObjectInfo
+		offset            int64
+		startOffset       int64
+		snappyStartOffset int64
+	}{
+		{
+			objInfo: ObjectInfo{
+				Parts: []objectPartInfo{
+					{
+						Size:       39235668,
+						ActualSize: 67108864,
+					},
+					{
+						Size:       19177372,
+						ActualSize: 32891137,
+					},
+				},
+			},
+			offset:            79109865,
+			startOffset:       39235668,
+			snappyStartOffset: 12001001,
+		},
+		{
+			objInfo: ObjectInfo{
+				Parts: []objectPartInfo{
+					{
+						Size:       39235668,
+						ActualSize: 67108864,
+					},
+					{
+						Size:       19177372,
+						ActualSize: 32891137,
+					},
+				},
+			},
+			offset:            19109865,
+			startOffset:       0,
+			snappyStartOffset: 19109865,
+		},
+		{
+			objInfo: ObjectInfo{
+				Parts: []objectPartInfo{
+					{
+						Size:       39235668,
+						ActualSize: 67108864,
+					},
+					{
+						Size:       19177372,
+						ActualSize: 32891137,
+					},
+				},
+			},
+			offset:            0,
+			startOffset:       0,
+			snappyStartOffset: 0,
+		},
+	}
+	for i, test := range testCases {
+		startOffset, snappyStartOffset := getCompressedOffsets(test.objInfo, test.offset)
+		if startOffset != test.startOffset {
+			t.Errorf("Test %d - expected startOffset %d but received %d",
+				i+1, test.startOffset, startOffset)
+		}
+		if snappyStartOffset != test.snappyStartOffset {
+			t.Errorf("Test %d - expected snappyOffset %d but received %d",
+				i+1, test.snappyStartOffset, snappyStartOffset)
 		}
 	}
 }

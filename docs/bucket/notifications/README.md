@@ -409,7 +409,7 @@ This notification target supports two formats: _namespace_ and _access_.
 
 When the _namespace_ format is used, Minio synchronizes objects in the bucket with entries in a hash. For each entry, the key is formatted as "bucketName/objectName" for an object that exists in the bucket, and the value is the JSON-encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding entry in the hash is also updated or deleted.
 
-When the _access_ format is used, Minio appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON encoded list with two items, where the first item is a timestamp string, and second item is a JSON object containing evnet data about the operation that happened in the bucket. No entries appended to the list are updated or deleted by Minio in this format.
+When the _access_ format is used, Minio appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON encoded list with two items, where the first item is a timestamp string, and the second item is a JSON object containing event data about the operation that happened in the bucket. No entries appended to the list are updated or deleted by Minio in this format.
 
 The steps below show how to use this notification target in `namespace` and `access` format.
 

@@ -172,7 +172,6 @@ func (ssecCopy) IsRequested(h http.Header) bool {
 // ParseHTTP parses the SSE-C headers and returns the SSE-C client key
 // on success. SSE-C copy headers are ignored.
 func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
-	defer h.Del(SSECKey) // remove SSE-C key from headers after parsing
 	if h.Get(SSECAlgorithm) != SSEAlgorithmAES256 {
 		return key, ErrInvalidCustomerAlgorithm
 	}
@@ -198,7 +197,6 @@ func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
 // ParseHTTP parses the SSE-C copy headers and returns the SSE-C client key
 // on success. Regular SSE-C headers are ignored.
 func (ssecCopy) ParseHTTP(h http.Header) (key [32]byte, err error) {
-	defer h.Del(SSECopyKey) // remove SSE-C copy key of source object from headers after parsing
 	if h.Get(SSECopyAlgorithm) != SSEAlgorithmAES256 {
 		return key, ErrInvalidCustomerAlgorithm
 	}

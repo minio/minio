@@ -253,6 +253,7 @@ func TestMyParser(t *testing.T) {
 		{"SELECT count(*) FROM S3OBJECT AS A WHERE col_name = 'Name' LIMIT 5", nil, []string{"*"}, "A", 5, []string{"count"}, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT sum(col_name),sum(col_other) FROM S3OBJECT AS A WHERE col_name = 'Name' LIMIT 5", nil, []string{"col_name", "col_other"}, "A", 5, []string{"sum", "sum"}, []string{"col_name", "col_other"}},
 		{"SELECT A.col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
+		{"SELECT A.`col name` FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A", nil, []string{"col_name"}, "A", 0, make([]string, 1), []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A WHERE randomname > 5", ErrMissingHeaders, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
 		{"SELECT A._col_name FROM S3OBJECT AS A WHERE A._11 > 5", ErrInvalidColumnIndex, nil, "", 0, nil, []string{"col_name", "col_other", "name3", "name4"}},
@@ -331,7 +332,7 @@ func TestMyAggregationFunc(t *testing.T) {
 		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, []string{"1", "2"}, nil, 5.500},
 		{10, 5, []float64{0.000}, columnsMap, []string{"Col1"}, []string{"random"}, []string{"1", "2"}, ErrParseNonUnaryAgregateFunctionCall, 0},
 		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, []string{"1", "2"}, nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 10},
+		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []string{"1", "12"}, nil, 1},
 	}
 	for _, table := range tables {
 		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.columnsMap, table.storeReqCols, table.storeFunctions, table.record)
@@ -368,8 +369,11 @@ func TestToStringAgg(t *testing.T) {
 		myAggVal []float64
 		expected string
 	}{
-		{[]float64{10, 11, 12, 13, 14}, "10.000000,11.000000,12.000000,13.000000,14.000000"},
-		{[]float64{10}, "10.000000"},
+		{[]float64{10, 11, 12, 13, 14}, "10,11,12,13,14"},
+		{[]float64{10, 11.3, 12, 13, 14}, "10,11.300000,12,13,14"},
+		{[]float64{10.235, 11.3, 12, 13, 14}, "10.235000,11.300000,12,13,14"},
+		{[]float64{10.235, 11.3, 12.123, 13.456, 14.789}, "10.235000,11.300000,12.123000,13.456000,14.789000"},
+		{[]float64{10}, "10"},
 	}
 	for _, table := range tables {
 		val := s3s.aggFuncToStr(table.myAggVal)

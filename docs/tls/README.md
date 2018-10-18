@@ -168,7 +168,7 @@ ip_address = "127.0.0.1"
 tls_www_server
 
 # Whether this certificate will be used to encrypt data (needed
-# in TLS RSA ciphersuites). Note that it is preferred to use different
+# in TLS RSA cipher suites). Note that it is preferred to use different
 # keys for encryption and signing.
 encryption_key
 ```

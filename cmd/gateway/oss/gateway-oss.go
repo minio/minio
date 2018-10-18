@@ -547,9 +547,9 @@ func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, s
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header) (gr *minio.GetObjectReader, err error) {
+func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var objInfo minio.ObjectInfo
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +562,7 @@ func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, minio.ObjectOptions{})
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -1094,4 +1094,9 @@ func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 		return ossToObjectError(err, bucket)
 	}
 	return nil
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *ossObjects) IsCompressionSupported() bool {
+	return false
 }

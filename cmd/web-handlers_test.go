@@ -343,7 +343,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		{"minio", false, token, "specified bucket minio does not exist"},
 		{bucketName, false, token, ""},
 		{bucketName, true, token, "Bucket not empty"},
-		{bucketName, false, "", "Authentication failed"},
+		{bucketName, false, "", "JWT token missing"},
 	}
 
 	for _, test := range testCases {
@@ -1294,7 +1294,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		},
 	}
 
-	if err = savePolicyConfig(obj, bucketName, bucketPolicy); err != nil {
+	if err = savePolicyConfig(context.Background(), obj, bucketName, bucketPolicy); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1394,7 +1394,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 		},
 	}
 
-	if err = savePolicyConfig(obj, bucketName, bucketPolicy); err != nil {
+	if err = savePolicyConfig(context.Background(), obj, bucketName, bucketPolicy); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

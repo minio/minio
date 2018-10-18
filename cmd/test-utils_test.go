@@ -137,7 +137,7 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 }
 
 func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *hash.Reader {
-	hr, err := hash.NewReader(data, size, md5hex, sha256hex)
+	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,10 +354,16 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
+	globalConfigSys = NewConfigSys()
 
-	// Create new policy system.
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
 	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
+	globalNotificationSys.Init(objLayer)
 
 	return testServer
 }
@@ -465,6 +471,11 @@ func resetGlobalCacheObjectAPI() {
 	globalCacheObjectAPI = nil
 }
 
+// sets globalIAMSys to `nil`.
+func resetGlobalIAMSys() {
+	globalIAMSys = nil
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -488,14 +499,16 @@ func resetTestGlobals() {
 	resetGlobalHealState()
 	//Reset global disk cache flags
 	resetGlobalCacheEnvs()
-	//set globalCacheObjectAPI to nil
+	// Reset globalCacheObjectAPI to nil
 	resetGlobalCacheObjectAPI()
+	// Reset globalIAMSys to `nil`
+	resetGlobalIAMSys()
 }
 
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	// Initialize server config.
-	if err = newConfig(obj); err != nil {
+	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
 
@@ -1620,11 +1633,13 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return xl.storageDisks
 	}
 
-	// Create new notification system.
-	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
+	globalConfigSys = NewConfigSys()
 
-	// Create new policy system.
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(xl)
+
 	globalPolicySys = NewPolicySys()
+	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
 
 	return xl, nil
 }
@@ -1894,9 +1909,11 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	}
 	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
-		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
+		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
 	}
 
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {

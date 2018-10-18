@@ -27,6 +27,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,168 +38,184 @@ import (
 
 var (
 	configJSON = []byte(`{
-	"version": "29",
-	"credential": {
-		"accessKey": "minio",
-		"secretKey": "minio123"
-	},
-	"region": "",
-	"worm": "off",
-	"storageclass": {
-		"standard": "",
-		"rrs": ""
-	},
-	"cache": {
-		"drives": [],
-		"expiry": 90,
-		"maxuse": 80,
-		"exclude": []
-	},
-	"kms": {
-		"vault": {
-			"endpoint": "",
-			"auth": {
-				"type": "",
-				"approle": {
-					"id": "",
-					"secret": ""
-				}
-			},
-			"key-id": {
-				"name": "",
-				"version": 0
-			}
-		}
-	},
-	"notify": {
-		"amqp": {
-			"1": {
-				"enable": false,
-				"url": "",
-				"exchange": "",
-				"routingKey": "",
-				"exchangeType": "",
-				"deliveryMode": 0,
-				"mandatory": false,
-				"immediate": false,
-				"durable": false,
-				"internal": false,
-				"noWait": false,
-				"autoDeleted": false
-			}
-		},
-		"elasticsearch": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"url": "",
-				"index": ""
-			}
-		},
-		"kafka": {
-			"1": {
-				"enable": false,
-				"brokers": null,
-				"topic": "",
-				"tls" : {
-					"enable" : false,
-					"skipVerify" : false,
-					"clientAuth" : 0
-				},
-				"sasl" : {
-					"enable" : false,
-					"username" : "",
-					"password" : ""
-				}
-			}
-		},
-		"mqtt": {
-			"1": {
-				"enable": false,
-				"broker": "",
-				"topic": "",
-				"qos": 0,
-				"clientId": "",
-				"username": "",
-				"password": "",
-				"reconnectInterval": 0,
-				"keepAliveInterval": 0
-			}
-		},
-		"mysql": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"dsnString": "",
-				"table": "",
-				"host": "",
-				"port": "",
-				"user": "",
-				"password": "",
-				"database": ""
-			}
-		},
-		"nats": {
-			"1": {
-				"enable": false,
-				"address": "",
-				"subject": "",
-				"username": "",
-				"password": "",
-				"token": "",
-				"secure": false,
-				"pingInterval": 0,
-				"streaming": {
-					"enable": false,
-					"clusterID": "",
-					"clientID": "",
-					"async": false,
-					"maxPubAcksInflight": 0
-				}
-			}
-		},
-		"postgresql": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"connectionString": "",
-				"table": "",
-				"host": "",
-				"port": "",
-				"user": "",
-				"password": "",
-				"database": ""
-			}
-		},
-		"redis": {
-			"1": {
-				"enable": false,
-				"format": "",
-				"address": "",
-				"password": "",
-				"key": ""
-			}
-		},
-		"webhook": {
-			"1": {
-				"enable": false,
-				"endpoint": ""
-			}
-		}
-	    },
-	    "logger": {
-		"console": {
-		    "enabled": true
-		},
-		"http": {
-		    "1": {
-			"enabled": false,
-			"endpoint": "http://user:example@localhost:9001/api/endpoint"
-		    }
-		}
-	    }
-
-	}`)
+  "version": "31",
+  "credential": {
+    "accessKey": "minio",
+    "secretKey": "minio123"
+  },
+  "region": "us-east-1",
+  "worm": "off",
+  "storageclass": {
+    "standard": "",
+    "rrs": ""
+  },
+  "cache": {
+    "drives": [],
+    "expiry": 90,
+    "maxuse": 80,
+    "exclude": []
+  },
+  "kms": {
+    "vault": {
+      "endpoint": "",
+      "auth": {
+        "type": "",
+        "approle": {
+          "id": "",
+          "secret": ""
+        }
+      },
+      "key-id": {
+        "name": "",
+        "version": 0
+      }
+    }
+  },
+  "notify": {
+    "amqp": {
+      "1": {
+        "enable": false,
+        "url": "",
+        "exchange": "",
+        "routingKey": "",
+        "exchangeType": "",
+        "deliveryMode": 0,
+        "mandatory": false,
+        "immediate": false,
+        "durable": false,
+        "internal": false,
+        "noWait": false,
+        "autoDeleted": false
+      }
+    },
+    "elasticsearch": {
+      "1": {
+        "enable": false,
+        "format": "namespace",
+        "url": "",
+        "index": ""
+      }
+    },
+    "kafka": {
+      "1": {
+        "enable": false,
+        "brokers": null,
+        "topic": "",
+        "tls": {
+          "enable": false,
+          "skipVerify": false,
+          "clientAuth": 0
+        },
+        "sasl": {
+          "enable": false,
+          "username": "",
+          "password": ""
+        }
+      }
+    },
+    "mqtt": {
+      "1": {
+        "enable": false,
+        "broker": "",
+        "topic": "",
+        "qos": 0,
+        "clientId": "",
+        "username": "",
+        "password": "",
+        "reconnectInterval": 0,
+        "keepAliveInterval": 0
+      }
+    },
+    "mysql": {
+      "1": {
+        "enable": false,
+        "format": "namespace",
+        "dsnString": "",
+        "table": "",
+        "host": "",
+        "port": "",
+        "user": "",
+        "password": "",
+        "database": ""
+      }
+    },
+    "nats": {
+      "1": {
+        "enable": false,
+        "address": "",
+        "subject": "",
+        "username": "",
+        "password": "",
+        "token": "",
+        "secure": false,
+        "pingInterval": 0,
+        "streaming": {
+          "enable": false,
+          "clusterID": "",
+          "clientID": "",
+          "async": false,
+          "maxPubAcksInflight": 0
+        }
+      }
+    },
+    "postgresql": {
+      "1": {
+        "enable": false,
+        "format": "namespace",
+        "connectionString": "",
+        "table": "",
+        "host": "",
+        "port": "",
+        "user": "",
+        "password": "",
+        "database": ""
+      }
+    },
+    "redis": {
+      "1": {
+        "enable": false,
+        "format": "namespace",
+        "address": "",
+        "password": "",
+        "key": ""
+      }
+    },
+    "webhook": {
+      "1": {
+        "enable": false,
+        "endpoint": ""
+      }
+    }
+  },
+  "logger": {
+    "console": {
+      "enabled": true
+    },
+    "http": {
+      "1": {
+        "enabled": false,
+        "endpoint": "https://username:password@example.com/api"
+      }
+    }
+  },
+  "compress": {
+    "enabled": false,
+    "extensions":[".txt",".log",".csv",".json"],
+    "mime-types":["text/csv","text/plain","application/json"]
+  },
+  "openid": {
+    "jwks": {
+      "url": ""
+    }
+  },
+  "policy": {
+    "opa": {
+      "url": "",
+      "authToken": ""
+    }
+  }
+}
+`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
@@ -480,6 +497,8 @@ func getServiceCmdRequest(cmd cmdType, cred auth.Credentials, body []byte) (*htt
 
 	// Set body
 	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
+
 	// Set sha-sum header
 	req.Header.Set("X-Amz-Content-Sha256", getSHA256Hash(body))
 
@@ -506,10 +525,16 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
+	var wg sync.WaitGroup
+
 	// Setting up a go routine to simulate ServerRouter's
 	// handleServiceSignals for stop and restart commands.
 	if cmd == restartCmd {
-		go testServiceSignalReceiver(cmd, t)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testServiceSignalReceiver(cmd, t)
+		}()
 	}
 	credentials := globalServerConfig.GetCredential()
 
@@ -545,6 +570,9 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
 			http.StatusOK, rec.Code, string(resp))
 	}
+
+	// Wait until testServiceSignalReceiver() called in a goroutine quits.
+	wg.Wait()
 }
 
 // Test for service status management REST API.
@@ -601,7 +629,7 @@ func TestServiceSetCreds(t *testing.T) {
 			t.Fatalf("JSONify err: %v", err)
 		}
 
-		ebody, err := madmin.EncryptServerConfigData(credentials.SecretKey, body)
+		ebody, err := madmin.EncryptData(credentials.SecretKey, body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -699,16 +727,12 @@ func TestSetConfigHandler(t *testing.T) {
 	globalMinioAddr = "127.0.0.1:9000"
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
-	// SetConfigHandler restarts minio setup - need to start a
-	// signal receiver to receive on globalServiceSignalCh.
-	go testServiceSignalReceiver(restartCmd, t)
-
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
 	password := globalServerConfig.GetCredential().SecretKey
-	econfigJSON, err := madmin.EncryptServerConfigData(password, configJSON)
+	econfigJSON, err := madmin.EncryptData(password, configJSON)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +752,7 @@ func TestSetConfigHandler(t *testing.T) {
 	// Check that a very large config file returns an error.
 	{
 		// Make a large enough config string
-		invalidCfg := []byte(strings.Repeat("A", maxConfigJSONSize+1))
+		invalidCfg := []byte(strings.Repeat("A", maxEConfigJSONSize+1))
 		req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
 			int64(len(invalidCfg)), bytes.NewReader(invalidCfg))
 		if err != nil {
@@ -758,7 +782,7 @@ func TestSetConfigHandler(t *testing.T) {
 		adminTestBed.router.ServeHTTP(rec, req)
 		respBody := string(rec.Body.Bytes())
 		if rec.Code != http.StatusBadRequest ||
-			!strings.Contains(respBody, "JSON configuration provided has objects with duplicate keys") {
+			!strings.Contains(respBody, "JSON configuration provided is of incorrect format") {
 			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
 		}
 	}

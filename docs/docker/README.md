@@ -74,7 +74,7 @@ docker service create --name="minio-service" --secret="access_key" --secret="sec
 Read more about `docker service` [here](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/)
 
 #### Minio Custom Access and Secret Key files
-To use other secret names follow the instuctions above and replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`). Run your service with
+To use other secret names follow the instructions above and replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`). Run your service with
 ```
 docker service create --name="minio-service" \
   --secret="my_access_key" \

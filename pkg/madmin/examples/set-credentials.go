@@ -36,7 +36,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
+	err = madmClnt.SetAdminCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
 	if err != nil {
 		log.Fatalln(err)
 	}

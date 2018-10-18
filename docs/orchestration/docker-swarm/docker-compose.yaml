@@ -2,7 +2,8 @@ version: '3'
 
 services:
   minio1:
-    image: minio/minio:RELEASE.2018-09-12T18-49-56Z
+    image: minio/minio:RELEASE.2018-10-18T00-28-58Z
+    hostname: minio1
     volumes:
       - minio1-data:/export
     ports:
@@ -17,10 +18,14 @@ services:
         delay: 10s
         max_attempts: 10
         window: 60s
+      placement:
+        constraints:
+          - node.labels.minio1==true
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio2:
-    image: minio/minio:RELEASE.2018-09-12T18-49-56Z
+    image: minio/minio:RELEASE.2018-10-18T00-28-58Z
+    hostname: minio2
     volumes:
       - minio2-data:/export
     ports:
@@ -35,10 +40,14 @@ services:
         delay: 10s
         max_attempts: 10
         window: 60s
+      placement:
+        constraints:
+          - node.labels.minio2==true
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio3:
-    image: minio/minio:RELEASE.2018-09-12T18-49-56Z
+    image: minio/minio:RELEASE.2018-10-18T00-28-58Z
+    hostname: minio3
     volumes:
       - minio3-data:/export
     ports:
@@ -53,10 +62,14 @@ services:
         delay: 10s
         max_attempts: 10
         window: 60s
+      placement:
+        constraints:
+          - node.labels.minio3==true
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio4:
-    image: minio/minio:RELEASE.2018-09-12T18-49-56Z
+    image: minio/minio:RELEASE.2018-10-18T00-28-58Z
+    hostname: minio4
     volumes:
       - minio4-data:/export
     ports:
@@ -71,6 +84,9 @@ services:
         delay: 10s
         max_attempts: 10
         window: 60s
+      placement:
+        constraints:
+          - node.labels.minio4==true
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
 volumes:

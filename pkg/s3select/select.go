@@ -50,7 +50,6 @@ func (reader *Input) runSelectParser(selectExpression string, myRow chan *Row) {
 // records, and the where clause.
 func (reader *Input) ParseSelect(sqlInput string) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
 	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
-
 	stmt, err := sqlparser.Parse(sqlInput)
 	var whereClause interface{}
 	var alias string
@@ -284,11 +283,7 @@ func (reader *Input) processSelectReq(reqColNames []string, alias string, whereC
 
 // printAsterix helps to print out the entire row if an asterix is used.
 func (reader *Input) printAsterix(record []string) string {
-	myRow := record[0]
-	for i := 1; i < len(record); i++ {
-		myRow = myRow + reader.options.OutputFieldDelimiter + record[i]
-	}
-	return myRow
+	return strings.Join(record, reader.options.OutputFieldDelimiter)
 }
 
 // processColumnNames is a function which allows for cleaning of column names.
@@ -304,7 +299,7 @@ func (reader *Input) processColumnNames(reqColNames []string, alias string) erro
 // processColNameIndex is the function which creates the row for an index based
 // query.
 func (reader *Input) processColNameIndex(record []string, reqColNames []string, columns []string) (string, error) {
-	myRow := ""
+	row := make([]string, len(reqColNames))
 	for i := 0; i < len(reqColNames); i++ {
 		// COALESCE AND NULLIF do not support index based access.
 		if reqColNames[0] == "0" {
@@ -312,54 +307,48 @@ func (reader *Input) processColNameIndex(record []string, reqColNames []string, 
 		}
 		// Subtract 1 because AWS Indexing is not 0 based, it starts at 1.
 		mytempindex, err := strconv.Atoi(reqColNames[i])
+		if err != nil {
+			return "", ErrMissingHeaders
+		}
 		mytempindex = mytempindex - 1
 		if mytempindex > len(columns) {
 			return "", ErrInvalidColumnIndex
 		}
-		myRow = writeRow(myRow, record[mytempindex], reader.options.OutputFieldDelimiter, len(reqColNames))
-		if err != nil {
-			return "", ErrMissingHeaders
-		}
+		row[i] = record[mytempindex]
 	}
-	if len(myRow) > 1000000 {
+	rowStr := strings.Join(row, reader.options.OutputFieldDelimiter)
+	if len(rowStr) > 1000000 {
 		return "", ErrOverMaxRecordSize
 	}
-	if strings.Count(myRow, reader.options.OutputFieldDelimiter) != len(reqColNames)-1 {
-		myRow = qualityCheck(myRow, len(reqColNames)-1-strings.Count(myRow, reader.options.OutputFieldDelimiter), reader.options.OutputFieldDelimiter)
-	}
-	return myRow, nil
+	return rowStr, nil
 }
 
 // processColNameLiteral is the function which creates the row for an name based
 // query.
 func (reader *Input) processColNameLiteral(record []string, reqColNames []string, columns []string, columnsMap map[string]int, myFunc *SelectFuncs) (string, error) {
-	myRow := ""
+	row := make([]string, len(reqColNames))
 	for i := 0; i < len(reqColNames); i++ {
 		// this is the case to deal with COALESCE.
 		if reqColNames[i] == "" && isValidFunc(myFunc.index, i) {
-			myVal := evaluateFuncExpr(myFunc.funcExpr[i], "", record, columnsMap)
-			myRow = writeRow(myRow, myVal, reader.options.OutputFieldDelimiter, len(reqColNames))
+			row[i] = evaluateFuncExpr(myFunc.funcExpr[i], "", record, columnsMap)
 			continue
 		}
 		myTempIndex, notFound := columnsMap[trimQuotes(reqColNames[i])]
 		if !notFound {
 			return "", ErrMissingHeaders
 		}
-		myRow = writeRow(myRow, record[myTempIndex], reader.options.OutputFieldDelimiter, len(reqColNames))
+		row[i] = record[myTempIndex]
 	}
-	if len(myRow) > 1000000 {
+	rowStr := strings.Join(row, reader.options.OutputFieldDelimiter)
+	if len(rowStr) > 1000000 {
 		return "", ErrOverMaxRecordSize
 	}
-	if strings.Count(myRow, reader.options.OutputFieldDelimiter) != len(reqColNames)-1 {
-		myRow = qualityCheck(myRow, len(reqColNames)-1-strings.Count(myRow, reader.options.OutputFieldDelimiter), reader.options.OutputFieldDelimiter)
-	}
-	return myRow, nil
-
+	return rowStr, nil
 }
 
-// aggregationFunctions is a function which performs the actual aggregation
-// methods on the given row, it uses an array defined the the main parsing
-// function to keep track of values.
+// aggregationFunctions performs the actual aggregation methods on the
+// given row, it uses an array defined for the main parsing function
+// to keep track of values.
 func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, columnsMap map[string]int, storeReqCols []string, storeFunctions []string, record []string) error {
 	for i := 0; i < len(storeFunctions); i++ {
 		if storeFunctions[i] == "" {
@@ -370,8 +359,9 @@ func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, colu
 			// If column names are provided as an index it'll use this if statement instead of the else/
 			var convAggFloat float64
 			if representsInt(storeReqCols[i]) {
-				myIndex, _ := strconv.Atoi(storeReqCols[i])
-				convAggFloat, _ = strconv.ParseFloat(record[myIndex], 64)
+				colIndex, _ := strconv.Atoi(storeReqCols[i])
+				// colIndex is 1-based
+				convAggFloat, _ = strconv.ParseFloat(record[colIndex-1], 64)
 
 			} else {
 				// case that the columns are in the form of named columns rather than indices.

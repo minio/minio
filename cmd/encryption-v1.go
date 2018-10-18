@@ -37,7 +37,6 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errInsecureSSERequest   = errors.New("SSE-C requests require TLS connections")
 	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
 	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
@@ -80,16 +79,31 @@ func hasServerSideEncryptionHeader(header http.Header) bool {
 	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
 }
 
+// isEncryptedMultipart returns true if the current object is
+// uploaded by the user using multipart mechanism:
+// initiate new multipart, upload part, complete upload
+func isEncryptedMultipart(objInfo ObjectInfo) bool {
+	if len(objInfo.Parts) == 0 {
+		return false
+	}
+	if !crypto.IsMultiPart(objInfo.UserDefined) {
+		return false
+	}
+	for _, part := range objInfo.Parts {
+		_, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return false
+		}
+	}
+	// Further check if this object is uploaded using multipart mechanism
+	// by the user and it is not about XL internally splitting the
+	// object into parts in PutObject()
+	return !(objInfo.backendType == BackendErasure && len(objInfo.ETag) == 32)
+}
+
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
 func ParseSSECopyCustomerRequest(h http.Header, metadata map[string]string) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
 	if crypto.S3.IsEncrypted(metadata) && crypto.SSECopy.IsRequested(h) {
 		return nil, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -106,13 +120,6 @@ func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
 // ParseSSECustomerHeader parses the SSE-C header fields and returns
 // the client provided key on success.
 func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
 	if crypto.S3.IsRequested(header) && crypto.SSEC.IsRequested(header) {
 		return key, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -123,8 +130,6 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 
 // This function rotates old to new key.
 func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map[string]string) error {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	switch {
 	default:
 		return errObjectTampered
@@ -155,8 +160,6 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 }
 
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) ([]byte, error) {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	var sealedKey crypto.SealedKey
 	if sseS3 {
 		if globalKMS == nil {
@@ -245,7 +248,6 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, 0, metadata)
 }
 
@@ -325,7 +327,6 @@ func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, 
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -342,7 +343,6 @@ func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string,
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptReader(client, key, bucket, object, 0, metadata)
 }
 
@@ -368,7 +368,7 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 // GetEncryptedOffsetLength - returns encrypted offset and length
 // along with sequence number
 func GetEncryptedOffsetLength(startOffset, length int64, objInfo ObjectInfo) (seqNumber uint32, encStartOffset, encLength int64) {
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !isEncryptedMultipart(objInfo) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
 		return
 	}
@@ -385,7 +385,7 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 	bucket, object := oi.Bucket, oi.Name
 
 	// Single part case
-	if len(oi.Parts) == 0 || !crypto.IsMultiPart(oi.UserDefined) {
+	if !isEncryptedMultipart(oi) {
 		var reader io.Reader
 		var err error
 		if copySource {
@@ -444,7 +444,6 @@ func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket,
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -513,13 +512,6 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
-
-	// make sure we do not save the key by accident
-	if d.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
 
 	// Limit the reader, so the decryptor doesnt receive bytes
 	// from the next part (different DARE stream)
@@ -636,13 +628,6 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	// make sure we do not save the key by accident
-	if w.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
-
 	// make sure to provide a NopCloser such that a Close
 	// on sio.decryptWriter doesn't close the underlying writer's
 	// close which perhaps can close the stream prematurely.
@@ -730,7 +715,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 	var seqNumber uint32
 	var encStartOffset, encLength int64
 
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !isEncryptedMultipart(objInfo) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
 
 		var writer io.WriteCloser
@@ -892,7 +877,7 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !crypto.IsEncrypted(o.UserDefined) {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	if len(o.Parts) == 0 || !crypto.IsMultiPart(o.UserDefined) {
+	if !isEncryptedMultipart(*o) {
 		size, err := sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered // assign correct error type
@@ -940,7 +925,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	}
 	sizes := []int64{int64(partSize)}
 	decObjSize = sizes[0]
-	if crypto.IsMultiPart(o.UserDefined) {
+	if isEncryptedMultipart(*o) {
 		sizes = make([]int64, len(o.Parts))
 		decObjSize = 0
 		for i, part := range o.Parts {

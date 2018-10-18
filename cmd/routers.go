@@ -36,7 +36,7 @@ func newCacheObjectsFn() CacheObjectLayer {
 // Composed function registering routers for only distributed XL setup.
 func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	// Register storage rpc router only if its a distributed setup.
-	registerStorageRPCRouters(router, endpoints)
+	registerStorageRESTHandlers(router, endpoints)
 
 	// Register distributed namespace lock.
 	registerDistNSLockRouter(router)
@@ -82,6 +82,8 @@ var globalHandlers = []HandlerFunc{
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
 	setAuthHandler,
+	// Enforce rules specific for TLS requests
+	setSSETLSHandler,
 	// filters HTTP headers which are treated as metadata and are reserved
 	// for internal use only.
 	filterReservedMetadata,
@@ -98,6 +100,9 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	if globalIsDistXL {
 		registerDistXLRouters(router, endpoints)
 	}
+
+	// Add STS router only enabled if etcd is configured.
+	registerSTSRouter(router)
 
 	// Add Admin RPC router
 	registerAdminRPCRouter(router)

@@ -187,11 +187,15 @@ const (
 	// new error codes here.
 
 	ErrMalformedJSON
+	ErrAdminNoSuchUser
+	ErrAdminNoSuchPolicy
+	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
+	ErrAdminConfigDuplicateKeys
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -291,6 +295,8 @@ const (
 	ErrInvalidColumnIndex
 	ErrMissingHeaders
 	ErrAdminConfigNotificationTargetsFailed
+	ErrAdminProfilerNotEnabled
+	ErrInvalidDecompressedSize
 )
 
 // error code to APIError structure, these fields carry respective
@@ -861,6 +867,21 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoSuchUser: {
+		Code:           "XMinioAdminNoSuchUser",
+		Description:    "The specified user does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminNoSuchPolicy: {
+		Code:           "XMinioAdminNoSuchPolicy",
+		Description:    "The canned policy does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminInvalidArgument: {
+		Code:           "XMinioAdminInvalidArgument",
+		Description:    "Invalid arguments specified.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
 		Description:    "The access key is invalid.",
@@ -879,17 +900,27 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrAdminConfigTooLarge: {
 		Code: "XMinioAdminConfigTooLarge",
 		Description: fmt.Sprintf("Configuration data provided exceeds the allowed maximum of %d bytes",
-			maxConfigJSONSize),
+			maxEConfigJSONSize),
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigBadJSON: {
 		Code:           "XMinioAdminConfigBadJSON",
+		Description:    "JSON configuration provided is of incorrect format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigDuplicateKeys: {
+		Code:           "XMinioAdminConfigDuplicateKeys",
 		Description:    "JSON configuration provided has objects with duplicate keys",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigNotificationTargetsFailed: {
 		Code:           "XMinioAdminNotificationTargetsTestFailed",
 		Description:    "Configuration update failed due an unsuccessful attempt to connect to one or more notification servers",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminProfilerNotEnabled: {
+		Code:           "XMinioAdminProfilerNotEnabled",
+		Description:    "Unable to perform the requested operation because profiling is not enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminCredentialsMismatch: {
@@ -1397,6 +1428,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidDecompressedSize: {
+		Code:           "XMinioInvalidDecompressedSize",
+		Description:    "The data provided is unfit for decompression",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -1410,8 +1446,16 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 	// Verify if the underlying error is signature mismatch.
 	switch err {
+	case errInvalidArgument:
+		apiErr = ErrAdminInvalidArgument
+	case errNoSuchUser:
+		apiErr = ErrAdminNoSuchUser
+	case errNoSuchPolicy:
+		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
+	case errInvalidRange:
+		apiErr = ErrInvalidRange
 	case errDataTooLarge:
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
@@ -1421,10 +1465,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
 	// SSE errors
+	case errInvalidEncryptionParameters:
+		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
-	case errInsecureSSERequest:
-		apiErr = ErrInsecureSSECustomerRequest
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
 	case crypto.ErrInvalidCustomerKey:
@@ -1614,6 +1658,12 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case s3select.ErrMissingHeaders:
 		apiErr = ErrMissingHeaders
 
+	}
+
+	// Compression errors
+	switch err {
+	case errInvalidDecompressedSize:
+		apiErr = ErrInvalidDecompressedSize
 	}
 
 	if apiErr != ErrNone {

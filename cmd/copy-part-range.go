@@ -43,28 +43,26 @@ func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL) {
 // http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPartCopy.html
 // for full details. This function treats an empty rangeString as
 // referring to the whole resource.
-//
-// In addition to parsing the range string, it also validates the
-// specified range against the given object size, so that Copy API
-// specific error can be returned.
-func parseCopyPartRange(rangeString string, resourceSize int64) (offset, length int64, err error) {
-	var hrange *HTTPRangeSpec
-	if rangeString != "" {
-		hrange, err = parseRequestRangeSpec(rangeString)
-		if err != nil {
-			return -1, -1, err
-		}
-
-		// Require that both start and end are specified.
-		if hrange.IsSuffixLength || hrange.Start == -1 || hrange.End == -1 {
-			return -1, -1, errInvalidRange
-		}
-
-		// Validate specified range against object size.
-		if hrange.Start >= resourceSize || hrange.End >= resourceSize {
-			return -1, -1, errInvalidRangeSource
-		}
+func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
+	hrange, err = parseRequestRangeSpec(rangeString)
+	if err != nil {
+		return nil, err
 	}
+	if hrange.IsSuffixLength || hrange.Start < 0 || hrange.End < 0 {
+		return nil, errInvalidRange
+	}
+	return hrange, nil
+}
 
-	return hrange.GetOffsetLength(resourceSize)
+// checkCopyPartRangeWithSize adds more check to the range string in case of
+// copy object part. This API requires having specific start and end  range values
+// e.g. 'bytes=3-10'. Other use cases will be rejected.
+func checkCopyPartRangeWithSize(rs *HTTPRangeSpec, resourceSize int64) (err error) {
+	if rs == nil {
+		return nil
+	}
+	if rs.IsSuffixLength || rs.Start >= resourceSize || rs.End >= resourceSize {
+		return errInvalidRangeSource
+	}
+	return nil
 }
