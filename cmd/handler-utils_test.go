@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
@@ -49,11 +50,9 @@ func TestIsValidLocationContraint(t *testing.T) {
 	}
 
 	// generates the input request with XML bucket configuration set to the request body.
-	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
-		createBucketConfig := createBucketLocationConfiguration{}
-		createBucketConfig.Location = location
+	createExpectedRequest := func(req *http.Request, bucketConfig interface{}) (*http.Request, error) {
 		var createBucketConfigBytes []byte
-		createBucketConfigBytes, e := xml.Marshal(createBucketConfig)
+		createBucketConfigBytes, e := xml.Marshal(bucketConfig)
 		if e != nil {
 			return nil, e
 		}
@@ -64,18 +63,37 @@ func TestIsValidLocationContraint(t *testing.T) {
 	}
 
 	testCases := []struct {
-		locationForInputRequest string
-		serverConfigRegion      string
-		expectedCode            APIErrorCode
+		bucketConfig       interface{}
+		serverConfigRegion string
+		expectedCode       APIErrorCode
 	}{
 		// Test case - 1.
-		{globalMinioDefaultRegion, globalMinioDefaultRegion, ErrNone},
+		{createBucketLocationConfiguration{Location: globalMinioDefaultRegion}, globalMinioDefaultRegion, ErrNone},
 		// Test case - 2.
 		// In case of empty request body ErrNone is returned.
-		{"", globalMinioDefaultRegion, ErrNone},
+		{createBucketLocationConfiguration{Location: ""}, globalMinioDefaultRegion, ErrNone},
+		// Test case - 3.
+		// In case of a request body that is another valid object ErrMalformedXML is returned.
+		{ObjectIdentifier{}, globalMinioDefaultRegion, ErrMalformedXML},
+		// Test case - 3.
+		// In case of a request body that is another valid object ErrNone is returned.
+		{"{\"test\" = \"text\"}", globalMinioDefaultRegion, ErrMalformedXML},
 	}
 	for i, testCase := range testCases {
-		inputRequest, e := createExpectedRequest(&http.Request{}, testCase.locationForInputRequest)
+		var (
+			e            error
+			inputRequest *http.Request
+			reqBytes     []byte
+		)
+		if reflect.TypeOf(testCase.bucketConfig).Kind() == reflect.String {
+			inputRequest = &http.Request{}
+			reqBytes, e = json.Marshal(testCase.bucketConfig)
+			reader := bytes.NewReader(reqBytes)
+			inputRequest.Body = ioutil.NopCloser(reader)
+			inputRequest.ContentLength = int64(len(reqBytes))
+		} else {
+			inputRequest, e = createExpectedRequest(&http.Request{}, testCase.bucketConfig)
+		}
 		if e != nil {
 			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
 		}
