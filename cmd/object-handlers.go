@@ -890,13 +890,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if isSourceEncrypted {
 				// Remove all source encrypted related metadata to
 				// avoid copying them in target object.
-				delete(srcInfo.UserDefined, crypto.SSEIV)
-				delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
-				delete(srcInfo.UserDefined, crypto.SSECSealedKey)
-				delete(srcInfo.UserDefined, crypto.SSEMultipart)
-				delete(srcInfo.UserDefined, crypto.S3SealedKey)
-				delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
-				delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
+				crypto.RemoveInternalEntries(srcInfo.UserDefined)
 			}
 
 			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
