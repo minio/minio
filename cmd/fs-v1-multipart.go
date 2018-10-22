@@ -713,6 +713,11 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	}
 
 	fs.appendFileMapMu.Lock()
+	// Remove file in tmp folder
+	file := fs.appendFileMap[uploadID]
+	if file != nil {
+		fsRemoveFile(ctx, file.filePath)
+	}
 	delete(fs.appendFileMap, uploadID)
 	fs.appendFileMapMu.Unlock()
 
@@ -725,9 +730,13 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		}
 		return toObjectErr(err, bucket, object)
 	}
+
 	// Ignore the error returned as Windows fails to remove directory if a file in it
 	// is Open()ed by the backgroundAppend()
 	fsRemoveAll(ctx, uploadIDDir)
+
+	// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
+	fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
 
 	return nil
 }
