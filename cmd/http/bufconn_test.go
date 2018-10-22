@@ -46,7 +46,7 @@ func TestBuffConnReadTimeout(t *testing.T) {
 
 		tcpConn, terr := tcpListener.AcceptTCP()
 		if terr != nil {
-			t.Fatalf("failed to accept new connection. %v", terr)
+			t.Errorf("failed to accept new connection. %v", terr)
 		}
 		bufconn := newBufConn(tcpConn, 1*time.Second, 1*time.Second)
 		defer bufconn.Close()
@@ -55,11 +55,11 @@ func TestBuffConnReadTimeout(t *testing.T) {
 		var b = make([]byte, 12)
 		_, terr = bufconn.Read(b)
 		if terr != nil {
-			t.Fatalf("failed to read from client. %v", terr)
+			t.Errorf("failed to read from client. %v", terr)
 		}
 		received := string(b)
 		if received != "message one\n" {
-			t.Fatalf(`server: expected: "message one\n", got: %v`, received)
+			t.Errorf(`server: expected: "message one\n", got: %v`, received)
 		}
 
 		// Wait for more than read timeout to simulate processing.
@@ -67,17 +67,17 @@ func TestBuffConnReadTimeout(t *testing.T) {
 
 		_, terr = bufconn.Read(b)
 		if terr != nil {
-			t.Fatalf("failed to read from client. %v", terr)
+			t.Errorf("failed to read from client. %v", terr)
 		}
 		received = string(b)
 		if received != "message two\n" {
-			t.Fatalf(`server: expected: "message two\n", got: %v`, received)
+			t.Errorf(`server: expected: "message two\n", got: %v`, received)
 		}
 
 		// Send a response.
 		_, terr = io.WriteString(bufconn, "messages received\n")
 		if terr != nil {
-			t.Fatalf("failed to write to client. %v", terr)
+			t.Errorf("failed to write to client. %v", terr)
 		}
 
 		// Removes all deadlines if any.
