@@ -1448,11 +1448,17 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
 
-	var actualPartSize int64
-	actualPartSize = srcInfo.Size
+	actualPartSize := srcInfo.Size
+	if crypto.IsEncrypted(srcInfo.UserDefined) {
+		actualPartSize, err = srcInfo.DecryptedSize()
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
+	}
 
 	// Special care for CopyObjectPart
-	if partRangeErr := checkCopyPartRangeWithSize(rs, srcInfo.Size); partRangeErr != nil {
+	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(w, partRangeErr, r.URL)
 		return
 	}
@@ -1463,21 +1469,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Get the object offset & length
-	startOffset, length, _ := rs.GetOffsetLength(srcInfo.Size)
-
+	startOffset, length, _ := rs.GetOffsetLength(actualPartSize)
 	if rangeHeader != "" {
 		actualPartSize = length
-	}
-
-	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsEncrypted(srcInfo.UserDefined) {
-			decryptedSize, decryptErr := srcInfo.DecryptedSize()
-			if decryptErr != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
-			}
-			startOffset, length, _ = rs.GetOffsetLength(decryptedSize)
-		}
 	}
 
 	/// maximum copy size for multipart objects in a single operation
