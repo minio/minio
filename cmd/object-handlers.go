@@ -808,9 +808,21 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !srcInfo.IsCompressed() {
+		// Encryption parameters not applicable for this object.
+		if !crypto.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header) {
+			writeErrorResponse(w, toAPIErrorCode(errInvalidEncryptionParameters), r.URL)
+			return
+		}
+
+		// Encryption parameters not present for this object.
+		if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) {
+			writeErrorResponse(w, ErrInvalidSSECustomerAlgorithm, r.URL)
+			return
+		}
+
 		var oldKey, newKey []byte
 		sseCopyS3 := crypto.S3.IsEncrypted(srcInfo.UserDefined)
-		sseCopyC := crypto.SSECopy.IsRequested(r.Header)
+		sseCopyC := crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header)
 		sseC := crypto.SSEC.IsRequested(r.Header)
 		sseS3 := crypto.S3.IsRequested(r.Header)
 
@@ -878,13 +890,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if isSourceEncrypted {
 				// Remove all source encrypted related metadata to
 				// avoid copying them in target object.
-				delete(srcInfo.UserDefined, crypto.SSEIV)
-				delete(srcInfo.UserDefined, crypto.SSESealAlgorithm)
-				delete(srcInfo.UserDefined, crypto.SSECSealedKey)
-				delete(srcInfo.UserDefined, crypto.SSEMultipart)
-				delete(srcInfo.UserDefined, crypto.S3SealedKey)
-				delete(srcInfo.UserDefined, crypto.S3KMSSealedKey)
-				delete(srcInfo.UserDefined, crypto.S3KMSKeyID)
+				crypto.RemoveInternalEntries(srcInfo.UserDefined)
 			}
 
 			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
