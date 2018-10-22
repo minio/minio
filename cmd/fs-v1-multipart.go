@@ -29,10 +29,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
-
-	"github.com/minio/minio/pkg/hash"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -259,7 +258,7 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 		return pi, toObjectErr(err)
 	}
 
-	partInfo, err := fs.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
+	partInfo, err := fs.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, NewPutObjectReader(srcInfo.Reader), dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -271,7 +270,8 @@ func (fs *FSObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
+func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjectReader, opts ObjectOptions) (pi PartInfo, e error) {
+	data := r.DataReader
 	if err := checkPutObjectPartArgs(ctx, bucket, object, fs); err != nil {
 		return pi, toObjectErr(err, bucket)
 	}
@@ -321,12 +321,32 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	// PutObjectPart succeeds then there would be nothing to
 	// delete in which case we just ignore the error.
 	defer fsRemoveFile(ctx, tmpPartPath)
+	var etag string
+	var etagPath string
 
-	etag := hex.EncodeToString(data.MD5Current())
+	if opts.ServerSideEncryption != nil {
+		if encMD5Sum, actualMD5Sum, err := r.OrigReader.EncryptedMD5Sum(); err == nil {
+			etag = encMD5Sum
+			etagPath = actualMD5Sum
+		}
+		// this is required for ssec because ListObjectParts does not have
+		// object encryption key to get encrypted etag from actual ETag
+		if opts.ServerSideEncryption.Type() == encrypt.SSEC {
+			etagPath = etag[len(etag)-32:]
+		}
+	} else {
+		etag = hex.EncodeToString(r.DataReader.MD5Current())
+	}
+
 	if etag == "" {
 		etag = GenETag()
 	}
-	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
+
+	if etagPath == "" {
+		etagPath = etag
+	}
+
+	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etagPath, data.ActualSize()))
 
 	if err = fsRenameFile(ctx, tmpPartPath, partPath); err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
@@ -478,7 +498,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
+func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart, opts ObjectOptions) (oi ObjectInfo, e error) {
 
 	var actualSize int64
 
@@ -561,9 +581,13 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 			partSize = actualSize
 		}
 
+		etag := part.ETag
+		if opts.GetEncryptedETagFn != nil {
+			etag = opts.GetEncryptedETagFn(etag)
+		}
 		fsMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			ETag:       part.ETag,
+			ETag:       etag,
 			Size:       fi.Size(),
 			ActualSize: actualSize,
 		}

@@ -189,7 +189,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 
 	// Object for test case 1 - No StorageClass defined, no MetaData in PutObject
 	object1 := "object1"
-	_, err = obj.PutObject(context.Background(), bucket, object1, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object1, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -200,7 +200,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object2 := "object2"
 	metadata2 := make(map[string]string)
 	metadata2["x-amz-storage-class"] = reducedRedundancyStorageClass
-	_, err = obj.PutObject(context.Background(), bucket, object2, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata2, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object2, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata2, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -211,7 +211,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object3 := "object3"
 	metadata3 := make(map[string]string)
 	metadata3["x-amz-storage-class"] = standardStorageClass
-	_, err = obj.PutObject(context.Background(), bucket, object3, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata3, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object3, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata3, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -227,7 +227,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		Scheme: "EC",
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object4, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata4, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object4, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata4, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -245,7 +245,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		Scheme: "EC",
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object5, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata5, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object5, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata5, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -263,7 +263,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		Scheme: "EC",
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object6, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata6, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object6, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata6, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -281,7 +281,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		Scheme: "EC",
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object7, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata7, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object7, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), metadata7, opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}

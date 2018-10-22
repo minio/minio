@@ -35,7 +35,6 @@ import (
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/hash"
 )
 
 // stor is a namespace within manta where you store any documents that are deemed as private
@@ -608,7 +607,8 @@ func (d dummySeeker) Seek(offset int64, whence int) (int64, error) {
 // CreateBlockBlobFromReader.
 //
 // https://apidocs.joyent.com/manta/api.html#PutObject
-func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (t *tritonObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.DataReader
 	if err = t.client.Objects().Put(ctx, &storage.PutObjectInput{
 		ContentLength: uint64(data.Size()),
 		ObjectPath:    path.Join(mantaRoot, bucket, object),
