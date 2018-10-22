@@ -136,12 +136,12 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 		2 // CRLF
 }
 
-func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *hash.Reader {
+func mustGetPutObjectReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjectReader {
 	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return hr
+	return NewPutObjectReader(hr)
 }
 
 // calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)

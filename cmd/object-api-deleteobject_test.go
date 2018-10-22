@@ -92,7 +92,7 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 		for _, object := range testCase.objectToUploads {
 			md5Bytes := md5.Sum([]byte(object.content))
-			_, err = obj.PutObject(context.Background(), testCase.bucketName, object.name, mustGetHashReader(t, bytes.NewBufferString(object.content),
+			_, err = obj.PutObject(context.Background(), testCase.bucketName, object.name, mustGetPutObjectReader(t, bytes.NewBufferString(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), nil, ObjectOptions{})
 			if err != nil {
 				t.Fatalf("%s : %s", instanceType, err.Error())

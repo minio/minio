@@ -655,7 +655,9 @@ func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string
 }
 
 // PutObject creates a new object with the incoming data.
-func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.DataReader
+
 	return ossPutObject(ctx, l.Client, bucket, object, data, metadata)
 }
 
@@ -773,7 +775,8 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 }
 
 // PutObjectPart puts a part of object in bucket.
-func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjectReader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+	data := r.DataReader
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -914,7 +917,7 @@ func (l *ossObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object.
-func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, err error) {
+func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, err error) {
 	client := l.Client
 	bkt, err := client.Bucket(bucket)
 	if err != nil {

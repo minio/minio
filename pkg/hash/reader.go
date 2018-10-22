@@ -25,10 +25,12 @@ import (
 	"hash"
 	"io"
 
+	"github.com/minio/minio/cmd/crypto"
 	sha256 "github.com/minio/sha256-simd"
 )
 
 var errNestedReader = errors.New("Nesting of Reader detected, not allowed")
+var errEmptyEncryptionKey = errors.New("Encryption key not set")
 
 // Reader writes what it reads from an io.Reader to an MD5 and SHA256 hash.Hash.
 // Reader verifies that the content of the io.Reader matches the expected checksums.
@@ -39,6 +41,7 @@ type Reader struct {
 
 	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
 	md5Hash, sha256Hash hash.Hash
+	encryptionKey       crypto.ObjectKey
 }
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
@@ -151,4 +154,19 @@ func (r *Reader) Verify() error {
 		}
 	}
 	return nil
+}
+
+// SetEncryptionKey sets an optional encryption key
+func (r *Reader) SetEncryptionKey(key []byte) {
+	copy(r.encryptionKey[:], key)
+}
+
+// EncryptedMD5Sum returns encrypted MD5 sum if an encryption key is set, current md5 and error.
+func (r *Reader) EncryptedMD5Sum() (string, string, error) {
+	var emptyKey [32]byte
+	if bytes.Equal(r.encryptionKey[:], emptyKey[:]) {
+		return "", "", errEmptyEncryptionKey
+	}
+	md5curr := r.MD5Current()
+	return hex.EncodeToString(r.encryptionKey.SealETag(md5curr)), hex.EncodeToString(md5curr), nil
 }
