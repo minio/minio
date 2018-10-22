@@ -153,7 +153,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
-	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, hashReader, srcInfo.UserDefined, dstOpts)
+	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, NewPutObjectReader(hashReader), srcInfo.UserDefined, dstOpts)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -639,7 +639,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjectReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Validate put object input args.
 	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
@@ -655,7 +655,9 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 }
 
 // putObject wrapper for xl PutObject
-func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjectReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	data := r.DataReader
+
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -841,7 +843,14 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
-	metadata["etag"] = hex.EncodeToString(data.MD5Current())
+	if opts.ServerSideEncryption != nil {
+		if encMD5Sum, _, err := r.OrigReader.EncryptedMD5Sum(); err == nil {
+			metadata["etag"] = encMD5Sum
+		}
+	}
+	if metadata["etag"] == "" {
+		metadata["etag"] = hex.EncodeToString(data.MD5Current())
+	}
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
