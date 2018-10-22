@@ -106,7 +106,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 		expectedETaghex := getMD5Hash(data)
 
 		var calcPartInfo PartInfo
-		calcPartInfo, err = obj.PutObjectPart(context.Background(), "bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBuffer(data), int64(len(data)), expectedETaghex, ""), opts)
+		calcPartInfo, err = obj.PutObjectPart(context.Background(), "bucket", "key", uploadID, i, mustGetPutObjectReader(t, bytes.NewBuffer(data), int64(len(data)), expectedETaghex, ""), opts)
 		if err != nil {
 			t.Errorf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -118,7 +118,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 			ETag:       calcPartInfo.ETag,
 		})
 	}
-	objInfo, err := obj.CompleteMultipartUpload(context.Background(), "bucket", "key", uploadID, completedParts.Parts)
+	objInfo, err := obj.CompleteMultipartUpload(context.Background(), "bucket", "key", uploadID, completedParts.Parts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -157,7 +157,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 
 		metadata["md5"] = expectedETaghex
 		var calcPartInfo PartInfo
-		calcPartInfo, err = obj.PutObjectPart(context.Background(), "bucket", "key", uploadID, i, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), expectedETaghex, ""), opts)
+		calcPartInfo, err = obj.PutObjectPart(context.Background(), "bucket", "key", uploadID, i, mustGetPutObjectReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), expectedETaghex, ""), opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -199,7 +199,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 		metadata := make(map[string]string)
 		metadata["etag"] = expectedETaghex
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(context.Background(), "bucket", key, mustGetHashReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), metadata["etag"], ""), metadata, opts)
+		objInfo, err = obj.PutObject(context.Background(), "bucket", key, mustGetPutObjectReader(t, bytes.NewBufferString(randomString), int64(len(randomString)), metadata["etag"], ""), metadata, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -253,7 +253,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check before paging occurs.
 	for i := 0; i < 5; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -273,7 +273,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check after paging occurs pages work.
 	for i := 6; i <= 10; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -290,11 +290,11 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	// check paging with prefix at end returns less objects.
 	{
-		_, err = obj.PutObject(context.Background(), "bucket", "newPrefix", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", "newPrefix", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		_, err = obj.PutObject(context.Background(), "bucket", "newPrefix2", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", "newPrefix2", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -332,11 +332,11 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check delimited results with delimiter and prefix.
 	{
-		_, err = obj.PutObject(context.Background(), "bucket", "this/is/delimited", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", "this/is/delimited", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		_, err = obj.PutObject(context.Background(), "bucket", "this/is/also/a/delimited/file", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), "bucket", "this/is/also/a/delimited/file", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -448,14 +448,14 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHan
 	var opts ObjectOptions
 	uploadContent := "The list of parts was not in ascending order. The parts list must be specified in order by part number."
 	length := int64(len(uploadContent))
-	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
 	uploadContent = "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
 	length = int64(len(uploadContent))
-	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -478,7 +478,7 @@ func (s *ObjectLayerAPISuite) TestNonExistantBucketOperations(t *testing.T) {
 // Tests validate that bucket operation on non-existent bucket fails.
 func testNonExistantBucketOperations(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	var opts ObjectOptions
-	_, err := obj.PutObject(context.Background(), "bucket1", "object", mustGetHashReader(t, bytes.NewBufferString("one"), int64(len("one")), "", ""), nil, opts)
+	_, err := obj.PutObject(context.Background(), "bucket1", "object", mustGetPutObjectReader(t, bytes.NewBufferString("one"), int64(len("one")), "", ""), nil, opts)
 	if err == nil {
 		t.Fatal("Expected error but found nil")
 	}
@@ -526,7 +526,7 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	var bytesBuffer1 bytes.Buffer
 	var opts ObjectOptions
-	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetHashReader(t, readerEOF, length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetPutObjectReader(t, readerEOF, length, "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -539,7 +539,7 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	var bytesBuffer2 bytes.Buffer
-	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetHashReader(t, readerNoEOF, length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "object", mustGetPutObjectReader(t, readerNoEOF, length, "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -568,7 +568,7 @@ func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandle
 	uploadContent := `The specified multipart upload does not exist. The upload ID might be invalid, or the multipart
  upload might have been aborted or completed.`
 	length := int64(len(uploadContent))
-	_, err = obj.PutObject(context.Background(), "bucket", "dir1/dir2/object", mustGetHashReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "dir1/dir2/object", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), length, "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -741,7 +741,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	content := "One or more of the specified parts could not be found. The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."
 	length := int64(len(content))
 	var opts ObjectOptions
-	_, err = obj.PutObject(context.Background(), bucketName, "dir1/dir3/object", mustGetHashReader(t, bytes.NewBufferString(content), length, "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucketName, "dir1/dir3/object", mustGetPutObjectReader(t, bytes.NewBufferString(content), length, "", ""), nil, opts)
 
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
@@ -783,7 +783,7 @@ func testContentType(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	var opts ObjectOptions
 	uploadContent := "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
 	// Test empty.
-	_, err = obj.PutObject(context.Background(), "bucket", "minio.png", mustGetHashReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), "bucket", "minio.png", mustGetPutObjectReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), nil, opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
