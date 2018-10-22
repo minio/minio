@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -72,7 +71,7 @@ func (api *DummyObjectLayer) GetObjectInfo(ctx context.Context, bucket, object s
 	return
 }
 
-func (api *DummyObjectLayer) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (api *DummyObjectLayer) PutObject(ctx context.Context, bucket, object string, data *PutObjectReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return
 }
 
@@ -96,7 +95,7 @@ func (api *DummyObjectLayer) CopyObjectPart(ctx context.Context, srcBucket, srcO
 	return
 }
 
-func (api *DummyObjectLayer) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (info PartInfo, err error) {
+func (api *DummyObjectLayer) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjectReader, opts ObjectOptions) (info PartInfo, err error) {
 	return
 }
 
@@ -108,7 +107,7 @@ func (api *DummyObjectLayer) AbortMultipartUpload(ctx context.Context, bucket, o
 	return
 }
 
-func (api *DummyObjectLayer) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error) {
+func (api *DummyObjectLayer) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return
 }
 

@@ -91,7 +91,7 @@ func TestHealObjectXL(t *testing.T) {
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -101,7 +101,7 @@ func TestHealObjectXL(t *testing.T) {
 		})
 	}
 
-	_, err = obj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts)
+	_, err = obj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}

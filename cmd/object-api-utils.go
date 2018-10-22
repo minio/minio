@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -610,4 +611,40 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 		}
 	}
 	return newMeta
+}
+
+// PutObjectReader is a type that wraps sio.EncryptReader and
+// underlying hash.Reader in a struct
+type PutObjectReader struct {
+	DataReader *hash.Reader // actual data stream
+	OrigReader *hash.Reader // original data stream
+}
+
+// Size returns the absolute number of bytes the Reader
+// will return during reading. It returns -1 for unlimited
+// data.
+func (p *PutObjectReader) Size() int64 {
+	return p.DataReader.Size()
+}
+
+// NewPutObjectReader returns a new PutObjectReader and holds
+// reference to underlying data stream from client and the encrypted
+// data reader
+func NewPutObjectReader(r *hash.Reader) *PutObjectReader {
+	return &PutObjectReader{OrigReader: r, DataReader: r}
+}
+
+// UnsealETagFn takes an object encryption key and returns a
+// ETag validation function and a function that returns encrypted ETag
+func UnsealETagFn(key []byte, ssec bool) (opts ObjectOptions) {
+	fn1 := func(clntEtag, bkETag string) bool {
+		if ssec {
+			return clntEtag == bkETag[len(bkETag)-32:]
+		}
+		return tryDecryptETag(key, bkETag, ssec) == clntEtag
+	}
+	fn2 := func(etag string) string {
+		return getEncryptedETag(etag, key)
+	}
+	return ObjectOptions{ValidateETagsFn: fn1, GetEncryptedETagFn: fn2}
 }

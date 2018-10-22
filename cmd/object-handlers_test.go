@@ -83,7 +83,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, ObjectOptions{})
+		_, err := obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, ObjectOptions{})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -355,7 +355,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, ObjectOptions{})
+		_, err := obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, ObjectOptions{})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1391,7 +1391,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	for i, input := range putObjectInputs {
 		// uploading the object.
 		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName,
-			mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
+			mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1449,7 +1449,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 		})
 	}
 
-	result, err := obj.CompleteMultipartUpload(context.Background(), bucketName, testObject, uploadID, parts)
+	result, err := obj.CompleteMultipartUpload(context.Background(), bucketName, testObject, uploadID, parts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Test: %s complete multipart upload failed: <ERROR> %v", instanceType, err)
 	}
@@ -1501,7 +1501,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1838,7 +1838,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -2462,7 +2462,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
 		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID,
-			mustGetHashReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""), opts)
+			mustGetPutObjectReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -2813,7 +2813,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// Iterating over createPartCases to generate multipart chunks.
 	for _, part := range parts {
 		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID,
-			mustGetHashReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""), opts)
+			mustGetPutObjectReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, ""), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -2951,7 +2951,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjectReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -3657,7 +3657,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	uploadIDCopy := uploadID
 
 	// create an object Part, will be used to test list object parts.
-	_, err = obj.PutObjectPart(context.Background(), bucketName, testObject, uploadID, 1, mustGetHashReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "5d41402abc4b2a76b9719d911017c592", ""), opts)
+	_, err = obj.PutObjectPart(context.Background(), bucketName, testObject, uploadID, 1, mustGetPutObjectReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "5d41402abc4b2a76b9719d911017c592", ""), opts)
 	if err != nil {
 		t.Fatalf("Minio %s : %s.", instanceType, err)
 	}

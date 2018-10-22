@@ -614,6 +614,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	pReader := NewPutObjectReader(hashReader)
+
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
 			var reader io.Reader
@@ -636,10 +638,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
+			pReader.DataReader = hashReader
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata, ObjectOptions{})
+	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, metadata, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return

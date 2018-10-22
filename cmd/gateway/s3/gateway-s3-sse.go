@@ -279,7 +279,7 @@ func (l *s3EncObjects) writeDareMetadata(ctx context.Context, bucket, objectPref
 		logger.LogIf(ctx, err)
 		return err
 	}
-	_, err = l.s3Objects.PutObject(ctx, bucket, dareMetaFile, hashReader, map[string]string{}, o)
+	_, err = l.s3Objects.PutObject(ctx, bucket, dareMetaFile, minio.NewPutObjectReader(hashReader), map[string]string{}, o)
 	return err
 }
 
@@ -346,12 +346,12 @@ func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 	// upload with destination side encryption options
 	gwMeta, err := l.getDareMetadata(ctx, srcBucket, getGWMetaPath(srcObject))
 	if err != nil {
-		return l.PutObject(ctx, dstBucket, dstObject, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
+		return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
 	}
 
 	// src encrypted, but not target or custom encrypted without multipart
 	if dstOpts.ServerSideEncryption == nil || len(gwMeta.Parts) == 0 {
-		return l.PutObject(ctx, dstBucket, dstObject, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
+		return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
 	}
 
 	// convert copy src encryption options for GET calls
@@ -372,7 +372,7 @@ func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 	var partID = 1
 
 	partUploadName := path.Join(getTmpGWMetaPath(dstObject, dstUploadID), strconv.Itoa(partID))
-	bkendObjInfo, rerr := l.s3Objects.PutObject(ctx, dstBucket, partUploadName, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
+	bkendObjInfo, rerr := l.s3Objects.PutObject(ctx, dstBucket, partUploadName, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
 	if rerr != nil {
 		return
 	}
@@ -381,7 +381,7 @@ func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		PartNumber: partID,
 	})
 
-	return l.CompleteMultipartUpload(ctx, dstBucket, dstObject, dstUploadID, uploadedParts)
+	return l.CompleteMultipartUpload(ctx, dstBucket, dstObject, dstUploadID, uploadedParts, dstOpts)
 }
 
 // DeleteObject deletes a blob in bucket
@@ -502,7 +502,7 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.PutObject(ctx, bucket, object, data, metadata, opts)
 	}
@@ -539,19 +539,24 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *minio.PutObjectReader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+	var s3Opts minio.ObjectOptions
+	// for sse-s3 encryption options should not be passed to backend
+	if opts.ServerSideEncryption.Type() == encrypt.SSEC {
+		s3Opts = opts
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
-		return l.s3Objects.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+		return l.s3Objects.PutObjectPart(ctx, bucket, object, uploadID, partID, data, s3Opts)
 	}
 	uploadPath := getTmpGWMetaPath(object, uploadID)
 	tmpDareMeta := path.Join(uploadPath, gwdareMetaJSON)
 	_, err := l.s3Objects.GetObjectInfo(ctx, bucket, tmpDareMeta, minio.ObjectOptions{})
 	if err != nil {
 		// it is a regular multipart,since dare.meta is missing.
-		return l.s3Objects.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+		return l.s3Objects.PutObjectPart(ctx, bucket, object, uploadID, partID, data, s3Opts)
 	}
 	partUploadName := path.Join(uploadPath, strconv.Itoa(partID))
-	oi, err := l.s3Objects.PutObject(ctx, bucket, partUploadName, data, map[string]string{}, opts)
+	oi, err := l.s3Objects.PutObject(ctx, bucket, partUploadName, data, map[string]string{}, s3Opts)
 	if err != nil {
 		return pi, err
 	}
@@ -585,7 +590,7 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		}
 		// src is encrypted
 		partName := path.Join(getTmpGWMetaPath(destObject, uploadID), strconv.Itoa(partID))
-		oi, oerr := l.PutObject(ctx, destBucket, partName, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
+		oi, oerr := l.PutObject(ctx, destBucket, partName, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
 		if oerr != nil {
 			return minio.PartInfo{}, oerr
 		}
@@ -596,7 +601,7 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	}
 	uploadPath := getTmpGWMetaPath(destObject, uploadID)
 	partUploadName := path.Join(uploadPath, strconv.Itoa(partID))
-	bkendObjInfo, rerr := l.s3Objects.PutObject(ctx, destBucket, partUploadName, srcInfo.Reader, srcInfo.UserDefined, dstOpts)
+	bkendObjInfo, rerr := l.s3Objects.PutObject(ctx, destBucket, partUploadName, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
 	if rerr != nil {
 		return
 	}
@@ -707,14 +712,14 @@ func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, e error) {
+func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
 	if len(minio.GlobalGatewaySSE) == 0 {
-		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts)
+		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 	uploadPrefix := getTmpGWMetaPath(object, uploadID)
 	dareMeta, err := l.getDareMetadata(ctx, bucket, uploadPrefix)
 	if err != nil {
-		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts)
+		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
 	// overwrite any previous unencrypted object with same name

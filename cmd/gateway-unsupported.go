@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -44,7 +43,7 @@ func (a GatewayUnsupported) CopyObjectPart(ctx context.Context, srcBucket, srcOb
 }
 
 // PutObjectPart puts a part of object in bucket
-func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, err error) {
+func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *PutObjectReader, opts ObjectOptions) (pi PartInfo, err error) {
 	return pi, NotImplemented{}
 }
 
@@ -60,7 +59,7 @@ func (a GatewayUnsupported) AbortMultipartUpload(ctx context.Context, bucket str
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-func (a GatewayUnsupported) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, err error) {
+func (a GatewayUnsupported) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (oi ObjectInfo, err error) {
 	return oi, NotImplemented{}
 }
 

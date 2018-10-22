@@ -199,7 +199,7 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
+	err = cache.Put(ctx, bucketName, objectName, NewPutObjectReader(hashReader), httpMeta, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,12 +275,12 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cache.diskAvailable(int64(size)) {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjectReader(hashReader), httpMeta, opts)
 		if err != errDiskFull {
 			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, httpMeta, opts)
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjectReader(hashReader), httpMeta, opts)
 		if err != nil {
 			t.Fatal(err)
 		}

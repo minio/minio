@@ -807,7 +807,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	opts := ObjectOptions{}
+	opts, err := getEncryptionOpts(r, bucket, object)
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
@@ -816,7 +820,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata, opts)
+	objInfo, err := putObject(ctx, bucket, object, NewPutObjectReader(hashReader), metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -916,7 +920,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
@@ -1113,7 +1117,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			length = info.Size
 			if objectAPI.IsEncryptionSupported() {
-				if _, err = DecryptObjectInfo(info, r.Header); err != nil {
+				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
 					writeWebErrorResponse(w, err)
 					return err
 				}

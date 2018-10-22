@@ -70,7 +70,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
-		_, err = obj.PutObject(context.Background(), testBuckets[0], object.name, mustGetHashReader(t, bytes.NewBufferString(object.content),
+		_, err = obj.PutObject(context.Background(), testBuckets[0], object.name, mustGetPutObjectReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), object.meta, ObjectOptions{})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
@@ -617,7 +617,7 @@ func BenchmarkListObjects(b *testing.B) {
 	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(context.Background(), bucket, key, mustGetHashReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), nil, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), bucket, key, mustGetPutObjectReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), nil, ObjectOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}

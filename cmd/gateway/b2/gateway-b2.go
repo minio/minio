@@ -534,7 +534,9 @@ func (nb *Reader) Read(p []byte) (int, error) {
 }
 
 // PutObject uploads the single upload to B2 backend by using *b2_upload_file* API, uploads upto 5GiB.
-func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, data *h2.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.DataReader
+
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return objInfo, err
@@ -653,7 +655,8 @@ func (l *b2Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *h2.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, r *minio.PutObjectReader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+	data := r.DataReader
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return pi, err
@@ -726,7 +729,7 @@ func (l *b2Objects) AbortMultipartUpload(ctx context.Context, bucket string, obj
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object, uses B2's LargeFile upload API.
-func (l *b2Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, err error) {
+func (l *b2Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return oi, err

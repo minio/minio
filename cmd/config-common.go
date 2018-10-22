@@ -70,7 +70,7 @@ func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data
 		return err
 	}
 
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, hashReader, nil, ObjectOptions{})
+	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjectReader(hashReader), nil, ObjectOptions{})
 	return err
 }
 

@@ -324,7 +324,7 @@ var decryptObjectInfoTests = []struct {
 
 func TestDecryptObjectInfo(t *testing.T) {
 	for i, test := range decryptObjectInfoTests {
-		if encrypted, err := DecryptObjectInfo(test.info, test.headers); err != test.expErr {
+		if encrypted, err := DecryptObjectInfo(&test.info, test.headers); err != test.expErr {
 			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
 		} else if enc := crypto.IsEncrypted(test.info.UserDefined); encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)

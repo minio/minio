@@ -309,7 +309,7 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			objectName := fmt.Sprintf("%s-%d", objName, i)
 			_, err = atb.objLayer.PutObject(context.Background(), bucketName, objectName,
-				mustGetHashReader(t, bytes.NewReader([]byte("hello")),
+				mustGetPutObjectReader(t, bytes.NewReader([]byte("hello")),
 					int64(len("hello")), "", ""), nil, ObjectOptions{})
 			if err != nil {
 				t.Fatalf("Failed to create %s - %v", objectName,
@@ -328,7 +328,7 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 		}
 
 		_, err = atb.objLayer.PutObjectPart(context.Background(), bucketName, objName,
-			uploadID, 3, mustGetHashReader(t, bytes.NewReader(
+			uploadID, 3, mustGetPutObjectReader(t, bytes.NewReader(
 				[]byte("hello")), int64(len("hello")), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("mp put error: %v", err)
