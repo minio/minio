@@ -108,6 +108,8 @@ type ObjectInfo struct {
 	// Implements writer and reader used by CopyObject API
 	Writer       io.WriteCloser `json:"-"`
 	Reader       *hash.Reader   `json:"-"`
+	PutObjReader *PutObjReader  `json:"-"`
+
 	metadataOnly bool
 
 	// Date and time when the object was last accessed.

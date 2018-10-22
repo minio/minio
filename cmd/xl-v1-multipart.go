@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"path"
 	"sort"
@@ -28,7 +27,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -263,7 +261,7 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 		return pi, err
 	}
 
-	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.Reader, dstOpts)
+	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, NewPutObjReader(srcInfo.Reader, nil, nil), dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -277,7 +275,8 @@ func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, ds
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, e error) {
+	data := r.Reader
 	if err := checkPutObjectPartArgs(ctx, bucket, object, xl); err != nil {
 		return pi, err
 	}
@@ -432,7 +431,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = UTCNow()
 
-	md5hex := hex.EncodeToString(data.MD5Current())
+	md5hex := r.MD5CurrentHexString()
 
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, data.ActualSize())
@@ -564,7 +563,7 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart) (oi ObjectInfo, e error) {
+func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart, opts ObjectOptions) (oi ObjectInfo, e error) {
 	if err := checkCompleteMultipartArgs(ctx, bucket, object, xl); err != nil {
 		return oi, err
 	}
@@ -657,7 +656,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			return oi, invp
 		}
 
-		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,

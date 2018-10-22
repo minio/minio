@@ -116,6 +116,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 			// Set the info.Size to the actualSize.
 			listObjectsV2Info.Objects[i].Size = actualSize
 		} else if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
+			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
@@ -198,6 +199,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 			// Set the info.Size to the actualSize.
 			listObjectsInfo.Objects[i].Size = actualSize
 		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
+			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)

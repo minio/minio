@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 
 	minio "github.com/minio/minio/cmd"
@@ -406,7 +405,8 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.Reader
 	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
@@ -464,7 +464,8 @@ func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
+	data := r.Reader
 	info, err := l.Client.PutObjectPart(bucket, object, uploadID, partID, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
 	if err != nil {
 		return pi, minio.ErrorRespToObjectError(err, bucket, object)
@@ -508,7 +509,7 @@ func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, obj
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, e error) {
+func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
 	err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, minio.ToMinioClientCompleteParts(uploadedParts))
 	if err != nil {
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)

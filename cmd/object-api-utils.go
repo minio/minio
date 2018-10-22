@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -596,4 +598,62 @@ func (g *GetObjectReader) Read(p []byte) (n int, err error) {
 		g.Close()
 	}
 	return
+}
+
+//SealMD5CurrFn seals md5sum with object encryption key and returns sealed
+// md5sum
+type SealMD5CurrFn func([]byte) []byte
+
+// PutObjReader is a type that wraps sio.EncryptReader and
+// underlying hash.Reader in a struct
+type PutObjReader struct {
+	*hash.Reader              // actual data stream
+	rawReader    *hash.Reader // original data stream
+	sealMD5Fn    SealMD5CurrFn
+}
+
+// Size returns the absolute number of bytes the Reader
+// will return during reading. It returns -1 for unlimited
+// data.
+func (p *PutObjReader) Size() int64 {
+	return p.Reader.Size()
+}
+
+// MD5CurrentHexString returns the current MD5Sum or encrypted MD5Sum
+// as a hex encoded string
+func (p *PutObjReader) MD5CurrentHexString() string {
+	md5sumCurr := p.rawReader.MD5Current()
+	if p.sealMD5Fn != nil {
+		md5sumCurr = p.sealMD5Fn(md5sumCurr)
+	}
+	return hex.EncodeToString(md5sumCurr)
+}
+
+// NewPutObjReader returns a new PutObjReader and holds
+// reference to underlying data stream from client and the encrypted
+// data reader
+func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, encKey []byte) *PutObjReader {
+	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
+
+	var objKey crypto.ObjectKey
+	copy(objKey[:], encKey)
+	p.sealMD5Fn = sealETagFn(objKey)
+	if encReader != nil {
+		p.Reader = encReader
+	}
+	return &p
+}
+
+func sealETag(encKey crypto.ObjectKey, md5CurrSum []byte) []byte {
+	var emptyKey [32]byte
+	if bytes.Equal(encKey[:], emptyKey[:]) {
+		return md5CurrSum
+	}
+	return encKey.SealETag(md5CurrSum)
+}
+func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
+	fn1 := func(md5sumcurr []byte) []byte {
+		return sealETag(key, md5sumcurr)
+	}
+	return fn1
 }
