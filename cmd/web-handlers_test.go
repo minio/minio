@@ -349,7 +349,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	for _, test := range testCases {
 		if test.initWithObject {
 			data := bytes.NewBufferString("hello")
-			_, err = obj.PutObject(context.Background(), test.bucketName, "object", mustGetHashReader(t, data, int64(data.Len()), "", ""), nil, opts)
+			_, err = obj.PutObject(context.Background(), test.bucketName, "object", mustGetPutObjectReader(t, data, int64(data.Len()), "", ""), nil, opts)
 			// _, err = obj.PutObject(test.bucketName, "object", int64(data.Len()), data, nil, "")
 			if err != nil {
 				t.Fatalf("could not put object to %s, %s", test.bucketName, err.Error())
@@ -485,7 +485,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
 
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
@@ -589,14 +589,14 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
 	objectName = "a/object"
 	metadata = map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -987,7 +987,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	content := []byte("temporary file's content")
 	metadata := map[string]string{"etag": "01ce59706106fe5e02e7f55fffda7f34"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader(content), int64(len(content)), metadata["etag"], ""), metadata, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader(content), int64(len(content)), metadata["etag"], ""), metadata, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -1090,9 +1090,9 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	obj.PutObject(context.Background(), bucket, "a/one", mustGetHashReader(t, strings.NewReader(fileOne), int64(len(fileOne)), "", ""), nil, opts)
-	obj.PutObject(context.Background(), bucket, "a/b/two", mustGetHashReader(t, strings.NewReader(fileTwo), int64(len(fileTwo)), "", ""), nil, opts)
-	obj.PutObject(context.Background(), bucket, "a/c/three", mustGetHashReader(t, strings.NewReader(fileThree), int64(len(fileThree)), "", ""), nil, opts)
+	obj.PutObject(context.Background(), bucket, "a/one", mustGetPutObjectReader(t, strings.NewReader(fileOne), int64(len(fileOne)), "", ""), nil, opts)
+	obj.PutObject(context.Background(), bucket, "a/b/two", mustGetPutObjectReader(t, strings.NewReader(fileTwo), int64(len(fileTwo)), "", ""), nil, opts)
+	obj.PutObject(context.Background(), bucket, "a/c/three", mustGetPutObjectReader(t, strings.NewReader(fileThree), int64(len(fileThree)), "", ""), nil, opts)
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
@@ -1177,7 +1177,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetHashReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjectReader(t, bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
