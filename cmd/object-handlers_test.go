@@ -2378,14 +2378,16 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 
 			if err != nil {
-				t.Fatalf("Failed to create HTTP request for NewMultipart request: <ERROR> %v", err)
+				t.Errorf("Failed to create HTTP request for NewMultipart request: <ERROR> %v", err)
+				return
 			}
 			// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 			// Call the ServeHTTP to executes the registered handler.
 			apiRouter.ServeHTTP(rec, req)
 			// Assert the response code with the expected status.
 			if rec.Code != http.StatusOK {
-				t.Fatalf("Minio %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+				t.Errorf("Minio %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+				return
 			}
 			// decode the response body.
 			decoder := xml.NewDecoder(rec.Body)
@@ -2393,7 +2395,8 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 
 			err = decoder.Decode(multipartResponse)
 			if err != nil {
-				t.Fatalf("Minio %s: Error decoding the recorded response Body", instanceType)
+				t.Errorf("Minio %s: Error decoding the recorded response Body", instanceType)
+				return
 			}
 			// push the obtained upload ID from the response into the array.
 			testUploads.Lock()
