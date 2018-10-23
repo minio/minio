@@ -162,10 +162,12 @@ func TestLockAndUnlock(t *testing.T) {
 		bl, blerr := LockedOpenFile(f.Name(), os.O_WRONLY, 0600)
 		if blerr != nil {
 			t.Error(blerr)
+			return
 		}
 		locked <- struct{}{}
 		if blerr = bl.Close(); blerr != nil {
 			t.Error(blerr)
+			return
 		}
 	}()
 
