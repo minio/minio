@@ -684,7 +684,7 @@ func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object str
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket, uses B2's LargeFile upload API.
-func (l *b2Objects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi minio.ListPartsInfo, err error) {
+func (l *b2Objects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, err error) {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return lpi, err
