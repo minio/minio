@@ -39,21 +39,52 @@ type Reader struct {
 
 	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
 	md5Hash, sha256Hash hash.Hash
+
+	// Custom hashing
+	customHashAlgo string
+	customHashsum  []byte
+	customHash     hash.Hash
+}
+
+// Options - hasher options.
+type Options struct {
+	Size              int64
+	Md5Hex, Sha256Hex string
+	ActualSize        int64
+	CustomHashAlgo    string
+	CustomHashHex     string
 }
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
 // SHA256 sum (if set) of the provided io.Reader at EOF.
-func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+func NewReader(src io.Reader, opts Options) (*Reader, error) {
 	if _, ok := src.(*Reader); ok {
 		return nil, errNestedReader
 	}
 
-	sha256sum, err := hex.DecodeString(sha256Hex)
+	customHashsum, err := hex.DecodeString(opts.CustomHashHex)
+	if err != nil {
+		return nil, ChecksumMismatch{
+			Algo:             opts.CustomHashAlgo,
+			ExpectedChecksum: opts.CustomHashHex,
+		}
+	}
+
+	var customHash hash.Hash
+	if len(customHashsum) != 0 {
+		algo := AlgorithmFromString(opts.CustomHashAlgo)
+		if !algo.Available() {
+			return nil, errUnsupportedAlgo
+		}
+		customHash = algo.New()
+	}
+
+	sha256sum, err := hex.DecodeString(opts.Sha256Hex)
 	if err != nil {
 		return nil, SHA256Mismatch{}
 	}
 
-	md5sum, err := hex.DecodeString(md5Hex)
+	md5sum, err := hex.DecodeString(opts.Md5Hex)
 	if err != nil {
 		return nil, BadDigest{}
 	}
@@ -62,17 +93,21 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	if len(sha256sum) != 0 {
 		sha256Hash = sha256.New()
 	}
-	if size >= 0 {
-		src = io.LimitReader(src, size)
+	if opts.Size >= 0 {
+		src = io.LimitReader(src, opts.Size)
 	}
+
 	return &Reader{
-		md5sum:     md5sum,
-		sha256sum:  sha256sum,
-		src:        src,
-		size:       size,
-		md5Hash:    md5.New(),
-		sha256Hash: sha256Hash,
-		actualSize: actualSize,
+		md5sum:         md5sum,
+		sha256sum:      sha256sum,
+		src:            src,
+		size:           opts.Size,
+		md5Hash:        md5.New(),
+		sha256Hash:     sha256Hash,
+		actualSize:     opts.ActualSize,
+		customHashAlgo: opts.CustomHashAlgo,
+		customHashsum:  customHashsum,
+		customHash:     customHash,
 	}, nil
 }
 
@@ -82,6 +117,9 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 		r.md5Hash.Write(p[:n])
 		if r.sha256Hash != nil {
 			r.sha256Hash.Write(p[:n])
+		}
+		if r.customHash != nil {
+			r.customHash.Write(p[:n])
 		}
 	}
 
@@ -143,6 +181,15 @@ func (r *Reader) Verify() error {
 	if r.sha256Hash != nil && len(r.sha256sum) > 0 {
 		if sum := r.sha256Hash.Sum(nil); !bytes.Equal(r.sha256sum, sum) {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}
+		}
+	}
+	if r.customHash != nil && len(r.customHashsum) > 0 {
+		if sum := r.customHash.Sum(nil); !bytes.Equal(r.customHashsum, sum) {
+			return ChecksumMismatch{
+				Algo:               r.customHashAlgo,
+				ExpectedChecksum:   hex.EncodeToString(r.customHashsum),
+				CalculatedChecksum: hex.EncodeToString(sum),
+			}
 		}
 	}
 	if len(r.md5sum) > 0 {

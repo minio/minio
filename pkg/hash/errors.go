@@ -35,3 +35,14 @@ type BadDigest struct {
 func (e BadDigest) Error() string {
 	return "Bad digest: Expected " + e.ExpectedMD5 + " is not valid with what we calculated " + e.CalculatedMD5
 }
+
+// ChecksumMismatch - returned if checksum mismatches
+type ChecksumMismatch struct {
+	Algo               string
+	ExpectedChecksum   string
+	CalculatedChecksum string
+}
+
+func (e ChecksumMismatch) Error() string {
+	return "Bad " + e.Algo + ": Expected " + e.ExpectedChecksum + " is not valid with what we calculated " + e.CalculatedChecksum
+}

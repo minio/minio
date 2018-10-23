@@ -26,7 +26,12 @@ import (
 
 // Tests functions like Size(), MD5*(), SHA256*()
 func TestHashReaderHelperMethods(t *testing.T) {
-	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
+	r, err := NewReader(bytes.NewReader([]byte("abcd")), Options{
+		Size:       4,
+		Md5Hex:     "e2fc714c4727ee9395f324cd2e7f331f",
+		Sha256Hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
+		ActualSize: 4,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +67,79 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	expectedSHA256, err := hex.DecodeString("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
 	if !bytes.Equal(r.SHA256(), expectedSHA256) {
 		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
+	}
+}
+
+// Tests hash reader custom checksum verification.
+func TestHashReaderCustomVerification(t *testing.T) {
+	testCases := []struct {
+		src                           io.Reader
+		customAlgo, customChecksumHex string
+		err                           error
+	}{
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "blake2b",
+			customChecksumHex: "786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce",
+		},
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "highwayhash256",
+			customChecksumHex: "5e76d207cf4ab20866fdc03c83e8a0f4e8f458e880777956ec0bae4e9f23f6c5",
+			err:               errUnsupportedAlgo,
+		},
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "sha256",
+			customChecksumHex: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		},
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "sha3-256",
+			customChecksumHex: "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+		},
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "sha3-512",
+			customChecksumHex: "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26",
+		},
+		{
+			src:               bytes.NewReader([]byte("abcd")),
+			customAlgo:        "blake2b",
+			customChecksumHex: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			err: ChecksumMismatch{
+				Algo:               "blake2b",
+				ExpectedChecksum:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+				CalculatedChecksum: "786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce",
+			},
+		},
+	}
+	for i, testCase := range testCases {
+		opts := Options{
+			CustomHashAlgo: testCase.customAlgo,
+			CustomHashHex:  testCase.customChecksumHex,
+		}
+		r, err := NewReader(testCase.src, opts)
+		if err != nil {
+			if testCase.err != nil {
+				if err.Error() != testCase.err.Error() {
+					t.Errorf("Test %d: Expected error %s, got error %s", i+1, testCase.err, err)
+				}
+			} else {
+				t.Errorf("Test %d: Expected error <nil>, got error %s", i+1, err)
+			}
+			continue
+		}
+		_, err = io.Copy(ioutil.Discard, r)
+		if err != nil {
+			if testCase.err != nil {
+				if err.Error() != testCase.err.Error() {
+					t.Errorf("Test %d: Expected error %s, got error %s", i+1, testCase.err, err)
+				}
+			} else {
+				t.Errorf("Test %d: Expected error <nil>, got error %s", i+1, err)
+			}
+		}
 	}
 }
 
@@ -104,7 +182,13 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+		opts := Options{
+			Size:       testCase.size,
+			Md5Hex:     testCase.md5hex,
+			Sha256Hex:  testCase.sha256hex,
+			ActualSize: testCase.actualSize,
+		}
+		r, err := NewReader(testCase.src, opts)
 		if err != nil {
 			t.Fatalf("Test %d: Initializing reader failed %s", i+1, err)
 		}
@@ -163,7 +247,13 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+		opts := Options{
+			Size:       testCase.size,
+			Md5Hex:     testCase.md5hex,
+			Sha256Hex:  testCase.sha256hex,
+			ActualSize: testCase.actualSize,
+		}
+		_, err := NewReader(testCase.src, opts)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success, but got error %s instead", i+1, err)
 		}

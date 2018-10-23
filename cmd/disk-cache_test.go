@@ -22,8 +22,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/minio/minio/pkg/hash"
 )
 
 // Initialize cache FS objects.
@@ -195,7 +193,7 @@ func TestDiskCache(t *testing.T) {
 	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader := mustGetHashReader(t, byteReader, int64(size), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +268,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader := mustGetHashReader(t, byteReader, int64(size), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

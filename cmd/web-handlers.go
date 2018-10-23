@@ -784,7 +784,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
 		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		actualReader, err = hash.NewReader(reader, hash.Options{
+			Size:       size,
+			ActualSize: actualSize,
+		})
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -802,7 +805,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		reader = pipeReader
 	}
 
-	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
+	hashReader, err := hash.NewReader(reader, hash.Options{
+		Size:       size,
+		ActualSize: actualSize,
+	})
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return

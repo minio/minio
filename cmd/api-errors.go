@@ -179,6 +179,8 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrInvalidRequest
+	ErrObjectHashMismatch
+
 	// Minio storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
@@ -863,6 +865,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrMalformedJSON: {
 		Code:           "XMinioMalformedJSON",
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectHashMismatch: {
+		Code:           "XMinioObjectHashMismatch",
+		Description:    "The provided 'x-minio-object-hash' header does not match what was computed.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminNoSuchUser: {
@@ -1664,6 +1671,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	switch err.(type) {
 	case StorageFull:
 		apiErr = ErrStorageFull
+	case hash.ChecksumMismatch:
+		apiErr = ErrObjectHashMismatch
 	case hash.BadDigest:
 		apiErr = ErrBadDigest
 	case AllAccessDisabled:

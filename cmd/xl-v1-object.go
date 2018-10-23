@@ -147,7 +147,10 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "", length)
+	hashReader, err := hash.NewReader(pipeReader, hash.Options{
+		Size:       length,
+		ActualSize: length,
+	})
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, dstBucket, dstObject)

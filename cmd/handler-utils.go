@@ -66,6 +66,7 @@ var supportedHeaders = []string{
 	"content-disposition",
 	amzStorageClass,
 	"expires",
+	"x-minio-object-hash", // This is a minio specifix extension.
 	// Add more supported headers here.
 }
 

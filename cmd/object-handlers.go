@@ -806,7 +806,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize)
+	srcInfo.Reader, err = hash.NewReader(reader, hash.Options{
+		Size:       length,
+		ActualSize: actualSize,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -897,7 +900,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				crypto.RemoveInternalEntries(srcInfo.UserDefined)
 			}
 
-			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
+			// do not try to verify encrypted content
+			srcInfo.Reader, err = hash.NewReader(reader, hash.Options{
+				Size:       targetSize,
+				ActualSize: targetSize,
+			})
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1113,6 +1120,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var (
+		customHashAlgo, customHashHex = func() (string, string) {
+			tokens := strings.SplitN(r.Header.Get("x-minio-object-hash"), ":", 2)
+			if len(tokens) == 2 {
+				return tokens[0], tokens[1]
+			}
+			return "", ""
+		}()
+	)
+
+	var (
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
 		reader    io.Reader
@@ -1163,7 +1180,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
 		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		actualReader, err = hash.NewReader(reader, hash.Options{
+			Size:           size,
+			Md5Hex:         md5hex,
+			Sha256Hex:      sha256hex,
+			ActualSize:     actualSize,
+			CustomHashAlgo: customHashAlgo,
+			CustomHashHex:  customHashHex,
+		})
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
@@ -1180,10 +1204,19 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
+		customHashAlgo = ""
+		customHashHex = ""
 		reader = pipeReader
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+	hashReader, err := hash.NewReader(reader, hash.Options{
+		Size:           size,
+		Md5Hex:         md5hex,
+		Sha256Hex:      sha256hex,
+		ActualSize:     actualSize,
+		CustomHashAlgo: customHashAlgo,
+		CustomHashHex:  customHashHex,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1205,7 +1238,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 			info := ObjectInfo{Size: size}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(reader, hash.Options{
+				Size:       info.EncryptedSize(),
+				ActualSize: size,
+			})
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1527,7 +1564,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize)
+	srcInfo.Reader, err = hash.NewReader(reader, hash.Options{
+		Size:       length,
+		ActualSize: actualPartSize,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1568,7 +1608,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 			info := ObjectInfo{Size: length}
 			size := info.EncryptedSize()
-			srcInfo.Reader, err = hash.NewReader(reader, size, "", "", actualPartSize)
+			srcInfo.Reader, err = hash.NewReader(reader, hash.Options{
+				Size:       size,
+				ActualSize: actualPartSize,
+			})
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -1724,7 +1767,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		snappyWriter := snappy.NewWriter(pipeWriter)
 
 		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		actualReader, err = hash.NewReader(reader, hash.Options{
+			Size:       size,
+			Md5Hex:     md5hex,
+			Sha256Hex:  sha256hex,
+			ActualSize: actualSize,
+		})
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 			return
@@ -1745,7 +1793,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		isCompressed = true
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+	hashReader, err := hash.NewReader(reader, hash.Options{
+		Size:       size,
+		Md5Hex:     md5hex,
+		Sha256Hex:  sha256hex,
+		ActualSize: actualSize,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -1805,7 +1858,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 
 			info := ObjectInfo{Size: size}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(reader, hash.Options{
+				Size:       info.EncryptedSize(),
+				ActualSize: size,
+			})
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -2008,6 +2065,47 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		}
 		return
+	}
+
+	var (
+		customHashAlgo, customHashHex = func() (string, string) {
+			tokens := strings.SplitN(r.Header.Get("x-minio-object-hash"), ":", 2)
+			if len(tokens) == 2 {
+				return tokens[0], tokens[1]
+			}
+			return "", ""
+		}()
+	)
+
+	if customHashAlgo != "" {
+		getObjectNInfo := objectAPI.GetObjectNInfo
+		if api.CacheAPI() != nil {
+			getObjectNInfo = api.CacheAPI().GetObjectNInfo
+		}
+
+		gr, gerr := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, ObjectOptions{})
+		if gerr != nil {
+			writeErrorResponse(w, toAPIErrorCode(gerr), r.URL)
+			return
+		}
+		defer gr.Close()
+
+		reader, herr := hash.NewReader(gr, hash.Options{
+			Size:           objInfo.Size,
+			ActualSize:     objInfo.GetActualSize(),
+			CustomHashAlgo: customHashAlgo,
+			CustomHashHex:  customHashHex,
+		})
+		if herr != nil {
+			writeErrorResponse(w, toAPIErrorCode(herr), r.URL)
+			return
+		}
+
+		// Read and discard until EOF.
+		if _, err = io.Copy(goioutil.Discard, reader); err != nil {
+			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			return
+		}
 	}
 
 	// Get object location.
