@@ -458,7 +458,7 @@ func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policy
 		//  prefix := "config/iam/users/"
 		//  v := trim(trim(key, prefix), base(key)) == "newuser"
 		//
-		user := strings.TrimSuffix(strings.TrimSuffix(string(kv.Key), prefix), path.Base(string(kv.Key)))
+		user := path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(kv.Key), prefix), path.Base(string(kv.Key))))
 		if !users.Contains(user) {
 			users.Add(user)
 		}
@@ -497,7 +497,7 @@ func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policy
 			if err = json.Unmarshal(pdata, &policyName); err != nil {
 				return err
 			}
-			policyMap[path.Base(prefix)] = policyName
+			policyMap[user] = policyName
 		}
 	}
 	return nil
@@ -521,11 +521,11 @@ func reloadEtcdPolicies(prefix string, cannedPolicyMap map[string]iampolicy.Poli
 		// then strip off the remaining basename to obtain the prefix
 		// value, usually in the following form.
 		//
-		//  key := "config/iam/policys/newpolicy/identity.json"
-		//  prefix := "config/iam/policys/"
+		//  key := "config/iam/policies/newpolicy/identity.json"
+		//  prefix := "config/iam/policies/"
 		//  v := trim(trim(key, prefix), base(key)) == "newpolicy"
 		//
-		policyName := strings.TrimSuffix(strings.TrimSuffix(string(kv.Key), prefix), path.Base(string(kv.Key)))
+		policyName := path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(kv.Key), prefix), path.Base(string(kv.Key))))
 		if !policies.Contains(policyName) {
 			policies.Add(policyName)
 		}
@@ -542,7 +542,7 @@ func reloadEtcdPolicies(prefix string, cannedPolicyMap map[string]iampolicy.Poli
 		if err = json.Unmarshal(pdata, &p); err != nil {
 			return err
 		}
-		cannedPolicyMap[path.Base(prefix)] = p
+		cannedPolicyMap[policyName] = p
 	}
 	return nil
 }
