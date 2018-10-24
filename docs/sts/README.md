@@ -11,15 +11,15 @@ Following are advantages for using temporary credentials:
 - Temporary credentials have a limited lifetime, there is no need to rotate them or explicitly revoke them. Expired temporary credentials cannot be reused.
 
 ## Identity Federation
-[**Client grants**](./client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS client grants supports WSO2, Keycloak.
+[**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS client grants supports WSO2, Keycloak.
 
 ## Get started
 In this document we will explain in detail on how to configure all the prerequisites, primarily WSO2, OPA (open policy agent).
 
 ### 1. Prerequisites
-- [Configuring wso2](./wso2.md)
-- [Configuring opa](./opa.md)
-- [Configuring etcd (optional needed only in gateway or federation mode)](./etcd.md)
+- [Configuring wso2](https://github.com/minio/minio/blob/master/docs/sts/wso2.md)
+- [Configuring opa](https://github.com/minio/minio/blob/master/docs/sts/opa.md)
+- [Configuring etcd (optional needed only in gateway or federation mode)](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
 
 ### 2. Setup Minio with WSO2, OPA
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use Minio STS API and Minio server to use these credentials to perform object API operations.
