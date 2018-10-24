@@ -34,23 +34,27 @@ const (
 	ipAddress                      = "IpAddress"
 	notIPAddress                   = "NotIpAddress"
 	null                           = "Null"
+	boolean                        = "Bool"
 )
+
+var supportedConditions = []name{
+	stringEquals,
+	stringNotEquals,
+	stringEqualsIgnoreCase,
+	stringNotEqualsIgnoreCase,
+	binaryEquals,
+	stringLike,
+	stringNotLike,
+	ipAddress,
+	notIPAddress,
+	null,
+	boolean,
+	// Add new conditions here.
+}
 
 // IsValid - checks if name is valid or not.
 func (n name) IsValid() bool {
-	for _, supn := range []name{
-		stringEquals,
-		stringNotEquals,
-		stringEqualsIgnoreCase,
-		stringNotEqualsIgnoreCase,
-		binaryEquals,
-		stringLike,
-		stringNotLike,
-		ipAddress,
-		notIPAddress,
-		null,
-		// Add new conditions here.
-	} {
+	for _, supn := range supportedConditions {
 		if n == supn {
 			return true
 		}

@@ -54,7 +54,6 @@ func TestStringEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
 
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, true},
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aes256"}}, true},
-		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, false},
 		{case2Function, map[string][]string{}, false},
 		{case2Function, map[string][]string{"delimiter": {"/"}}, false},
 
@@ -158,7 +157,6 @@ func TestStringEqualsIgnoreCaseFuncToMap(t *testing.T) {
 	case4Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -168,7 +166,6 @@ func TestStringEqualsIgnoreCaseFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	}
 
@@ -280,7 +277,6 @@ func TestStringNotEqualsIgnoreCaseFuncEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{"delimiter": {"/"}}, true},
 
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, false},
-		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, true},
 		{case2Function, map[string][]string{}, true},
 		{case2Function, map[string][]string{"delimiter": {"/"}}, true},
 
@@ -383,7 +379,6 @@ func TestStringNotEqualsIgnoreCaseFuncToMap(t *testing.T) {
 	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -393,7 +388,6 @@ func TestStringNotEqualsIgnoreCaseFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	}
 
@@ -497,7 +491,6 @@ func TestNewStringEqualsIgnoreCaseFunc(t *testing.T) {
 	case4Function, err := newStringEqualsIgnoreCaseFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -551,7 +544,6 @@ func TestNewStringEqualsIgnoreCaseFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES256"),
-				NewStringValue("aws:kms"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPLACE")), case5Function, false},
@@ -620,7 +612,6 @@ func TestNewStringNotEqualsIgnoreCaseFunc(t *testing.T) {
 	case4Function, err := newStringNotEqualsIgnoreCaseFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -674,7 +665,6 @@ func TestNewStringNotEqualsIgnoreCaseFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES256"),
-				NewStringValue("aws:kms"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPLACE")), case5Function, false},

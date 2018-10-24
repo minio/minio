@@ -53,7 +53,6 @@ func TestStringEqualsFuncEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{"delimiter": {"/"}}, false},
 
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, true},
-		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, false},
 		{case2Function, map[string][]string{}, false},
 		{case2Function, map[string][]string{"delimiter": {"/"}}, false},
 
@@ -156,7 +155,6 @@ func TestStringEqualsFuncToMap(t *testing.T) {
 	case4Function, err := newStringEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -166,7 +164,6 @@ func TestStringEqualsFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	}
 
@@ -278,7 +275,6 @@ func TestStringNotEqualsFuncEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{"delimiter": {"/"}}, true},
 
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, false},
-		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, true},
 		{case2Function, map[string][]string{}, true},
 		{case2Function, map[string][]string{"delimiter": {"/"}}, true},
 
@@ -381,7 +377,6 @@ func TestStringNotEqualsFuncToMap(t *testing.T) {
 	case4Function, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -391,7 +386,6 @@ func TestStringNotEqualsFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	}
 
@@ -495,7 +489,6 @@ func TestNewStringEqualsFunc(t *testing.T) {
 	case4Function, err := newStringEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -549,7 +542,6 @@ func TestNewStringEqualsFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES256"),
-				NewStringValue("aws:kms"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPLACE")), case5Function, false},
@@ -618,7 +610,6 @@ func TestNewStringNotEqualsFunc(t *testing.T) {
 	case4Function, err := newStringNotEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES256"),
-			NewStringValue("aws:kms"),
 		),
 	)
 	if err != nil {
@@ -672,7 +663,6 @@ func TestNewStringNotEqualsFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES256"),
-				NewStringValue("aws:kms"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPLACE")), case5Function, false},
