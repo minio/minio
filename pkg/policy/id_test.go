@@ -29,13 +29,14 @@ func TestIDIsValid(t *testing.T) {
 	}{
 		{ID("DenyEncryptionSt1"), true},
 		{ID(""), true},
+		{ID("aa\xe2"), false},
 	}
 
 	for i, testCase := range testCases {
 		result := testCase.id.IsValid()
 
 		if result != testCase.expectedResult {
-			t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+			t.Errorf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 		}
 	}
 }
@@ -46,10 +47,9 @@ func TestIDMarshalJSON(t *testing.T) {
 		expectedResult []byte
 		expectErr      bool
 	}{
-		{ID("foo"), []byte(`"foo"`), false},
-		{ID("1234"), []byte(`"1234"`), false},
 		{ID("DenyEncryptionSt1"), []byte(`"DenyEncryptionSt1"`), false},
 		{ID(""), []byte(`""`), false},
+		{ID("aa\xe2"), nil, true}, // invalid utf-8
 	}
 
 	for i, testCase := range testCases {
@@ -74,11 +74,9 @@ func TestIDUnmarshalJSON(t *testing.T) {
 		expectedResult ID
 		expectErr      bool
 	}{
-		{[]byte(`"foo"`), ID("foo"), false},
-		{[]byte(`"1234"`), ID("1234"), false},
 		{[]byte(`"DenyEncryptionSt1"`), ID("DenyEncryptionSt1"), false},
 		{[]byte(`""`), ID(""), false},
-		{[]byte(`"foo bar"`), ID(""), true},
+		{[]byte(`"aa\xe2"`), ID(""), true},
 	}
 
 	for i, testCase := range testCases {

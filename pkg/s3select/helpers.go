@@ -17,94 +17,58 @@
 package s3select
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/minio/minio/pkg/s3select/format"
+	"github.com/tidwall/gjson"
 	"github.com/xwb1989/sqlparser"
 )
 
 // MaxExpressionLength - 256KiB
 const MaxExpressionLength = 256 * 1024
 
-// This function processes size so that we can calculate bytes BytesProcessed.
-func processSize(myrecord []string) int64 {
-	if len(myrecord) > 0 {
-		var size int64
-		size = int64(len(myrecord)-1) + 1
-		for i := range myrecord {
-			size += int64(len(myrecord[i]))
-		}
-
-		return size
-	}
-	return 0
-}
-
-// This function finds whether a string is in a list
-func stringInSlice(x string, list []string) bool {
-	for _, y := range list {
-		if x == y {
-			return true
-		}
-	}
-	return false
-}
-
-// This function returns the index of a string in a list
-func stringIndex(a string, list []string) int {
-	for i, v := range list {
-		if v == a {
-			return i
-		}
-	}
-	return -1
-}
-
-// Returns a true or false, whether a string can be represented as an int.
-func representsInt(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
-}
-
-// The function below processes the where clause into an acutal boolean given a
-// row
-func matchesMyWhereClause(row []string, columnNames map[string]int, alias string, whereClause interface{}) (bool, error) {
-	// This particular logic deals with the details of casting, e.g if we have to
-	// cast a column of string numbers into int's for comparison.
+// matchesMyWhereClause takes map[string]interfaces{} , process the where clause and returns true if the row suffices
+func matchesMyWhereClause(record map[string]interface{}, alias string, whereClause interface{}) (bool, error) {
 	var conversionColumn string
 	var operator string
 	var operand interface{}
 	if fmt.Sprintf("%v", whereClause) == "false" {
 		return false, nil
 	}
+	out, err := json.Marshal(record)
+	if err != nil {
+		return false, ErrExternalEvalException
+	}
 	switch expr := whereClause.(type) {
 	case *sqlparser.IsExpr:
-		return evaluateIsExpr(expr, row, columnNames, alias)
+		return evaluateIsExpr(expr, string(out), alias)
 	case *sqlparser.RangeCond:
 		operator = expr.Operator
 		if operator != "between" && operator != "not between" {
 			return false, ErrUnsupportedSQLOperation
 		}
 		if operator == "not between" {
-			myResult, err := evaluateBetween(expr, alias, row, columnNames)
+			result, err := evaluateBetween(expr, alias, string(out))
 			if err != nil {
 				return false, err
 			}
-			return !myResult, nil
+			return !result, nil
 		}
-		myResult, err := evaluateBetween(expr, alias, row, columnNames)
+		result, err := evaluateBetween(expr, alias, string(out))
 		if err != nil {
 			return false, err
 		}
-		return myResult, nil
+		return result, nil
 	case *sqlparser.ComparisonExpr:
 		operator = expr.Operator
 		switch right := expr.Right.(type) {
 		case *sqlparser.FuncExpr:
-			operand = evaluateFuncExpr(right, "", row, columnNames)
+			operand = evaluateFuncExpr(right, "", string(out))
 		case *sqlparser.SQLVal:
 			var err error
 			operand, err = evaluateParserType(right)
@@ -116,29 +80,22 @@ func matchesMyWhereClause(row []string, columnNames map[string]int, alias string
 		myVal = ""
 		switch left := expr.Left.(type) {
 		case *sqlparser.FuncExpr:
-			myVal = evaluateFuncExpr(left, "", row, columnNames)
+			myVal = evaluateFuncExpr(left, "", string(out))
 			conversionColumn = ""
 		case *sqlparser.ColName:
-			conversionColumn = cleanCol(left.Name.CompliantName(), alias)
+			conversionColumn = left.Name.CompliantName()
 		}
-		if representsInt(conversionColumn) {
-			intCol, err := strconv.Atoi(conversionColumn)
-			if err != nil {
-				return false, err
-			}
-			// Subtract 1 out because the index starts at 1 for Amazon instead of 0.
-			return evaluateOperator(row[intCol-1], operator, operand)
-		}
+
 		if myVal != "" {
 			return evaluateOperator(myVal, operator, operand)
 		}
-		return evaluateOperator(row[columnNames[conversionColumn]], operator, operand)
+		return evaluateOperator(jsonValue(conversionColumn, string(out)), operator, operand)
 	case *sqlparser.AndExpr:
 		var leftVal bool
 		var rightVal bool
 		switch left := expr.Left.(type) {
 		case *sqlparser.ComparisonExpr:
-			temp, err := matchesMyWhereClause(row, columnNames, alias, left)
+			temp, err := matchesMyWhereClause(record, alias, left)
 			if err != nil {
 				return false, err
 			}
@@ -146,7 +103,7 @@ func matchesMyWhereClause(row []string, columnNames map[string]int, alias string
 		}
 		switch right := expr.Right.(type) {
 		case *sqlparser.ComparisonExpr:
-			temp, err := matchesMyWhereClause(row, columnNames, alias, right)
+			temp, err := matchesMyWhereClause(record, alias, right)
 			if err != nil {
 				return false, err
 			}
@@ -158,18 +115,18 @@ func matchesMyWhereClause(row []string, columnNames map[string]int, alias string
 		var rightVal bool
 		switch left := expr.Left.(type) {
 		case *sqlparser.ComparisonExpr:
-			leftVal, _ = matchesMyWhereClause(row, columnNames, alias, left)
+			leftVal, _ = matchesMyWhereClause(record, alias, left)
 
 		}
 		switch right := expr.Right.(type) {
 		case *sqlparser.ComparisonExpr:
-			rightVal, _ = matchesMyWhereClause(row, columnNames, alias, right)
+			rightVal, _ = matchesMyWhereClause(record, alias, right)
 		}
 		return (rightVal || leftVal), nil
-
 	}
 	return true, nil
 }
+
 func applyStrFunc(rawArg string, funcName string) string {
 	switch strings.ToUpper(funcName) {
 	case "TRIM":
@@ -190,6 +147,135 @@ func applyStrFunc(rawArg string, funcName string) string {
 	}
 	return rawArg
 
+}
+
+// evaluateBetween is a function which evaluates a Between Clause.
+func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record string) (bool, error) {
+	var colToVal interface{}
+	var colFromVal interface{}
+	var conversionColumn string
+	var funcName string
+	switch colTo := betweenExpr.To.(type) {
+	case sqlparser.Expr:
+		switch colToMyVal := colTo.(type) {
+		case *sqlparser.FuncExpr:
+			colToVal = stringOps(colToMyVal, record, "")
+		case *sqlparser.SQLVal:
+			var err error
+			colToVal, err = evaluateParserType(colToMyVal)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+	switch colFrom := betweenExpr.From.(type) {
+	case sqlparser.Expr:
+		switch colFromMyVal := colFrom.(type) {
+		case *sqlparser.FuncExpr:
+			colFromVal = stringOps(colFromMyVal, record, "")
+		case *sqlparser.SQLVal:
+			var err error
+			colFromVal, err = evaluateParserType(colFromMyVal)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+	var myFuncVal string
+	switch left := betweenExpr.Left.(type) {
+	case *sqlparser.FuncExpr:
+		myFuncVal = evaluateFuncExpr(left, "", record)
+		conversionColumn = ""
+	case *sqlparser.ColName:
+		conversionColumn = cleanCol(left.Name.CompliantName(), alias)
+	}
+	toGreater, err := evaluateOperator(fmt.Sprintf("%v", colToVal), ">", colFromVal)
+	if err != nil {
+		return false, err
+	}
+	if toGreater {
+		return evalBetweenGreater(conversionColumn, record, funcName, colFromVal, colToVal, myFuncVal)
+	}
+	return evalBetweenLess(conversionColumn, record, funcName, colFromVal, colToVal, myFuncVal)
+}
+
+// evalBetweenGreater is a function which evaluates the between given that the
+// TO is > than the FROM.
+func evalBetweenGreater(conversionColumn string, record string, funcName string, colFromVal interface{}, colToVal interface{}, myColVal string) (bool, error) {
+	if format.IsInt(conversionColumn) {
+		myVal, err := evaluateOperator(jsonValue("_"+conversionColumn, record), ">=", colFromVal)
+		if err != nil {
+			return false, err
+		}
+		var myOtherVal bool
+		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(jsonValue("_"+conversionColumn, record)))
+		if err != nil {
+			return false, err
+		}
+		return (myVal && myOtherVal), nil
+	}
+	if myColVal != "" {
+		myVal, err := evaluateOperator(myColVal, ">=", colFromVal)
+		if err != nil {
+			return false, err
+		}
+		var myOtherVal bool
+		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(myColVal))
+		if err != nil {
+			return false, err
+		}
+		return (myVal && myOtherVal), nil
+	}
+	myVal, err := evaluateOperator(jsonValue(conversionColumn, record), ">=", colFromVal)
+	if err != nil {
+		return false, err
+	}
+	var myOtherVal bool
+	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(jsonValue(conversionColumn, record)))
+	if err != nil {
+		return false, err
+	}
+	return (myVal && myOtherVal), nil
+}
+
+// evalBetweenLess is a function which evaluates the between given that the
+// FROM is > than the TO.
+func evalBetweenLess(conversionColumn string, record string, funcName string, colFromVal interface{}, colToVal interface{}, myColVal string) (bool, error) {
+	if format.IsInt(conversionColumn) {
+		// Subtract 1 out because the index starts at 1 for Amazon instead of 0.
+		myVal, err := evaluateOperator(jsonValue("_"+conversionColumn, record), "<=", colFromVal)
+		if err != nil {
+			return false, err
+		}
+		var myOtherVal bool
+		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(jsonValue("_"+conversionColumn, record)))
+		if err != nil {
+			return false, err
+		}
+		return (myVal && myOtherVal), nil
+	}
+	if myColVal != "" {
+		myVal, err := evaluateOperator(myColVal, "<=", colFromVal)
+		if err != nil {
+			return false, err
+		}
+		var myOtherVal bool
+		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(myColVal))
+		if err != nil {
+			return false, err
+		}
+		return (myVal && myOtherVal), nil
+	}
+	myVal, err := evaluateOperator(jsonValue(conversionColumn, record), "<=", colFromVal)
+	if err != nil {
+		return false, err
+	}
+	var myOtherVal bool
+	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(jsonValue(conversionColumn, record)))
+	if err != nil {
+		return false, err
+	}
+	return (myVal && myOtherVal), nil
 }
 
 // This is a really important function it actually evaluates the boolean
@@ -432,151 +518,16 @@ func cleanCol(myCol string, alias string) string {
 	return myCol
 }
 
-// evaluateBetween is a function which evaluates a Between Clause.
-func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record []string, columnNames map[string]int) (bool, error) {
-	var colToVal interface{}
-	var colFromVal interface{}
-	var conversionColumn string
-	var funcName string
-	switch colTo := betweenExpr.To.(type) {
-	case sqlparser.Expr:
-		switch colToMyVal := colTo.(type) {
-		case *sqlparser.FuncExpr:
-			var temp string
-			temp = stringOps(colToMyVal, record, "", columnNames)
-			colToVal = []byte(temp)
-		case *sqlparser.SQLVal:
-			var err error
-			colToVal, err = evaluateParserType(colToMyVal)
-			if err != nil {
-				return false, err
-			}
-		}
-	}
-	switch colFrom := betweenExpr.From.(type) {
-	case sqlparser.Expr:
-		switch colFromMyVal := colFrom.(type) {
-		case *sqlparser.FuncExpr:
-			colFromVal = stringOps(colFromMyVal, record, "", columnNames)
-		case *sqlparser.SQLVal:
-			var err error
-			colFromVal, err = evaluateParserType(colFromMyVal)
-			if err != nil {
-				return false, err
-			}
-		}
-	}
-	var myFuncVal string
-	myFuncVal = ""
-	switch left := betweenExpr.Left.(type) {
-	case *sqlparser.FuncExpr:
-		myFuncVal = evaluateFuncExpr(left, "", record, columnNames)
-		conversionColumn = ""
-	case *sqlparser.ColName:
-		conversionColumn = cleanCol(left.Name.CompliantName(), alias)
-	}
-
-	toGreater, err := evaluateOperator(fmt.Sprintf("%v", colToVal), ">", colFromVal)
-	if err != nil {
-		return false, err
-	}
-	if toGreater {
-		return evalBetweenGreater(conversionColumn, record, funcName, columnNames, colFromVal, colToVal, myFuncVal)
-	}
-	return evalBetweenLess(conversionColumn, record, funcName, columnNames, colFromVal, colToVal, myFuncVal)
-}
-
-// evalBetweenLess is a function which evaluates the between given that the
-// FROM is > than the TO.
-func evalBetweenLess(conversionColumn string, record []string, funcName string, columnNames map[string]int, colFromVal interface{}, colToVal interface{}, myCoalVal string) (bool, error) {
-	if representsInt(conversionColumn) {
-		myIndex, _ := strconv.Atoi(conversionColumn)
-		// Subtract 1 out because the index starts at 1 for Amazon instead of 0.
-		myVal, err := evaluateOperator(record[myIndex-1], "<=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(record[myIndex-1]))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	if myCoalVal != "" {
-		myVal, err := evaluateOperator(myCoalVal, "<=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(myCoalVal))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	myVal, err := evaluateOperator(record[columnNames[conversionColumn]], "<=", colFromVal)
-	if err != nil {
-		return false, err
-	}
-	var myOtherVal bool
-	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(record[columnNames[conversionColumn]]))
-	if err != nil {
-		return false, err
-	}
-	return (myVal && myOtherVal), nil
-}
-
-// evalBetweenGreater is a function which evaluates the between given that the
-// TO is > than the FROM.
-func evalBetweenGreater(conversionColumn string, record []string, funcName string, columnNames map[string]int, colFromVal interface{}, colToVal interface{}, myCoalVal string) (bool, error) {
-	if representsInt(conversionColumn) {
-		myIndex, _ := strconv.Atoi(conversionColumn)
-		myVal, err := evaluateOperator(record[myIndex-1], ">=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(record[myIndex-1]))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	if myCoalVal != "" {
-		myVal, err := evaluateOperator(myCoalVal, ">=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(myCoalVal))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	myVal, err := evaluateOperator(record[columnNames[conversionColumn]], ">=", colFromVal)
-	if err != nil {
-		return false, err
-	}
-	var myOtherVal bool
-	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(record[columnNames[conversionColumn]]))
-	if err != nil {
-		return false, err
-	}
-	return (myVal && myOtherVal), nil
-}
-
 // whereClauseNameErrs is a function which returns an error if there is a column
 // in the where clause which does not exist.
-func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) error {
+func whereClauseNameErrs(whereClause interface{}, alias string, f format.Select) error {
 	var conversionColumn string
 	switch expr := whereClause.(type) {
 	// case for checking errors within a clause of the form "col_name is ..."
 	case *sqlparser.IsExpr:
 		switch myCol := expr.Expr.(type) {
 		case *sqlparser.FuncExpr:
-			if err := reader.evaluateFuncErr(myCol); err != nil {
+			if err := evaluateFuncErr(myCol, f); err != nil {
 				return err
 			}
 		case *sqlparser.ColName:
@@ -585,7 +536,7 @@ func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) 
 	case *sqlparser.RangeCond:
 		switch left := expr.Left.(type) {
 		case *sqlparser.FuncExpr:
-			if err := reader.evaluateFuncErr(left); err != nil {
+			if err := evaluateFuncErr(left, f); err != nil {
 				return err
 			}
 		case *sqlparser.ColName:
@@ -594,7 +545,7 @@ func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) 
 	case *sqlparser.ComparisonExpr:
 		switch left := expr.Left.(type) {
 		case *sqlparser.FuncExpr:
-			if err := reader.evaluateFuncErr(left); err != nil {
+			if err := evaluateFuncErr(left, f); err != nil {
 				return err
 			}
 		case *sqlparser.ColName:
@@ -603,54 +554,30 @@ func (reader *Input) whereClauseNameErrs(whereClause interface{}, alias string) 
 	case *sqlparser.AndExpr:
 		switch left := expr.Left.(type) {
 		case *sqlparser.ComparisonExpr:
-			return reader.whereClauseNameErrs(left, alias)
+			return whereClauseNameErrs(left, alias, f)
 		}
 		switch right := expr.Right.(type) {
 		case *sqlparser.ComparisonExpr:
-			return reader.whereClauseNameErrs(right, alias)
+			return whereClauseNameErrs(right, alias, f)
 		}
 	case *sqlparser.OrExpr:
 		switch left := expr.Left.(type) {
 		case *sqlparser.ComparisonExpr:
-			return reader.whereClauseNameErrs(left, alias)
+			return whereClauseNameErrs(left, alias, f)
 		}
 		switch right := expr.Right.(type) {
 		case *sqlparser.ComparisonExpr:
-			return reader.whereClauseNameErrs(right, alias)
+			return whereClauseNameErrs(right, alias, f)
 		}
 	}
 	if conversionColumn != "" {
-		return reader.colNameErrs([]string{conversionColumn})
-	}
-	return nil
-}
-
-// colNameErrs is a function which makes sure that the headers are requested are
-// present in the file otherwise it throws an error.
-func (reader *Input) colNameErrs(columnNames []string) error {
-	for i := 0; i < len(columnNames); i++ {
-		if columnNames[i] == "" {
-			continue
-		}
-		if !representsInt(columnNames[i]) && !reader.options.HeaderOpt {
-			return ErrInvalidColumnIndex
-		}
-		if representsInt(columnNames[i]) {
-			tempInt, _ := strconv.Atoi(columnNames[i])
-			if tempInt > len(reader.Header()) || tempInt == 0 {
-				return ErrInvalidColumnIndex
-			}
-		} else {
-			if reader.options.HeaderOpt && !stringInSlice(columnNames[i], reader.Header()) {
-				return ErrMissingHeaders
-			}
-		}
+		return f.ColNameErrs([]string{conversionColumn})
 	}
 	return nil
 }
 
 // aggFuncToStr converts an array of floats into a properly formatted string.
-func (reader *Input) aggFuncToStr(aggVals []float64) string {
+func aggFuncToStr(aggVals []float64, f format.Select) string {
 	// Define a number formatting function
 	numToStr := func(f float64) string {
 		if f == math.Trunc(f) {
@@ -666,7 +593,7 @@ func (reader *Input) aggFuncToStr(aggVals []float64) string {
 	}
 
 	// Intersperse field delimiter
-	return strings.Join(vals, reader.options.OutputFieldDelimiter)
+	return strings.Join(vals, f.OutputFieldDelimiter())
 }
 
 // checkForDuplicates ensures we do not have an ambigious column name.
@@ -714,18 +641,18 @@ func evaluateParserType(col *sqlparser.SQLVal) (interface{}, error) {
 
 // parseErrs is the function which handles all the errors that could occur
 // through use of function arguments such as column names in NULLIF
-func (reader *Input) parseErrs(columnNames []string, whereClause interface{}, alias string, myFuncs *SelectFuncs) error {
+func parseErrs(columnNames []string, whereClause interface{}, alias string, myFuncs *SelectFuncs, f format.Select) error {
 	// Below code cleans up column names.
-	reader.processColumnNames(columnNames, alias)
+	processColumnNames(columnNames, alias, f)
 	if columnNames[0] != "*" {
-		if err := reader.colNameErrs(columnNames); err != nil {
+		if err := f.ColNameErrs(columnNames); err != nil {
 			return err
 		}
 	}
 	// Below code ensures the whereClause has no errors.
 	if whereClause != nil {
 		tempClause := whereClause
-		if err := reader.whereClauseNameErrs(tempClause, alias); err != nil {
+		if err := whereClauseNameErrs(tempClause, alias, f); err != nil {
 			return err
 		}
 	}
@@ -733,9 +660,16 @@ func (reader *Input) parseErrs(columnNames []string, whereClause interface{}, al
 		if myFuncs.funcExpr[i] == nil {
 			continue
 		}
-		if err := reader.evaluateFuncErr(myFuncs.funcExpr[i]); err != nil {
+		if err := evaluateFuncErr(myFuncs.funcExpr[i], f); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// It return the value corresponding to the tag in Json .
+// Input is the Key and row is the JSON string
+func jsonValue(input string, row string) string {
+	value := gjson.Get(row, input)
+	return value.String()
 }

@@ -19,12 +19,13 @@ package s3select
 import (
 	"strings"
 
+	"github.com/minio/minio/pkg/s3select/format"
 	"github.com/xwb1989/sqlparser"
 )
 
 // stringOps is a function which handles the case in a clause if there is a need
 // to perform a string function
-func stringOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, columnsMap map[string]int) string {
+func stringOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
 	var value string
 	funcName := myFunc.Name.CompliantName()
 	switch tempArg := myFunc.Exprs[0].(type) {
@@ -34,7 +35,7 @@ func stringOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, 
 			// myReturnVal is actually the tail recursive value being used in the eval func.
 			return applyStrFunc(myReturnVal, funcName)
 		case *sqlparser.ColName:
-			value = applyStrFunc(record[columnsMap[col.Name.CompliantName()]], funcName)
+			value = applyStrFunc(jsonValue(col.Name.CompliantName(), record), funcName)
 		case *sqlparser.SQLVal:
 			value = applyStrFunc(string(col.Val), funcName)
 		}
@@ -43,7 +44,7 @@ func stringOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, 
 }
 
 // coalOps is a function which decomposes a COALESCE func expr into its struct.
-func coalOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, columnsMap map[string]int) string {
+func coalOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
 	myArgs := make([]string, len(myFunc.Exprs))
 
 	for i := 0; i < len(myFunc.Exprs); i++ {
@@ -54,7 +55,7 @@ func coalOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, co
 				// myReturnVal is actually the tail recursive value being used in the eval func.
 				return myReturnVal
 			case *sqlparser.ColName:
-				myArgs[i] = record[columnsMap[col.Name.CompliantName()]]
+				myArgs[i] = jsonValue(col.Name.CompliantName(), record)
 			case *sqlparser.SQLVal:
 				myArgs[i] = string(col.Val)
 			}
@@ -64,7 +65,7 @@ func coalOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, co
 }
 
 // nullOps is a function which decomposes a NullIf func expr into its struct.
-func nullOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, columnsMap map[string]int) string {
+func nullOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
 	myArgs := make([]string, 2)
 
 	for i := 0; i < len(myFunc.Exprs); i++ {
@@ -74,7 +75,7 @@ func nullOps(myFunc *sqlparser.FuncExpr, record []string, myReturnVal string, co
 			case *sqlparser.FuncExpr:
 				return myReturnVal
 			case *sqlparser.ColName:
-				myArgs[i] = record[columnsMap[col.Name.CompliantName()]]
+				myArgs[i] = jsonValue(col.Name.CompliantName(), record)
 			case *sqlparser.SQLVal:
 				myArgs[i] = string(col.Val)
 			}
@@ -118,8 +119,8 @@ func processCoalNoIndex(coalStore []string) string {
 }
 
 // evaluateFuncExpr is a function that allows for tail recursive evaluation of
-// nested function expressions.
-func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord []string, columnsMap map[string]int) string {
+// nested function expressions
+func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord string) string {
 	if myVal == nil {
 		return myReturnVal
 	}
@@ -140,26 +141,26 @@ func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord []
 	for i := 0; i < len(mySubFunc); i++ {
 		if supportedString(myVal.Name.CompliantName()) {
 			if mySubFunc != nil {
-				return stringOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
+				return stringOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
 			}
-			return stringOps(myVal, myRecord, myReturnVal, columnsMap)
+			return stringOps(myVal, myRecord, myReturnVal)
 		} else if strings.ToUpper(myVal.Name.CompliantName()) == "NULLIF" {
 			if mySubFunc != nil {
-				return nullOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
+				return nullOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
 			}
-			return nullOps(myVal, myRecord, myReturnVal, columnsMap)
+			return nullOps(myVal, myRecord, myReturnVal)
 		} else if strings.ToUpper(myVal.Name.CompliantName()) == "COALESCE" {
 			if mySubFunc != nil {
-				return coalOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord, columnsMap), columnsMap)
+				return coalOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
 			}
-			return coalOps(myVal, myRecord, myReturnVal, columnsMap)
+			return coalOps(myVal, myRecord, myReturnVal)
 		}
 	}
 	return ""
 }
 
 // evaluateFuncErr is a function that flags errors in nested functions.
-func (reader *Input) evaluateFuncErr(myVal *sqlparser.FuncExpr) error {
+func evaluateFuncErr(myVal *sqlparser.FuncExpr, reader format.Select) error {
 	if myVal == nil {
 		return nil
 	}
@@ -173,11 +174,11 @@ func (reader *Input) evaluateFuncErr(myVal *sqlparser.FuncExpr) error {
 		case *sqlparser.AliasedExpr:
 			switch col := tempArg.Expr.(type) {
 			case *sqlparser.FuncExpr:
-				if err := reader.evaluateFuncErr(col); err != nil {
+				if err := evaluateFuncErr(col, reader); err != nil {
 					return err
 				}
 			case *sqlparser.ColName:
-				if err := reader.colNameErrs([]string{col.Name.CompliantName()}); err != nil {
+				if err := reader.ColNameErrs([]string{col.Name.CompliantName()}); err != nil {
 					return err
 				}
 			}
@@ -186,11 +187,9 @@ func (reader *Input) evaluateFuncErr(myVal *sqlparser.FuncExpr) error {
 	return nil
 }
 
-// evaluateIsExpr is a function for evaluating expressions of the form "column
-// is ...."
-func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []string, columnNames map[string]int, alias string) (bool, error) {
+// evaluateIsExpr is a function for evaluating expressions of the form "column is ...."
+func evaluateIsExpr(myFunc *sqlparser.IsExpr, row string, alias string) (bool, error) {
 	operator := myFunc.Operator
-	var colName string
 	var myVal string
 	switch myIs := myFunc.Expr.(type) {
 	// case for literal val
@@ -198,14 +197,10 @@ func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []string, columnNames map[stri
 		myVal = string(myIs.Val)
 	// case for nested func val
 	case *sqlparser.FuncExpr:
-		myVal = evaluateFuncExpr(myIs, "", row, columnNames)
+		myVal = evaluateFuncExpr(myIs, "", row)
 	// case for col val
 	case *sqlparser.ColName:
-		colName = cleanCol(myIs.Name.CompliantName(), alias)
-	}
-	// case if it is a col val
-	if colName != "" {
-		myVal = row[columnNames[colName]]
+		myVal = jsonValue(myIs.Name.CompliantName(), row)
 	}
 	// case to evaluate is null
 	if strings.ToLower(operator) == "is null" {
@@ -221,11 +216,11 @@ func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []string, columnNames map[stri
 // supportedString is a function that checks whether the function is a supported
 // string one
 func supportedString(strFunc string) bool {
-	return stringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER"})
+	return format.StringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER"})
 }
 
 // supportedFunc is a function that checks whether the function is a supported
 // S3 one.
 func supportedFunc(strFunc string) bool {
-	return stringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER", "COALESCE", "NULLIF"})
+	return format.StringInSlice(strings.ToUpper(strFunc), []string{"TRIM", "SUBSTRING", "CHAR_LENGTH", "CHARACTER_LENGTH", "LOWER", "UPPER", "COALESCE", "NULLIF"})
 }
