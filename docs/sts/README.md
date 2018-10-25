@@ -11,7 +11,7 @@ Following are advantages for using temporary credentials:
 - Temporary credentials have a limited lifetime, there is no need to rotate them or explicitly revoke them. Expired temporary credentials cannot be reused.
 
 ## Identity Federation
-[**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS client grants supports WSO2, Keycloak.
+[**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS supports client grants, tested against identity providers such as WSO2, KeyCloak.
 
 ## Get started
 In this document we will explain in detail on how to configure all the prerequisites, primarily WSO2, OPA (open policy agent).

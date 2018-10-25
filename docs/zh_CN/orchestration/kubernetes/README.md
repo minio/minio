@@ -4,9 +4,7 @@ Kubernetes的部署和状态集提供了在独立，分布式或共享模式下�
 
 - Minio [Helm](https://helm.sh) Chart通过一个简单的命令即可提供自定义而且简单的Minio部署。更多关于Minio Helm部署的资料，请访问[这里](#prerequisites).
 
-- 你也可以浏览Kubernetes [Minio示例](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/README.md) ，通过`.yaml`文件来部署Minio。
-
-- 如果您想在Kubernetes上开始使用Minio，而无需创建真正的容器集群，您也可以使用Minikube [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md)。
+- 你也可以浏览Kubernetes [Minio示例](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/README.md) ，通过`.yaml`文件来部署Minio。
 
 <a name="prerequisites"></a>
 ## 1. 前提条件
