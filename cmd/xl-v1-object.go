@@ -112,7 +112,7 @@ func (xl xlObjects) CopyObjectVersion(ctx context.Context, srcBucket, srcObject,
 	length := xlMeta.Stat.Size
 
 	// Check if this request is only metadata update.
-	if cpSrcDstSame { // FIXME: check the behavior of AWS when version is provided when src == dst
+	if cpSrcDstSame {
 		// Update `xl.json` content on each disks.
 		for index := range metaArr {
 			metaArr[index].Meta = srcInfo.UserDefined
@@ -965,7 +965,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 
 	if !hasSuffix(object, slashSeparator) {
 		if globalVersioningSys.IsEnabled(bucket) {
-			// FIXME: check the quorum of all versioned objects
+			// FIXME(VERSIONING): check the quorum of all versioned objects
 			xlVersioning, vErr := xl.getObjectVersioning(ctx, bucket, object)
 
 			// Ignore any errors for versioned buckets and create the version history regardless

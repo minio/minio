@@ -274,6 +274,7 @@ func deleteObjectVersion(ctx context.Context, obj ObjectLayer, bucket, object, v
 		return
 	}
 
+	// FIXME(VERSIONING): Do we need to add deleteMarker to the event object?
 	// Get host and port from Request.RemoteAddr.
 	host, port, _ := net.SplitHostPort(handlers.GetSourceIP(r))
 	

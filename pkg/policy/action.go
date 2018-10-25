@@ -83,6 +83,15 @@ const (
 
 	// PutObjectAction - PutObject Rest API action.
 	PutObjectAction = "s3:PutObject"
+
+	// FIXME(VERSIONING): Do we want to add these policies?
+	//DeleteObjectVersion = ""
+	//GetBucketVersioning = ""
+	//GetObjectVersion = ""
+	//GetObjectVersionAcl = ""
+	//ListBucketVersions = ""
+	//PutBucketVersioning = ""
+	//PutObjectVersionAcl = ""
 )
 
 // isObjectAction - returns whether action is object type or not.

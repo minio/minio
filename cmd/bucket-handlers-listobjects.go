@@ -80,6 +80,7 @@ func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// FIXME(VERSIONING): Use ListBucketVersions ??
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -106,16 +107,16 @@ func (api objectAPIHandlers) ListObjectsVersionsHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// FIXME: check if size in versions differentiate between encryption/plain state of object
-	/* for i := range listObjectsVersionsInfo.Versions {
-		if listObjectsVersionsInfo.Versions[i].IsEncrypted() {
-			listObjectsVersionsInfo.Versions[i].Size, err = listObjectsVersionsInfo.Versions[i].DecryptedSize()
-			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
-			}
-		}
-	} */
+	// FIXME(VERSIONING): check if size in versions differentiate between encryption/plain state of object
+	// for i := range listObjectsVersionsInfo.Versions {
+	//	if listObjectsVersionsInfo.Versions[i].IsEncrypted() {
+	//		listObjectsVersionsInfo.Versions[i].Size, err = listObjectsVersionsInfo.Versions[i].DecryptedSize()
+	//		if err != nil {
+	//			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+	//			return
+	//		}
+	//	}
+	//}
 
 	response := generateListObjectsVersionsResponse(bucket, prefix, delimiter, maxkeys, listObjectsVersionsInfo)
 

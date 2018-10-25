@@ -62,7 +62,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	//FIXME: check if get versioning has anything to do with policy configuration
+	// FIXME(VERSIONING): check if get versioning has anything to do with policy configuration
 	if s3Error := checkRequestAuthType(ctx, r, "", bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
@@ -92,6 +92,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	} else {
 		err = xml.Unmarshal(versioningConfigBytes, &versioningConfig)
 		if err != nil {
+			// FIXME(VERSIONING): Change error code
 			writeErrorResponse(w, ErrMalformedPolicy, r.URL)
 			return
 		}
@@ -100,6 +101,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 	// Minio only allows versioning to be enabled (effectively just once),
 	// thereafter it cannot be suspended.
 	if versioningConfig.Status != "Enabled" {
+		// FIXME(VERSIONING): Change error code
 		writeErrorResponse(w, ErrMalformedPolicy, r.URL)
 		return
 	}

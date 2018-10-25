@@ -629,6 +629,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 			objInfo.ETag = remoteObjInfo.ETag
 			objInfo.ModTime = remoteObjInfo.LastModified
+			// objInfo.VersionId = remoteObjInfo.VersionId
+			// FIXME(VERSIONING): Get versionId from client (requires minio-go extension)
 		}
 	} else {
 		// Copy source object to destination, if source and destination

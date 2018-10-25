@@ -107,6 +107,9 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	// FIXME(VERSIONING): Support versionId(s) -- and error out if not supported
+	// versionID := r.URL.Query().Get("versionId")
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
