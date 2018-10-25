@@ -52,12 +52,8 @@ mc ls mygcs
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
-### 已知的限制
-[限制](https://github.com/minio/minio/blob/master/docs/gateway/gcs-limitations.md)
-
 ## 了解更多
 - [`mc` 命令行接口](https://docs.minio.io/cn/minio-client-quickstart-guide)
 - [`aws` 命令行接口](https://docs.minio.io/cn/aws-cli-with-minio)
-- [`minfs` 文件系统接口](https://docs.minio.io/cn/minfs-quickstart-guide)
 - [`minio-go` Go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
 

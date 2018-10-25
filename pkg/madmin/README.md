@@ -113,7 +113,7 @@ The sample output below shows the result of executing the above program against 
 
 * [service-status.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-status.go)
 * [service-restart.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-restart.go)
-* [service-set-credentials.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-set-credentials.go)
+* [set-credentials.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/set-credentials.go)
 
 ## Contribute
 
