@@ -244,7 +244,6 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 			err := disk.DeleteVol(bucket)
 
 			if err != nil {
-				logger.LogIf(ctx, err)
 				dErrs[index] = err
 				return
 			}

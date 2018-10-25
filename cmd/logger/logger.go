@@ -320,7 +320,7 @@ func logIf(ctx context.Context, err error) {
 	}
 
 	// Get full stack trace
-	trace := getTrace(2)
+	trace := getTrace(3)
 
 	// Get the cause for the Error
 	message := err.Error()

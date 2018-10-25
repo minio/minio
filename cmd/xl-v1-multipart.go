@@ -385,7 +385,6 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if n < data.Size() {
-		logger.LogIf(ctx, IncompleteBody{})
 		return pi, IncompleteBody{}
 	}
 
@@ -655,7 +654,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 				PartNumber: part.PartNumber,
 				GotETag:    part.ETag,
 			}
-			logger.LogIf(ctx, invp)
 			return oi, invp
 		}
 
@@ -666,17 +664,11 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 				ExpETag:    currentXLMeta.Parts[partIdx].ETag,
 				GotETag:    part.ETag,
 			}
-			logger.LogIf(ctx, invp)
 			return oi, invp
 		}
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].ActualSize) {
-			logger.LogIf(ctx, PartTooSmall{
-				PartNumber: part.PartNumber,
-				PartSize:   currentXLMeta.Parts[partIdx].ActualSize,
-				PartETag:   part.ETag,
-			})
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
 				PartSize:   currentXLMeta.Parts[partIdx].ActualSize,

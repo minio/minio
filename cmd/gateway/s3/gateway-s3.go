@@ -377,7 +377,6 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 
 	if startOffset >= 0 && length >= 0 {
 		if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
-			logger.LogIf(ctx, err)
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
@@ -388,7 +387,6 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 	defer object.Close()
 
 	if _, err := io.Copy(writer, object); err != nil {
-		logger.LogIf(ctx, err)
 		return minio.ErrorRespToObjectError(err, bucket, key)
 	}
 	return nil
