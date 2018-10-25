@@ -632,6 +632,22 @@ func reloadUsers(objectAPI ObjectLayer, prefix string, usersMap map[string]auth.
 	return nil
 }
 
+// Set default canned policies only if not already overridden by users.
+func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
+	_, ok := policies["writeonly"]
+	if !ok {
+		policies["writeonly"] = iampolicy.WriteOnly
+	}
+	_, ok = policies["readonly"]
+	if !ok {
+		policies["readonly"] = iampolicy.ReadOnly
+	}
+	_, ok = policies["readwrite"]
+	if !ok {
+		policies["readwrite"] = iampolicy.ReadWrite
+	}
+}
+
 // Refresh IAMSys.
 func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 	iamUsersMap := make(map[string]auth.Credentials)
@@ -659,6 +675,9 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 			return err
 		}
 	}
+
+	// Sets default canned policies, if none set.
+	setDefaultCannedPolicies(iamCannedPolicyMap)
 
 	sys.Lock()
 	defer sys.Unlock()
