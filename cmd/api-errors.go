@@ -254,7 +254,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrAccessDenied: {
 		Code:           "AccessDenied",
-		Description:    "Access Denied.",
+		Description:    "Access denied.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrBadDigest: {
