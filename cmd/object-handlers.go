@@ -701,30 +701,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	// Get request range.
-	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("x-amz-copy-source-range")
-	if rangeHeader != "" {
-		var parseRangeErr error
-		if rs, parseRangeErr = parseRequestRangeSpec(rangeHeader); parseRangeErr != nil {
-			// Handle only errInvalidRange. Ignore other
-			// parse error and treat it as regular Get
-			// request like Amazon S3.
-			if parseRangeErr == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
-
-			// log the error.
-			logger.LogIf(ctx, parseRangeErr)
-		}
-	}
-
 	var lock = noLock
 	if !cpSrcDstSame {
 		lock = readLock
 	}
 
+	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, srcOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -1485,8 +1467,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Get the object offset & length
-	startOffset, length, _ := rs.GetOffsetLength(actualPartSize)
-	actualPartSize = length
+	startOffset, length, err := rs.GetOffsetLength(actualPartSize)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 
 	/// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
@@ -1494,8 +1479,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	actualPartSize = length
 	var reader io.Reader
-	var getLength = length
 
 	var li ListPartsInfo
 	li, err = objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1)
@@ -1503,6 +1488,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, compressPart := li.UserDefined[ReservedMetadataPrefix+"compression"]
 	isCompressed := compressPart
@@ -1535,7 +1521,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		if crypto.IsEncrypted(li.UserDefined) {
-			if !hasServerSideEncryptionHeader(r.Header) {
+			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
 				return
 			}
@@ -1567,18 +1553,18 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			}
 
 			info := ObjectInfo{Size: length}
-			size := info.EncryptedSize()
-			srcInfo.Reader, err = hash.NewReader(reader, size, "", "", actualPartSize)
+			srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
 			}
 		}
 	}
+
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket,
-		dstObject, uploadID, partID, startOffset, getLength, srcInfo, srcOpts, dstOpts)
+	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
+		startOffset, length, srcInfo, srcOpts, dstOpts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
