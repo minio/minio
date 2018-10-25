@@ -18,6 +18,8 @@ import React from "react"
 import { shallow } from "enzyme"
 import { Bucket } from "../Bucket"
 
+jest.useFakeTimers()
+
 describe("Bucket", () => {
   it("should render without crashing", () => {
     shallow(<Bucket />)
@@ -26,11 +28,17 @@ describe("Bucket", () => {
   it("should call selectBucket when clicked", () => {
     const selectBucket = jest.fn()
     const wrapper = shallow(
-      <Bucket bucket={"test"} selectBucket={selectBucket} />
+      <Bucket
+        bucket={"test"}
+        selectBucket={selectBucket}
+        closeSidebar={jest.fn()}
+      />
     )
-    wrapper
-      .find(".buckets__item")
-      .simulate("click", { preventDefault: jest.fn() })
+    wrapper.find(".buckets__item").simulate("click", {
+      preventDefault: jest.fn(),
+      target: {}
+    })
+    jest.runAllTimers()
     expect(selectBucket).toHaveBeenCalledWith("test")
   })
 
