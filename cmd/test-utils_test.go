@@ -2017,7 +2017,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	removeRoots(append(xlDisks, fsDir, rootPath))
 }
 
-// function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
+// function to be passed to ExecObjectLayerAPITest, for executing object layer API handler tests.
 type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string,
 	apiRouter http.Handler, credentials auth.Credentials, t *testing.T)
 
