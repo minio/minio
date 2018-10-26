@@ -678,6 +678,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
 	// Check if metadata directive is valid.
 	if !isMetadataDirectiveValid(r.Header) {
 		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
@@ -1390,6 +1395,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
