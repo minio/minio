@@ -157,10 +157,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to create configuration directories")
 
-	// Check and load SSL certificates.
+	// Check and load TLS certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
-	logger.FatalIf(err, "Invalid SSL certificate file")
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	logger.FatalIf(err, "Invalid TLS certificate file")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = getRootCAs(getCADir())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
