@@ -2163,23 +2163,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		}
 	}
 
-	// Test for Anonymous/unsigned http request.
-	newCopyAnonObject := "new-anon-obj"
-	anonReq, err := newTestRequest("PUT", getCopyObjectURL("", bucketName, newCopyAnonObject), 0, nil)
-	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
-			instanceType, bucketName, "new-anon-obj", err)
-	}
-
-	// Below is how CopyObjectHandler is registered.
-	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?")
-	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
-	anonReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+bucketName+"/"+anonObject))
-	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
-	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
-	// unsigned request goes through and its validated again.
-	ExecObjectLayerAPIAnonTest(t, obj, "TestAPICopyObjectHandler", bucketName, newCopyAnonObject, instanceType, apiRouter, anonReq, getAnonWriteOnlyObjectPolicy(bucketName, newCopyAnonObject))
-
 	// HTTP request to test the case of `objectLayer` being set to `nil`.
 	// There is no need to use an existing bucket or valid input for creating the request,
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
