@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/go-autorest/autorest/azure"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
@@ -93,7 +94,7 @@ EXAMPLES:
   2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
      $ export MINIO_ACCESS_KEY=azureaccountname
      $ export MINIO_SECRET_KEY=azureaccountkey
-     $ {{.HelpName}} https://azure.example.com
+     $ {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
 
   3. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
      $ export MINIO_ACCESS_KEY=azureaccountname
@@ -140,28 +141,43 @@ func (g *Azure) Name() string {
 	return azureBackend
 }
 
+// All known cloud environments of Azure
+var azureEnvs = []azure.Environment{
+	azure.PublicCloud,
+	azure.USGovernmentCloud,
+	azure.ChinaCloud,
+	azure.GermanCloud,
+}
+
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
-	var endpoint = storage.DefaultBaseURL
+	// The default endpoint is the public cloud
+	var endpoint = azure.PublicCloud.StorageEndpointSuffix
 	var secure = true
 
-	// If user provided some parameters
+	// Load the endpoint url if supplied by the user.
 	if g.host != "" {
 		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
+		// Reformat the full account storage endpoint to the base format.
+		//   e.g. testazure.blob.core.windows.net => core.windows.net
+		endpoint = strings.ToLower(endpoint)
+		for _, env := range azureEnvs {
+			if strings.Contains(endpoint, env.StorageEndpointSuffix) {
+				endpoint = env.StorageEndpointSuffix
+				break
+			}
+		}
 	}
 
-	if endpoint == fmt.Sprintf("%s.blob.%s", creds.AccessKey, storage.DefaultBaseURL) {
-		// If, by mistake, user provides endpoint as accountname.blob.core.windows.net
-		endpoint = storage.DefaultBaseURL
-	}
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	c.AddToUserAgent(fmt.Sprintf("APN/1.0 Minio/1.0 Minio/%s", minio.Version))
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
