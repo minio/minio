@@ -100,7 +100,7 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 		return newPosix(endpoint.Path)
 	}
 
-	return newStorageRESTClient(endpoint), nil
+	return newStorageRESTClient(endpoint)
 }
 
 // Cleanup a directory recursively.

@@ -51,15 +51,15 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs                  []string                 // addresses on which the server listens for new connection.
-	ShutdownTimeout        time.Duration            // timeout used for graceful server shutdown.
-	TCPKeepAliveTimeout    time.Duration            // timeout used for underneath TCP connection.
-	UpdateBytesReadFunc    func(*http.Request, int) // function to be called to update bytes read in bufConn.
-	UpdateBytesWrittenFunc func(*http.Request, int) // function to be called to update bytes written in bufConn.
-	listenerMutex          *sync.Mutex              // to guard 'listener' field.
-	listener               *httpListener            // HTTP listener for all 'Addrs' field.
-	inShutdown             uint32                   // indicates whether the server is in shutdown or not
-	requestCount           int32                    // counter holds no. of request in progress.
+	Addrs                  []string      // addresses on which the server listens for new connection.
+	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
+	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
+	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
+	UpdateBytesWrittenFunc func(int)     // function to be called to update bytes written in bufConn.
+	listenerMutex          *sync.Mutex   // to guard 'listener' field.
+	listener               *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown             uint32        // indicates whether the server is in shutdown or not
+	requestCount           int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -80,8 +80,6 @@ func (srv *Server) Start() (err error) {
 
 	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
 	tcpKeepAliveTimeout := srv.TCPKeepAliveTimeout
-	updateBytesReadFunc := srv.UpdateBytesReadFunc
-	updateBytesWrittenFunc := srv.UpdateBytesWrittenFunc
 
 	// Create new HTTP listener.
 	var listener *httpListener
@@ -92,8 +90,8 @@ func (srv *Server) Start() (err error) {
 		readTimeout,
 		writeTimeout,
 		srv.MaxHeaderBytes,
-		updateBytesReadFunc,
-		updateBytesWrittenFunc,
+		srv.UpdateBytesReadFunc,
+		srv.UpdateBytesWrittenFunc,
 	)
 	if err != nil {
 		return err
@@ -121,6 +119,9 @@ func (srv *Server) Start() (err error) {
 	srv.listenerMutex.Unlock()
 
 	// Start servicing with listener.
+	if tlsConfig != nil {
+		return srv.Server.Serve(tls.NewListener(listener, tlsConfig))
+	}
 	return srv.Server.Serve(listener)
 }
 
@@ -192,7 +193,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			CipherSuites:             defaultCipherSuites,
 			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"http/1.1"},
+			NextProtos:               []string{"h2", "http/1.1"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}
