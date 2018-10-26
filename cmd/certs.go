@@ -164,10 +164,6 @@ func getTLSConfig() (x509Certs []*x509.Certificate, c *certs.Certs, secureConn b
 		return nil, nil, false, err
 	}
 
-	//if rootCAs, err = getRootCAs(getCADir()); err != nil {
-	//		return nil, nil, nil, false, err
-	//	}
-
 	secureConn = true
 	return x509Certs, c, secureConn, nil
 }
