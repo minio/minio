@@ -266,8 +266,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	// Executes the query on data-set
 	if err = s3select.Execute(w, s3s); err != nil {
-		logger.LogIf(ctx, err)
-
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
 	}
 
 	for k, v := range objInfo.UserDefined {
