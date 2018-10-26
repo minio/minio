@@ -36,29 +36,6 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
-// checks for bucket if it exists in writeQuorum number of disks, this call
-// is only used by healBucket().
-func checkBucketExistsInQuorum(ctx context.Context, storageDisks []StorageAPI, bucketName string) (err error) {
-	var wg = &sync.WaitGroup{}
-
-	errs := make([]error, len(storageDisks))
-	// Prepare object creation in a all disks
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_, errs[index] = disk.StatVol(bucketName)
-		}(index, disk)
-	}
-	wg.Wait()
-
-	readQuorum := len(storageDisks) / 2
-	return reduceWriteQuorumErrs(ctx, errs, nil, readQuorum)
-}
-
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
@@ -66,13 +43,6 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) 
 	results []madmin.HealResultItem, err error) {
 
 	storageDisks := xl.getDisks()
-
-	// Check if bucket doesn't exist in writeQuorum number of disks, if quorum
-	// number of disks returned that bucket does not exist we quickly return
-	// and do not proceed to heal.
-	if err = checkBucketExistsInQuorum(ctx, storageDisks, bucket); err != nil {
-		return results, err
-	}
 
 	// get write quorum for an object
 	writeQuorum := len(storageDisks)/2 + 1
