@@ -1202,8 +1202,14 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 	for _, endpoint := range s.endpoints {
 		var foundBefore bool
 		for _, v := range res.Before.Drives {
-			if v.Endpoint == endpoint.String() {
-				foundBefore = true
+			if endpoint.IsLocal {
+				if v.Endpoint == endpoint.Path {
+					foundBefore = true
+				}
+			} else {
+				if v.Endpoint == endpoint.String() {
+					foundBefore = true
+				}
 			}
 		}
 		if !foundBefore {
@@ -1215,8 +1221,14 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 		}
 		var foundAfter bool
 		for _, v := range res.After.Drives {
-			if v.Endpoint == endpoint.String() {
-				foundAfter = true
+			if endpoint.IsLocal {
+				if v.Endpoint == endpoint.Path {
+					foundAfter = true
+				}
+			} else {
+				if v.Endpoint == endpoint.String() {
+					foundAfter = true
+				}
 			}
 		}
 		if !foundAfter {
