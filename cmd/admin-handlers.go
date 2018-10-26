@@ -1114,6 +1114,11 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if err = config.TestNotificationTargets(); err != nil {
+		writeCustomErrorResponseJSON(w, ErrAdminConfigBadJSON, err.Error(), r.URL)
+		return
+	}
+
 	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return

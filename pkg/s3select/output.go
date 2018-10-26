@@ -282,7 +282,7 @@ func writeProgressHeader() []byte {
 
 // writeRecordMessage is the function which constructs the binary message for a
 // record message to be sent.
-func (csvOutput *Input) writeRecordMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeRecordMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
 	// The below are the specifications of the header for a "record" event
 	// 11 -event type - 7 - 7 "Records"
 	// 13 -content-type -7 -24 "application/octet-stream"
@@ -310,7 +310,7 @@ func (csvOutput *Input) writeRecordMessage(payload string, currentMessage *bytes
 
 // writeContinuationMessage is the function which constructs the binary message
 // for a continuation message to be sent.
-func (csvOutput *Input) writeContinuationMessage(currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeContinuationMessage(currentMessage *bytes.Buffer) *bytes.Buffer {
 	// 11 -event type - 7 - 4 "Cont"
 	// 13 -message-type -7 5 "event"
 	// This is predefined from AMZ protocol found here:
@@ -333,7 +333,7 @@ func (csvOutput *Input) writeContinuationMessage(currentMessage *bytes.Buffer) *
 
 // writeEndMessage is the function which constructs the binary message
 // for a end message to be sent.
-func (csvOutput *Input) writeEndMessage(currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeEndMessage(currentMessage *bytes.Buffer) *bytes.Buffer {
 	// 11 -event type - 7 - 3 "End"
 	// 13 -message-type -7 5 "event"
 	// This is predefined from AMZ protocol found here:
@@ -356,7 +356,7 @@ func (csvOutput *Input) writeEndMessage(currentMessage *bytes.Buffer) *bytes.Buf
 
 // writeStateMessage is the function which constructs the binary message for a
 // state message to be sent.
-func (csvOutput *Input) writeStatMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeStatMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
 	// 11 -event type - 7 - 5 "Stat" 20
 	// 13 -content-type -7 -8 "text/xml" 25
 	// 13 -message-type -7 5 "event"     22
@@ -384,7 +384,7 @@ func (csvOutput *Input) writeStatMessage(payload string, currentMessage *bytes.B
 
 // writeProgressMessage is the function which constructs the binary message for
 // a progress message to be sent.
-func (csvOutput *Input) writeProgressMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeProgressMessage(payload string, currentMessage *bytes.Buffer) *bytes.Buffer {
 	// The below are the specifications of the header for a "Progress" event
 	// 11 -event type - 7 - 8 "Progress" 23
 	// 13 -content-type -7 -8 "text/xml" 25
@@ -413,7 +413,7 @@ func (csvOutput *Input) writeProgressMessage(payload string, currentMessage *byt
 
 // writeErrorMessage is the function which constructs the binary message for a
 // error message to be sent.
-func (csvOutput *Input) writeErrorMessage(errorMessage error, currentMessage *bytes.Buffer) *bytes.Buffer {
+func writeErrorMessage(errorMessage error, currentMessage *bytes.Buffer) *bytes.Buffer {
 
 	// The below are the specifications of the header for a "error" event
 	// 11 -error-code - 7 - DEFINED "DEFINED"

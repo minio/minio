@@ -16,7 +16,11 @@
 
 package s3select
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/minio/minio/pkg/s3select/format"
+)
 
 //S3 errors below
 
@@ -34,10 +38,6 @@ var ErrExpressionTooLong = errors.New("The SQL expression is too long: The maxim
 // ErrIllegalSQLFunctionArgument is an error if you provide an illegal argument
 // in the SQL function.
 var ErrIllegalSQLFunctionArgument = errors.New("Illegal argument was used in the SQL function")
-
-// ErrInvalidColumnIndex is an error if you provide a column index which is not
-// valid.
-var ErrInvalidColumnIndex = errors.New("Column index in the SQL expression is invalid")
 
 // ErrInvalidKeyPath is an error if you provide a key in the SQL expression that
 // is invalid.
@@ -63,10 +63,6 @@ var ErrMissingHeaders = errors.New("Some headers in the query are missing from t
 // utilized with the select object query.
 var ErrInvalidCompressionFormat = errors.New("The file is not in a supported compression format. Only GZIP is supported at this time")
 
-// ErrTruncatedInput is an error if the object is not compressed properly and an
-// error occurs during decompression.
-var ErrTruncatedInput = errors.New("Object decompression failed. Check that the object is properly compressed using the format specified in the request")
-
 // ErrInvalidFileHeaderInfo is an error if the argument provided to the
 // FileHeader Argument is incorrect.
 var ErrInvalidFileHeaderInfo = errors.New("The FileHeaderInfo is invalid. Only NONE, USE, and IGNORE are supported")
@@ -82,13 +78,6 @@ var ErrInvalidQuoteFields = errors.New("The QuoteFields is invalid. Only ALWAYS 
 // ErrInvalidRequestParameter is an error if the value of a parameter in the
 // request element is not valid.
 var ErrInvalidRequestParameter = errors.New("The value of a parameter in Request element is invalid. Check the service API documentation and try again")
-
-// ErrCSVParsingError is an error if the CSV presents an error while being
-// parsed.
-var ErrCSVParsingError = errors.New("Encountered an Error parsing the CSV file. Check the file and try again")
-
-// ErrJSONParsingError is an error if while parsing the JSON an error arises.
-var ErrJSONParsingError = errors.New("Encountered an error parsing the JSON file. Check the file and try again")
 
 // ErrExternalEvalException is an error that arises if the query can not be
 // evaluated.
@@ -223,10 +212,6 @@ var ErrParseUnsupportedSyntax = errors.New("The SQL expression contains unsuppor
 // ErrParseUnknownOperator is an error that occurs if there is an invalid
 // operator present in the SQL expression.
 var ErrParseUnknownOperator = errors.New("The SQL expression contains an invalid operator")
-
-// ErrParseInvalidPathComponent is an error that occurs if there is an invalid
-// path component.
-var ErrParseInvalidPathComponent = errors.New("The SQL expression contains an invalid path component")
 
 // ErrParseMissingIdentAfterAt is an error that occurs if the wrong symbol
 // follows the "@" symbol in the SQL expression.
@@ -395,20 +380,20 @@ var errorCodeResponse = map[error]string{
 	ErrUnauthorizedAccess:                                     "UnauthorizedAccess",
 	ErrExpressionTooLong:                                      "ExpressionTooLong",
 	ErrIllegalSQLFunctionArgument:                             "IllegalSqlFunctionArgument",
-	ErrInvalidColumnIndex:                                     "InvalidColumnIndex",
+	format.ErrInvalidColumnIndex:                              "InvalidColumnIndex",
 	ErrInvalidKeyPath:                                         "InvalidKeyPath",
 	ErrColumnTooLong:                                          "ColumnTooLong",
 	ErrOverMaxColumn:                                          "OverMaxColumn",
 	ErrOverMaxRecordSize:                                      "OverMaxRecordSize",
 	ErrMissingHeaders:                                         "MissingHeaders",
 	ErrInvalidCompressionFormat:                               "InvalidCompressionFormat",
-	ErrTruncatedInput:                                         "TruncatedInput",
+	format.ErrTruncatedInput:                                  "TruncatedInput",
 	ErrInvalidFileHeaderInfo:                                  "InvalidFileHeaderInfo",
 	ErrInvalidJSONType:                                        "InvalidJsonType",
 	ErrInvalidQuoteFields:                                     "InvalidQuoteFields",
 	ErrInvalidRequestParameter:                                "InvalidRequestParameter",
-	ErrCSVParsingError:                                        "CSVParsingError",
-	ErrJSONParsingError:                                       "JSONParsingError",
+	format.ErrCSVParsingError:                                 "CSVParsingError",
+	format.ErrJSONParsingError:                                "JSONParsingError",
 	ErrExternalEvalException:                                  "ExternalEvalException",
 	ErrInvalidDataType:                                        "InvalidDataType",
 	ErrUnrecognizedFormatException:                            "UnrecognizedFormatException",
@@ -443,7 +428,7 @@ var errorCodeResponse = map[error]string{
 	ErrParseUnsupportedAlias:                                  "ParseUnsupportedAlias",
 	ErrParseUnsupportedSyntax:                                 "ParseUnsupportedSyntax",
 	ErrParseUnknownOperator:                                   "ParseUnknownOperator",
-	ErrParseInvalidPathComponent:                              "ParseInvalidPathComponent",
+	format.ErrParseInvalidPathComponent:                       "ParseInvalidPathComponent",
 	ErrParseMissingIdentAfterAt:                               "ParseMissingIdentAfterAt",
 	ErrParseUnexpectedOperator:                                "ParseUnexpectedOperator",
 	ErrParseUnexpectedTerm:                                    "ParseUnexpectedTerm",

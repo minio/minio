@@ -17,7 +17,7 @@ Minio共享模式是为了解决在真实场景中存在的一些问题，而且
 
 ## 1. 前提条件
 
-安装Minio - [Minio快速入门](https://docs.minio.io/cn/minio).
+安装Minio - [Minio快速入门](https://docs.minio.io/cn/).
 
 ## 2. 在共享后端存储上运行Minio
 

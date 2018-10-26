@@ -56,7 +56,7 @@ $ mc admin config get myminio
 ```
 
 Testing with an example
-> Obtaining client ID and secrets follow [WSO2 configuring documentation](./wso2.md)
+> Obtaining client ID and secrets follow [WSO2 configuring documentation](https://github.com/minio/minio/blob/master/docs/sts/wso2.md)
 
 ```
 go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga

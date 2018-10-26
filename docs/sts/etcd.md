@@ -6,7 +6,7 @@ etcd is a distributed key value store that provides a reliable way to store data
 - Docker 18.03 or above, refer here for [installation](https://docs.docker.com/install/).
 
 ### 2. Start etcd
-etcd uses [gcr.io/etcd-development/etcd](gcr.io/etcd-development/etcd) as a primary container registry.
+etcd uses [gcr.io/etcd-development/etcd](https://console.cloud.google.com/gcr/images/etcd-development/GLOBAL/etcd) as a primary container registry.
 
 ```
 rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
@@ -37,7 +37,7 @@ minio server /data
 ```
 
 ### 5. Test with Minio STS API
-Assuming that you have configured Minio server to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://docs.minio.io/docs/wso2-quickstart-guide).
+Assuming that you have configured Minio server to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/wso2.md).
 ```
 go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
@@ -50,7 +50,7 @@ go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOW
 }
 ```
 
-These credentials can now be used to perform Minio API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://docs.minio.io/docs/api-assume-role-with-client-grants).
+These credentials can now be used to perform Minio API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md).
 
 ## Explore Further
 - [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
