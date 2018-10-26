@@ -473,7 +473,7 @@ func (s *xlSets) ListObjectVersions(ctx context.Context, bucket, prefix, delimit
 		isLeaf := func(bucket, entry string) bool {
 			entry = strings.TrimSuffix(entry, slashSeparator)
 			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` or `versioning.json` inside a directory.
+			// see `xl.json` inside a directory.
 			return s.getHashedSet(entry).isObject(bucket, entry)
 		}
 
@@ -862,7 +862,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		isLeaf := func(bucket, entry string) bool {
 			entry = strings.TrimSuffix(entry, slashSeparator)
 			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` or `versioning.json` inside a directory.
+			// see `xl.json` inside a directory.
 			return s.getHashedSet(entry).isObject(bucket, entry)
 		}
 
@@ -909,10 +909,13 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			}...) {
 				continue
 			}
-			// For versioning, ignore ObjectNotFound for cases where
-			// DeleteMarker is at the top
-			if _, ok := err.(ObjectNotFound); globalVersioningSys.IsEnabled(bucket) && ok {
-				continue
+			// Just for versioning ...
+			if globalVersioningSys.IsEnabled(bucket) {
+				if _, ok := err.(ObjectNotFound); ok {
+					continue // ignore ObjectNotFound for cases where DeleteMarker is at the top
+				} else if err == errInvalidArgument {
+					continue // or the object does not contain any versioning info (will also have mangled name)
+				}
 			}
 			return result, toObjectErr(err, bucket, prefix)
 		}

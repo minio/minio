@@ -733,28 +733,19 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		}
 	}
 
-	objectVersionID := ""
+	objectVersionID, objectVersionPostfix := "", ""
 	versionedObject := object
 	if globalVersioningSys.IsEnabled(bucket) {
-		var xlVersioning xlVersioningV1
+		var xlVersioning xlMetaV1
 		xlVersioning, err = xl.getObjectVersioning(ctx, bucket, object)
 		if err != nil {
-			if err == errFileNotFound {
-				xlVersioning = newXLVersioningV1()
-			} else {
+			if err != errFileNotFound {
 				return ObjectInfo{}, toObjectErr(err, bucket, object)
 			}
+			xlVersioning = newXLMetaV1(object, 1, 1)
 		}
-		objectVersionID = xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
-		versionedObject = pathJoin(object, objectVersionID)
-		defer func() {
-			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
-			xlVersioning.ModTime = timeStamp
-			tempVersioning := mustGetUUID()
-			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
-		}()
+		objectVersionID, objectVersionPostfix = xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
+		versionedObject += objectVersionPostfix
 	}
 
 	if xl.isObject(bucket, versionedObject) {
@@ -789,6 +780,20 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	// Rename the multipart object to final location.
 	if _, err = renameObject(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, versionedObject, writeQuorum); err != nil {
 		return oi, toObjectErr(err, bucket, object)
+	}
+
+	// Commit version id to disk for versioning
+	if globalVersioningSys.IsEnabled(bucket) {
+		timeStamp := time.Now().UTC()
+		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, objectVersionPostfix,false, timeStamp})
+		xlVersioning.Stat.ModTime = timeStamp
+		tempVersioning := mustGetUUID()
+		_, _ = writeSameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+		_, _ = renameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 	}
 
 	// Pass along object version ID (if any)

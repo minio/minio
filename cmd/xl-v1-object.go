@@ -232,7 +232,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 		}
 
 		// Find index for this version
-		idx, found := xlVersioning.FindVersion(version)
+		idx, postfix, found := xlVersioning.FindVersion(version)
 		if !found {
 			return InvalidVersionId{}
 		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
@@ -240,7 +240,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object, version strin
 			return toObjectErr(errFileNotFound, bucket, object)
 		}
 
-		object = pathJoin(object, version)
+		object += postfix
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -420,20 +420,20 @@ func (xl xlObjects) GetObjectInfoVersion(ctx context.Context, bucket, object, ve
 	return info, dm, nil
 }
 
-func (xl xlObjects) getObjectVersioning(ctx context.Context, bucket, object string) (versioning xlVersioningV1, err error) {
-	versioningArr, errs := readAllXLVersioning(ctx, xl.getDisks(), bucket, object)
+func (xl xlObjects) getObjectVersioning(ctx context.Context, bucket, object string) (versioning xlMetaV1, err error) {
+	versioningArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(xl.getDisks())/2)
 	if reducedErr != nil {
-		return xlVersioningV1{}, reducedErr
+		return xlMetaV1{}, reducedErr
 	}
 	var modTimes []time.Time
 	for _, v := range versioningArr {
-		modTimes = append(modTimes, v.ModTime)
+		modTimes = append(modTimes, v.Stat.ModTime)
 	}
 	modTime, _ := commonTime(modTimes)
-	xlVersioning, err := pickValidXLVersioning(ctx, versioningArr, modTime)
+	xlVersioning, err := pickValidXLMeta(ctx, versioningArr, modTime)
 	if err != nil {
-		return xlVersioningV1{}, toObjectErr(err, bucket, object)
+		return xlMetaV1{}, toObjectErr(err, bucket, object)
 	}
 	return xlVersioning, nil
 }
@@ -540,7 +540,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 		}
 
 		// Find index for this version
-		idx, found := xlVersioning.FindVersion(version)
+		idx, postfix, found := xlVersioning.FindVersion(version)
 		if !found {
 			return objInfo, deleteMarker, InvalidVersionId{}
 		} else if xlVersioning.ObjectVersions[idx].DeleteMarker {
@@ -548,7 +548,7 @@ func (xl xlObjects) getObjectInfoVersion(ctx context.Context, bucket, object, ve
 			return objInfo, true, toObjectErr(errFileNotFound, bucket, object)
 		}
 
-		versionedObject = pathJoin(object, version)
+		versionedObject += postfix
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -904,7 +904,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 	}
 
-	objectVersionID := ""
+	// Derive version id for versioning
+	objectVersionID, objectVersionPostfix := "", ""
 	versionedObject := object
 	if globalVersioningSys.IsEnabled(bucket) {
 		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
@@ -912,23 +913,29 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			if err != errFileNotFound {
 				return ObjectInfo{}, toObjectErr(err, bucket, object)
 			}
-			xlVersioning = newXLVersioningV1()
+			xlVersioning = newXLMetaV1(object, 1, 1)
 		}
-		objectVersionID = xlVersioning.DeriveVersionId(object, metadata["etag"])
-		versionedObject = pathJoin(object, objectVersionID)
-		defer func() {
-			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, false, timeStamp})
-			xlVersioning.ModTime = timeStamp
-			tempVersioning := mustGetUUID()
-			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
-		}()
+		objectVersionID, objectVersionPostfix = xlVersioning.DeriveVersionId(object, metadata["etag"])
+		versionedObject += objectVersionPostfix
 	}
 
 	// Rename the successfully written temporary object to final location.
 	if _, err = renameObject(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, versionedObject, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Commit version id to disk for versioning
+	if globalVersioningSys.IsEnabled(bucket) {
+		timeStamp := time.Now().UTC()
+		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, objectVersionPostfix,false, timeStamp})
+		xlVersioning.Stat.ModTime = timeStamp
+		tempVersioning := mustGetUUID()
+		_, _ = writeSameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+		_, _ = renameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 	}
 
 	// Object info is the same in all disks, so we can pick the first meta
@@ -976,14 +983,14 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 			}
 
 			// Add Delete Marker to versioning info (without any corresponding sub directory)
-			versionId = xlVersioning.DeriveVersionId(object, "")
+			versionId, _ = xlVersioning.DeriveVersionId(object, "")
 			// Check if we need to pass along the version Id in the header (as for put object)
 			timeStamp := time.Now().UTC()
-			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, true, timeStamp})
-			xlVersioning.ModTime = timeStamp
+			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, "", true, timeStamp})
+			xlVersioning.Stat.ModTime = timeStamp
 			tempVersioning := mustGetUUID()
-			_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-			_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+			_, _ = writeSameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+			_, _ = renameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 			return
 		}
 		// Read metadata associated with the object from all disks.
@@ -1138,16 +1145,26 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	}
 
 	// Find index for this version
-	idx, found := xlVersioning.FindVersion(version)
+	idx, postfix, found := xlVersioning.FindVersion(version)
 	if !found {
 		return false, InvalidVersionId{}
 	}
 	deleteMarker = xlVersioning.ObjectVersions[idx].DeleteMarker
-	if !deleteMarker {
+	if postfix != "" {
 		// Delete the actual version of this object from all disks
-		if err = xl.deleteObjectVersioned(ctx, bucket, object, version); err != nil {
+		if err = xl.deleteObjectVersioned(ctx, bucket, object + postfix, ""); err != nil {
 			return deleteMarker, toObjectErr(err, bucket, object)
 		}
+	} else if !deleteMarker {
+		// Delete initial version
+		if err = xl.deleteObjectVersioned(ctx, bucket, object, ""); err != nil {
+			return deleteMarker, toObjectErr(err, bucket, object)
+		}
+
+		// Copy version history over to new xlMeta object (without baggage from initial object)
+		versions := xlVersioning.ObjectVersions
+		xlVersioning = newXLMetaV1(object, 1, 1)
+		xlVersioning.ObjectVersions = versions
 	}
 
 	// Purge version from array
@@ -1157,8 +1174,8 @@ func (xl xlObjects) DeleteObjectVersion(ctx context.Context, bucket, object, ver
 	if len(xlVersioning.ObjectVersions) > 0 {
 		// Commit with the removed version across all disks
 		tempVersioning := mustGetUUID()
-		_, _ = writeSameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-		_, _ = renameXLVersioning(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
+		_, _ = writeSameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
+		_, _ = renameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 	} else {
 		// Delete the complete contents of this object from all disks
 		if err = xl.deleteObjectAcrossDisks(ctx, bucket, object, len(xl.getDisks())/2+1); err != nil {

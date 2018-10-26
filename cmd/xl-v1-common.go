@@ -64,13 +64,9 @@ func (xl xlObjects) isJSONFile(bucket, prefix, jsonFile string) (ok bool) {
 }
 
 // isObject - returns `true` if the prefix is an object i.e if
-// `xl.json` or `versioning.json` exists at the leaf, false otherwise.
+// `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
-	if globalVersioningSys.IsEnabled(bucket) {
-		return xl.isJSONFile(bucket, prefix, xlVersioningJSONFile)
-	} else {
-		return xl.isJSONFile(bucket, prefix, xlMetaJSONFile)
-	}
+	return xl.isJSONFile(bucket, prefix, xlMetaJSONFile)
 }
 
 // isObjectDir returns if the specified path represents an empty directory.

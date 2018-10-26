@@ -231,6 +231,7 @@ type xlMetaV1 struct {
 	Meta map[string]string `json:"meta,omitempty"`
 	// Captures all the individual object `xl.json`.
 	Parts []objectPartInfo `json:"parts,omitempty"`
+	ObjectVersions []xlObjectVersion `json:"objectVersions,omitempty"`
 }
 
 // XL metadata constants.
