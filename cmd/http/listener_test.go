@@ -116,7 +116,7 @@ func getTLSConfig(t *testing.T) *tls.Config {
 	tlsConfig := &tls.Config{
 		PreferServerCipherSuites: true,
 		MinVersion:               tls.VersionTLS12,
-		NextProtos:               []string{"http/1.1", "h2"},
+		NextProtos:               []string{"http/1.1"},
 	}
 	tlsConfig.Certificates = append(tlsConfig.Certificates, tlsCert)
 
