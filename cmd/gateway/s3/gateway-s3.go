@@ -203,6 +203,9 @@ func newS3(url string) (*miniogo.Core, error) {
 		return nil, err
 	}
 
+	// Set custom transport
+	clnt.SetCustomTransport(minio.NewCustomHTTPTransport())
+
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
 	// Check if the provided keys are valid.
 	if _, err = clnt.BucketExists(probeBucketName); err != nil {

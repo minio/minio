@@ -218,12 +218,6 @@ func serverMain(ctx *cli.Context) {
 		logger.EnableQuiet()
 	}
 
-	// Handle all server command args.
-	serverHandleCmdArgs(ctx)
-
-	// Handle all server environment vars.
-	serverHandleEnvVars()
-
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
 
@@ -235,6 +229,12 @@ func serverMain(ctx *cli.Context) {
 	// Check and load Root CAs.
 	globalRootCAs, err = getRootCAs(getCADir())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	// Handle all server command args.
+	serverHandleCmdArgs(ctx)
+
+	// Handle all server environment vars.
+	serverHandleEnvVars()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
