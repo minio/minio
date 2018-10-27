@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"runtime"
 	"strings"
 	"sync"
@@ -123,6 +124,35 @@ func (ahs *allHealState) getHealSequence(path string) (h *healSequence, exists b
 	return h, exists
 }
 
+func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
+	var hsp madmin.HealStopSuccess
+	he, exists := ahs.getHealSequence(path)
+	if !exists {
+		hsp = madmin.HealStopSuccess{
+			ClientToken: "invalid",
+			StartTime:   UTCNow(),
+		}
+	} else {
+		hsp = madmin.HealStopSuccess{
+			ClientToken:   he.clientToken,
+			ClientAddress: he.clientAddress,
+			StartTime:     he.startTime,
+		}
+
+		he.stop()
+		for !he.hasEnded() {
+			time.Sleep(1 * time.Second)
+		}
+		ahs.Lock()
+		defer ahs.Unlock()
+		// Heal sequence explicitly stopped, remove it.
+		delete(ahs.healSeqMap, path)
+	}
+
+	b, err := json.Marshal(&hsp)
+	return b, toAdminAPIErrCode(err)
+}
+
 // LaunchNewHealSequence - launches a background routine that performs
 // healing according to the healSequence argument. For each heal
 // sequence, state is stored in the `globalAllHealState`, which is a
@@ -143,20 +173,20 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 			existsAndLive = true
 		}
 	}
+
 	if existsAndLive {
 		// A heal sequence exists on the given path.
 		if h.forceStarted {
-			// stop the running heal sequence - wait for
-			// it to finish.
+			// stop the running heal sequence - wait for it to finish.
 			he.stop()
 			for !he.hasEnded() {
-				time.Sleep(10 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 		} else {
 			errMsg = "Heal is already running on the given path " +
 				"(use force-start option to stop and start afresh). " +
-				fmt.Sprintf("The heal was started by IP %s at %s",
-					h.clientAddress, h.startTime)
+				fmt.Sprintf("The heal was started by IP %s at %s, token is %s",
+					h.clientAddress, h.startTime.Format(http.TimeFormat), h.clientToken)
 
 			return nil, ErrHealAlreadyRunning, errMsg
 		}
@@ -285,7 +315,7 @@ type healSequence struct {
 	// bucket, and prefix on which heal seq. was initiated
 	bucket, objPrefix string
 
-	// path is just bucket + "/" + objPrefix
+	// path is just pathJoin(bucket, objPrefix)
 	path string
 
 	// time at which heal sequence was started
@@ -330,7 +360,7 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 	return &healSequence{
 		bucket:        bucket,
 		objPrefix:     objPrefix,
-		path:          bucket + "/" + objPrefix,
+		path:          pathJoin(bucket, objPrefix),
 		startTime:     UTCNow(),
 		clientToken:   mustGetUUID(),
 		clientAddress: clientAddr,
@@ -552,7 +582,7 @@ func (h *healSequence) healConfig() error {
 			// before proceeding to heal
 			waitCount := 60
 			// Any requests in progress, delay the heal.
-			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)
 			}
@@ -698,7 +728,7 @@ func (h *healSequence) healBucket(bucket string) error {
 			// before proceeding to heal
 			waitCount := 60
 			// Any requests in progress, delay the heal.
-			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)
 			}

@@ -53,9 +53,10 @@ type mgmtQueryKey string
 // Only valid query params for mgmt admin APIs.
 const (
 	mgmtBucket      mgmtQueryKey = "bucket"
-	mgmtPrefix      mgmtQueryKey = "prefix"
-	mgmtClientToken mgmtQueryKey = "clientToken"
-	mgmtForceStart  mgmtQueryKey = "forceStart"
+	mgmtPrefix                   = "prefix"
+	mgmtClientToken              = "clientToken"
+	mgmtForceStart               = "forceStart"
+	mgmtForceStop                = "forceStop"
 )
 
 var (
@@ -402,7 +403,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 
 // extractHealInitParams - Validates params for heal init API.
 func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
-	hs madmin.HealOpts, clientToken string, forceStart bool,
+	hs madmin.HealOpts, clientToken string, forceStart bool, forceStop bool,
 	err APIErrorCode) {
 
 	vars := mux.Vars(r)
@@ -433,7 +434,9 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 	if _, ok := qParms[string(mgmtForceStart)]; ok {
 		forceStart = true
 	}
-
+	if _, ok := qParms[string(mgmtForceStop)]; ok {
+		forceStop = true
+	}
 	// ignore body if clientToken is provided
 	if clientToken == "" {
 		jerr := json.NewDecoder(r.Body).Decode(&hs)
@@ -484,7 +487,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucket, objPrefix, hs, clientToken, forceStart, apiErr := extractHealInitParams(r)
+	bucket, objPrefix, hs, clientToken, forceStart, forceStop, apiErr := extractHealInitParams(r)
 	if apiErr != ErrNone {
 		writeErrorResponseJSON(w, apiErr, r.URL)
 		return
@@ -518,13 +521,35 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("\n\r"))
 				w.(http.Flusher).Flush()
 			case hr := <-respCh:
-				switch {
-				case hr.errCode == ErrNone:
-					writeSuccessResponseJSON(w, hr.respBytes)
-				case hr.errBody == "":
-					writeErrorResponseJSON(w, hr.errCode, r.URL)
+				switch hr.errCode {
+				case ErrNone:
+					if started {
+						w.Write(hr.respBytes)
+						w.(http.Flusher).Flush()
+					} else {
+						writeSuccessResponseJSON(w, hr.respBytes)
+					}
 				default:
-					writeCustomErrorResponseJSON(w, hr.errCode, hr.errBody, r.URL)
+					apiError := getAPIError(hr.errCode)
+					var errorRespJSON []byte
+					if hr.errBody == "" {
+						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(apiError, r.URL.Path, w.Header().Get(responseRequestIDKey)))
+					} else {
+						errorRespJSON = encodeResponseJSON(APIErrorResponse{
+							Code:      apiError.Code,
+							Message:   hr.errBody,
+							Resource:  r.URL.Path,
+							RequestID: w.Header().Get(responseRequestIDKey),
+							HostID:    "3L137",
+						})
+					}
+					if !started {
+						setCommonHeaders(w)
+						w.Header().Set("Content-Type", string(mimeJSON))
+						w.WriteHeader(apiError.HTTPStatusCode)
+					}
+					w.Write(errorRespJSON)
+					w.(http.Flusher).Flush()
 				}
 				break forLoop
 			}
@@ -535,34 +560,61 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	info := objLayer.StorageInfo(ctx)
 	numDisks := info.Backend.OfflineDisks + info.Backend.OnlineDisks
 
-	if clientToken == "" {
-		// Not a status request
-		nh := newHealSequence(bucket, objPrefix, handlers.GetSourceIP(r),
-			numDisks, hs, forceStart)
+	healPath := pathJoin(bucket, objPrefix)
+	if clientToken == "" && !forceStart && !forceStop {
+		nh, exists := globalAllHealState.getHealSequence(healPath)
+		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
+			b, err := json.Marshal(madmin.HealStartSuccess{
+				ClientToken:   nh.clientToken,
+				ClientAddress: nh.clientAddress,
+				StartTime:     nh.startTime,
+			})
+			if err != nil {
+				logger.LogIf(context.Background(), err)
+				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				return
+			}
+			// Client token not specified but a heal sequence exists on a path,
+			// Send the token back to client.
+			writeSuccessResponseJSON(w, b)
+			return
+		}
+	}
 
-		respCh := make(chan healResp)
-		go func() {
-			respBytes, errCode, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
-			hr := healResp{respBytes, errCode, errMsg}
-			respCh <- hr
-		}()
-
-		// Due to the force-starting functionality, the Launch
-		// call above can take a long time - to keep the
-		// connection alive, we start sending whitespace
-		keepConnLive(w, respCh)
-	} else {
+	if clientToken != "" && !forceStart && !forceStop {
 		// Since clientToken is given, fetch heal status from running
 		// heal sequence.
-		path := bucket + "/" + objPrefix
 		respBytes, errCode := globalAllHealState.PopHealStatusJSON(
-			path, clientToken)
+			healPath, clientToken)
 		if errCode != ErrNone {
 			writeErrorResponseJSON(w, errCode, r.URL)
 		} else {
 			writeSuccessResponseJSON(w, respBytes)
 		}
+		return
 	}
+
+	respCh := make(chan healResp)
+	switch {
+	case forceStop:
+		go func() {
+			respBytes, errCode := globalAllHealState.stopHealSequence(healPath)
+			hr := healResp{respBytes: respBytes, errCode: errCode}
+			respCh <- hr
+		}()
+	case clientToken == "":
+		nh := newHealSequence(bucket, objPrefix, handlers.GetSourceIP(r), numDisks, hs, forceStart)
+		go func() {
+			respBytes, errCode, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
+			hr := healResp{respBytes, errCode, errMsg}
+			respCh <- hr
+		}()
+	}
+
+	// Due to the force-starting functionality, the Launch
+	// call above can take a long time - to keep the
+	// connection alive, we start sending whitespace
+	keepConnLive(w, respCh)
 }
 
 // GetConfigHandler - GET /minio/admin/v1/config
