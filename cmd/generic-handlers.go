@@ -783,7 +783,11 @@ type sseTLSHandler struct{ handler http.Handler }
 func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Deny SSE-C requests if not made over TLS
 	if !globalIsSSL && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
-		writeErrorResponseHeadersOnly(w, ErrInsecureSSECustomerRequest)
+		if r.Method == http.MethodHead {
+			writeErrorResponseHeadersOnly(w, ErrInsecureSSECustomerRequest)
+		} else {
+			writeErrorResponse(w, ErrInsecureSSECustomerRequest, r.URL)
+		}
 		return
 	}
 	h.handler.ServeHTTP(w, r)

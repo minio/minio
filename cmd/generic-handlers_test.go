@@ -19,6 +19,7 @@ package cmd
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 
@@ -184,14 +185,15 @@ func TestContainsReservedMetadata(t *testing.T) {
 }
 
 var sseTLSHandlerTests = []struct {
+	URL               *url.URL
 	Header            http.Header
 	IsTLS, ShouldFail bool
 }{
-	{Header: http.Header{}, IsTLS: false, ShouldFail: false},                                        // 0
-	{Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: false, ShouldFail: true}, // 1
-	{Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: true, ShouldFail: false}, // 2
-	{Header: http.Header{crypto.SSECKey: []string{""}}, IsTLS: true, ShouldFail: false},             // 3
-	{Header: http.Header{crypto.SSECopyAlgorithm: []string{""}}, IsTLS: false, ShouldFail: true},    // 4
+	{URL: &url.URL{}, Header: http.Header{}, IsTLS: false, ShouldFail: false},                                        // 0
+	{URL: &url.URL{}, Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: false, ShouldFail: true}, // 1
+	{URL: &url.URL{}, Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: true, ShouldFail: false}, // 2
+	{URL: &url.URL{}, Header: http.Header{crypto.SSECKey: []string{""}}, IsTLS: true, ShouldFail: false},             // 3
+	{URL: &url.URL{}, Header: http.Header{crypto.SSECopyAlgorithm: []string{""}}, IsTLS: false, ShouldFail: true},    // 4
 }
 
 func TestSSETLSHandler(t *testing.T) {
@@ -206,6 +208,7 @@ func TestSSETLSHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := new(http.Request)
 		r.Header = test.Header
+		r.URL = test.URL
 
 		h := setSSETLSHandler(okHandler)
 		h.ServeHTTP(w, r)
