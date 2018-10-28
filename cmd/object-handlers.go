@@ -1535,6 +1535,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
 				return
 			}
+			if crypto.S3.IsEncrypted(li.UserDefined) && crypto.SSEC.IsRequested(r.Header) {
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				return
+			}
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
