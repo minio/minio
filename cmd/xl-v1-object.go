@@ -984,12 +984,12 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if !xl.isObject(bucket, object) && !xl.isObjectDir(bucket, object) {
-		return ObjectNotFound{bucket, object}
-	}
-
 	var writeQuorum int
 	var isObjectDir = hasSuffix(object, slashSeparator)
+
+	if isObjectDir && !xl.isObjectDir(bucket, object) {
+		return toObjectErr(errFileNotFound, bucket, object)
+	}
 
 	if isObjectDir {
 		writeQuorum = len(xl.getDisks())/2 + 1
