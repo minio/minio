@@ -227,10 +227,14 @@ func serverMain(ctx *cli.Context) {
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
 
-	// Check and load SSL certificates.
+	// Check and load TLS certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalTLSCerts, globalIsSSL, err = getSSLConfig()
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = getRootCAs(getCADir())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
