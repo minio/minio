@@ -29,6 +29,8 @@ rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
   --initial-cluster-state new
 ```
 
+You may also setup etcd with TLS following this documentation [here](https://coreos.com/etcd/docs/latest/op-guide/security.html)
+
 ### 3. Setup Minio with etcd
 Minio server expects environment variable for etcd as `MINIO_ETCD_ENDPOINTS`, this environment variable takes many comma separated entries.
 ```
@@ -36,7 +38,9 @@ export MINIO_ETCD_ENDPOINTS=localhost:2379
 minio server /data
 ```
 
-### 5. Test with Minio STS API
+NOTE: If `etcd` is configured with `Client-to-server authentication with HTTPS client certificates` then you need to use additional envs such as `MINIO_ETCD_CLIENT_CERT` pointing to path to `etcd-client.crt` and `MINIO_ETCD_CLIENT_CERT_KEY` path to `etcd-client.key` .
+
+### 4. Test with Minio STS API
 Assuming that you have configured Minio server to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/wso2.md).
 ```
 go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
