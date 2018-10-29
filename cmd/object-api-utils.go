@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -636,7 +637,7 @@ func NewPutObjectReader(r *hash.Reader) *PutObjectReader {
 
 // UnsealETagFn takes an object encryption key and returns a
 // ETag validation function and a function that returns encrypted ETag
-func UnsealETagFn(key []byte, ssec bool) (opts ObjectOptions) {
+func (o *ObjectOptions) UnsealETagFn(key []byte, ssec bool) {
 	fn1 := func(clntEtag, bkETag string) bool {
 		if ssec {
 			return clntEtag == bkETag[len(bkETag)-32:]
@@ -646,5 +647,28 @@ func UnsealETagFn(key []byte, ssec bool) (opts ObjectOptions) {
 	fn2 := func(etag string) string {
 		return getEncryptedETag(etag, key)
 	}
-	return ObjectOptions{ValidateETagsFn: fn1, GetEncryptedETagFn: fn2}
+	fn3 := func(encEtag string) string {
+		if ssec {
+			return encEtag[len(encEtag)-32:]
+		}
+		return tryDecryptETag(key, encEtag, ssec)
+	}
+	o.ValidateETagsFn = fn1
+	o.GetEncryptedETagFn = fn2
+	o.GetDecryptedETagFn = fn3
+}
+
+// SetETagEncryptionOpts sets opts to a function that creates encrypted
+// etag for gateway encryption
+func (o *ObjectOptions) SetETagEncryptionOpts(p *PutObjectReader) {
+	if GlobalGatewaySSE != nil {
+		var f3 CreateEncryptedETagFn
+		f3 = func() (string, string, error) {
+			if p != nil {
+				return p.OrigReader.EncryptedMD5Sum()
+			}
+			return "", "", errors.New("PutObjectReader not initialized")
+		}
+		o.CreateEncryptedETagFn = f3
+	}
 }
