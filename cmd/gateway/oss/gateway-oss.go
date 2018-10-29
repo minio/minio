@@ -886,7 +886,7 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
-func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi minio.ListPartsInfo, err error) {
+func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, err error) {
 	lupr, err := ossListObjectParts(l.Client, bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		logger.LogIf(ctx, err)
