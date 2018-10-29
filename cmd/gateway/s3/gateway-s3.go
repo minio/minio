@@ -341,13 +341,13 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	var objInfo minio.ObjectInfo
 	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
-		return nil, err
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
 	var startOffset, length int64
 	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
 	if err != nil {
-		return nil, err
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
 	pr, pw := io.Pipe()
@@ -492,7 +492,7 @@ func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, de
 func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi minio.ListPartsInfo, e error) {
 	result, err := l.Client.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		return lpi, err
+		return lpi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
 	return minio.FromMinioClientListPartsInfo(result), nil
