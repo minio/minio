@@ -54,14 +54,17 @@ The access token received is a signed JSON Web Token (JWT). Use a JWT decoder to
 
 |Claim Name|Type|Claim Value|
 |:--:|:--:|:--:|
-|iss| string | The issuer of the JWT. The '> Identity Provider Entity Id ' value of the OAuth2/OpenID Connect Inbound Authentication configuration of the Resident Identity Provider is returned here. |
-|aud| string array | The token audience list. The client identifier of the OAuth clients that the JWT is intended for, is sent herewith. |
-|azp| string | The authorized party for which the token is issued to. The client identifier of the OAuth client that the token is issued for, is sent herewith. |
-|iat| integer |	The token issue time. |
-|exp| integer |	The token expiration time. |
-|jti| string | Unique identifier for the JWT token. |
+|iss| _string_ | The issuer of the JWT. The '> Identity Provider Entity Id ' value of the OAuth2/OpenID Connect Inbound Authentication configuration of the Resident Identity Provider is returned here. |
+|aud| _string array_ | The token audience list. The client identifier of the OAuth clients that the JWT is intended for, is sent herewith. |
+|azp| _string_ | The authorized party for which the token is issued to. The client identifier of the OAuth client that the token is issued for, is sent herewith. |
+|iat| _integer_ |	The token issue time. |
+|exp| _integer_ |	The token expiration time. |
+|jti| _string_ | Unique identifier for the JWT token. |
+|policy| _string_ | Canned policy name to be applied for STS credentials. (Optional) |
 
 Using the above `access_token` we can perform an STS request to Minio to get temporary credentials for Minio API operations. Minio STS API uses [JSON Web Key Set Endpoint](https://docs.wso2.com/display/IS541/JSON+Web+Key+Set+Endpoint) to validate if JWT is valid and is properly signed.
+
+Optionally you can also configure `policy` as a custom claim for the JWT service provider follow [here](https://docs.wso2.com/display/IS550/Configuring+Claims+for+a+Service+Provider) and [here](https://docs.wso2.com/display/IS550/Handling+Custom+Claims+with+the+JWT+Bearer+Grant+Type) for relevant docs on how to configure claims for a service provider.
 
 ### 5. Setup Minio with JWKS URL
 Minio server expects environment variable for JWKS url as `MINIO_IAM_JWKS_URL`, this environment variable takes a single entry.
