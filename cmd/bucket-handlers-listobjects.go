@@ -60,6 +60,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	ctx := newContext(r, w, "ListObjectsV2")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -142,6 +146,10 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	ctx := newContext(r, w, "ListObjectsV1")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

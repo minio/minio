@@ -45,6 +45,9 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	ctx := newContext(r, w, "GetBucketNotification")
 
 	defer logger.AuditLog(ctx, r)
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
@@ -99,6 +102,9 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	ctx := newContext(r, w, "PutBucketNotification")
 
 	defer logger.AuditLog(ctx, r)
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -161,6 +167,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	ctx := newContext(r, w, "ListenBucketNotification")
 
 	defer logger.AuditLog(ctx, r)
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()

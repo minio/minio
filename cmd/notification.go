@@ -494,12 +494,11 @@ func (args eventArgs) ToEvent() event.Event {
 		return fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), host, globalMinioPort)
 	}
 
-	creds := globalServerConfig.GetCredential()
 	eventTime := UTCNow()
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
 
 	respElements := map[string]string{
-		"x-amz-request-id":        uniqueID,
+		"x-amz-request-id":        args.RespElements["requestId"],
 		"x-minio-origin-endpoint": getOriginEndpoint(), // Minio specific custom elements.
 	}
 	if args.RespElements["content-length"] != "" {
@@ -508,10 +507,10 @@ func (args eventArgs) ToEvent() event.Event {
 	newEvent := event.Event{
 		EventVersion:      "2.0",
 		EventSource:       "minio:s3",
-		AwsRegion:         globalServerConfig.GetRegion(),
+		AwsRegion:         args.ReqParams["region"],
 		EventTime:         eventTime.Format(event.AMZTimeFormat),
 		EventName:         args.EventName,
-		UserIdentity:      event.Identity{creds.AccessKey},
+		UserIdentity:      event.Identity{args.ReqParams["accessKey"]},
 		RequestParameters: args.ReqParams,
 		ResponseElements:  respElements,
 		S3: event.Metadata{
@@ -519,7 +518,7 @@ func (args eventArgs) ToEvent() event.Event {
 			ConfigurationID: "Config",
 			Bucket: event.Bucket{
 				Name:          args.BucketName,
-				OwnerIdentity: event.Identity{creds.AccessKey},
+				OwnerIdentity: event.Identity{args.ReqParams["accessKey"]},
 				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{

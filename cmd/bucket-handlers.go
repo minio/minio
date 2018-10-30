@@ -90,6 +90,10 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	ctx := newContext(r, w, "GetBucketLocation")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -140,6 +144,10 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	ctx := newContext(r, w, "ListMultipartUploads")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -193,6 +201,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	ctx := newContext(r, w, "ListBuckets")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -249,6 +261,12 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 // DeleteMultipleObjectsHandler - deletes multiple objects.
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteMultipleObjects")
+
+	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -380,10 +398,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			Object: ObjectInfo{
 				Name: dobj.ObjectName,
 			},
-			ReqParams: extractReqParams(r),
-			UserAgent: r.UserAgent(),
-			Host:      host,
-			Port:      port,
+			ReqParams:    reqParams,
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         host,
+			Port:         port,
 		})
 	}
 }
@@ -395,6 +414,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	ctx := newContext(r, w, "PutBucket")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -473,6 +496,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	ctx := newContext(r, w, "PostPolicyBucket")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -657,14 +684,23 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedPost,
-		BucketName: objInfo.Bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedPost,
+		BucketName:   objInfo.Bucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
+
+	defer func() {
+		for k, v := range objInfo.UserDefined {
+			logger.GetReqInfo(ctx).SetTags(k, v)
+		}
+
+		logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
+	}()
 
 	if successRedirect != "" {
 		// Replace raw query params..
@@ -688,12 +724,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	default:
 		writeSuccessNoContent(w)
 	}
-
-	for k, v := range objInfo.UserDefined {
-		logger.GetReqInfo(ctx).SetTags(k, v)
-	}
-
-	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // HeadBucketHandler - HEAD Bucket
@@ -706,6 +736,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "HeadBucket")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -738,6 +772,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "DeleteBucket")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
