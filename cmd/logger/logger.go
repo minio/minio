@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/build"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,9 +116,11 @@ type traceEntry struct {
 	Source    []string          `json:"source,omitempty"`
 	Variables map[string]string `json:"variables,omitempty"`
 }
+
 type args struct {
-	Bucket string `json:"bucket,omitempty"`
-	Object string `json:"object,omitempty"`
+	Bucket   string            `json:"bucket,omitempty"`
+	Object   string            `json:"object,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 type api struct {
@@ -339,55 +340,6 @@ func logIf(ctx context.Context, err error) {
 	// Iterate over all logger targets to send the log entry
 	for _, t := range Targets {
 		t.send(entry)
-	}
-}
-
-type auditEntry struct {
-	DeploymentID string            `json:"deploymentid,omitempty"`
-	Time         string            `json:"time"`
-	API          *api              `json:"api,omitempty"`
-	RemoteHost   string            `json:"remotehost,omitempty"`
-	RequestID    string            `json:"requestID,omitempty"`
-	UserAgent    string            `json:"userAgent,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-}
-
-// AuditLog - logs audit logs to all targets.
-func AuditLog(ctx context.Context, r *http.Request) {
-	if Disable {
-		return
-	}
-
-	req := GetReqInfo(ctx)
-	if req == nil {
-		req = &ReqInfo{API: "SYSTEM"}
-	}
-
-	API := "SYSTEM"
-	if req.API != "" {
-		API = req.API
-	}
-
-	tags := make(map[string]string)
-	for _, entry := range req.GetTags() {
-		tags[entry.Key] = entry.Val
-	}
-
-	entry := auditEntry{
-		DeploymentID: deploymentID,
-		RemoteHost:   req.RemoteHost,
-		RequestID:    req.RequestID,
-		UserAgent:    req.UserAgent,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
-		API:          &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
-		Metadata:     tags,
-	}
-
-	// Send audit logs only to http targets.
-	for _, t := range Targets {
-		if _, ok := t.(*HTTPTarget); ok {
-			t.send(entry)
-		}
 	}
 }
 

@@ -707,7 +707,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(ctx, r)
+	defer logger.AuditLog(ctx, w, r)
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -830,27 +830,22 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Notify object created event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedPut,
-		BucketName: bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedPut,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
-
-	for k, v := range objInfo.UserDefined {
-		logger.GetReqInfo(ctx).SetTags(k, v)
-	}
-
-	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(ctx, r)
+	defer logger.AuditLog(ctx, w, r)
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1012,12 +1007,6 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		Host:         host,
 		Port:         port,
 	})
-
-	for k, v := range objInfo.UserDefined {
-		logger.GetReqInfo(ctx).SetTags(k, v)
-	}
-
-	logger.GetReqInfo(ctx).SetTags("etag", objInfo.ETag)
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -1038,8 +1027,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := newContext(r, w, "WebDownloadZip")
-
-	defer logger.AuditLog(ctx, r)
+	defer logger.AuditLog(ctx, w, r)
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
