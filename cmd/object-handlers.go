@@ -82,6 +82,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	ctx := newContext(r, w, "SelectObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
@@ -287,6 +291,24 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	// Executes the query on data-set
 	s3select.Execute(w, s3s)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a GET request.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedGet,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
+	})
+
 	for k, v := range objInfo.UserDefined {
 		logger.GetReqInfo(ctx).SetTags(k, v)
 	}
@@ -302,6 +324,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	ctx := newContext(r, w, "GetObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -472,7 +498,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		EventName:    event.ObjectAccessedGet,
 		BucketName:   bucket,
 		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
+		ReqParams:    reqParams,
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         host,
@@ -493,6 +519,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "HeadObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -630,7 +660,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		EventName:    event.ObjectAccessedHead,
 		BucketName:   bucket,
 		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
+		ReqParams:    reqParams,
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         host,
@@ -683,6 +713,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "CopyObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1043,13 +1077,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Notify object created event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedCopy,
-		BucketName: dstBucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedCopy,
+		BucketName:   dstBucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
 
 	for k, v := range objInfo.UserDefined {
@@ -1071,6 +1106,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	ctx := newContext(r, w, "PutObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1314,13 +1353,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Notify object created event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedPut,
-		BucketName: bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedPut,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
 
 	for k, v := range objInfo.UserDefined {
@@ -1342,6 +1382,10 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	ctx := newContext(r, w, "NewMultipartUpload")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1440,6 +1484,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	ctx := newContext(r, w, "CopyObjectPart")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1699,6 +1747,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
 	encodedSuccessResponse := encodeResponse(response)
 
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", partInfo.ETag)
+
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
@@ -1708,6 +1762,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	ctx := newContext(r, w, "PutObjectPart")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1968,6 +2026,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	}
 
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
+	logger.GetReqInfo(ctx).SetTags("etag", partInfo.ETag)
+
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -1976,6 +2040,10 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	ctx := newContext(r, w, "AbortMultipartUpload")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -2013,6 +2081,11 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
 	writeSuccessNoContent(w)
 }
 
@@ -2021,6 +2094,10 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	ctx := newContext(r, w, "ListObjectParts")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -2092,6 +2169,10 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	response := generateListPartsResponse(listPartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
@@ -2101,6 +2182,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	ctx := newContext(r, w, "CompleteMultipartUpload")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -2228,13 +2313,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Notify object created event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedCompleteMultipartUpload,
-		BucketName: bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedCompleteMultipartUpload,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
 
 	for k, v := range objInfo.UserDefined {
@@ -2251,6 +2337,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "DeleteObject")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

@@ -58,6 +58,10 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "GetBucketACL")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -107,6 +111,10 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "GetObjectACL")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

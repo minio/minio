@@ -42,6 +42,10 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	defer logger.AuditLog(ctx, r)
 
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -105,6 +109,10 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	defer logger.AuditLog(ctx, r)
 
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
@@ -142,6 +150,10 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	ctx := newContext(r, w, "GetBucketPolicy")
 
 	defer logger.AuditLog(ctx, r)
+
+	for k, v := range extractReqParams(r) {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {

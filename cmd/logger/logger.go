@@ -342,7 +342,9 @@ func logIf(ctx context.Context, err error) {
 	}
 }
 
-type auditEntry struct {
+// AuditEntry - audit entry logs.
+type AuditEntry struct {
+	Version      string            `json:"version"`
 	DeploymentID string            `json:"deploymentid,omitempty"`
 	Time         string            `json:"time"`
 	API          *api              `json:"api,omitempty"`
@@ -373,20 +375,25 @@ func AuditLog(ctx context.Context, r *http.Request) {
 		tags[entry.Key] = entry.Val
 	}
 
-	entry := auditEntry{
-		DeploymentID: deploymentID,
-		RemoteHost:   req.RemoteHost,
-		RequestID:    req.RequestID,
-		UserAgent:    req.UserAgent,
-		Time:         time.Now().UTC().Format(time.RFC3339Nano),
-		API:          &api{Name: API, Args: &args{Bucket: req.BucketName, Object: req.ObjectName}},
-		Metadata:     tags,
-	}
-
 	// Send audit logs only to http targets.
 	for _, t := range Targets {
 		if _, ok := t.(*HTTPTarget); ok {
-			t.send(entry)
+			t.send(AuditEntry{
+				Version:      "1",
+				DeploymentID: deploymentID,
+				RemoteHost:   req.RemoteHost,
+				RequestID:    req.RequestID,
+				UserAgent:    req.UserAgent,
+				Time:         time.Now().UTC().Format(time.RFC3339Nano),
+				API: &api{
+					Name: API,
+					Args: &args{
+						Bucket: req.BucketName,
+						Object: req.ObjectName,
+					},
+				},
+				Metadata: tags,
+			})
 		}
 	}
 }

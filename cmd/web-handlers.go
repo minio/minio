@@ -708,6 +708,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -834,13 +838,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Notify object created event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedPut,
-		BucketName: bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedPut,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    reqParams,
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
 
 	for k, v := range objInfo.UserDefined {
@@ -855,6 +860,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
 	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
+	for k, v := range reqParams {
+		logger.GetReqInfo(ctx).SetTags(k, v)
+	}
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1010,7 +1019,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		EventName:    event.ObjectAccessedGet,
 		BucketName:   bucket,
 		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
+		ReqParams:    reqParams,
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         host,
@@ -1042,8 +1051,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := newContext(r, w, "WebDownloadZip")
-
-	defer logger.AuditLog(ctx, r)
+	reqParams := extractReqParams(r)
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1123,6 +1131,11 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
+			defer logger.AuditLog(ctx, r)
+			for k, v := range reqParams {
+				logger.GetReqInfo(ctx).SetTags(k, v)
+			}
+
 			info, err := getObjectInfo(ctx, args.BucketName, objectName, opts)
 			if err != nil {
 				return err
@@ -1220,12 +1233,16 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				EventName:    event.ObjectAccessedGet,
 				BucketName:   args.BucketName,
 				Object:       info,
-				ReqParams:    extractReqParams(r),
+				ReqParams:    reqParams,
 				RespElements: extractRespElements(w),
 				UserAgent:    r.UserAgent(),
 				Host:         host,
 				Port:         port,
 			})
+
+			for k, v := range info.UserDefined {
+				logger.GetReqInfo(ctx).SetTags(k, v)
+			}
 
 			return nil
 		}
