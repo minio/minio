@@ -257,6 +257,8 @@ var (
 
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE []string
+	// GlobalGatewaySSEMode sse mode options
+	GlobalGatewaySSEMode []string
 	// Add new variable global values here.
 
 )
