@@ -67,10 +67,18 @@ Optionally set `MINIO_SSE_VAULT_CAPATH` as the path to a directory of PEM-encode
 export MINIO_SSE_VAULT_CAPATH=/home/user/custom-pems
 ```
 
-To enable encryption at gateway MINIO_GW_SSE environment variable needs to be set to "s3" for sse-s3
+Gateway encryption options can be specified by setting MINIO_GW_SSE and MINI_GW_SSE_MODE.
+
+To specify encryption type at gateway MINIO_GW_SSE environment variable needs to be set to "s3" for sse-s3
 and "c" for sse-c encryption at gateway. More than one encryption option can be set, delimited by ";". If MINIO_GW_SSE is not set, any SSE headers will be passed to S3 backend.
+
+In gateway mode, encryption can be set to pass-through to backend, do encryption at the gateway or double encryption at both gateway and backend by setting environment variable MINIO_GW_SSE_MODE.  More than one encryption mode can be set, delimited by ";". If MINIO_GW_SSE_MODE is not set,SSE options will not be honored.
+Valid settings are "backend" to enable encryption at the backend, and "gateway" to enable encryption at the gateway. Both can be specified to turn on double
+encryption.
+
 ```sh
 export MINIO_GW_SSE="s3;c"
+export MINIO_GW_SSE_MODE="backend;gateway"
 export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
 export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
 export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
