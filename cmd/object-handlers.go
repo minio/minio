@@ -269,10 +269,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	// Executes the query on data-set
-	if err = s3select.Execute(w, s3s); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	s3select.Execute(w, s3s)
 
 	for k, v := range objInfo.UserDefined {
 		logger.GetReqInfo(ctx).SetTags(k, v)
