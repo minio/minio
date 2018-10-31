@@ -563,6 +563,12 @@
 			"revisionTime": "2018-06-06T15:09:39Z"
 		},
 		{
+			"checksumSHA1": "/8VtN8HUS0G235mhqfj2gRMi9Eg=",
+			"path": "github.com/klauspost/readahead",
+			"revision": "7f90b27d81113b71920c55b7a73a071dc81bdfd8",
+			"revisionTime": "2017-10-07T12:43:06Z"
+		},
+		{
 			"checksumSHA1": "ehsrWipiGIWqa4To8TmelIx06vI=",
 			"path": "github.com/klauspost/reedsolomon",
 			"revision": "0b30fa71cc8e4e9010c9aba6d0320e2e5b163b29",

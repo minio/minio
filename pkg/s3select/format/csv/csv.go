@@ -17,14 +17,12 @@
 package csv
 
 import (
-	"compress/bzip2"
 	"encoding/csv"
 	"encoding/xml"
 	"io"
 	"strconv"
 	"strings"
 
-	gzip "github.com/klauspost/pgzip"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/s3select/format"
 )
@@ -89,28 +87,13 @@ type cinput struct {
 // Otherwise, the returned reader can be reliably consumed with Read().
 // until Read() return err.
 func New(opts *Options) (format.Select, error) {
-	myReader := opts.ReadFrom
-	var tempBytesScanned int64
-	tempBytesScanned = 0
-	switch opts.Compressed {
-	case "GZIP":
-		tempBytesScanned = opts.StreamSize
-		var err error
-		if myReader, err = gzip.NewReader(opts.ReadFrom); err != nil {
-			return nil, format.ErrTruncatedInput
-		}
-	case "BZIP2":
-		tempBytesScanned = opts.StreamSize
-		myReader = bzip2.NewReader(opts.ReadFrom)
-	}
-
 	// DelimitedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
-	normalizedReader := ioutil.NewDelimitedReader(myReader, []rune(opts.RecordDelimiter))
+	normalizedReader := ioutil.NewDelimitedReader(opts.ReadFrom, []rune(opts.RecordDelimiter))
 	reader := &cinput{
 		options: opts,
 		reader:  csv.NewReader(normalizedReader),
 	}
-	reader.stats.BytesScanned = tempBytesScanned
+	reader.stats.BytesScanned = opts.StreamSize
 	reader.stats.BytesProcessed = 0
 	reader.stats.BytesReturned = 0
 
