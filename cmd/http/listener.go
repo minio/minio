@@ -141,8 +141,8 @@ func getMethodResourceHost(bufConn *BufConn, maxHeaderBytes int) (method string,
 			// HTTP headers are case insensitive, so we should simply convert
 			// each tokens to their lower case form to match 'host' header.
 			token = strings.ToLower(token)
-			if strings.HasPrefix(token, "host: ") {
-				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
+			if strings.HasPrefix(token, "host:") {
+				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host:")
 				return method, resource, host, nil
 			}
 		}
