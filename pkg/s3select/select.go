@@ -36,13 +36,12 @@ type SelectFuncs struct {
 
 // RunSqlParser allows us to easily bundle all the functions from above and run
 // them in the appropriate order.
-func runSelectParser(f format.Select, myRow chan *Row) {
+func runSelectParser(f format.Select, myRow chan Row) {
 	reqCols, alias, myLimit, whereClause, aggFunctionNames, myFuncs, myErr := ParseSelect(f)
 	if myErr != nil {
-		rowStruct := &Row{
+		myRow <- Row{
 			err: myErr,
 		}
-		myRow <- rowStruct
 		return
 	}
 	processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, myRow, myFuncs, f)
@@ -52,19 +51,18 @@ func runSelectParser(f format.Select, myRow chan *Row) {
 // ParseSelect parses the SELECT expression, and effectively tokenizes it into
 // its separate parts. It returns the requested column names,alias,limit of
 // records, and the where clause.
-func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
-	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
-
-	stmt, err := sqlparser.Parse(cleanExpr(f.Expression()))
-	// TODO Maybe can parse their errors a bit to return some more of the s3 errors
-	if err != nil {
-		return nil, "", 0, nil, nil, nil, ErrLexerInvalidChar
-	}
-
+func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []string, SelectFuncs, error) {
+	var sFuncs = SelectFuncs{}
 	var whereClause interface{}
 	var alias string
 	var limit int64
-	myFuncs := &SelectFuncs{}
+
+	stmt, err := sqlparser.Parse(f.Expression())
+	// TODO Maybe can parse their errors a bit to return some more of the s3 errors
+	if err != nil {
+		return nil, "", 0, nil, nil, sFuncs, ErrLexerInvalidChar
+	}
+
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		// evaluates the where clause
@@ -95,26 +93,26 @@ func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []strin
 							case *sqlparser.StarExpr:
 								columnNames[0] = "*"
 								if smallerexpr.Name.CompliantName() != "count" {
-									return nil, "", 0, nil, nil, nil, ErrParseUnsupportedCallWithStar
+									return nil, "", 0, nil, nil, sFuncs, ErrParseUnsupportedCallWithStar
 								}
 							case *sqlparser.AliasedExpr:
 								switch col := tempagg.Expr.(type) {
 								case *sqlparser.BinaryExpr:
-									return nil, "", 0, nil, nil, nil, ErrParseNonUnaryAgregateFunctionCall
+									return nil, "", 0, nil, nil, sFuncs, ErrParseNonUnaryAgregateFunctionCall
 								case *sqlparser.ColName:
 									columnNames[i] = col.Name.CompliantName()
 								}
 							}
 							// Case to deal with if COALESCE was used..
 						} else if supportedFunc(smallerexpr.Name.CompliantName()) {
-							if myFuncs.funcExpr == nil {
-								myFuncs.funcExpr = make([]*sqlparser.FuncExpr, len(stmt.SelectExprs))
-								myFuncs.index = make([]int, len(stmt.SelectExprs))
+							if sFuncs.funcExpr == nil {
+								sFuncs.funcExpr = make([]*sqlparser.FuncExpr, len(stmt.SelectExprs))
+								sFuncs.index = make([]int, len(stmt.SelectExprs))
 							}
-							myFuncs.funcExpr[i] = smallerexpr
-							myFuncs.index[i] = i
+							sFuncs.funcExpr[i] = smallerexpr
+							sFuncs.index[i] = i
 						} else {
-							return nil, "", 0, nil, nil, nil, ErrUnsupportedSQLOperation
+							return nil, "", 0, nil, nil, sFuncs, ErrUnsupportedSQLOperation
 						}
 					case *sqlparser.ColName:
 						columnNames[i] = smallerexpr.Name.CompliantName()
@@ -129,7 +127,7 @@ func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []strin
 			for i := 0; i < len(stmt.From); i++ {
 				switch smallerexpr := stmt.From[i].(type) {
 				case *sqlparser.JoinTableExpr:
-					return nil, "", 0, nil, nil, nil, ErrParseMalformedJoin
+					return nil, "", 0, nil, nil, sFuncs, ErrParseMalformedJoin
 				case *sqlparser.AliasedTableExpr:
 					alias = smallerexpr.As.CompliantName()
 					if alias == "" {
@@ -147,23 +145,23 @@ func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []strin
 			}
 		}
 		if stmt.GroupBy != nil {
-			return nil, "", 0, nil, nil, nil, ErrParseUnsupportedLiteralsGroupBy
+			return nil, "", 0, nil, nil, sFuncs, ErrParseUnsupportedLiteralsGroupBy
 		}
 		if stmt.OrderBy != nil {
-			return nil, "", 0, nil, nil, nil, ErrParseUnsupportedToken
+			return nil, "", 0, nil, nil, sFuncs, ErrParseUnsupportedToken
 		}
-		if err := parseErrs(columnNames, whereClause, alias, myFuncs, f); err != nil {
-			return nil, "", 0, nil, nil, nil, err
+		if err := parseErrs(columnNames, whereClause, alias, sFuncs, f); err != nil {
+			return nil, "", 0, nil, nil, sFuncs, err
 		}
-		return columnNames, alias, limit, whereClause, functionNames, myFuncs, nil
+		return columnNames, alias, limit, whereClause, functionNames, sFuncs, nil
 	}
-	return nil, "", 0, nil, nil, nil, nil
+	return nil, "", 0, nil, nil, sFuncs, nil
 }
 
 // This is the main function, It goes row by row and for records which validate
 // the where clause it currently prints the appropriate row given the requested
 // columns.
-func processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int64, functionNames []string, myRow chan *Row, myFunc *SelectFuncs, f format.Select) {
+func processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int64, functionNames []string, myRow chan Row, myFunc SelectFuncs, f format.Select) {
 	counter := -1
 	var columns []string
 	filtrCount := 0
@@ -183,18 +181,16 @@ func processSelectReq(reqColNames []string, alias string, whereClause interface{
 	for {
 		record, err := f.Read()
 		if err != nil {
-			rowStruct := &Row{
+			myRow <- Row{
 				err: err,
 			}
-			myRow <- rowStruct
 			return
 		}
 		if record == nil {
 			if functionFlag {
-				rowStruct := &Row{
+				myRow <- Row{
 					record: aggFuncToStr(myAggVals, f) + "\n",
 				}
-				myRow <- rowStruct
 			}
 			close(myRow)
 			return
@@ -210,10 +206,9 @@ func processSelectReq(reqColNames []string, alias string, whereClause interface{
 				myErr = ErrMissingHeaders
 			}
 			if myErr != nil {
-				rowStruct := &Row{
+				myRow <- Row{
 					err: myErr,
 				}
-				myRow <- rowStruct
 				return
 			}
 		} else if counter == -1 && len(f.Header()) > 0 {
@@ -232,28 +227,26 @@ func processSelectReq(reqColNames []string, alias string, whereClause interface{
 		// The call to the where function clause,ensures that the rows we print match our where clause.
 		condition, myErr := matchesMyWhereClause(record, alias, whereClause)
 		if myErr != nil {
-			rowStruct := &Row{
+			myRow <- Row{
 				err: myErr,
 			}
-			myRow <- rowStruct
 			return
 		}
 		if condition {
 			// if its an asterix we just print everything in the row
 			if reqColNames[0] == "*" && functionNames[0] == "" {
-				var row *Row
+				var row Row
 				switch f.Type() {
 				case format.CSV:
-					row = &Row{
+					row = Row{
 						record: strings.Join(convertToSlice(columnsMap, record, string(out)), f.OutputFieldDelimiter()) + "\n",
 					}
 				case format.JSON:
-					row = &Row{
+					row = Row{
 						record: string(out) + "\n",
 					}
 				}
 				myRow <- row
-
 			} else if alias != "" {
 				// This is for dealing with the case of if we have to deal with a
 				// request for a column with an index e.g A_1.
@@ -269,16 +262,14 @@ func processSelectReq(reqColNames []string, alias string, whereClause interface{
 						// retrieve the correct part of the row.
 						myQueryRow, myErr := processColNameIndex(string(out), reqColNames, columns, f)
 						if myErr != nil {
-							rowStruct := &Row{
+							myRow <- Row{
 								err: myErr,
 							}
-							myRow <- rowStruct
 							return
 						}
-						rowStruct := &Row{
+						myRow <- Row{
 							record: myQueryRow + "\n",
 						}
-						myRow <- rowStruct
 					}
 				} else {
 					// This code does aggregation if we were provided column names in the
@@ -292,16 +283,14 @@ func processSelectReq(reqColNames []string, alias string, whereClause interface{
 						// names rather than indices.
 						myQueryRow, myErr := processColNameLiteral(string(out), reqColNames, myFunc, f)
 						if myErr != nil {
-							rowStruct := &Row{
+							myRow <- Row{
 								err: myErr,
 							}
-							myRow <- rowStruct
 							return
 						}
-						rowStruct := &Row{
+						myRow <- Row{
 							record: myQueryRow + "\n",
 						}
-						myRow <- rowStruct
 					}
 				}
 			}
@@ -357,7 +346,7 @@ func processColNameIndex(record string, reqColNames []string, columns []string, 
 
 // processColNameLiteral is the function which creates the row for an name based
 // query.
-func processColNameLiteral(record string, reqColNames []string, myFunc *SelectFuncs, f format.Select) (string, error) {
+func processColNameLiteral(record string, reqColNames []string, myFunc SelectFuncs, f format.Select) (string, error) {
 	row := make([]string, len(reqColNames))
 	for i := 0; i < len(reqColNames); i++ {
 		// this is the case to deal with COALESCE.

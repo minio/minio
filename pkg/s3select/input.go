@@ -18,6 +18,8 @@ package s3select
 
 import (
 	"bytes"
+	"compress/bzip2"
+	"compress/gzip"
 	"io"
 	"net/http"
 	"strings"
@@ -26,6 +28,8 @@ import (
 	"github.com/minio/minio/pkg/s3select/format"
 	"github.com/minio/minio/pkg/s3select/format/csv"
 	"github.com/minio/minio/pkg/s3select/format/json"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -61,7 +65,16 @@ func cleanExpr(expr string) string {
 }
 
 // New - initialize new select format
-func New(gr io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, err error) {
+func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, err error) {
+	switch req.InputSerialization.CompressionType {
+	case SelectCompressionGZIP:
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return nil, format.ErrTruncatedInput
+		}
+	case SelectCompressionBZIP:
+		reader = bzip2.NewReader(reader)
+	}
+
 	//  Initializating options for CSV
 	if req.InputSerialization.CSV != nil {
 		if req.OutputSerialization.CSV.FieldDelimiter == "" {
@@ -79,7 +92,7 @@ func New(gr io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, 
 			FieldDelimiter:       req.InputSerialization.CSV.FieldDelimiter,
 			Comments:             req.InputSerialization.CSV.Comments,
 			Name:                 "S3Object", // Default table name for all objects
-			ReadFrom:             gr,
+			ReadFrom:             reader,
 			Compressed:           string(req.InputSerialization.CompressionType),
 			Expression:           cleanExpr(req.Expression),
 			OutputFieldDelimiter: req.OutputSerialization.CSV.FieldDelimiter,
@@ -91,7 +104,7 @@ func New(gr io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, 
 		//  Initializating options for JSON
 		s3s, err = json.New(&json.Options{
 			Name:       "S3Object", // Default table name for all objects
-			ReadFrom:   gr,
+			ReadFrom:   reader,
 			Compressed: string(req.InputSerialization.CompressionType),
 			Expression: cleanExpr(req.Expression),
 			StreamSize: size,
@@ -106,8 +119,8 @@ func New(gr io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, 
 // response writer in a streaming fashion so that the client can actively use
 // the results before the query is finally finished executing. The
 func Execute(writer io.Writer, f format.Select) error {
-	myRow := make(chan *Row)
-	curBuf := bytes.NewBuffer(make([]byte, 1000000))
+	myRow := make(chan Row, 1000)
+	curBuf := bytes.NewBuffer(make([]byte, humanize.MiByte))
 	curBuf.Reset()
 	progressTicker := time.NewTicker(progressTime)
 	continuationTimer := time.NewTimer(continuationTime)
@@ -115,13 +128,11 @@ func Execute(writer io.Writer, f format.Select) error {
 	defer continuationTimer.Stop()
 
 	go runSelectParser(f, myRow)
-
 	for {
 		select {
 		case row, ok := <-myRow:
 			if ok && row.err != nil {
-				errorMessage := writeErrorMessage(row.err, curBuf)
-				_, err := errorMessage.WriteTo(writer)
+				_, err := writeErrorMessage(row.err, curBuf).WriteTo(writer)
 				flusher, okFlush := writer.(http.Flusher)
 				if okFlush {
 					flusher.Flush()
@@ -133,8 +144,7 @@ func Execute(writer io.Writer, f format.Select) error {
 				close(myRow)
 				return nil
 			} else if ok {
-				message := writeRecordMessage(row.record, curBuf)
-				_, err := message.WriteTo(writer)
+				_, err := writeRecordMessage(row.record, curBuf).WriteTo(writer)
 				flusher, okFlush := writer.(http.Flusher)
 				if okFlush {
 					flusher.Flush()
@@ -153,8 +163,7 @@ func Execute(writer io.Writer, f format.Select) error {
 				if err != nil {
 					return err
 				}
-				statMessage := writeStatMessage(statPayload, curBuf)
-				_, err = statMessage.WriteTo(writer)
+				_, err = writeStatMessage(statPayload, curBuf).WriteTo(writer)
 				flusher, ok := writer.(http.Flusher)
 				if ok {
 					flusher.Flush()
@@ -163,8 +172,7 @@ func Execute(writer io.Writer, f format.Select) error {
 					return err
 				}
 				curBuf.Reset()
-				message := writeEndMessage(curBuf)
-				_, err = message.WriteTo(writer)
+				_, err = writeEndMessage(curBuf).WriteTo(writer)
 				flusher, ok = writer.(http.Flusher)
 				if ok {
 					flusher.Flush()
@@ -182,8 +190,7 @@ func Execute(writer io.Writer, f format.Select) error {
 				if err != nil {
 					return err
 				}
-				progressMessage := writeProgressMessage(progressPayload, curBuf)
-				_, err = progressMessage.WriteTo(writer)
+				_, err = writeProgressMessage(progressPayload, curBuf).WriteTo(writer)
 				flusher, ok := writer.(http.Flusher)
 				if ok {
 					flusher.Flush()
@@ -194,8 +201,7 @@ func Execute(writer io.Writer, f format.Select) error {
 				curBuf.Reset()
 			}
 		case <-continuationTimer.C:
-			message := writeContinuationMessage(curBuf)
-			_, err := message.WriteTo(writer)
+			_, err := writeContinuationMessage(curBuf).WriteTo(writer)
 			flusher, ok := writer.(http.Flusher)
 			if ok {
 				flusher.Flush()

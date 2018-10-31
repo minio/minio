@@ -33,6 +33,7 @@ import (
 
 	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
+	"github.com/klauspost/readahead"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -251,7 +252,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 	}
 
-	s3s, err := s3select.New(gr, objInfo.Size, selectReq)
+	reader := readahead.NewReader(gr)
+	defer reader.Close()
+
+	s3s, err := s3select.New(reader, objInfo.GetActualSize(), selectReq)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -265,10 +269,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	// Executes the query on data-set
-	if err = s3select.Execute(w, s3s); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	s3select.Execute(w, s3s)
 
 	for k, v := range objInfo.UserDefined {
 		logger.GetReqInfo(ctx).SetTags(k, v)
@@ -368,6 +369,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer gr.Close()
+
 	objInfo := gr.ObjInfo
 
 	if objectAPI.IsEncryptionSupported() {
@@ -2091,21 +2093,18 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			}
 			return
 		}
-	} else {
-		getBucketInfo := objectAPI.GetBucketInfo
-		if api.CacheAPI() != nil {
-			getBucketInfo = api.CacheAPI().GetBucketInfo
-		}
-		if _, err := getBucketInfo(ctx, bucket); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
-		}
 	}
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	// Ignore delete object errors while replying to client, since we are
-	// suppposed to reply only 204. Additionally log the error for
-	// investigation.
-	deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r)
+	if err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r); err != nil {
+		switch toAPIErrorCode(err) {
+		case ErrNoSuchBucket:
+			// When bucket doesn't exist specially handle it.
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			return
+		}
+		logger.LogIf(ctx, err)
+		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
+	}
 	writeSuccessNoContent(w)
 }

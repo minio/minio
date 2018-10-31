@@ -490,17 +490,6 @@ func likeConvert(pattern string, record string) (bool, error) {
 	return true, nil
 }
 
-// TrimQuotes allows the following to occur select "name", we need to trim the
-// quotes to reference our map of columnNames.
-func trimQuotes(s string) string {
-	if len(s) >= 2 {
-		if c := s[len(s)-1]; s[0] == c && (c == '"') {
-			return s[1 : len(s)-1]
-		}
-	}
-	return s
-}
-
 // cleanCol cleans a column name from the parser so that the name is returned to
 // original.
 func cleanCol(myCol string, alias string) string {
@@ -641,7 +630,7 @@ func evaluateParserType(col *sqlparser.SQLVal) (interface{}, error) {
 
 // parseErrs is the function which handles all the errors that could occur
 // through use of function arguments such as column names in NULLIF
-func parseErrs(columnNames []string, whereClause interface{}, alias string, myFuncs *SelectFuncs, f format.Select) error {
+func parseErrs(columnNames []string, whereClause interface{}, alias string, myFuncs SelectFuncs, f format.Select) error {
 	// Below code cleans up column names.
 	processColumnNames(columnNames, alias, f)
 	if columnNames[0] != "*" {
