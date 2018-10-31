@@ -209,4 +209,14 @@ Example 1:
 		"Please check the passed value",
 		"MINIO_GW_SSE: Gateway SSE accepts only S3, C and KMS as valid values. Delimit by `;` to set more than one value",
 	)
+	uiErrInvalidGWSSEModeValue = newUIErrFn(
+		"Invalid gateway sse mode value",
+		"Please check the passed value",
+		"MINIO_GW_SSE_MODE: Gateway SSE accepts only backend,gateway as valid values. Delimit by `;` to set more than one value",
+	)
+	uiErrInvalidGWSSEEnvValue = newUIErrFn(
+		"Invalid gateway sse configuration",
+		"",
+		"MINIO_GW_SSE and MINIO_GW_SSE_MODE environment variables need to be set",
+	)
 )

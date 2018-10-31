@@ -212,13 +212,28 @@ func (l *s3EncObjects) isPrefix(ctx context.Context, bucket, prefix string, fetc
 	return false
 }
 
+// shouldSetSSEHeaders returns true if sse mode specifies
+// backend encryption
+func shouldSetSSEHeaders() bool {
+	for _, v := range minio.GlobalGatewaySSEMode {
+		if v == minio.GatewaySSEBackendEncrypt {
+			return true
+		}
+	}
+	return false
+}
+
 // GetObject reads an object from S3. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
 // In the case of multi-part uploads that were encrypted at the gateway, the objects
 // are stored in a custom format at the backend with each part as an individual object
 // and piped to the writer.
-func (l *s3EncObjects) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, o minio.ObjectOptions) error {
+func (l *s3EncObjects) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
+	var o minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		o = opts
+	}
 	// pass through encryption
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.GetObject(ctx, bucket, key, startOffset, length, writer, etag, o)
@@ -360,7 +375,11 @@ func (l *s3EncObjects) deleteGWMetadata(ctx context.Context, bucket, metaFileNam
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
+func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, o minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
+	var opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		opts = o
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -387,7 +406,11 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 // For custom gateway encrypted large objects, the ObjectInfo is retrieved from the dare.meta file.
-func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	var opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		opts = o
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.GetObjectInfo(ctx, bucket, object, opts)
 	}
@@ -399,11 +422,16 @@ func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
-func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, s, d minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	var srcOpts, dstOpts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		srcOpts = s
+		dstOpts = d
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
-	return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjectReader, srcInfo.UserDefined, dstOpts)
+	return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjectReader, srcInfo.UserDefined, d)
 }
 
 // DeleteObject deletes a blob in bucket
@@ -507,6 +535,10 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 
 // NewMultipartUpload uploads object in multiple parts
 func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
+	var opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		opts = o
+	}
 	// Create uploadID and write a temporary dare.meta object under object/uploadID prefix
 	if len(minio.GlobalGatewaySSE) > 0 {
 		uploadID := minio.MustGetUUID()
@@ -519,17 +551,21 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 		}
 		return uploadID, nil
 	}
-	return l.s3Objects.NewMultipartUpload(ctx, bucket, object, metadata, o)
+	return l.s3Objects.NewMultipartUpload(ctx, bucket, object, metadata, opts)
 }
 
 // PutObject creates a new object with the incoming data,
 func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjectReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	var s3Opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		s3Opts = opts
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
-		return l.s3Objects.PutObject(ctx, bucket, object, data, metadata, opts)
+		return l.s3Objects.PutObject(ctx, bucket, object, data, metadata, s3Opts)
 	}
 	if opts.ServerSideEncryption == nil {
 		wasEncrypted := l.isGWEncrypted(ctx, bucket, object)
-		oi, err := l.s3Objects.PutObject(ctx, bucket, object, data, metadata, opts)
+		oi, err := l.s3Objects.PutObject(ctx, bucket, object, data, metadata, s3Opts)
 		if err != nil {
 			return objInfo, minio.ErrorRespToObjectError(err)
 		}
@@ -540,8 +576,7 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 	// overwrite any previous unencrypted object with same name
 	defer l.s3Objects.DeleteObject(ctx, bucket, object)
-
-	oi, err := l.s3Objects.PutObject(ctx, bucket, getGWContentPath(object), data, map[string]string{}, opts)
+	oi, err := l.s3Objects.PutObject(ctx, bucket, getGWContentPath(object), data, map[string]string{}, s3Opts)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err)
 	}
@@ -577,7 +612,7 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *minio.PutObjectReader, opts minio.ObjectOptions) (pi minio.PartInfo, e error) {
 	var s3Opts minio.ObjectOptions
 	// for sse-s3 encryption options should not be passed to backend
-	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC {
+	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC && shouldSetSSEHeaders() {
 		s3Opts = opts
 	}
 	if len(minio.GlobalGatewaySSE) == 0 {
@@ -629,7 +664,12 @@ func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object 
 // CopyObjectPart creates a part in a multipart upload by copying
 // existing object or a part of it.
 func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
-	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (p minio.PartInfo, err error) {
+	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, s, d minio.ObjectOptions) (p minio.PartInfo, err error) {
+	var srcOpts, dstOpts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		srcOpts = s
+		dstOpts = d
+	}
 	// pass through encryption
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.CopyObjectPart(ctx, srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset, length, srcInfo, srcOpts, dstOpts)
@@ -638,7 +678,11 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
-func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
+func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, o minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
+	var opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		opts = o
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
 		return l.s3Objects.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
@@ -747,8 +791,12 @@ func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
+	var s3Opts minio.ObjectOptions
+	if shouldSetSSEHeaders() {
+		s3Opts = opts
+	}
 	if len(minio.GlobalGatewaySSE) == 0 {
-		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+		return l.s3Objects.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, s3Opts)
 	}
 	uploadPrefix := getTmpGWMetaPath(object, uploadID)
 	dareMeta, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID))

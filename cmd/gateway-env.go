@@ -23,4 +23,8 @@ const (
 	GatewaySSEC = "C"
 	// GatewaySSEKMS is set when SSE-KMS double encryption is needed
 	GatewaySSEKMS = "KMS"
+	// GatewaySSEBackendEncrypt is set when encryption is required at backend
+	GatewaySSEBackendEncrypt = "backend"
+	// GatewaySSEGatewayEncrypt is set when encryption is required at gateway
+	GatewaySSEGatewayEncrypt = "gateway"
 )
