@@ -42,7 +42,7 @@ export MINIO_ACCESS_KEY=aws_access_key
 export MINIO_SECRET_KEY=aws_secret_key
 export MINIO_IAM_JWKS_URL=https://localhost:9443/oauth2/jwks
 export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
-export MINIO_ETCD_ENDPOINTS=localhost:2379
+export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio gateway s3
 ```
 
