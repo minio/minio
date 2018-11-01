@@ -17,10 +17,8 @@
 package s3select
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -32,64 +30,50 @@ import (
 // MaxExpressionLength - 256KiB
 const MaxExpressionLength = 256 * 1024
 
-// matchesMyWhereClause takes map[string]interfaces{} , process the where clause and returns true if the row suffices
-func matchesMyWhereClause(record map[string]interface{}, alias string, whereClause interface{}) (bool, error) {
+// matchesMyWhereClause takes []byte, process the where clause and returns true if the row suffices
+func matchesMyWhereClause(record []byte, alias string, whereClause sqlparser.Expr) (bool, error) {
 	var conversionColumn string
 	var operator string
-	var operand interface{}
+	var operand gjson.Result
 	if fmt.Sprintf("%v", whereClause) == "false" {
 		return false, nil
 	}
-	out, err := json.Marshal(record)
-	if err != nil {
-		return false, ErrExternalEvalException
-	}
 	switch expr := whereClause.(type) {
 	case *sqlparser.IsExpr:
-		return evaluateIsExpr(expr, string(out), alias)
+		return evaluateIsExpr(expr, record, alias)
 	case *sqlparser.RangeCond:
 		operator = expr.Operator
 		if operator != "between" && operator != "not between" {
 			return false, ErrUnsupportedSQLOperation
 		}
-		if operator == "not between" {
-			result, err := evaluateBetween(expr, alias, string(out))
-			if err != nil {
-				return false, err
-			}
-			return !result, nil
-		}
-		result, err := evaluateBetween(expr, alias, string(out))
+		result, err := evaluateBetween(expr, alias, record)
 		if err != nil {
 			return false, err
+		}
+		if operator == "not between" {
+			return !result, nil
 		}
 		return result, nil
 	case *sqlparser.ComparisonExpr:
 		operator = expr.Operator
 		switch right := expr.Right.(type) {
 		case *sqlparser.FuncExpr:
-			operand = evaluateFuncExpr(right, "", string(out))
+			operand = gjson.Parse(evaluateFuncExpr(right, "", record))
 		case *sqlparser.SQLVal:
-			var err error
-			operand, err = evaluateParserType(right)
-			if err != nil {
-				return false, err
-			}
+			operand = gjson.ParseBytes(right.Val)
 		}
 		var myVal string
-		myVal = ""
 		switch left := expr.Left.(type) {
 		case *sqlparser.FuncExpr:
-			myVal = evaluateFuncExpr(left, "", string(out))
+			myVal = evaluateFuncExpr(left, "", record)
 			conversionColumn = ""
 		case *sqlparser.ColName:
 			conversionColumn = left.Name.CompliantName()
 		}
-
 		if myVal != "" {
-			return evaluateOperator(myVal, operator, operand)
+			return evaluateOperator(gjson.Parse(myVal), operator, operand)
 		}
-		return evaluateOperator(jsonValue(conversionColumn, string(out)), operator, operand)
+		return evaluateOperator(gjson.GetBytes(record, conversionColumn), operator, operand)
 	case *sqlparser.AndExpr:
 		var leftVal bool
 		var rightVal bool
@@ -127,58 +111,50 @@ func matchesMyWhereClause(record map[string]interface{}, alias string, whereClau
 	return true, nil
 }
 
-func applyStrFunc(rawArg string, funcName string) string {
+func applyStrFunc(rawArg gjson.Result, funcName string) string {
 	switch strings.ToUpper(funcName) {
 	case "TRIM":
-		// parser has an issue which does not allow it to support Trim with other
-		// arguments
-		return strings.Trim(rawArg, " ")
+		// parser has an issue which does not allow it to support
+		// Trim with other arguments
+		return strings.Trim(rawArg.String(), " ")
 	case "SUBSTRING":
-		// TODO parser has an issue which does not support substring
-		return rawArg
+		// TODO: parser has an issue which does not support substring
+		return rawArg.String()
 	case "CHAR_LENGTH":
-		return strconv.Itoa(len(rawArg))
+		return strconv.Itoa(len(rawArg.String()))
 	case "CHARACTER_LENGTH":
-		return strconv.Itoa(len(rawArg))
+		return strconv.Itoa(len(rawArg.String()))
 	case "LOWER":
-		return strings.ToLower(rawArg)
+		return strings.ToLower(rawArg.String())
 	case "UPPER":
-		return strings.ToUpper(rawArg)
+		return strings.ToUpper(rawArg.String())
 	}
-	return rawArg
+	return rawArg.String()
 
 }
 
 // evaluateBetween is a function which evaluates a Between Clause.
-func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record string) (bool, error) {
-	var colToVal interface{}
-	var colFromVal interface{}
+func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record []byte) (bool, error) {
+	var colToVal gjson.Result
+	var colFromVal gjson.Result
 	var conversionColumn string
 	var funcName string
 	switch colTo := betweenExpr.To.(type) {
 	case sqlparser.Expr:
 		switch colToMyVal := colTo.(type) {
 		case *sqlparser.FuncExpr:
-			colToVal = stringOps(colToMyVal, record, "")
+			colToVal = gjson.Parse(stringOps(colToMyVal, record, ""))
 		case *sqlparser.SQLVal:
-			var err error
-			colToVal, err = evaluateParserType(colToMyVal)
-			if err != nil {
-				return false, err
-			}
+			colToVal = gjson.ParseBytes(colToMyVal.Val)
 		}
 	}
 	switch colFrom := betweenExpr.From.(type) {
 	case sqlparser.Expr:
 		switch colFromMyVal := colFrom.(type) {
 		case *sqlparser.FuncExpr:
-			colFromVal = stringOps(colFromMyVal, record, "")
+			colFromVal = gjson.Parse(stringOps(colFromMyVal, record, ""))
 		case *sqlparser.SQLVal:
-			var err error
-			colFromVal, err = evaluateParserType(colFromMyVal)
-			if err != nil {
-				return false, err
-			}
+			colFromVal = gjson.ParseBytes(colFromMyVal.Val)
 		}
 	}
 	var myFuncVal string
@@ -189,7 +165,7 @@ func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record stri
 	case *sqlparser.ColName:
 		conversionColumn = cleanCol(left.Name.CompliantName(), alias)
 	}
-	toGreater, err := evaluateOperator(fmt.Sprintf("%v", colToVal), ">", colFromVal)
+	toGreater, err := evaluateOperator(colToVal, ">", colFromVal)
 	if err != nil {
 		return false, err
 	}
@@ -199,113 +175,87 @@ func evaluateBetween(betweenExpr *sqlparser.RangeCond, alias string, record stri
 	return evalBetweenLess(conversionColumn, record, funcName, colFromVal, colToVal, myFuncVal)
 }
 
-// evalBetweenGreater is a function which evaluates the between given that the
-// TO is > than the FROM.
-func evalBetweenGreater(conversionColumn string, record string, funcName string, colFromVal interface{}, colToVal interface{}, myColVal string) (bool, error) {
+func evalBetween(conversionColumn string, record []byte, funcName string, colFromVal gjson.Result, colToVal gjson.Result, myColVal string, operator string) (bool, error) {
 	if format.IsInt(conversionColumn) {
-		myVal, err := evaluateOperator(jsonValue("_"+conversionColumn, record), ">=", colFromVal)
+		myVal, err := evaluateOperator(gjson.GetBytes(record, "_"+conversionColumn), operator, colFromVal)
 		if err != nil {
 			return false, err
 		}
 		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(jsonValue("_"+conversionColumn, record)))
+		myOtherVal, err = evaluateOperator(colToVal, operator, gjson.GetBytes(record, "_"+conversionColumn))
 		if err != nil {
 			return false, err
 		}
 		return (myVal && myOtherVal), nil
 	}
 	if myColVal != "" {
-		myVal, err := evaluateOperator(myColVal, ">=", colFromVal)
+		myVal, err := evaluateOperator(gjson.Parse(myColVal), operator, colFromVal)
 		if err != nil {
 			return false, err
 		}
 		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(myColVal))
+		myOtherVal, err = evaluateOperator(colToVal, operator, gjson.Parse(myColVal))
 		if err != nil {
 			return false, err
 		}
 		return (myVal && myOtherVal), nil
 	}
-	myVal, err := evaluateOperator(jsonValue(conversionColumn, record), ">=", colFromVal)
+	myVal, err := evaluateOperator(gjson.GetBytes(record, conversionColumn), operator, colFromVal)
 	if err != nil {
 		return false, err
 	}
 	var myOtherVal bool
-	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), ">=", checkStringType(jsonValue(conversionColumn, record)))
+	myOtherVal, err = evaluateOperator(colToVal, operator, gjson.GetBytes(record, conversionColumn))
 	if err != nil {
 		return false, err
 	}
 	return (myVal && myOtherVal), nil
 }
 
+// evalBetweenGreater is a function which evaluates the between given that the
+// TO is > than the FROM.
+func evalBetweenGreater(conversionColumn string, record []byte, funcName string, colFromVal gjson.Result, colToVal gjson.Result, myColVal string) (bool, error) {
+	return evalBetween(conversionColumn, record, funcName, colFromVal, colToVal, myColVal, ">=")
+}
+
 // evalBetweenLess is a function which evaluates the between given that the
 // FROM is > than the TO.
-func evalBetweenLess(conversionColumn string, record string, funcName string, colFromVal interface{}, colToVal interface{}, myColVal string) (bool, error) {
-	if format.IsInt(conversionColumn) {
-		// Subtract 1 out because the index starts at 1 for Amazon instead of 0.
-		myVal, err := evaluateOperator(jsonValue("_"+conversionColumn, record), "<=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(jsonValue("_"+conversionColumn, record)))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	if myColVal != "" {
-		myVal, err := evaluateOperator(myColVal, "<=", colFromVal)
-		if err != nil {
-			return false, err
-		}
-		var myOtherVal bool
-		myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(myColVal))
-		if err != nil {
-			return false, err
-		}
-		return (myVal && myOtherVal), nil
-	}
-	myVal, err := evaluateOperator(jsonValue(conversionColumn, record), "<=", colFromVal)
-	if err != nil {
-		return false, err
-	}
-	var myOtherVal bool
-	myOtherVal, err = evaluateOperator(fmt.Sprintf("%v", colToVal), "<=", checkStringType(jsonValue(conversionColumn, record)))
-	if err != nil {
-		return false, err
-	}
-	return (myVal && myOtherVal), nil
+func evalBetweenLess(conversionColumn string, record []byte, funcName string, colFromVal gjson.Result, colToVal gjson.Result, myColVal string) (bool, error) {
+	return evalBetween(conversionColumn, record, funcName, colFromVal, colToVal, myColVal, "<=")
 }
 
 // This is a really important function it actually evaluates the boolean
 // statement and therefore actually returns a bool, it functions as the lowest
 // level of the state machine.
-func evaluateOperator(myTblVal string, operator string, operand interface{}) (bool, error) {
+func evaluateOperator(myTblVal gjson.Result, operator string, operand gjson.Result) (bool, error) {
 	if err := checkValidOperator(operator); err != nil {
 		return false, err
 	}
-	myRecordVal := checkStringType(myTblVal)
-	myVal := reflect.ValueOf(myRecordVal)
-	myOp := reflect.ValueOf(operand)
-
-	switch {
-	case myVal.Kind() == reflect.String && myOp.Kind() == reflect.String:
-		return stringEval(myVal.String(), operator, myOp.String())
-	case myVal.Kind() == reflect.Float64 && myOp.Kind() == reflect.Float64:
-		return floatEval(myVal.Float(), operator, myOp.Float())
-	case myVal.Kind() == reflect.Int && myOp.Kind() == reflect.Int:
-		return intEval(myVal.Int(), operator, myOp.Int())
-	case myVal.Kind() == reflect.Int && myOp.Kind() == reflect.String:
-		stringVs := strconv.Itoa(int(myVal.Int()))
-		return stringEval(stringVs, operator, myOp.String())
-	case myVal.Kind() == reflect.Float64 && myOp.Kind() == reflect.String:
-		stringVs := strconv.FormatFloat(myVal.Float(), 'f', 6, 64)
-		return stringEval(stringVs, operator, myOp.String())
-	case myVal.Kind() != myOp.Kind():
+	if !myTblVal.Exists() {
 		return false, nil
 	}
-	return false, ErrUnsupportedSyntax
+	switch {
+	case operand.Type == gjson.String || operand.Type == gjson.Null:
+		return stringEval(myTblVal.String(), operator, operand.String())
+	case operand.Type == gjson.Number:
+		opInt := format.IsInt(operand.Raw)
+		tblValInt := format.IsInt(strings.Trim(myTblVal.Raw, "\""))
+		if opInt && tblValInt {
+			return intEval(int64(myTblVal.Float()), operator, operand.Int())
+		}
+		if !opInt && !tblValInt {
+			return floatEval(myTblVal.Float(), operator, operand.Float())
+		}
+		switch operator {
+		case "!=":
+			return true, nil
+		}
+		return false, nil
+	case myTblVal.Type != operand.Type:
+		return false, nil
+	default:
+		return false, ErrUnsupportedSyntax
+	}
 }
 
 // checkValidOperator ensures that the current operator is supported
@@ -317,19 +267,6 @@ func checkValidOperator(operator string) error {
 		}
 	}
 	return ErrParseUnknownOperator
-}
-
-// checkStringType converts the value from the csv to the appropriate one.
-func checkStringType(tblVal string) interface{} {
-	intVal, err := strconv.Atoi(tblVal)
-	if err == nil {
-		return intVal
-	}
-	floatVal, err := strconv.ParseFloat(tblVal, 64)
-	if err == nil {
-		return floatVal
-	}
-	return tblVal
 }
 
 // stringEval is for evaluating the state of string comparison.
@@ -586,46 +523,15 @@ func aggFuncToStr(aggVals []float64, f format.Select) string {
 }
 
 // checkForDuplicates ensures we do not have an ambigious column name.
-func checkForDuplicates(columns []string, columnsMap map[string]int, hasDuplicates map[string]bool, lowercaseColumnsMap map[string]int) error {
-	for i := 0; i < len(columns); i++ {
-		columns[i] = strings.Replace(columns[i], " ", "_", len(columns[i]))
+func checkForDuplicates(columns []string, columnsMap map[string]int) error {
+	for i, column := range columns {
+		columns[i] = strings.Replace(column, " ", "_", len(column))
 		if _, exist := columnsMap[columns[i]]; exist {
 			return ErrAmbiguousFieldName
 		}
 		columnsMap[columns[i]] = i
-		// This checks that if a key has already been put into the map, that we're
-		// setting its appropriate value in has duplicates to be true.
-		if _, exist := lowercaseColumnsMap[strings.ToLower(columns[i])]; exist {
-			hasDuplicates[strings.ToLower(columns[i])] = true
-		} else {
-			lowercaseColumnsMap[strings.ToLower(columns[i])] = i
-		}
 	}
 	return nil
-}
-
-// evaluateParserType is a function that takes a SQL value and returns it as an
-// interface converted into the appropriate value.
-func evaluateParserType(col *sqlparser.SQLVal) (interface{}, error) {
-	colDataType := col.Type
-	var val interface{}
-	switch colDataType {
-	case 0:
-		val = string(col.Val)
-	case 1:
-		intVersion, isInt := strconv.Atoi(string(col.Val))
-		if isInt != nil {
-			return nil, ErrIntegerOverflow
-		}
-		val = intVersion
-	case 2:
-		floatVersion, isFloat := strconv.ParseFloat(string(col.Val), 64)
-		if isFloat != nil {
-			return nil, ErrIntegerOverflow
-		}
-		val = floatVersion
-	}
-	return val, nil
 }
 
 // parseErrs is the function which handles all the errors that could occur
@@ -654,11 +560,4 @@ func parseErrs(columnNames []string, whereClause interface{}, alias string, myFu
 		}
 	}
 	return nil
-}
-
-// It return the value corresponding to the tag in Json .
-// Input is the Key and row is the JSON string
-func jsonValue(input string, row string) string {
-	value := gjson.Get(row, input)
-	return value.String()
 }

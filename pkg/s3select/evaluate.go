@@ -19,13 +19,15 @@ package s3select
 import (
 	"strings"
 
-	"github.com/minio/minio/pkg/s3select/format"
+	"github.com/tidwall/gjson"
 	"github.com/xwb1989/sqlparser"
+
+	"github.com/minio/minio/pkg/s3select/format"
 )
 
-// stringOps is a function which handles the case in a clause if there is a need
-// to perform a string function
-func stringOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
+// stringOps is a function which handles the case in a clause
+// if there is a need to perform a string function
+func stringOps(myFunc *sqlparser.FuncExpr, record []byte, myReturnVal string) string {
 	var value string
 	funcName := myFunc.Name.CompliantName()
 	switch tempArg := myFunc.Exprs[0].(type) {
@@ -33,29 +35,29 @@ func stringOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) st
 		switch col := tempArg.Expr.(type) {
 		case *sqlparser.FuncExpr:
 			// myReturnVal is actually the tail recursive value being used in the eval func.
-			return applyStrFunc(myReturnVal, funcName)
+			return applyStrFunc(gjson.Parse(myReturnVal), funcName)
 		case *sqlparser.ColName:
-			value = applyStrFunc(jsonValue(col.Name.CompliantName(), record), funcName)
+			value = applyStrFunc(gjson.GetBytes(record, col.Name.CompliantName()), funcName)
 		case *sqlparser.SQLVal:
-			value = applyStrFunc(string(col.Val), funcName)
+			value = applyStrFunc(gjson.ParseBytes(col.Val), funcName)
 		}
 	}
 	return value
 }
 
 // coalOps is a function which decomposes a COALESCE func expr into its struct.
-func coalOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
+func coalOps(myFunc *sqlparser.FuncExpr, record []byte, myReturnVal string) string {
 	myArgs := make([]string, len(myFunc.Exprs))
 
-	for i := 0; i < len(myFunc.Exprs); i++ {
-		switch tempArg := myFunc.Exprs[i].(type) {
+	for i, expr := range myFunc.Exprs {
+		switch tempArg := expr.(type) {
 		case *sqlparser.AliasedExpr:
 			switch col := tempArg.Expr.(type) {
 			case *sqlparser.FuncExpr:
 				// myReturnVal is actually the tail recursive value being used in the eval func.
 				return myReturnVal
 			case *sqlparser.ColName:
-				myArgs[i] = jsonValue(col.Name.CompliantName(), record)
+				myArgs[i] = gjson.GetBytes(record, col.Name.CompliantName()).String()
 			case *sqlparser.SQLVal:
 				myArgs[i] = string(col.Val)
 			}
@@ -65,54 +67,47 @@ func coalOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) stri
 }
 
 // nullOps is a function which decomposes a NullIf func expr into its struct.
-func nullOps(myFunc *sqlparser.FuncExpr, record string, myReturnVal string) string {
+func nullOps(myFunc *sqlparser.FuncExpr, record []byte, myReturnVal string) string {
 	myArgs := make([]string, 2)
 
-	for i := 0; i < len(myFunc.Exprs); i++ {
-		switch tempArg := myFunc.Exprs[i].(type) {
+	for i, expr := range myFunc.Exprs {
+		switch tempArg := expr.(type) {
 		case *sqlparser.AliasedExpr:
 			switch col := tempArg.Expr.(type) {
 			case *sqlparser.FuncExpr:
 				return myReturnVal
 			case *sqlparser.ColName:
-				myArgs[i] = jsonValue(col.Name.CompliantName(), record)
+				myArgs[i] = gjson.GetBytes(record, col.Name.CompliantName()).String()
 			case *sqlparser.SQLVal:
 				myArgs[i] = string(col.Val)
 			}
 		}
 	}
-	return processNullIf(myArgs)
+	if myArgs[0] == myArgs[1] {
+		return ""
+	}
+	return myArgs[0]
 }
 
-// isValidString is a function that ensures the current index is one with a
-// StrFunc
+// isValidString is a function that ensures the
+// current index is one with a StrFunc
 func isValidFunc(myList []int, index int) bool {
 	if myList == nil {
 		return false
 	}
-	for i := 0; i < len(myList); i++ {
-		if myList[i] == index {
+	for _, i := range myList {
+		if i == index {
 			return true
 		}
 	}
 	return false
 }
 
-// processNullIf is a function that evaluates a given NULLIF clause.
-func processNullIf(nullStore []string) string {
-	nullValOne := nullStore[0]
-	nullValTwo := nullStore[1]
-	if nullValOne == nullValTwo {
-		return ""
-	}
-	return nullValOne
-}
-
 // processCoalNoIndex is a function which evaluates a given COALESCE clause.
 func processCoalNoIndex(coalStore []string) string {
-	for i := 0; i < len(coalStore); i++ {
-		if coalStore[i] != "null" && coalStore[i] != "missing" && coalStore[i] != "" {
-			return coalStore[i]
+	for _, coal := range coalStore {
+		if coal != "null" && coal != "missing" && coal != "" {
+			return coal
 		}
 	}
 	return "null"
@@ -120,15 +115,15 @@ func processCoalNoIndex(coalStore []string) string {
 
 // evaluateFuncExpr is a function that allows for tail recursive evaluation of
 // nested function expressions
-func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord string) string {
+func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, record []byte) string {
 	if myVal == nil {
 		return myReturnVal
 	}
 	// retrieve all the relevant arguments of the function
 	var mySubFunc []*sqlparser.FuncExpr
 	mySubFunc = make([]*sqlparser.FuncExpr, len(myVal.Exprs))
-	for i := 0; i < len(myVal.Exprs); i++ {
-		switch col := myVal.Exprs[i].(type) {
+	for i, expr := range myVal.Exprs {
+		switch col := expr.(type) {
 		case *sqlparser.AliasedExpr:
 			switch temp := col.Expr.(type) {
 			case *sqlparser.FuncExpr:
@@ -141,19 +136,19 @@ func evaluateFuncExpr(myVal *sqlparser.FuncExpr, myReturnVal string, myRecord st
 	for i := 0; i < len(mySubFunc); i++ {
 		if supportedString(myVal.Name.CompliantName()) {
 			if mySubFunc != nil {
-				return stringOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
+				return stringOps(myVal, record, evaluateFuncExpr(mySubFunc[i], myReturnVal, record))
 			}
-			return stringOps(myVal, myRecord, myReturnVal)
+			return stringOps(myVal, record, myReturnVal)
 		} else if strings.ToUpper(myVal.Name.CompliantName()) == "NULLIF" {
 			if mySubFunc != nil {
-				return nullOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
+				return nullOps(myVal, record, evaluateFuncExpr(mySubFunc[i], myReturnVal, record))
 			}
-			return nullOps(myVal, myRecord, myReturnVal)
+			return nullOps(myVal, record, myReturnVal)
 		} else if strings.ToUpper(myVal.Name.CompliantName()) == "COALESCE" {
 			if mySubFunc != nil {
-				return coalOps(myVal, myRecord, evaluateFuncExpr(mySubFunc[i], myReturnVal, myRecord))
+				return coalOps(myVal, record, evaluateFuncExpr(mySubFunc[i], myReturnVal, record))
 			}
-			return coalOps(myVal, myRecord, myReturnVal)
+			return coalOps(myVal, record, myReturnVal)
 		}
 	}
 	return ""
@@ -167,8 +162,8 @@ func evaluateFuncErr(myVal *sqlparser.FuncExpr, reader format.Select) error {
 	if !supportedFunc(myVal.Name.CompliantName()) {
 		return ErrUnsupportedSQLOperation
 	}
-	for i := 0; i < len(myVal.Exprs); i++ {
-		switch tempArg := myVal.Exprs[i].(type) {
+	for _, expr := range myVal.Exprs {
+		switch tempArg := expr.(type) {
 		case *sqlparser.StarExpr:
 			return ErrParseUnsupportedCallWithStar
 		case *sqlparser.AliasedExpr:
@@ -188,29 +183,31 @@ func evaluateFuncErr(myVal *sqlparser.FuncExpr, reader format.Select) error {
 }
 
 // evaluateIsExpr is a function for evaluating expressions of the form "column is ...."
-func evaluateIsExpr(myFunc *sqlparser.IsExpr, row string, alias string) (bool, error) {
-	operator := myFunc.Operator
-	var myVal string
-	switch myIs := myFunc.Expr.(type) {
-	// case for literal val
-	case *sqlparser.SQLVal:
-		myVal = string(myIs.Val)
-	// case for nested func val
-	case *sqlparser.FuncExpr:
-		myVal = evaluateFuncExpr(myIs, "", row)
-	// case for col val
-	case *sqlparser.ColName:
-		myVal = jsonValue(myIs.Name.CompliantName(), row)
+func evaluateIsExpr(myFunc *sqlparser.IsExpr, row []byte, alias string) (bool, error) {
+	getMyVal := func() (myVal string) {
+		switch myIs := myFunc.Expr.(type) {
+		// case for literal val
+		case *sqlparser.SQLVal:
+			myVal = string(myIs.Val)
+			// case for nested func val
+		case *sqlparser.FuncExpr:
+			myVal = evaluateFuncExpr(myIs, "", row)
+			// case for col val
+		case *sqlparser.ColName:
+			myVal = gjson.GetBytes(row, myIs.Name.CompliantName()).String()
+		}
+		return myVal
 	}
-	// case to evaluate is null
-	if strings.ToLower(operator) == "is null" {
-		return myVal == "", nil
+
+	operator := strings.ToLower(myFunc.Operator)
+	switch operator {
+	case "is null":
+		return getMyVal() == "", nil
+	case "is not null":
+		return getMyVal() != "", nil
+	default:
+		return false, ErrUnsupportedSQLOperation
 	}
-	// case to evaluate is not null
-	if strings.ToLower(operator) == "is not null" {
-		return myVal != "", nil
-	}
-	return false, ErrUnsupportedSQLOperation
 }
 
 // supportedString is a function that checks whether the function is a supported

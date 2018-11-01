@@ -17,33 +17,19 @@
 package s3select
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
-	"reflect"
+	"math/rand"
+	"strconv"
 	"testing"
+	"time"
+
+	humanize "github.com/dustin/go-humanize"
+	"github.com/tidwall/gjson"
 
 	"github.com/minio/minio/pkg/s3select/format"
 )
-
-// Unit Test for the checkForDuplicates function.
-func TestCheckForDuplicates(t *testing.T) {
-	tables := []struct {
-		myReq     []string
-		myHeaders map[string]int
-		myDup     map[string]bool
-		myLow     map[string]int
-		myErr     error
-	}{
-		{[]string{"name", "id", "last_name", "last_name"}, make(map[string]int), make(map[string]bool), make(map[string]int), ErrAmbiguousFieldName},
-		{[]string{"name", "id", "last_name", "another_name"}, make(map[string]int), make(map[string]bool), make(map[string]int), nil},
-	}
-
-	for _, table := range tables {
-		err := checkForDuplicates(table.myReq, table.myHeaders, table.myDup, table.myLow)
-		if err != table.myErr {
-			t.Error()
-		}
-	}
-}
 
 // This function returns the index of a string in a list
 func stringIndex(a string, list []string) int {
@@ -55,9 +41,9 @@ func stringIndex(a string, list []string) int {
 	return -1
 }
 
-// TestMyHelperFunctions is a unit test which tests some small helper string
-// functions.
-func TestMyHelperFunctions(t *testing.T) {
+// TestHelperFunctions is a unit test which tests some
+// small helper string functions.
+func TestHelperFunctions(t *testing.T) {
 	tables := []struct {
 		myReq    string
 		myList   []string
@@ -78,37 +64,44 @@ func TestMyHelperFunctions(t *testing.T) {
 	}
 }
 
-// TestMyStateMachine is a unit test which ensures that the lowest level of the
+// TestStateMachine is a unit test which ensures that the lowest level of the
 // interpreter is converting properly.
-func TestMyStateMachine(t *testing.T) {
+func TestStateMachine(t *testing.T) {
 	tables := []struct {
-		operand  interface{}
+		operand  string
 		operator string
 		leftArg  string
 		err      error
 		expected bool
 	}{
+		{"", ">", "2012", nil, true},
 		{"2005", ">", "2012", nil, true},
-		{2005, ">", "2012", nil, true},
-		{2012.0000, ">", "2014.000", nil, true},
-		{"NA", ">", "2014.000", nil, false},
-		{2014, ">", "Random", nil, false},
+		{"2005", ">", "2012", nil, true},
+		{"2012.0000", ">", "2014.000", nil, true},
+		{"2012", "!=", "2014.000", nil, true},
+		{"NA", ">", "2014.000", nil, true},
+		{"2012", ">", "2014.000", nil, false},
+		{"2012.0000", ">", "2014", nil, false},
+		{"", "<", "2012", nil, false},
+		{"2012.0000", "<", "2014.000", nil, false},
+		{"2014", ">", "Random", nil, false},
 		{"test3", ">", "aandom", nil, false},
+		{"true", ">", "true", ErrUnsupportedSyntax, false},
 	}
-	for _, table := range tables {
-		val, err := evaluateOperator(table.leftArg, table.operator, table.operand)
+	for i, table := range tables {
+		val, err := evaluateOperator(gjson.Parse(table.leftArg), table.operator, gjson.Parse(table.operand))
 		if err != table.err {
-			t.Error()
+			t.Errorf("Test %d: expected %v, got %v", i+1, table.err, err)
 		}
 		if val != table.expected {
-			t.Error()
+			t.Errorf("Test %d: expected %t, got %t", i+1, table.expected, val)
 		}
 	}
 }
 
-// TestMyOperators is a unit test which ensures that the appropriate values are
+// TestOperators is a unit test which ensures that the appropriate values are
 // being returned from the operators functions.
-func TestMyOperators(t *testing.T) {
+func TestOperators(t *testing.T) {
 	tables := []struct {
 		operator string
 		err      error
@@ -124,27 +117,8 @@ func TestMyOperators(t *testing.T) {
 	}
 }
 
-// TestMyConversion ensures that the conversion of the value from the csv
-// happens correctly.
-func TestMyConversion(t *testing.T) {
-	tables := []struct {
-		myTblVal string
-		expected reflect.Kind
-	}{
-		{"2014", reflect.Int},
-		{"2014.000", reflect.Float64},
-		{"String!!!", reflect.String},
-	}
-	for _, table := range tables {
-		val := reflect.ValueOf(checkStringType(table.myTblVal)).Kind()
-		if val != table.expected {
-			t.Error()
-		}
-	}
-}
-
 // Unit tests for the main function that performs aggreggation.
-func TestMyAggregationFunc(t *testing.T) {
+func TestAggregationFunc(t *testing.T) {
 	columnsMap := make(map[string]int)
 	columnsMap["Col1"] = 0
 	columnsMap["Col2"] = 1
@@ -155,22 +129,23 @@ func TestMyAggregationFunc(t *testing.T) {
 		columnsMap     map[string]int
 		storeReqCols   []string
 		storeFunctions []string
-		record         string
+		record         []byte
 		err            error
 		expectedVal    float64
 	}{
-		{10, 5, []float64{10, 11, 12, 13, 14}, columnsMap, []string{"Col1"}, []string{"count"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 11},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"min"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"max"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 10},
-		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"sum"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 11},
-		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 5.500},
-		{10, 5, []float64{0.0000}, columnsMap, []string{"Col1"}, []string{"random"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", ErrParseNonUnaryAgregateFunctionCall, 0},
-		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, "{\"Col1\":\"1\",\"Col2\":\"2\"}", nil, 1},
-		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, "{\"_1\":\"1\",\"_2\":\"2\"}", nil, 1},
+		{10, 5, []float64{10, 11, 12, 13, 14}, columnsMap, []string{"Col1"}, []string{"count"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 11},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"min"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 1},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"max"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 10},
+		{10, 5, []float64{10}, columnsMap, []string{"Col1"}, []string{"sum"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 11},
+		{1, 1, []float64{10}, columnsMap, []string{"Col1"}, []string{"avg"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 5.500},
+		{10, 5, []float64{0.0000}, columnsMap, []string{"Col1"}, []string{"random"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"),
+			ErrParseNonUnaryAgregateFunctionCall, 0},
+		{0, 5, []float64{0}, columnsMap, []string{"0"}, []string{"count"}, []byte("{\"Col1\":\"1\",\"Col2\":\"2\"}"), nil, 1},
+		{10, 5, []float64{10}, columnsMap, []string{"1"}, []string{"min"}, []byte("{\"_1\":\"1\",\"_2\":\"2\"}"), nil, 1},
 	}
 
 	for _, table := range tables {
-		err := aggregationFunctions(table.counter, table.filtrCount, table.myAggVals, table.storeReqCols, table.storeFunctions, table.record)
+		err := aggregationFns(table.counter, table.filtrCount, table.myAggVals, table.storeReqCols, table.storeFunctions, table.record)
 		if table.err != err {
 			t.Error()
 		}
@@ -181,9 +156,9 @@ func TestMyAggregationFunc(t *testing.T) {
 	}
 }
 
-// TestMyStringComparator is a unit test which ensures that the appropriate
+// TestStringComparator is a unit test which ensures that the appropriate
 // values are being compared for strings.
-func TestMyStringComparator(t *testing.T) {
+func TestStringComparator(t *testing.T) {
 	tables := []struct {
 		operand  string
 		operator string
@@ -211,9 +186,9 @@ func TestMyStringComparator(t *testing.T) {
 	}
 }
 
-// TestMyFloatComparator is a unit test which ensures that the appropriate
+// TestFloatComparator is a unit test which ensures that the appropriate
 // values are being compared for floats.
-func TestMyFloatComparator(t *testing.T) {
+func TestFloatComparator(t *testing.T) {
 	tables := []struct {
 		operand  float64
 		operator string
@@ -240,9 +215,9 @@ func TestMyFloatComparator(t *testing.T) {
 	}
 }
 
-// TestMyIntComparator is a unit test which ensures that the appropriate values
+// TestIntComparator is a unit test which ensures that the appropriate values
 // are being compared for ints.
-func TestMyIntComparator(t *testing.T) {
+func TestIntComparator(t *testing.T) {
 	tables := []struct {
 		operand  int64
 		operator string
@@ -269,9 +244,9 @@ func TestMyIntComparator(t *testing.T) {
 	}
 }
 
-// TestMySizeFunction is a function which provides unit testing for the function
+// TestSizeFunction is a function which provides unit testing for the function
 // which calculates size.
-func TestMySizeFunction(t *testing.T) {
+func TestSizeFunction(t *testing.T) {
 	tables := []struct {
 		myRecord []string
 		expected int64
@@ -471,20 +446,19 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-// TestMyFuncProcessing is a unit test which ensures that the appropriate values are
+// TestFuncProcessing is a unit test which ensures that the appropriate values are
 // being returned from the Processing... functions.
-func TestMyFuncProcessing(t *testing.T) {
+func TestFuncProcessing(t *testing.T) {
 	tables := []struct {
 		myString    string
-		nullList    []string
 		coalList    []string
 		myValString string
 		myValCoal   string
 		myValNull   string
 		stringFunc  string
 	}{
-		{"lower", []string{"yo", "yo"}, []string{"random", "hello", "random"}, "LOWER", "random", "", "UPPER"},
-		{"LOWER", []string{"null", "random"}, []string{"missing", "hello", "random"}, "lower", "hello", "null", "LOWER"},
+		{"lower", []string{"random", "hello", "random"}, "LOWER", "random", "", "UPPER"},
+		{"LOWER", []string{"missing", "hello", "random"}, "lower", "hello", "null", "LOWER"},
 	}
 	for _, table := range tables {
 		if table.coalList != nil {
@@ -493,16 +467,145 @@ func TestMyFuncProcessing(t *testing.T) {
 				t.Error()
 			}
 		}
-		if table.nullList != nil {
-			myVal := processNullIf(table.nullList)
-			if myVal != table.myValNull {
-				t.Error()
-			}
-		}
-		myVal := applyStrFunc(table.myString, table.stringFunc)
+		myVal := applyStrFunc(gjson.Result{
+			Type: gjson.String,
+			Str:  table.myString,
+		}, table.stringFunc)
 		if myVal != table.myValString {
 			t.Error()
 		}
 
 	}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func StringWithCharset(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func String(length int) string {
+	return StringWithCharset(length, charset)
+}
+
+func genCSV(b *bytes.Buffer, records int) error {
+	b.Reset()
+	w := csv.NewWriter(b)
+	w.Write([]string{"id", "name", "age", "city"})
+
+	for i := 0; i < records; i++ {
+		w.Write([]string{
+			strconv.Itoa(i),
+			String(10),
+			String(5),
+			String(10),
+		})
+	}
+
+	// Write any buffered data to the underlying writer (standard output).
+	w.Flush()
+
+	return w.Error()
+}
+
+func benchmarkSQLAll(b *testing.B, records int) {
+	benchmarkSQL(b, records, "select * from S3Object")
+}
+
+func benchmarkSQLAggregate(b *testing.B, records int) {
+	benchmarkSQL(b, records, "select count(*) from S3Object")
+}
+
+func benchmarkSQL(b *testing.B, records int, query string) {
+	var (
+		buf    bytes.Buffer
+		output bytes.Buffer
+	)
+	genCSV(&buf, records)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	sreq := ObjectSelectRequest{}
+	sreq.Expression = query
+	sreq.ExpressionType = QueryExpressionTypeSQL
+	sreq.InputSerialization.CSV = &struct {
+		FileHeaderInfo       CSVFileHeaderInfo
+		RecordDelimiter      string
+		FieldDelimiter       string
+		QuoteCharacter       string
+		QuoteEscapeCharacter string
+		Comments             string
+	}{}
+	sreq.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoUse
+	sreq.InputSerialization.CSV.RecordDelimiter = "\n"
+	sreq.InputSerialization.CSV.FieldDelimiter = ","
+
+	sreq.OutputSerialization.CSV = &struct {
+		QuoteFields          CSVQuoteFields
+		RecordDelimiter      string
+		FieldDelimiter       string
+		QuoteCharacter       string
+		QuoteEscapeCharacter string
+	}{}
+	sreq.OutputSerialization.CSV.RecordDelimiter = "\n"
+	sreq.OutputSerialization.CSV.FieldDelimiter = ","
+
+	s3s, err := New(&buf, int64(buf.Len()), sreq)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		output.Reset()
+		if err = Execute(&output, s3s); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkSQLAggregate_100K - benchmark count(*) function with 100k records.
+func BenchmarkSQLAggregate_100K(b *testing.B) {
+	benchmarkSQLAggregate(b, humanize.KiByte*100)
+}
+
+// BenchmarkSQLAggregate_1M - benchmark count(*) function with 1m records.
+func BenchmarkSQLAggregate_1M(b *testing.B) {
+	benchmarkSQLAggregate(b, humanize.MiByte)
+}
+
+// BenchmarkSQLAggregate_2M - benchmark count(*) function with 2m records.
+func BenchmarkSQLAggregate_2M(b *testing.B) {
+	benchmarkSQLAggregate(b, 2*humanize.MiByte)
+}
+
+// BenchmarkSQLAggregate_10M - benchmark count(*) function with 10m records.
+func BenchmarkSQLAggregate_10M(b *testing.B) {
+	benchmarkSQLAggregate(b, 10*humanize.MiByte)
+}
+
+// BenchmarkSQLAll_100K - benchmark * function with 100k records.
+func BenchmarkSQLAll_100K(b *testing.B) {
+	benchmarkSQLAll(b, humanize.KiByte*100)
+}
+
+// BenchmarkSQLAll_1M - benchmark * function with 1m records.
+func BenchmarkSQLAll_1M(b *testing.B) {
+	benchmarkSQLAll(b, humanize.MiByte)
+}
+
+// BenchmarkSQLAll_2M - benchmark * function with 2m records.
+func BenchmarkSQLAll_2M(b *testing.B) {
+	benchmarkSQLAll(b, 2*humanize.MiByte)
+}
+
+// BenchmarkSQLAll_10M - benchmark * function with 10m records.
+func BenchmarkSQLAll_10M(b *testing.B) {
+	benchmarkSQLAll(b, 10*humanize.MiByte)
 }

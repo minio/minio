@@ -88,13 +88,14 @@ The dot and wildcard characters can be escaped with '\\'.
 ```
 
 You can also query an array for the first match by using `#[...]`, or find all matches with `#[...]#`. 
-Queries support the `==`, `!=`, `<`, `<=`, `>`, `>=` comparison operators and the simple pattern matching `%` operator.
+Queries support the `==`, `!=`, `<`, `<=`, `>`, `>=` comparison operators and the simple pattern matching `%` (like) and `!%` (not like) operators.
 
 ```
 friends.#[last=="Murphy"].first    >> "Dale"
 friends.#[last=="Murphy"]#.first   >> ["Dale","Jane"]
 friends.#[age>45]#.last            >> ["Craig","Murphy"]
 friends.#[first%"D*"].last         >> "Murphy"
+friends.#[first!%"D*"].last        >> "Craig"
 ```
 
 ## JSON Lines

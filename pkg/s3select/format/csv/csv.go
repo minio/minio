@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tidwall/sjson"
+
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/s3select/format"
 )
@@ -96,7 +98,6 @@ func New(opts *Options) (format.Select, error) {
 	reader.stats.BytesScanned = opts.StreamSize
 	reader.stats.BytesProcessed = 0
 	reader.stats.BytesReturned = 0
-
 	reader.firstRow = nil
 
 	reader.reader.FieldsPerRecord = -1
@@ -120,7 +121,14 @@ func New(opts *Options) (format.Select, error) {
 
 // Replace the spaces in columnnames with underscores
 func cleanHeader(columns []string) []string {
-	for i := 0; i < len(columns); i++ {
+	for i := range columns {
+		// Even if header name is specified, some CSV's
+		// might have column header names might be empty
+		// and non-empty. In such a scenario we prepare
+		// indexed value.
+		if columns[i] == "" {
+			columns[i] = "_" + strconv.Itoa(i)
+		}
 		columns[i] = strings.Replace(columns[i], " ", "_", -1)
 	}
 	return columns
@@ -137,15 +145,14 @@ func (reader *cinput) readHeader() error {
 		}
 		reader.header = cleanHeader(reader.firstRow)
 		reader.firstRow = nil
-		reader.minOutputLength = len(reader.header)
 	} else {
 		reader.firstRow, readErr = reader.reader.Read()
 		reader.header = make([]string, len(reader.firstRow))
-		for i := 0; i < reader.minOutputLength; i++ {
-			reader.header[i] = strconv.Itoa(i)
+		for i := range reader.firstRow {
+			reader.header[i] = "_" + strconv.Itoa(i)
 		}
-
 	}
+	reader.minOutputLength = len(reader.header)
 	return nil
 }
 
@@ -155,33 +162,24 @@ func (reader *cinput) Progress() bool {
 }
 
 // UpdateBytesProcessed - populates the bytes Processed
-func (reader *cinput) UpdateBytesProcessed(record map[string]interface{}) {
-	// Convert map to slice of values.
-	values := []string{}
-	for _, value := range record {
-		values = append(values, value.(string))
-	}
-
-	reader.stats.BytesProcessed += int64(len(values))
+func (reader *cinput) UpdateBytesProcessed(size int64) {
+	reader.stats.BytesProcessed += size
 
 }
 
-// Read the file and returns map[string]interface{}
-func (reader *cinput) Read() (map[string]interface{}, error) {
-	record := make(map[string]interface{})
+// Read returns byte sequence
+func (reader *cinput) Read() ([]byte, error) {
 	dec := reader.readRecord()
 	if dec != nil {
-		if reader.options.HasHeader {
-			columns := reader.header
-			for i, value := range dec {
-				record[columns[i]] = value
-			}
-		} else {
-			for i, value := range dec {
-				record["_"+strconv.Itoa(i)] = value
+		var data []byte
+		var err error
+		for i, value := range dec {
+			data, err = sjson.SetBytes(data, reader.header[i], value)
+			if err != nil {
+				return nil, err
 			}
 		}
-		return record, nil
+		return data, nil
 	}
 	return nil, nil
 }
