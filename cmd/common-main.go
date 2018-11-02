@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Check for updates and print a notification message
@@ -159,27 +160,45 @@ func handleCommonEnvVars() {
 	if ok {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
 
-		// This is only to support client side certificate authentication
-		// https://coreos.com/etcd/docs/latest/op-guide/security.html
-		etcdClientCertFile, ok1 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT")
-		etcdClientCertKey, ok2 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT_KEY")
-		var getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-		if ok1 && ok2 {
-			getClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				cert, err := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
-				return &cert, err
+		var etcdSecure bool
+		for _, endpoint := range etcdEndpoints {
+			u, err := xnet.ParseURL(endpoint)
+			if err != nil {
+				logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 			}
+			// If one of the endpoint is https, we will use https directly.
+			etcdSecure = etcdSecure || u.Scheme == "https"
 		}
+
 		var err error
-		globalEtcdClient, err = etcd.New(etcd.Config{
-			Endpoints:         etcdEndpoints,
-			DialTimeout:       defaultDialTimeout,
-			DialKeepAliveTime: defaultDialKeepAlive,
-			TLS: &tls.Config{
-				RootCAs:              globalRootCAs,
-				GetClientCertificate: getClientCertificate,
-			},
-		})
+		if etcdSecure {
+			// This is only to support client side certificate authentication
+			// https://coreos.com/etcd/docs/latest/op-guide/security.html
+			etcdClientCertFile, ok1 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT")
+			etcdClientCertKey, ok2 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT_KEY")
+			var getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+			if ok1 && ok2 {
+				getClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					cert, terr := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
+					return &cert, terr
+				}
+			}
+			globalEtcdClient, err = etcd.New(etcd.Config{
+				Endpoints:         etcdEndpoints,
+				DialTimeout:       defaultDialTimeout,
+				DialKeepAliveTime: defaultDialKeepAlive,
+				TLS: &tls.Config{
+					RootCAs:              globalRootCAs,
+					GetClientCertificate: getClientCertificate,
+				},
+			})
+		} else {
+			globalEtcdClient, err = etcd.New(etcd.Config{
+				Endpoints:         etcdEndpoints,
+				DialTimeout:       defaultDialTimeout,
+				DialKeepAliveTime: defaultDialKeepAlive,
+			})
+		}
 		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 	}
 

@@ -34,7 +34,7 @@ You may also setup etcd with TLS following this documentation [here](https://cor
 ### 3. Setup Minio with etcd
 Minio server expects environment variable for etcd as `MINIO_ETCD_ENDPOINTS`, this environment variable takes many comma separated entries.
 ```
-export MINIO_ETCD_ENDPOINTS=localhost:2379
+export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio server /data
 ```
 
