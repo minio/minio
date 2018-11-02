@@ -168,6 +168,10 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 
 // isGWObject returns true if it is a custom object
 func isGWObject(objName string) bool {
+	isEncrypted := strings.Contains(objName, defaultMinioGWPrefix)
+	if !isEncrypted {
+		return true
+	}
 	pfxSlice := strings.Split(objName, slashSeparator)
 	var i1, i2 int
 	for i := len(pfxSlice) - 1; i >= 0; i-- {
