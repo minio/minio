@@ -172,6 +172,16 @@ func TestExtractMetadataHeaders(t *testing.T) {
 			},
 			shouldFail: false,
 		},
+		// Support multiple values
+		{
+			header: http.Header{
+				"x-amz-meta-key": []string{"amz-meta1", "amz-meta2"},
+			},
+			metadata: map[string]string{
+				"x-amz-meta-key": "amz-meta1,amz-meta2",
+			},
+			shouldFail: false,
+		},
 		// Empty header input returns empty metadata.
 		{
 			header:     nil,
