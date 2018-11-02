@@ -829,19 +829,24 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				return
 			}
 		}
-		// AWS S3 implementation requires us to only rotate keys
-		// when/ both keys are provided and destination is same
-		// otherwise we proceed to encrypt/decrypt.
-		if sseCopyC && sseC && cpSrcDstSame {
-			// Get the old key which needs to be rotated.
-			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
-			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-				return
+
+		// If src == dst and either
+		// - the object is encrypted using SSE-C and two different SSE-C keys are present
+		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
+		// than execute a key rotation.
+		if cpSrcDstSame && ((sseCopyC && sseC) || (sseS3 && sseCopyS3)) {
+			if sseCopyC && sseC {
+				oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
+				if err != nil {
+					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					return
+				}
 			}
 			for k, v := range srcInfo.UserDefined {
 				encMetadata[k] = v
 			}
+
+			// In case of SSE-S3 oldKey and newKey aren't used - the KMS manages the keys.
 			if err = rotateKey(oldKey, newKey, srcBucket, srcObject, encMetadata); err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -914,7 +919,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// metadataOnly is true indicating that we are not overwriting the object.
 	// if encryption is enabled we do not need explicit "REPLACE" metadata to
 	// be enabled as well - this is to allow for key-rotation.
-	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly && !crypto.SSEC.IsEncrypted(srcInfo.UserDefined) {
+	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly && !crypto.IsEncrypted(srcInfo.UserDefined) {
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(w, ErrInvalidCopyDest, r.URL)
