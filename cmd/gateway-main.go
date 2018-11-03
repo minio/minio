@@ -249,9 +249,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
-	// Load logger subsystem
-	loadLoggers()
-
 	// Re-enable logging
 	logger.Disable = false
 
