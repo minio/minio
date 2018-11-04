@@ -1,4 +1,4 @@
-// +build plan9
+// +build plan9 solaris
 
 /*
  * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.

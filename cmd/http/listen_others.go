@@ -1,4 +1,4 @@
-// +build windows plan9
+// +build windows plan9 solaris
 
 /*
  * Minio Cloud Storage, (C) 2018 Minio, Inc.
