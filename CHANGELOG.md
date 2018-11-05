@@ -1,3 +1,4 @@
+* Upgrading to minio release RELEASE.2018-10-25T01-27-03Z
 ## Current Release 
 ### 0.1.0 
 **Release Date:** Fri Aug 31 19:18:15 UTC 2018     
