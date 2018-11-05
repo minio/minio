@@ -208,7 +208,7 @@ Fetches information for all cluster nodes, such as server properties, storage in
 ## 6. Heal operations
 
 <a name="Heal"></a>
-### Heal(bucket, prefix string, healOpts HealOpts, clientToken string, forceStart bool) (start HealStartSuccess, status HealTaskStatus, err error)
+### Heal(bucket, prefix string, healOpts HealOpts, clientToken string, forceStart bool, forceStop bool) (start HealStartSuccess, status HealTaskStatus, err error)
 
 Start a heal sequence that scans data under given (possible empty)
 `bucket` and `prefix`. The `recursive` bool turns on recursive
@@ -232,7 +232,8 @@ __Example__
             DryRun:    false,
     }
     forceStart := false
-    healPath, err := madmClnt.Heal("", "", opts, "", forceStart)
+    forceStop := false
+    healPath, err := madmClnt.Heal("", "", opts, "", forceStart, forceStop)
     if err != nil {
         log.Fatalln(err)
     }
