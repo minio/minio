@@ -156,6 +156,30 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 		sealedKey = objectKey.Seal(extKey, sealedKey.IV, crypto.SSEC.String(), bucket, object)
 		crypto.SSEC.CreateMetadata(metadata, sealedKey)
 		return nil
+	case crypto.S3.IsEncrypted(metadata):
+		if globalKMS == nil {
+			return errKMSNotConfigured
+		}
+		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
+		if err != nil {
+			return err
+		}
+		oldKey, err := globalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(oldKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
+			return err
+		}
+
+		newKey, encKey, err := globalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return err
+		}
+		sealedKey = objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
+		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
+		return nil
 	}
 }
 
