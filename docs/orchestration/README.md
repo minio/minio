@@ -14,7 +14,7 @@ The term cloud-native revolves around the idea of applications deployed as micro
 
 While containers provide isolated application execution environment, orchestration platforms allow seamless scaling by helping replicate and manage containers. Minio extends this by adding isolated storage environment for each tenant.
 
-Minio is built ground up on the cloud-native premise. With features like erasure-coding, distributed and shared setup, it focusses only on storage and does it very well. While, it can be scaled by just replicating Minio instances per tenant via an orchestration platform.  
+Minio is built ground up on the cloud-native premise. With features like erasure-coding, distributed and shared setup, it focuses only on storage and does it very well. While, it can be scaled by just replicating Minio instances per tenant via an orchestration platform.  
 
 > In a cloud-native environment, scalability is not a function of the application but the orchestration platform.
 

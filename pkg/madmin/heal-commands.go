@@ -40,6 +40,10 @@ type HealStartSuccess struct {
 	StartTime     time.Time `json:"startTime"`
 }
 
+// HealStopSuccess - holds information about a successfully stopped
+// heal operation.
+type HealStopSuccess HealStartSuccess
+
 // HealTaskStatus - status struct for a heal task
 type HealTaskStatus struct {
 	Summary       string    `json:"summary"`
@@ -176,9 +180,16 @@ func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
 }
 
 // Heal - API endpoint to start heal and to fetch status
+// forceStart and forceStop are mutually exclusive, you can either
+// set one of them to 'true'. If both are set 'forceStart' will be
+// honored.
 func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
-	clientToken string, forceStart bool) (
+	clientToken string, forceStart, forceStop bool) (
 	healStart HealStartSuccess, healTaskStatus HealTaskStatus, err error) {
+
+	if forceStart && forceStop {
+		return healStart, healTaskStatus, ErrInvalidArgument("forceStart and forceStop set to true is not allowed")
+	}
 
 	body, err := json.Marshal(healOpts)
 	if err != nil {
@@ -196,8 +207,12 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 		queryVals.Set("clientToken", clientToken)
 		body = []byte{}
 	}
+
+	// Anyone can be set, either force start or forceStop.
 	if forceStart {
 		queryVals.Set("forceStart", "true")
+	} else if forceStop {
+		queryVals.Set("forceStop", "true")
 	}
 
 	resp, err := adm.executeMethod("POST", requestData{
@@ -221,9 +236,24 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 
 	// Was it a status request?
 	if clientToken == "" {
+		// As a special operation forceStop would return a
+		// similar struct as healStart will have the
+		// heal sequence information about the heal which
+		// was stopped.
 		err = json.Unmarshal(respBytes, &healStart)
 	} else {
 		err = json.Unmarshal(respBytes, &healTaskStatus)
 	}
-	return healStart, healTaskStatus, err
+	if err != nil {
+		// May be the server responded with error after success
+		// message, handle it separately here.
+		var errResp ErrorResponse
+		err = json.Unmarshal(respBytes, &errResp)
+		if err != nil {
+			// Unknown structure return error anyways.
+			return healStart, healTaskStatus, err
+		}
+		return healStart, healTaskStatus, errResp
+	}
+	return healStart, healTaskStatus, nil
 }

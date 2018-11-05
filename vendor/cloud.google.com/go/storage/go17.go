@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,4 +23,8 @@ import (
 
 func withContext(r *http.Request, ctx context.Context) *http.Request {
 	return r.WithContext(ctx)
+}
+
+func goHTTPUncompressed(res *http.Response) bool {
+	return res.Uncompressed
 }

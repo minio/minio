@@ -17,6 +17,7 @@ package crypto
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"testing"
 
 	"github.com/minio/minio/cmd/logger"
@@ -326,15 +327,20 @@ func TestS3CreateMetadata(t *testing.T) {
 	_ = S3.CreateMetadata(nil, "", []byte{}, SealedKey{Algorithm: InsecureSealAlgorithm})
 }
 
-var ssecCreateMetadataTests = []SealedKey{
-	{Algorithm: SealAlgorithm},
-	{IV: [32]byte{0xff}, Key: [64]byte{0x7e}, Algorithm: SealAlgorithm},
+var ssecCreateMetadataTests = []struct {
+	KeyID         string
+	SealedDataKey []byte
+	SealedKey     SealedKey
+}{
+	{KeyID: "", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
 }
 
 func TestSSECCreateMetadata(t *testing.T) {
 	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
 	logger.Disable = true
-	for i, test := range s3CreateMetadataTests {
+	for i, test := range ssecCreateMetadataTests {
 		metadata := SSEC.CreateMetadata(nil, test.SealedKey)
 		sealedKey, err := SSEC.ParseMetadata(metadata)
 		if err != nil {
@@ -358,4 +364,76 @@ func TestSSECCreateMetadata(t *testing.T) {
 		}
 	}()
 	_ = SSEC.CreateMetadata(nil, SealedKey{Algorithm: InsecureSealAlgorithm})
+}
+
+var isETagSealedTests = []struct {
+	ETag     string
+	IsSealed bool
+}{
+	{ETag: "", IsSealed: false},                                                                                                // 0
+	{ETag: "90682b8e8cc7609c4671e1d64c73fc30", IsSealed: false},                                                                // 1
+	{ETag: "f201040c9dc593e39ea004dc1323699bcd", IsSealed: true},                                                               // 2 not valid ciphertext but looks like sealed ETag
+	{ETag: "20000f00fba2ee2ae4845f725964eeb9e092edfabc7ab9f9239e8344341f769a51ce99b4801b0699b92b16a72fa94972", IsSealed: true}, // 3
+}
+
+func TestIsETagSealed(t *testing.T) {
+	for i, test := range isETagSealedTests {
+		etag, err := hex.DecodeString(test.ETag)
+		if err != nil {
+			t.Errorf("Test %d: failed to decode etag: %s", i, err)
+		}
+		if sealed := IsETagSealed(etag); sealed != test.IsSealed {
+			t.Errorf("Test %d: got %v - want %v", i, sealed, test.IsSealed)
+		}
+	}
+}
+
+var removeInternalEntriesTests = []struct {
+	Metadata, Expected map[string]string
+}{
+	{ // 0
+		Metadata: map[string]string{
+			SSEMultipart:     "",
+			SSEIV:            "",
+			SSESealAlgorithm: "",
+			SSECSealedKey:    "",
+			S3SealedKey:      "",
+			S3KMSKeyID:       "",
+			S3KMSSealedKey:   "",
+		},
+		Expected: map[string]string{},
+	},
+	{ // 1
+		Metadata: map[string]string{
+			SSEMultipart:         "",
+			SSEIV:                "",
+			"X-Amz-Meta-A":       "X",
+			"X-Minio-Internal-B": "Y",
+		},
+		Expected: map[string]string{
+			"X-Amz-Meta-A":       "X",
+			"X-Minio-Internal-B": "Y",
+		},
+	},
+}
+
+func TestRemoveInternalEntries(t *testing.T) {
+	isEqual := func(x, y map[string]string) bool {
+		if len(x) != len(y) {
+			return false
+		}
+		for k, v := range x {
+			if u, ok := y[k]; !ok || v != u {
+				return false
+			}
+		}
+		return true
+	}
+
+	for i, test := range removeInternalEntriesTests {
+		RemoveInternalEntries(test.Metadata)
+		if !isEqual(test.Metadata, test.Expected) {
+			t.Errorf("Test %d: got %v - want %v", i, test.Metadata, test.Expected)
+		}
+	}
 }

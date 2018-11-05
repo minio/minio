@@ -24,9 +24,11 @@ import {
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
+import * as bucketActions from "../buckets/actions"
 import { minioBrowserPrefix } from "../constants"
 
 export const SET_LIST = "objects/SET_LIST"
+export const RESET_LIST = "object/RESET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
 export const REMOVE = "objects/REMOVE"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
@@ -45,6 +47,10 @@ export const setList = (objects, marker, isTruncated) => ({
   isTruncated
 })
 
+export const resetList = () => ({
+  type: RESET_LIST
+})
+
 export const appendList = (objects, marker, isTruncated) => ({
   type: APPEND_LIST,
   objects,
@@ -60,35 +66,45 @@ export const fetchObjects = append => {
     } = getState()
     if (currentBucket) {
       return web
-      .ListObjects({
-        bucketName: currentBucket,
-        prefix: currentPrefix,
-        marker: append ? marker : ""
-      })
-      .then(res => {
-        let objects = []
-        if (res.objects) {
-          objects = res.objects.map(object => {
-            return {
-              ...object,
-              name: object.name.replace(currentPrefix, "")
-            }
-          })
-        }
-        if (append) {
-          dispatch(appendList(objects, res.nextmarker, res.istruncated))
-        } else {
-          dispatch(setList(objects, res.nextmarker, res.istruncated))
-          dispatch(setSortBy(""))
-          dispatch(setSortOrder(false))
-        }
-        dispatch(setPrefixWritable(res.writable))
-      })
-      .catch(err => {
-        dispatch(alertActions.set({ type: "danger", message: err.message }))
-        history.push("/login")
-      })
-    } 
+        .ListObjects({
+          bucketName: currentBucket,
+          prefix: currentPrefix,
+          marker: append ? marker : ""
+        })
+        .then(res => {
+          let objects = []
+          if (res.objects) {
+            objects = res.objects.map(object => {
+              return {
+                ...object,
+                name: object.name.replace(currentPrefix, "")
+              }
+            })
+          }
+          if (append) {
+            dispatch(appendList(objects, res.nextmarker, res.istruncated))
+          } else {
+            dispatch(setList(objects, res.nextmarker, res.istruncated))
+            dispatch(setSortBy(""))
+            dispatch(setSortOrder(false))
+          }
+          dispatch(setPrefixWritable(res.writable))
+        })
+        .catch(err => {
+          if (web.LoggedIn()) {
+            dispatch(
+              alertActions.set({
+                type: "danger",
+                message: err.message,
+                autoClear: true
+              })
+            )
+            dispatch(resetList())
+          } else {
+            history.push("/login")
+          }
+        })
+    }
   }
 }
 

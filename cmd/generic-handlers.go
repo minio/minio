@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/handlers"
@@ -689,7 +690,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 // canceled immediately.
 func setRateLimitHandler(h http.Handler) http.Handler {
 	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	logger.FatalIf(err, "Unable to get maximum open file limit", context.Background())
+	logger.FatalIf(err, "Unable to get maximum open file limit")
 	// Burst value is set to 1 to allow only maxOpenFileLimit
 	// requests to happen at once.
 	l := rate.NewLimiter(rate.Limit(maxLimit), 1)
@@ -771,5 +772,23 @@ func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			panic(err) // forward other panic calls
 		}
 	}()
+	h.handler.ServeHTTP(w, r)
+}
+
+func setSSETLSHandler(h http.Handler) http.Handler { return sseTLSHandler{h} }
+
+// sseTLSHandler enforces certain rules for SSE requests which are made / must be made over TLS.
+type sseTLSHandler struct{ handler http.Handler }
+
+func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Deny SSE-C requests if not made over TLS
+	if !globalIsSSL && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+		if r.Method == http.MethodHead {
+			writeErrorResponseHeadersOnly(w, ErrInsecureSSECustomerRequest)
+		} else {
+			writeErrorResponse(w, ErrInsecureSSECustomerRequest, r.URL)
+		}
+		return
+	}
 	h.handler.ServeHTTP(w, r)
 }

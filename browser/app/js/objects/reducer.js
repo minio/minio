@@ -50,6 +50,13 @@ export default (
         marker: action.marker,
         isTruncated: action.isTruncated
       }
+    case actionsObjects.RESET_LIST:
+      return {
+        ...state,
+        list: [],
+        marker: "",
+        isTruncated: false
+      }
     case actionsObjects.APPEND_LIST:
       return {
         ...state,

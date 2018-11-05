@@ -274,6 +274,10 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
+func (s *posix) LastError() error {
+	return nil
+}
+
 func (s *posix) Close() error {
 	close(s.stopUsageCh)
 	s.connected = false
@@ -914,7 +918,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 // Currently we use fallocate when available to avoid disk fragmentation as much as possible
 func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 	// It doesn't make sense to create a negative-sized file
-	if fileSize <= 0 {
+	if fileSize < -1 {
 		return errInvalidArgument
 	}
 
@@ -945,8 +949,11 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 	// Close upon return.
 	defer w.Close()
 
-	// Allocate needed disk space to append data
-	e := Fallocate(int(w.Fd()), 0, fileSize)
+	var e error
+	if fileSize > 0 {
+		// Allocate needed disk space to append data
+		e = Fallocate(int(w.Fd()), 0, fileSize)
+	}
 
 	// Ignore errors when Fallocate is not supported in the current system
 	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {

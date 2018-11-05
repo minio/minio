@@ -258,7 +258,7 @@ func (cfs *cacheFSObjects) IsOnline() bool {
 }
 
 // Caches the object to disk
-func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) error {
+func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) error {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:
@@ -275,7 +275,7 @@ func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data 
 			return pErr
 		}
 	}
-	_, err := cfs.PutObject(ctx, bucket, object, data, metadata)
+	_, err := cfs.PutObject(ctx, bucket, object, data, metadata, opts)
 	// if err is due to disk being offline , mark cache drive as offline
 	if IsErr(err, baseErrs...) {
 		cfs.setOnline(false)
@@ -284,8 +284,8 @@ func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data 
 }
 
 // Returns the handle for the cached object
-func (cfs *cacheFSObjects) Get(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) (err error) {
-	return cfs.GetObject(ctx, bucket, object, startOffset, length, writer, etag)
+func (cfs *cacheFSObjects) Get(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
+	return cfs.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 // Deletes the cached object
@@ -295,13 +295,13 @@ func (cfs *cacheFSObjects) Delete(ctx context.Context, bucket, object string) (e
 
 // convenience function to check if object is cached on this cacheFSObjects
 func (cfs *cacheFSObjects) Exists(ctx context.Context, bucket, object string) bool {
-	_, err := cfs.GetObjectInfo(ctx, bucket, object)
+	_, err := cfs.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	return err == nil
 }
 
 // Identical to fs PutObject operation except that it uses ETag in metadata
 // headers.
-func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
+func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	fs := cfs.FSObjects
 	// Lock the object.
 	objectLock := fs.nsMutex.NewNSLock(bucket, object)
@@ -354,7 +354,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, errInvalidArgument
 	}
@@ -438,7 +438,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 // Implements S3 compatible initiate multipart API. Operation here is identical
 // to fs backend implementation - with the exception that cache FS uses the uploadID
 // generated on the backend
-func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, uploadID string) (string, error) {
+func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, uploadID string, opts ObjectOptions) (string, error) {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:

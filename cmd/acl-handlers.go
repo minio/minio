@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -55,6 +56,8 @@ type accessControlPolicy struct {
 // subresource to return the ACL of a specified bucket.
 func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketACL")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -103,6 +106,8 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObjectACL")
 
+	defer logger.AuditLog(ctx, w, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -121,7 +126,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if object exists.
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object)
+	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

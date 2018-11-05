@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path"
 	"testing"
@@ -51,7 +52,7 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), serverConfigVersion)
 	}
 
-	if err := saveServerConfig(objLayer, globalServerConfig); err != nil {
+	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 
@@ -103,7 +104,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	initConfig(objLayer)
 
 	// Check if serverConfig has browser disabled
-	if globalServerConfig.GetBrowser() {
+	if globalIsBrowserEnabled {
 		t.Error("Expected browser to be disabled but it is not")
 	}
 
@@ -129,8 +130,8 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	}
 
 	// Check if serverConfig has the correct domain
-	if globalServerConfig.Domain != "domain.com" {
-		t.Errorf("Expected Domain to be `domain.com`, found " + globalServerConfig.Domain)
+	if globalDomainName != "domain.com" {
+		t.Errorf("Expected Domain to be `domain.com`, found " + globalDomainName)
 	}
 }
 
@@ -236,7 +237,7 @@ func TestValidateConfig(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = saveConfig(objLayer, configPath, []byte(testCase.configData)); err != nil {
+		if err = saveConfig(context.Background(), objLayer, configPath, []byte(testCase.configData)); err != nil {
 			t.Fatal(err)
 		}
 		_, err = getValidConfig(objLayer)
@@ -259,77 +260,81 @@ func TestConfigDiff(t *testing.T) {
 		{&serverConfig{}, nil, "Given configuration is empty"},
 		// 2
 		{
-			&serverConfig{Credential: auth.Credentials{"u1", "p1"}},
-			&serverConfig{Credential: auth.Credentials{"u1", "p2"}},
+			&serverConfig{Credential: auth.Credentials{
+				AccessKey:  "u1",
+				SecretKey:  "p1",
+				Expiration: timeSentinel,
+			}},
+			&serverConfig{Credential: auth.Credentials{
+				AccessKey:  "u1",
+				SecretKey:  "p2",
+				Expiration: timeSentinel,
+			}},
 			"Credential configuration differs",
 		},
 		// 3
 		{&serverConfig{Region: "us-east-1"}, &serverConfig{Region: "us-west-1"}, "Region configuration differs"},
 		// 4
-		{&serverConfig{Browser: false}, &serverConfig{Browser: true}, "Browser configuration differs"},
-		// 5
-		{&serverConfig{Domain: "domain1"}, &serverConfig{Domain: "domain2"}, "Domain configuration differs"},
-		// 6
 		{
 			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 6}}},
 			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 4}}},
 			"StorageClass configuration differs",
 		},
-		// 7
+		// 5
 		{
 			&serverConfig{Notify: notifier{AMQP: map[string]target.AMQPArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{AMQP: map[string]target.AMQPArgs{"1": {Enable: false}}}},
 			"AMQP Notification configuration differs",
 		},
-		// 8
+		// 6
 		{
 			&serverConfig{Notify: notifier{NATS: map[string]target.NATSArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{NATS: map[string]target.NATSArgs{"1": {Enable: false}}}},
 			"NATS Notification configuration differs",
 		},
-		// 9
+		// 7
 		{
 			&serverConfig{Notify: notifier{Elasticsearch: map[string]target.ElasticsearchArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{Elasticsearch: map[string]target.ElasticsearchArgs{"1": {Enable: false}}}},
 			"ElasticSearch Notification configuration differs",
 		},
-		// 10
+		// 8
 		{
 			&serverConfig{Notify: notifier{Redis: map[string]target.RedisArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{Redis: map[string]target.RedisArgs{"1": {Enable: false}}}},
 			"Redis Notification configuration differs",
 		},
-		// 11
+		// 9
 		{
 			&serverConfig{Notify: notifier{PostgreSQL: map[string]target.PostgreSQLArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{PostgreSQL: map[string]target.PostgreSQLArgs{"1": {Enable: false}}}},
 			"PostgreSQL Notification configuration differs",
 		},
-		// 12
+		// 10
 		{
 			&serverConfig{Notify: notifier{Kafka: map[string]target.KafkaArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{Kafka: map[string]target.KafkaArgs{"1": {Enable: false}}}},
 			"Kafka Notification configuration differs",
 		},
-		// 13
+		// 11
 		{
 			&serverConfig{Notify: notifier{Webhook: map[string]target.WebhookArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{Webhook: map[string]target.WebhookArgs{"1": {Enable: false}}}},
 			"Webhook Notification configuration differs",
 		},
-		// 14
+		// 12
 		{
 			&serverConfig{Notify: notifier{MySQL: map[string]target.MySQLArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{MySQL: map[string]target.MySQLArgs{"1": {Enable: false}}}},
 			"MySQL Notification configuration differs",
 		},
-		// 15
+		// 13
 		{
 			&serverConfig{Notify: notifier{MQTT: map[string]target.MQTTArgs{"1": {Enable: true}}}},
 			&serverConfig{Notify: notifier{MQTT: map[string]target.MQTTArgs{"1": {Enable: false}}}},
 			"MQTT Notification configuration differs",
 		},
-		// 16
+		// 14
 		{
 			&serverConfig{Logger: loggerConfig{
 				Console: loggerConsole{Enabled: true},

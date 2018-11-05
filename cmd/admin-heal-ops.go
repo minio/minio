@@ -20,12 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // healStatusSummary - overall short summary of a healing sequence
@@ -121,6 +124,35 @@ func (ahs *allHealState) getHealSequence(path string) (h *healSequence, exists b
 	return h, exists
 }
 
+func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
+	var hsp madmin.HealStopSuccess
+	he, exists := ahs.getHealSequence(path)
+	if !exists {
+		hsp = madmin.HealStopSuccess{
+			ClientToken: "invalid",
+			StartTime:   UTCNow(),
+		}
+	} else {
+		hsp = madmin.HealStopSuccess{
+			ClientToken:   he.clientToken,
+			ClientAddress: he.clientAddress,
+			StartTime:     he.startTime,
+		}
+
+		he.stop()
+		for !he.hasEnded() {
+			time.Sleep(1 * time.Second)
+		}
+		ahs.Lock()
+		defer ahs.Unlock()
+		// Heal sequence explicitly stopped, remove it.
+		delete(ahs.healSeqMap, path)
+	}
+
+	b, err := json.Marshal(&hsp)
+	return b, toAdminAPIErrCode(err)
+}
+
 // LaunchNewHealSequence - launches a background routine that performs
 // healing according to the healSequence argument. For each heal
 // sequence, state is stored in the `globalAllHealState`, which is a
@@ -141,20 +173,20 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 			existsAndLive = true
 		}
 	}
+
 	if existsAndLive {
 		// A heal sequence exists on the given path.
 		if h.forceStarted {
-			// stop the running heal sequence - wait for
-			// it to finish.
+			// stop the running heal sequence - wait for it to finish.
 			he.stop()
 			for !he.hasEnded() {
-				time.Sleep(10 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 		} else {
 			errMsg = "Heal is already running on the given path " +
 				"(use force-start option to stop and start afresh). " +
-				fmt.Sprintf("The heal was started by IP %s at %s",
-					h.clientAddress, h.startTime)
+				fmt.Sprintf("The heal was started by IP %s at %s, token is %s",
+					h.clientAddress, h.startTime.Format(http.TimeFormat), h.clientToken)
 
 			return nil, ErrHealAlreadyRunning, errMsg
 		}
@@ -283,7 +315,7 @@ type healSequence struct {
 	// bucket, and prefix on which heal seq. was initiated
 	bucket, objPrefix string
 
-	// path is just bucket + "/" + objPrefix
+	// path is just pathJoin(bucket, objPrefix)
 	path string
 
 	// time at which heal sequence was started
@@ -328,7 +360,7 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 	return &healSequence{
 		bucket:        bucket,
 		objPrefix:     objPrefix,
-		path:          bucket + "/" + objPrefix,
+		path:          pathJoin(bucket, objPrefix),
 		startTime:     UTCNow(),
 		clientToken:   mustGetUUID(),
 		clientAddress: clientAddr,
@@ -383,7 +415,6 @@ func (h *healSequence) stop() {
 // sequence automatically resumes. The return value indicates if the
 // operation succeeded.
 func (h *healSequence) pushHealResultItem(r madmin.HealResultItem) error {
-
 	// start a timer to keep an upper time limit to find an empty
 	// slot to add the given heal result - if no slot is found it
 	// means that the server is holding the maximum amount of
@@ -519,6 +550,9 @@ func (h *healSequence) traverseAndHeal() {
 	// Start with format healing
 	checkErr(h.healDiskFormat)
 
+	// Start healing the config.
+	checkErr(h.healConfig)
+
 	// Heal buckets and objects
 	checkErr(h.healBuckets)
 
@@ -529,9 +563,72 @@ func (h *healSequence) traverseAndHeal() {
 	close(h.traverseAndHealDoneCh)
 }
 
+// healConfig - heals config.json, retrun value indicates if a failure occurred.
+func (h *healSequence) healConfig() error {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	// NOTE: Healing on configs is run regardless
+	// of any bucket being selected, this is to ensure that
+	// configs are always uptodate and correct.
+	marker := ""
+	isTruncated := true
+	for isTruncated {
+		if globalHTTPServer != nil {
+			// Wait at max 1 minute for an inprogress request
+			// before proceeding to heal
+			waitCount := 60
+			// Any requests in progress, delay the heal.
+			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		// Lists all objects under `config` prefix.
+		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, minioMetaBucket, minioConfigPrefix,
+			marker, "", 1000)
+		if err != nil {
+			return errFnHealFromAPIErr(err)
+		}
+
+		for index := range objectInfos.Objects {
+			if h.isQuitting() {
+				return errHealStopSignalled
+			}
+			o := objectInfos.Objects[index]
+			res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun)
+			// Object might have been deleted, by the time heal
+			// was attempted we ignore this file an move on.
+			if isErrObjectNotFound(herr) {
+				continue
+			}
+			if herr != nil {
+				return herr
+			}
+			res.Type = madmin.HealItemBucketMetadata
+			if err = h.pushHealResultItem(res); err != nil {
+				return err
+			}
+		}
+
+		isTruncated = objectInfos.IsTruncated
+		marker = objectInfos.NextMarker
+	}
+
+	return nil
+}
+
 // healDiskFormat - heals format.json, return value indicates if a
 // failure error occurred.
 func (h *healSequence) healDiskFormat() error {
+	if h.isQuitting() {
+		return errHealStopSignalled
+	}
+
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
@@ -557,6 +654,10 @@ func (h *healSequence) healDiskFormat() error {
 
 // healBuckets - check for all buckets heal or just particular bucket.
 func (h *healSequence) healBuckets() error {
+	if h.isQuitting() {
+		return errHealStopSignalled
+	}
+
 	// 1. If a bucket was specified, heal only the bucket.
 	if h.bucket != "" {
 		return h.healBucket(h.bucket)
@@ -584,10 +685,6 @@ func (h *healSequence) healBuckets() error {
 
 // healBucket - traverses and heals given bucket
 func (h *healSequence) healBucket(bucket string) error {
-	if h.isQuitting() {
-		return errHealStopSignalled
-	}
-
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
@@ -610,10 +707,9 @@ func (h *healSequence) healBucket(bucket string) error {
 		if h.objPrefix != "" {
 			// Check if an object named as the objPrefix exists,
 			// and if so heal it.
-			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix)
+			_, err = objectAPI.GetObjectInfo(h.ctx, bucket, h.objPrefix, ObjectOptions{})
 			if err == nil {
-				err = h.healObject(bucket, h.objPrefix)
-				if err != nil {
+				if err = h.healObject(bucket, h.objPrefix); err != nil {
 					return err
 				}
 			}
@@ -622,17 +718,40 @@ func (h *healSequence) healBucket(bucket string) error {
 		return nil
 	}
 
+	entries := runtime.NumCPU() * globalEndpoints.Nodes()
+
 	marker := ""
 	isTruncated := true
 	for isTruncated {
+		if globalHTTPServer != nil {
+			// Wait at max 1 minute for an inprogress request
+			// before proceeding to heal
+			waitCount := 60
+			// Any requests in progress, delay the heal.
+			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		// Heal numCPU * nodes objects at a time.
 		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, bucket,
-			h.objPrefix, marker, "", 1000)
+			h.objPrefix, marker, "", entries)
 		if err != nil {
 			return errFnHealFromAPIErr(err)
 		}
 
-		for _, o := range objectInfos.Objects {
-			if err := h.healObject(o.Bucket, o.Name); err != nil {
+		g := errgroup.WithNErrs(len(objectInfos.Objects))
+		for index := range objectInfos.Objects {
+			index := index
+			g.Go(func() error {
+				o := objectInfos.Objects[index]
+				return h.healObject(o.Bucket, o.Name)
+			}, index)
+		}
+
+		for _, err := range g.Wait() {
+			if err != nil {
 				return err
 			}
 		}
@@ -656,6 +775,9 @@ func (h *healSequence) healObject(bucket, object string) error {
 	}
 
 	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun)
+	if isErrObjectNotFound(err) {
+		return nil
+	}
 	if err != nil {
 		hri.Detail = err.Error()
 	}

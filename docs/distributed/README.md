@@ -14,11 +14,11 @@ Distributed Minio provides protection against multiple node/drive failures and [
 
 A stand-alone Minio server would go down if the server hosting the disks goes offline. In contrast, a distributed Minio setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
 
-For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need at least 5 nodes online to create new objects.
+For example, an 8-node distributed Minio setup with 1 disk per node would continue serving files, even if up to 4 disks are offline. But, you'll need at least 5 disks online to create new objects.
 
 ### Limits
 
-As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 2 and maximum 32 servers. There are no limits on number of disks shared across these servers. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
+As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 2 and maximum 32 servers. There are no limits on number of disks shared across these servers. If you need a multiple tenant setup, you can easily spin up multiple Minio instances managed by orchestration tools like Kubernetes.
 
 Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, 32 servers with 24 drives each and so on.
 
@@ -40,94 +40,34 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quicks
 
 To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes.
 
-*Note* 
+*Note*
 
-- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
+- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, it is **mandatory** to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing Minio server command.
+- All the nodes running distributed Minio need to be in a homogeneous environment, i.e. same operating system, same number of disks and same interconnects.
+- `MINIO_DOMAIN` environment variable should be defined and exported if domain is needed to be set.
 - Minio distributed mode requires fresh directories. If required, the drives can be shared with other applications. You can do this by using a sub-directory exclusive to minio. For example, if you have mounted your volume under `/export`, pass `/export/data` as arguments to Minio server.
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
-- Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers. 
-- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution. 
+- Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers.
+- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution.
 
-Example 1: Start distributed Minio instance on 8 nodes with 1 drive each (pictured below), by running this command on all the 8 nodes:
+Example 1: Start distributed Minio instance on 8 nodes with 1 disk each mounted at `/export1` (pictured below), by running this command on all the 8 nodes:
 ![Distributed Minio, 8 nodes with 1 disk each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
 #### GNU/Linux and macOS
 
-```shell
+```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
-               http://192.168.1.13/export3 http://192.168.1.14/export4 \
-               http://192.168.1.15/export5 http://192.168.1.16/export6 \
-               http://192.168.1.17/export7 http://192.168.1.18/export8
-```
-
-#### Windows 
-
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:/data http://192.168.1.12/C:/data ^
-                  http://192.168.1.13/C:/data http://192.168.1.14/C:/data ^
-                  http://192.168.1.15/C:/data http://192.168.1.16/C:/data ^
-                  http://192.168.1.17/C:/data http://192.168.1.18/C:/data
+minio server http://192.168.1.1{1...8}/export1
 ```
 
 
-Example 2: Start distributed Minio instance on 4 nodes with 4 drives (pictured below), by running this command on all the 4 nodes:
-![Distributed Minio, 4 nodes with 4 disks each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
-
-#### GNU/Linux and macOS
-
-```shell
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.11/export1 http://192.168.1.12/export1 \
-               http://192.168.1.13/export1 http://192.168.1.14/export1 \
-               http://192.168.1.11/export2 http://192.168.1.12/export2 \
-               http://192.168.1.13/export2 http://192.168.1.14/export2 \
-               http://192.168.1.11/export3 http://192.168.1.12/export3 \
-               http://192.168.1.13/export3 http://192.168.1.14/export3 \
-               http://192.168.1.11/export4 http://192.168.1.12/export4 \
-               http://192.168.1.13/export4 http://192.168.1.14/export4
-```
-
-##### Short version of the same command:
-```shell
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://192.168.1.{11...14}/export{1...4}
-```
-
-#### Windows
-
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.12/C:/data1 ^
-                  http://192.168.1.13/C:/data1 http://192.168.1.14/C:/data1 ^
-                  http://192.168.1.11/C:/data2 http://192.168.1.12/C:/data2 ^
-                  http://192.168.1.13/C:/data2 http://192.168.1.14/C:/data2 ^
-                  http://192.168.1.11/C:/data3 http://192.168.1.12/C:/data3 ^
-                  http://192.168.1.13/C:/data3 http://192.168.1.14/C:/data3 ^
-                  http://192.168.1.11/C:/data4 http://192.168.1.12/C:/data4 ^
-                  http://192.168.1.13/C:/data4 http://192.168.1.14/C:/data4
-```
-
-##### Short version of the same command:
-```cmd
-set MINIO_ACCESS_KEY=<ACCESS_KEY>
-set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.{1...14}/C:/data{1...4}
-```
-__NOTE:__ `{1...n}` shown in shortened examples above have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally stripe erasure-coded data__
-
+__NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..4}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use `{1...n}` (3 dots!) to allow minio server to optimally erasure-code data__
 
 ## 3. Test your setup
-
-To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). 
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
-- [Minio Large Bucket Suppport Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
+- [Minio Large Bucket Support Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)

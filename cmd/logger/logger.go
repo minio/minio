@@ -116,9 +116,11 @@ type traceEntry struct {
 	Source    []string          `json:"source,omitempty"`
 	Variables map[string]string `json:"variables,omitempty"`
 }
+
 type args struct {
-	Bucket string `json:"bucket,omitempty"`
-	Object string `json:"object,omitempty"`
+	Bucket   string            `json:"bucket,omitempty"`
+	Object   string            `json:"object,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 type api struct {
@@ -319,7 +321,7 @@ func logIf(ctx context.Context, err error) {
 	}
 
 	// Get full stack trace
-	trace := getTrace(2)
+	trace := getTrace(3)
 
 	// Get the cause for the Error
 	message := err.Error()
@@ -450,10 +452,9 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 	os.Exit(1)
 }
 
-var info infoMsg
+type infoMsg struct{}
 
-type infoMsg struct {
-}
+var info infoMsg
 
 func (i infoMsg) json(msg string, args ...interface{}) {
 	logJSON, err := json.Marshal(&logEntry{

@@ -89,6 +89,8 @@ func initFederatorBackend(objLayer ObjectLayer) {
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketLocation")
 
+	defer logger.AuditLog(ctx, w, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -137,6 +139,8 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListMultipartUploads")
 
+	defer logger.AuditLog(ctx, w, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -151,7 +155,11 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _, s3Error := getBucketMultipartResources(r.URL.Query())
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
 	if maxUploads < 0 {
 		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
 		return
@@ -183,6 +191,8 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 // owned by the authenticated sender of the request.
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListBuckets")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -239,6 +249,8 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 // DeleteMultipleObjectsHandler - deletes multiple objects.
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteMultipleObjects")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -370,10 +382,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			Object: ObjectInfo{
 				Name: dobj.ObjectName,
 			},
-			ReqParams: extractReqParams(r),
-			UserAgent: r.UserAgent(),
-			Host:      host,
-			Port:      port,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         host,
+			Port:         port,
 		})
 	}
 }
@@ -383,6 +396,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucket")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -459,6 +474,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 // signature policy in multipart/form-data
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PostPolicyBucket")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -590,7 +607,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(fileBody, fileSize, "", "")
+	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -614,7 +631,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 			info := ObjectInfo{Size: fileSize}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "") // do not try to verify encrypted content
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize) // do not try to verify encrypted content
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 				return
@@ -622,7 +639,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata)
+	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -640,13 +657,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{
-		EventName:  event.ObjectCreatedPost,
-		BucketName: objInfo.Bucket,
-		Object:     objInfo,
-		ReqParams:  extractReqParams(r),
-		UserAgent:  r.UserAgent(),
-		Host:       host,
-		Port:       port,
+		EventName:    event.ObjectCreatedPost,
+		BucketName:   objInfo.Bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         host,
+		Port:         port,
 	})
 
 	if successRedirect != "" {
@@ -682,6 +700,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadBucket")
 
+	defer logger.AuditLog(ctx, w, r)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -711,6 +731,8 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteBucket")
+
+	defer logger.AuditLog(ctx, w, r)
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

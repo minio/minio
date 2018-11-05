@@ -47,7 +47,12 @@ minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/te
 
 ![Example-3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)
 
+*Note*
+
+Please remember that defining and exporting credential environment variables, `MINIO_ACCESS_KEY` and  `MINIO_SECRET_KEY`, is **mandatory** on distributed deployments. It is also required to define and export domain environment variable, `MINIO_DOMAIN`, if domain information is needed to be set.
+
 ## Cloud Scale Deployment
+
 For large scale multi-tenant Minio deployments, we recommend using one of the popular container orchestration platforms, e.g. Kubernetes, DC/OS or Docker Swarm. Refer [this document](https://docs.minio.io/docs/minio-deployment-quickstart-guide) to get started with Minio on orchestration platforms.  
 
 

@@ -608,7 +608,7 @@ func writeCustomErrorResponseJSON(w http.ResponseWriter, errorCode APIErrorCode,
 		Code:      apiError.Code,
 		Message:   errBody,
 		Resource:  reqURL.Path,
-		RequestID: "3L137",
+		RequestID: w.Header().Get(responseRequestIDKey),
 		HostID:    "3L137",
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)

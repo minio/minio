@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All Rights Reserved.
+// Copyright 2014 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,17 +26,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"cloud.google.com/go/internal/trace"
 	"google.golang.org/api/option"
-	"google.golang.org/api/transport"
+	htransport "google.golang.org/api/transport/http"
 
 	"cloud.google.com/go/internal/optional"
 	"cloud.google.com/go/internal/version"
@@ -89,7 +91,7 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 		option.WithUserAgent(userAgent),
 	}
 	opts = append(o, opts...)
-	hc, ep, err := transport.NewHTTPClient(ctx, opts...)
+	hc, ep, err := htransport.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("dialing: %v", err)
 	}
@@ -110,41 +112,10 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 //
 // Close need not be called at program exit.
 func (c *Client) Close() error {
+	// Set fields to nil so that subsequent uses will panic.
 	c.hc = nil
+	c.raw = nil
 	return nil
-}
-
-// BucketHandle provides operations on a Google Cloud Storage bucket.
-// Use Client.Bucket to get a handle.
-type BucketHandle struct {
-	acl              ACLHandle
-	defaultObjectACL ACLHandle
-
-	c    *Client
-	name string
-}
-
-// Bucket returns a BucketHandle, which provides operations on the named bucket.
-// This call does not perform any network operations.
-//
-// The supplied name must contain only lowercase letters, numbers, dashes,
-// underscores, and dots. The full specification for valid bucket names can be
-// found at:
-//   https://cloud.google.com/storage/docs/bucket-naming
-func (c *Client) Bucket(name string) *BucketHandle {
-	return &BucketHandle{
-		c:    c,
-		name: name,
-		acl: ACLHandle{
-			c:      c,
-			bucket: name,
-		},
-		defaultObjectACL: ACLHandle{
-			c:         c,
-			bucket:    name,
-			isDefault: true,
-		},
-	}
 }
 
 // SignedURLOptions allows you to restrict the access to the signed URL.
@@ -200,7 +171,7 @@ type SignedURLOptions struct {
 	// Optional.
 	ContentType string
 
-	// Headers is a list of extention headers the client must provide
+	// Headers is a list of extension headers the client must provide
 	// in order to use the generated signed URL.
 	// Optional.
 	Headers []string
@@ -210,6 +181,60 @@ type SignedURLOptions struct {
 	// header in order to use the signed URL.
 	// Optional.
 	MD5 string
+}
+
+var (
+	canonicalHeaderRegexp    = regexp.MustCompile(`(?i)^(x-goog-[^:]+):(.*)?$`)
+	excludedCanonicalHeaders = map[string]bool{
+		"x-goog-encryption-key":        true,
+		"x-goog-encryption-key-sha256": true,
+	}
+)
+
+// sanitizeHeaders applies the specifications for canonical extension headers at
+// https://cloud.google.com/storage/docs/access-control/signed-urls#about-canonical-extension-headers.
+func sanitizeHeaders(hdrs []string) []string {
+	headerMap := map[string][]string{}
+	for _, hdr := range hdrs {
+		// No leading or trailing whitespaces.
+		sanitizedHeader := strings.TrimSpace(hdr)
+
+		// Only keep canonical headers, discard any others.
+		headerMatches := canonicalHeaderRegexp.FindStringSubmatch(sanitizedHeader)
+		if len(headerMatches) == 0 {
+			continue
+		}
+
+		header := strings.ToLower(strings.TrimSpace(headerMatches[1]))
+		if excludedCanonicalHeaders[headerMatches[1]] {
+			// Do not keep any deliberately excluded canonical headers when signing.
+			continue
+		}
+		value := strings.TrimSpace(headerMatches[2])
+		if len(value) > 0 {
+			// Remove duplicate headers by appending the values of duplicates
+			// in their order of appearance.
+			headerMap[header] = append(headerMap[header], value)
+		}
+	}
+
+	var sanitizedHeaders []string
+	for header, values := range headerMap {
+		// There should be no spaces around the colon separating the
+		// header name from the header value or around the values
+		// themselves. The values should be separated by commas.
+		// NOTE: The semantics for headers without a value are not clear.
+		//       However from specifications these should be edge-cases
+		//       anyway and we should assume that there will be no
+		//       canonical headers using empty values. Any such headers
+		//       are discarded at the regexp stage above.
+		sanitizedHeaders = append(
+			sanitizedHeaders,
+			fmt.Sprintf("%s:%s", header, strings.Join(values, ",")),
+		)
+	}
+	sort.Strings(sanitizedHeaders)
+	return sanitizedHeaders
 }
 
 // SignedURL returns a URL for the specified object. Signed URLs allow
@@ -238,6 +263,7 @@ func SignedURL(bucket, name string, opts *SignedURLOptions) (string, error) {
 			return "", errors.New("storage: invalid MD5 checksum")
 		}
 	}
+	opts.Headers = sanitizeHeaders(opts.Headers)
 
 	signBytes := opts.SignBytes
 	if opts.PrivateKey != nil {
@@ -288,13 +314,15 @@ func SignedURL(bucket, name string, opts *SignedURLOptions) (string, error) {
 // ObjectHandle provides operations on an object in a Google Cloud Storage bucket.
 // Use BucketHandle.Object to get a handle.
 type ObjectHandle struct {
-	c             *Client
-	bucket        string
-	object        string
-	acl           ACLHandle
-	gen           int64 // a negative value indicates latest
-	conds         *Conditions
-	encryptionKey []byte // AES-256 key
+	c              *Client
+	bucket         string
+	object         string
+	acl            ACLHandle
+	gen            int64 // a negative value indicates latest
+	conds          *Conditions
+	encryptionKey  []byte // AES-256 key
+	userProject    string // for requester-pays buckets
+	readCompressed bool   // Accept-Encoding: gzip
 }
 
 // ACL provides access to the object's access control list.
@@ -317,7 +345,7 @@ func (o *ObjectHandle) Generation(gen int64) *ObjectHandle {
 
 // If returns a new ObjectHandle that applies a set of preconditions.
 // Preconditions already set on the ObjectHandle are ignored.
-// Operations on the new handle will only occur if the preconditions are
+// Operations on the new handle will return an error if the preconditions are not
 // satisfied. See https://cloud.google.com/storage/docs/generations-preconditions
 // for more details.
 func (o *ObjectHandle) If(conds Conditions) *ObjectHandle {
@@ -339,7 +367,10 @@ func (o *ObjectHandle) Key(encryptionKey []byte) *ObjectHandle {
 
 // Attrs returns meta information about the object.
 // ErrObjectNotExist will be returned if the object is not found.
-func (o *ObjectHandle) Attrs(ctx context.Context) (*ObjectAttrs, error) {
+func (o *ObjectHandle) Attrs(ctx context.Context) (attrs *ObjectAttrs, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.Object.Attrs")
+	defer func() { trace.EndSpan(ctx, err) }()
+
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
@@ -347,11 +378,13 @@ func (o *ObjectHandle) Attrs(ctx context.Context) (*ObjectAttrs, error) {
 	if err := applyConds("Attrs", o.gen, o.conds, call); err != nil {
 		return nil, err
 	}
+	if o.userProject != "" {
+		call.UserProject(o.userProject)
+	}
 	if err := setEncryptionHeaders(call.Header(), o.encryptionKey, false); err != nil {
 		return nil, err
 	}
 	var obj *raw.Object
-	var err error
 	setClientHeader(call.Header())
 	err = runWithRetry(ctx, func() error { obj, err = call.Do(); return err })
 	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
@@ -366,7 +399,10 @@ func (o *ObjectHandle) Attrs(ctx context.Context) (*ObjectAttrs, error) {
 // Update updates an object with the provided attributes.
 // All zero-value attributes are ignored.
 // ErrObjectNotExist will be returned if the object is not found.
-func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (*ObjectAttrs, error) {
+func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (oa *ObjectAttrs, err error) {
+	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.Object.Update")
+	defer func() { trace.EndSpan(ctx, err) }()
+
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
@@ -375,11 +411,17 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	var forceSendFields, nullFields []string
 	if uattrs.ContentType != nil {
 		attrs.ContentType = optional.ToString(uattrs.ContentType)
-		forceSendFields = append(forceSendFields, "ContentType")
+		// For ContentType, sending the empty string is a no-op.
+		// Instead we send a null.
+		if attrs.ContentType == "" {
+			nullFields = append(nullFields, "ContentType")
+		} else {
+			forceSendFields = append(forceSendFields, "ContentType")
+		}
 	}
 	if uattrs.ContentLanguage != nil {
 		attrs.ContentLanguage = optional.ToString(uattrs.ContentLanguage)
-		// For ContentLanguage It's an error to send the empty string.
+		// For ContentLanguage it's an error to send the empty string.
 		// Instead we send a null.
 		if attrs.ContentLanguage == "" {
 			nullFields = append(nullFields, "ContentLanguage")
@@ -389,7 +431,7 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	}
 	if uattrs.ContentEncoding != nil {
 		attrs.ContentEncoding = optional.ToString(uattrs.ContentEncoding)
-		forceSendFields = append(forceSendFields, "ContentType")
+		forceSendFields = append(forceSendFields, "ContentEncoding")
 	}
 	if uattrs.ContentDisposition != nil {
 		attrs.ContentDisposition = optional.ToString(uattrs.ContentDisposition)
@@ -398,6 +440,14 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	if uattrs.CacheControl != nil {
 		attrs.CacheControl = optional.ToString(uattrs.CacheControl)
 		forceSendFields = append(forceSendFields, "CacheControl")
+	}
+	if uattrs.EventBasedHold != nil {
+		attrs.EventBasedHold = optional.ToBool(uattrs.EventBasedHold)
+		forceSendFields = append(forceSendFields, "EventBasedHold")
+	}
+	if uattrs.TemporaryHold != nil {
+		attrs.TemporaryHold = optional.ToBool(uattrs.TemporaryHold)
+		forceSendFields = append(forceSendFields, "TemporaryHold")
 	}
 	if uattrs.Metadata != nil {
 		attrs.Metadata = uattrs.Metadata
@@ -421,11 +471,16 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	if err := applyConds("Update", o.gen, o.conds, call); err != nil {
 		return nil, err
 	}
+	if o.userProject != "" {
+		call.UserProject(o.userProject)
+	}
+	if uattrs.PredefinedACL != "" {
+		call.PredefinedAcl(uattrs.PredefinedACL)
+	}
 	if err := setEncryptionHeaders(call.Header(), o.encryptionKey, false); err != nil {
 		return nil, err
 	}
 	var obj *raw.Object
-	var err error
 	setClientHeader(call.Header())
 	err = runWithRetry(ctx, func() error { obj, err = call.Do(); return err })
 	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
@@ -435,6 +490,16 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 		return nil, err
 	}
 	return newObject(obj), nil
+}
+
+// BucketName returns the name of the bucket.
+func (o *ObjectHandle) BucketName() string {
+	return o.bucket
+}
+
+// ObjectName returns the name of the object.
+func (o *ObjectHandle) ObjectName() string {
+	return o.object
 }
 
 // ObjectAttrsToUpdate is used to update the attributes of an object.
@@ -449,6 +514,8 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 //        Metadata: map[string]string{},
 //    }
 type ObjectAttrsToUpdate struct {
+	EventBasedHold     optional.Bool
+	TemporaryHold      optional.Bool
 	ContentType        optional.String
 	ContentLanguage    optional.String
 	ContentEncoding    optional.String
@@ -456,6 +523,10 @@ type ObjectAttrsToUpdate struct {
 	CacheControl       optional.String
 	Metadata           map[string]string // set to map[string]string{} to delete
 	ACL                []ACLRule
+
+	// If not empty, applies a predefined set of access controls. ACL must be nil.
+	// See https://cloud.google.com/storage/docs/json_api/v1/objects/patch.
+	PredefinedACL string
 }
 
 // Delete deletes the single specified object.
@@ -467,6 +538,10 @@ func (o *ObjectHandle) Delete(ctx context.Context) error {
 	if err := applyConds("Delete", o.gen, o.conds, call); err != nil {
 		return err
 	}
+	if o.userProject != "" {
+		call.UserProject(o.userProject)
+	}
+	// Encryption doesn't apply to Delete.
 	setClientHeader(call.Header())
 	err := runWithRetry(ctx, func() error { return call.Do() })
 	switch e := err.(type) {
@@ -480,135 +555,12 @@ func (o *ObjectHandle) Delete(ctx context.Context) error {
 	return err
 }
 
-// NewReader creates a new Reader to read the contents of the
-// object.
-// ErrObjectNotExist will be returned if the object is not found.
-//
-// The caller must call Close on the returned Reader when done reading.
-func (o *ObjectHandle) NewReader(ctx context.Context) (*Reader, error) {
-	return o.NewRangeReader(ctx, 0, -1)
+// ReadCompressed when true causes the read to happen without decompressing.
+func (o *ObjectHandle) ReadCompressed(compressed bool) *ObjectHandle {
+	o2 := *o
+	o2.readCompressed = compressed
+	return &o2
 }
-
-// NewRangeReader reads part of an object, reading at most length bytes
-// starting at the given offset. If length is negative, the object is read
-// until the end.
-func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64) (*Reader, error) {
-	if err := o.validate(); err != nil {
-		return nil, err
-	}
-	if offset < 0 {
-		return nil, fmt.Errorf("storage: invalid offset %d < 0", offset)
-	}
-	if o.conds != nil {
-		if err := o.conds.validate("NewRangeReader"); err != nil {
-			return nil, err
-		}
-	}
-	u := &url.URL{
-		Scheme:   "https",
-		Host:     "storage.googleapis.com",
-		Path:     fmt.Sprintf("/%s/%s", o.bucket, o.object),
-		RawQuery: conditionsQuery(o.gen, o.conds),
-	}
-	verb := "GET"
-	if length == 0 {
-		verb = "HEAD"
-	}
-	req, err := http.NewRequest(verb, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req = withContext(req, ctx)
-	if length < 0 && offset > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
-	} else if length > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+length-1))
-	}
-	if err := setEncryptionHeaders(req.Header, o.encryptionKey, false); err != nil {
-		return nil, err
-	}
-	var res *http.Response
-	err = runWithRetry(ctx, func() error {
-		res, err = o.c.hc.Do(req)
-		if err != nil {
-			return err
-		}
-		if res.StatusCode == http.StatusNotFound {
-			res.Body.Close()
-			return ErrObjectNotExist
-		}
-		if res.StatusCode < 200 || res.StatusCode > 299 {
-			body, _ := ioutil.ReadAll(res.Body)
-			res.Body.Close()
-			return &googleapi.Error{
-				Code:   res.StatusCode,
-				Header: res.Header,
-				Body:   string(body),
-			}
-		}
-		if offset > 0 && length != 0 && res.StatusCode != http.StatusPartialContent {
-			res.Body.Close()
-			return errors.New("storage: partial request not satisfied")
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var size int64 // total size of object, even if a range was requested.
-	if res.StatusCode == http.StatusPartialContent {
-		cr := strings.TrimSpace(res.Header.Get("Content-Range"))
-		if !strings.HasPrefix(cr, "bytes ") || !strings.Contains(cr, "/") {
-			return nil, fmt.Errorf("storage: invalid Content-Range %q", cr)
-		}
-		size, err = strconv.ParseInt(cr[strings.LastIndex(cr, "/")+1:], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("storage: invalid Content-Range %q", cr)
-		}
-	} else {
-		size = res.ContentLength
-	}
-
-	remain := res.ContentLength
-	body := res.Body
-	if length == 0 {
-		remain = 0
-		body.Close()
-		body = emptyBody
-	}
-	var (
-		checkCRC bool
-		crc      uint32
-	)
-	// Even if there is a CRC header, we can't compute the hash on partial data.
-	if remain == size {
-		crc, checkCRC = parseCRC32c(res)
-	}
-	return &Reader{
-		body:        body,
-		size:        size,
-		remain:      remain,
-		contentType: res.Header.Get("Content-Type"),
-		wantCRC:     crc,
-		checkCRC:    checkCRC,
-	}, nil
-}
-
-func parseCRC32c(res *http.Response) (uint32, bool) {
-	const prefix = "crc32c="
-	for _, spec := range res.Header["X-Goog-Hash"] {
-		if strings.HasPrefix(spec, prefix) {
-			c, err := decodeUint32(spec[len(prefix):])
-			if err == nil {
-				return c, true
-			}
-		}
-	}
-	return 0, false
-}
-
-var emptyBody = ioutil.NopCloser(strings.NewReader(""))
 
 // NewWriter returns a storage Writer that writes to the GCS object
 // associated with this ObjectHandle.
@@ -623,7 +575,8 @@ var emptyBody = ioutil.NopCloser(strings.NewReader(""))
 // attribute is specified, the content type will be automatically sniffed
 // using net/http.DetectContentType.
 //
-// It is the caller's responsibility to call Close when writing is done.
+// It is the caller's responsibility to call Close when writing is done. To
+// stop writing without saving the data, cancel the context.
 func (o *ObjectHandle) NewWriter(ctx context.Context) *Writer {
 	return &Writer{
 		ctx:         ctx,
@@ -647,11 +600,10 @@ func (o *ObjectHandle) validate() error {
 	return nil
 }
 
-// parseKey converts the binary contents of a private key file
-// to an *rsa.PrivateKey. It detects whether the private key is in a
-// PEM container or not. If so, it extracts the the private key
-// from PEM container before conversion. It only supports PEM
-// containers with no passphrase.
+// parseKey converts the binary contents of a private key file to an
+// *rsa.PrivateKey. It detects whether the private key is in a PEM container or
+// not. If so, it extracts the private key from PEM container before
+// conversion. It only supports PEM containers with no passphrase.
 func parseKey(key []byte) (*rsa.PrivateKey, error) {
 	if block, _ := pem.Decode(key); block != nil {
 		key = block.Bytes
@@ -670,34 +622,26 @@ func parseKey(key []byte) (*rsa.PrivateKey, error) {
 	return parsed, nil
 }
 
-func toRawObjectACL(oldACL []ACLRule) []*raw.ObjectAccessControl {
-	var acl []*raw.ObjectAccessControl
-	if len(oldACL) > 0 {
-		acl = make([]*raw.ObjectAccessControl, len(oldACL))
-		for i, rule := range oldACL {
-			acl[i] = &raw.ObjectAccessControl{
-				Entity: string(rule.Entity),
-				Role:   string(rule.Role),
-			}
-		}
-	}
-	return acl
-}
-
 // toRawObject copies the editable attributes from o to the raw library's Object type.
 func (o *ObjectAttrs) toRawObject(bucket string) *raw.Object {
-	acl := toRawObjectACL(o.ACL)
+	var ret string
+	if !o.RetentionExpirationTime.IsZero() {
+		ret = o.RetentionExpirationTime.Format(time.RFC3339)
+	}
 	return &raw.Object{
-		Bucket:             bucket,
-		Name:               o.Name,
-		ContentType:        o.ContentType,
-		ContentEncoding:    o.ContentEncoding,
-		ContentLanguage:    o.ContentLanguage,
-		CacheControl:       o.CacheControl,
-		ContentDisposition: o.ContentDisposition,
-		StorageClass:       o.StorageClass,
-		Acl:                acl,
-		Metadata:           o.Metadata,
+		Bucket:                  bucket,
+		Name:                    o.Name,
+		EventBasedHold:          o.EventBasedHold,
+		TemporaryHold:           o.TemporaryHold,
+		RetentionExpirationTime: ret,
+		ContentType:             o.ContentType,
+		ContentEncoding:         o.ContentEncoding,
+		ContentLanguage:         o.ContentLanguage,
+		CacheControl:            o.CacheControl,
+		ContentDisposition:      o.ContentDisposition,
+		StorageClass:            o.StorageClass,
+		Acl:                     toRawObjectACL(o.ACL),
+		Metadata:                o.Metadata,
 	}
 }
 
@@ -721,8 +665,31 @@ type ObjectAttrs struct {
 	// headers when serving the object data.
 	CacheControl string
 
+	// EventBasedHold specifies whether an object is under event-based hold. New
+	// objects created in a bucket whose DefaultEventBasedHold is set will
+	// default to that value.
+	EventBasedHold bool
+
+	// TemporaryHold specifies whether an object is under temporary hold. While
+	// this flag is set to true, the object is protected against deletion and
+	// overwrites.
+	TemporaryHold bool
+
+	// RetentionExpirationTime is a server-determined value that specifies the
+	// earliest time that the object's retention period expires.
+	// This is a read-only field.
+	RetentionExpirationTime time.Time
+
 	// ACL is the list of access control rules for the object.
 	ACL []ACLRule
+
+	// If not empty, applies a predefined set of access controls. It should be set
+	// only when writing, copying or composing an object. When copying or composing,
+	// it acts as the destinationPredefinedAcl parameter.
+	// PredefinedACL is always empty for ObjectAttrs returned from the service.
+	// See https://cloud.google.com/storage/docs/json_api/v1/objects/insert
+	// for valid values.
+	PredefinedACL string
 
 	// Owner is the owner of the object. This field is read-only.
 	//
@@ -739,11 +706,16 @@ type ObjectAttrs struct {
 	// sent in the response headers.
 	ContentDisposition string
 
-	// MD5 is the MD5 hash of the object's content. This field is read-only.
+	// MD5 is the MD5 hash of the object's content. This field is read-only,
+	// except when used from a Writer. If set on a Writer, the uploaded
+	// data is rejected if its MD5 hash does not match this field.
 	MD5 []byte
 
 	// CRC32C is the CRC32 checksum of the object's content using
-	// the Castagnoli93 polynomial. This field is read-only.
+	// the Castagnoli93 polynomial. This field is read-only, except when
+	// used from a Writer. If set on a Writer and Writer.SendCRC32C
+	// is true, the uploaded data is rejected if its CRC32c hash does not
+	// match this field.
 	CRC32C uint32
 
 	// MediaLink is an URL to the object's content. This field is read-only.
@@ -792,6 +764,14 @@ type ObjectAttrs struct {
 	// encryption in Google Cloud Storage.
 	CustomerKeySHA256 string
 
+	// Cloud KMS key name, in the form
+	// projects/P/locations/L/keyRings/R/cryptoKeys/K, used to encrypt this object,
+	// if the object is encrypted by such a key.
+	//
+	// Providing both a KMSKeyName and a customer-supplied encryption key (via
+	// ObjectHandle.Key) will result in an error when writing an object.
+	KMSKeyName string
+
 	// Prefix is set only for ObjectAttrs which represent synthetic "directory
 	// entries" when iterating over buckets using Query.Delimiter. See
 	// ObjectIterator.Next. When set, no other fields in ObjectAttrs will be
@@ -813,13 +793,6 @@ func newObject(o *raw.Object) *ObjectAttrs {
 	if o == nil {
 		return nil
 	}
-	acl := make([]ACLRule, len(o.Acl))
-	for i, rule := range o.Acl {
-		acl[i] = ACLRule{
-			Entity: ACLEntity(rule.Entity),
-			Role:   ACLRole(rule.Role),
-		}
-	}
 	owner := ""
 	if o.Owner != nil {
 		owner = o.Owner.Entity
@@ -831,26 +804,31 @@ func newObject(o *raw.Object) *ObjectAttrs {
 		sha256 = o.CustomerEncryption.KeySha256
 	}
 	return &ObjectAttrs{
-		Bucket:            o.Bucket,
-		Name:              o.Name,
-		ContentType:       o.ContentType,
-		ContentLanguage:   o.ContentLanguage,
-		CacheControl:      o.CacheControl,
-		ACL:               acl,
-		Owner:             owner,
-		ContentEncoding:   o.ContentEncoding,
-		Size:              int64(o.Size),
-		MD5:               md5,
-		CRC32C:            crc32c,
-		MediaLink:         o.MediaLink,
-		Metadata:          o.Metadata,
-		Generation:        o.Generation,
-		Metageneration:    o.Metageneration,
-		StorageClass:      o.StorageClass,
-		CustomerKeySHA256: sha256,
-		Created:           convertTime(o.TimeCreated),
-		Deleted:           convertTime(o.TimeDeleted),
-		Updated:           convertTime(o.Updated),
+		Bucket:                  o.Bucket,
+		Name:                    o.Name,
+		ContentType:             o.ContentType,
+		ContentLanguage:         o.ContentLanguage,
+		CacheControl:            o.CacheControl,
+		EventBasedHold:          o.EventBasedHold,
+		TemporaryHold:           o.TemporaryHold,
+		RetentionExpirationTime: convertTime(o.RetentionExpirationTime),
+		ACL:                     toObjectACLRules(o.Acl),
+		Owner:                   owner,
+		ContentEncoding:         o.ContentEncoding,
+		ContentDisposition:      o.ContentDisposition,
+		Size:                    int64(o.Size),
+		MD5:                     md5,
+		CRC32C:                  crc32c,
+		MediaLink:               o.MediaLink,
+		Metadata:                o.Metadata,
+		Generation:              o.Generation,
+		Metageneration:          o.Metageneration,
+		StorageClass:            o.StorageClass,
+		CustomerKeySHA256:       sha256,
+		KMSKeyName:              o.KmsKeyName,
+		Created:                 convertTime(o.TimeCreated),
+		Deleted:                 convertTime(o.TimeDeleted),
+		Updated:                 convertTime(o.Updated),
 	}
 }
 
@@ -905,7 +883,7 @@ func (c *contentTyper) ContentType() string {
 }
 
 // Conditions constrain methods to act on specific generations of
-// resources.
+// objects.
 //
 // The zero value is an empty set of constraints. Not all conditions or
 // combinations of conditions are applicable to all methods.
@@ -1133,4 +1111,12 @@ func setEncryptionHeaders(headers http.Header, key []byte, copySource bool) erro
 	return nil
 }
 
-// TODO(jbd): Add storage.objects.watch.
+// ServiceAccount fetches the email address of the given project's Google Cloud Storage service account.
+func (c *Client) ServiceAccount(ctx context.Context, projectID string) (string, error) {
+	r := c.raw.Projects.ServiceAccount.Get(projectID)
+	res, err := r.Context(ctx).Do()
+	if err != nil {
+		return "", err
+	}
+	return res.EmailAddress, nil
+}

@@ -17,11 +17,8 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 )
 
 // Writes S3 compatible copy part range error.
@@ -39,68 +36,33 @@ func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL) {
 	}
 }
 
-// Parses x-amz-copy-source-range for CopyObjectPart API. Specifically written to
-// differentiate the behavior between regular httpRange header v/s x-amz-copy-source-range.
-// The range of bytes to copy from the source object. The range value must use the form
-// bytes=first-last, where the first and last are the zero-based byte offsets to copy.
-// For example, bytes=0-9 indicates that you want to copy the first ten bytes of the source.
+// Parses x-amz-copy-source-range for CopyObjectPart API. Its behavior
+// is different from regular HTTP range header. It only supports the
+// form `bytes=first-last` where first and last are zero-based byte
+// offsets. See
 // http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPartCopy.html
-func parseCopyPartRange(rangeString string, resourceSize int64) (hrange *httpRange, err error) {
-	// Return error if given range string doesn't start with byte range prefix.
-	if !strings.HasPrefix(rangeString, byteRangePrefix) {
-		return nil, fmt.Errorf("'%s' does not start with '%s'", rangeString, byteRangePrefix)
+// for full details. This function treats an empty rangeString as
+// referring to the whole resource.
+func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
+	hrange, err = parseRequestRangeSpec(rangeString)
+	if err != nil {
+		return nil, err
 	}
-
-	// Trim byte range prefix.
-	byteRangeString := strings.TrimPrefix(rangeString, byteRangePrefix)
-
-	// Check if range string contains delimiter '-', else return error. eg. "bytes=8"
-	sepIndex := strings.Index(byteRangeString, "-")
-	if sepIndex == -1 {
+	if hrange.IsSuffixLength || hrange.Start < 0 || hrange.End < 0 {
 		return nil, errInvalidRange
 	}
+	return hrange, nil
+}
 
-	offsetBeginString := byteRangeString[:sepIndex]
-	offsetBegin := int64(-1)
-	// Convert offsetBeginString only if its not empty.
-	if len(offsetBeginString) > 0 {
-		if !validBytePos.MatchString(offsetBeginString) {
-			return nil, errInvalidRange
-		}
-		if offsetBegin, err = strconv.ParseInt(offsetBeginString, 10, 64); err != nil {
-			return nil, errInvalidRange
-		}
+// checkCopyPartRangeWithSize adds more check to the range string in case of
+// copy object part. This API requires having specific start and end  range values
+// e.g. 'bytes=3-10'. Other use cases will be rejected.
+func checkCopyPartRangeWithSize(rs *HTTPRangeSpec, resourceSize int64) (err error) {
+	if rs == nil {
+		return nil
 	}
-
-	offsetEndString := byteRangeString[sepIndex+1:]
-	offsetEnd := int64(-1)
-	// Convert offsetEndString only if its not empty.
-	if len(offsetEndString) > 0 {
-		if !validBytePos.MatchString(offsetEndString) {
-			return nil, errInvalidRange
-		}
-		if offsetEnd, err = strconv.ParseInt(offsetEndString, 10, 64); err != nil {
-			return nil, errInvalidRange
-		}
+	if rs.IsSuffixLength || rs.Start >= resourceSize || rs.End >= resourceSize {
+		return errInvalidRangeSource
 	}
-
-	// rangeString contains first byte positions. eg. "bytes=2-" or
-	// rangeString contains last bye positions. eg. "bytes=-2"
-	if offsetBegin == -1 || offsetEnd == -1 {
-		return nil, errInvalidRange
-	}
-
-	// Last byte position should not be greater than first byte
-	// position. eg. "bytes=5-2"
-	if offsetBegin > offsetEnd {
-		return nil, errInvalidRange
-	}
-
-	// First and last byte positions should not be >= resourceSize.
-	if offsetBegin >= resourceSize || offsetEnd >= resourceSize {
-		return nil, errInvalidRangeSource
-	}
-
-	// Success..
-	return &httpRange{offsetBegin, offsetEnd, resourceSize}, nil
+	return nil
 }

@@ -20,11 +20,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
+	"path"
+	"strconv"
+
 	"os"
 	"regexp"
 	"strings"
@@ -732,25 +736,29 @@ func (l *gcsGateway) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	}, nil
 }
 
-func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec) (objInfo minio.ObjectInfo, reader io.ReadCloser, err error) {
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object)
+// GetObjectNInfo - returns object info and locked object ReadCloser
+func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
+	var objInfo minio.ObjectInfo
+	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
-		return objInfo, reader, err
+		return nil, err
 	}
 
-	startOffset, length := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, length = rs.GetOffsetLength(objInfo.Size)
+	var startOffset, length int64
+	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	if err != nil {
+		return nil, err
 	}
 
 	pr, pw := io.Pipe()
-	objReader := minio.NewGetObjectReader(pr, nil, nil)
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag)
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
-
-	return objInfo, objReader, nil
+	// Setup cleanup function to cause the above go-routine to
+	// exit in case of partial read
+	pipeCloser := func() { pr.Close() }
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
 }
 
 // GetObject - reads an object from GCS. Supports additional
@@ -759,7 +767,7 @@ func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, 
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -767,7 +775,13 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 		return gcsToObjectError(err, bucket)
 	}
 
-	object := l.client.Bucket(bucket).Object(key)
+	// GCS storage decompresses a gzipped object by default and returns the data.
+	// Refer to https://cloud.google.com/storage/docs/transcoding#decompressive_transcoding
+	// Need to set `Accept-Encoding` header to `gzip` when issuing a GetObject call, to be able
+	// to download the object in compressed state.
+	// Calling ReadCompressed with true accomplishes that.
+	object := l.client.Bucket(bucket).Object(key).ReadCompressed(true)
+
 	r, err := object.NewRangeReader(l.ctx, startOffset, length)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -848,7 +862,7 @@ func applyMetadataToGCSAttrs(metadata map[string]string, attrs *storage.ObjectAt
 }
 
 // GetObjectInfo - reads object info and replies back ObjectInfo
-func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object string) (minio.ObjectInfo, error) {
+func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -866,7 +880,7 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data *hash.Reader, metadata map[string]string) (minio.ObjectInfo, error) {
+func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -905,7 +919,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, d
 
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
-	srcInfo minio.ObjectInfo) (minio.ObjectInfo, error) {
+	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
 
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)
@@ -934,7 +948,7 @@ func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object str
 }
 
 // NewMultipartUpload - upload object in multiple parts
-func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key string, metadata map[string]string) (uploadID string, err error) {
+func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
 	// generate new uploadid
 	uploadID = minio.MustGetUUID()
 
@@ -957,14 +971,84 @@ func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key 
 	return uploadID, nil
 }
 
-// ListMultipartUploads - lists all multipart uploads.
+// ListMultipartUploads - lists the (first) multipart upload for an object
+// matched _exactly_ by the prefix
 func (l *gcsGateway) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (minio.ListMultipartsInfo, error) {
+	// List objects under <bucket>/gcsMinioMultipartPathV1
+	it := l.client.Bucket(bucket).Objects(ctx, &storage.Query{
+		Prefix: gcsMinioMultipartPathV1,
+	})
+
+	var uploads []minio.MultipartInfo
+
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return minio.ListMultipartsInfo{
+				KeyMarker:      keyMarker,
+				UploadIDMarker: uploadIDMarker,
+				MaxUploads:     maxUploads,
+				Prefix:         prefix,
+				Delimiter:      delimiter,
+			}, gcsToObjectError(err)
+		}
+
+		// Skip entries other than gcs.json
+		if !strings.HasSuffix(attrs.Name, gcsMinioMultipartMeta) {
+			continue
+		}
+
+		// Extract multipart upload information from gcs.json
+		obj := l.client.Bucket(bucket).Object(attrs.Name)
+		objReader, rErr := obj.NewReader(ctx)
+		if rErr != nil {
+			logger.LogIf(ctx, rErr)
+			return minio.ListMultipartsInfo{}, rErr
+		}
+		defer objReader.Close()
+
+		var mpMeta gcsMultipartMetaV1
+		dec := json.NewDecoder(objReader)
+		decErr := dec.Decode(&mpMeta)
+		if decErr != nil {
+			logger.LogIf(ctx, decErr)
+			return minio.ListMultipartsInfo{}, decErr
+		}
+
+		if prefix == mpMeta.Object {
+			// Extract uploadId
+			// E.g minio.sys.tmp/multipart/v1/d063ad89-fdc4-4ea3-a99e-22dba98151f5/gcs.json
+			components := strings.SplitN(attrs.Name, "/", 5)
+			if len(components) != 5 {
+				compErr := errors.New("Invalid multipart upload format")
+				logger.LogIf(ctx, compErr)
+				return minio.ListMultipartsInfo{}, compErr
+			}
+			upload := minio.MultipartInfo{
+				Object:    mpMeta.Object,
+				UploadID:  components[3],
+				Initiated: attrs.Created,
+			}
+			uploads = []minio.MultipartInfo{upload}
+			break
+		}
+	}
+
 	return minio.ListMultipartsInfo{
-		KeyMarker:      keyMarker,
-		UploadIDMarker: uploadIDMarker,
-		MaxUploads:     maxUploads,
-		Prefix:         prefix,
-		Delimiter:      delimiter,
+		KeyMarker:          keyMarker,
+		UploadIDMarker:     uploadIDMarker,
+		MaxUploads:         maxUploads,
+		Prefix:             prefix,
+		Delimiter:          delimiter,
+		Uploads:            uploads,
+		NextKeyMarker:      "",
+		NextUploadIDMarker: "",
+		IsTruncated:        false,
 	}, nil
 }
 
@@ -977,7 +1061,7 @@ func (l *gcsGateway) checkUploadIDExists(ctx context.Context, bucket string, key
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data *hash.Reader) (minio.PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key string, uploadID string, partNumber int, data *hash.Reader, opts minio.ObjectOptions) (minio.PartInfo, error) {
 	if err := l.checkUploadIDExists(ctx, bucket, key, uploadID); err != nil {
 		return minio.PartInfo{}, err
 	}
@@ -1008,9 +1092,91 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 
 }
 
-// ListObjectParts returns all object parts for specified object in specified bucket
+// gcsGetPartInfo returns PartInfo of a given object part
+func gcsGetPartInfo(ctx context.Context, attrs *storage.ObjectAttrs) (minio.PartInfo, error) {
+	components := strings.SplitN(attrs.Name, "/", 5)
+	if len(components) != 5 {
+		logger.LogIf(ctx, errors.New("Invalid multipart upload format"))
+		return minio.PartInfo{}, errors.New("Invalid multipart upload format")
+	}
+
+	partComps := strings.SplitN(components[4], ".", 2)
+	if len(partComps) != 2 {
+		logger.LogIf(ctx, errors.New("Invalid multipart part format"))
+		return minio.PartInfo{}, errors.New("Invalid multipart part format")
+	}
+
+	partNum, pErr := strconv.Atoi(partComps[0])
+	if pErr != nil {
+		logger.LogIf(ctx, pErr)
+		return minio.PartInfo{}, errors.New("Invalid part number")
+	}
+
+	return minio.PartInfo{
+		PartNumber:   partNum,
+		LastModified: attrs.Updated,
+		Size:         attrs.Size,
+		ETag:         partComps[1],
+	}, nil
+}
+
+//  ListObjectParts returns all object parts for specified object in specified bucket
 func (l *gcsGateway) ListObjectParts(ctx context.Context, bucket string, key string, uploadID string, partNumberMarker int, maxParts int) (minio.ListPartsInfo, error) {
-	return minio.ListPartsInfo{}, l.checkUploadIDExists(ctx, bucket, key, uploadID)
+	it := l.client.Bucket(bucket).Objects(ctx, &storage.Query{
+		Prefix: path.Join(gcsMinioMultipartPathV1, uploadID),
+	})
+
+	var (
+		count     int
+		partInfos []minio.PartInfo
+	)
+
+	isTruncated := true
+	for count < maxParts {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			isTruncated = false
+			break
+		}
+
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return minio.ListPartsInfo{}, gcsToObjectError(err)
+		}
+
+		if strings.HasSuffix(attrs.Name, gcsMinioMultipartMeta) {
+			continue
+		}
+
+		partInfo, pErr := gcsGetPartInfo(ctx, attrs)
+		if pErr != nil {
+			logger.LogIf(ctx, pErr)
+			return minio.ListPartsInfo{}, pErr
+		}
+
+		if partInfo.PartNumber <= partNumberMarker {
+			continue
+		}
+
+		partInfos = append(partInfos, partInfo)
+		count++
+	}
+
+	nextPartNumberMarker := 0
+	if isTruncated {
+		nextPartNumberMarker = partInfos[maxParts-1].PartNumber
+	}
+
+	return minio.ListPartsInfo{
+		Bucket:               bucket,
+		Object:               key,
+		UploadID:             uploadID,
+		PartNumberMarker:     partNumberMarker,
+		NextPartNumberMarker: nextPartNumberMarker,
+		MaxParts:             maxParts,
+		Parts:                partInfos,
+		IsTruncated:          isTruncated,
+	}, nil
 }
 
 // Called by AbortMultipartUpload and CompleteMultipartUpload for cleaning up.
@@ -1286,4 +1452,9 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 	}
 
 	return nil
+}
+
+// IsCompressionSupported returns whether compression is applicable for this layer.
+func (l *gcsGateway) IsCompressionSupported() bool {
+	return false
 }

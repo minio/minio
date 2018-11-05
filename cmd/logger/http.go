@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -30,7 +32,8 @@ import (
 // is returned to the caller.
 type HTTPTarget struct {
 	// Channel of log entries
-	logCh chan logEntry
+	logCh chan interface{}
+
 	// HTTP(s) endpoint
 	endpoint string
 	client   http.Client
@@ -54,6 +57,8 @@ func (h *HTTPTarget) startHTTPLogger() {
 				continue
 			}
 			if resp.Body != nil {
+				buf := make([]byte, 512)
+				io.CopyBuffer(ioutil.Discard, resp.Body, buf)
 				resp.Body.Close()
 			}
 		}
@@ -68,14 +73,14 @@ func NewHTTP(endpoint string, transport *http.Transport) LoggingTarget {
 		client: http.Client{
 			Transport: transport,
 		},
-		logCh: make(chan logEntry, 10000),
+		logCh: make(chan interface{}, 10000),
 	}
 
 	h.startHTTPLogger()
 	return &h
 }
 
-func (h *HTTPTarget) send(entry logEntry) error {
+func (h *HTTPTarget) send(entry interface{}) error {
 	select {
 	case h.logCh <- entry:
 	default:

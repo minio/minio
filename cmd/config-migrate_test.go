@@ -159,8 +159,8 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 }
 
-// Test if a config migration from v2 to v28 is successfully done
-func TestServerConfigMigrateV2toV28(t *testing.T) {
+// Test if a config migration from v2 to v30 is successfully done
+func TestServerConfigMigrateV2toV30(t *testing.T) {
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +203,10 @@ func TestServerConfigMigrateV2toV28(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	if err := migrateMinioSysConfig(objLayer); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initialize server config and check again if everything is fine
 	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
@@ -218,6 +222,7 @@ func TestServerConfigMigrateV2toV28(t *testing.T) {
 	if globalServerConfig.Credential.AccessKey != accessKey {
 		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
 	}
+
 	if globalServerConfig.Credential.SecretKey != secretKey {
 		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
 	}
@@ -314,7 +319,6 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err := migrateV26ToV27(); err == nil {
 		t.Fatal("migrateConfigV26ToV27() should fail with a corrupted json")
 	}
-
 	if err := migrateV27ToV28(); err == nil {
 		t.Fatal("migrateConfigV27ToV28() should fail with a corrupted json")
 	}

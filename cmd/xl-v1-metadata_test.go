@@ -28,6 +28,8 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
+const ActualSize = 1000
+
 // Tests for reading XL object info.
 func TestXLReadStat(t *testing.T) {
 	ExecObjectLayerDiskAlteredTest(t, testXLReadStat)
@@ -67,7 +69,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData, ObjectOptions{})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -108,6 +110,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
 	objectNames := []string{"minio-object-1.txt"}
 	uploadIDs := []string{}
+	var opts ObjectOptions
 
 	// bucketnames[0].
 	// objectNames[0].
@@ -119,7 +122,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -150,7 +153,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, perr := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetHashReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum))
+		_, perr := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetHashReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), opts)
 		if perr != nil {
 			t.Fatalf("%s : %s", instanceType, perr)
 		}
@@ -212,7 +215,7 @@ func TestAddObjectPart(t *testing.T) {
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
 			partNumString := strconv.Itoa(testCase.partNum)
-			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
+			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
 		}
 
 		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -244,7 +247,7 @@ func TestObjectPartIndex(t *testing.T) {
 	// Add some parts for testing.
 	for _, testCase := range testCases {
 		partNumString := strconv.Itoa(testCase.partNum)
-		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
+		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
 	}
 
 	// Add failure test case.
@@ -273,7 +276,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
 		partNumString := strconv.Itoa(partNum)
-		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte))
+		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize)
 	}
 
 	testCases := []struct {

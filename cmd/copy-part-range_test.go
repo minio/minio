@@ -19,35 +19,37 @@ package cmd
 import "testing"
 
 // Test parseCopyPartRange()
-func TestParseCopyPartRange(t *testing.T) {
+func TestParseCopyPartRangeSpec(t *testing.T) {
 	// Test success cases.
 	successCases := []struct {
 		rangeString string
 		offsetBegin int64
 		offsetEnd   int64
-		length      int64
 	}{
-		{"bytes=2-5", 2, 5, 4},
-		{"bytes=2-9", 2, 9, 8},
-		{"bytes=2-2", 2, 2, 1},
-		{"bytes=0000-0006", 0, 6, 7},
+		{"bytes=2-5", 2, 5},
+		{"bytes=2-9", 2, 9},
+		{"bytes=2-2", 2, 2},
+		{"bytes=0000-0006", 0, 6},
 	}
+	objectSize := int64(10)
 
 	for _, successCase := range successCases {
-		hrange, err := parseCopyPartRange(successCase.rangeString, 10)
+		rs, err := parseCopyPartRangeSpec(successCase.rangeString)
 		if err != nil {
 			t.Fatalf("expected: <nil>, got: %s", err)
 		}
 
-		if hrange.offsetBegin != successCase.offsetBegin {
-			t.Fatalf("expected: %d, got: %d", successCase.offsetBegin, hrange.offsetBegin)
+		start, length, err1 := rs.GetOffsetLength(objectSize)
+		if err1 != nil {
+			t.Fatalf("expected: <nil>, got: %s", err1)
 		}
 
-		if hrange.offsetEnd != successCase.offsetEnd {
-			t.Fatalf("expected: %d, got: %d", successCase.offsetEnd, hrange.offsetEnd)
+		if start != successCase.offsetBegin {
+			t.Fatalf("expected: %d, got: %d", successCase.offsetBegin, start)
 		}
-		if hrange.getLength() != successCase.length {
-			t.Fatalf("expected: %d, got: %d", successCase.length, hrange.getLength())
+
+		if start+length-1 != successCase.offsetEnd {
+			t.Fatalf("expected: %d, got: %d", successCase.offsetEnd, start+length-1)
 		}
 	}
 
@@ -59,15 +61,16 @@ func TestParseCopyPartRange(t *testing.T) {
 		"bytes=2-+5",
 		"bytes=2--5",
 		"bytes=-",
-		"",
 		"2-5",
 		"bytes = 2-5",
 		"bytes=2 - 5",
 		"bytes=0-0,-1",
 		"bytes=2-5 ",
+		"bytes=-1",
+		"bytes=1-",
 	}
 	for _, rangeString := range invalidRangeStrings {
-		if _, err := parseCopyPartRange(rangeString, 10); err == nil {
+		if _, err := parseCopyPartRangeSpec(rangeString); err == nil {
 			t.Fatalf("expected: an error, got: <nil> for range %s", rangeString)
 		}
 	}
@@ -78,8 +81,14 @@ func TestParseCopyPartRange(t *testing.T) {
 		"bytes=20-30",
 	}
 	for _, rangeString := range errorRangeString {
-		if _, err := parseCopyPartRange(rangeString, 10); err != errInvalidRangeSource {
-			t.Fatalf("expected: %s, got: %s", errInvalidRangeSource, err)
+		rs, err := parseCopyPartRangeSpec(rangeString)
+		if err == nil {
+			err1 := checkCopyPartRangeWithSize(rs, objectSize)
+			if err1 != errInvalidRangeSource {
+				t.Fatalf("expected: %s, got: %s", errInvalidRangeSource, err)
+			}
+		} else {
+			t.Fatalf("expected: %s, got: <nil>", errInvalidRangeSource)
 		}
 	}
 }

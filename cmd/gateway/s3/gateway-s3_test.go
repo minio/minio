@@ -51,6 +51,10 @@ func TestS3ToObjectError(t *testing.T) {
 			expectedErr: minio.BucketNameInvalid{},
 		},
 		{
+			inputErr:    errResponse("InvalidPart"),
+			expectedErr: minio.InvalidPart{},
+		},
+		{
 			inputErr:    errResponse("NoSuchBucketPolicy"),
 			expectedErr: minio.BucketPolicyNotFound{},
 		},

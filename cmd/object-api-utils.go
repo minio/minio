@@ -22,15 +22,21 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	snappy "github.com/golang/snappy"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/wildcard"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -298,6 +304,107 @@ func getRandomHostPort(records []dns.SrvRecord) (string, int) {
 	return srvRecord.Host, srvRecord.Port
 }
 
+// IsCompressed returns true if the object is marked as compressed.
+func (o ObjectInfo) IsCompressed() bool {
+	_, ok := o.UserDefined[ReservedMetadataPrefix+"compression"]
+	return ok
+}
+
+// GetActualSize - read the decompressed size from the meta json.
+func (o ObjectInfo) GetActualSize() int64 {
+	metadata := o.UserDefined
+	sizeStr, ok := metadata[ReservedMetadataPrefix+"actual-size"]
+	if ok {
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err == nil {
+			return size
+		}
+	}
+	return -1
+}
+
+// Disabling compression for encrypted enabled requests.
+// Using compression and encryption together enables room for side channel attacks.
+// Eliminate non-compressible objects by extensions/content-types.
+func isCompressible(header http.Header, object string) bool {
+	if hasServerSideEncryptionHeader(header) || excludeForCompression(header, object) {
+		return false
+	}
+	return true
+}
+
+// Eliminate the non-compressible objects.
+func excludeForCompression(header http.Header, object string) bool {
+	objStr := object
+	contentType := header.Get("Content-Type")
+	if globalIsCompressionEnabled {
+		// We strictly disable compression for standard extensions/content-types (`compressed`).
+		if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
+			return true
+		}
+		// Filter compression includes.
+		if len(globalCompressExtensions) > 0 || len(globalCompressMimeTypes) > 0 {
+			extensions := globalCompressExtensions
+			mimeTypes := globalCompressMimeTypes
+			if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
+				return false
+			}
+			return true
+		}
+		return false
+	}
+	return true
+}
+
+// Utility which returns if a string is present in the list.
+func hasStringSuffixInSlice(str string, list []string) bool {
+	for _, v := range list {
+		if strings.HasSuffix(str, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns true if any of the given wildcard patterns match the matchStr.
+func hasPattern(patterns []string, matchStr string) bool {
+	for _, pattern := range patterns {
+		if ok := wildcard.MatchSimple(pattern, matchStr); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns the part file name which matches the partNumber and etag.
+func getPartFile(entries []string, partNumber int, etag string) string {
+	for _, entry := range entries {
+		if strings.HasPrefix(entry, fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
+			return entry
+		}
+	}
+	return ""
+}
+
+// Returs the compressed offset which should be skipped.
+func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (int64, int64) {
+	var compressedOffset int64
+	var skipLength int64
+	var cumulativeActualSize int64
+	if len(objectInfo.Parts) > 0 {
+		for _, part := range objectInfo.Parts {
+			cumulativeActualSize += part.ActualSize
+			if cumulativeActualSize <= offset {
+				compressedOffset += part.Size
+			} else {
+				skipLength = cumulativeActualSize - part.ActualSize
+				break
+			}
+		}
+	}
+	return compressedOffset, offset - skipLength
+}
+
 // byBucketName is a collection satisfying sort.Interface.
 type byBucketName []BucketInfo
 
@@ -308,40 +415,173 @@ func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
 // GetObjectReader is a type that wraps a reader with a lock to
 // provide a ReadCloser interface that unlocks on Close()
 type GetObjectReader struct {
-	lock RWLocker
-	pr   io.Reader
+	ObjInfo ObjectInfo
+	pReader io.Reader
 
-	// register any clean up actions (happens before unlocking)
-	cleanUp func()
-
-	once sync.Once
+	cleanUpFns []func()
+	once       sync.Once
 }
 
-// NewGetObjectReader creates a new GetObjectReader. The cleanUp
-// action is called on Close() before the lock is unlocked.
-func NewGetObjectReader(reader io.Reader, lock RWLocker, cleanUp func()) io.ReadCloser {
+// NewGetObjectReaderFromReader sets up a GetObjectReader with a given
+// reader. This ignores any object properties.
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, cleanupFns ...func()) *GetObjectReader {
 	return &GetObjectReader{
-		lock:    lock,
-		pr:      reader,
-		cleanUp: cleanUp,
+		ObjInfo:    oi,
+		pReader:    r,
+		cleanUpFns: cleanupFns,
 	}
 }
 
-// Close - calls the cleanup action if provided, and *then* unlocks
-// the object. Calling Close multiple times is safe.
+// ObjReaderFn is a function type that takes a reader and returns
+// GetObjectReader and an error. Request headers are passed to provide
+// encryption parameters. cleanupFns allow cleanup funcs to be
+// registered for calling after usage of the reader.
+type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
+
+// NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
+// are called on Close() in reverse order as passed here. NOTE: It is
+// assumed that clean up functions do not panic (otherwise, they may
+// not all run!).
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) (
+	fn ObjReaderFn, off, length int64, err error) {
+
+	// Call the clean-up functions immediately in case of exit
+	// with error
+	defer func() {
+		if err != nil {
+			for i := len(cleanUpFns) - 1; i >= 0; i-- {
+				cleanUpFns[i]()
+			}
+		}
+	}()
+
+	isEncrypted := crypto.IsEncrypted(oi.UserDefined)
+	isCompressed := oi.IsCompressed()
+	var skipLen int64
+	// Calculate range to read (different for
+	// e.g. encrypted/compressed objects)
+	switch {
+	case isEncrypted:
+		var seqNumber uint32
+		var partStart int
+		off, length, skipLen, seqNumber, partStart, err = oi.GetDecryptedRange(rs)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		var decSize int64
+		decSize, err = oi.DecryptedSize()
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		var decRangeLength int64
+		decRangeLength, err = rs.GetLength(decSize)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		// We define a closure that performs decryption given
+		// a reader that returns the desired range of
+		// encrypted bytes. The header parameter is used to
+		// provide encryption parameters.
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+
+			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+
+			cFns = append(cleanUpFns, cFns...)
+			// Attach decrypter on inputReader
+			var decReader io.Reader
+			decReader, err = DecryptBlocksRequestR(inputReader, h,
+				off, length, seqNumber, partStart, oi, copySource)
+			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
+				return nil, err
+			}
+
+			// Apply the skipLen and limit on the
+			// decrypted stream
+			decReader = io.LimitReader(ioutil.NewSkipReader(decReader, skipLen), decRangeLength)
+
+			// Assemble the GetObjectReader
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    decReader,
+				cleanUpFns: cFns,
+			}
+			return r, nil
+		}
+	case isCompressed:
+		// Read the decompressed size from the meta.json.
+		actualSize := oi.GetActualSize()
+		if actualSize < 0 {
+			return nil, 0, 0, errInvalidDecompressedSize
+		}
+		off, length = int64(0), oi.Size
+		decOff, decLength := int64(0), actualSize
+		if rs != nil {
+			off, length, err = rs.GetOffsetLength(actualSize)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			// Incase of range based queries on multiparts, the offset and length are reduced.
+			off, decOff = getCompressedOffsets(oi, off)
+			decLength = length
+			length = oi.Size - off
+
+			// For negative length we read everything.
+			if decLength < 0 {
+				decLength = actualSize - decOff
+			}
+
+			// Reply back invalid range if the input offset and length fall out of range.
+			if decOff > actualSize || decOff+decLength > actualSize {
+				return nil, 0, 0, errInvalidRange
+			}
+		}
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+			// Decompression reader.
+			snappyReader := snappy.NewReader(inputReader)
+			// Apply the skipLen and limit on the
+			// decompressed stream
+			decReader := io.LimitReader(ioutil.NewSkipReader(snappyReader, decOff), decLength)
+			oi.Size = decLength
+
+			// Assemble the GetObjectReader
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    decReader,
+				cleanUpFns: append(cleanUpFns, cFns...),
+			}
+			return r, nil
+		}
+
+	default:
+		off, length, err = rs.GetOffsetLength(oi.Size)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    inputReader,
+				cleanUpFns: append(cleanUpFns, cFns...),
+			}
+			return r, nil
+		}
+	}
+
+	return fn, off, length, nil
+}
+
+// Close - calls the cleanup actions in reverse order
 func (g *GetObjectReader) Close() error {
 	// sync.Once is used here to ensure that Close() is
 	// idempotent.
 	g.once.Do(func() {
-		// Unlocking is defer-red - this ensures that
-		// unlocking happens even if cleanUp panics.
-		defer func() {
-			if g.lock != nil {
-				g.lock.RUnlock()
-			}
-		}()
-		if g.cleanUp != nil {
-			g.cleanUp()
+		for i := len(g.cleanUpFns) - 1; i >= 0; i-- {
+			g.cleanUpFns[i]()
 		}
 	})
 	return nil
@@ -349,7 +589,7 @@ func (g *GetObjectReader) Close() error {
 
 // Read - to implement Reader interface.
 func (g *GetObjectReader) Read(p []byte) (n int, err error) {
-	n, err = g.pr.Read(p)
+	n, err = g.pReader.Read(p)
 	if err != nil {
 		// Calling code may not Close() in case of error, so
 		// we ensure it.

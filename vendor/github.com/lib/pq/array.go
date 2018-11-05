@@ -13,7 +13,7 @@ import (
 
 var typeByteSlice = reflect.TypeOf([]byte{})
 var typeDriverValuer = reflect.TypeOf((*driver.Valuer)(nil)).Elem()
-var typeSqlScanner = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
+var typeSQLScanner = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
 
 // Array returns the optimal driver.Valuer and sql.Scanner for an array or
 // slice of any dimension.
@@ -70,6 +70,9 @@ func (a *BoolArray) Scan(src interface{}) error {
 		return a.scanBytes(src)
 	case string:
 		return a.scanBytes([]byte(src))
+	case nil:
+		*a = nil
+		return nil
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to BoolArray", src)
@@ -80,7 +83,7 @@ func (a *BoolArray) scanBytes(src []byte) error {
 	if err != nil {
 		return err
 	}
-	if len(elems) == 0 {
+	if *a != nil && len(elems) == 0 {
 		*a = (*a)[:0]
 	} else {
 		b := make(BoolArray, len(elems))
@@ -141,6 +144,9 @@ func (a *ByteaArray) Scan(src interface{}) error {
 		return a.scanBytes(src)
 	case string:
 		return a.scanBytes([]byte(src))
+	case nil:
+		*a = nil
+		return nil
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to ByteaArray", src)
@@ -151,7 +157,7 @@ func (a *ByteaArray) scanBytes(src []byte) error {
 	if err != nil {
 		return err
 	}
-	if len(elems) == 0 {
+	if *a != nil && len(elems) == 0 {
 		*a = (*a)[:0]
 	} else {
 		b := make(ByteaArray, len(elems))
@@ -210,6 +216,9 @@ func (a *Float64Array) Scan(src interface{}) error {
 		return a.scanBytes(src)
 	case string:
 		return a.scanBytes([]byte(src))
+	case nil:
+		*a = nil
+		return nil
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to Float64Array", src)
@@ -220,7 +229,7 @@ func (a *Float64Array) scanBytes(src []byte) error {
 	if err != nil {
 		return err
 	}
-	if len(elems) == 0 {
+	if *a != nil && len(elems) == 0 {
 		*a = (*a)[:0]
 	} else {
 		b := make(Float64Array, len(elems))
@@ -269,7 +278,7 @@ func (GenericArray) evaluateDestination(rt reflect.Type) (reflect.Type, func([]b
 	// TODO calculate the assign function for other types
 	// TODO repeat this section on the element type of arrays or slices (multidimensional)
 	{
-		if reflect.PtrTo(rt).Implements(typeSqlScanner) {
+		if reflect.PtrTo(rt).Implements(typeSQLScanner) {
 			// dest is always addressable because it is an element of a slice.
 			assign = func(src []byte, dest reflect.Value) (err error) {
 				ss := dest.Addr().Interface().(sql.Scanner)
@@ -320,6 +329,11 @@ func (a GenericArray) Scan(src interface{}) error {
 		return a.scanBytes(src, dv)
 	case string:
 		return a.scanBytes([]byte(src), dv)
+	case nil:
+		if dv.Kind() == reflect.Slice {
+			dv.Set(reflect.Zero(dv.Type()))
+			return nil
+		}
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to %s", src, dv.Type())
@@ -386,7 +400,13 @@ func (a GenericArray) Value() (driver.Value, error) {
 
 	rv := reflect.ValueOf(a.A)
 
-	if k := rv.Kind(); k != reflect.Array && k != reflect.Slice {
+	switch rv.Kind() {
+	case reflect.Slice:
+		if rv.IsNil() {
+			return nil, nil
+		}
+	case reflect.Array:
+	default:
 		return nil, fmt.Errorf("pq: Unable to convert %T to array", a.A)
 	}
 
@@ -412,6 +432,9 @@ func (a *Int64Array) Scan(src interface{}) error {
 		return a.scanBytes(src)
 	case string:
 		return a.scanBytes([]byte(src))
+	case nil:
+		*a = nil
+		return nil
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to Int64Array", src)
@@ -422,7 +445,7 @@ func (a *Int64Array) scanBytes(src []byte) error {
 	if err != nil {
 		return err
 	}
-	if len(elems) == 0 {
+	if *a != nil && len(elems) == 0 {
 		*a = (*a)[:0]
 	} else {
 		b := make(Int64Array, len(elems))
@@ -470,6 +493,9 @@ func (a *StringArray) Scan(src interface{}) error {
 		return a.scanBytes(src)
 	case string:
 		return a.scanBytes([]byte(src))
+	case nil:
+		*a = nil
+		return nil
 	}
 
 	return fmt.Errorf("pq: cannot convert %T to StringArray", src)
@@ -480,7 +506,7 @@ func (a *StringArray) scanBytes(src []byte) error {
 	if err != nil {
 		return err
 	}
-	if len(elems) == 0 {
+	if *a != nil && len(elems) == 0 {
 		*a = (*a)[:0]
 	} else {
 		b := make(StringArray, len(elems))
@@ -561,7 +587,7 @@ func appendArrayElement(b []byte, rv reflect.Value) ([]byte, string, error) {
 		}
 	}
 
-	var del string = ","
+	var del = ","
 	var err error
 	var iv interface{} = rv.Interface()
 
@@ -639,6 +665,9 @@ Element:
 	for i < len(src) {
 		switch src[i] {
 		case '{':
+			if depth == len(dims) {
+				break Element
+			}
 			depth++
 			dims[depth-1] = 0
 			i++
@@ -680,11 +709,11 @@ Element:
 	}
 
 	for i < len(src) {
-		if bytes.HasPrefix(src[i:], del) {
+		if bytes.HasPrefix(src[i:], del) && depth > 0 {
 			dims[depth-1]++
 			i += len(del)
 			goto Element
-		} else if src[i] == '}' {
+		} else if src[i] == '}' && depth > 0 {
 			dims[depth-1]++
 			depth--
 			i++

@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package optional
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type (
@@ -37,6 +38,9 @@ type (
 
 	// Float64 is either a float64 or nil.
 	Float64 interface{}
+
+	// Duration is either a time.Duration or nil.
+	Duration interface{}
 )
 
 // ToBool returns its argument as a bool.
@@ -85,6 +89,16 @@ func ToFloat64(v Float64) float64 {
 	x, ok := v.(float64)
 	if !ok {
 		doPanic("Float64", v)
+	}
+	return x
+}
+
+// ToDuration returns its argument as a time.Duration.
+// It panics if its argument is nil or not a time.Duration.
+func ToDuration(v Duration) time.Duration {
+	x, ok := v.(time.Duration)
+	if !ok {
+		doPanic("Duration", v)
 	}
 	return x
 }

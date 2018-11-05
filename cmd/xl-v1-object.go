@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
@@ -81,7 +82,7 @@ func (xl xlObjects) prepareFile(ctx context.Context, bucket, object string, size
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo) (oi ObjectInfo, e error) {
+func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
@@ -139,20 +140,20 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	go func() {
 		var startOffset int64 // Read the whole file.
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag); gerr != nil {
+		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag, srcOpts); gerr != nil {
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
 			return
 		}
 		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
 	}()
 
-	hashReader, err := hash.NewReader(pipeReader, length, "", "")
+	hashReader, err := hash.NewReader(pipeReader, length, "", "", length)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
-	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, hashReader, srcInfo.UserDefined)
+	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, hashReader, srcInfo.UserDefined, dstOpts)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -163,52 +164,70 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	return objInfo, nil
 }
 
-func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (objInfo ObjectInfo, reader io.ReadCloser, err error) {
+// GetObjectNInfo - returns object info and an object
+// Read(Closer). When err != nil, the returned reader is always nil.
+func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	var nsUnlocker = func() {}
 
 	// Acquire lock
-	lock := xl.nsMutex.NewNSLock(bucket, object)
-	if err = lock.GetRLock(globalObjectTimeout); err != nil {
-		return objInfo, nil, err
+	if lockType != noLock {
+		lock := xl.nsMutex.NewNSLock(bucket, object)
+		switch lockType {
+		case writeLock:
+			if err = lock.GetLock(globalObjectTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.Unlock
+		case readLock:
+			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.RUnlock
+		}
 	}
 
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return objInfo, nil, err
+		nsUnlocker()
+		return nil, err
 	}
 
+	// Handler directory request by returning a reader that
+	// returns no bytes.
 	if hasSuffix(object, slashSeparator) {
 		if !xl.isObjectDir(bucket, object) {
-			return objInfo, nil, toObjectErr(errFileNotFound, bucket, object)
+			nsUnlocker()
+			return nil, toObjectErr(errFileNotFound, bucket, object)
 		}
-		var e error
-		if objInfo, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
-			return objInfo, nil, toObjectErr(e, bucket, object)
+		var objInfo ObjectInfo
+		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
+			nsUnlocker()
+			return nil, toObjectErr(err, bucket, object)
 		}
-		objReader := NewGetObjectReader(bytes.NewReader(nil), lock, nil)
-		return objInfo, objReader, nil
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, nsUnlocker), nil
 	}
 
+	var objInfo ObjectInfo
 	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
 	if err != nil {
-		return objInfo, nil, toObjectErr(err, bucket, object)
+		nsUnlocker()
+		return nil, toObjectErr(err, bucket, object)
 	}
 
-	startOffset, readLength := int64(0), objInfo.Size
-	if rs != nil {
-		startOffset, readLength = rs.GetOffsetLength(objInfo.Size)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, nsUnlocker)
+	if nErr != nil {
+		return nil, nErr
 	}
 
 	pr, pw := io.Pipe()
-	objReader := NewGetObjectReader(pr, lock, nil)
 	go func() {
-		err := xl.getObject(ctx, bucket, object, startOffset, readLength, pw, "")
-		if err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-		pw.Close()
+		err := xl.getObject(ctx, bucket, object, off, length, pw, "", opts)
+		pw.CloseWithError(err)
 	}()
+	// Cleanup function to cause the go routine above to exit, in
+	// case of incomplete read.
+	pipeCloser := func() { pr.Close() }
 
-	return objInfo, objReader, nil
+	return fn(pr, h, pipeCloser)
 }
 
 // GetObject - reads an object erasured coded across multiple
@@ -217,18 +236,18 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
 		return err
 	}
 	defer objectLock.RUnlock()
-	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag)
+	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 // getObject wrapper for xl GetObject
-func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string) error {
+func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
@@ -399,7 +418,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
+func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
@@ -429,19 +448,105 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string) (o
 	return info, nil
 }
 
-// getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
-	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-
-	// get Quorum for this object
-	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
-	if err != nil {
-		return objInfo, err
+func (xl xlObjects) isObjectCorrupted(metaArr []xlMetaV1, errs []error) (validMeta xlMetaV1, ok bool) {
+	// We can consider an object data not reliable
+	// when xl.json is not found in read quorum disks.
+	var notFoundXLJSON int
+	for _, readErr := range errs {
+		if readErr == errFileNotFound {
+			notFoundXLJSON++
+		}
 	}
 
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return objInfo, reducedErr
+	for _, m := range metaArr {
+		if !m.IsValid() {
+			continue
+		}
+		validMeta = m
+		break
+	}
+
+	// Return if the object is indeed corrupted.
+	return validMeta, len(xl.getDisks())-notFoundXLJSON < validMeta.Erasure.DataBlocks
+}
+
+const xlCorruptedSuffix = ".CORRUPTED"
+
+// Renames the corrupted object and makes it visible.
+func renameCorruptedObject(ctx context.Context, bucket, object string, validMeta xlMetaV1, disks []StorageAPI, errs []error) {
+	writeQuorum := validMeta.Erasure.DataBlocks + 1
+
+	// Move all existing objects into corrupted suffix.
+	rename(ctx, disks, bucket, object, bucket, object+xlCorruptedSuffix, true, writeQuorum, []error{errFileNotFound})
+
+	tempObj := mustGetUUID()
+
+	// Get all the disks which do not have the file.
+	var cdisks = make([]StorageAPI, len(disks))
+	for i, merr := range errs {
+		if merr == errFileNotFound {
+			cdisks[i] = disks[i]
+		}
+	}
+
+	for _, disk := range cdisks {
+		if disk == nil {
+			continue
+		}
+
+		// Write empty part file on missing disks.
+		disk.AppendFile(minioMetaTmpBucket, pathJoin(tempObj, "part.1"), []byte{})
+
+		// Write algorithm hash for empty part file.
+		alg := validMeta.Erasure.Checksums[0].Algorithm.New()
+		alg.Write([]byte{})
+
+		// Update the checksums and part info.
+		validMeta.Erasure.Checksums[0] = ChecksumInfo{
+			Name:      validMeta.Erasure.Checksums[0].Name,
+			Algorithm: validMeta.Erasure.Checksums[0].Algorithm,
+			Hash:      alg.Sum(nil),
+		}
+		validMeta.Parts[0] = objectPartInfo{
+			Number: 1,
+			Name:   "part.1",
+		}
+
+		// Write the `xl.json` with the newly calculated metadata.
+		writeXLMetadata(ctx, disk, minioMetaTmpBucket, tempObj, validMeta)
+	}
+
+	// Finally rename all the parts into their respective locations.
+	rename(ctx, cdisks, minioMetaTmpBucket, tempObj, bucket, object+xlCorruptedSuffix, true, writeQuorum, []error{errFileNotFound})
+}
+
+// getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
+func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
+	disks := xl.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
+
+	var readQuorum int
+	// Having read quorum means we have xl.json in at least N/2 disks.
+	if !strings.HasSuffix(object, xlCorruptedSuffix) {
+		if validMeta, ok := xl.isObjectCorrupted(metaArr, errs); ok {
+			renameCorruptedObject(ctx, bucket, object, validMeta, disks, errs)
+			// Return err file not found since we renamed now the corrupted object
+			return objInfo, errFileNotFound
+		}
+
+		// Not a corrupted object, attempt to get readquorum properly.
+		readQuorum, _, err = objectQuorumFromMeta(ctx, xl, metaArr, errs)
+		if err != nil {
+			return objInfo, err
+		}
+
+	} else {
+
+		// If this is a corrupted object, change read quorum to N/2 disks
+		// so it will be visible to users, so they can delete it.
+		readQuorum = len(xl.getDisks()) / 2
 	}
 
 	// List all the file commit ids from parts metadata.
@@ -530,53 +635,27 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 	return evalDisks(disks, errs), err
 }
 
-// renamePart - renames a part of the source object to the destination
-// across all disks in parallel. Additionally if we have errors and do
-// not have a readQuorum partially renamed files are renamed back to
-// its proper location.
-func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart string, quorum int) ([]StorageAPI, error) {
-	isDir := false
-	return rename(ctx, disks, srcBucket, srcPart, dstBucket, dstPart, isDir, quorum, []error{errFileNotFound})
-}
-
-// renameObjectDir - renames all source objects directories to destination
-// object directories across all disks in parallel. Additionally if we have
-// errors and do not have a readQuorum partially renamed files are renamed
-// back to its proper location.
-func renameObjectDir(ctx context.Context, disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) ([]StorageAPI, error) {
-	isDir := true
-	return rename(ctx, disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum, []error{errFileNotFound, errFileAccessDenied})
-}
-
-// renameObject - renames all source objects to destination object
-// across all disks in parallel. Additionally if we have errors and do
-// not have a readQuorum partially renamed files are renamed back to
-// its proper location.
-func renameObject(ctx context.Context, disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) ([]StorageAPI, error) {
-	isDir := true
-	return rename(ctx, disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum, []error{errFileNotFound})
-}
-
 // PutObject - creates an object upon reading from the input stream
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Validate put object input args.
 	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
+
 	// Lock the object.
 	objectLock := xl.nsMutex.NewNSLock(bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
-	return xl.putObject(ctx, bucket, object, data, metadata)
+	return xl.putObject(ctx, bucket, object, data, metadata, opts)
 }
 
 // putObject wrapper for xl PutObject
-func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -612,8 +691,9 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		// Rename the successfully written temporary object to final location.
-		if _, err = renameObjectDir(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+		// Rename the successfully written temporary object to final location. Ignore errFileAccessDenied
+		// error because it means that the target object dir exists and we want to be close to S3 specification.
+		if _, err = rename(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, []error{errFileAccessDenied}); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
@@ -626,7 +706,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Validate input data size and it can never be less than zero.
-	if data.Size() < 0 {
+	if data.Size() < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
@@ -667,12 +747,12 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+	case size == -1 || size >= blockSizeV1:
+		buffer = xl.bp.Get()
+		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size)
-	default:
-		buffer = xl.bp.Get()
-		defer xl.bp.Put(buffer)
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -696,7 +776,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		var curPartReader io.Reader
-		if curPartSize > 0 {
+
+		if curPartSize >= 0 {
 			pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum)
 			if pErr != nil {
 				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
@@ -723,9 +804,21 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
-		if n < curPartSize {
+
+		if n < curPartSize && data.Size() > 0 {
 			logger.LogIf(ctx, IncompleteBody{})
 			return ObjectInfo{}, IncompleteBody{}
+		}
+
+		if n == 0 && data.Size() == -1 {
+			// The last part of a compressed object will always be empty
+			// Since the compressed size is unpredictable.
+			// Hence removing the last (empty) part from all `xl.disks`.
+			dErr := xl.deleteObject(ctx, minioMetaTmpBucket, tempErasureObj, writeQuorum, true)
+			if dErr != nil {
+				return ObjectInfo{}, toObjectErr(dErr, minioMetaTmpBucket, tempErasureObj)
+			}
+			break
 		}
 
 		// Update the total written size
@@ -736,7 +829,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 				onlineDisks[i] = nil
 				continue
 			}
-			partsMetadata[i].AddObjectPart(partIdx, partName, "", n)
+			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, data.ActualSize())
 			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, w.Sum()})
 		}
 
@@ -752,24 +845,25 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
-		if objectExt := path.Ext(object); objectExt != "" {
-			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
-				metadata["content-type"] = content.ContentType
-			}
-		}
+		metadata["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	if xl.isObject(bucket, object) {
+		// Deny if WORM is enabled
+		if globalWORMEnabled {
+			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+		}
+
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
 		// Delete successfully renamed object.
 		defer xl.deleteObject(ctx, minioMetaTmpBucket, newUniqueID, writeQuorum, false)
 
-		// NOTE: Do not use online disks slice here.
-		// The reason is that existing object should be purged
-		// regardless of `xl.json` status and rolled back in case of errors.
-		_, err = renameObject(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, newUniqueID, writeQuorum)
+		// NOTE: Do not use online disks slice here: the reason is that existing object should be purged
+		// regardless of `xl.json` status and rolled back in case of errors. Also allow renaming the
+		// existing object if it is not present in quorum disks so users can overwrite stale objects.
+		_, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, newUniqueID, true, writeQuorum, []error{errFileNotFound})
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -788,15 +882,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if xl.isObject(bucket, object) {
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-		}
-	}
-
 	// Rename the successfully written temporary object to final location.
-	if _, err = renameObject(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+	if _, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -832,10 +919,15 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 		tmpObj = object
 		disks = xl.getDisks()
 	} else {
+		// Rename the current object while requiring write quorum, but also consider
+		// that a non found object in a given disk as a success since it already
+		// confirms that the object doesn't have a part in that disk (already removed)
 		if isDir {
-			disks, err = renameObjectDir(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, writeQuorum)
+			disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, true, writeQuorum,
+				[]error{errFileNotFound, errFileAccessDenied})
 		} else {
-			disks, err = renameObject(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, writeQuorum)
+			disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, true, writeQuorum,
+				[]error{errFileNotFound})
 		}
 		if err != nil {
 			return toObjectErr(err, bucket, object)
@@ -892,24 +984,27 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return err
 	}
 
-	if hasSuffix(object, slashSeparator) {
-		// Delete the object on all disks.
-		if err = xl.deleteObject(ctx, bucket, object, len(xl.getDisks())/2+1, true); err != nil {
+	var writeQuorum int
+	var isObjectDir = hasSuffix(object, slashSeparator)
+
+	if isObjectDir && !xl.isObjectDir(bucket, object) {
+		return toObjectErr(errFileNotFound, bucket, object)
+	}
+
+	if isObjectDir {
+		writeQuorum = len(xl.getDisks())/2 + 1
+	} else {
+		// Read metadata associated with the object from all disks.
+		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		// get Quorum for this object
+		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
+		if err != nil {
 			return toObjectErr(err, bucket, object)
 		}
 	}
 
-	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-
-	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
-	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-
 	// Delete the object on all disks.
-	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, false); err != nil {
+	if err = xl.deleteObject(ctx, bucket, object, writeQuorum, isObjectDir); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

@@ -192,7 +192,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			CipherSuites:             defaultCipherSuites,
 			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"http/1.1", "h2"},
+			NextProtos:               []string{"http/1.1"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}

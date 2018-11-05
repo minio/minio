@@ -37,7 +37,6 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errInsecureSSERequest   = errors.New("SSE-C requests require TLS connections")
 	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
 	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
@@ -80,20 +79,35 @@ func hasServerSideEncryptionHeader(header http.Header) bool {
 	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
 }
 
+// isEncryptedMultipart returns true if the current object is
+// uploaded by the user using multipart mechanism:
+// initiate new multipart, upload part, complete upload
+func isEncryptedMultipart(objInfo ObjectInfo) bool {
+	if len(objInfo.Parts) == 0 {
+		return false
+	}
+	if !crypto.IsMultiPart(objInfo.UserDefined) {
+		return false
+	}
+	for _, part := range objInfo.Parts {
+		_, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return false
+		}
+	}
+	// Further check if this object is uploaded using multipart mechanism
+	// by the user and it is not about XL internally splitting the
+	// object into parts in PutObject()
+	return !(objInfo.backendType == BackendErasure && len(objInfo.ETag) == 32)
+}
+
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
 // It returns the client provided key on success.
-func ParseSSECopyCustomerRequest(r *http.Request, metadata map[string]string) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
-	if crypto.S3.IsEncrypted(metadata) && crypto.SSECopy.IsRequested(r.Header) {
+func ParseSSECopyCustomerRequest(h http.Header, metadata map[string]string) (key []byte, err error) {
+	if crypto.S3.IsEncrypted(metadata) && crypto.SSECopy.IsRequested(h) {
 		return nil, crypto.ErrIncompatibleEncryptionMethod
 	}
-	k, err := crypto.SSECopy.ParseHTTP(r.Header)
+	k, err := crypto.SSECopy.ParseHTTP(h)
 	return k[:], err
 }
 
@@ -106,13 +120,6 @@ func ParseSSECustomerRequest(r *http.Request) (key []byte, err error) {
 // ParseSSECustomerHeader parses the SSE-C header fields and returns
 // the client provided key on success.
 func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
-	if !globalIsSSL { // minio only supports HTTP or HTTPS requests not both at the same time
-		// we cannot use r.TLS == nil here because Go's http implementation reflects on
-		// the net.Conn and sets the TLS field of http.Request only if it's an tls.Conn.
-		// Minio uses a BufConn (wrapping a tls.Conn) so the type check within the http package
-		// will always fail -> r.TLS is always nil even for TLS requests.
-		return nil, errInsecureSSERequest
-	}
 	if crypto.S3.IsRequested(header) && crypto.SSEC.IsRequested(header) {
 		return key, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -123,8 +130,6 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 
 // This function rotates old to new key.
 func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map[string]string) error {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	switch {
 	default:
 		return errObjectTampered
@@ -155,8 +160,6 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 }
 
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) ([]byte, error) {
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
-
 	var sealedKey crypto.SealedKey
 	if sseS3 {
 		if globalKMS == nil {
@@ -240,12 +243,11 @@ func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string
 		err error
 	)
 	if crypto.SSECopy.IsRequested(r.Header) {
-		key, err = ParseSSECopyCustomerRequest(r, metadata)
+		key, err = ParseSSECopyCustomerRequest(r.Header, metadata)
 		if err != nil {
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, 0, metadata)
 }
 
@@ -316,34 +318,32 @@ func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte,
 
 // DecryptRequestWithSequenceNumberR - same as
 // DecryptRequestWithSequenceNumber but with a reader
-func DecryptRequestWithSequenceNumberR(client io.Reader, r *http.Request, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
+func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
 	if crypto.S3.IsEncrypted(metadata) {
 		return newDecryptReader(client, nil, bucket, object, seqNumber, metadata)
 	}
 
-	key, err := ParseSSECustomerRequest(r)
+	key, err := ParseSSECustomerHeader(h)
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
 }
 
 // DecryptCopyRequestR - same as DecryptCopyRequest, but with a
 // Reader
-func DecryptCopyRequestR(client io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (io.Reader, error) {
+func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
 	var (
 		key []byte
 		err error
 	)
-	if crypto.SSECopy.IsRequested(r.Header) {
-		key, err = ParseSSECopyCustomerRequest(r, metadata)
+	if crypto.SSECopy.IsRequested(h) {
+		key, err = ParseSSECopyCustomerRequest(h, metadata)
 		if err != nil {
 			return nil, err
 		}
 	}
-	delete(metadata, crypto.SSECopyKey) // make sure we do not save the key by accident
-	return newDecryptReader(client, key, bucket, object, 0, metadata)
+	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
 }
 
 func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
@@ -362,103 +362,64 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey
 	}
-	delete(metadata, crypto.SSEIV)
-	delete(metadata, crypto.SSESealAlgorithm)
-	delete(metadata, crypto.SSECSealedKey)
-	delete(metadata, crypto.SSEMultipart)
-	delete(metadata, crypto.S3SealedKey)
-	delete(metadata, crypto.S3KMSSealedKey)
-	delete(metadata, crypto.S3KMSKeyID)
 	return reader, nil
 }
 
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
-func DecryptBlocksRequestR(client io.Reader, r *http.Request, bucket, object string, startOffset, length int64, objInfo ObjectInfo, copySource bool) (io.Reader, int64, int64, error) {
-	var seqNumber uint32
-	var encStartOffset, encLength int64
+func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
+	length int64, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (
+	io.Reader, error) {
 
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
-		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
+	bucket, object := oi.Bucket, oi.Name
 
+	// Single part case
+	if !isEncryptedMultipart(oi) {
 		var reader io.Reader
 		var err error
 		if copySource {
-			reader, err = DecryptCopyRequestR(client, r, bucket, object, objInfo.UserDefined)
+			reader, err = DecryptCopyRequestR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
 		} else {
-			reader, err = DecryptRequestWithSequenceNumberR(client, r, bucket, object, seqNumber, objInfo.UserDefined)
+			reader, err = DecryptRequestWithSequenceNumberR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
 		}
 		if err != nil {
-			return nil, 0, 0, err
+			return nil, err
 		}
-		return reader, encStartOffset, encLength, nil
+		return reader, nil
 	}
 
-	seqNumber, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
-	var partStartIndex int
-	var partStartOffset = startOffset
-	// Skip parts until final offset maps to a particular part offset.
-	for i, part := range objInfo.Parts {
-		decryptedSize, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
-			return nil, -1, -1, errObjectTampered
-		}
-
-		partStartIndex = i
-
-		// Offset is smaller than size we have reached the
-		// proper part offset, break out we start from
-		// this part index.
-		if partStartOffset < int64(decryptedSize) {
-			break
-		}
-
-		// Continue to look for next part.
-		partStartOffset -= int64(decryptedSize)
-	}
-
-	startSeqNum := partStartOffset / sseDAREPackageBlockSize
-	partEncRelOffset := int64(startSeqNum) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	partDecRelOffset := int64(seqNumber) * sseDAREPackageBlockSize
+	partEncRelOffset := int64(seqNumber) * (sseDAREPackageBlockSize + sseDAREPackageMetaSize)
 
 	w := &DecryptBlocksReader{
-		reader:            client,
-		startSeqNum:       uint32(startSeqNum),
+		reader:            inputReader,
+		startSeqNum:       seqNumber,
+		partDecRelOffset:  partDecRelOffset,
 		partEncRelOffset:  partEncRelOffset,
-		parts:             objInfo.Parts,
-		partIndex:         partStartIndex,
-		req:               r,
+		parts:             oi.Parts,
+		partIndex:         partStart,
+		header:            h,
 		bucket:            bucket,
 		object:            object,
-		customerKeyHeader: r.Header.Get(crypto.SSECKey),
+		customerKeyHeader: h.Get(crypto.SSECKey),
 		copySource:        copySource,
 	}
 
 	w.metadata = map[string]string{}
 	// Copy encryption metadata for internal use.
-	for k, v := range objInfo.UserDefined {
+	for k, v := range oi.UserDefined {
 		w.metadata[k] = v
 	}
 
-	// Purge all the encryption headers.
-	delete(objInfo.UserDefined, crypto.SSEIV)
-	delete(objInfo.UserDefined, crypto.SSESealAlgorithm)
-	delete(objInfo.UserDefined, crypto.SSECSealedKey)
-	delete(objInfo.UserDefined, crypto.SSEMultipart)
-
-	if crypto.S3.IsEncrypted(objInfo.UserDefined) {
-		delete(objInfo.UserDefined, crypto.S3SealedKey)
-		delete(objInfo.UserDefined, crypto.S3KMSKeyID)
-		delete(objInfo.UserDefined, crypto.S3KMSSealedKey)
-	}
 	if w.copySource {
-		w.customerKeyHeader = r.Header.Get(crypto.SSECopyKey)
+		w.customerKeyHeader = h.Get(crypto.SSECopyKey)
 	}
 
 	if err := w.buildDecrypter(w.parts[w.partIndex].Number); err != nil {
-		return nil, 0, 0, err
+		return nil, err
 	}
 
-	return w, encStartOffset, encLength, nil
+	return w, nil
 }
 
 // DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
@@ -472,7 +433,6 @@ func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket,
 	if err != nil {
 		return nil, err
 	}
-	delete(metadata, crypto.SSECKey) // make sure we do not save the key by accident
 	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
 }
 
@@ -495,11 +455,11 @@ type DecryptBlocksReader struct {
 	partIndex int
 	// Parts information
 	parts          []objectPartInfo
-	req            *http.Request
+	header         http.Header
 	bucket, object string
 	metadata       map[string]string
 
-	partEncRelOffset int64
+	partDecRelOffset, partEncRelOffset int64
 
 	copySource bool
 	// Customer Key
@@ -517,13 +477,13 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	var err error
 	if d.copySource {
 		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.req.Header.Set(crypto.SSECopyKey, d.customerKeyHeader)
-			key, err = ParseSSECopyCustomerRequest(d.req, d.metadata)
+			d.header.Set(crypto.SSECopyKey, d.customerKeyHeader)
+			key, err = ParseSSECopyCustomerRequest(d.header, d.metadata)
 		}
 	} else {
 		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.req.Header.Set(crypto.SSECKey, d.customerKeyHeader)
-			key, err = ParseSSECustomerRequest(d.req)
+			d.header.Set(crypto.SSECKey, d.customerKeyHeader)
+			key, err = ParseSSECustomerHeader(d.header)
 		}
 	}
 	if err != nil {
@@ -542,17 +502,10 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	// make sure we do not save the key by accident
-	if d.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
-
-	// make sure to provide a NopCloser such that a Close
-	// on sio.decryptWriter doesn't close the underlying writer's
-	// close which perhaps can close the stream prematurely.
-	decrypter, err := newDecryptReaderWithObjectKey(d.reader, partEncryptionKey, d.startSeqNum, m)
+	// Limit the reader, so the decryptor doesnt receive bytes
+	// from the next part (different DARE stream)
+	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
+	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum, m)
 	if err != nil {
 		return err
 	}
@@ -564,14 +517,16 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 	var err error
 	var n1 int
-	if int64(len(p)) < d.parts[d.partIndex].Size-d.partEncRelOffset {
+	decPartSize, _ := sio.DecryptedSize(uint64(d.parts[d.partIndex].Size))
+	unreadPartLen := int64(decPartSize) - d.partDecRelOffset
+	if int64(len(p)) < unreadPartLen {
 		n1, err = d.decrypter.Read(p)
 		if err != nil {
 			return 0, err
 		}
-		d.partEncRelOffset += int64(n1)
+		d.partDecRelOffset += int64(n1)
 	} else {
-		n1, err = d.decrypter.Read(p[:d.parts[d.partIndex].Size-d.partEncRelOffset])
+		n1, err = io.ReadFull(d.decrypter, p[:unreadPartLen])
 		if err != nil {
 			return 0, err
 		}
@@ -579,11 +534,15 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 		// We should now proceed to next part, reset all
 		// values appropriately.
 		d.partEncRelOffset = 0
+		d.partDecRelOffset = 0
 		d.startSeqNum = 0
 
 		d.partIndex++
+		if d.partIndex == len(d.parts) {
+			return n1, io.EOF
+		}
 
-		err = d.buildDecrypter(d.partIndex + 1)
+		err = d.buildDecrypter(d.parts[d.partIndex].Number)
 		if err != nil {
 			return 0, err
 		}
@@ -593,13 +552,14 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 			return 0, err
 		}
 
-		d.partEncRelOffset += int64(n1)
+		d.partDecRelOffset += int64(n1)
 	}
 
 	return len(p), nil
 }
 
-// DecryptBlocksWriter - decrypts multipart parts, while implementing a io.Writer compatible interface.
+// DecryptBlocksWriter - decrypts  multipart parts, while implementing
+// a io.Writer compatible interface.
 type DecryptBlocksWriter struct {
 	// Original writer where the plain data will be written
 	writer io.Writer
@@ -633,7 +593,7 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	if w.copySource {
 		if crypto.SSEC.IsEncrypted(w.metadata) {
 			w.req.Header.Set(crypto.SSECopyKey, w.customerKeyHeader)
-			key, err = ParseSSECopyCustomerRequest(w.req, w.metadata)
+			key, err = ParseSSECopyCustomerRequest(w.req.Header, w.metadata)
 		}
 	} else {
 		if crypto.SSEC.IsEncrypted(w.metadata) {
@@ -656,13 +616,6 @@ func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
 	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
-
-	// make sure we do not save the key by accident
-	if w.copySource {
-		delete(m, crypto.SSECopyKey)
-	} else {
-		delete(m, crypto.SSECKey)
-	}
 
 	// make sure to provide a NopCloser such that a Close
 	// on sio.decryptWriter doesn't close the underlying writer's
@@ -751,7 +704,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 	var seqNumber uint32
 	var encStartOffset, encLength int64
 
-	if len(objInfo.Parts) == 0 || !crypto.IsMultiPart(objInfo.UserDefined) {
+	if !isEncryptedMultipart(objInfo) {
 		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
 
 		var writer io.WriteCloser
@@ -913,7 +866,7 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 	if !crypto.IsEncrypted(o.UserDefined) {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}
-	if len(o.Parts) == 0 || !crypto.IsMultiPart(o.UserDefined) {
+	if !isEncryptedMultipart(*o) {
 		size, err := sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered // assign correct error type
@@ -930,6 +883,119 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 		size += int64(partSize)
 	}
 	return size, nil
+}
+
+// GetDecryptedRange - To decrypt the range (off, length) of the
+// decrypted object stream, we need to read the range (encOff,
+// encLength) of the encrypted object stream to decrypt it, and
+// compute skipLen, the number of bytes to skip in the beginning of
+// the encrypted range.
+//
+// In addition we also compute the object part number for where the
+// requested range starts, along with the DARE sequence number within
+// that part. For single part objects, the partStart will be 0.
+func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, skipLen int64, seqNumber uint32, partStart int, err error) {
+	if !crypto.IsEncrypted(o.UserDefined) {
+		err = errors.New("Object is not encrypted")
+		return
+	}
+
+	if rs == nil {
+		// No range, so offsets refer to the whole object.
+		return 0, int64(o.Size), 0, 0, 0, nil
+	}
+
+	// Assemble slice of (decrypted) part sizes in `sizes`
+	var decObjSize int64 // decrypted total object size
+	var partSize uint64
+	partSize, err = sio.DecryptedSize(uint64(o.Size))
+	if err != nil {
+		return
+	}
+	sizes := []int64{int64(partSize)}
+	decObjSize = sizes[0]
+	if isEncryptedMultipart(*o) {
+		sizes = make([]int64, len(o.Parts))
+		decObjSize = 0
+		for i, part := range o.Parts {
+			partSize, err = sio.DecryptedSize(uint64(part.Size))
+			if err != nil {
+				return
+			}
+			t := int64(partSize)
+			sizes[i] = t
+			decObjSize += t
+		}
+	}
+
+	var off, length int64
+	off, length, err = rs.GetOffsetLength(decObjSize)
+	if err != nil {
+		return
+	}
+
+	// At this point, we have:
+	//
+	// 1. the decrypted part sizes in `sizes` (single element for
+	//    single part object) and total decrypted object size `decObjSize`
+	//
+	// 2. the (decrypted) start offset `off` and (decrypted)
+	//    length to read `length`
+	//
+	// These are the inputs to the rest of the algorithm below.
+
+	// Locate the part containing the start of the required range
+	var partEnd int
+	var cumulativeSum, encCumulativeSum int64
+	for i, size := range sizes {
+		if off < cumulativeSum+size {
+			partStart = i
+			break
+		}
+		cumulativeSum += size
+		encPartSize, _ := sio.EncryptedSize(uint64(size))
+		encCumulativeSum += int64(encPartSize)
+	}
+	// partStart is always found in the loop above,
+	// because off is validated.
+
+	sseDAREEncPackageBlockSize := int64(sseDAREPackageBlockSize + sseDAREPackageMetaSize)
+	startPkgNum := (off - cumulativeSum) / sseDAREPackageBlockSize
+
+	// Now we can calculate the number of bytes to skip
+	skipLen = (off - cumulativeSum) % sseDAREPackageBlockSize
+
+	encOff = encCumulativeSum + startPkgNum*sseDAREEncPackageBlockSize
+	// Locate the part containing the end of the required range
+	endOffset := off + length - 1
+	for i1, size := range sizes[partStart:] {
+		i := partStart + i1
+		if endOffset < cumulativeSum+size {
+			partEnd = i
+			break
+		}
+		cumulativeSum += size
+		encPartSize, _ := sio.EncryptedSize(uint64(size))
+		encCumulativeSum += int64(encPartSize)
+	}
+	// partEnd is always found in the loop above, because off and
+	// length are validated.
+	endPkgNum := (endOffset - cumulativeSum) / sseDAREPackageBlockSize
+	// Compute endEncOffset with one additional DARE package (so
+	// we read the package containing the last desired byte).
+	endEncOffset := encCumulativeSum + (endPkgNum+1)*sseDAREEncPackageBlockSize
+	// Check if the DARE package containing the end offset is a
+	// full sized package (as the last package in the part may be
+	// smaller)
+	lastPartSize, _ := sio.EncryptedSize(uint64(sizes[partEnd]))
+	if endEncOffset > encCumulativeSum+int64(lastPartSize) {
+		endEncOffset = encCumulativeSum + int64(lastPartSize)
+	}
+	encLength = endEncOffset - encOff
+	// Set the sequence number as the starting package number of
+	// the requested block
+	seqNumber = uint32(startPkgNum)
+	return encOff, encLength, skipLen, seqNumber, partStart, nil
 }
 
 // EncryptedSize returns the size of the object after encryption.
@@ -982,7 +1048,7 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 // decryption succeeded.
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
-func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, err error) {
+func DecryptObjectInfo(info ObjectInfo, headers http.Header) (encrypted bool, err error) {
 	// Directories are never encrypted.
 	if info.IsDir {
 		return false, nil
@@ -1000,7 +1066,7 @@ func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, e
 			err = errEncryptedObject
 			return
 		}
-		info.Size, err = info.DecryptedSize()
+		_, err = info.DecryptedSize()
 	}
 	return
 }

@@ -259,7 +259,7 @@ func (c Client) uploadPart(ctx context.Context, bucketName, objectName, uploadID
 
 	// Set encryption headers, if any.
 	customHeader := make(http.Header)
-	if sse != nil && sse.Type() != encrypt.S3 && sse.Type() != encrypt.KMS {
+	if sse != nil {
 		sse.Marshal(customHeader)
 	}
 

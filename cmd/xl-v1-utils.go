@@ -202,6 +202,7 @@ func parseXLParts(xlMetaBuf []byte) []objectPartInfo {
 		info.Name = p.Get("name").String()
 		info.ETag = p.Get("etag").String()
 		info.Size = p.Get("size").Int()
+		info.ActualSize = p.Get("actualSize").Int()
 		partInfo[i] = info
 	}
 	return partInfo
@@ -304,7 +305,8 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		if err != errFileNotFound {
+		if err != errFileNotFound && err != errVolumeNotFound {
+			logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
 			logger.LogIf(ctx, err)
 		}
 		return xlMetaV1{}, err
@@ -409,7 +411,7 @@ var (
 // calculatePartSizeFromIdx calculates the part size according to input index.
 // returns error if totalSize is -1, partSize is 0, partIndex is 0.
 func calculatePartSizeFromIdx(ctx context.Context, totalSize int64, partSize int64, partIndex int) (currPartSize int64, err error) {
-	if totalSize < 0 {
+	if totalSize < -1 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return 0, errInvalidArgument
 	}

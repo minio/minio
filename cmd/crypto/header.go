@@ -74,6 +74,14 @@ const (
 	SSEAlgorithmKMS = "aws:kms"
 )
 
+// RemoveSensitiveHeaders removes confidential encryption
+// information - e.g. the SSE-C key - from the HTTP headers.
+// It has the same semantics as RemoveSensitiveEntires.
+func RemoveSensitiveHeaders(h http.Header) {
+	h.Del(SSECKey)
+	h.Del(SSECopyKey)
+}
+
 // S3 represents AWS SSE-S3. It provides functionality to handle
 // SSE-S3 requests.
 var S3 = s3{}
@@ -164,7 +172,6 @@ func (ssecCopy) IsRequested(h http.Header) bool {
 // ParseHTTP parses the SSE-C headers and returns the SSE-C client key
 // on success. SSE-C copy headers are ignored.
 func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
-	defer h.Del(SSECKey) // remove SSE-C key from headers after parsing
 	if h.Get(SSECAlgorithm) != SSEAlgorithmAES256 {
 		return key, ErrInvalidCustomerAlgorithm
 	}
@@ -190,7 +197,6 @@ func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
 // ParseHTTP parses the SSE-C copy headers and returns the SSE-C client key
 // on success. Regular SSE-C headers are ignored.
 func (ssecCopy) ParseHTTP(h http.Header) (key [32]byte, err error) {
-	defer h.Del(SSECopyKey) // remove SSE-C copy key of source object from headers after parsing
 	if h.Get(SSECopyAlgorithm) != SSEAlgorithmAES256 {
 		return key, ErrInvalidCustomerAlgorithm
 	}

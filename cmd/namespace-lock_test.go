@@ -218,7 +218,8 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 		// Try to claim lock again.
 		anotherLock := globalNSMutex.NewNSLock("bucket", "object")
 		if anotherLock.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
-			t.Fatalf("Failed to get lock")
+			t.Errorf("Failed to get lock")
+			return
 		}
 		// And signal success.
 		ch <- struct{}{}
