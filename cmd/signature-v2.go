@@ -69,15 +69,9 @@ var resourceList = []string{
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	cred := globalServerConfig.GetCredential()
 	accessKey := formValues.Get("AWSAccessKeyId")
-	if accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(accessKey)
-		if !ok {
-			return ErrInvalidAccessKeyID
-		}
+	cred, _, s3Err := checkKeyValid(accessKey)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 	policy := formValues.Get("Policy")
 	signature := formValues.Get("Signature")
@@ -153,16 +147,9 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrInvalidQueryParams
 	}
 
-	// Validate if access key id same.
-	if accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(accessKey)
-		if !ok {
-			return ErrInvalidAccessKeyID
-		}
+	cred, _, s3Err := checkKeyValid(accessKey)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 
 	// Make sure the request has not expired.
@@ -189,27 +176,25 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	return ErrNone
 }
 
-func getReqAccessKeyV2(r *http.Request) (string, bool, APIErrorCode) {
+func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 	if accessKey := r.URL.Query().Get("AWSAccessKeyId"); accessKey != "" {
-		owner, s3Err := checkKeyValid(accessKey)
-		return accessKey, owner, s3Err
+		return checkKeyValid(accessKey)
 	}
 
 	// below is V2 Signed Auth header format, splitting on `space` (after the `AWS` string).
 	// Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature
 	authFields := strings.Split(r.Header.Get("Authorization"), " ")
 	if len(authFields) != 2 {
-		return "", false, ErrMissingFields
+		return auth.Credentials{}, false, ErrMissingFields
 	}
 
 	// Then will be splitting on ":", this will seprate `AWSAccessKeyId` and `Signature` string.
 	keySignFields := strings.Split(strings.TrimSpace(authFields[1]), ":")
 	if len(keySignFields) != 2 {
-		return "", false, ErrMissingFields
+		return auth.Credentials{}, false, ErrMissingFields
 	}
 
-	owner, s3Err := checkKeyValid(keySignFields[0])
-	return keySignFields[0], owner, s3Err
+	return checkKeyValid(keySignFields[0])
 }
 
 // Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;
@@ -244,22 +229,9 @@ func validateV2AuthHeader(r *http.Request) (auth.Credentials, APIErrorCode) {
 		return cred, ErrSignatureVersionNotSupported
 	}
 
-	accessKey, owner, apiErr := getReqAccessKeyV2(r)
+	cred, _, apiErr := getReqAccessKeyV2(r)
 	if apiErr != ErrNone {
 		return cred, apiErr
-	}
-
-	cred = globalServerConfig.GetCredential()
-	// Access credentials.
-	if !owner {
-		if globalIAMSys == nil {
-			return cred, ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(accessKey)
-		if !ok {
-			return cred, ErrInvalidAccessKeyID
-		}
 	}
 
 	return cred, ErrNone
