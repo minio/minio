@@ -53,4 +53,4 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 - ObjectVersions
 
 ### Object name restrictions on Minio
-Object names that contain characters `^*|\/&#34;` are unsupported on Windows and other file systems which do not support filenames with these characters. Note that this list is not exhaustive, and depends on the maintainers of the filesystem itself.
+Object names that contain characters `^*|\/&";` are unsupported on Windows and other file systems which do not support filenames with these characters. Note that this list is not exhaustive, and depends on the maintainers of the filesystem itself.
