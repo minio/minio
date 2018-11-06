@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -85,13 +84,7 @@ func (target *ElasticsearchTarget) Send(eventData event.Event) (err error) {
 	}
 
 	add := func() error {
-		eventTime, err := time.Parse(event.AMZTimeFormat, eventData.EventTime)
-		if err != nil {
-			return err
-		}
-
-		eventTimeMS := fmt.Sprintf("%d", eventTime.UnixNano()/1000000)
-		_, err = target.client.Index().Index(target.args.Index).Type("event").Timestamp(eventTimeMS).BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(context.Background())
+		_, err = target.client.Index().Index(target.args.Index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(context.Background())
 		return err
 	}
 
