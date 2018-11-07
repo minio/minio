@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-  "version": "31",
+  "version": "32",
   "credential": {
     "accessKey": "minio",
     "secretKey": "minio123"
@@ -156,6 +156,17 @@ var (
           "async": false,
           "maxPubAcksInflight": 0
         }
+      }
+	},
+    "nsq": {
+      "1": {
+        "enable": false,
+        "nsqdAddress": "",
+        "topic": "",
+        "tls": {
+			"enable": false,
+			"skipVerify": false
+		}
       }
     },
     "postgresql": {
@@ -746,7 +757,7 @@ func TestSetConfigHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	adminTestBed.router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+		t.Errorf("Expected to succeed but failed with %d, body: %s", rec.Code, rec.Body)
 	}
 
 	// Check that a very large config file returns an error.

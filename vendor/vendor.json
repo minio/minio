@@ -783,6 +783,12 @@
 			"revisionTime": "2016-09-27T04:49:45Z"
 		},
 		{
+			"checksumSHA1": "MZdppx6laedD1LcVomiZ/Sfa6rE=",
+			"path": "github.com/nsqio/go-nsq",
+			"revision": "0527e80f3ba5ecff59ad8d07db607677b5dc056a",
+			"revisionTime": "2018-10-28T19:52:56Z"
+		},
+		{
 			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
 			"path": "github.com/pkg/errors",
 			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
