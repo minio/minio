@@ -325,7 +325,7 @@ func handleCommonEnvVars() {
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize KMS")
 		}
-		globalKMS = kms
+		GlobalKMS = kms
 		globalKMSKeyID = kmsConf.Vault.Key.Name
 		globalKMSConfig = kmsConf
 	}

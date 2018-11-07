@@ -227,7 +227,7 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	s := s3Objects{
 		Client: clnt,
 	}
-	if len(minio.GlobalGatewaySSE) > 0 {
+	if minio.GlobalKMS != nil {
 		encS := s3EncObjects{s}
 		go encS.cleanupStaleMultipartUploads(context.Background(), minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry, minio.GlobalServiceDoneCh)
 		return &encS, nil
@@ -592,5 +592,5 @@ func (l *s3Objects) IsCompressionSupported() bool {
 
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
-	return len(minio.GlobalGatewaySSE) > 0
+	return true
 }

@@ -229,7 +229,7 @@ var (
 	// KMS key id
 	globalKMSKeyID string
 	// Allocated KMS
-	globalKMS crypto.KMS
+	GlobalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
 
@@ -257,8 +257,6 @@ var (
 
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE []string
-	// GlobalGatewaySSEMode sse mode options
-	GlobalGatewaySSEMode []string
 	// Add new variable global values here.
 
 )

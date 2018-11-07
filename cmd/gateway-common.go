@@ -350,26 +350,11 @@ func parseGatewaySSE(s string) ([]string, error) {
 	gwSlice := make([]string, len(l))
 	for _, val := range l {
 		v := strings.ToUpper(val)
-		if v == GatewaySSES3 || v == GatewaySSEC || v == GatewaySSEKMS {
+		if v == GatewaySSES3 || v == GatewaySSEC {
 			gwSlice = append(gwSlice, v)
 			continue
 		}
 		return nil, uiErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
-	}
-	return gwSlice, nil
-}
-
-// parse gateway sse mode env variable
-func parseGatewaySSEMode(s string) ([]string, error) {
-	l := strings.Split(s, ";")
-	gwSlice := make([]string, len(l))
-	for _, val := range l {
-		v := strings.ToLower(val)
-		if v == GatewaySSEBackendEncrypt || v == GatewaySSEGatewayEncrypt {
-			gwSlice = append(gwSlice, v)
-			continue
-		}
-		return nil, uiErrInvalidGWSSEModeValue(nil).Msg("gateway SSE mode cannot be (%s) ", v)
 	}
 	return gwSlice, nil
 }
@@ -384,18 +369,8 @@ func handleGatewayEnvVars() {
 		}
 		GlobalGatewaySSE = gwsseSlice
 	}
-	gwsseMode, ok := os.LookupEnv("MINIO_GW_SSE_MODE")
-	if ok {
-		gwsseModeSlice, err := parseGatewaySSEMode(gwsseMode)
-		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_GW_SSE_MODE value (`%s`)", gwsseMode)
-		}
-		GlobalGatewaySSEMode = gwsseModeSlice
-	}
-	if len(gwsseMode) == 0 && len(gwsse) != 0 {
-		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GW_SSE_MODE not set"), "Unable to start gateway with sse")
-	}
-	if len(gwsse) == 0 && len(gwsseMode) != 0 {
-		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GW_SSE not set"), "Unable to start gateway with sse")
+
+	if len(gwsse) != 0 && GlobalKMS == nil {
+		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GW_SSE set but KMS not enabled"), "Unable to start gateway with sse")
 	}
 }

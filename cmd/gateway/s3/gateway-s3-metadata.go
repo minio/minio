@@ -40,8 +40,7 @@ type gwMetaV1 struct {
 	Version string         `json:"version"` // Version of the current `gw.json`.
 	Format  string         `json:"format"`  // Format of the current `gw.json`.
 	Stat    minio.StatInfo `json:"stat"`    // Stat of the current object `gw.json`.
-	//TODO: parse
-	ETag string `json:"etag"` // ETag of the current object
+	ETag    string         `json:"etag"`    // ETag of the current object
 
 	// Metadata map for current object `gw.json`.
 	Meta map[string]string `json:"meta,omitempty"`
@@ -104,6 +103,28 @@ func (m gwMetaV1) ToObjectInfo(bucket, object string) minio.ObjectInfo {
 	}
 	// Success.
 	return objInfo
+}
+
+// ObjectToPartOffset - translate offset of an object to offset of its individual part.
+func (m gwMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partIndex int, partOffset int64, err error) {
+	if offset == 0 {
+		// Special case - if offset is 0, then partIndex and partOffset are always 0.
+		return 0, 0, nil
+	}
+	partOffset = offset
+	// Seek until object offset maps to a particular part offset.
+	for i, part := range m.Parts {
+		partIndex = i
+		// Offset is smaller than size we have reached the proper part offset.
+		if partOffset < part.Size {
+			return partIndex, partOffset, nil
+		}
+		// Continue to towards the next part.
+		partOffset -= part.Size
+	}
+	logger.LogIf(ctx, minio.InvalidRange{})
+	// Offset beyond the size of the object return InvalidRange.
+	return 0, 0, minio.InvalidRange{}
 }
 
 // parses gateway metadata stat info from metadata json

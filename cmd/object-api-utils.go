@@ -486,7 +486,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
-
 			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
@@ -573,7 +572,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 			return r, nil
 		}
 	}
-
 	return fn, off, length, nil
 }
 
@@ -661,14 +659,12 @@ func (o *ObjectOptions) UnsealETagFn(key []byte, ssec bool) {
 // SetETagEncryptionOpts sets opts to a function that creates encrypted
 // etag for gateway encryption
 func (o *ObjectOptions) SetETagEncryptionOpts(p *PutObjectReader) {
-	if GlobalGatewaySSE != nil {
-		var f3 CreateEncryptedETagFn
-		f3 = func() (string, string, error) {
-			if p != nil {
-				return p.OrigReader.EncryptedMD5Sum()
-			}
-			return "", "", errors.New("PutObjectReader not initialized")
+	var f3 CreateEncryptedETagFn
+	f3 = func() (string, string, error) {
+		if p != nil {
+			return p.OrigReader.EncryptedMD5Sum()
 		}
-		o.CreateEncryptedETagFn = f3
+		return "", "", errors.New("PutObjectReader not initialized")
 	}
+	o.CreateEncryptedETagFn = f3
 }
