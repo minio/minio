@@ -70,7 +70,7 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 }
 
 // Send - sends event to Elasticsearch.
-func (target *ElasticsearchTarget) Send(eventData event.Event) (err error) {
+func (target *ElasticsearchTarget) Send(eventData event.Event) error {
 	var key string
 
 	remove := func() error {
@@ -84,7 +84,7 @@ func (target *ElasticsearchTarget) Send(eventData event.Event) (err error) {
 	}
 
 	add := func() error {
-		_, err = target.client.Index().Index(target.args.Index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(context.Background())
+		_, err := target.client.Index().Index(target.args.Index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(context.Background())
 		return err
 	}
 
