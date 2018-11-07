@@ -150,6 +150,9 @@ const (
 	ErrKMSNotConfigured
 	ErrKMSAuthFailure
 
+	ErrNoAccessKey
+	ErrInvalidToken
+
 	// Bucket notification related errors.
 	ErrEventNotification
 	ErrARNNotification
@@ -805,6 +808,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "InvalidArgument",
 		Description:    "Server side encryption specified but KMS authorization failed",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNoAccessKey: {
+		Code:           "AccessDenied",
+		Description:    "No AWSAccessKey was presented",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrInvalidToken: {
+		Code:           "InvalidTokenId",
+		Description:    "The security token included in the request is invalid",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 
 	/// S3 extensions.

@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/policy"
@@ -154,11 +156,40 @@ func getSessionToken(r *http.Request) (token string) {
 }
 
 // Fetch claims in the security token returned by the client and validate the token.
-func getClaimsFromToken(r *http.Request) (map[string]interface{}, APIErrorCode) {
+func getClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
+	stsTokenCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
+		if _, ok := jwtToken.Method.(*jwtgo.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
+		}
+		if err := jwtToken.Claims.Valid(); err != nil {
+			return nil, errAuthentication
+		}
+		if claims, ok := jwtToken.Claims.(jwtgo.MapClaims); ok {
+			if _, ok = claims["accessKey"].(string); !ok {
+				return nil, errInvalidAccessKeyID
+			}
+			// JWT token for x-amz-security-token is signed with admin
+			// secret key, temporary credentials become invalid if
+			// server admin credentials change. This is done to ensure
+			// that clients cannot decode the token using the temp
+			// secret keys and generate an entirely new claim by essentially
+			// hijacking the policies. We need to make sure that this is
+			// based an admin credential such that token cannot be decoded
+			// on the client side and is treated like an opaque value.
+			return []byte(globalServerConfig.GetCredential().SecretKey), nil
+		}
+		return nil, errAuthentication
+	}
 	claims := make(map[string]interface{})
 	token := getSessionToken(r)
 	if token == "" {
 		return nil, ErrNone
+	}
+	if token != "" && cred.AccessKey == "" {
+		return nil, ErrNoAccessKey
+	}
+	if token != cred.SessionToken {
+		return nil, ErrInvalidToken
 	}
 	p := &jwtgo.Parser{}
 	jtoken, err := p.ParseWithClaims(token, jwtgo.MapClaims(claims), stsTokenCallback)
@@ -177,7 +208,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, APIErrorCode) 
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
-	var accessKey string
+	var cred auth.Credentials
 	var owner bool
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
@@ -186,7 +217,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
 			return s3Err
 		}
-		accessKey, owner, s3Err = getReqAccessKeyV2(r)
+		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
 		region := globalServerConfig.GetRegion()
 		switch action {
@@ -196,7 +227,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		if s3Err = isReqAuthenticated(r, region); s3Err != ErrNone {
 			return s3Err
 		}
-		accessKey, owner, s3Err = getReqAccessKeyV4(r, region)
+		cred, owner, s3Err = getReqAccessKeyV4(r, region)
 	}
 	if s3Err != ErrNone {
 		return s3Err
@@ -225,14 +256,14 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
 
-	claims, s3Err := getClaimsFromToken(r)
+	claims, s3Err := getClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
 	}
 
-	if accessKey == "" {
+	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
-			AccountName:     accessKey,
+			AccountName:     cred.AccessKey,
 			Action:          action,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, locationConstraint),
@@ -245,7 +276,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	}
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     accessKey,
+		AccountName:     cred.AccessKey,
 		Action:          iampolicy.Action(action),
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, ""),
@@ -372,29 +403,29 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
 func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request) (s3Err APIErrorCode) {
-	var accessKey string
+	var cred auth.Credentials
 	var owner bool
 	switch atype {
 	case authTypeUnknown:
 		return ErrAccessDenied
 	case authTypeSignedV2, authTypePresignedV2:
-		accessKey, owner, s3Err = getReqAccessKeyV2(r)
+		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
 		region := globalServerConfig.GetRegion()
-		accessKey, owner, s3Err = getReqAccessKeyV4(r, region)
+		cred, owner, s3Err = getReqAccessKeyV4(r, region)
 	}
 	if s3Err != ErrNone {
 		return s3Err
 	}
 
-	claims, s3Err := getClaimsFromToken(r)
+	claims, s3Err := getClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
 	}
 
-	if accessKey == "" {
+	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
-			AccountName:     accessKey,
+			AccountName:     cred.AccessKey,
 			Action:          policy.PutObjectAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, ""),
@@ -407,7 +438,7 @@ func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request
 	}
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     accessKey,
+		AccountName:     cred.AccessKey,
 		Action:          policy.PutObjectAction,
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, ""),

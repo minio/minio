@@ -47,22 +47,21 @@ func (c credentialHeader) getScope() string {
 	}, "/")
 }
 
-func getReqAccessKeyV4(r *http.Request, region string) (string, bool, APIErrorCode) {
+func getReqAccessKeyV4(r *http.Request, region string) (auth.Credentials, bool, APIErrorCode) {
 	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get("X-Amz-Credential"), region)
 	if err != ErrNone {
 		// Strip off the Algorithm prefix.
 		v4Auth := strings.TrimPrefix(r.Header.Get("Authorization"), signV4Algorithm)
 		authFields := strings.Split(strings.TrimSpace(v4Auth), ",")
 		if len(authFields) != 3 {
-			return "", false, ErrMissingFields
+			return auth.Credentials{}, false, ErrMissingFields
 		}
 		ch, err = parseCredentialHeader(authFields[0], region)
 		if err != ErrNone {
-			return "", false, err
+			return auth.Credentials{}, false, err
 		}
 	}
-	owner, s3Err := checkKeyValid(ch.accessKey)
-	return ch.accessKey, owner, s3Err
+	return checkKeyValid(ch.accessKey)
 }
 
 // parse credentialHeader string into its structured form.
