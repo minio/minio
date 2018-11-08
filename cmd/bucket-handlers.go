@@ -110,7 +110,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		getBucketInfo = api.CacheAPI().GetBucketInfo
 	}
 	if _, err := getBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 
 	listMultipartsInfo, err := objectAPI.ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 	// generate response
@@ -214,7 +214,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 		bucketSet := set.NewStringSet()
@@ -233,7 +233,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		var err error
 		bucketsInfo, err = listBuckets(ctx)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 	}
@@ -354,8 +354,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{
-			Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
-			Message: errorCodeResponse[toAPIErrorCode(err)].Description,
+			Code:    errorCodeResponse[toAPIErrorCode(ctx, err)].Code,
+			Message: errorCodeResponse[toAPIErrorCode(ctx, err)].Description,
 			Key:     object.ObjectName,
 		})
 	}
@@ -432,12 +432,12 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
-					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 					return
 				}
 				if err = globalDNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(ctx, bucket)
-					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 					return
 				}
 
@@ -447,7 +447,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				writeSuccessResponseHeadersOnly(w)
 				return
 			}
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 
 		}
@@ -458,7 +458,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucketWithLocation(ctx, bucket, location)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -589,12 +589,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	lengthRange := postPolicyForm.Conditions.ContentLengthRange
 	if lengthRange.Valid {
 		if fileSize < lengthRange.Min {
-			writeErrorResponse(w, toAPIErrorCode(errDataTooSmall), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooSmall), r.URL)
 			return
 		}
 
 		if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
-			writeErrorResponse(w, toAPIErrorCode(errDataTooLarge), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooLarge), r.URL)
 			return
 		}
 	}
@@ -610,7 +610,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -621,19 +621,19 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			if crypto.SSEC.IsRequested(formValues) {
 				key, err = ParseSSECustomerHeader(formValues)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 					return
 				}
 			}
 			reader, err = newEncryptReader(hashReader, key, bucket, object, metadata, crypto.S3.IsRequested(formValues))
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
 			info := ObjectInfo{Size: fileSize}
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize) // do not try to verify encrypted content
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
 		}
@@ -641,7 +641,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	objInfo, err := objectAPI.PutObject(ctx, bucket, object, hashReader, metadata, ObjectOptions{})
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -721,7 +721,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		getBucketInfo = api.CacheAPI().GetBucketInfo
 	}
 	if _, err := getBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
 	}
 
@@ -754,7 +754,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 	// Attempt to delete bucket.
 	if err := deleteBucket(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -766,7 +766,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
 			objectAPI.MakeBucketWithLocation(ctx, bucket, "")
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 	}

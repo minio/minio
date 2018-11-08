@@ -62,8 +62,8 @@ var (
 	errHealPushStopNDiscard = fmt.Errorf("heal push stopped due to heal stop signal")
 	errHealStopSignalled    = fmt.Errorf("heal stop signaled")
 
-	errFnHealFromAPIErr = func(err error) error {
-		errCode := toAPIErrorCode(err)
+	errFnHealFromAPIErr = func(ctx context.Context, err error) error {
+		errCode := toAPIErrorCode(ctx, err)
 		apiErr := getAPIError(errCode)
 		return fmt.Errorf("Heal internal error: %s: %s",
 			apiErr.Code, apiErr.Description)
@@ -150,7 +150,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
 	}
 
 	b, err := json.Marshal(&hsp)
-	return b, toAdminAPIErrCode(err)
+	return b, toAdminAPIErrCode(context.Background(), err)
 }
 
 // LaunchNewHealSequence - launches a background routine that performs
@@ -254,7 +254,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 		StartTime:     h.startTime,
 	})
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(h.ctx, err)
 		return nil, ErrInternalError, ""
 	}
 	return b, ErrNone, ""
@@ -302,7 +302,7 @@ func (ahs *allHealState) PopHealStatusJSON(path string,
 
 	jbytes, err := json.Marshal(h.currentStatus)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(h.ctx, err)
 		return nil, ErrInternalError
 	}
 
@@ -592,7 +592,7 @@ func (h *healSequence) healConfig() error {
 		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, minioMetaBucket, minioConfigPrefix,
 			marker, "", 1000)
 		if err != nil {
-			return errFnHealFromAPIErr(err)
+			return errFnHealFromAPIErr(h.ctx, err)
 		}
 
 		for index := range objectInfos.Objects {
@@ -639,7 +639,7 @@ func (h *healSequence) healDiskFormat() error {
 	// return any error, ignore error returned when disks have
 	// already healed.
 	if err != nil && err != errNoHealRequired {
-		return errFnHealFromAPIErr(err)
+		return errFnHealFromAPIErr(h.ctx, err)
 	}
 
 	// Healing succeeded notify the peers to reload format and re-initialize disks.
@@ -671,7 +671,7 @@ func (h *healSequence) healBuckets() error {
 
 	buckets, err := objectAPI.ListBucketsHeal(h.ctx)
 	if err != nil {
-		return errFnHealFromAPIErr(err)
+		return errFnHealFromAPIErr(h.ctx, err)
 	}
 
 	for _, bucket := range buckets {
@@ -738,7 +738,7 @@ func (h *healSequence) healBucket(bucket string) error {
 		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, bucket,
 			h.objPrefix, marker, "", entries)
 		if err != nil {
-			return errFnHealFromAPIErr(err)
+			return errFnHealFromAPIErr(h.ctx, err)
 		}
 
 		g := errgroup.WithNErrs(len(objectInfos.Objects))

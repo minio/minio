@@ -2533,6 +2533,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), s3MD5)
 	encodedSuccessResponse := encodeResponse(successResponse)
 
+	ctx := context.Background()
+
 	testCases := []struct {
 		bucket    string
 		object    string
@@ -2555,7 +2557,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(ctx, InvalidPart{})),
 				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -2585,7 +2587,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})),
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(ctx, InvalidUploadID{UploadID: "abc"})),
 				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
@@ -2600,7 +2602,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
-				getAPIErrorResponse(getAPIError(toAPIErrorCode(PartTooSmall{PartNumber: 1})),
+				getAPIErrorResponse(getAPIError(toAPIErrorCode(ctx, PartTooSmall{PartNumber: 1})),
 					getGetObjectURL("", bucketName, objectName), "")}),
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -2614,7 +2616,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(ctx, InvalidPart{})),
 				getGetObjectURL("", bucketName, objectName), "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},

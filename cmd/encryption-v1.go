@@ -1062,7 +1062,7 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 		}
 		var err error
 		if info.Size, err = info.DecryptedSize(); err != nil {
-			apiErr = toAPIErrorCode(err)
+			apiErr = toAPIErrorCode(context.Background(), err)
 		}
 	}
 	return
