@@ -334,6 +334,66 @@ func TestDecryptObjectInfo(t *testing.T) {
 	}
 }
 
+// Tests for issue reproduced when getting the right encrypted
+// offset of the object.
+func TestGetDecryptedRange_Issue50(t *testing.T) {
+	rs, err := parseRequestRangeSpec("bytes=594870256-594870263")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	objInfo := ObjectInfo{
+		Bucket: "bucket",
+		Name:   "object",
+		Size:   595160760,
+		UserDefined: map[string]string{
+			crypto.SSEMultipart:                    "",
+			crypto.SSEIV:                           "HTexa=",
+			crypto.SSESealAlgorithm:                "DAREv2-HMAC-SHA256",
+			crypto.SSECSealedKey:                   "IAA8PGAA==",
+			ReservedMetadataPrefix + "actual-size": "594870264",
+			"content-type":                         "application/octet-stream",
+			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
+		},
+		Parts: []objectPartInfo{
+			{
+				Number:     1,
+				Name:       "part.1",
+				ETag:       "etag1",
+				Size:       297580380,
+				ActualSize: 297435132,
+			},
+			{
+				Number:     2,
+				Name:       "part.2",
+				ETag:       "etag2",
+				Size:       297580380,
+				ActualSize: 297435132,
+			},
+		},
+	}
+
+	encOff, encLength, skipLen, seqNumber, partStart, err := objInfo.GetDecryptedRange(rs)
+	if err != nil {
+		t.Fatalf("Test: failed %s", err)
+	}
+	if encOff != 595127964 {
+		t.Fatalf("Test: expected %d, got %d", 595127964, encOff)
+	}
+	if encLength != 32796 {
+		t.Fatalf("Test: expected %d, got %d", 32796, encLength)
+	}
+	if skipLen != 32756 {
+		t.Fatalf("Test: expected %d, got %d", 32756, skipLen)
+	}
+	if seqNumber != 4538 {
+		t.Fatalf("Test: expected %d, got %d", 4538, seqNumber)
+	}
+	if partStart != 1 {
+		t.Fatalf("Test: expected %d, got %d", 1, partStart)
+	}
+}
+
 func TestGetDecryptedRange(t *testing.T) {
 	var (
 		pkgSz     = int64(64) * humanize.KiByte
