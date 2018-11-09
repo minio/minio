@@ -2094,7 +2094,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 			return
 		}
-		logger.LogIf(ctx, err)
 		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
 	}
 	writeSuccessNoContent(w)
