@@ -10,7 +10,7 @@ This quickstart guide describes how to quickly install and run a local Minio ser
 [1. Open a Firewall Port](#open-a-firewall-port)
 [2. Install and run the Minio Server](#install-and-run-server)
 [3. Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys)
-[4. Test Using the Minio Web Browser](#test-web-browser)
+[4. (Optional) Test Using the Minio Web Browser](#test-web-browser)
 [5. Install the Minio Client](#install-client)
 [6. Test the Client Against the Server](#test-client-against-server)
 
@@ -80,9 +80,9 @@ brew install minio/stable/minio
 ```
 
 #### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+| Platform|  URL|
+| ----------| ------|
+|Apple macOS|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 
 ```sh
 chmod 755 minio
@@ -96,9 +96,9 @@ Run the server on port 9000 and store data in a local folder named **/data**:
 
 ### <a name="server-linux"></a> **GNU/Linux**
 #### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+| Platform|  URL|
+| ----------| ------|
+|GNU/Linux|https://dl.minio.io/server/minio/release/linux-amd64/minio |
 
 ```sh
 wget https://dl.minio.io/server/minio/release/linux-amd64/minio
@@ -113,9 +113,9 @@ Run the server on port 9000 and store data in a local folder named **/data**:
 
 ### <a name="server-windows"></a> **Microsoft Windows**
 #### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+| Platform|  URL|
+| ----------| ------|
+|Microsoft Windows|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
 
 ```sh
 ```
@@ -168,7 +168,7 @@ Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
 
 From the output, identify the endpoint, access key, secret key, browser URLs and ports, and the client command necessary to add the server to the list of hosts accessible by the client. This information will be used in subsequent steps.
 
-## <a name="test-web-browser"></a> 4. Test Using the Minio Web Browser
+## <a name="test-web-browser"></a> 4. (Optional) Test Using the Minio Web Browser
 The Minio Server comes with an embedded web-based object browser. Navigate your web browser to http://127.0.0.1:9000. If the embedded web-based object browser shown below displays in your browser, the server has started successfully:
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
@@ -214,9 +214,9 @@ mc --help
 ### <a name="client-linux"></a> **GNU/Linux**
 #### Binary Download
 
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|GNU/Linux|64-bit Intel|https://dl.minio.io/client/mc/release/linux-amd64/mc |
+| Platform| URL|
+| ----------| ------|
+|GNU/Linux|https://dl.minio.io/client/mc/release/linux-amd64/mc |
 
 ```sh
 wget https://dl.minio.io/client/mc/release/linux-amd64/mc
@@ -225,9 +225,9 @@ chmod +x mc
 
 ### <a name="client-windows"></a> **Microsoft Windows**
 #### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|Microsoft Windows|64-bit|https://dl.minio.io/client/mc/release/windows-amd64/mc.exe |
+| Platform|  URL|
+| ----------| ------|
+|Microsoft Windows|https://dl.minio.io/client/mc/release/windows-amd64/mc.exe |
 
 ```sh
 mc.exe --help
