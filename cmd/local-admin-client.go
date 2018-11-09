@@ -49,6 +49,14 @@ func (lc localAdminClient) ReInitFormat(dryRun bool) error {
 	return objectAPI.ReloadFormat(context.Background(), dryRun)
 }
 
+// ListLocks - Returns the locks open on this server.
+func (lc localAdminClient) ListLocks() (LocksMap, error) {
+	if globalBootTime.IsZero() || globalLockServer == nil {
+		return LocksMap{}, errServerNotInitialized
+	}
+	return LocksMap{LockMap: globalLockServer.ll.lockMap}, nil
+}
+
 // ServerInfo - Returns the server info of this server.
 func (lc localAdminClient) ServerInfo() (sid ServerInfoData, e error) {
 	if globalBootTime.IsZero() {

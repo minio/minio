@@ -51,6 +51,12 @@ func (receiver *adminRPCReceiver) ServerInfo(args *AuthArgs, reply *ServerInfoDa
 	return err
 }
 
+// ServerInfo - returns the server info when object layer was initialized on this server.
+func (receiver *adminRPCReceiver) ListLocks(args *AuthArgs, reply *LocksMap) (err error) {
+	*reply, err = receiver.local.ListLocks()
+	return err
+}
+
 // StartProfilingArgs - holds the RPC argument for StartingProfiling RPC call
 type StartProfilingArgs struct {
 	AuthArgs

@@ -17,8 +17,6 @@
 package dsync
 
 import (
-	cryptorand "crypto/rand"
-	"fmt"
 	golog "log"
 	"os"
 	"sync"
@@ -79,10 +77,10 @@ func NewDRWMutex(name string, clnt *Dsync) *DRWMutex {
 //
 // If the lock is already in use, the calling go routine
 // blocks until the mutex is available.
-func (dm *DRWMutex) Lock() {
+func (dm *DRWMutex) Lock(opsID, lockSource string) {
 
 	isReadLock := false
-	dm.lockBlocking(drwMutexInfinite, isReadLock)
+	dm.lockBlocking(opsID, lockSource, drwMutexInfinite, isReadLock)
 }
 
 // GetLock tries to get a write lock on dm before the timeout elapses.
@@ -90,20 +88,20 @@ func (dm *DRWMutex) Lock() {
 // If the lock is already in use, the calling go routine
 // blocks until either the mutex becomes available and return success or
 // more time has passed than the timeout value and return false.
-func (dm *DRWMutex) GetLock(timeout time.Duration) (locked bool) {
+func (dm *DRWMutex) GetLock(opsID, lockSource string, timeout time.Duration) (locked bool) {
 
 	isReadLock := false
-	return dm.lockBlocking(timeout, isReadLock)
+	return dm.lockBlocking(opsID, lockSource, timeout, isReadLock)
 }
 
 // RLock holds a read lock on dm.
 //
 // If one or more read locks are already in use, it will grant another lock.
 // Otherwise the calling go routine blocks until the mutex is available.
-func (dm *DRWMutex) RLock() {
+func (dm *DRWMutex) RLock(opsID, lockSource string) {
 
 	isReadLock := true
-	dm.lockBlocking(drwMutexInfinite, isReadLock)
+	dm.lockBlocking(opsID, lockSource, drwMutexInfinite, isReadLock)
 }
 
 // GetRLock tries to get a read lock on dm before the timeout elapses.
@@ -112,10 +110,10 @@ func (dm *DRWMutex) RLock() {
 // Otherwise the calling go routine blocks until either the mutex becomes
 // available and return success or more time has passed than the timeout
 // value and return false.
-func (dm *DRWMutex) GetRLock(timeout time.Duration) (locked bool) {
+func (dm *DRWMutex) GetRLock(opsID, lockSource string, timeout time.Duration) (locked bool) {
 
 	isReadLock := true
-	return dm.lockBlocking(timeout, isReadLock)
+	return dm.lockBlocking(opsID, lockSource, timeout, isReadLock)
 }
 
 // lockBlocking will try to acquire either a read or a write lock
@@ -123,7 +121,7 @@ func (dm *DRWMutex) GetRLock(timeout time.Duration) (locked bool) {
 // The function will loop using a built-in timing randomized back-off
 // algorithm until either the lock is acquired successfully or more
 // time has elapsed than the timeout value.
-func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked bool) {
+func (dm *DRWMutex) lockBlocking(opsID, lockSource string, timeout time.Duration, isReadLock bool) (locked bool) {
 	doneCh, start := make(chan struct{}), time.Now().UTC()
 	defer close(doneCh)
 
@@ -133,7 +131,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 		locks := make([]string, dm.clnt.dNodeCount)
 
 		// Try to acquire the lock.
-		success := lock(dm.clnt, &locks, dm.Name, isReadLock)
+		success := lock(opsID, lockSource, dm.clnt, &locks, dm.Name, isReadLock)
 		if success {
 			dm.m.Lock()
 			defer dm.m.Unlock()
@@ -160,7 +158,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
+func lock(opsID, lockSource string, ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
 
 	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan Granted, ds.dNodeCount)
@@ -174,17 +172,12 @@ func lock(ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
 		go func(index int, isReadLock bool, c NetLocker) {
 			defer wg.Done()
 
-			// All client methods issuing RPCs are thread-safe and goroutine-safe,
-			// i.e. it is safe to call them from multiple concurrently running go routines.
-			bytesUID := [16]byte{}
-			cryptorand.Read(bytesUID[:])
-			uid := fmt.Sprintf("%X", bytesUID[:])
-
 			args := LockArgs{
-				UID:             uid,
+				UID:             opsID,
 				Resource:        lockName,
 				ServerAddr:      ds.rpcClnts[ds.ownNode].ServerAddr(),
 				ServiceEndpoint: ds.rpcClnts[ds.ownNode].ServiceEndpoint(),
+				Source:          lockSource,
 			}
 
 			var locked bool
@@ -438,5 +431,5 @@ func (dm *DRWMutex) DRLocker() sync.Locker {
 
 type drlocker DRWMutex
 
-func (dr *drlocker) Lock()   { (*DRWMutex)(dr).RLock() }
+func (dr *drlocker) Lock()   { (*DRWMutex)(dr).RLock("", "") }
 func (dr *drlocker) Unlock() { (*DRWMutex)(dr).RUnlock() }

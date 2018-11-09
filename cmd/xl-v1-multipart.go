@@ -292,7 +292,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
 	// pre-check upload id lock.
-	preUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	preUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, uploadID))
 	if err := preUploadIDLock.GetRLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -394,7 +394,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	// post-upload check (write) lock
-	postUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	postUploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, uploadID))
 	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -487,7 +487,7 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 	// Hold lock so that there is no competing
 	// abort-multipart-upload or complete-multipart-upload.
 	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket,
-		xl.getUploadIDDir(bucket, object, uploadID))
+		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
 		return result, err
 	}
@@ -582,7 +582,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	//
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return oi, err
 	}
@@ -790,7 +790,7 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 	// Hold lock so that there is no competing
 	// complete-multipart-upload or put-object-part.
-	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
+	uploadIDLock := xl.nsMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

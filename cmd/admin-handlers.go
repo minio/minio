@@ -27,6 +27,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -224,6 +225,17 @@ type ServerInfo struct {
 	Error string          `json:"error"`
 	Addr  string          `json:"addr"`
 	Data  *ServerInfoData `json:"data"`
+}
+
+// LockEntry .......
+type LockEntry struct {
+	Timestamp  time.Time `json:"time"`       // Timestamp set at the time of initialization.
+	Name       string    `json:"name"`       // Name contains info like bucket, object etc
+	Type       string    `json:"type"`       // Bool whether write or read lock.
+	Source     string    `json:"source"`     // Source which created the lock
+	ServerList []string  `json:"serverlist"` // RPC path of servers issuing the lock.
+	Client     string    `json:"client"`     // RPC path of client claiming lock.
+	ID         string    `json:"id"`         // UID to uniquely identify request of client.
 }
 
 // ServerInfoHandler - GET /minio/admin/v1/info
@@ -663,6 +675,121 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeSuccessResponseJSON(w, econfigData)
+}
+
+func setLockEntry(l lockRequesterInfo, name, server string) *LockEntry {
+	entry := &LockEntry{Timestamp: l.Timestamp, Name: name, ServerList: []string{server}, Client: l.Node, Source: l.Source, ID: l.UID}
+	if l.Writer {
+		entry.Type = "Write"
+	} else {
+		entry.Type = "Read"
+	}
+	return entry
+}
+
+// LockEntries - To sort the locks
+type LockEntries []LockEntry
+
+func (l LockEntries) Len() int {
+	return len(l)
+}
+
+func (l LockEntries) Less(i, j int) bool {
+	return l[i].Timestamp.After(l[j].Timestamp)
+}
+
+func (l LockEntries) Swap(i, j int) {
+	l[i], l[j] = l[j], l[i]
+}
+
+type lockEntryMap map[string]*LockEntry
+
+func sliceLockEntries(entryMap lockEntryMap) LockEntries {
+	var lockEntries LockEntries
+	for _, v := range entryMap {
+		lockEntries = append(lockEntries, *v)
+	}
+	return lockEntries
+}
+
+func serializeLockEntries(entryMap lockEntryMap, server string, locksMap *LocksMap) lockEntryMap {
+	if locksMap != nil {
+		for k, v := range locksMap.LockMap {
+			for _, lockReqInfo := range v {
+				if val, ok := entryMap[lockReqInfo.UID]; ok {
+					val.ServerList = append(val.ServerList, server)
+				} else {
+					entryMap[lockReqInfo.UID] = setLockEntry(lockReqInfo, k, server)
+				}
+			}
+		}
+	}
+	return entryMap
+}
+
+// ListLocksHandler Get list of locks in use
+func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListLocksHandler")
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Web service response
+	reply := make([]LocksMap, len(globalAdminPeers))
+
+	var wg sync.WaitGroup
+
+	// Gather lock information for all nodes
+	for i, p := range globalAdminPeers {
+		wg.Add(1)
+
+		// Gather information from a peer in a goroutine
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+
+			// Initialize Locks info at index
+			locksMap, err := peer.cmdRunner.ListLocks()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", peer.addr)
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				return
+			}
+			reply[idx] = locksMap
+		}(i, p)
+	}
+
+	wg.Wait()
+
+	var entryMap lockEntryMap
+	entryMap = make(map[string]*LockEntry)
+
+	for i := 0; i < len(globalAdminPeers); i++ {
+		// Convert to the first map
+		entryMap = serializeLockEntries(entryMap, globalAdminPeers[i].addr, &reply[i])
+	}
+
+	// Convert to ListEntries
+	locklist := sliceLockEntries(entryMap)
+	sort.Sort(locklist)
+	if len(locklist) > 10 {
+		locklist = locklist[:10]
+	}
+
+	//var locklist LockEntries
+	// Marshal API response
+	jsonBytes, err := json.Marshal(locklist)
+	if err != nil {
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		logger.LogIf(context.Background(), err)
+		return
+	}
+
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // Disable tidwall json array notation in JSON key path so

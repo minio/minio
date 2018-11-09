@@ -59,6 +59,12 @@ func (rpcClient *AdminRPCClient) ServerInfo() (sid ServerInfoData, err error) {
 	return sid, err
 }
 
+// ListLocks - returns the lock information on the server to which the RPC call is made.
+func (rpcClient *AdminRPCClient) ListLocks() (sid LocksMap, err error) {
+	err = rpcClient.Call(adminServiceName+".ListLocks", &AuthArgs{}, &sid)
+	return sid, err
+}
+
 // GetConfig - returns config.json of the remote server.
 func (rpcClient *AdminRPCClient) GetConfig() ([]byte, error) {
 	args := AuthArgs{}
@@ -127,6 +133,7 @@ type adminCmdRunner interface {
 	SignalService(s serviceSignal) error
 	ReInitFormat(dryRun bool) error
 	ServerInfo() (ServerInfoData, error)
+	ListLocks() (LocksMap, error)
 	GetConfig() ([]byte, error)
 	StartProfiling(string) error
 	DownloadProfilingData() ([]byte, error)

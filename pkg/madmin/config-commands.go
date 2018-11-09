@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -45,6 +46,24 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	defer closeResponse(resp)
 
 	return DecryptData(adm.secretAccessKey, resp.Body)
+}
+
+// ListLocks - returns the lock list of a minio setup.
+func (adm *AdminClient) ListLocks() ([]byte, error) {
+	// Execute GET on /minio/admin/v1/top/locks to get config of a setup.
+	resp, err := adm.executeMethod("GET",
+		requestData{relPath: "/v1/top/locks"})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+	defer closeResponse(resp)
+
+	return ioutil.ReadAll(resp.Body)
 }
 
 // GetConfigKeys - returns partial json or json value from config.json of a minio setup.

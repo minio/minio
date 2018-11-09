@@ -145,13 +145,8 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	nsLk, found := n.lockMap[param]
 	if !found {
 		n.lockMap[param] = &nsLock{
-			RWLockerSync: func() RWLockerSync {
-				if n.isDistXL {
-					return dsync.NewDRWMutex(pathJoin(volume, path), globalDsync)
-				}
-				return &lsync.LRWMutex{}
-			}(),
-			ref: 1,
+			RWLockerSync: &lsync.LRWMutex{},
+			ref:          1,
 		}
 		nsLk = n.lockMap[param]
 	} else {
@@ -211,8 +206,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 // Lock - locks the given resource for writes, using a previously
 // allocated name space lock or initializing a new one.
 func (n *nsLockMap) Lock(volume, path, opsID string, timeout time.Duration) (locked bool) {
-	readLock := false // This is a write lock.
-
+	readLock := false         // This is a write lock.
 	lockSource := getSource() // Useful for debugging
 	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
 }
@@ -226,7 +220,6 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 // RLock - locks any previously acquired read locks.
 func (n *nsLockMap) RLock(volume, path, opsID string, timeout time.Duration) (locked bool) {
 	readLock := true
-
 	lockSource := getSource() // Useful for debugging
 	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
 }
@@ -241,7 +234,6 @@ func (n *nsLockMap) RUnlock(volume, path, opsID string) {
 func (n *nsLockMap) ForceUnlock(volume, path string) {
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
-
 	// Clarification on operation:
 	// - In case of FS or XL we call ForceUnlock on the local globalNSMutex
 	//   (since there is only a single server) which will cause the 'stuck'
@@ -258,7 +250,6 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	if n.isDistXL { // For distributed mode, broadcast ForceUnlock message.
 		dsync.NewDRWMutex(pathJoin(volume, path), globalDsync).ForceUnlock()
 	}
-
 	param := nsParam{volume, path}
 	if _, found := n.lockMap[param]; found {
 		// Remove lock from the map.
@@ -270,14 +261,18 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 type lockInstance struct {
 	ns                  *nsLockMap
 	volume, path, opsID string
+	drwMutex            *dsync.DRWMutex
 }
 
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
 func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
-	opsID := mustGetUUID()
-	return &lockInstance{n, volume, path, opsID}
+	var drwMutex *dsync.DRWMutex
+	if n.isDistXL {
+		drwMutex = dsync.NewDRWMutex(pathJoin(volume, path), globalDsync)
+	}
+	return &lockInstance{ns: n, volume: volume, path: path, drwMutex: drwMutex}
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
@@ -285,6 +280,16 @@ func (li *lockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error) {
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := false
+	li.opsID = mustGetUUID()
+	if li.ns.isDistXL {
+		locked := li.drwMutex.GetLock(li.opsID, lockSource, timeout.Timeout())
+		if !locked {
+			timeout.LogFailure()
+			return OperationTimedOut{Path: li.path}
+		}
+		timeout.LogSuccess(UTCNow().Sub(start))
+		return
+	}
 	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
@@ -295,6 +300,14 @@ func (li *lockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error) {
 
 // Unlock - block until write lock is released.
 func (li *lockInstance) Unlock() {
+	if li.ns.isDistXL {
+		if li.drwMutex == nil {
+			logger.LogIf(context.Background(), errUnexpected)
+			return
+		}
+		li.drwMutex.Unlock()
+		return
+	}
 	readLock := false
 	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }
@@ -304,6 +317,16 @@ func (li *lockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error) {
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := true
+	li.opsID = mustGetUUID()
+	if li.ns.isDistXL {
+		locked := li.drwMutex.GetRLock(li.opsID, lockSource, timeout.Timeout())
+		if !locked {
+			timeout.LogFailure()
+			return OperationTimedOut{Path: li.path}
+		}
+		timeout.LogSuccess(UTCNow().Sub(start))
+		return
+	}
 	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
@@ -314,6 +337,14 @@ func (li *lockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error) {
 
 // RUnlock - block until read lock is released.
 func (li *lockInstance) RUnlock() {
+	if li.ns.isDistXL {
+		if li.drwMutex == nil {
+			logger.LogIf(context.Background(), errUnexpected)
+			return
+		}
+		li.drwMutex.RUnlock()
+		return
+	}
 	readLock := true
 	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }
