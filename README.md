@@ -1,9 +1,9 @@
 # Minio Quickstart Guide
 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio consists of an *object storage server*, released under Apache License v2.0, that is compatible with the Amazon S3 cloud storage service, as well as a *client component* used for sending and retrieving objects to and from the server. 
+Minio is an *object storage server*, released under Apache License v2.0, that is compatible with the Amazon S3 cloud storage service. Minio also provides a *client component* used for sending and retrieving objects to and from the server. 
 
-Minio is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. The size of an object can range from a few kilobytes to a maximum of 5TB. The Minio server component is light enough to be bundled with an application stack similar to NodeJS, Redis, and MySQL.
+Minio is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. The size of an object can range from a few kilobytes to a maximum of 5TB. Minio Server is light enough to be bundled with an application stack similar to NodeJS, Redis, and MySQL.
 
 This quickstart guide describes how to quickly install and run a local Minio server, and guides you through the process of storing and retrieving an image file. These are the steps you will follow:
 
