@@ -2490,7 +2490,13 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 }
 
 func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (bool, []byte, error) {
-	data, err := readConfig(context.Background(), objAPI, configFile)
+	var data []byte
+	var err error
+	if globalEtcdClient != nil {
+		data, err = readConfigEtcd(context.Background(), globalEtcdClient, configFile)
+	} else {
+		data, err = readConfig(context.Background(), objAPI, configFile)
+	}
 	if err != nil {
 		return false, nil, err
 	}
@@ -2531,7 +2537,12 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objAPI, configFile, data)
+	}
+	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
 	}
 
@@ -2563,7 +2574,12 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objAPI, configFile, data)
+	}
+	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
 	}
 
@@ -2600,7 +2616,12 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objAPI, configFile, data)
+	}
+	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘29’ to ‘30’. %v", err)
 	}
 
@@ -2640,7 +2661,12 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objAPI, configFile, data)
+	}
+	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘30’ to ‘31’. %v", err)
 	}
 
@@ -2675,7 +2701,12 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 		return err
 	}
 
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objAPI, configFile, data)
+	}
+	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘31’ to ‘32’. %v", err)
 	}
 
