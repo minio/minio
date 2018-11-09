@@ -930,26 +930,29 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	}
 
 	// Assemble slice of (decrypted) part sizes in `sizes`
+	var sizes []int64
 	var decObjSize int64 // decrypted total object size
-	var partSize uint64
-	partSize, err = sio.DecryptedSize(uint64(o.Size))
-	if err != nil {
-		return
-	}
-	sizes := []int64{int64(partSize)}
-	decObjSize = sizes[0]
 	if isEncryptedMultipart(*o) {
 		sizes = make([]int64, len(o.Parts))
-		decObjSize = 0
 		for i, part := range o.Parts {
+			var partSize uint64
 			partSize, err = sio.DecryptedSize(uint64(part.Size))
 			if err != nil {
+				err = errObjectTampered
 				return
 			}
-			t := int64(partSize)
-			sizes[i] = t
-			decObjSize += t
+			sizes[i] = int64(partSize)
+			decObjSize += int64(partSize)
 		}
+	} else {
+		var partSize uint64
+		partSize, err = sio.DecryptedSize(uint64(o.Size))
+		if err != nil {
+			err = errObjectTampered
+			return
+		}
+		sizes = []int64{int64(partSize)}
+		decObjSize = sizes[0]
 	}
 
 	var off, length int64
