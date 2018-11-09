@@ -83,6 +83,11 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		nConfig = &event.Config{}
 	}
 
+	// If xml namespace is empty, set a default value before returning.
+	if nConfig.XMLNS == "" {
+		nConfig.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	}
+
 	notificationBytes, err := xml.Marshal(nConfig)
 	if err != nil {
 		logger.LogIf(ctx, err)
