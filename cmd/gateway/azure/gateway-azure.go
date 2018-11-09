@@ -672,7 +672,6 @@ func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, sta
 	}
 	_, err = io.Copy(writer, rc)
 	rc.Close()
-	logger.LogIf(ctx, err)
 	return err
 }
 

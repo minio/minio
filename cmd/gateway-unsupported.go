@@ -30,25 +30,21 @@ type GatewayUnsupported struct{}
 
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return lmi, NotImplemented{}
 }
 
 // NewMultipartUpload upload object in multiple parts
 func (a GatewayUnsupported) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return "", NotImplemented{}
 }
 
 // CopyObjectPart copy part of object to uploadID for another object
 func (a GatewayUnsupported) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string, partID int, startOffset, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return pi, NotImplemented{}
 }
 
 // PutObjectPart puts a part of object in bucket
 func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *hash.Reader, opts ObjectOptions) (pi PartInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return pi, NotImplemented{}
 }
 
@@ -60,13 +56,11 @@ func (a GatewayUnsupported) ListObjectParts(ctx context.Context, bucket string, 
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (a GatewayUnsupported) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
-	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (a GatewayUnsupported) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []CompletePart) (oi ObjectInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return oi, NotImplemented{}
 }
 
@@ -78,13 +72,11 @@ func (a GatewayUnsupported) SetBucketPolicy(ctx context.Context, bucket string, 
 
 // GetBucketPolicy will get policy on bucket
 func (a GatewayUnsupported) GetBucketPolicy(ctx context.Context, bucket string) (bucketPolicy *policy.Policy, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return nil, NotImplemented{}
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (a GatewayUnsupported) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
@@ -95,50 +87,42 @@ func (a GatewayUnsupported) ReloadFormat(ctx context.Context, dryRun bool) error
 
 // HealFormat - Not implemented stub
 func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // HealBucket - Not implemented stub
 func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, dryRun bool) ([]madmin.HealResultItem, error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return nil, NotImplemented{}
 }
 
 // ListBucketsHeal - Not implemented stub
 func (a GatewayUnsupported) ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return nil, NotImplemented{}
 }
 
 // HealObject - Not implemented stub
 func (a GatewayUnsupported) HealObject(ctx context.Context, bucket, object string, dryRun bool) (h madmin.HealResultItem, e error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return h, NotImplemented{}
 }
 
 // ListObjectsV2 - Not implemented stub
 func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return result, NotImplemented{}
 }
 
 // ListObjectsHeal - Not implemented stub
 func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return loi, NotImplemented{}
 }
 
 // CopyObject copies a blob from source container to destination container.
 func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return objInfo, NotImplemented{}
 }
 
 // RefreshBucketPolicy refreshes cache policy with what's on disk.
 func (a GatewayUnsupported) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
