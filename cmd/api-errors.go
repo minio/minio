@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -1440,7 +1441,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 // toAPIErrorCode - Converts embedded errors. Convenience
 // function written to handle all cases where we have known types of
 // errors returned by underlying layers.
-func toAPIErrorCode(err error) (apiErr APIErrorCode) {
+func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
@@ -1767,6 +1768,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectTampered
 	default:
 		apiErr = ErrInternalError
+		// Make sure to log the errors which we cannot translate
+		// to a meaningful S3 API errors. This is added to aid in
+		// debugging unexpected/unhandled errors.
+		logger.LogIf(ctx, err)
 	}
 
 	return apiErr

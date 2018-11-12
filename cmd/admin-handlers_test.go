@@ -867,12 +867,12 @@ func TestToAdminAPIErr(t *testing.T) {
 		// 3. Non-admin API specific error.
 		{
 			err:            errDiskNotFound,
-			expectedAPIErr: toAPIErrorCode(errDiskNotFound),
+			expectedAPIErr: toAPIErrorCode(context.Background(), errDiskNotFound),
 		},
 	}
 
 	for i, test := range testCases {
-		actualErr := toAdminAPIErrCode(test.err)
+		actualErr := toAdminAPIErrCode(context.Background(), test.err)
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)

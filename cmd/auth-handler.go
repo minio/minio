@@ -119,7 +119,7 @@ func getRequestAuthType(r *http.Request) authType {
 
 // checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
 // It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
+func checkAdminRequestAuthType(ctx context.Context, r *http.Request, region string) APIErrorCode {
 	s3Err := ErrAccessDenied
 	if _, ok := r.Header["X-Amz-Content-Sha256"]; ok &&
 		getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) {
@@ -136,11 +136,11 @@ func checkAdminRequestAuthType(r *http.Request, region string) APIErrorCode {
 		}
 
 		// we only support V4 (no presign) with auth body
-		s3Err = isReqAuthenticated(r, region)
+		s3Err = isReqAuthenticated(ctx, r, region)
 	}
 	if s3Err != ErrNone {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description))
 	}
 	return s3Err
@@ -194,10 +194,10 @@ func getClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]inte
 	p := &jwtgo.Parser{}
 	jtoken, err := p.ParseWithClaims(token, jwtgo.MapClaims(claims), stsTokenCallback)
 	if err != nil {
-		return nil, toAPIErrorCode(errAuthentication)
+		return nil, toAPIErrorCode(context.Background(), errAuthentication)
 	}
 	if !jtoken.Valid {
-		return nil, toAPIErrorCode(errAuthentication)
+		return nil, toAPIErrorCode(context.Background(), errAuthentication)
 	}
 	return claims, ErrNone
 }
@@ -224,7 +224,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		case policy.GetBucketLocationAction, policy.ListAllMyBucketsAction:
 			region = ""
 		}
-		if s3Err = isReqAuthenticated(r, region); s3Err != ErrNone {
+		if s3Err = isReqAuthenticated(ctx, r, region); s3Err != ErrNone {
 			return s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV4(r, region)
@@ -310,7 +310,7 @@ func reqSignatureV4Verify(r *http.Request, region string) (s3Error APIErrorCode)
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
+func isReqAuthenticated(ctx context.Context, r *http.Request, region string) (s3Error APIErrorCode) {
 	if errCode := reqSignatureV4Verify(r, region); errCode != ErrNone {
 		return errCode
 	}
@@ -347,7 +347,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	// The verification happens implicit during reading.
 	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256), -1)
 	if err != nil {
-		return toAPIErrorCode(err)
+		return toAPIErrorCode(ctx, err)
 	}
 	r.Body = ioutil.NopCloser(reader)
 	return ErrNone

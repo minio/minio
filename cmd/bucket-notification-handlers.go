@@ -67,7 +67,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	_, err := objAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	if err != nil {
 		// Ignore errNoSuchNotifications to comply with AWS S3.
 		if err != errNoSuchNotifications {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 
@@ -90,8 +90,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	notificationBytes, err := xml.Marshal(nConfig)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -126,7 +125,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -141,7 +140,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	if err != nil {
 		apiErr := ErrMalformedXML
 		if event.IsEventError(err) {
-			apiErr = toAPIErrorCode(err)
+			apiErr = toAPIErrorCode(ctx, err)
 		}
 
 		writeErrorResponse(w, apiErr, r.URL)
@@ -149,7 +148,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	if err = saveNotificationConfig(ctx, objectAPI, bucketName, config); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -194,7 +193,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	}
 	if len(values["prefix"]) == 1 {
 		if err := event.ValidateFilterRuleValue(values["prefix"][0]); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 
@@ -207,7 +206,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	}
 	if len(values["suffix"]) == 1 {
 		if err := event.ValidateFilterRuleValue(values["suffix"][0]); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 
@@ -220,7 +219,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	for _, s := range values["events"] {
 		eventName, err := event.ParseName(s)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 			return
 		}
 
@@ -228,19 +227,19 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	}
 
 	if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	host, err := xnet.ParseHost(r.RemoteAddr)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	target, err := target.NewHTTPClientTarget(*host, w)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -248,8 +247,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	if err = globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
@@ -257,14 +255,13 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	if err = SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -274,8 +271,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	if err = RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
 		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 }
