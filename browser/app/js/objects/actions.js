@@ -16,11 +16,7 @@
 
 import web from "../web"
 import history from "../history"
-import {
-  sortObjectsByName,
-  sortObjectsBySize,
-  sortObjectsByDate
-} from "../utils"
+import { sortObjectsByName, sortObjectsBySize, sortObjectsByDate } from "../utils"
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
@@ -60,10 +56,7 @@ export const appendList = (objects, marker, isTruncated) => ({
 
 export const fetchObjects = append => {
   return function(dispatch, getState) {
-    const {
-      buckets: { currentBucket },
-      objects: { currentPrefix, marker }
-    } = getState()
+    const {buckets: {currentBucket}, objects: {currentPrefix, marker}} = getState()
     if (currentBucket) {
       return web
         .ListObjects({
@@ -110,7 +103,7 @@ export const fetchObjects = append => {
 
 export const sortObjects = sortBy => {
   return function(dispatch, getState) {
-    const { objects } = getState()
+    const {objects} = getState()
     const sortOrder = objects.sortBy == sortBy ? !objects.sortOrder : true
     dispatch(setSortBy(sortBy))
     dispatch(setSortOrder(sortOrder))
@@ -210,30 +203,39 @@ export const shareObject = (object, days, hours, minutes) => {
     const currentPrefix = getCurrentPrefix(getState())
     const objectName = `${currentPrefix}${object}`
     const expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
-    return web
-      .PresignedGet({
-        host: location.host,
-        bucket: currentBucket,
-        object: objectName,
-        expiry
-      })
-      .then(obj => {
-        dispatch(showShareObject(object, obj.url))
-        dispatch(
-          alertActions.set({
-            type: "success",
-            message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`
-          })
-        )
-      })
-      .catch(err => {
-        dispatch(
-          alertActions.set({
-            type: "danger",
-            message: err.message
-          })
-        )
-      })
+    if (web.LoggedIn()) {
+      return web
+        .PresignedGet({
+          host: location.host,
+          bucket: currentBucket,
+          object: objectName
+        })
+        .then(obj => {
+          dispatch(showShareObject(object, obj.url))
+          dispatch(
+            alertActions.set({
+              type: "success",
+              message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`
+            })
+          )
+        })
+        .catch(err => {
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message
+            })
+          )
+        })
+    } else {
+      dispatch(showShareObject(object, `${location.host}` + '/' + `${currentBucket}` + '/' + encodeURI(objectName)))
+      dispatch(
+        alertActions.set({
+          type: "success",
+          message: `Object shared.`
+        })
+      )
+    }
   }
 }
 
@@ -279,7 +281,7 @@ export const downloadObject = object => {
     } else {
       const url = `${
         window.location.origin
-      }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=''`
+      }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=`
       window.location = url
     }
   }
@@ -308,7 +310,7 @@ export const downloadCheckedObjects = () => {
       objects: getCheckedList(state)
     }
     if (!web.LoggedIn()) {
-      const requestUrl = location.origin + "/minio/zip?token=''"
+      const requestUrl = location.origin + "/minio/zip?token="
       downloadZip(requestUrl, req, dispatch)
     } else {
       return web
@@ -319,14 +321,13 @@ export const downloadCheckedObjects = () => {
           }${minioBrowserPrefix}/zip?token=${res.token}`
           downloadZip(requestUrl, req, dispatch)
         })
-        .catch(err =>
-          dispatch(
-            alertActions.set({
-              type: "danger",
-              message: err.message
-            })
-          )
+        .catch(err => dispatch(
+          alertActions.set({
+            type: "danger",
+            message: err.message
+          })
         )
+      )
     }
   }
 }
@@ -349,8 +350,7 @@ const downloadZip = (url, req, dispatch) => {
       var separator = req.prefix.length > 1 ? "-" : ""
 
       anchor.href = blobUrl
-      anchor.download =
-        req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
+      anchor.download = req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
 
       anchor.click()
       window.URL.revokeObjectURL(blobUrl)
