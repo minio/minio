@@ -397,7 +397,7 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	oi, err := l.Client.StatObject(bucket, object, miniogo.StatObjectOptions{miniogo.GetObjectOptions{ServerSideEncryption: opts.ServerSideEncryption}})
+	oi, err := l.Client.StatObject(bucket, object, miniogo.StatObjectOptions{GetObjectOptions: miniogo.GetObjectOptions{ServerSideEncryption: opts.ServerSideEncryption}})
 	if err != nil {
 		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
 	}

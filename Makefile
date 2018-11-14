@@ -23,8 +23,8 @@ verifiers: getdeps vet fmt lint cyclo deadcode spelling
 
 vet:
 	@echo "Running $@"
-	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult cmd
-	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult pkg
+	@go tool vet cmd
+	@go tool vet pkg
 
 fmt:
 	@echo "Running $@"

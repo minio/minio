@@ -44,7 +44,7 @@ func (target *PeerRPCClientTarget) Close() error {
 // NewPeerRPCClientTarget - creates RPCClient target with given target ID available in remote peer.
 func NewPeerRPCClientTarget(bucketName string, targetID event.TargetID, rpcClient *PeerRPCClient) *PeerRPCClientTarget {
 	return &PeerRPCClientTarget{
-		id:             event.TargetID{targetID.ID, targetID.Name + "+" + mustGetUUID()},
+		id:             event.TargetID{ID: targetID.ID, Name: targetID.Name + "+" + mustGetUUID()},
 		remoteTargetID: targetID,
 		bucketName:     bucketName,
 		rpcClient:      rpcClient,

@@ -93,7 +93,7 @@ func (target *NATSTarget) Send(eventData event.Event) (err error) {
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func NewNATSTarget(id string, args NATSArgs) (*NATSTarget, error) {
 	}
 
 	return &NATSTarget{
-		id:       event.TargetID{id, "nats"},
+		id:       event.TargetID{ID: id, Name: "nats"},
 		args:     args,
 		stanConn: stanConn,
 		natsConn: natsConn,

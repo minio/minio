@@ -123,7 +123,7 @@ func (target *AMQPTarget) Send(eventData event.Event) error {
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func NewAMQPTarget(id string, args AMQPArgs) (*AMQPTarget, error) {
 	}
 
 	return &AMQPTarget{
-		id:   event.TargetID{id, "amqp"},
+		id:   event.TargetID{ID: id, Name: "amqp"},
 		args: args,
 		conn: conn,
 	}, nil
