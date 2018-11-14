@@ -1,18 +1,34 @@
 # Minio Docker Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-## Prerequisites
-Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
+This quickstart guide describes how to quickly install and run a Minio Server Docker container. These are the steps you will follow:
 
-## Run Standalone Minio on Docker.
-Minio needs a persistent volume to store configuration and application data. However, for testing purposes, you can launch Minio by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
+1. [Install Docker](#installdocker) 
+2. [Run Standalone Minio on Docker](#runstandalong) 
+3. [Run Distributed Minio on Docker](#rundistributed) 
+
+## <a name="installdocker"></a>1. Install Docker
+Install Docker using these instructions: <https://www.docker.com/community-edition#/download>.
+
+## <a name="runstandalong"></a>2. Run Standalone Minio on Docker
+
+You can run Minio with either temporary or persistent storage, as described below.
+
+### 2.1 Run Minio with Temporary Storage
+Minio requires a persistent volume to store configuration and application data. However, you can launch Minio by specifying a temporary directory for testing purposes. This temporary directory is created in the container's file system when the container is started, but all of the data is lost after the container exits.
+
+Run the container with a temporary storage directory in `/data`:
 
 ```sh
 docker run -p 9000:9000 minio/minio server /data
 ```
+### 2.2 Run Minio with Persistent Storage
+To run a Minio container with persistent storage, local persistent directories must be mapped from the host OS to the virtual `config` and `export` directories. 
 
-To create a Minio container with persistent storage, you need to map local persistent directories from the host OS to virtual config `~/.minio` and export `/data` directories. To do this, run the below commands
+Use one of the methods below to run the container with  `~/.minio` as the virtual `config` directory and `/data` as the `export` directory:
+* [GNU/Linux and macOS](#persistent_linuxmac)
+* [Windows](#persistent_windows)
 
-#### GNU/Linux and macOS
+#### <a name="persistent_linuxmac"></a>GNU/Linux and macOS
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/data:/data \
@@ -20,7 +36,7 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-#### Windows
+#### <a name="persistent_windows"></a>Windows
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v D:\data:/data \
@@ -28,17 +44,21 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-## Run Distributed Minio on Docker
-Distributed Minio can be deployed via [Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose) or [Swarm mode](https://docs.minio.io/docs/deploy-minio-on-docker-swarm). The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment.
+## <a name="rundistributed"></a>3. Run Distributed Minio on Docker
+Distributed Minio can be deployed using one of these two methods:
+* [Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose): Creates a single host, multi-container deployment. This lets you quickly get started with Distributed Minio on your computer, which is ideal for development, testing, and staging environments.
+* [Swarm mode](https://docs.minio.io/docs/deploy-minio-on-docker-swarm): Creates a multi-host, multi-container deployment. This offers a more robust, production-level deployment than Docker Compose.
 
-This means Docker Compose lets you quickly get started with Distributed Minio on your computer - ideal for development, testing, staging environments. While deploying Distributed Minio on Swarm offers a more robust, production level deployment.
+## <a name="runcommands"></a>Examples of Typical Docker Commands
 
-## Minio Docker Tips
+### Specify a Custom Access Key and Secret Key
+To override Minio's auto-generated keys, pass the secret key and access key explicitly as environment variables using one of these methods:
+* [GNU/Linux and macOS](#linuxmac_secret)
+* [Windows](#windows_secret)
 
-### Minio Custom Access and Secret Keys
-To override Minio's auto-generated keys, you may pass secret and access keys explicitly as environment variables. Minio server also allows regular strings as access and secret keys.
+**Note:** Minio Server allows the use of regular strings for the access key and secret key.
 
-#### GNU/Linux and macOS
+#### <a name="linuxmac_secret"></a>GNU/Linux and macOS
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
@@ -48,7 +68,7 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-#### Windows
+#### <a name="windows_secret"></a>Windows
 ```powershell
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
@@ -58,23 +78,27 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-### Minio Custom Access and Secret Keys using Docker secrets
-To override Minio's auto-generated keys, you may pass secret and access keys explicitly by creating access and secret keys as [Docker secrets](https://docs.docker.com/engine/swarm/secrets/). Minio server also allows regular strings as access and secret keys.
+### Specify a Custom Access Key and Secret Key Using Docker Secrets
+To override Minio's auto-generated keys, pass the access key and secret key explicitly as [Docker secrets](https://docs.docker.com/engine/swarm/secrets/):
 
 ```
 echo "AKIAIOSFODNN7EXAMPLE" | docker secret create access_key -
 echo "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" | docker secret create secret_key -
 ```
 
-Create a Minio service using `docker service` to read from Docker secrets.
+**Note:** Minio Server allows the use of regular strings for the access key and secret key.
+
+Create a service for Minio using `docker service` to read from the Docker secrets:
+
 ```
 docker service create --name="minio-service" --secret="access_key" --secret="secret_key" minio/minio server /data
 ```
 
-Read more about `docker service` [here](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/)
+See [How services work](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/) more information about `docker service`.
 
-#### Minio Custom Access and Secret Key files
-To use other secret names follow the instructions above and replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`). Run your service with
+#### Specify a Custom Access Key and Secret Key Using Files
+Run the service using the command below to specify other secret names. Replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`):
+
 ```
 docker service create --name="minio-service" \
   --secret="my_access_key" \
@@ -84,36 +108,48 @@ docker service create --name="minio-service" \
   minio/minio server /data
 ```
 
-### Retrieving Container ID
-To use Docker commands on a specific container, you need to know the `Container ID` for that container. To get the `Container ID`, run
+### Identify a Container's ID
+The ID of a container must be specified when running Docker commands on it. 
+
+Use the following command to get the IDs of all containers:
 
 ```sh
 docker ps -a
 ```
 
-`-a` flag makes sure you get all the containers (Created, Running, Exited). Then identify the `Container ID` from the output.
+**Note:** Specifying the `-a`  option returns all containers that have been created, are running, and have exited.
+
+You should see a response similar to this one:
+
+```sh
+CONTAINER ID        IMAGE                     COMMAND                  CREATED             STATUS                     PORTS               NAMES
+fabcc0ae9833        minio/minio               "/usr/bin/docker-e..."   4 minutes ago       Exited (0) 4 minutes ago                       minio2
+1c51076ce4dc        minio/minio               "/usr/bin/docker-e..."   7 minutes ago       Created                                        minio1
+```
+
+Identify the ID of your container from the `Container ID` column displayed in the output.
 
 ### Starting and Stopping Containers
-To start a stopped container, you can use the [`docker start`](https://docs.docker.com/engine/reference/commandline/start/) command.
+To start a stopped container, use the [`docker start`](https://docs.docker.com/engine/reference/commandline/start/) command:
 
 ```sh
 docker start <container_id>
 ```
 
-To stop a running container, you can use the [`docker stop`](https://docs.docker.com/engine/reference/commandline/stop/) command.
+To stop a running container, use the [`docker stop`](https://docs.docker.com/engine/reference/commandline/stop/) command:
 ```sh
 docker stop <container_id>
 ```
 
-### Minio container logs
-To access Minio logs, you can use the [`docker logs`](https://docs.docker.com/engine/reference/commandline/logs/) command.
+### Minio Container Logs
+To access Minio logs, use the [`docker logs`](https://docs.docker.com/engine/reference/commandline/logs/) command:
 
 ```sh
 docker logs <container_id>
 ```
 
-### Monitor Minio Docker Container
-To monitor the resources used by Minio container, you can use the [`docker stats`](https://docs.docker.com/engine/reference/commandline/stats/) command.
+### Monitor a Minio Docker Container
+To monitor the resources used by a Minio container, use the [`docker stats`](https://docs.docker.com/engine/reference/commandline/stats/) command:
 
 ```sh
 docker stats <container_id>
