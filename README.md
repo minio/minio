@@ -7,12 +7,12 @@ Minio is best suited for storing unstructured data such as photos, videos, log f
 
 This quickstart guide describes how to quickly install and run a local Minio server, and guides you through the process of storing and retrieving an image file. These are the steps you will follow:
 
-[1. Open a Firewall Port](#open-a-firewall-port)  
-[2. Install and run the Minio Server](#install-and-run-server)  
-[3. Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys)  
-[4. (Optional) Test Using the Minio Web Browser](#test-web-browser)  
-[5. Install the Minio Client](#install-client)  
-[6. Test the Client Against the Server](#test-client-against-server)
+1. [Open a Firewall Port](#open-a-firewall-port) 
+2. [Install and run the Minio Server](#install-and-run-server) 
+3. [Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys) 
+4. [(Optional) Test Using the Minio Web Browser](#test-web-browser) 
+5. [Install the Minio Client](#install-client) 
+6. [Test the Client Against the Server](#test-client-against-server)
 
 ## <a name="open-a-firewall-port"></a> 1. Open a Firewall Port
 By default, Minio uses port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port. See [Allow Port Access for Firewalls](#allowport) for information on opening firewall ports.
