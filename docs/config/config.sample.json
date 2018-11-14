@@ -121,6 +121,17 @@
 				}
 			}
 		},
+		"nsq": {
+			"1": {
+				"enable": false,
+				"nsqdAddress": "",
+				"topic": "",
+				"tls": {
+					"enable": false,
+					"skipVerify": true
+				}
+			}
+		},
 		"postgresql": {
 			"1": {
 				"enable": false,

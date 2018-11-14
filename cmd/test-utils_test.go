@@ -2354,8 +2354,9 @@ func TestToErrIsNil(t *testing.T) {
 	if toStorageErr(nil) != nil {
 		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", toStorageErr(nil))
 	}
-	if toAPIErrorCode(nil) != ErrNone {
-		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(nil))
+	ctx := context.Background()
+	if toAPIErrorCode(ctx, nil) != ErrNone {
+		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(ctx, nil))
 	}
 }
 

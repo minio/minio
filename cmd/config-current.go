@@ -43,9 +43,9 @@ import (
 // 6. Make changes in config-current_test.go for any test change
 
 // Config version
-const serverConfigVersion = "31"
+const serverConfigVersion = "32"
 
-type serverConfig = serverConfigV31
+type serverConfig = serverConfigV32
 
 var (
 	// globalServerConfig server config.
@@ -210,6 +210,12 @@ func (s *serverConfig) Validate() error {
 		}
 	}
 
+	for _, v := range s.Notify.NSQ {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("nsq: %s", err)
+		}
+	}
+
 	for _, v := range s.Notify.PostgreSQL {
 		if err := v.Validate(); err != nil {
 			return fmt.Errorf("postgreSQL: %s", err)
@@ -358,6 +364,17 @@ func (s *serverConfig) TestNotificationTargets() error {
 		t.Close()
 	}
 
+	for k, v := range s.Notify.NSQ {
+		if !v.Enable {
+			continue
+		}
+		t, err := target.NewNSQTarget(k, v)
+		if err != nil {
+			return fmt.Errorf("nsq(%s): %s", k, err.Error())
+		}
+		t.Close()
+	}
+
 	for k, v := range s.Notify.PostgreSQL {
 		if !v.Enable {
 			continue
@@ -405,6 +422,8 @@ func (s *serverConfig) ConfigDiff(t *serverConfig) string {
 		return "AMQP Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
 		return "NATS Notification configuration differs"
+	case !reflect.DeepEqual(s.Notify.NSQ, t.Notify.NSQ):
+		return "NSQ Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.Elasticsearch, t.Notify.Elasticsearch):
 		return "ElasticSearch Notification configuration differs"
 	case !reflect.DeepEqual(s.Notify.Redis, t.Notify.Redis):
@@ -470,6 +489,8 @@ func newServerConfig() *serverConfig {
 	srvCfg.Notify.Redis["1"] = target.RedisArgs{}
 	srvCfg.Notify.NATS = make(map[string]target.NATSArgs)
 	srvCfg.Notify.NATS["1"] = target.NATSArgs{}
+	srvCfg.Notify.NSQ = make(map[string]target.NSQArgs)
+	srvCfg.Notify.NSQ["1"] = target.NSQArgs{}
 	srvCfg.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
 	srvCfg.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
 	srvCfg.Notify.MySQL = make(map[string]target.MySQLArgs)
@@ -694,6 +715,20 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.NATS {
 		if args.Enable {
 			newTarget, err := target.NewNATSTarget(id, args)
+			if err != nil {
+				logger.LogIf(context.Background(), err)
+				continue
+			}
+			if err = targetList.Add(newTarget); err != nil {
+				logger.LogIf(context.Background(), err)
+				continue
+			}
+		}
+	}
+
+	for id, args := range config.Notify.NSQ {
+		if args.Enable {
+			newTarget, err := target.NewNSQTarget(id, args)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

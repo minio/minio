@@ -58,7 +58,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	if err = objAPI.SetBucketPolicy(ctx, bucket, bucketPolicy); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -121,12 +121,12 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	if err := objAPI.DeleteBucketPolicy(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -159,21 +159,20 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	// Check if bucket exists.
 	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	// Read bucket access policy.
 	bucketPolicy, err := objAPI.GetBucketPolicy(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
 	policyData, err := json.Marshal(bucketPolicy)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 

@@ -655,7 +655,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err == dns.ErrNoEntriesFound {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
 		} else {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(context.Background(), err), r.URL)
 		}
 		return
 	}

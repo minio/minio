@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"os"
+	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -71,7 +72,7 @@ func handleSignals() {
 			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
 			stopHTTPTrace()
-			logger.Info("Exiting on signal %v", osSignal)
+			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
 			switch signal {

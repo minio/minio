@@ -253,12 +253,6 @@ func getUserAgent(mode string) string {
 	if mode != "" {
 		uaAppend("; ", mode)
 	}
-	if len(globalCacheDrives) > 0 {
-		uaAppend("; ", "feature-cache")
-	}
-	if globalWORMEnabled {
-		uaAppend("; ", "feature-worm")
-	}
 	if IsDCOS() {
 		uaAppend("; ", "dcos")
 	}

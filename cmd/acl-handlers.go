@@ -78,7 +78,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	// Before proceeding validate if bucket exists.
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 		Permission: "FULL_CONTROL",
 	})
 	if err := xml.NewEncoder(w).Encode(acl); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	// Before proceeding validate if object exists.
 	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 		Permission: "FULL_CONTROL",
 	})
 	if err := xml.NewEncoder(w).Encode(acl); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 

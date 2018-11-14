@@ -100,7 +100,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// marshaled into S3 compatible XML header.
 	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		} else if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
 		}
@@ -182,7 +182,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// marshaled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return
 	}
 
@@ -200,7 +200,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 				return
 			}
 		}

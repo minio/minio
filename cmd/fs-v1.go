@@ -719,8 +719,12 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		// Read from fs metadata only if it exists.
 		_, rerr := fsMeta.ReadFrom(ctx, rlk.LockedFile)
 		fs.rwPool.Close(fsMetaPath)
-		if rerr != nil && rerr != io.EOF {
-			return oi, rerr
+		if rerr != nil {
+			if rerr != io.EOF {
+				return oi, rerr
+			}
+			// Set Default ETag, if fs.json is empty
+			fsMeta = fs.defaultFsJSON(object)
 		}
 	}
 
