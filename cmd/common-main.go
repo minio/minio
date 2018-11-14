@@ -32,6 +32,8 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/target/console"
+	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	xnet "github.com/minio/minio/pkg/net"
@@ -54,25 +56,25 @@ func loadLoggers() {
 	auditEndpoint, ok := os.LookupEnv("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(logger.NewHTTP(auditEndpoint, NewCustomHTTPTransport()))
+		logger.AddAuditTarget(http.New(auditEndpoint, NewCustomHTTPTransport()))
 	}
 
 	loggerEndpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable HTTP logging through ENV.
-		logger.AddTarget(logger.NewHTTP(loggerEndpoint, NewCustomHTTPTransport()))
+		logger.AddTarget(http.New(loggerEndpoint, NewCustomHTTPTransport()))
 	} else {
 		for _, l := range globalServerConfig.Logger.HTTP {
 			if l.Enabled {
 				// Enable http logging
-				logger.AddTarget(logger.NewHTTP(l.Endpoint, NewCustomHTTPTransport()))
+				logger.AddTarget(http.New(l.Endpoint, NewCustomHTTPTransport()))
 			}
 		}
 	}
 
 	if globalServerConfig.Logger.Console.Enabled {
 		// Enable console logging
-		logger.AddTarget(logger.NewConsole())
+		logger.AddTarget(console.New())
 	}
 
 }

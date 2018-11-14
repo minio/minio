@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package logger
+package http
 
 import (
 	"bytes"
@@ -22,24 +22,24 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"net/http"
+	gohttp "net/http"
 )
 
-// HTTPTarget implements loggerTarget and sends the json
+// Target implements logger.Target and sends the json
 // format of a log entry to the configured http endpoint.
 // An internal buffer of logs is maintained but when the
 // buffer is full, new logs are just ignored and an error
 // is returned to the caller.
-type HTTPTarget struct {
+type Target struct {
 	// Channel of log entries
 	logCh chan interface{}
 
 	// HTTP(s) endpoint
 	endpoint string
-	client   http.Client
+	client   gohttp.Client
 }
 
-func (h *HTTPTarget) startHTTPLogger() {
+func (h *Target) startHTTPLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
 	go func() {
@@ -49,7 +49,7 @@ func (h *HTTPTarget) startHTTPLogger() {
 				continue
 			}
 
-			req, err := http.NewRequest("POST", h.endpoint, bytes.NewBuffer(logJSON))
+			req, err := gohttp.NewRequest("POST", h.endpoint, bytes.NewBuffer(logJSON))
 			req.Header.Set("Content-Type", "application/json")
 
 			resp, err := h.client.Do(req)
@@ -65,12 +65,12 @@ func (h *HTTPTarget) startHTTPLogger() {
 	}()
 }
 
-// NewHTTP initializes a new logger target which
+// New initializes a new logger target which
 // sends log over http to the specified endpoint
-func NewHTTP(endpoint string, transport *http.Transport) LoggingTarget {
-	h := HTTPTarget{
+func New(endpoint string, transport *gohttp.Transport) *Target {
+	h := Target{
 		endpoint: endpoint,
-		client: http.Client{
+		client: gohttp.Client{
 			Transport: transport,
 		},
 		logCh: make(chan interface{}, 10000),
@@ -80,7 +80,8 @@ func NewHTTP(endpoint string, transport *http.Transport) LoggingTarget {
 	return &h
 }
 
-func (h *HTTPTarget) send(entry interface{}) error {
+// Send log message 'e' to http target.
+func (h *Target) Send(entry interface{}) error {
 	select {
 	case h.logCh <- entry:
 	default:

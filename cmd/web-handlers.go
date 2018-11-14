@@ -707,7 +707,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebUpload")
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -845,7 +845,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownload")
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1027,7 +1027,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownloadZip")
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()

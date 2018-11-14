@@ -16,18 +16,18 @@
 
 package logger
 
-// LoggingTarget is the entity that we will receive
-// a single log entry and send it to the log target
-//   e.g. send the log to a http server
-type LoggingTarget interface {
-	send(entry interface{}) error
+// Target is the entity that we will receive
+// a single log entry and Send it to the log target
+//   e.g. Send the log to a http server
+type Target interface {
+	Send(entry interface{}) error
 }
 
 // Targets is the set of enabled loggers
-var Targets = []LoggingTarget{}
+var Targets = []Target{}
 
 // AddTarget adds a new logger target to the
 // list of enabled loggers
-func AddTarget(t LoggingTarget) {
+func AddTarget(t Target) {
 	Targets = append(Targets, t)
 }

@@ -24,7 +24,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -273,7 +272,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			rlk.Close()
 			return nil, err
 		}
-		logger.SetDeploymentID(id)
+		globalDeploymentID = id
 		return rlk, nil
 	}
 }

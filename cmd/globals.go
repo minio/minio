@@ -255,6 +255,9 @@ var (
 	// OPA policy system.
 	globalPolicyOPA *iampolicy.Opa
 
+	// Deployment ID - unique per deployment
+	globalDeploymentID string
+
 	// Add new variable global values here.
 )
 

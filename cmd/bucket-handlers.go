@@ -89,7 +89,7 @@ func initFederatorBackend(objLayer ObjectLayer) {
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketLocation")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "GetBucketLocation")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -139,7 +139,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListMultipartUploads")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "ListMultipartUploads")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -192,7 +192,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListBuckets")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "ListBuckets")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -250,7 +250,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteMultipleObjects")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "DeleteMultipleObjects")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -397,7 +397,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucket")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "PutBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -475,7 +475,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PostPolicyBucket")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "PostPolicyBucket")
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -703,7 +703,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadBucket")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "HeadBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -735,7 +735,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteBucket")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "DeleteBucket")
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

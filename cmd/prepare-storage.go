@@ -210,7 +210,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 		}
 	}
 
-	logger.SetDeploymentID(format.ID)
+	globalDeploymentID = format.ID
 
 	if err = formatXLFixLocalDeploymentID(context.Background(), storageDisks, format); err != nil {
 		return nil, err
