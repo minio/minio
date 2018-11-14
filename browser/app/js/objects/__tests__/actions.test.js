@@ -26,6 +26,8 @@ jest.mock("../../web", () => ({
     .fn(() => true)
     .mockReturnValueOnce(true)
     .mockReturnValueOnce(false)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(true)
     .mockReturnValueOnce(false),
   ListObjects: jest.fn(({ bucketName }) => {
     if (bucketName === "test-deny") {
@@ -405,7 +407,7 @@ describe("Objects actions", () => {
       store.dispatch(actionsObjects.downloadObject("obj1"))
       const url = `${
         window.location.origin
-      }${minioBrowserPrefix}/download/bk1/${encodeURI("pre1/obj1")}?token=''`
+      }${minioBrowserPrefix}/download/bk1/${encodeURI("pre1/obj1")}?token=`
       expect(setLocation).toHaveBeenCalledWith(url)
     })
 
