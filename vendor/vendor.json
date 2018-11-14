@@ -176,12 +176,6 @@
 			"revisionTime": "2018-07-03T21:59:44Z"
 		},
 		{
-			"checksumSHA1": "mKIXx1kDwmVmdIpZ3pJtRBuUKso=",
-			"path": "github.com/coreos/etcd/pkg/pathutil",
-			"revision": "f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b",
-			"revisionTime": "2017-10-06T15:58:06Z"
-		},
-		{
 			"checksumSHA1": "Hspf+u/wsBRUBNaXHgVUYBWeq10=",
 			"path": "github.com/coreos/etcd/pkg/systemd",
 			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
@@ -926,12 +920,6 @@
 			"revisionTime": "2016-12-12T16:53:56Z"
 		},
 		{
-			"checksumSHA1": "MWqyOvDMkW+XYe2RJ5mplvut+aE=",
-			"path": "github.com/ugorji/go/codec",
-			"revision": "ded73eae5db7e7a0ef6f55aace87a2873c5d2b74",
-			"revisionTime": "2017-01-07T13:32:03Z"
-		},
-		{
 			"checksumSHA1": "R/Mpe0uUp5HeqWrdrH5qE2qZuE8=",
 			"path": "github.com/valyala/tcplisten",
 			"revision": "ceec8f93295a060cdb565ec25e4ccf17941dbd55",
@@ -1468,12 +1456,6 @@
 		{
 			"checksumSHA1": "LKKkn7EYA+Do9Qwb2/SUKLFNxoo=",
 			"path": "google.golang.org/grpc/encoding/proto",
-			"revision": "168a6198bcb0ef175f7dacec0b8691fc141dc9b8",
-			"revisionTime": "2018-06-19T22:19:05Z"
-		},
-		{
-			"checksumSHA1": "XbDzI4GeUt2/8WAS5mLKm5ghVWo=",
-			"path": "google.golang.org/grpc/grpclb/grpc_lb_v1",
 			"revision": "168a6198bcb0ef175f7dacec0b8691fc141dc9b8",
 			"revisionTime": "2018-06-19T22:19:05Z"
 		},
