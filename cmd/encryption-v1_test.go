@@ -37,7 +37,7 @@ var hasServerSideEncryptionHeaderTests = []struct {
 	{headers: map[string]string{}, sseRequest: false},                                                                                                           // 4
 	{headers: map[string]string{crypto.SSECopyAlgorithm + " ": "AES256", " " + crypto.SSECopyKey: "key", crypto.SSECopyKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
 	{headers: map[string]string{crypto.SSECopyAlgorithm: "", crypto.SSECopyKey: "", crypto.SSECopyKeyMD5: ""}, sseRequest: false},                               // 6
-	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: true},                                                                                        // 6
+	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: true},                                                                                        // 7
 }
 
 func TestHasServerSideEncryptionHeader(t *testing.T) {
@@ -94,7 +94,7 @@ var hasSSECustomerHeaderTests = []struct {
 
 }
 
-func TesthasSSECustomerHeader(t *testing.T) {
+func TestHasSSECustomerHeader(t *testing.T) {
 	for i, test := range hasSSECustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {

@@ -550,7 +550,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	credentials := globalServerConfig.GetCredential()
 
 	body, err := json.Marshal(madmin.ServiceAction{
-		cmd.toServiceActionValue()})
+		Action: cmd.toServiceActionValue()})
 	if err != nil {
 		t.Fatalf("JSONify error: %v", err)
 	}

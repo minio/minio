@@ -72,7 +72,7 @@ func (target *WebhookTarget) Send(eventData event.Event) error {
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (target *WebhookTarget) Close() error {
 // NewWebhookTarget - creates new Webhook target.
 func NewWebhookTarget(id string, args WebhookArgs) *WebhookTarget {
 	return &WebhookTarget{
-		id:   event.TargetID{id, "webhook"},
+		id:   event.TargetID{ID: id, Name: "webhook"},
 		args: args,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
