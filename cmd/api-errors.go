@@ -29,6 +29,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/s3select"
+	"github.com/minio/minio/pkg/s3select/format"
 )
 
 // APIError structure
@@ -1655,7 +1656,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrEvaluatorBindingDoesNotExist
 	case s3select.ErrMissingHeaders:
 		apiErr = ErrMissingHeaders
-
+	case format.ErrParseInvalidPathComponent:
+		apiErr = ErrMissingHeaders
 	}
 
 	// Compression errors

@@ -19,17 +19,17 @@ package s3select
 import (
 	"bytes"
 	"compress/bzip2"
-	"compress/gzip"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+	"github.com/klauspost/pgzip"
+
 	"github.com/minio/minio/pkg/s3select/format"
 	"github.com/minio/minio/pkg/s3select/format/csv"
 	"github.com/minio/minio/pkg/s3select/format/json"
-
-	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -40,18 +40,6 @@ const (
 	continuationTime time.Duration = 5 * time.Second
 )
 
-// ParseSelectTokens tokenizes the select query into required Columns, Alias, limit value
-// where clause, aggregate functions, myFunctions, error.
-type ParseSelectTokens struct {
-	reqCols          []string
-	alias            string
-	myLimit          int64
-	whereClause      interface{}
-	aggFunctionNames []string
-	myFuncs          *SelectFuncs
-	myErr            error
-}
-
 // Row is a Struct for keeping track of key aspects of a row.
 type Row struct {
 	record string
@@ -60,7 +48,7 @@ type Row struct {
 
 // This function replaces "",'' with `` for the select parser
 func cleanExpr(expr string) string {
-	r := strings.NewReplacer("\"", "`", "'", "`")
+	r := strings.NewReplacer("\"", "`")
 	return r.Replace(expr)
 }
 
@@ -68,7 +56,7 @@ func cleanExpr(expr string) string {
 func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Select, err error) {
 	switch req.InputSerialization.CompressionType {
 	case SelectCompressionGZIP:
-		if reader, err = gzip.NewReader(reader); err != nil {
+		if reader, err = pgzip.NewReader(reader); err != nil {
 			return nil, format.ErrTruncatedInput
 		}
 	case SelectCompressionBZIP:
@@ -119,7 +107,7 @@ func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Sele
 // response writer in a streaming fashion so that the client can actively use
 // the results before the query is finally finished executing. The
 func Execute(writer io.Writer, f format.Select) error {
-	myRow := make(chan Row, 1000)
+	rowCh := make(chan Row)
 	curBuf := bytes.NewBuffer(make([]byte, humanize.MiByte))
 	curBuf.Reset()
 	progressTicker := time.NewTicker(progressTime)
@@ -127,10 +115,10 @@ func Execute(writer io.Writer, f format.Select) error {
 	defer progressTicker.Stop()
 	defer continuationTimer.Stop()
 
-	go runSelectParser(f, myRow)
+	go runSelectParser(f, rowCh)
 	for {
 		select {
-		case row, ok := <-myRow:
+		case row, ok := <-rowCh:
 			if ok && row.err != nil {
 				_, err := writeErrorMessage(row.err, curBuf).WriteTo(writer)
 				flusher, okFlush := writer.(http.Flusher)
@@ -141,7 +129,7 @@ func Execute(writer io.Writer, f format.Select) error {
 					return err
 				}
 				curBuf.Reset()
-				close(myRow)
+				close(rowCh)
 				return nil
 			} else if ok {
 				_, err := writeRecordMessage(row.record, curBuf).WriteTo(writer)

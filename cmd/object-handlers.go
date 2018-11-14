@@ -230,9 +230,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	}
 	if selectReq.InputSerialization.JSON != nil {
-		if selectReq.InputSerialization.JSON.Type != s3select.JSONTypeDocument &&
-			selectReq.InputSerialization.JSON.Type != s3select.JSONLinesType &&
-			selectReq.InputSerialization.JSON.Type != "" {
+		if selectReq.InputSerialization.JSON.Type != s3select.JSONLinesType {
 			writeErrorResponse(w, ErrInvalidJSONType, r.URL)
 			return
 		}
@@ -255,7 +253,16 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	reader := readahead.NewReader(gr)
 	defer reader.Close()
 
-	s3s, err := s3select.New(reader, objInfo.GetActualSize(), selectReq)
+	size := objInfo.Size
+	if objInfo.IsCompressed() {
+		size = objInfo.GetActualSize()
+		if size < 0 {
+			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidDecompressedSize), r.URL)
+			return
+		}
+	}
+
+	s3s, err := s3select.New(reader, size, selectReq)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
 		return

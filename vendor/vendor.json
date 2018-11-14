@@ -528,12 +528,6 @@
 			"revisionTime": "2018-01-16T16:19:11Z"
 		},
 		{
-			"checksumSHA1": "WqeEgS7pqqkwK8mlrAZmDgtWJMY=",
-			"path": "github.com/json-iterator/go",
-			"revision": "1624edc4454b8682399def8740d46db5e4362ba4",
-			"revisionTime": "2018-08-06T06:07:27Z"
-		},
-		{
 			"checksumSHA1": "mA7isU/nIAT5ytwIzK65H0vlVqI=",
 			"path": "github.com/klauspost/compress/flate",
 			"revision": "5fb1f31b0a61e9858f12f39266e059848a5f1cea",
@@ -717,18 +711,6 @@
 			"revisionTime": "2015-07-17T05:11:58Z"
 		},
 		{
-			"checksumSHA1": "ZTcgWKWHsrX0RXYVXn5Xeb8Q0go=",
-			"path": "github.com/modern-go/concurrent",
-			"revision": "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94",
-			"revisionTime": "2018-03-06T01:26:44Z"
-		},
-		{
-			"checksumSHA1": "qvH48wzTIV3QKSDqI0dLFtVjaDI=",
-			"path": "github.com/modern-go/reflect2",
-			"revision": "94122c33edd36123c84d5368cfb2b69df93a0ec8",
-			"revisionTime": "2018-07-18T01:23:57Z"
-		},
-		{
 			"checksumSHA1": "zvQr4zOz1/g/Fui6co0sctxrJ28=",
 			"path": "github.com/nats-io/go-nats",
 			"revision": "6b6bf392d34d01f57cc563ae123f00c13778bd57",
@@ -902,10 +884,10 @@
 			"revisionTime": "2016-03-11T21:55:03Z"
 		},
 		{
-			"checksumSHA1": "d+4iuDj/qQ+2LiWEbQ+AWjxEJOc=",
+			"checksumSHA1": "QI+LuP9gKNIfftobaThCcAnOCX0=",
 			"path": "github.com/tidwall/gjson",
-			"revision": "f123b340873a0084cb27267eddd8ff615115fbff",
-			"revisionTime": "2018-06-21T18:09:58Z"
+			"revision": "081192fa2e471ddff3ec98a3cc04fecfd031ed57",
+			"revisionTime": "2018-10-28T15:46:04Z"
 		},
 		{
 			"checksumSHA1": "qmePMXEDYGwkAfT9QvtMC58JN/E=",
