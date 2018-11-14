@@ -28,6 +28,7 @@ const (
 
 	storageRESTMethodPrepareFile = "preparefile"
 	storageRESTMethodAppendFile  = "appendfile"
+	storageRESTMethodWriteAll    = "writeall"
 	storageRESTMethodStatFile    = "statfile"
 	storageRESTMethodReadAll     = "readall"
 	storageRESTMethodReadFile    = "readfile"

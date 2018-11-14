@@ -47,6 +47,9 @@ type StorageAPI interface {
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
 
+	// Write all data, syncs the data to disk.
+	WriteAll(volume string, path string, buf []byte) (err error)
+
 	// Read all.
 	ReadAll(volume string, path string) (buf []byte, err error)
 }
