@@ -89,7 +89,7 @@ var hasSSECustomerHeaderTests = []struct {
 	{headers: map[string]string{crypto.SSECKeyMD5: "md5"}, sseRequest: true},                                                                           // 3
 	{headers: map[string]string{}, sseRequest: false},                                                                                                  // 4
 	{headers: map[string]string{crypto.SSECAlgorithm + " ": "AES256", " " + crypto.SSECKey: "key", crypto.SSECKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
-	{headers: map[string]string{crypto.SSECAlgorithm: "", crypto.SSECKey: "", crypto.SSECKeyMD5: ""}, sseRequest: false},                               // 6
+	{headers: map[string]string{crypto.SSECAlgorithm: "", crypto.SSECKey: "", crypto.SSECKeyMD5: ""}, sseRequest: true},                                // 6
 	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: false},                                                                              // 7
 
 }
