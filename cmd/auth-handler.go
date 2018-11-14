@@ -109,10 +109,10 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeJWT
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
-	} else if _, ok := r.Header["Authorization"]; !ok {
-		return authTypeAnonymous
 	} else if _, ok := r.URL.Query()["Action"]; ok {
 		return authTypeSTS
+	} else if _, ok := r.Header["Authorization"]; !ok {
+		return authTypeAnonymous
 	}
 	return authTypeUnknown
 }
@@ -393,6 +393,9 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		a.handler.ServeHTTP(w, r)
+		return
+	} else if aType == authTypeSTS {
 		a.handler.ServeHTTP(w, r)
 		return
 	}

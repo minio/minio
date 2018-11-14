@@ -76,7 +76,7 @@ func (target *NSQTarget) Send(eventData event.Event) (err error) {
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func NewNSQTarget(id string, args NSQArgs) (*NSQTarget, error) {
 	}
 
 	return &NSQTarget{
-		id:       event.TargetID{id, "nsq"},
+		id:       event.TargetID{ID: id, Name: "nsq"},
 		args:     args,
 		producer: producer,
 	}, nil

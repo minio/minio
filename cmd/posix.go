@@ -847,7 +847,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	return int64(len(buffer)), nil
 }
 
-func (s *posix) createFile(volume, path string) (f *os.File, err error) {
+func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -896,7 +896,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	}
 
-	w, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	w, err := os.OpenFile(filePath, mode, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
@@ -941,7 +941,7 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 	}
 
 	// Create file if not found
-	w, err := s.createFile(volume, path)
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
@@ -972,6 +972,30 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 	return nil
 }
 
+func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
+	defer func() {
+		if err == errFaultyDisk {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
+	// Create file if not found
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_WRONLY)
+	if err != nil {
+		return err
+	}
+
+	if _, err = w.Write(buf); err != nil {
+		return err
+	}
+
+	return w.Close()
+}
+
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
@@ -986,13 +1010,16 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	}
 
 	// Create file if not found
-	w, err := s.createFile(volume, path)
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(buf)
-	w.Close()
-	return err
+
+	if _, err = w.Write(buf); err != nil {
+		return err
+	}
+
+	return w.Close()
 }
 
 // StatFile - get file info.

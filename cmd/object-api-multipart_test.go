@@ -329,20 +329,20 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Test case - 12.
 		// Input to replicate Md5 mismatch.
 		{bucket, object, uploadID, 1, "", "d41d8cd98f00b204e9800998ecf8427f", "", 0, false, "",
-			hash.BadDigest{"d41d8cd98f00b204e9800998ecf8427f", "d41d8cd98f00b204e9800998ecf8427e"}},
+			hash.BadDigest{ExpectedMD5: "d41d8cd98f00b204e9800998ecf8427f", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"}},
 		// Test case - 13.
 		// When incorrect sha256 is provided.
 		{bucket, object, uploadID, 1, "", "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854", 0, false, "",
-			hash.SHA256Mismatch{"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854",
-				"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}},
+			hash.SHA256Mismatch{ExpectedSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854",
+				CalculatedSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}},
 		// Test case - 14.
 		// Input with size more than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f3335", "", int64(len("abcd") + 1), false, "",
-			hash.BadDigest{"e2fc714c4727ee9395f324cd2e7f3335", "e2fc714c4727ee9395f324cd2e7f331f"}},
+			hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f3335", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"}},
 		// Test case - 15.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, uploadID, 1, "abcd", "900150983cd24fb0d6963f7d28e17f73", "", int64(len("abcd") - 1), false, "",
-			hash.BadDigest{"900150983cd24fb0d6963f7d28e17f73", "900150983cd24fb0d6963f7d28e17f72"}},
+			hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"}},
 
 		// Test case - 16-19.
 		// Validating for success cases.

@@ -179,6 +179,33 @@ func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// WriteAllHandler - write to file all content.
+func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	buf := make([]byte, r.ContentLength)
+	_, err := io.ReadFull(r.Body, buf)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	err = s.storage.WriteAll(volume, filePath, buf)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
 // StatFileHandler - stat a file.
 func (s *storageRESTServer) StatFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -335,6 +362,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodPrepareFile).HandlerFunc(httpTraceHdrs(server.PrepareFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodAppendFile).HandlerFunc(httpTraceHdrs(server.AppendFileHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodWriteAll).HandlerFunc(httpTraceHdrs(server.WriteAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatFile).HandlerFunc(httpTraceHdrs(server.StatFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)

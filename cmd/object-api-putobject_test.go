@@ -97,24 +97,24 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test case - 7.
 		// Input to replicate Md5 mismatch.
 		{bucket, object, []byte(""), map[string]string{"etag": "d41d8cd98f00b204e9800998ecf8427f"}, "", 0, "",
-			hash.BadDigest{"d41d8cd98f00b204e9800998ecf8427f", "d41d8cd98f00b204e9800998ecf8427e"}},
+			hash.BadDigest{ExpectedMD5: "d41d8cd98f00b204e9800998ecf8427f", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"}},
 
 		// Test case - 8.
 		// With incorrect sha256.
 		{bucket, object, []byte("abcd"), map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"},
 			"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580", int64(len("abcd")),
-			"", hash.SHA256Mismatch{"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
-				"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"}},
+			"", hash.SHA256Mismatch{ExpectedSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
+				CalculatedSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"}},
 
 		// Test case - 9.
 		// Input with size more than the size of actual data inside the reader.
 		{bucket, object, []byte("abcd"), map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331e"}, "", int64(len("abcd") + 1), "",
-			hash.BadDigest{"e2fc714c4727ee9395f324cd2e7f331e", "e2fc714c4727ee9395f324cd2e7f331f"}},
+			hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f331e", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"}},
 
 		// Test case - 10.
 		// Input with size less than the size of actual data inside the reader.
 		{bucket, object, []byte("abcd"), map[string]string{"etag": "900150983cd24fb0d6963f7d28e17f73"}, "", int64(len("abcd") - 1), "",
-			hash.BadDigest{"900150983cd24fb0d6963f7d28e17f73", "900150983cd24fb0d6963f7d28e17f72"}},
+			hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"}},
 
 		// Test case - 11-14.
 		// Validating for success cases.
@@ -144,11 +144,11 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test case 24-26.
 		// data with invalid md5sum in header
 		{bucket, object, data, invalidMD5Header, "", int64(len(data)), getMD5Hash(data),
-			hash.BadDigest{invalidMD5, getMD5Hash(data)}},
+			hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(data)}},
 		{bucket, object, nilBytes, invalidMD5Header, "", int64(len(nilBytes)), getMD5Hash(nilBytes),
-			hash.BadDigest{invalidMD5, getMD5Hash(nilBytes)}},
+			hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(nilBytes)}},
 		{bucket, object, fiveMBBytes, invalidMD5Header, "", int64(len(fiveMBBytes)), getMD5Hash(fiveMBBytes),
-			hash.BadDigest{invalidMD5, getMD5Hash(fiveMBBytes)}},
+			hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(fiveMBBytes)}},
 
 		// Test case 27-29.
 		// data with size different from the actual number of bytes available in the reader

@@ -140,7 +140,7 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs) (*ElasticsearchTa
 	}
 
 	return &ElasticsearchTarget{
-		id:     event.TargetID{id, "elasticsearch"},
+		id:     event.TargetID{ID: id, Name: "elasticsearch"},
 		args:   args,
 		client: client,
 	}, nil
