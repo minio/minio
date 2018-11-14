@@ -1,24 +1,80 @@
 # Minio Quickstart Guide
 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio is an *object storage server*, released under Apache License v2.0, that is compatible with the Amazon S3 cloud storage service. Minio also provides a *client component* used for sending and retrieving objects to and from the server. 
+Minio is an *object storage server*, released under Apache License v2.0, that is compatible with the Amazon S3 cloud storage service. Minio also provides a client that communicates with the server to store and retrieve objects. 
 
-Minio is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. The size of an object can range from a few kilobytes to a maximum of 5TB. Minio Server is light enough to be bundled with an application stack similar to NodeJS, Redis, and MySQL.
+Minio is best suited for storing unstructured data such as photos, videos, log files, backups, and container / VM images. The size of an object can range from a few kilobytes to a maximum of 5TB. Minio Server is light enough to be bundled with an application stack similar to NodeJS, Redis, and MySQL.
 
-This quickstart guide describes how to quickly install and run a local Minio server, and guides you through the process of storing and retrieving an image file. These are the steps you will follow:
+This quickstart guide describes how to quickly install and run Minio Server locally. These are the steps you will follow:
 
 1. [Open a Firewall Port](#open-a-firewall-port) 
 2. [Install and run the Minio Server](#install-and-run-server) 
-3. [Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys) 
-4. [(Optional) Test Using the Minio Web Browser](#test-web-browser) 
-5. [Install the Minio Client](#install-client) 
-6. [Test the Client Against the Server](#test-client-against-server)
+3. [Test Using the Minio Web-based Object Browser](#test-web-browser) 
+4. [Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys) 
+5. [Test using Minio Client](#test-client)
 
 ## <a name="open-a-firewall-port"></a> 1. Open a Firewall Port
-By default, Minio uses port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port. See [Allow Port Access for Firewalls](#allowport) for information on opening firewall ports.
+By default, Minio uses port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port. Use one of the following methods to allow port access:
+* [iptables](#host-iptables)<br/>
+* [ufw](#host-ufw)<br/>
+* [firewall-cmd](#host-firewall-cmd)
+
+### <a name="host-iptables"></a> **iptables**
+
+For hosts with `iptables` enabled (RHEL, CentOS, etc), use `iptables` to enable all traffic coming into specific ports. The following command allows access to port 9000:
+
+```sh
+iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
+service iptables restart
+```
+
+The following command enables all incoming traffic to ports 9000 through 9010:
+
+```sh
+iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
+service iptables restart
+```
+
+### <a name="host-ufw"></a> **ufw**
+
+For hosts with `ufw` enabled (Debian-based distributions), use `ufw` to allow traffic on specific ports. The following command allows access to port 9000:
+
+```sh
+ufw allow 9000
+```
+
+The following command enables all incoming traffic to ports 9000 through 9010:
+
+```sh
+ufw allow 9000:9010/tcp
+```
+
+### <a name="host-firewall-cmd"></a> **firewall-cmd**
+
+For hosts with `firewall-cmd` enabled (CentOS), use `firewall-cmd` to allow traffic to specific ports. The following command sequence allows access to port 9000.
+
+This command gets the active zones: 
+
+```sh
+firewall-cmd --get-active-zones
+```
+
+Apply port rules to the relevant zones returned by the previous command. For example, if the zone is `public`, use the following command: 
+
+```sh
+firewall-cmd --zone=public --add-port=9000/tcp --permanent
+```
+
+**Note:** `--permanent` ensures the rules are persistent across a start, restart, or reload of the firewall.
+
+Specify `--reload` with `firewall-cmd` for the changes to take effect:
+
+```sh
+firewall-cmd --reload
+```
 
 ## <a name="install-and-run-server"></a> 2. Install and run the Minio Server
-Open a command-line window and use one of the following methods to install and run the Minio server locally:
+Use one of the following methods to install and run Minio Server locally:
 * [Docker Container](#server-docker)  
 * [macOS](#server-macos)
 * [GNU/Linux](#server-linux)
@@ -72,7 +128,7 @@ Run the server on port 9000 and store data in a local folder named **/data**:
 minio server /data
 ```
 
-> Note: If you previously installed `minio` using `brew install minio`, it is recommended that you reinstall `minio` from the `minio/stable/minio` official repo instead.
+**Note:** If you previously installed `minio` using `brew install minio`, it is recommended that you reinstall `minio` from the official `minio/stable/minio` repository instead.
 
 ```sh
 brew uninstall minio
@@ -83,6 +139,8 @@ brew install minio/stable/minio
 | Platform|  URL|
 | ----------| ------|
 |Apple macOS|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+
+Allow all users to read and execute `minio`:
 
 ```sh
 chmod 755 minio
@@ -99,6 +157,8 @@ Run the server on port 9000 and store data in a local folder named **/data**:
 | Platform|  URL|
 | ----------| ------|
 |GNU/Linux|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+
+Download the binary and make it into an executable:
 
 ```sh
 wget https://dl.minio.io/server/minio/release/linux-amd64/minio
@@ -117,10 +177,7 @@ Run the server on port 9000 and store data in a local folder named **/data**:
 | ----------| ------|
 |Microsoft Windows|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
 
-```sh
-```
-
-Run the server on port 9000 and store data in a local folder on the **D:\ **drive in a folder named **Photos**:
+Run the server on port 9000 and store data in a local folder on the **D:\Photos**:
 
 ```
 minio.exe server D:\Photos
@@ -128,29 +185,41 @@ minio.exe server D:\Photos
 
 ### <a name="server-freebsd"></a> **FreeBSD**
 #### Port
-Install minio packages using [pkg](https://github.com/freebsd/pkg):
+Install Minio packages using [pkg](https://github.com/freebsd/pkg):
 
 ```sh
 pkg install minio
+```
+
+Configure Minio variables to enable Minio and store data in a local folder named **/home/user/Photos**:
+
+```sh
 sysrc minio_enable=yes
 sysrc minio_disks=/home/user/Photos
 ```
 
-Run the server on the default port (9000) and store data in a local folder named **/home/user/Photos**:
+Run the server on the default port (9000):
 
 ```
 service minio start
 ```
 
 ### <a name="server-github"></a> **GitHub**
-An installation of the source repository from GitHub is only intended for developers and advanced users. If you do not have a working Golang environment, see [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
+Installing Minio from the source repository on GitHub is only intended for developers and advanced users. If you do not have a working Golang environment, see [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
+
+Install Minio Server using Golang:
 
 ```sh
 go get -u github.com/minio/minio
 ```
 
-## <a name="identify-endpoint-access-secret-keys"></a> 3. Identify the Endpoint, Access Key, and Secret Key
-Once the server is running, it will display information similar to the following:
+## <a name="test-web-browser"></a> 3. Test Using the Minio Web-based Object Browser
+If Minio Server has started successfully, it will display an embedded web-based object browser. Navigate your web browser to http://127.0.0.1:9000 and ensure that the following screen is displayed:
+
+![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
+
+## <a name="identify-endpoint-access-secret-keys"></a> 4. Identify the Endpoint, Access Key, and Secret Key
+Once the server is running you should see a response similar to this one:
 
 ```
 Endpoint:  http://192.168.0.15:9000  http://127.0.0.1:9000
@@ -163,173 +232,14 @@ Browser Access:
 Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
    $ mc config host add myminio http://192.168.0.15:9000 6BRHR38FJ1TWH54QGKO2 1PiWZf9hJVpjZkbhnfdDdE7SFAem__v0DghNJNdk
 ...
-
 ```
 
-From the output, identify the endpoint, access key, secret key, browser URLs and ports, and the client command necessary to add the server to the list of hosts accessible by the client. This information will be used in subsequent steps.
+From the output, identify the endpoint, access key, secret key, browser URLs and ports, and the client command necessary to add the server to the list of hosts accessible by the client. This information will be used when testing with Minio Client.
 
-## <a name="test-web-browser"></a> 4. (Optional) Test Using the Minio Web Browser
-The Minio Server comes with an embedded web-based object browser. Navigate your web browser to http://127.0.0.1:9000. If the embedded web-based object browser shown below displays in your browser, the server has started successfully:
+## <a name="test-client"></a> 5. Test Using Minio Client
+Minio Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server  (e.g. `ls`, `cat`, `cp`, `mirror`, `diff`, `find`, etc.). `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
 
-![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
-
-
-## <a name="install-client"></a> 5. Install the Minio Client
-The Minio client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server  (e.g. `ls`, `cat`, `cp`, `mirror`, `diff`, `find`, etc.). The `mc` command supports file systems and Amazon S3 compatible cloud storage services (AWS Signature v2 and v4).
-
-Open a new command-line window and use one of the following methods to install the Minio client:
-* [Docker Container](#client-docker)  
-* [macOS](#client-macos)
-* [GNU/Linux](#client-linux)
-* [Microsoft Windows](#client-windows)
-* [GitHub](#client-github)
-
-### <a name="client-docker"></a> **Docker Container**
-#### Stable
-
-Install the client:
-
-```
-docker pull minio/mc
-```
-
-#### Edge
-
-Install the client:
-
-```
-docker pull minio/mc:edge
-```
-
-### <a name="client-macos"></a> **macOS**
-#### Homebrew
-
-Install the `mc` client package using [Homebrew](http://brew.sh/):
-
-```sh
-brew install minio/stable/mc
-mc --help
-```
-
-### <a name="client-linux"></a> **GNU/Linux**
-#### Binary Download
-
-| Platform| URL|
-| ----------| ------|
-|GNU/Linux|https://dl.minio.io/client/mc/release/linux-amd64/mc |
-
-```sh
-wget https://dl.minio.io/client/mc/release/linux-amd64/mc
-chmod +x mc
-```
-
-### <a name="client-windows"></a> **Microsoft Windows**
-#### Binary Download
-| Platform|  URL|
-| ----------| ------|
-|Microsoft Windows|https://dl.minio.io/client/mc/release/windows-amd64/mc.exe |
-
-```sh
-mc.exe --help
-```
-
-### <a name="client-github"></a> **GitHub**
-An installation of the source repository from GitHub is only intended for developers and advanced users. The `mc` update command does not support update notifications for source-based installations. If you do not have a working Golang environment, see [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
-
-```sh
-go get -d github.com/minio/mc
-cd ${GOPATH}/src/github.com/minio/mc
-make
-```
-
-## <a name="test-client-against-server"></a> 6. Test the Client Against the Server
-The following examples show how to use the `mc` commands to store and retrieve an image file to and from the local server.
-
-### Create a New Local Bucket
-
-```sh 
-mc mb mybucket
-Bucket created successfully `mybucket`.
-```
-
-### List all Buckets Hosted by the Local Server
-```sh
-mc ls mybucket
-```
-
-### Copy a Picture File from your Local Hard Disk to the Bucket
-```sh
-mc cp mypicture.png mybucket
-mypicture.png:    14 B / 14 B  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  100.00 % 41 B/s 0
-```
-
-### Copy the Picture file from the Bucket back to Local Storage
-Use the following command to copy the picture file from the bucket back to local storage as a new file called `mypicture2.png`:
-```sh
-mc cp mybucket/mypicture.png mypicture2.png
-```
-
-## <a name="allowport"></a> Allow port access for Firewalls
-
-Use one of the following methods, depending on the type of host enabled:
-* [iptables](#host-iptables)
-* [ufw](#host-ufw)
-* [firewall-cmd](#host-firewall-cmd)
-
-
-### <a name="host-iptables"></a> **iptables**
-
-For hosts with `iptables` enabled (RHEL, CentOS, etc), use `iptables` to enable all traffic coming into specific ports. The following command allows access to port 9000:
-
-```sh
-iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
-service iptables restart
-```
-
-The following command enables all incoming traffic to ports 9000 through 9010:
-
-```sh
-iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
-service iptables restart
-```
-
-### <a name="host-ufw"></a> **ufw**
-
-For hosts with `ufw` enabled (Debian-based distributions), you can use `ufw` to allow traffic on specific ports. The following command allows access to port 9000:
-
-```sh
-ufw allow 9000
-```
-
-The following command enables all incoming traffic to ports 9000 through 9010:
-
-```sh
-ufw allow 9000:9010/tcp
-```
-
-### <a name="host-firewall-cmd"></a> **firewall-cmd**
-
-For hosts with `firewall-cmd` enabled (CentOS), you can use `firewall-cmd` to allow traffic to specific ports. The command sequence shown below allows access to port 9000.
-
-This command gets the active zones: 
-
-```sh
-firewall-cmd --get-active-zones
-```
-
-You can apply port rules to the relevant zones returned by the above command. For example, if the zone is `public`, use the following command, noting that `permanent` ensures the rules are persistent across a firewall start, restart, or reload:
-
-```sh
-firewall-cmd --zone=public --add-port=9000/tcp --permanent
-```
-
-
-Specify the `--reload` option with the `firewall-cmd` for the changes to take effect:
-
-```sh
-firewall-cmd --reload
-```
-
+Test `mc` with the server using the instructions in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide)
 
 ## Explore Further
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
@@ -339,8 +249,8 @@ firewall-cmd --reload
 - [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
 - [The Minio documentation website](https://docs.minio.io)
 
-## Contribute to Minio Project
-Please follow the instructions in the Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md).
+## Contribute to the Minio Project
+Follow the instructions in the Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md).
 
 ## License
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fminio%2Fminio.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fminio%2Fminio?ref=badge_large)
