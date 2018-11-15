@@ -139,7 +139,7 @@ func TestEncryptRequest(t *testing.T) {
 		for k, v := range test.header {
 			req.Header.Set(k, v)
 		}
-		_, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
+		_, _, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
@@ -324,7 +324,7 @@ var decryptObjectInfoTests = []struct {
 
 func TestDecryptObjectInfo(t *testing.T) {
 	for i, test := range decryptObjectInfoTests {
-		if encrypted, err := DecryptObjectInfo(test.info, test.headers); err != test.expErr {
+		if encrypted, err := DecryptObjectInfo(&test.info, test.headers); err != test.expErr {
 			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
 		} else if enc := crypto.IsEncrypted(test.info.UserDefined); encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)

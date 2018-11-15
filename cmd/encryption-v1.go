@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -205,21 +206,20 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 	sealedKey = objectKey.Seal(extKey, crypto.GenerateIV(rand.Reader), crypto.SSEC.String(), bucket, object)
 	crypto.SSEC.CreateMetadata(metadata, sealedKey)
 	return objectKey[:], nil
-
 }
 
-func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (io.Reader, error) {
+func newEncryptReader(content io.Reader, key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (r io.Reader, encKey []byte, err error) {
 	objectEncryptionKey, err := newEncryptMetadata(key, bucket, object, metadata, sseS3)
 	if err != nil {
-		return nil, err
+		return nil, encKey, err
 	}
 
 	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20})
 	if err != nil {
-		return nil, crypto.ErrInvalidCustomerKey
+		return nil, encKey, crypto.ErrInvalidCustomerKey
 	}
 
-	return reader, nil
+	return reader, objectEncryptionKey, nil
 }
 
 // set new encryption metadata from http request headers for SSE-C and generated key from KMS in the case of
@@ -241,19 +241,18 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 // EncryptRequest takes the client provided content and encrypts the data
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
-func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (io.Reader, error) {
+func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (reader io.Reader, objEncKey []byte, err error) {
 
 	var (
 		key []byte
-		err error
 	)
 	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
-		return nil, crypto.ErrIncompatibleEncryptionMethod
+		return nil, objEncKey, crypto.ErrIncompatibleEncryptionMethod
 	}
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err = ParseSSECustomerRequest(r)
 		if err != nil {
-			return nil, err
+			return nil, objEncKey, err
 		}
 	}
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
@@ -578,7 +577,6 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 
 		d.partDecRelOffset += int64(n1)
 	}
-
 	return len(p), nil
 }
 
@@ -813,7 +811,6 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 
 // getEncryptedMultipartsOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
 func getEncryptedMultipartsOffsetLength(offset, length int64, obj ObjectInfo) (uint32, int64, int64) {
-
 	// Calculate encrypted offset of a multipart object
 	computeEncOffset := func(off int64, obj ObjectInfo) (seqNumber uint32, encryptedOffset int64, err error) {
 		var curPartEndOffset uint64
@@ -907,6 +904,64 @@ func (o *ObjectInfo) DecryptedSize() (int64, error) {
 		size += int64(partSize)
 	}
 	return size, nil
+}
+
+// For encrypted objects, the ETag sent by client if available
+// is stored in encrypted form in the backend. Decrypt the ETag
+// if ETag was previously encrypted.
+func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) (decryptedETag string) {
+	var (
+		key [32]byte
+		err error
+	)
+	// If ETag is contentMD5Sum return it as is.
+	if len(objInfo.ETag) == 32 {
+		return objInfo.ETag
+	}
+
+	if crypto.IsMultiPart(objInfo.UserDefined) {
+		return objInfo.ETag
+	}
+	if crypto.SSECopy.IsRequested(headers) {
+		key, err = crypto.SSECopy.ParseHTTP(headers)
+		if err != nil {
+			return objInfo.ETag
+		}
+	}
+	// As per AWS S3 Spec, ETag for SSE-C encrypted objects need not be MD5Sum of the data.
+	// Since server side copy with same source and dest just replaces the ETag, we save
+	// encrypted content MD5Sum as ETag for both SSE-C and SSE-S3, we standardize the ETag
+	//encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) && !copySource {
+		return objInfo.ETag[len(objInfo.ETag)-32:]
+	}
+
+	objectEncryptionKey, err := decryptObjectInfo(key[:], objInfo.Bucket, objInfo.Name, objInfo.UserDefined)
+	if err != nil {
+		return objInfo.ETag
+	}
+	return tryDecryptETag(objectEncryptionKey, objInfo.ETag, false)
+}
+
+// helper to decrypt Etag given object encryption key and encrypted ETag
+func tryDecryptETag(key []byte, encryptedETag string, ssec bool) string {
+	// ETag for SSE-C encrypted objects need not be content MD5Sum.While encrypted
+	// md5sum is stored internally, return just the last 32 bytes of hex-encoded and
+	// encrypted md5sum string for SSE-C
+	if ssec {
+		return encryptedETag[len(encryptedETag)-32:]
+	}
+	var objectKey crypto.ObjectKey
+	copy(objectKey[:], key)
+	encBytes, err := hex.DecodeString(encryptedETag)
+	if err != nil {
+		return encryptedETag
+	}
+	etagBytes, err := objectKey.UnsealETag(encBytes)
+	if err != nil {
+		return encryptedETag
+	}
+	return hex.EncodeToString(etagBytes)
 }
 
 // GetDecryptedRange - To decrypt the range (off, length) of the
@@ -1075,7 +1130,7 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErr
 // decryption succeeded.
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
-func DecryptObjectInfo(info ObjectInfo, headers http.Header) (encrypted bool, err error) {
+func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, err error) {
 	// Directories are never encrypted.
 	if info.IsDir {
 		return false, nil
@@ -1094,6 +1149,11 @@ func DecryptObjectInfo(info ObjectInfo, headers http.Header) (encrypted bool, er
 			return
 		}
 		_, err = info.DecryptedSize()
+
+		if crypto.IsEncrypted(info.UserDefined) && !crypto.IsMultiPart(info.UserDefined) {
+			info.ETag = getDecryptedETag(headers, *info, false)
+		}
+
 	}
 	return
 }
