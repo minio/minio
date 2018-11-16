@@ -25,6 +25,9 @@ import (
 	"encoding/base64"
 )
 
+// The maximum number of versions that Minio supports for each object
+const MaxVersionsLimit = 100
+
 type xlObjectVersion struct {
 	Id           string    `json:"id"`                     // Object version id
 	Postfix      string    `json:"postfix,omitempty"`  	   // Postfix for path of object (2nd version and beyond)
@@ -34,7 +37,13 @@ type xlObjectVersion struct {
 
 // DeriveVersionId derives a pseudo-random, yet deterministic, versionId
 // It is meant to generate identical versionIds across replicated buckets
-func (m xlMetaV1) DeriveVersionId(object, etag string) (id, postfix string) {
+func (m xlMetaV1) DeriveVersionId(object, etag string) (id, postfix string, err error) {
+
+	// Check that we are not about to create more versions than allowed
+	if len(m.ObjectVersions) >= MaxVersionsLimit {
+		err = TooManyVersions{}
+		return
+	}
 
 	h := sha1.New()
 	// Derive hash from concatenation of the base of the key name of object, an index and the etag

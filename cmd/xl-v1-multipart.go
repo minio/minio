@@ -744,7 +744,9 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			}
 			xlVersioning = newXLMetaV1(object, 1, 1)
 		}
-		objectVersionID, objectVersionPostfix = xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"])
+		if objectVersionID, objectVersionPostfix, err = xlVersioning.DeriveVersionId(object, xlMeta.Meta["etag"]); err != nil {
+			return oi, err
+		}
 		versionedObject += objectVersionPostfix
 	}
 

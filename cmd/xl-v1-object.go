@@ -915,7 +915,9 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			}
 			xlVersioning = newXLMetaV1(object, 1, 1)
 		}
-		objectVersionID, objectVersionPostfix = xlVersioning.DeriveVersionId(object, metadata["etag"])
+		if objectVersionID, objectVersionPostfix, err = xlVersioning.DeriveVersionId(object, metadata["etag"]); err != nil {
+			return  ObjectInfo{}, err
+		}
 		versionedObject += objectVersionPostfix
 	}
 
@@ -983,7 +985,10 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string) (ve
 			}
 
 			// Add Delete Marker to versioning info (without any corresponding sub directory)
-			versionId, _ = xlVersioning.DeriveVersionId(object, "")
+			if versionId, _, err = xlVersioning.DeriveVersionId(object, ""); err != nil {
+				return "", err
+			}
+
 			// Check if we need to pass along the version Id in the header (as for put object)
 			timeStamp := time.Now().UTC()
 			xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{versionId, "", true, timeStamp})

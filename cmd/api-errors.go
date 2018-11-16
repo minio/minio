@@ -129,6 +129,7 @@ const (
 	ErrSlowDown
 	ErrInvalidPrefixMarker
 	ErrInvalidVersionId
+	ErrTooManyVersions
 	ErrBadRequest
 	// Add new error codes here.
 
@@ -1016,6 +1017,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrBackendDown
 	case InvalidVersionId:
 		apiErr = ErrInvalidVersionId
+	case TooManyVersions:
+		apiErr = ErrMethodNotAllowed
 	default:
 		apiErr = ErrInternalError
 	}

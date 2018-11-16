@@ -189,6 +189,13 @@ func (e InvalidVersionId) Error() string {
 	return "The specified version does not exist."
 }
 
+// Limit for maximum number of versions is reached (versioned buckets).
+type TooManyVersions GenericError
+
+func (e TooManyVersions) Error() string {
+	return "Maximum number of versions is reached."
+}
+
 // BucketExists bucket exists.
 type BucketExists GenericError
 
