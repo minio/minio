@@ -322,6 +322,7 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.connected = false
+	client.restClient.Close()
 	return nil
 }
 
