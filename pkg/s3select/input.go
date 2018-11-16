@@ -75,7 +75,7 @@ func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Sele
 			req.InputSerialization.CSV.RecordDelimiter = "\n"
 		}
 		s3s, err = csv.New(&csv.Options{
-			HasHeader:            req.InputSerialization.CSV.FileHeaderInfo != CSVFileHeaderInfoNone,
+			HasHeader:            req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
 			RecordDelimiter:      req.InputSerialization.CSV.RecordDelimiter,
 			FieldDelimiter:       req.InputSerialization.CSV.FieldDelimiter,
 			Comments:             req.InputSerialization.CSV.Comments,

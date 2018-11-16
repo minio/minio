@@ -297,6 +297,8 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
+	ErrInvalidColumnIndex
+
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
@@ -1431,6 +1433,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidColumnIndex: {
+		Code:           "InvalidColumnIndex",
+		Description:    "The column index is invalid. Please check the service documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidDecompressedSize: {
 		Code:           "XMinioInvalidDecompressedSize",
 		Description:    "The data provided is unfit for decompression",
@@ -1658,6 +1665,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrMissingHeaders
 	case format.ErrParseInvalidPathComponent:
 		apiErr = ErrMissingHeaders
+	case format.ErrInvalidColumnIndex:
+		apiErr = ErrInvalidColumnIndex
 	}
 
 	// Compression errors
