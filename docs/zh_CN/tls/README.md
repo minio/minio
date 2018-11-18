@@ -4,13 +4,13 @@
 
 ## 1. 前提条件
 
-* 下载Minio server [这里](https://docs.minio.io/docs/minio-quickstart-guide)
+* 下载Minio server [这里](https://docs.minio.io/cn/minio-quickstart-guide)
 
 ## 2. 配置已存在的证书
 
 如果你已经有私钥和公钥证书，你需要将它们拷贝到Minio的config/`certs`文件夹,分别取名为`private.key` 和 `public.crt`。
 
-如果这个证书是被证书机构签发的，`public.crt`应该是服务器的证书，任何中间体的证书以及CA的根证书的级联。 
+如果这个证书是被证书机构签发的，`public.crt`应该是服务器的证书，任何中间体的证书以及CA的根证书的级联。
 
 ## 3. 生成证书
 
@@ -67,7 +67,7 @@ setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
 运行下面的命令来生成 `private.key`
 
 ```
-certtool.exe --generate-privkey --outfile private.key 
+certtool.exe --generate-privkey --outfile private.key
 ```
 
 #### 生成public.crt
@@ -117,7 +117,7 @@ encryption_key
 生成公钥证书
 
 ```
-certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt 
+certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt
 ```
 
 ## 4. 安装第三方CAs

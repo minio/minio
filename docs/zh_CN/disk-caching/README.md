@@ -7,7 +7,7 @@
 ## 开始
 
 ### 1. 前期条件
-安装Minio - [Minio快速入门](https://docs.minio.io/docs/minio-quickstart-guide)。
+安装Minio - [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide)。
 
 ### 2. 运行Minio缓存
 磁盘缓存可以通过修改Minio服务的`cache`配置来进行开启。配置`cache`设置需要指定磁盘路径、缓存过期时间（以天为单位）以及使用统配符方式指定的不需要进行缓存的对象。
@@ -30,12 +30,12 @@ minio server /export{1...24}
 ```
 
 ### 3. 验证设置是否成功
-要验证是否部署成功，你可以通过浏览器或者[`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide)来访问刚刚部署的Minio服务。你应该可以看到上传的文件在所有Minio节点上都可以访问。
+要验证是否部署成功，你可以通过浏览器或者[`mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)来访问刚刚部署的Minio服务。你应该可以看到上传的文件在所有Minio节点上都可以访问。
 
 # 了解更多
 - [磁盘缓存设计](https://github.com/minio/minio/blob/master/docs/disk-caching/DESIGN.md)
-- [mc快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [使用 aws-cli](https://docs.minio.io/docs/aws-cli-with-minio)
-- [使用 s3cmd](https://docs.minio.io/docs/s3cmd-with-minio)
-- [使用 minio-go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [mc快速入门](https://docs.minio.io/cn/minio-client-quickstart-guide)
+- [使用 aws-cli](https://docs.minio.io/cn/aws-cli-with-minio)
+- [使用 s3cmd](https://docs.minio.io/cn/s3cmd-with-minio)
+- [使用 minio-go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
 - [Minio文档](https://docs.minio.io)

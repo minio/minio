@@ -38,6 +38,6 @@ mc ls mynas
 ```
 
 ## 了解更多
-- [`mc`快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [使用 aws-cli](https://docs.minio.io/docs/aws-cli-with-minio)
-- [使用 minio-go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [`mc`快速入门](https://docs.minio.io/cn/minio-client-quickstart-guide)
+- [使用 aws-cli](https://docs.minio.io/cn/aws-cli-with-minio)
+- [使用 minio-go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
