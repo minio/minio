@@ -40,7 +40,7 @@ const (
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketPolicy")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "PutBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -103,7 +103,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteBucketPolicy")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "DeleteBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -141,7 +141,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketPolicy")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "GetBucketPolicy")
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {

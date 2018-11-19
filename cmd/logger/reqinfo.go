@@ -35,22 +35,24 @@ type KeyVal struct {
 
 // ReqInfo stores the request info.
 type ReqInfo struct {
-	RemoteHost string   // Client Host/IP
-	UserAgent  string   // User Agent
-	RequestID  string   // x-amz-request-id
-	API        string   // API name - GetObject PutObject NewMultipartUpload etc.
-	BucketName string   // Bucket name
-	ObjectName string   // Object name
-	tags       []KeyVal // Any additional info not accommodated by above fields
+	RemoteHost   string   // Client Host/IP
+	UserAgent    string   // User Agent
+	DeploymentID string   // x-minio-deployment-id
+	RequestID    string   // x-amz-request-id
+	API          string   // API name - GetObject PutObject NewMultipartUpload etc.
+	BucketName   string   // Bucket name
+	ObjectName   string   // Object name
+	tags         []KeyVal // Any additional info not accommodated by above fields
 	sync.RWMutex
 }
 
 // NewReqInfo :
-func NewReqInfo(remoteHost, userAgent, requestID, api, bucket, object string) *ReqInfo {
+func NewReqInfo(remoteHost, userAgent, deploymentID, requestID, api, bucket, object string) *ReqInfo {
 	req := ReqInfo{}
 	req.RemoteHost = remoteHost
 	req.UserAgent = userAgent
 	req.API = api
+	req.DeploymentID = deploymentID
 	req.RequestID = requestID
 	req.BucketName = bucket
 	req.ObjectName = object

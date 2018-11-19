@@ -239,7 +239,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	loadLoggers()
 
 	// This is only to uniquely identify each gateway deployments.
-	logger.SetDeploymentID(os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID"))
+	globalDeploymentID = os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID")
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
