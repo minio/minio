@@ -1,4 +1,4 @@
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd
 
 /*
  * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
