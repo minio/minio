@@ -160,14 +160,14 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 		crypto.SSEC.CreateMetadata(metadata, sealedKey)
 		return nil
 	case crypto.S3.IsEncrypted(metadata):
-		if globalKMS == nil {
+		if GlobalKMS == nil {
 			return errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
 		if err != nil {
 			return err
 		}
-		oldKey, err := globalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		oldKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 			return err
 		}
 
-		newKey, encKey, err := globalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		newKey, encKey, err := GlobalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
@@ -189,10 +189,10 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) ([]byte, error) {
 	var sealedKey crypto.SealedKey
 	if sseS3 {
-		if globalKMS == nil {
+		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
 		}
-		key, encKey, err := globalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		key, encKey, err := GlobalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +281,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	default:
 		return nil, errObjectTampered
 	case crypto.S3.IsEncrypted(metadata):
-		if globalKMS == nil {
+		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
@@ -289,7 +289,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 		if err != nil {
 			return nil, err
 		}
-		extKey, err := globalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		extKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return nil, err
 		}
@@ -397,7 +397,6 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 	io.Reader, error) {
 
 	bucket, object := oi.Bucket, oi.Name
-
 	// Single part case
 	if !isEncryptedMultipart(oi) {
 		var reader io.Reader
@@ -1179,7 +1178,7 @@ func deriveClientKey(header http.Header, headerName, bucket, object string) ([32
 }
 
 // extract encryption options for pass through to backend in the case of gateway
-func extractEncryptionOption(header http.Header, copySource bool) (opts ObjectOptions, err error) {
+func extractEncryptionOption(header http.Header, copySource bool, metadata map[string]string) (opts ObjectOptions, err error) {
 	var clientKey []byte
 	var sse encrypt.ServerSide
 
@@ -1207,7 +1206,7 @@ func extractEncryptionOption(header http.Header, copySource bool) (opts ObjectOp
 		}
 		return ObjectOptions{ServerSideEncryption: sse}, nil
 	}
-	if crypto.S3.IsRequested(header) {
+	if crypto.S3.IsRequested(header) || (metadata != nil && crypto.S3.IsEncrypted(metadata)) {
 		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
 	}
 	return opts, nil
@@ -1235,7 +1234,7 @@ func getEncryptionOpts(r *http.Request, bucket, object string) (ObjectOptions, e
 		}
 	}
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false)
+	return extractEncryptionOption(r.Header, false, nil)
 }
 
 // get ObjectOptions for PUT calls from encryption headers
@@ -1253,7 +1252,7 @@ func putEncryptionOpts(r *http.Request, bucket, object string, metadata map[stri
 		}
 	}
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false)
+	return extractEncryptionOption(r.Header, false, metadata)
 }
 
 // get ObjectOptions for Copy calls for encryption headers provided on the target side
@@ -1271,7 +1270,7 @@ func copyDstEncryptionOpts(r *http.Request, bucket, object string, metadata map[
 		}
 	}
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false)
+	return extractEncryptionOption(r.Header, false, nil)
 }
 
 // get ObjectOptions for Copy calls for encryption headers provided on the source side
@@ -1296,5 +1295,5 @@ func copySrcEncryptionOpts(r *http.Request, bucket, object string) (ObjectOption
 		}
 	}
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, true)
+	return extractEncryptionOption(r.Header, true, nil)
 }

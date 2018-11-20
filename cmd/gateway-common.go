@@ -350,7 +350,7 @@ func parseGatewaySSE(s string) ([]string, error) {
 	gwSlice := make([]string, len(l))
 	for _, val := range l {
 		v := strings.ToUpper(val)
-		if v == GatewaySSES3 || v == GatewaySSEC || v == GatewaySSEKMS {
+		if v == GatewaySSES3 || v == GatewaySSEC {
 			gwSlice = append(gwSlice, v)
 			continue
 		}
@@ -361,11 +361,16 @@ func parseGatewaySSE(s string) ([]string, error) {
 
 // handle gateway env vars
 func handleGatewayEnvVars() {
-	if gwsse, ok := os.LookupEnv("MINIO_GW_SSE"); ok {
+	gwsse, ok := os.LookupEnv("MINIO_GW_SSE")
+	if ok {
 		gwsseSlice, err := parseGatewaySSE(gwsse)
 		if err != nil {
 			logger.Fatal(err, "Unable to parse MINIO_GW_SSE value (`%s`)", gwsse)
 		}
 		GlobalGatewaySSE = gwsseSlice
+	}
+
+	if len(gwsse) != 0 && GlobalKMS == nil {
+		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GW_SSE set but KMS not enabled"), "Unable to start gateway with sse")
 	}
 }

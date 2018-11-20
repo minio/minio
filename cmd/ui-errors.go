@@ -207,6 +207,12 @@ Example 1:
 	uiErrInvalidGWSSEValue = newUIErrFn(
 		"Invalid gateway sse value",
 		"Please check the passed value",
-		"MINIO_GW_SSE: Gateway SSE accepts only S3, C and KMS as valid values. Delimit by `;` to set more than one value",
+		"MINIO_GW_SSE: Gateway SSE accepts only C and S3 as valid values. Delimit by `;` to set more than one value",
+	)
+
+	uiErrInvalidGWSSEEnvValue = newUIErrFn(
+		"Invalid gateway sse configuration",
+		"",
+		"Refer to https://docs.minio.io/docs/minio-kms-quickstart-guide.html for setting up sse with s3 gateway",
 	)
 )

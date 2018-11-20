@@ -140,8 +140,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(pErr, "Unable to start gateway")
 	}
 
-	// Handle gateway specific env
-	handleGatewayEnvVars()
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
@@ -162,6 +160,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Handle common env vars.
 	handleCommonEnvVars()
+
+	// Handle gateway specific env
+	handleGatewayEnvVars()
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {

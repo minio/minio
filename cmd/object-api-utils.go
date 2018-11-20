@@ -486,7 +486,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
-
 			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
@@ -573,7 +572,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 			return r, nil
 		}
 	}
-
 	return fn, off, length, nil
 }
 
@@ -651,6 +649,7 @@ func sealETag(encKey crypto.ObjectKey, md5CurrSum []byte) []byte {
 	}
 	return encKey.SealETag(md5CurrSum)
 }
+
 func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
 	fn1 := func(md5sumcurr []byte) []byte {
 		return sealETag(key, md5sumcurr)

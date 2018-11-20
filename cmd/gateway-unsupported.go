@@ -49,7 +49,7 @@ func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, ob
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
-func (a GatewayUnsupported) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, err error) {
+func (a GatewayUnsupported) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (lpi ListPartsInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return lpi, NotImplemented{}
 }

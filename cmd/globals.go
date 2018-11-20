@@ -229,8 +229,8 @@ var (
 
 	// KMS key id
 	globalKMSKeyID string
-	// Allocated KMS
-	globalKMS crypto.KMS
+	// GlobalKMS - Allocated KMS
+	GlobalKMS crypto.KMS
 	// KMS config
 	globalKMSConfig crypto.KMSConfig
 

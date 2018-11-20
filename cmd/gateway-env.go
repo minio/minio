@@ -21,6 +21,4 @@ const (
 	GatewaySSES3 = "S3"
 	// GatewaySSEC is set when SSE-C encryption needed on both gateway and backend
 	GatewaySSEC = "C"
-	// GatewaySSEKMS is set when SSE-KMS double encryption is needed
-	GatewaySSEKMS = "KMS"
 )
