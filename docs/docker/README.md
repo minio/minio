@@ -1,6 +1,6 @@
 # Minio Docker Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-This quickstart guide describes how to quickly install and run a Minio Server Docker container. These are the steps you will follow:
+This quickstart guide describes how to quickly install and run a Minio Server Docker container.
 
 1. [Install Docker](#installdocker) 
 2. [Run Standalone Minio on Docker](#runstandalong) 
@@ -11,22 +11,27 @@ Install Docker using these instructions: <https://www.docker.com/community-editi
 
 ## <a name="runstandalong"></a>2. Run Standalone Minio on Docker
 
-You can run Minio with either temporary or persistent storage, as described below.
+Minio can be run with either temporary or persistent storage, as described below.
 
 ### 2.1 Run Minio with Temporary Storage
-Minio requires a persistent volume to store configuration and application data. However, you can launch Minio by specifying a temporary directory for testing purposes. This temporary directory is created in the container's file system when the container is started, but all of the data is lost after the container exits.
+Minio requires a persistent volume to store configuration and application data. However, a temporary directory can be specified for testing purposes. This temporary directory is created in the container's file system when the container is started, but all of the data is lost after the container exits.
 
 Run the container with a temporary storage directory in `/data`:
 
 ```sh
 docker run -p 9000:9000 minio/minio server /data
 ```
+
+**Note:** A `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` must be specified to run containers. For more information see: [Specify a Custom Access Key and Secret Key](#specifycustomkeys).
+
 ### 2.2 Run Minio with Persistent Storage
 To run a Minio container with persistent storage, local persistent directories must be mapped from the host OS to the virtual `config` and `export` directories. 
 
 Use one of the methods below to run the container with  `~/.minio` as the virtual `config` directory and `/data` as the `export` directory:
 * [GNU/Linux and macOS](#persistent_linuxmac)
 * [Windows](#persistent_windows)
+
+**Note:** In the following examples, `~/.minio` and `/data` are local directories being mapped inside the container.
 
 #### <a name="persistent_linuxmac"></a>GNU/Linux and macOS
 ```sh
@@ -46,12 +51,12 @@ docker run -p 9000:9000 --name minio1 \
 
 ## <a name="rundistributed"></a>3. Run Distributed Minio on Docker
 Distributed Minio can be deployed using one of these two methods:
-* [Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose): Creates a single host, multi-container deployment. This lets you quickly get started with Distributed Minio on your computer, which is ideal for development, testing, and staging environments.
+* [Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose): Creates a single host, multi-container deployment. This is useful for developing, testing, and staging environments with Distributed Minio.
 * [Swarm mode](https://docs.minio.io/docs/deploy-minio-on-docker-swarm): Creates a multi-host, multi-container deployment. This offers a more robust, production-level deployment than Docker Compose.
 
 ## <a name="runcommands"></a>Examples of Typical Docker Commands
 
-### Specify a Custom Access Key and Secret Key
+### <a name="specifycustomkeys"></a>Specify a Custom Access Key and Secret Key
 To override Minio's auto-generated keys, pass the secret key and access key explicitly as environment variables using one of these methods:
 * [GNU/Linux and macOS](#linuxmac_secret)
 * [Windows](#windows_secret)
@@ -79,7 +84,7 @@ docker run -p 9000:9000 --name minio1 \
 ```
 
 ### Specify a Custom Access Key and Secret Key Using Docker Secrets
-To override Minio's auto-generated keys, pass the access key and secret key explicitly as [Docker secrets](https://docs.docker.com/engine/swarm/secrets/):
+When using Docker in Swarm mode, Minio's auto-generated keys can be overridden by passing the access key and secret key explicitly as [Docker secrets](https://docs.docker.com/engine/swarm/secrets/):
 
 ```
 echo "AKIAIOSFODNN7EXAMPLE" | docker secret create access_key -
@@ -97,7 +102,7 @@ docker service create --name="minio-service" --secret="access_key" --secret="sec
 See [How services work](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/) more information about `docker service`.
 
 #### Specify a Custom Access Key and Secret Key Using Files
-Run the service using the command below to specify other secret names. Replace `access_key` and `secret_key` with your custom names (e.g. `my_secret_key`,`my_custom_key`):
+Run the service using the command below to specify other secret names. Replace `access_key` and `secret_key` with those from a development server (e.g. `my_secret_key`,`my_custom_key`):
 
 ```
 docker service create --name="minio-service" \
@@ -119,7 +124,7 @@ docker ps -a
 
 **Note:** Specifying the `-a`  option returns all containers that have been created, are running, and have exited.
 
-You should see a response similar to this one:
+A response similar to this one should be displayed:
 
 ```sh
 CONTAINER ID        IMAGE                     COMMAND                  CREATED             STATUS                     PORTS               NAMES
@@ -127,7 +132,7 @@ fabcc0ae9833        minio/minio               "/usr/bin/docker-e..."   4 minutes
 1c51076ce4dc        minio/minio               "/usr/bin/docker-e..."   7 minutes ago       Created                                        minio1
 ```
 
-Identify the ID of your container from the `Container ID` column displayed in the output.
+Identify the ID of the container from the `Container ID` column displayed in the output.
 
 ### Starting and Stopping Containers
 To start a stopped container, use the [`docker start`](https://docs.docker.com/engine/reference/commandline/start/) command:
