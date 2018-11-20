@@ -35,9 +35,10 @@ const DefaultRESTTimeout = 1 * time.Minute
 
 // Client - http based RPC client.
 type Client struct {
-	httpClient   *http.Client
-	url          *url.URL
-	newAuthToken func() string
+	httpClient          *http.Client
+	httpIdleConnsCloser func()
+	url                 *url.URL
+	newAuthToken        func() string
 }
 
 // Call - make a REST call.
@@ -67,6 +68,13 @@ func (c *Client) Call(method string, values url.Values, body io.Reader) (reply i
 	return resp.Body, nil
 }
 
+// Close closes all idle connections of the underlying http client
+func (c *Client) Close() {
+	if c.httpIdleConnsCloser != nil {
+		c.httpIdleConnsCloser()
+	}
+}
+
 func newCustomDialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
@@ -84,25 +92,26 @@ func newCustomDialContext(timeout time.Duration) func(ctx context.Context, netwo
 	}
 }
 
-// NewClient - returns new RPC client.
+// NewClient - returns new REST client.
 func NewClient(url *url.URL, tlsConfig *tls.Config, timeout time.Duration, newAuthToken func() string) *Client {
+	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
+	// except custom DialContext and TLSClientConfig.
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           newCustomDialContext(timeout),
+		MaxIdleConnsPerHost:   4096,
+		MaxIdleConns:          4096,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       tlsConfig,
+		DisableCompression:    true,
+	}
+
 	return &Client{
-		httpClient: &http.Client{
-			// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
-			// except custom DialContext and TLSClientConfig.
-			Transport: &http.Transport{
-				Proxy:                 http.ProxyFromEnvironment,
-				DialContext:           newCustomDialContext(timeout),
-				MaxIdleConnsPerHost:   4096,
-				MaxIdleConns:          4096,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-				TLSClientConfig:       tlsConfig,
-				DisableCompression:    true,
-			},
-		},
-		url:          url,
-		newAuthToken: newAuthToken,
+		httpClient:          &http.Client{Transport: tr},
+		httpIdleConnsCloser: tr.CloseIdleConnections,
+		url:                 url,
+		newAuthToken:        newAuthToken,
 	}
 }
