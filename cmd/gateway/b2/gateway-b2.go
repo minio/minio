@@ -92,7 +92,7 @@ EXAMPLES:
 `
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               b2Backend,
-		Usage:              "Backblaze B2.",
+		Usage:              "Backblaze B2",
 		Action:             b2GatewayMain,
 		CustomHelpTemplate: b2GatewayTemplate,
 		HideHelpCommand:    true,

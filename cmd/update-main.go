@@ -40,12 +40,12 @@ import (
 // Check for new software updates.
 var updateCmd = cli.Command{
 	Name:   "update",
-	Usage:  "Check for a new software update.",
+	Usage:  "update minio to latest release",
 	Action: mainUpdate,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "quiet",
-			Usage: "Disable any update prompt message.",
+			Usage: "disable any update prompt message",
 		},
 	},
 	CustomHelpTemplate: `Name:

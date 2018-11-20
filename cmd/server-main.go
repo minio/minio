@@ -41,13 +41,13 @@ var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":" + globalMinioPort,
-		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
+		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
 	},
 }
 
 var serverCmd = cli.Command{
 	Name:   "server",
-	Usage:  "Start object storage server.",
+	Usage:  "start object storage server",
 	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
@@ -112,10 +112,10 @@ EXAMPLES:
   4. Start erasure coded minio server on a node with 64 drives.
      $ {{.HelpName}} /mnt/export{1...64}
 
-  5. Start distributed minio server on an 8 node setup with 8 drives each. Run following command on all the 8 nodes.
+  5. Start distributed minio server on an 32 node setup with 32 drives each. Run following command on all the 32 nodes.
      $ export MINIO_ACCESS_KEY=minio
      $ export MINIO_SECRET_KEY=miniostorage
-     $ {{.HelpName}} http://node{1...8}.example.com/mnt/export/{1...8}
+     $ {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
   6. Start minio server with edge caching enabled.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"

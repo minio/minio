@@ -108,7 +108,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               mantaBackend,
-		Usage:              "Manta Object Storage.",
+		Usage:              "Manta Object Storage",
 		Action:             mantaGatewayMain,
 		CustomHelpTemplate: mantaGatewayTemplate,
 		HideHelpCommand:    true,
