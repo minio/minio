@@ -187,14 +187,9 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 		case <-doneCh:
 			return errWalkAbort
 		default:
-			var fi os.FileInfo
-			var err error
-			if hasSuffix(entry, slashSeparator) {
-				fi, err = fsStatDir(ctx, entry)
-			} else {
-				fi, err = fsStatFile(ctx, entry)
-			}
+			fi, err := os.Stat(entry)
 			if err != nil {
+				err = osErrToFSFileErr(err)
 				return err
 			}
 			atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
@@ -226,14 +221,9 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 					}
 				}
 
-				var fi os.FileInfo
-				var err error
-				if hasSuffix(entry, slashSeparator) {
-					fi, err = fsStatDir(ctx, entry)
-				} else {
-					fi, err = fsStatFile(ctx, entry)
-				}
+				fi, err := os.Stat(entry)
 				if err != nil {
+					err = osErrToFSFileErr(err)
 					return err
 				}
 				usage = usage + uint64(fi.Size())
