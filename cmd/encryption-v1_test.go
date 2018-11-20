@@ -355,7 +355,7 @@ func TestGetDecryptedRange_Issue50(t *testing.T) {
 			"content-type":                         "application/octet-stream",
 			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
 		},
-		Parts: []objectPartInfo{
+		Parts: []ObjectPartInfo{
 			{
 				Number:     1,
 				Name:       "part.1",

@@ -34,7 +34,7 @@ const (
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal
 
-// Global service done channel.
+// GlobalServiceDoneCh - Global service done channel.
 var GlobalServiceDoneCh chan struct{}
 
 // Initialize service mutex once.

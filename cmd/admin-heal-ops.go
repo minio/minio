@@ -133,7 +133,7 @@ func (ahs *allHealState) periodicHealSeqsClean() {
 				}
 			}
 			ahs.Unlock()
-		case <-globalServiceDoneCh:
+		case <-GlobalServiceDoneCh:
 			// server could be restarting - need
 			// to exit immediately
 			return

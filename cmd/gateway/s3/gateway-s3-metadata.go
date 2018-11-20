@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"time"
 
 	minio "github.com/minio/minio/cmd"
@@ -197,15 +196,17 @@ func readGWMetadata(ctx context.Context, buf bytes.Buffer) (gwMeta gwMetaV1, err
 	return gwMeta, nil
 }
 
-// getGWMetadata - unmarshals dare.meta into a *hash.Reader
-func getGWMetadata(ctx context.Context, bucket, prefix string, gwMeta gwMetaV1) (*hash.Reader, error) {
+// getGWMetadata - unmarshals dare.meta into a *minio.PutObjReader
+func getGWMetadata(ctx context.Context, bucket, prefix string, gwMeta gwMetaV1) (*minio.PutObjReader, error) {
 	// Marshal json.
 	metadataBytes, err := json.Marshal(&gwMeta)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-	var r io.Reader
-	r = bytes.NewReader(metadataBytes)
-	return hash.NewReader(r, int64(len(metadataBytes)), "", "", int64(len(metadataBytes)))
+	hashReader, err := hash.NewReader(bytes.NewReader(metadataBytes), int64(len(metadataBytes)), "", "", int64(len(metadataBytes)))
+	if err != nil {
+		return nil, err
+	}
+	return minio.NewPutObjReader(hashReader, nil, nil), nil
 }
