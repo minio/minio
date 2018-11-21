@@ -1,56 +1,64 @@
 ## Minio Server Limits Per Tenant
 
-### Erasure Code (Multiple Drives / Servers)
+This topic lists the limits for various parameters supported by Minio Server, Amazon S3 APIs that are not supported, and character restrictions for object names.
 
-|Item|Specification|
+1. [Supported Number of Drives and Servers for Erasure Code](#erasurecode) 
+2. [Maximum Browser Upload Size](#browseraccess) 
+3. [Maximum Sizes Using the S3 API](#s3apilimits) 
+4. [List of Amazon S3 APIs not Supported on Minio](#apisnotsupported) 
+5. [Object Name Restrictions](#objnamerestrictions)
+
+### 1. <a name="erasurecode"></a>Supported Number of Drives and Servers for Erasure Code
+
+|**Item**|**Limit**|
 |:---|:---|
 |Maximum number of servers| 32|
-|Minimum number of servers| 02|
+|Minimum number of servers| 2|
 |Maximum number of drives per server| Unlimited|
 |Read quorum| N/2|
-|Write quorum| N/2+1|
+|Write quorum| N/2 + 1|
 
-### Browser Access
+### 2. <a name="browseraccess"></a>Maximum Browser Upload Size 
 
-|Item|Specification|
+|**Item**|**Limit**|
 |:---|:---|
-|Web browser upload size limit| 5 TiB|
+|Web browser upload size limit| 5 TB|
 
-### Limits of S3 API
+### 3. <a name="s3apilimits"></a>Maximum Sizes Using the S3 API
 
-|Item|Specification|
+|**Item**|**Limit**|
 |:---|:---|
 |Maximum number of buckets| no-limit|
 |Maximum number of objects per bucket| no-limit|
-|Maximum object size| 5 TiB|
+|Maximum object size| 5 TB|
 |Minimum object size| 0 B|
-|Maximum object size per PUT operation| 5 TiB|
+|Maximum object size per PUT operation| 5 TB|
 |Maximum number of parts per upload| 	10,000|
-|Part size|5 MiB to 5 GiB. Last part can be 0 B to 5 GiB|
-|Maximum number of parts returned per list parts request| 1000|
-|Maximum number of objects returned per list objects request| 1000|
-|Maximum number of multipart uploads returned per list multipart uploads request| 1000|
+|Part size|5 MB to 5 GB. The last part can be 0 B to 5 GB.|
+|Maximum number of parts returned per list in a request for parts| 1000|
+|Maximum number of objects returned per list in a request for objects| 1000|
+|Maximum number of multi-part uploads returned per list in a request for multi-part uploads| 1000|
 
-### List of Amazon S3 API's not supported on Minio
-We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [github issue](https://github.com/minio/minio/issues).
+### 4. <a name="apisnotsupported"></a>List of Amazon S3 APIs Not Supported on Minio
+The following APIs are considered redundant or less useful outside of AWS S3. If there are additional APIs that should be added to this list, please open a [github issue](https://github.com/minio/minio/issues).
 
-#### List of Amazon S3 Bucket API's not supported on Minio
+#### 4.1 List of Amazon S3 Bucket APIs Not Supported on Minio:
 
-- BucketACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
-- BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
-- BucketLifecycle (Not required for Minio erasure coded backend)
-- BucketReplication (Use [`mc mirror`](https://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
-- BucketVersions, BucketVersioning (Use [`s3git`](https://github.com/s3git/s3git))
-- BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
-- BucketRequestPayment
-- BucketTagging
+- `BucketACL` (use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- `BucketCORS` (CORS is enabled by default on all buckets for all HTTP verbs)
+- `BucketLifecycle` (not required for the Minio erasure-coded backend)
+- `BucketReplication` (use [`mc mirror`](https://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
+- `BucketVersions`, `BucketVersioning` (use [`s3git`](https://github.com/s3git/s3git))
+- `BucketWebsite` (use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
+- `BucketAnalytics`, `BucketMetrics`, `BucketLogging` (use [bucket notification](https://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
+- `BucketRequestPayment`
+- `BucketTagging`
 
-#### List of Amazon S3 Object API's not supported on Minio
+#### 4.2 List of Amazon S3 Object APIs Not Supported on Minio:
 
-- ObjectACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
-- ObjectTorrent
-- ObjectVersions
+- `ObjectACL` (use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- `ObjectTorrent`
+- `ObjectVersions`
 
-### Object name restrictions on Minio
-Object names that contain characters `^*|\/&";` are unsupported on Windows and other file systems which do not support filenames with these characters. Note that this list is not exhaustive, and depends on the maintainers of the filesystem itself.
+### 5. <a name="objnamerestrictions"></a>Object Name Restrictions
+Minio does not support object names that contain any of the following characters: `^*|\/&#";`. This restriction is applicable to file systems that do not support filenames containing these characters. There may be additional filename character restrictions on other file systems.
