@@ -55,7 +55,7 @@ func AddAuditTarget(t Target) {
 }
 
 // AuditLog - logs audit logs to all audit targets.
-func AuditLog(w http.ResponseWriter, r *http.Request, api string) {
+func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}) {
 	var statusCode int
 	lrw, ok := w.(*ResponseWriter)
 	if ok {
@@ -63,6 +63,6 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string) {
 	}
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets {
-		t.Send(audit.ToEntry(w, r, api, statusCode))
+		_ = t.Send(audit.ToEntry(w, r, api, statusCode, reqClaims))
 	}
 }
