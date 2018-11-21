@@ -111,7 +111,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               s3Backend,
-		Usage:              "Amazon Simple Storage Service (S3).",
+		Usage:              "Amazon Simple Storage Service (S3)",
 		Action:             s3GatewayMain,
 		CustomHelpTemplate: s3GatewayTemplate,
 		HideHelpCommand:    true,

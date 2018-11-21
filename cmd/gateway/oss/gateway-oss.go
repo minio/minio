@@ -98,7 +98,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               "oss",
-		Usage:              "Alibaba Cloud (Aliyun) Object Storage Service (OSS).",
+		Usage:              "Alibaba Cloud (Aliyun) Object Storage Service (OSS)",
 		Action:             ossGatewayMain,
 		CustomHelpTemplate: ossGatewayTemplate,
 		HideHelpCommand:    true,

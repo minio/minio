@@ -74,7 +74,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               nasBackend,
-		Usage:              "Network-attached storage (NAS).",
+		Usage:              "Network-attached storage (NAS)",
 		Action:             nasGatewayMain,
 		CustomHelpTemplate: nasGatewayTemplate,
 		HideHelpCommand:    true,
