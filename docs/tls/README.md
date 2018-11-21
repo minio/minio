@@ -2,18 +2,18 @@
 
 This guide explains how to configure Minio Server with TLS certificates on Linux and Windows platforms.
 
-1. [Install Minio Server](#installminio) 
-2. [Use an Existing Key and Certificate with Minio](#usingexistingcerts) 
-3. [Generate and use Self-signed Keys and Certificates with Minio](#genselfsignedcerts) 
-4. [Install Certificates from Third-party CAs](#installthirdparty)
+1. [Install Minio Server](#install-minio-server) 
+2. [Use an Existing Key and Certificate with Minio](#use-an-existing-key-and-certificate-with-minio) 
+3. [Generate and use Self-signed Keys and Certificates with Minio](#generate-use-self-signed-keys-certificates) 
+4. [Install Certificates from Third-party CAs](#install-certificates-from-third-party-cas)
 
-## <a name="installminio"></a>1. Install Minio Server
+## <a name="install-minio-server"></a>1. Install Minio Server
 
 Install Minio Server using the instructions in the [Minio Quickstart Guide](http://docs.minio.io/docs/minio-quickstart-guide).
 
-## <a name="usingexistingcerts"></a>2. Use an Existing Key and Certificate with Minio 
+## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with Minio 
 
-This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#genselfsignedcerts) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.minio.io/docs/).
+This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.minio.io/docs/).
 
 Copy the existing private key and public certificate to the `certs` directory within the Minio configuration directory. The default configuration directory is:
 * **Linux:** `${HOME}/.minio/`
@@ -23,20 +23,20 @@ Copy the existing private key and public certificate to the `certs` directory wi
 * The key and certificate files must be appended with `.key` and `.crt`, respectively.
 * A filename for a certificate signed by a CA consists of a concatenation of the server's certificate, any intermediates, and the CA's root certificate.
 
-## <a name="genselfsignedcerts"></a>3. Generate and use Self-signed Keys and Certificates with Minio
+## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with Minio
 
 This section describes how to generate a self-signed certificate using various tools:
 
-3.1 [Use generate_cert.go to Generate a Certificate](#usinggo) 
-3.2 [Use OpenSSL to Generate a Certificate](#usingopenssl) 
-3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#usingopensslwithip) 
-3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#usinggnutls)
+3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
+3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
+3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
+3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
 
 **Note:**
 * Minio only supports keys and certificates in PEM format on Linux and Windows.
 * Minio doesn't currently support PFX certificates.
 
-### <a name="usinggo"></a>3.1 Use generate_cert.go to Generate a Certificate
+### <a name="using-go"></a>3.1 Use generate_cert.go to Generate a Certificate
 
 Download [`generate_cert.go`](https://golang.org/src/crypto/tls/generate_cert.go?m=text).
 
@@ -53,14 +53,14 @@ A response similar to this one should be displayed:
 2018/11/21 10:16:18 wrote key.pem
 ```
 
-### <a name="usingopenssl"></a>3.2 Use OpenSSL to Generate a Certificate
+### <a name="using-open-ssl"></a>3.2 Use OpenSSL to Generate a Certificate
 
 Use one of the following methods to generate a certificate using `openssl`:
 
-* 3.2.1 [Generate a private key with ECDSA](#genecdsa) 
-* 3.2.2 [Generate a private key with RSA](#genrsa)
+* 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
+* 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
 
-#### 3.2.1 <a name="genecdsa"></a>Generate a private key with ECDSA.
+#### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
 
 Use the following command to generate a private key with ECDSA:
 
@@ -83,7 +83,7 @@ openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -
 
 **Note:** NIST curves P-384 and P-521 are not currently supported.
 
-#### 3.2.2 <a name="genrsa"></a>Generate a private key with RSA.
+#### 3.2.2 <a name="generate-private-key-with-rsa"></a>Generate a private key with RSA.
 
 Use the following command to generate a private key with RSA:
 
@@ -133,7 +133,7 @@ Alternatively, use the command below to generate a self-signed wildcard certific
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
 ```
 
-### <a name="usingopensslwithip"></a>3.3 Use OpenSSL (with IP address) to Generate a Certificate
+### <a name="using-open-ssl-with-ip"></a>3.3 Use OpenSSL (with IP address) to Generate a Certificate
 
 This section describes how to specify an IP address to `openssl` when generating a certificate.
 
@@ -168,7 +168,7 @@ IP.1 = 127.0.0.1
 openssl req -x509 -nodes -days 730 -newkey rsa:2048 -keyout private.key -out public.crt -config openssl.conf
 ```
 
-### <a name="usinggnutls"></a>3.4 Use GnuTLS (for Windows) to Generate a Certificate
+### <a name="using-gnu-tls"></a>3.4 Use GnuTLS (for Windows) to Generate a Certificate
 
 This section describes how to use GnuTLS on Windows to generate a certificate.
 
@@ -246,7 +246,7 @@ Run `certtool.exe` and specify the configuration file to generate a certificate:
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt
 ```
 
-## <a name="installthirdparty"></a>4. Install Certificates from Third-party CAs
+## <a name="install-certificates-from-third-party-cas"></a>4. Install Certificates from Third-party CAs
 
 Minio can connect to other servers, including Minio nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to Minio Server by placing these certificates under one of the following Minio configuration paths:
 * **Linux:** `~/.minio/certs/CAs/`
