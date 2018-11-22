@@ -99,6 +99,51 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	w.(http.Flusher).Flush()
 }
 
+func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketACL")
+
+	defer logger.AuditLog(w, r, "PutBucketACL", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Allow putBucketACL if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Before proceeding validate if bucket exists.
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		return
+	}
+
+	acl := &accessControlPolicy{}
+	acl.AccessControlList.Grants = append(acl.AccessControlList.Grants, grant{
+		Grantee: grantee{
+			XMLNS:  "http://www.w3.org/2001/XMLSchema-instance",
+			XMLXSI: "CanonicalUser",
+			Type:   "CanonicalUser",
+		},
+		Permission: "FULL_CONTROL",
+	})
+	if err := xml.NewEncoder(w).Encode(acl); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
 // GetObjectACLHandler - GET Object ACL
 // -----------------
 // This operation uses the ACL
@@ -121,6 +166,52 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	// Allow getObjectACL if policy action is set, since this is a dummy call
 	// we are simply re-purposing the bucketPolicyAction.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Before proceeding validate if object exists.
+	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		return
+	}
+
+	acl := &accessControlPolicy{}
+	acl.AccessControlList.Grants = append(acl.AccessControlList.Grants, grant{
+		Grantee: grantee{
+			XMLNS:  "http://www.w3.org/2001/XMLSchema-instance",
+			XMLXSI: "CanonicalUser",
+			Type:   "CanonicalUser",
+		},
+		Permission: "FULL_CONTROL",
+	})
+	if err := xml.NewEncoder(w).Encode(acl); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
+func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutObjectACL")
+
+	defer logger.AuditLog(w, r, "PutObjectACL", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Allow putObjectACL if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
