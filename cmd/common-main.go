@@ -80,6 +80,31 @@ func loadLoggers() {
 
 func handleCommonCmdArgs(ctx *cli.Context) {
 
+	// Get "json" flag from command line argument and
+	// enable json and quite modes if jason flag is turned on.
+	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
+	if globalCLIContext.JSON {
+		logger.EnableJSON()
+	}
+
+	// Get quiet flag from command line argument.
+	globalCLIContext.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
+	if globalCLIContext.Quiet {
+		logger.EnableQuiet()
+	}
+
+	// Get anonymous flag from command line argument.
+	globalCLIContext.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
+	if globalCLIContext.Anonymous {
+		logger.EnableAnonymous()
+	}
+
+	// Fetch address option
+	globalCLIContext.Addr = ctx.GlobalString("address")
+	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+globalMinioDefaultPort {
+		globalCLIContext.Addr = ctx.String("address")
+	}
+
 	var configDir string
 
 	switch {

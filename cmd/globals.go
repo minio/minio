@@ -42,6 +42,8 @@ import (
 const (
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
+	globalMinioDefaultPort = "9000"
+
 	globalMinioDefaultRegion = ""
 	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
 	// this is kept in present form to be compatible with S3 owner ID
@@ -90,6 +92,12 @@ const (
 	maxLocationConstraintSize = 3 * humanize.MiByte
 )
 
+var globalCLIContext = struct {
+	JSON, Quiet bool
+	Anonymous   bool
+	Addr        string
+}{}
+
 var (
 	// Indicates the total number of erasure coded sets configured.
 	globalXLSetCount int
@@ -127,7 +135,7 @@ var (
 	// Minio local server address (in `host:port` format)
 	globalMinioAddr = ""
 	// Minio default port, can be changed through command line.
-	globalMinioPort = "9000"
+	globalMinioPort = globalMinioDefaultPort
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 
