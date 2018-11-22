@@ -572,30 +572,33 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
-	if err != nil {
-		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Make sure formValues adhere to policy restrictions.
-	if apiErr = checkPostPolicy(formValues, postPolicyForm); apiErr != ErrNone {
-		writeErrorResponse(w, apiErr, r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Ensure that the object size is within expected range, also the file size
-	// should not exceed the maximum single Put size (5 GiB)
-	lengthRange := postPolicyForm.Conditions.ContentLengthRange
-	if lengthRange.Valid {
-		if fileSize < lengthRange.Min {
-			writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooSmall), r.URL, guessIsBrowserReq(r))
+	// Handle policy if it is set.
+	if len(policyBytes) > 0 {
+		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
+		if err != nil {
+			writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
-			writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooLarge), r.URL, guessIsBrowserReq(r))
+		// Make sure formValues adhere to policy restrictions.
+		if apiErr = checkPostPolicy(formValues, postPolicyForm); apiErr != ErrNone {
+			writeErrorResponse(w, apiErr, r.URL, guessIsBrowserReq(r))
 			return
+		}
+
+		// Ensure that the object size is within expected range, also the file size
+		// should not exceed the maximum single Put size (5 GiB)
+		lengthRange := postPolicyForm.Conditions.ContentLengthRange
+		if lengthRange.Valid {
+			if fileSize < lengthRange.Min {
+				writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooSmall), r.URL, guessIsBrowserReq(r))
+				return
+			}
+
+			if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
+				writeErrorResponse(w, toAPIErrorCode(ctx, errDataTooLarge), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 
