@@ -91,7 +91,7 @@ func setRequestHeaderSizeLimitHandler(h http.Handler) http.Handler {
 // of the user-defined metadata to 2 KB.
 func (h requestHeaderSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if isHTTPHeaderSizeTooLarge(r.Header) {
-		writeErrorResponse(w, ErrMetadataTooLarge, r.URL)
+		writeErrorResponse(w, ErrMetadataTooLarge, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	h.Handler.ServeHTTP(w, r)
@@ -134,7 +134,7 @@ func filterReservedMetadata(h http.Handler) http.Handler {
 // would be treated as metadata.
 func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if containsReservedMetadata(r.Header) {
-		writeErrorResponse(w, ErrUnsupportedMetadata, r.URL)
+		writeErrorResponse(w, ErrUnsupportedMetadata, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	h.Handler.ServeHTTP(w, r)
@@ -300,7 +300,7 @@ func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 		// buckets
 		bucketName, _ := urlPath2BucketObjectName(r.URL.Path)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
+			writeErrorResponse(w, ErrAllAccessDisabled, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -363,14 +363,14 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, apiErr, r.URL)
+			writeErrorResponse(w, apiErr, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
 		curTime := UTCNow()
 		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
-			writeErrorResponse(w, ErrRequestTimeTooSkewed, r.URL)
+			writeErrorResponse(w, ErrRequestTimeTooSkewed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -485,20 +485,20 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, ErrNotImplemented, r.URL)
+			writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 	// If bucketName and objectName are present check for its resource queries.
 	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, ErrNotImplemented, r.URL)
+			writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
 	if r.Method == http.MethodPut && r.URL.Path == "/" {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -601,14 +601,14 @@ func hasBadPathComponent(path string) bool {
 func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check for bad components in URL path.
 	if hasBadPathComponent(r.URL.Path) {
-		writeErrorResponse(w, ErrInvalidResourceName, r.URL)
+		writeErrorResponse(w, ErrInvalidResourceName, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	// Check for bad components in URL query values.
 	for _, vv := range r.URL.Query() {
 		for _, v := range vv {
 			if hasBadPathComponent(v) {
-				writeErrorResponse(w, ErrInvalidResourceName, r.URL)
+				writeErrorResponse(w, ErrInvalidResourceName, r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}
@@ -653,9 +653,9 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
 		if err == dns.ErrNoEntriesFound {
-			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
 		} else {
-			writeErrorResponse(w, toAPIErrorCode(context.Background(), err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(context.Background(), err), r.URL, guessIsBrowserReq(r))
 		}
 		return
 	}
@@ -716,7 +716,7 @@ func (l rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// potential pileup on the server.
 	if err := l.Wait(ctx); err != nil {
 		// Send an S3 compatible error, SlowDown.
-		writeErrorResponse(w, ErrSlowDown, r.URL)
+		writeErrorResponse(w, ErrSlowDown, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -768,7 +768,7 @@ type criticalErrorHandler struct{ handler http.Handler }
 func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err == logger.ErrCritical { // handle
-			writeErrorResponse(w, ErrInternalError, r.URL)
+			writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		} else if err != nil {
 			panic(err) // forward other panic calls
 		}
@@ -787,7 +787,7 @@ func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			writeErrorResponseHeadersOnly(w, ErrInsecureSSECustomerRequest)
 		} else {
-			writeErrorResponse(w, ErrInsecureSSECustomerRequest, r.URL)
+			writeErrorResponse(w, ErrInsecureSSECustomerRequest, r.URL, guessIsBrowserReq(r))
 		}
 		return
 	}

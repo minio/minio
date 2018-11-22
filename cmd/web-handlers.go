@@ -768,7 +768,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadata(context.Background(), r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 

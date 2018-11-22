@@ -75,7 +75,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
 				writeHeaders()
-				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 				return true
 			}
 		}
@@ -89,7 +89,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
-				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 				return true
 			}
 		}
@@ -102,7 +102,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if objInfo.ETag != "" && !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 			return true
 		}
 	}
@@ -114,7 +114,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if objInfo.ETag != "" && isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 			return true
 		}
 	}
@@ -174,7 +174,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
-				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 				return true
 			}
 		}
@@ -187,7 +187,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL, guessIsBrowserReq(r))
 			return true
 		}
 	}
