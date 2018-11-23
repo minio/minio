@@ -33,7 +33,7 @@ Minio follows a strict **read-after-write** consistency model for all I/O operat
 This section describes how to set up and run distributed Minio.
 
 1. [Install Minio Server](#install-minio-server) 
-2. [Run Distributed Minio](#run-disttributed-minio) 
+2. [Run Distributed Minio](#run-distributed-minio) 
 3. [Test the Configuration](#test-the-configuration)
 
 The process to set up distributed Minio is largely the same as that for a standalone Minio configuration. Depending on the command line parameters, Minio Server automatically switches to stand-alone or distributed mode.
@@ -42,7 +42,7 @@ The process to set up distributed Minio is largely the same as that for a standa
 
 Install Minio Server using the instructions in the [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
-### <a name="run-disttributed-minio"></a>2. Run Distributed Minio
+### <a name="run-distributed-minio"></a>2. Run Distributed Minio
 
 To start a distributed Minio instance:
 1. Pass the hard drive locations as parameters to the `minio server` command.
