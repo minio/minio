@@ -206,9 +206,6 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 // Fetch claims in the security token returned by the client and validate the token.
 func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
 	token := getSessionToken(r)
-	if token == "" {
-		return nil, ErrNone
-	}
 	if token != "" && cred.AccessKey == "" {
 		return nil, ErrNoAccessKey
 	}
@@ -253,6 +250,11 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		return s3Err
 	}
 
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return s3Err
+	}
+
 	// LocationConstraint is valid only for CreateBucketAction.
 	var locationConstraint string
 	if action == policy.CreateBucketAction {
@@ -274,11 +276,6 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 
 		// Populate payload again to handle it in HTTP handler.
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-	}
-
-	claims, s3Err := checkClaimsFromToken(r, cred)
-	if s3Err != ErrNone {
-		return s3Err
 	}
 
 	if cred.AccessKey == "" {
