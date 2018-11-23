@@ -4,12 +4,12 @@ Minio protects data against hardware failures and silent data corruption using e
 
 This guide describes what Minio erasure code is and how to use it.
 
-1. [What is Erasure Code?](#whatiserasure) 
-2. [Why is Erasure Code Useful?](#whyuseful) 
-3. [What is Bit Rot Protection?](#whatisrot) 
-4. [Get Started with Minio Erasure Code](#getstarted)
+1. [What is Erasure Code?](#what-is-erasure-code) 
+2. [Why is Erasure Code Useful?](#why-is-erasure-code-useful) 
+3. [What is Bit Rot Protection?](#what-is-bit-rot-protection) 
+4. [Get Started with Minio Erasure Code](#get-started-with-minio-erasure-code)
 
-## 1. <a name="whatiserasure"></a>What is Erasure Code?
+## 1. <a name="what-is-erasure-code"></a>What is Erasure Code?
 
 *Erasure code* is a mathematical algorithm to reconstruct missing or corrupted data. Minio uses Reed-Solomon code to shard objects into variable data and parity blocks. 
 
@@ -21,19 +21,19 @@ By default, Minio shards the objects across N/2 data and N/2 parity drives:
 
 For example, in a 12-drive configuration, an object can be sharded into a variable number of data and parity blocks across all the drives, ranging from 6-10 data blocks and 2-6 parity blocks. When running Minio Server with its default configuration, up to 6 drives can fail while data can still be reliably reconstructed from the remaining drives.
 
-## <a name="whyuseful"></a>2. Why is Erasure Code Useful?
+## <a name="why-is-erasure-code-useful"></a>2. Why is Erasure Code Useful?
 
 Unlike RAID or replication backup configurations, erasure code protects data from multiple drive failures. For example, RAID6 can protect against two drive failures, whereas Minio erasure code can retain data for as many as half of the drives that are lost. 
 
 Minio's erasure code operates at the object level and can heal one object at a time. With RAID, healing can only be performed at the volume level, which can result in long downtime. Since Minio encodes each object individually, it can heal objects incrementally. Storage servers should not require drive replacement or healing for the lifetime of the server. Minio's erasure-coded backend is designed for operational efficiency and takes full advantage of hardware acceleration when available.
 
-## <a name="whatisrot"></a>3. What is Bit Rot Protection?
+## <a name="what-is-bit-rot-protection"></a>3. What is Bit Rot Protection?
 
 *Bit rot*, also known as *data rot* or *silent data* corruption, is a data loss issue that occurs on modern hard drives. Data on the drive may become corrupted silently without signaling that an error has occurred, making bit rot more dangerous than a permanent hard drive failure.
 
 Minio's erasure-coded backend uses high-speed [HighwayHash](https://blog.minio.io/highwayhash-fast-hashing-at-over-10-gb-s-per-core-in-golang-fee938b5218a) checksums to protect against bit rot.
 
-## <a name="getstarted"></a>4. Get Started with Minio Erasure Code
+## <a name="get-started-with-minio-erasure-code"></a>4. Get Started with Minio Erasure Code
 
 ### 4.1 Install Minio Server
 
