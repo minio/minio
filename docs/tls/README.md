@@ -21,7 +21,7 @@ Copy the existing private key and public certificate to the `certs` directory wi
 
 **Note:** 
 * The key and certificate files must be appended with `.key` and `.crt`, respectively.
-* A filename for a certificate signed by a CA consists of a concatenation of the server's certificate, any intermediates, and the CA's root certificate.
+* A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
 ## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with Minio
 
@@ -75,7 +75,7 @@ read EC key
 writing EC key
 ```
 
-Alternatively, use the following command to generate a private key with ECDSA and a password:
+Alternatively, use the following command to generate a private ECDSA key protected by a password:
 
 ```sh
 openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
@@ -99,7 +99,7 @@ Generating RSA private key, 2048 bit long modulus
 e is 65537 (0x10001)
 ```
 
-Alternatively, use the following command to generate a private key with RSA and a password:
+Alternatively, use the following command to generate a private RSA key protected by a password:
 
 ```sh
 openssl genrsa -aes256 -out private.key 2048 -passout pass:PASSWORD
