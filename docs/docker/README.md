@@ -2,14 +2,14 @@
 
 This quickstart guide describes how to quickly install and run a Minio Server Docker container.
 
-1. [Install Docker](#installdocker) 
-2. [Run Standalone Minio on Docker](#runstandalong) 
-3. [Run Distributed Minio on Docker](#rundistributed) 
+1. [Install Docker](#install-docker) 
+2. [Run Standalone Minio on Docker](#run-standalone-minio-on-docker) 
+3. [Run Distributed Minio on Docker](#run-distributed-minio-on-docker) 
 
-## <a name="installdocker"></a>1. Install Docker
+## <a name="install-docker"></a>1. Install Docker
 Install Docker using these instructions: <https://www.docker.com/community-edition#/download>.
 
-## <a name="runstandalong"></a>2. Run Standalone Minio on Docker
+## <a name="run-standalone-minio-on-docker"></a>2. Run Standalone Minio on Docker
 
 Minio can be run with either temporary or persistent storage, as described below.
 
@@ -49,7 +49,7 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-## <a name="rundistributed"></a>3. Run Distributed Minio on Docker
+## <a name="run-distributed-minio-on-docker"></a>3. Run Distributed Minio on Docker
 Distributed Minio can be deployed using one of these two methods:
 * [Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose): Creates a single host, multi-container deployment. This is useful for developing, testing, and staging environments with Distributed Minio.
 * [Swarm mode](https://docs.minio.io/docs/deploy-minio-on-docker-swarm): Creates a multi-host, multi-container deployment. This offers a more robust, production-level deployment than Docker Compose.
