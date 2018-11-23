@@ -8,10 +8,10 @@ Minio is best suited for storing unstructured data such as photos, videos, log f
 This quickstart guide describes how to quickly install and run Minio Server locally. These are the steps you will follow:
 
 1. [Open a Firewall Port](#open-a-firewall-port) 
-2. [Install and run the Minio Server](#install-and-run-server) 
-3. [Test Using the Minio Web-based Object Browser](#test-web-browser) 
-4. [Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-secret-keys) 
-5. [Test using Minio Client](#test-client)
+2. [Install and run the Minio Server](#install-and-run-the-minio-server) 
+3. [Test Using the Minio Web-based Object Browser](#test-using-the-minio-web-based-object-browser) 
+4. [Identify the Endpoint, Access Key, and Secret Key](#identify-endpoint-access-key-and-secret-key) 
+5. [Test using Minio Client](#test-using-minio-client)
 
 ## <a name="open-a-firewall-port"></a> 1. Open a Firewall Port
 By default, Minio uses port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port. Use one of the following methods to allow port access:
@@ -73,7 +73,7 @@ Specify `--reload` with `firewall-cmd` for the changes to take effect:
 firewall-cmd --reload
 ```
 
-## <a name="install-and-run-server"></a> 2. Install and run the Minio Server
+## <a name="install-and-run-the-minio-server"></a> 2. Install and run the Minio Server
 Use one of the following methods to install and run Minio Server locally:
 * [Docker Container](#server-docker)  
 * [macOS](#server-macos)
@@ -213,12 +213,12 @@ Install Minio Server using Golang:
 go get -u github.com/minio/minio
 ```
 
-## <a name="test-web-browser"></a> 3. Test Using the Minio Web-based Object Browser
+## <a name="test-using-the-minio-web-based-object-browser"></a> 3. Test Using the Minio Web-based Object Browser
 If Minio Server has started successfully, it will display an embedded web-based object browser. Navigate your web browser to http://127.0.0.1:9000 and ensure that the following screen is displayed:
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.png?raw=true)
 
-## <a name="identify-endpoint-access-secret-keys"></a> 4. Identify the Endpoint, Access Key, and Secret Key
+## <a name="identify-endpoint-access-key-and-secret-key"></a> 4. Identify the Endpoint, Access Key, and Secret Key
 Once the server is running you should see a response similar to this one:
 
 ```
@@ -236,7 +236,7 @@ Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
 
 From the output, identify the endpoint, access key, secret key, browser URLs and ports, and the client command necessary to add the server to the list of hosts accessible by the client. This information will be used when testing with Minio Client.
 
-## <a name="test-client"></a> 5. Test Using Minio Client
+## <a name="test-using-minio-client"></a> 5. Test Using Minio Client
 Minio Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server  (e.g. `ls`, `cat`, `cp`, `mirror`, `diff`, `find`, etc.). `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
 
 Test `mc` with the server using the instructions in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide)
