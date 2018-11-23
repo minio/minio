@@ -32,17 +32,17 @@ Minio follows a strict **read-after-write** consistency model for all I/O operat
 
 This section describes how to set up and run distributed Minio.
 
-1. [Install Minio Server](#installserver) 
-2. [Run Distributed Minio](#rundist) 
-3. [Test the Configuration](#testtheconfig)
+1. [Install Minio Server](#install-minio-server) 
+2. [Run Distributed Minio](#run-disttributed-minio) 
+3. [Test the Configuration](#test-the-configuration)
 
 The process to set up distributed Minio is largely the same as that for a standalone Minio configuration. Depending on the command line parameters, Minio Server automatically switches to stand-alone or distributed mode.
 
-### <a name="installserver"></a>1. Install Minio Server
+### <a name="install-minio-server"></a>1. Install Minio Server
 
 Install Minio Server using the instructions in the [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
-### <a name="rundist"></a>2. Run Distributed Minio
+### <a name="run-disttributed-minio"></a>2. Run Distributed Minio
 
 To start a distributed Minio instance:
 1. Pass the hard drive locations as parameters to the `minio server` command.
@@ -74,7 +74,7 @@ minio server http://192.168.1.1{1...8}/export1
 
 **Note:** Arguments such as `{1...n}` have three dots. Using only two dots (e.g. `{1..4}`) will be interpreted by the shell and won't be passed to Minio Server. This affects the erasure coding order, possibly impacting performance and high availability. Always use `{1...n}` (three dots) to use Minio Server erasure code on data optimally.
 
-### <a name="testtheconfig"></a>3. Test the Configuration
+### <a name="test-the-configuration"></a>3. Test the Configuration
 To test this configuration, access the Minio server via a browser or invoke it as described in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
