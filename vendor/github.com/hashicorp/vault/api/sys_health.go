@@ -11,6 +11,7 @@ func (c *Sys) Health() (*HealthResponse, error) {
 	r.Params.Add("sealedcode", "299")
 	r.Params.Add("standbycode", "299")
 	r.Params.Add("drsecondarycode", "299")
+	r.Params.Add("performancestandbycode", "299")
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
@@ -35,4 +36,5 @@ type HealthResponse struct {
 	Version                    string `json:"version"`
 	ClusterName                string `json:"cluster_name,omitempty"`
 	ClusterID                  string `json:"cluster_id,omitempty"`
+	LastWAL                    uint64 `json:"last_wal,omitempty"`
 }
