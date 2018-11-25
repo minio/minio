@@ -1,6 +1,11 @@
 package api
 
-import "context"
+import (
+	"context"
+	"errors"
+
+	"github.com/mitchellh/mapstructure"
+)
 
 func (c *Sys) RekeyStatus() (*RekeyStatusResponse, error) {
 	r := c.c.NewRequest("GET", "/v1/sys/rekey/init")
@@ -211,8 +216,20 @@ func (c *Sys) RekeyRetrieveBackup() (*RekeyRetrieveResponse, error) {
 	}
 	defer resp.Body.Close()
 
+	secret, err := ParseSecret(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if secret == nil || secret.Data == nil {
+		return nil, errors.New("data from server response is empty")
+	}
+
 	var result RekeyRetrieveResponse
-	err = resp.DecodeJSON(&result)
+	err = mapstructure.Decode(secret.Data, &result)
+	if err != nil {
+		return nil, err
+	}
+
 	return &result, err
 }
 
@@ -227,8 +244,20 @@ func (c *Sys) RekeyRetrieveRecoveryBackup() (*RekeyRetrieveResponse, error) {
 	}
 	defer resp.Body.Close()
 
+	secret, err := ParseSecret(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if secret == nil || secret.Data == nil {
+		return nil, errors.New("data from server response is empty")
+	}
+
 	var result RekeyRetrieveResponse
-	err = resp.DecodeJSON(&result)
+	err = mapstructure.Decode(secret.Data, &result)
+	if err != nil {
+		return nil, err
+	}
+
 	return &result, err
 }
 
@@ -340,9 +369,9 @@ type RekeyUpdateResponse struct {
 }
 
 type RekeyRetrieveResponse struct {
-	Nonce   string              `json:"nonce"`
-	Keys    map[string][]string `json:"keys"`
-	KeysB64 map[string][]string `json:"keys_base64"`
+	Nonce   string              `json:"nonce" mapstructure:"nonce"`
+	Keys    map[string][]string `json:"keys" mapstructure:"keys"`
+	KeysB64 map[string][]string `json:"keys_base64" mapstructure:"keys_base64"`
 }
 
 type RekeyVerificationStatusResponse struct {

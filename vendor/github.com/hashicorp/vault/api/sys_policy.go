@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 func (c *Sys) ListPolicies() ([]string, error) {
-	r := c.c.NewRequest("GET", "/v1/sys/policy")
+	r := c.c.NewRequest("LIST", "/v1/sys/policies/acl")
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
@@ -16,29 +19,25 @@ func (c *Sys) ListPolicies() ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	err = resp.DecodeJSON(&result)
+	secret, err := ParseSecret(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if secret == nil || secret.Data == nil {
+		return nil, errors.New("data from server response is empty")
+	}
+
+	var result []string
+	err = mapstructure.Decode(secret.Data["keys"], &result)
 	if err != nil {
 		return nil, err
 	}
 
-	var ok bool
-	if _, ok = result["policies"]; !ok {
-		return nil, fmt.Errorf("policies not found in response")
-	}
-
-	listRaw := result["policies"].([]interface{})
-	var policies []string
-
-	for _, val := range listRaw {
-		policies = append(policies, val.(string))
-	}
-
-	return policies, err
+	return result, err
 }
 
 func (c *Sys) GetPolicy(name string) (string, error) {
-	r := c.c.NewRequest("GET", fmt.Sprintf("/v1/sys/policy/%s", name))
+	r := c.c.NewRequest("GET", fmt.Sprintf("/v1/sys/policies/acl/%s", name))
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
@@ -53,16 +52,15 @@ func (c *Sys) GetPolicy(name string) (string, error) {
 		return "", err
 	}
 
-	var result map[string]interface{}
-	err = resp.DecodeJSON(&result)
+	secret, err := ParseSecret(resp.Body)
 	if err != nil {
 		return "", err
 	}
-
-	if rulesRaw, ok := result["rules"]; ok {
-		return rulesRaw.(string), nil
+	if secret == nil || secret.Data == nil {
+		return "", errors.New("data from server response is empty")
 	}
-	if policyRaw, ok := result["policy"]; ok {
+
+	if policyRaw, ok := secret.Data["policy"]; ok {
 		return policyRaw.(string), nil
 	}
 
@@ -71,10 +69,10 @@ func (c *Sys) GetPolicy(name string) (string, error) {
 
 func (c *Sys) PutPolicy(name, rules string) error {
 	body := map[string]string{
-		"rules": rules,
+		"policy": rules,
 	}
 
-	r := c.c.NewRequest("PUT", fmt.Sprintf("/v1/sys/policy/%s", name))
+	r := c.c.NewRequest("PUT", fmt.Sprintf("/v1/sys/policies/acl/%s", name))
 	if err := r.SetJSONBody(body); err != nil {
 		return err
 	}
@@ -91,7 +89,7 @@ func (c *Sys) PutPolicy(name, rules string) error {
 }
 
 func (c *Sys) DeletePolicy(name string) error {
-	r := c.c.NewRequest("DELETE", fmt.Sprintf("/v1/sys/policy/%s", name))
+	r := c.c.NewRequest("DELETE", fmt.Sprintf("/v1/sys/policies/acl/%s", name))
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
