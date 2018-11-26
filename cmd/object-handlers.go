@@ -720,7 +720,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	srcOpts, err = copySrcEncryptionOpts(r, srcBucket, srcObject)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	// convert copy src encryption options for GET calls
@@ -732,7 +732,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, nil)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1490,7 +1490,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var srcOpts, dstOpts ObjectOptions
 	srcOpts, err = copySrcEncryptionOpts(r, srcBucket, srcObject)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	// convert copy src and dst encryption options for GET/PUT calls
@@ -1500,7 +1500,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 	dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, nil)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1622,13 +1622,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		li, lerr := objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1, dstOpts)
 		if lerr != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, lerr), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, lerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
 		dstOpts, err = copyDstEncryptionOpts(r, dstBucket, dstObject, li.UserDefined)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
@@ -1823,7 +1823,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if crypto.SSEC.IsRequested(r.Header) {
 		opts, err = putEncryptionOpts(r, bucket, object, nil)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1898,7 +1898,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			isEncrypted = true // to detect SSE-S3 encryption
 			opts, err = putEncryptionOpts(r, bucket, object, li.UserDefined)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 

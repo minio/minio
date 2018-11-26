@@ -193,15 +193,16 @@ func NewVault(kmsConf KMSConfig) (KMS, error) {
 		return nil, err
 	}
 
+	if ns, ok := os.LookupEnv("VAULT_NAMESPACE"); ok {
+		c.SetNamespace(ns)
+	}
+
 	accessToken, leaseDuration, err := getVaultAccessToken(c, config.Auth.AppRole.ID, config.Auth.AppRole.Secret)
 	if err != nil {
 		return nil, err
 	}
 	// authenticate and get the access token
 	c.SetToken(accessToken)
-	if ns, ok := os.LookupEnv("VAULT_NAMESPACE"); ok {
-		c.SetNamespace(ns)
-	}
 	v := vaultService{client: c, config: &config, leaseDuration: time.Duration(leaseDuration)}
 	v.renewToken(c)
 	return &v, nil
