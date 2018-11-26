@@ -59,7 +59,7 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2")
 
-	defer logger.AuditLog(w, r, "ListObjectsV2")
+	defer logger.AuditLog(w, r, "ListObjectsV2", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -141,7 +141,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV1")
 
-	defer logger.AuditLog(w, r, "ListObjectsV1")
+	defer logger.AuditLog(w, r, "ListObjectsV1", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

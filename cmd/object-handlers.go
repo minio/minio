@@ -79,7 +79,7 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SelectObject")
 
-	defer logger.AuditLog(w, r, "SelectObject")
+	defer logger.AuditLog(w, r, "SelectObject", mustGetClaimsFromToken(r))
 
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
@@ -305,7 +305,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObject")
 
-	defer logger.AuditLog(w, r, "GetObject")
+	defer logger.AuditLog(w, r, "GetObject", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -473,7 +473,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HeadObject")
 
-	defer logger.AuditLog(w, r, "HeadObject")
+	defer logger.AuditLog(w, r, "HeadObject", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -656,7 +656,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObject")
 
-	defer logger.AuditLog(w, r, "CopyObject")
+	defer logger.AuditLog(w, r, "CopyObject", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1028,7 +1028,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObject")
 
-	defer logger.AuditLog(w, r, "PutObject")
+	defer logger.AuditLog(w, r, "PutObject", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1291,7 +1291,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NewMultipartUpload")
 
-	defer logger.AuditLog(w, r, "NewMultipartUpload")
+	defer logger.AuditLog(w, r, "NewMultipartUpload", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1388,7 +1388,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CopyObjectPart")
 
-	defer logger.AuditLog(w, r, "CopyObjectPart")
+	defer logger.AuditLog(w, r, "CopyObjectPart", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1632,7 +1632,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectPart")
 
-	defer logger.AuditLog(w, r, "PutObjectPart")
+	defer logger.AuditLog(w, r, "PutObjectPart", mustGetClaimsFromToken(r))
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -1883,7 +1883,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AbortMultipartUpload")
 
-	defer logger.AuditLog(w, r, "AbortMultipartUpload")
+	defer logger.AuditLog(w, r, "AbortMultipartUpload", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -1929,7 +1929,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectParts")
 
-	defer logger.AuditLog(w, r, "ListObjectParts")
+	defer logger.AuditLog(w, r, "ListObjectParts", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -2008,7 +2008,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CompleteMultipartUpload")
 
-	defer logger.AuditLog(w, r, "CompleteMultipartUpload")
+	defer logger.AuditLog(w, r, "CompleteMultipartUpload", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -2187,7 +2187,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteObject")
 
-	defer logger.AuditLog(w, r, "DeleteObject")
+	defer logger.AuditLog(w, r, "DeleteObject", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

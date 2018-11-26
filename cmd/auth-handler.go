@@ -19,10 +19,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -155,32 +155,56 @@ func getSessionToken(r *http.Request) (token string) {
 	return r.URL.Query().Get("X-Amz-Security-Token")
 }
 
-// Fetch claims in the security token returned by the client and validate the token.
-func getClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
+// Fetch claims in the security token returned by the client, doesn't return
+// errors - upon errors the returned claims map will be empty.
+func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
+	claims, _ := getClaimsFromToken(r)
+	return claims
+}
+
+// Fetch claims in the security token returned by the client.
+func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
+	claims := make(map[string]interface{})
+	token := getSessionToken(r)
+	if token == "" {
+		return claims, nil
+	}
 	stsTokenCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
-		if _, ok := jwtToken.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
-		}
-		if err := jwtToken.Claims.Valid(); err != nil {
-			return nil, errAuthentication
-		}
-		if claims, ok := jwtToken.Claims.(jwtgo.MapClaims); ok {
-			if _, ok = claims["accessKey"].(string); !ok {
-				return nil, errInvalidAccessKeyID
-			}
-			// JWT token for x-amz-security-token is signed with admin
-			// secret key, temporary credentials become invalid if
-			// server admin credentials change. This is done to ensure
-			// that clients cannot decode the token using the temp
-			// secret keys and generate an entirely new claim by essentially
-			// hijacking the policies. We need to make sure that this is
-			// based an admin credential such that token cannot be decoded
-			// on the client side and is treated like an opaque value.
-			return []byte(globalServerConfig.GetCredential().SecretKey), nil
-		}
+		// JWT token for x-amz-security-token is signed with admin
+		// secret key, temporary credentials become invalid if
+		// server admin credentials change. This is done to ensure
+		// that clients cannot decode the token using the temp
+		// secret keys and generate an entirely new claim by essentially
+		// hijacking the policies. We need to make sure that this is
+		// based an admin credential such that token cannot be decoded
+		// on the client side and is treated like an opaque value.
+		return []byte(globalServerConfig.GetCredential().SecretKey), nil
+	}
+	p := &jwtgo.Parser{
+		ValidMethods: []string{
+			jwtgo.SigningMethodHS256.Alg(),
+			jwtgo.SigningMethodHS512.Alg(),
+		},
+	}
+	jtoken, err := p.ParseWithClaims(token, jwtgo.MapClaims(claims), stsTokenCallback)
+	if err != nil {
+		return nil, err
+	}
+	if !jtoken.Valid {
 		return nil, errAuthentication
 	}
-	claims := make(map[string]interface{})
+	v, ok := claims["accessKey"]
+	if !ok {
+		return nil, errInvalidAccessKeyID
+	}
+	if _, ok = v.(string); !ok {
+		return nil, errInvalidAccessKeyID
+	}
+	return claims, nil
+}
+
+// Fetch claims in the security token returned by the client and validate the token.
+func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
 	token := getSessionToken(r)
 	if token == "" {
 		return nil, ErrNone
@@ -188,16 +212,12 @@ func getClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]inte
 	if token != "" && cred.AccessKey == "" {
 		return nil, ErrNoAccessKey
 	}
-	if token != cred.SessionToken {
+	if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
 		return nil, ErrInvalidToken
 	}
-	p := &jwtgo.Parser{}
-	jtoken, err := p.ParseWithClaims(token, jwtgo.MapClaims(claims), stsTokenCallback)
+	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		return nil, toAPIErrorCode(context.Background(), errAuthentication)
-	}
-	if !jtoken.Valid {
-		return nil, toAPIErrorCode(context.Background(), errAuthentication)
+		return nil, toAPIErrorCode(context.Background(), err)
 	}
 	return claims, ErrNone
 }
@@ -256,7 +276,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
 
-	claims, s3Err := getClaimsFromToken(r, cred)
+	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -421,7 +441,7 @@ func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request
 		return s3Err
 	}
 
-	claims, s3Err := getClaimsFromToken(r, cred)
+	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
 	}

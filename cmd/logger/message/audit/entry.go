@@ -40,16 +40,17 @@ type Entry struct {
 		Status     string `json:"status,omitempty"`
 		StatusCode int    `json:"statusCode,omitempty"`
 	} `json:"api"`
-	RemoteHost string            `json:"remotehost,omitempty"`
-	RequestID  string            `json:"requestID,omitempty"`
-	UserAgent  string            `json:"userAgent,omitempty"`
-	ReqQuery   map[string]string `json:"requestQuery,omitempty"`
-	ReqHeader  map[string]string `json:"requestHeader,omitempty"`
-	RespHeader map[string]string `json:"responseHeader,omitempty"`
+	RemoteHost string                 `json:"remotehost,omitempty"`
+	RequestID  string                 `json:"requestID,omitempty"`
+	UserAgent  string                 `json:"userAgent,omitempty"`
+	ReqClaims  map[string]interface{} `json:"requestClaims,omitempty"`
+	ReqQuery   map[string]string      `json:"requestQuery,omitempty"`
+	ReqHeader  map[string]string      `json:"requestHeader,omitempty"`
+	RespHeader map[string]string      `json:"responseHeader,omitempty"`
 }
 
 // ToEntry - constructs an audit entry object.
-func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int) Entry {
+func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int, reqClaims map[string]interface{}) Entry {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -77,6 +78,7 @@ func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int)
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
 		ReqQuery:     reqQuery,
 		ReqHeader:    reqHeader,
+		ReqClaims:    reqClaims,
 		RespHeader:   respHeader,
 	}
 
