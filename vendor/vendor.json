@@ -450,6 +450,12 @@
 			"revisionTime": "2018-07-27T12:33:20Z"
 		},
 		{
+			"checksumSHA1": "MQKcgExxbVHltqyTjVbDuHlkfLw=",
+			"path": "github.com/hashicorp/vault/helper/consts",
+			"revision": "d4367e581fe117356c4d4ac9a8c8c4e514457449",
+			"revisionTime": "2018-11-21T18:10:53Z"
+		},
+		{
 			"checksumSHA1": "RlqPBLOexQ0jj6jomhiompWKaUg=",
 			"path": "github.com/hashicorp/vault/helper/hclutil",
 			"revision": "f348177b5d55dbd38d039b814bf34cbc9cfc093b",
