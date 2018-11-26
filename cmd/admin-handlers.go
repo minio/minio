@@ -578,7 +578,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				StartTime:     nh.startTime,
 			})
 			if err != nil {
-				writeErrorResponse(w, toAdminAPIErrCode(ctx, err), r.URL)
+				writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 				return
 			}
 			// Client token not specified but a heal sequence exists on a path,
@@ -859,7 +859,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		writeErrorResponseJSON(w, ErrInvalidRequest, r.URL)
 		return
 	}
 
@@ -898,7 +898,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponse(w, ErrInvalidRequest, r.URL)
+		writeErrorResponseJSON(w, ErrInvalidRequest, r.URL)
 		return
 	}
 

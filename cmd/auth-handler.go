@@ -419,7 +419,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(w, ErrSignatureVersionNotSupported, r.URL)
+	writeErrorResponse(w, ErrSignatureVersionNotSupported, r.URL, guessIsBrowserReq(r))
 }
 
 // isPutAllowed - check if PUT operation is allowed on the resource, this
