@@ -155,7 +155,7 @@ channel.start_consuming()
 
 Use the following command to execute the program and watch for RabbitMQ events:
 
-```py
+```
 python rabbit.py
 ```
 
@@ -167,7 +167,7 @@ mc cp myphoto.jpg myminio/images
 
 Once the upload completes, return to the first console. A response similar to this one should be displayed showing an event notification from RabbitMQ:
 
-```json
+```
 '{"Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016–09–08T22:34:38.226Z","eventName":"s3:ObjectCreated:Put",
  "userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"10.1.10.150:44576"},"responseElements":{},"s3":
  {"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},
@@ -274,7 +274,7 @@ client.loop_forever()
 
 Use the following command to execute this program and watch for MQTT events on the console:
 
-```py
+```
 python mqtt.py
 ```
 
@@ -286,7 +286,7 @@ mc cp myphoto.jpg myminio/images
 
 Once the upload completes, return to the first console. A response similar to this one should be displayed showing an event notification from MQTT:
 
-```json
+```
 {"Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016–09–08T22:34:38.226Z","eventName":"s3:ObjectCreated:Put",
  "userIdentity":{"principalId":"minio"}, "requestParameters":{"sourceIPAddress":"10.1.10.150:44576"},"responseElements":{},"s3":
  {"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},
