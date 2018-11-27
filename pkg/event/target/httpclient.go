@@ -135,7 +135,7 @@ func NewHTTPClientTarget(host xnet.Host, w http.ResponseWriter) (*HTTPClientTarg
 		return nil, err
 	}
 	c := &HTTPClientTarget{
-		id:      event.TargetID{"httpclient" + "+" + uuid + "+" + host.Name, host.Port.String()},
+		id:      event.TargetID{ID: "httpclient" + "+" + uuid + "+" + host.Name, Name: host.Port.String()},
 		w:       w,
 		eventCh: make(chan []byte),
 		DoneCh:  make(chan struct{}),

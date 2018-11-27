@@ -32,12 +32,12 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/go-autorest/autorest/azure"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/policy/condition"
 	sha256 "github.com/minio/sha256-simd"
@@ -93,7 +93,7 @@ EXAMPLES:
   2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
      $ export MINIO_ACCESS_KEY=azureaccountname
      $ export MINIO_SECRET_KEY=azureaccountkey
-     $ {{.HelpName}} https://azure.example.com
+     $ {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
 
   3. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
      $ export MINIO_ACCESS_KEY=azureaccountname
@@ -140,28 +140,43 @@ func (g *Azure) Name() string {
 	return azureBackend
 }
 
+// All known cloud environments of Azure
+var azureEnvs = []azure.Environment{
+	azure.PublicCloud,
+	azure.USGovernmentCloud,
+	azure.ChinaCloud,
+	azure.GermanCloud,
+}
+
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	var err error
-	var endpoint = storage.DefaultBaseURL
+	// The default endpoint is the public cloud
+	var endpoint = azure.PublicCloud.StorageEndpointSuffix
 	var secure = true
 
-	// If user provided some parameters
+	// Load the endpoint url if supplied by the user.
 	if g.host != "" {
 		endpoint, secure, err = minio.ParseGatewayEndpoint(g.host)
 		if err != nil {
 			return nil, err
 		}
+		// Reformat the full account storage endpoint to the base format.
+		//   e.g. testazure.blob.core.windows.net => core.windows.net
+		endpoint = strings.ToLower(endpoint)
+		for _, env := range azureEnvs {
+			if strings.Contains(endpoint, env.StorageEndpointSuffix) {
+				endpoint = env.StorageEndpointSuffix
+				break
+			}
+		}
 	}
 
-	if endpoint == fmt.Sprintf("%s.blob.%s", creds.AccessKey, storage.DefaultBaseURL) {
-		// If, by mistake, user provides endpoint as accountname.blob.core.windows.net
-		endpoint = storage.DefaultBaseURL
-	}
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	c.AddToUserAgent(fmt.Sprintf("APN/1.0 Minio/1.0 Minio/%s", minio.Version))
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
@@ -672,7 +687,6 @@ func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, sta
 	}
 	_, err = io.Copy(writer, rc)
 	rc.Close()
-	logger.LogIf(ctx, err)
 	return err
 }
 
@@ -722,7 +736,8 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.Reader
 	if data.Size() < azureBlockSize/10 {
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
@@ -923,7 +938,8 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	data := r.Reader
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return info, err
 	}
@@ -1062,7 +1078,7 @@ func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object,
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
-func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return objInfo, err

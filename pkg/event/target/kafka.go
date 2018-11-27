@@ -81,7 +81,7 @@ func (target *KafkaTarget) Send(eventData event.Event) error {
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func NewKafkaTarget(id string, args KafkaArgs) (*KafkaTarget, error) {
 	}
 
 	return &KafkaTarget{
-		id:       event.TargetID{id, "kafka"},
+		id:       event.TargetID{ID: id, Name: "kafka"},
 		args:     args,
 		producer: producer,
 	}, nil

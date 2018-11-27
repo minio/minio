@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-  "version": "31",
+  "version": "32",
   "credential": {
     "accessKey": "minio",
     "secretKey": "minio123"
@@ -156,6 +156,17 @@ var (
           "async": false,
           "maxPubAcksInflight": 0
         }
+      }
+	},
+    "nsq": {
+      "1": {
+        "enable": false,
+        "nsqdAddress": "",
+        "topic": "",
+        "tls": {
+			"enable": false,
+			"skipVerify": false
+		}
       }
     },
     "postgresql": {
@@ -298,7 +309,7 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			objectName := fmt.Sprintf("%s-%d", objName, i)
 			_, err = atb.objLayer.PutObject(context.Background(), bucketName, objectName,
-				mustGetHashReader(t, bytes.NewReader([]byte("hello")),
+				mustGetPutObjReader(t, bytes.NewReader([]byte("hello")),
 					int64(len("hello")), "", ""), nil, ObjectOptions{})
 			if err != nil {
 				t.Fatalf("Failed to create %s - %v", objectName,
@@ -317,7 +328,7 @@ func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
 		}
 
 		_, err = atb.objLayer.PutObjectPart(context.Background(), bucketName, objName,
-			uploadID, 3, mustGetHashReader(t, bytes.NewReader(
+			uploadID, 3, mustGetPutObjReader(t, bytes.NewReader(
 				[]byte("hello")), int64(len("hello")), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("mp put error: %v", err)
@@ -539,7 +550,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	credentials := globalServerConfig.GetCredential()
 
 	body, err := json.Marshal(madmin.ServiceAction{
-		cmd.toServiceActionValue()})
+		Action: cmd.toServiceActionValue()})
 	if err != nil {
 		t.Fatalf("JSONify error: %v", err)
 	}
@@ -746,7 +757,7 @@ func TestSetConfigHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	adminTestBed.router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+		t.Errorf("Expected to succeed but failed with %d, body: %s", rec.Code, rec.Body)
 	}
 
 	// Check that a very large config file returns an error.
@@ -856,12 +867,12 @@ func TestToAdminAPIErr(t *testing.T) {
 		// 3. Non-admin API specific error.
 		{
 			err:            errDiskNotFound,
-			expectedAPIErr: toAPIErrorCode(errDiskNotFound),
+			expectedAPIErr: toAPIErrorCode(context.Background(), errDiskNotFound),
 		},
 	}
 
 	for i, test := range testCases {
-		actualErr := toAdminAPIErrCode(test.err)
+		actualErr := toAdminAPIErrCode(context.Background(), test.err)
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)

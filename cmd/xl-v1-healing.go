@@ -636,9 +636,9 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	reqInfo := logger.GetReqInfo(ctx)
 	var newReqInfo *logger.ReqInfo
 	if reqInfo != nil {
-		newReqInfo = logger.NewReqInfo(reqInfo.RemoteHost, reqInfo.UserAgent, reqInfo.RequestID, reqInfo.API, bucket, object)
+		newReqInfo = logger.NewReqInfo(reqInfo.RemoteHost, reqInfo.UserAgent, reqInfo.DeploymentID, reqInfo.RequestID, reqInfo.API, bucket, object)
 	} else {
-		newReqInfo = logger.NewReqInfo("", "", "", "Heal", bucket, object)
+		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
 	}
 	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
 

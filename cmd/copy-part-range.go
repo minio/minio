@@ -22,16 +22,16 @@ import (
 )
 
 // Writes S3 compatible copy part range error.
-func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL) {
+func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL, browser bool) {
 	switch err {
 	case errInvalidRange:
-		writeErrorResponse(w, ErrInvalidCopyPartRange, url)
+		writeErrorResponse(w, ErrInvalidCopyPartRange, url, browser)
 		return
 	case errInvalidRangeSource:
-		writeErrorResponse(w, ErrInvalidCopyPartRangeSource, url)
+		writeErrorResponse(w, ErrInvalidCopyPartRangeSource, url, browser)
 		return
 	default:
-		writeErrorResponse(w, ErrInternalError, url)
+		writeErrorResponse(w, ErrInternalError, url, browser)
 		return
 	}
 }

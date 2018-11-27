@@ -221,6 +221,17 @@ func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) 
 	return err
 }
 
+// WriteAll - write all data to a file.
+func (client *storageRESTClient) WriteAll(volume, path string, buffer []byte) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	reader := bytes.NewBuffer(buffer)
+	respBody, err := client.call(storageRESTMethodWriteAll, values, reader)
+	defer CloseResponse(respBody)
+	return err
+}
+
 // StatFile - stat a file.
 func (client *storageRESTClient) StatFile(volume, path string) (info FileInfo, err error) {
 	values := make(url.Values)
@@ -311,6 +322,7 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.connected = false
+	client.restClient.Close()
 	return nil
 }
 

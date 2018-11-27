@@ -161,9 +161,6 @@ func compareSignatureV4(sig1, sig2 string) bool {
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns ErrNone if the signature matches.
 func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
 	// Server region.
 	region := globalServerConfig.GetRegion()
 
@@ -173,16 +170,9 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 		return ErrMissingFields
 	}
 
-	// Verify if the access key id matches.
-	if credHeader.accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(credHeader.accessKey)
-		if !ok {
-			return ErrInvalidAccessKeyID
-		}
+	cred, _, s3Err := checkKeyValid(credHeader.accessKey)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 
 	// Get signing key.
@@ -204,9 +194,6 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns ErrNone if the signature matches.
 func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
 	// Copy request
 	req := *r
 
@@ -216,16 +203,9 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return err
 	}
 
-	// Verify if the access key id matches.
-	if pSignValues.Credential.accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(pSignValues.Credential.accessKey)
-		if !ok {
-			return ErrInvalidAccessKeyID
-		}
+	cred, _, s3Err := checkKeyValid(pSignValues.Credential.accessKey)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 
 	// Extract all the signed headers along with its values.
@@ -233,6 +213,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	if errCode != ErrNone {
 		return errCode
 	}
+
 	// Construct new query.
 	query := make(url.Values)
 	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
@@ -326,9 +307,6 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns ErrNone if signature matches.
 func doesSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
 	// Copy request.
 	req := *r
 
@@ -347,16 +325,9 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 		return errCode
 	}
 
-	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(signV4Values.Credential.accessKey)
-		if !ok {
-			return ErrInvalidAccessKeyID
-		}
+	cred, _, s3Err := checkKeyValid(signV4Values.Credential.accessKey)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 
 	// Extract date, if not present throw error.
@@ -366,6 +337,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 			return ErrMissingDateHeader
 		}
 	}
+
 	// Parse date header.
 	t, e := time.Parse(iso8601Format, date)
 	if e != nil {

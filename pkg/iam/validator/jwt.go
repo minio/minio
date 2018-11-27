@@ -185,7 +185,13 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	var claims jwtgo.MapClaims
 	jwtToken, err := jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
 	if err != nil {
-		return nil, err
+		if err = p.args.PopulatePublicKey(); err != nil {
+			return nil, err
+		}
+		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if !jwtToken.Valid {

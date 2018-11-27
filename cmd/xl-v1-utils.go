@@ -311,6 +311,9 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 		}
 		return xlMetaV1{}, err
 	}
+	if len(xlMetaBuf) == 0 {
+		return xlMetaV1{}, errFileNotFound
+	}
 	// obtain xlMetaV1{} using `github.com/tidwall/gjson`.
 	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 	if err != nil {

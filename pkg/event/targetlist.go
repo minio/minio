@@ -66,9 +66,6 @@ type TargetIDErr struct {
 
 // Remove - closes and removes targets by given target IDs.
 func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
-	list.Lock()
-	defer list.Unlock()
-
 	errCh := make(chan TargetIDErr)
 
 	go func() {
@@ -76,7 +73,10 @@ func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 
 		var wg sync.WaitGroup
 		for _, id := range targetids {
-			if target, ok := list.targets[id]; ok {
+			list.RLock()
+			target, ok := list.targets[id]
+			list.RUnlock()
+			if ok {
 				wg.Add(1)
 				go func(id TargetID, target Target) {
 					defer wg.Done()
@@ -91,9 +91,11 @@ func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 		}
 		wg.Wait()
 
+		list.Lock()
 		for _, id := range targetids {
 			delete(list.targets, id)
 		}
+		list.Unlock()
 	}()
 
 	return errCh
@@ -114,9 +116,6 @@ func (list *TargetList) List() []TargetID {
 
 // Send - sends events to targets identified by target IDs.
 func (list *TargetList) Send(event Event, targetIDs ...TargetID) <-chan TargetIDErr {
-	list.Lock()
-	defer list.Unlock()
-
 	errCh := make(chan TargetIDErr)
 
 	go func() {
@@ -124,7 +123,10 @@ func (list *TargetList) Send(event Event, targetIDs ...TargetID) <-chan TargetID
 
 		var wg sync.WaitGroup
 		for _, id := range targetIDs {
-			if target, ok := list.targets[id]; ok {
+			list.RLock()
+			target, ok := list.targets[id]
+			list.RUnlock()
+			if ok {
 				wg.Add(1)
 				go func(id TargetID, target Target) {
 					defer wg.Done()

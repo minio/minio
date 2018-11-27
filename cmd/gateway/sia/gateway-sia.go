@@ -38,7 +38,6 @@ import (
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/sha256-simd"
 )
 
@@ -98,7 +97,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               siaBackend,
-		Usage:              "Sia Decentralized Cloud.",
+		Usage:              "Sia Decentralized Cloud",
 		Action:             siaGatewayMain,
 		CustomHelpTemplate: siaGatewayTemplate,
 		HideHelpCommand:    true,
@@ -554,7 +553,8 @@ func (s *siaObjects) GetObjectInfo(ctx context.Context, bucket string, object st
 }
 
 // PutObject creates a new object with the incoming data,
-func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (s *siaObjects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.Reader
 	srcFile := path.Join(s.TempDir, minio.MustGetUUID())
 	writer, err := os.Create(srcFile)
 	if err != nil {

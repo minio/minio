@@ -122,12 +122,12 @@ func writeHeaderSize(headerLength int) []byte {
 }
 
 //  writeCRC writes the CRC for both the prelude and and the end of the protocol.
-func writeCRC(myBuffer []byte) []byte {
+func writeCRC(buffer []byte) []byte {
 	// Calculate the  CRC here:
-	myCRC := make([]byte, 4)
-	cksum := crc32.ChecksumIEEE(myBuffer)
-	binary.BigEndian.PutUint32(myCRC, cksum)
-	return myCRC
+	crc := make([]byte, 4)
+	cksum := crc32.ChecksumIEEE(buffer)
+	binary.BigEndian.PutUint32(crc, cksum)
+	return crc
 }
 
 // writePayload writes the Payload for those protocols which the Payload is

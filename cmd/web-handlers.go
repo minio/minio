@@ -707,7 +707,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebUpload", mustGetClaimsFromToken(r))
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -768,7 +768,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadata(context.Background(), r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -807,7 +807,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	opts := ObjectOptions{}
+	var opts ObjectOptions
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
@@ -816,7 +816,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objInfo, err := putObject(ctx, bucket, object, hashReader, metadata, opts)
+	objInfo, err := putObject(ctx, bucket, object, NewPutObjReader(hashReader, nil, nil), metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -845,7 +845,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownload", mustGetClaimsFromToken(r))
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -916,7 +916,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
@@ -1027,7 +1027,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1113,7 +1113,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			length = info.Size
 			if objectAPI.IsEncryptionSupported() {
-				if _, err = DecryptObjectInfo(info, r.Header); err != nil {
+				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
 					writeWebErrorResponse(w, err)
 					return err
 				}

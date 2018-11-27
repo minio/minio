@@ -16,7 +16,10 @@
 
 package cmd
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 // Represents additional fields necessary for ErrPartTooSmall S3 error.
 type completeMultipartAPIError struct {
@@ -42,7 +45,7 @@ type completeMultipartAPIError struct {
 // of this function.
 func writePartSmallErrorResponse(w http.ResponseWriter, r *http.Request, err PartTooSmall) {
 
-	apiError := getAPIError(toAPIErrorCode(err))
+	apiError := getAPIError(toAPIErrorCode(context.Background(), err))
 	// Generate complete multipart error response.
 	errorResponse := getAPIErrorResponse(apiError, r.URL.Path, w.Header().Get(responseRequestIDKey))
 	cmpErrResp := completeMultipartAPIError{err.PartSize, int64(5242880), err.PartNumber, err.PartETag, errorResponse}

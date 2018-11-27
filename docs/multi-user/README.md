@@ -67,7 +67,14 @@ List all enabled and disabled users.
 mc admin users list myminio
 ```
 
+### 6. Configure `mc`
+```
+mc config host add myminio-newuser http://localhost:9000 newuser newuser123 --api s3v4
+mc cat myminio-newuser/my-bucketname/my-objectname
+```
+
 ## Explore Further
+- [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide)
 - [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
 - [Minio Admin Complete Guide](https://docs.minio.io/docs/minio-admin-complete-guide.html)
 - [The Minio documentation website](https://docs.minio.io)

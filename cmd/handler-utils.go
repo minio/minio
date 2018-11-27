@@ -178,11 +178,11 @@ func getRedirectPostRawQuery(objInfo ObjectInfo) string {
 
 // Returns access key in the request Authorization header.
 func getReqAccessKey(r *http.Request, region string) (accessKey string) {
-	accessKey, _, _ = getReqAccessKeyV4(r, region)
-	if accessKey == "" {
-		accessKey, _, _ = getReqAccessKeyV2(r)
+	cred, _, _ := getReqAccessKeyV4(r, region)
+	if cred.AccessKey == "" {
+		cred, _, _ = getReqAccessKeyV2(r)
 	}
-	return accessKey
+	return cred.AccessKey
 }
 
 // Extract request params to be sent with event notifiation.
@@ -351,6 +351,6 @@ func getResource(path string, host string, domain string) (string, error) {
 
 // If none of the http routes match respond with MethodNotAllowed
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
-	writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+	writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 	return
 }

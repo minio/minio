@@ -37,7 +37,7 @@ var hasServerSideEncryptionHeaderTests = []struct {
 	{headers: map[string]string{}, sseRequest: false},                                                                                                           // 4
 	{headers: map[string]string{crypto.SSECopyAlgorithm + " ": "AES256", " " + crypto.SSECopyKey: "key", crypto.SSECopyKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
 	{headers: map[string]string{crypto.SSECopyAlgorithm: "", crypto.SSECopyKey: "", crypto.SSECopyKeyMD5: ""}, sseRequest: false},                               // 6
-	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: true},                                                                                        // 6
+	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: true},                                                                                        // 7
 }
 
 func TestHasServerSideEncryptionHeader(t *testing.T) {
@@ -89,12 +89,12 @@ var hasSSECustomerHeaderTests = []struct {
 	{headers: map[string]string{crypto.SSECKeyMD5: "md5"}, sseRequest: true},                                                                           // 3
 	{headers: map[string]string{}, sseRequest: false},                                                                                                  // 4
 	{headers: map[string]string{crypto.SSECAlgorithm + " ": "AES256", " " + crypto.SSECKey: "key", crypto.SSECKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
-	{headers: map[string]string{crypto.SSECAlgorithm: "", crypto.SSECKey: "", crypto.SSECKeyMD5: ""}, sseRequest: false},                               // 6
+	{headers: map[string]string{crypto.SSECAlgorithm: "", crypto.SSECKey: "", crypto.SSECKeyMD5: ""}, sseRequest: true},                                // 6
 	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: false},                                                                              // 7
 
 }
 
-func TesthasSSECustomerHeader(t *testing.T) {
+func TestHasSSECustomerHeader(t *testing.T) {
 	for i, test := range hasSSECustomerHeaderTests {
 		headers := http.Header{}
 		for k, v := range test.headers {
@@ -139,7 +139,7 @@ func TestEncryptRequest(t *testing.T) {
 		for k, v := range test.header {
 			req.Header.Set(k, v)
 		}
-		_, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
+		_, _, err := EncryptRequest(content, req, "bucket", "object", test.metadata)
 
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
@@ -324,13 +324,73 @@ var decryptObjectInfoTests = []struct {
 
 func TestDecryptObjectInfo(t *testing.T) {
 	for i, test := range decryptObjectInfoTests {
-		if encrypted, err := DecryptObjectInfo(test.info, test.headers); err != test.expErr {
+		if encrypted, err := DecryptObjectInfo(&test.info, test.headers); err != test.expErr {
 			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
 		} else if enc := crypto.IsEncrypted(test.info.UserDefined); encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is encrypted but it is not", i)
 		} else if !encrypted && enc != encrypted {
 			t.Errorf("Test %d: Decryption thinks object is not encrypted but it is", i)
 		}
+	}
+}
+
+// Tests for issue reproduced when getting the right encrypted
+// offset of the object.
+func TestGetDecryptedRange_Issue50(t *testing.T) {
+	rs, err := parseRequestRangeSpec("bytes=594870256-594870263")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	objInfo := ObjectInfo{
+		Bucket: "bucket",
+		Name:   "object",
+		Size:   595160760,
+		UserDefined: map[string]string{
+			crypto.SSEMultipart:                    "",
+			crypto.SSEIV:                           "HTexa=",
+			crypto.SSESealAlgorithm:                "DAREv2-HMAC-SHA256",
+			crypto.SSECSealedKey:                   "IAA8PGAA==",
+			ReservedMetadataPrefix + "actual-size": "594870264",
+			"content-type":                         "application/octet-stream",
+			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
+		},
+		Parts: []objectPartInfo{
+			{
+				Number:     1,
+				Name:       "part.1",
+				ETag:       "etag1",
+				Size:       297580380,
+				ActualSize: 297435132,
+			},
+			{
+				Number:     2,
+				Name:       "part.2",
+				ETag:       "etag2",
+				Size:       297580380,
+				ActualSize: 297435132,
+			},
+		},
+	}
+
+	encOff, encLength, skipLen, seqNumber, partStart, err := objInfo.GetDecryptedRange(rs)
+	if err != nil {
+		t.Fatalf("Test: failed %s", err)
+	}
+	if encOff != 595127964 {
+		t.Fatalf("Test: expected %d, got %d", 595127964, encOff)
+	}
+	if encLength != 32796 {
+		t.Fatalf("Test: expected %d, got %d", 32796, encLength)
+	}
+	if skipLen != 32756 {
+		t.Fatalf("Test: expected %d, got %d", 32756, skipLen)
+	}
+	if seqNumber != 4538 {
+		t.Fatalf("Test: expected %d, got %d", 4538, seqNumber)
+	}
+	if partStart != 1 {
+		t.Fatalf("Test: expected %d, got %d", 1, partStart)
 	}
 }
 

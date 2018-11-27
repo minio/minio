@@ -47,7 +47,7 @@ func TestIsSecretKeyValid(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result := isSecretKeyValid(testCase.secretKey)
+		result := IsSecretKeyValid(testCase.secretKey)
 		if result != testCase.expectedResult {
 			t.Fatalf("test %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}

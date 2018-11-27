@@ -23,11 +23,13 @@ import (
 	"net/http"
 
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/s3select"
+	"github.com/minio/minio/pkg/s3select/format"
 )
 
 // APIError structure
@@ -149,6 +151,9 @@ const (
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
 	ErrKMSAuthFailure
+
+	ErrNoAccessKey
+	ErrInvalidToken
 
 	// Bucket notification related errors.
 	ErrEventNotification
@@ -292,6 +297,8 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
+	ErrInvalidColumnIndex
+
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
@@ -805,6 +812,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "InvalidArgument",
 		Description:    "Server side encryption specified but KMS authorization failed",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNoAccessKey: {
+		Code:           "AccessDenied",
+		Description:    "No AWSAccessKey was presented",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrInvalidToken: {
+		Code:           "InvalidTokenId",
+		Description:    "The security token included in the request is invalid",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 
 	/// S3 extensions.
@@ -1416,6 +1433,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidColumnIndex: {
+		Code:           "InvalidColumnIndex",
+		Description:    "The column index is invalid. Please check the service documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidDecompressedSize: {
 		Code:           "XMinioInvalidDecompressedSize",
 		Description:    "The data provided is unfit for decompression",
@@ -1427,7 +1449,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 // toAPIErrorCode - Converts embedded errors. Convenience
 // function written to handle all cases where we have known types of
 // errors returned by underlying layers.
-func toAPIErrorCode(err error) (apiErr APIErrorCode) {
+func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
@@ -1641,7 +1663,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEvaluatorBindingDoesNotExist
 	case s3select.ErrMissingHeaders:
 		apiErr = ErrMissingHeaders
-
+	case format.ErrParseInvalidPathComponent:
+		apiErr = ErrMissingHeaders
+	case format.ErrInvalidColumnIndex:
+		apiErr = ErrInvalidColumnIndex
 	}
 
 	// Compression errors
@@ -1754,6 +1779,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectTampered
 	default:
 		apiErr = ErrInternalError
+		// Make sure to log the errors which we cannot translate
+		// to a meaningful S3 API errors. This is added to aid in
+		// debugging unexpected/unhandled errors.
+		logger.LogIf(ctx, err)
 	}
 
 	return apiErr

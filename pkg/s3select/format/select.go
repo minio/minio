@@ -22,11 +22,11 @@ import "encoding/xml"
 // https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html
 type Select interface {
 	Type() Type
-	Read() (map[string]interface{}, error)
+	Read() ([]byte, error)
 	Header() []string
 	HasHeader() bool
 	OutputFieldDelimiter() string
-	UpdateBytesProcessed(record map[string]interface{})
+	UpdateBytesProcessed(int64)
 	Expression() string
 	UpdateBytesReturned(int64)
 	CreateStatXML() (string, error)

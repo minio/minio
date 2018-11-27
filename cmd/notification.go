@@ -510,7 +510,7 @@ func (args eventArgs) ToEvent() event.Event {
 		AwsRegion:         args.ReqParams["region"],
 		EventTime:         eventTime.Format(event.AMZTimeFormat),
 		EventName:         args.EventName,
-		UserIdentity:      event.Identity{args.ReqParams["accessKey"]},
+		UserIdentity:      event.Identity{PrincipalID: args.ReqParams["accessKey"]},
 		RequestParameters: args.ReqParams,
 		ResponseElements:  respElements,
 		S3: event.Metadata{
@@ -518,7 +518,7 @@ func (args eventArgs) ToEvent() event.Event {
 			ConfigurationID: "Config",
 			Bucket: event.Bucket{
 				Name:          args.BucketName,
-				OwnerIdentity: event.Identity{args.ReqParams["accessKey"]},
+				OwnerIdentity: event.Identity{PrincipalID: args.ReqParams["accessKey"]},
 				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{

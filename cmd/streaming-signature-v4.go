@@ -91,17 +91,9 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 		return cred, "", "", time.Time{}, errCode
 	}
 
-	cred = globalServerConfig.GetCredential()
-	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return cred, "", "", time.Time{}, ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(signV4Values.Credential.accessKey)
-		if !ok {
-			return cred, "", "", time.Time{}, ErrInvalidAccessKeyID
-		}
+	cred, _, errCode = checkKeyValid(signV4Values.Credential.accessKey)
+	if errCode != ErrNone {
+		return cred, "", "", time.Time{}, errCode
 	}
 
 	// Verify if region is valid.
@@ -114,6 +106,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 			return cred, "", "", time.Time{}, ErrMissingDateHeader
 		}
 	}
+
 	// Parse date header.
 	var err error
 	date, err = time.Parse(iso8601Format, dateStr)

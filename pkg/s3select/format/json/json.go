@@ -17,11 +17,10 @@
 package json
 
 import (
-	"encoding/json"
+	"bufio"
 	"encoding/xml"
 	"io"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/pkg/s3select/format"
 )
 
@@ -57,7 +56,7 @@ type Options struct {
 // jinput represents a record producing input from a  formatted file or pipe.
 type jinput struct {
 	options         *Options
-	reader          *jsoniter.Decoder
+	reader          *bufio.Reader
 	firstRow        []string
 	header          []string
 	minOutputLength int
@@ -75,7 +74,7 @@ type jinput struct {
 func New(opts *Options) (format.Select, error) {
 	reader := &jinput{
 		options: opts,
-		reader:  jsoniter.NewDecoder(opts.ReadFrom),
+		reader:  bufio.NewReader(opts.ReadFrom),
 	}
 	reader.stats.BytesScanned = opts.StreamSize
 	reader.stats.BytesProcessed = 0
@@ -90,26 +89,21 @@ func (reader *jinput) Progress() bool {
 }
 
 // UpdateBytesProcessed - populates the bytes Processed
-func (reader *jinput) UpdateBytesProcessed(record map[string]interface{}) {
-	out, _ := json.Marshal(record)
-	reader.stats.BytesProcessed += int64(len(out))
+func (reader *jinput) UpdateBytesProcessed(size int64) {
+	reader.stats.BytesProcessed += size
 }
 
-// Read the file and returns map[string]interface{}
-func (reader *jinput) Read() (map[string]interface{}, error) {
-	dec := reader.reader
-	var record interface{}
-	for {
-		err := dec.Decode(&record)
+// Read the file and returns
+func (reader *jinput) Read() ([]byte, error) {
+	data, err := reader.reader.ReadBytes('\n')
+	if err != nil {
 		if err == io.EOF || err == io.ErrClosedPipe {
-			break
+			err = nil
+		} else {
+			err = format.ErrJSONParsingError
 		}
-		if err != nil {
-			return nil, format.ErrJSONParsingError
-		}
-		return record.(map[string]interface{}), nil
 	}
-	return nil, nil
+	return data, err
 }
 
 // OutputFieldDelimiter - returns the delimiter specified in input request

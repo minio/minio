@@ -136,12 +136,12 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 		2 // CRLF
 }
 
-func mustGetHashReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *hash.Reader {
+func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjReader {
 	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return hr
+	return NewPutObjReader(hr, nil, nil)
 }
 
 // calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)
@@ -2354,8 +2354,9 @@ func TestToErrIsNil(t *testing.T) {
 	if toStorageErr(nil) != nil {
 		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", toStorageErr(nil))
 	}
-	if toAPIErrorCode(nil) != ErrNone {
-		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(nil))
+	ctx := context.Background()
+	if toAPIErrorCode(ctx, nil) != ErrNone {
+		t.Errorf("Test expected error code to be ErrNone, failed instead provided %d", toAPIErrorCode(ctx, nil))
 	}
 }
 
