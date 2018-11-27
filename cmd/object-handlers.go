@@ -774,6 +774,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		length = actualSize
 	}
 
 	// No need to compress for remote etcd calls
@@ -813,8 +814,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	rawReader := srcInfo.Reader
-	pReader := NewPutObjReader(srcInfo.Reader, srcInfo.Reader, nil)
+	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
+
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		// Encryption parameters not applicable for this object.
@@ -882,15 +885,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			switch {
 			case !isSourceEncrypted && !isTargetEncrypted:
-				fallthrough
+				targetSize = srcInfo.Size
 			case isSourceEncrypted && isTargetEncrypted:
 				targetSize = srcInfo.Size
-			// Source not encrypted and target encrypted
 			case !isSourceEncrypted && isTargetEncrypted:
 				targetSize = srcInfo.EncryptedSize()
 			case isSourceEncrypted && !isTargetEncrypted:
 				targetSize, _ = srcInfo.DecryptedSize()
 			}
+
 			if isTargetEncrypted {
 				reader, objEncKey, err = newEncryptReader(srcInfo.Reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
@@ -910,6 +913,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+
 			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objEncKey)
 		}
 	}

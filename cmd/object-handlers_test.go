@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1811,9 +1812,13 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	// this is required even to assert the copied object,
 	bytesData := []struct {
 		byteData []byte
+		md5sum   string
 	}{
-		{generateBytesData(6 * humanize.KiByte)},
+		{byteData: generateBytesData(6 * humanize.KiByte)},
 	}
+	h := md5.New()
+	h.Write(bytesData[0].byteData)
+	bytesData[0].md5sum = hex.EncodeToString(h.Sum(nil))
 
 	buffers := []*bytes.Buffer{
 		new(bytes.Buffer),
@@ -1826,22 +1831,28 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		objectName    string
 		contentLength int64
 		textData      []byte
+		md5sum        string
 		metaData      map[string]string
 	}{
 		// case - 1.
-		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, bytesData[0].md5sum, make(map[string]string)},
 
 		// case - 2.
 		// used for anonymous HTTP request test.
-		{bucketName, anonObject, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+		{bucketName, anonObject, int64(len(bytesData[0].byteData)), bytesData[0].byteData, bytesData[0].md5sum, make(map[string]string)},
 	}
+
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
+		var objInfo ObjectInfo
+		objInfo, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), input.metaData, opts)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+		if objInfo.ETag != input.md5sum {
+			t.Fatalf("Put Object case %d:  Checksum mismatched: <ERROR> got %s, expected %s", i+1, input.md5sum, objInfo.ETag)
 		}
 	}
 
@@ -2105,6 +2116,16 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			t.Fatalf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 		if rec.Code == http.StatusOK {
+			var cpObjResp CopyObjectResponse
+			if err = xml.Unmarshal(rec.Body.Bytes(), &cpObjResp); err != nil {
+				t.Fatalf("Test %d: %s: Failed to parse the CopyObjectResult response: <ERROR> %s", i+1, instanceType, err)
+			}
+
+			retag := canonicalizeETag(cpObjResp.ETag)
+			if retag != bytesData[0].md5sum {
+				t.Fatalf("Test %d: %s: Failed to CopyObject: <ERROR> got %s, expected %s", i+1, instanceType, retag, bytesData[0].md5sum)
+			}
+
 			// See if the new object is formed.
 			// testing whether the copy was successful.
 			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.newObjectName, 0, int64(len(bytesData[0].byteData)), buffers[0], "", opts)
