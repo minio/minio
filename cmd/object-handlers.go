@@ -84,11 +84,11 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	// Fetch object stat info.
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	vars := mux.Vars(r)
@@ -129,33 +129,33 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				}
 			}
 		}
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Get request range.
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		writeErrorResponse(w, ErrUnsupportedRangeHeader, r.URL)
+		writeErrorResponse(w, ErrUnsupportedRangeHeader, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if r.ContentLength <= 0 {
-		writeErrorResponse(w, ErrEmptyRequestBody, r.URL)
+		writeErrorResponse(w, ErrEmptyRequestBody, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	var selectReq s3select.ObjectSelectRequest
 	if err := xmlDecoder(r.Body, &selectReq, r.ContentLength); err != nil {
-		writeErrorResponse(w, ErrMalformedXML, r.URL)
+		writeErrorResponse(w, ErrMalformedXML, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if !strings.EqualFold(string(selectReq.ExpressionType), "SQL") {
-		writeErrorResponse(w, ErrInvalidExpressionType, r.URL)
+		writeErrorResponse(w, ErrInvalidExpressionType, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if len(selectReq.Expression) >= s3select.MaxExpressionLength {
-		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
+		writeErrorResponse(w, ErrExpressionTooLong, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -167,7 +167,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	var opts ObjectOptions
 	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, opts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	defer gr.Close()
@@ -176,37 +176,37 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	if selectReq.InputSerialization.CompressionType == s3select.SelectCompressionGZIP {
 		if !strings.Contains(objInfo.ContentType, "gzip") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 	if selectReq.InputSerialization.CompressionType == s3select.SelectCompressionBZIP {
 		if !strings.Contains(objInfo.ContentType, "bzip") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 	if selectReq.InputSerialization.CompressionType == "" {
 		selectReq.InputSerialization.CompressionType = s3select.SelectCompressionNONE
 		if !strings.Contains(objInfo.ContentType, "text/csv") && !strings.Contains(objInfo.ContentType, "application/json") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL)
+			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 	if !strings.EqualFold(string(selectReq.ExpressionType), "SQL") {
-		writeErrorResponse(w, ErrInvalidExpressionType, r.URL)
+		writeErrorResponse(w, ErrInvalidExpressionType, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if len(selectReq.Expression) >= s3select.MaxExpressionLength {
-		writeErrorResponse(w, ErrExpressionTooLong, r.URL)
+		writeErrorResponse(w, ErrExpressionTooLong, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if selectReq.InputSerialization.CSV == nil && selectReq.InputSerialization.JSON == nil {
-		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if selectReq.OutputSerialization.CSV == nil && selectReq.OutputSerialization.JSON == nil {
-		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -215,24 +215,24 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			selectReq.InputSerialization.CSV.FileHeaderInfo != s3select.CSVFileHeaderInfoNone &&
 			selectReq.InputSerialization.CSV.FileHeaderInfo != s3select.CSVFileHeaderInfoIgnore &&
 			selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
-			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL)
+			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
 			selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
 			selectReq.OutputSerialization.CSV.QuoteFields != "" {
-			writeErrorResponse(w, ErrInvalidQuoteFields, r.URL)
+			writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
-			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL)
+			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
 	}
 	if selectReq.InputSerialization.JSON != nil {
 		if selectReq.InputSerialization.JSON.Type != s3select.JSONLinesType {
-			writeErrorResponse(w, ErrInvalidJSONType, r.URL)
+			writeErrorResponse(w, ErrInvalidJSONType, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -258,21 +258,21 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if objInfo.IsCompressed() {
 		size = objInfo.GetActualSize()
 		if size < 0 {
-			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidDecompressedSize), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
 	s3s, err := s3select.New(reader, size, selectReq)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Parses the select query and checks for an error
 	_, _, _, _, _, _, err = s3select.ParseSelect(s3s)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -309,11 +309,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
-		writeErrorResponse(w, ErrBadRequest, r.URL)
+		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -359,7 +359,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				}
 			}
 		}
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -377,7 +377,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			// parse error and treat it as regular Get
 			// request like Amazon S3.
 			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
+				writeErrorResponse(w, ErrInvalidRange, r.URL, guessIsBrowserReq(r))
 				return
 			}
 
@@ -387,7 +387,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	defer gr.Close()
@@ -396,7 +396,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsEncryptionSupported() {
 		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -420,7 +420,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if err = setObjectHeaders(w, objInfo, rs); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -436,14 +436,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Write object content to response body
 	if _, err = io.Copy(httpWriter, gr); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
 		return
 	}
 
 	if err = httpWriter.Close(); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -481,7 +481,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
-		writeErrorResponse(w, ErrBadRequest, r.URL)
+		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -660,11 +660,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
 
@@ -673,7 +673,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	dstObject := vars["object"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -689,18 +689,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
-		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Check if metadata directive is valid.
 	if !isMetadataDirectiveValid(r.Header) {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -709,7 +709,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -729,7 +729,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, srcOpts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	defer gr.Close()
@@ -742,7 +742,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(srcInfo.Size) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -771,7 +771,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if crypto.IsEncrypted(srcInfo.UserDefined) {
 		actualSize, err = srcInfo.DecryptedSize()
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -810,7 +810,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	rawReader := srcInfo.Reader
@@ -819,12 +819,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		// Encryption parameters not applicable for this object.
 		if !crypto.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header) {
-			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidEncryptionParameters), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		// Encryption parameters not present for this object.
 		if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) {
-			writeErrorResponse(w, ErrInvalidSSECustomerAlgorithm, r.URL)
+			writeErrorResponse(w, ErrInvalidSSECustomerAlgorithm, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -840,7 +840,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if sseC {
 			newKey, err = ParseSSECustomerRequest(r)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}
@@ -853,7 +853,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if sseCopyC && sseC {
 				oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
@@ -863,7 +863,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			// In case of SSE-S3 oldKey and newKey aren't used - the KMS manages the keys.
 			if err = rotateKey(oldKey, newKey, srcBucket, srcObject, encMetadata); err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 
@@ -894,7 +894,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if isTargetEncrypted {
 				reader, objEncKey, err = newEncryptReader(srcInfo.Reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
@@ -907,7 +907,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize) // do not try to verify encrypted content
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objEncKey)
@@ -918,7 +918,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	srcInfo.UserDefined, err = getCpObjMetadataFromHeader(ctx, r, srcInfo.UserDefined)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -939,7 +939,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if !isMetadataReplace(r.Header) && srcInfo.metadataOnly && !crypto.IsEncrypted(srcInfo.UserDefined) {
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
-		writeErrorResponse(w, ErrInvalidCopyDest, r.URL)
+		writeErrorResponse(w, ErrInvalidCopyDest, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -958,7 +958,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		if globalDNSConfig == nil {
-			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		var dstRecords []dns.SrvRecord
@@ -967,12 +967,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			host, port := getRandomHostPort(dstRecords)
 			client, rerr := getRemoteInstanceClient(host, port)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL)
+				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL)
+				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			objInfo.ETag = remoteObjInfo.ETag
@@ -983,7 +983,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// object is same then only metadata is updated.
 		objInfo, err = objectAPI.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1032,11 +1032,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
 
@@ -1046,14 +1046,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate storage class metadata if present
 	if _, ok := r.Header[amzStorageClassCanonical]; ok {
 		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
-			writeErrorResponse(w, ErrInvalidStorageClass, r.URL)
+			writeErrorResponse(w, ErrInvalidStorageClass, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1061,7 +1061,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidDigest, r.URL)
+		writeErrorResponse(w, ErrInvalidDigest, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	/// if Content-Length is unknown/missing, deny the request
@@ -1070,30 +1070,30 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if rAuthType == authTypeStreamingSigned {
 		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
 			if sizeStr[0] == "" {
-				writeErrorResponse(w, ErrMissingContentLength, r.URL)
+				writeErrorResponse(w, ErrMissingContentLength, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			size, err = strconv.ParseInt(sizeStr[0], 10, 64)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}
 	}
 	if size == -1 {
-		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		writeErrorResponse(w, ErrMissingContentLength, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1128,7 +1128,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Check if put is allowed
 	if s3Err = isPutAllowed(rAuthType, bucket, object, r); s3Err != ErrNone {
-		writeErrorResponse(w, s3Err, r.URL)
+		writeErrorResponse(w, s3Err, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1137,19 +1137,19 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Initialize stream signature verifier.
 		reader, s3Err = newSignV4ChunkedReader(r)
 		if s3Err != ErrNone {
-			writeErrorResponse(w, s3Err, r.URL)
+			writeErrorResponse(w, s3Err, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Err = isReqAuthenticatedV2(r)
 		if s3Err != ErrNone {
-			writeErrorResponse(w, s3Err, r.URL)
+			writeErrorResponse(w, s3Err, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
 	case authTypePresigned, authTypeSigned:
 		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Err != ErrNone {
-			writeErrorResponse(w, s3Err, r.URL)
+			writeErrorResponse(w, s3Err, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if !skipContentSha256Cksum(r) {
@@ -1170,7 +1170,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		var actualReader *hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -1190,7 +1190,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1202,7 +1202,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1211,13 +1211,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			info := ObjectInfo{Size: size}
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
@@ -1234,7 +1234,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Create the object..
 	objInfo, err := putObject(ctx, bucket, object, pReader, metadata, opts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1295,11 +1295,11 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
 
@@ -1312,14 +1312,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		err  error
 	)
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1327,7 +1327,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Validate storage class metadata if present
 	if _, ok := r.Header[amzStorageClassCanonical]; ok {
 		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
-			writeErrorResponse(w, ErrInvalidStorageClass, r.URL)
+			writeErrorResponse(w, ErrInvalidStorageClass, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1337,7 +1337,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			// Set this for multipart only operations, we need to differentiate during
@@ -1349,7 +1349,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Extract metadata that needs to be saved.
 	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1373,7 +1373,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 	uploadID, err := newMultipartUpload(ctx, bucket, object, metadata, opts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1392,11 +1392,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
 
@@ -1405,7 +1405,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	dstObject := vars["object"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1419,12 +1419,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
-		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1433,13 +1433,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidPart, r.URL)
+		writeErrorResponse(w, ErrInvalidPart, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// check partID with maximum part ID for multipart objects
 	if isMaxPartID(partID) {
-		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
+		writeErrorResponse(w, ErrInvalidMaxParts, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1448,7 +1448,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1468,7 +1468,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
 			logger.GetReqInfo(ctx).AppendTags("rangeHeader", rangeHeader)
 			logger.LogIf(ctx, parseRangeErr)
-			writeCopyPartErr(w, parseRangeErr, r.URL)
+			writeCopyPartErr(w, parseRangeErr, r.URL, guessIsBrowserReq(r))
 			return
 
 		}
@@ -1476,7 +1476,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, srcOpts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	defer gr.Close()
@@ -1486,14 +1486,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if crypto.IsEncrypted(srcInfo.UserDefined) {
 		actualPartSize, err = srcInfo.DecryptedSize()
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
-		writeCopyPartErr(w, partRangeErr, r.URL)
+		writeCopyPartErr(w, partRangeErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1505,13 +1505,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Get the object offset & length
 	startOffset, length, err := rs.GetOffsetLength(actualPartSize)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	/// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1521,7 +1521,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var li ListPartsInfo
 	li, err = objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1551,7 +1551,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1563,11 +1563,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		if crypto.IsEncrypted(li.UserDefined) {
 			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			if crypto.S3.IsEncrypted(li.UserDefined) && crypto.SSEC.IsRequested(r.Header) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			isEncrypted = true // to detect SSE-S3 encryption
@@ -1575,13 +1575,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
 			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 
@@ -1593,14 +1593,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			partEncryptionKey := mac.Sum(nil)
 			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 
 			info := ObjectInfo{Size: length}
 			srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objectEncryptionKey)
@@ -1613,7 +1613,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
 		startOffset, length, srcInfo, srcOpts, dstOpts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1636,11 +1636,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(w, ErrNotImplemented, r.URL) // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
 
@@ -1650,14 +1650,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidDigest, r.URL)
+		writeErrorResponse(w, ErrInvalidDigest, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1669,24 +1669,24 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if rAuthType == authTypeStreamingSigned {
 		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
 			if sizeStr[0] == "" {
-				writeErrorResponse(w, ErrMissingContentLength, r.URL)
+				writeErrorResponse(w, ErrMissingContentLength, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			size, err = strconv.ParseInt(sizeStr[0], 10, 64)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}
 	}
 	if size == -1 {
-		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		writeErrorResponse(w, ErrMissingContentLength, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxAllowedPartSize(size) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1695,13 +1695,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidPart, r.URL)
+		writeErrorResponse(w, ErrInvalidPart, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// check partID with maximum part ID for multipart objects
 	if isMaxPartID(partID) {
-		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
+		writeErrorResponse(w, ErrInvalidMaxParts, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1713,7 +1713,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	)
 	reader = r.Body
 	if s3Error = isPutAllowed(rAuthType, bucket, object, r); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1722,17 +1722,17 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		// Initialize stream signature verifier.
 		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	case authTypeSignedV2, authTypePresignedV2:
 		if s3Error = isReqAuthenticatedV2(r); s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion()); s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
+			writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -1748,7 +1748,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	var li ListPartsInfo
 	li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	// Read compression metadata preserved in the init multipart for the decision.
@@ -1762,7 +1762,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		var actualReader *hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
@@ -1783,7 +1783,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1794,7 +1794,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -1805,12 +1805,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
 			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
-				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL)
+				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL, guessIsBrowserReq(r))
 				return
 			}
 			isEncrypted = true // to detect SSE-S3 encryption
@@ -1818,7 +1818,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
@@ -1826,7 +1826,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			// Calculating object encryption key
 			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 
@@ -1839,13 +1839,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 			reader, err = sio.EncryptReader(hashReader, sio.Config{Key: partEncryptionKey})
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			info := ObjectInfo{Size: size}
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
@@ -1859,7 +1859,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
 	if err != nil {
 		// Verify if the underlying error is signature mismatch.
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if isCompressed {
@@ -1891,7 +1891,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	abortMultipartUpload := objectAPI.AbortMultipartUpload
@@ -1900,25 +1900,25 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.AbortMultipartUploadAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{}); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
 	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
 	if s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if err := abortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1937,31 +1937,31 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListMultipartUploadPartsAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	uploadID, partNumberMarker, maxParts, _, s3Error := getObjectResources(r.URL.Query())
 	if s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if partNumberMarker < 0 {
-		writeErrorResponse(w, ErrInvalidPartNumberMarker, r.URL)
+		writeErrorResponse(w, ErrInvalidPartNumberMarker, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if maxParts < 0 {
-		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
+		writeErrorResponse(w, ErrInvalidMaxParts, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1970,7 +1970,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
@@ -1983,7 +1983,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 				// Calculating object encryption key
 				objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
@@ -2016,19 +2016,19 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err := objectAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{}); err == nil {
-			writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+			writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -2036,26 +2036,26 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get upload id.
 	uploadID, _, _, _, s3Error := getObjectResources(r.URL.Query())
 	if s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	completeMultipartBytes, err := goioutil.ReadAll(r.Body)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	complMultipartUpload := &CompleteMultipartUpload{}
 	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
-		writeErrorResponse(w, ErrMalformedXML, r.URL)
+		writeErrorResponse(w, ErrMalformedXML, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if len(complMultipartUpload.Parts) == 0 {
-		writeErrorResponse(w, ErrMalformedXML, r.URL)
+		writeErrorResponse(w, ErrMalformedXML, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if !sort.IsSorted(CompletedParts(complMultipartUpload.Parts)) {
-		writeErrorResponse(w, ErrInvalidPartOrder, r.URL)
+		writeErrorResponse(w, ErrInvalidPartOrder, r.URL, guessIsBrowserReq(r))
 		return
 	}
 	var objectEncryptionKey []byte
@@ -2066,7 +2066,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1)
 		if err != nil {
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
@@ -2077,7 +2077,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 				// Calculating object encryption key
 				objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 				if err != nil {
-					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+					writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 			}
@@ -2093,7 +2093,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		for {
 			listPartsInfo, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			for _, part := range listPartsInfo.Parts {
@@ -2120,7 +2120,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			if bkPartInfo, ok := partsMap[strconv.Itoa(part.PartNumber)]; ok {
 				bkETag := tryDecryptETag(objectEncryptionKey, bkPartInfo.ETag, ssec)
 				if bkETag != part.ETag {
-					writeErrorResponse(w, ErrInvalidPart, r.URL)
+					writeErrorResponse(w, ErrInvalidPart, r.URL, guessIsBrowserReq(r))
 					return
 				}
 				part.ETag = bkPartInfo.ETag
@@ -2141,7 +2141,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writePartSmallErrorResponse(w, r, oErr)
 		default:
 			// Handle all other generic issues.
-			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
 		return
 	}
@@ -2152,7 +2152,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
 	encodedSuccessResponse := encodeResponse(response)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -2195,12 +2195,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -2208,7 +2208,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	if globalWORMEnabled {
 		// Not required to check whether given object exists or not, because
 		// DeleteObject is always successful irrespective of object existence.
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -2216,9 +2216,9 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		_, err := globalDNSConfig.Get(bucket)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
-				writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+				writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
 			} else {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL)
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			}
 			return
 		}
@@ -2229,7 +2229,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		switch toAPIErrorCode(ctx, err) {
 		case ErrNoSuchBucket:
 			// When bucket doesn't exist specially handle it.
-			writeErrorResponse(w, ErrNoSuchBucket, r.URL)
+			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
 			return
 		}
 		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.

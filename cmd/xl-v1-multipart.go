@@ -341,8 +341,10 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum, false)
-	if data.Size() > 0 || data.Size() == -1 {
-		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
+
+	if data.Size() >= 0 {
+		if pErr := xl.prepareFile(ctx, minioMetaTmpBucket, tmpPartPath, data.Size(),
+			onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, writeQuorum); pErr != nil {
 			return pi, toObjectErr(pErr, bucket, object)
 
 		}
@@ -369,6 +371,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
 		buffer = buffer[:xlMeta.Erasure.BlockSize]
 	}
+
 	writers := make([]*bitrotWriter, len(onlineDisks))
 	for i, disk := range onlineDisks {
 		if disk == nil {
@@ -376,6 +379,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tmpPartPath, DefaultBitrotAlgorithm)
 	}
+
 	n, err := erasure.Encode(ctx, data, writers, buffer, erasure.dataBlocks+1)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
@@ -672,13 +676,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 				PartSize:   currentXLMeta.Parts[partIdx].ActualSize,
 				PartETag:   part.ETag,
 			}
-		}
-
-		// Last part could have been uploaded as 0bytes, do not need
-		// to save it in final `xl.json`.
-		if (i == len(parts)-1) && currentXLMeta.Parts[partIdx].Size == 0 {
-			xlMeta.Parts = xlMeta.Parts[:i] // Skip the part.
-			continue
 		}
 
 		// Save for total object size.
