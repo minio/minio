@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	"github.com/hashicorp/errwrap"
@@ -46,7 +47,25 @@ func (c *Client) Logical() *Logical {
 }
 
 func (c *Logical) Read(path string) (*Secret, error) {
+	return c.ReadWithData(path, nil)
+}
+
+func (c *Logical) ReadWithData(path string, data map[string][]string) (*Secret, error) {
 	r := c.c.NewRequest("GET", "/v1/"+path)
+
+	var values url.Values
+	for k, v := range data {
+		if values == nil {
+			values = make(url.Values)
+		}
+		for _, val := range v {
+			values.Add(k, val)
+		}
+	}
+
+	if values != nil {
+		r.Params = values
+	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
