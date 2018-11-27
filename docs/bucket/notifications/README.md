@@ -116,7 +116,7 @@ The following example enables a bucket event notification to trigger when a JPEG
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 In this example, the ARN value is ``arn:minio:sqs::1:amqp``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
@@ -240,7 +240,7 @@ Use the following commands to enable a bucket event notification to trigger when
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:mqtt --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 In this example, the ARN value is ``arn:minio:sqs::1:mqtt``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -287,10 +287,10 @@ mc cp myphoto.jpg myminio/images
 Once the upload completes, return to the first console. A response similar to this one should be displayed showing an event notification from MQTT:
 
 ```json
-{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,
- ”userIdentity”:{“principalId”:”minio”}, ”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":
- {“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},
-”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}
+{"Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016–09–08T22:34:38.226Z","eventName":"s3:ObjectCreated:Put",
+ "userIdentity":{"principalId":"minio"}, "requestParameters":{"sourceIPAddress":"10.1.10.150:44576"},"responseElements":{},"s3":
+ {"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},
+"object":{"key":"myphoto.jpg","size":200436,"sequencer":"147279EAF9F40933"}}}],"level":"info","msg":"","time":"2016–09–08T15:34:38–07:00"}
 ```
 
 ## 4.<a name="publish-minio-events-via-elasticsearch"></a> Publish Minio Events via Elasticsearch
@@ -362,7 +362,7 @@ Use the following commands to enable bucket event notifications on a bucket name
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:elasticsearch --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -524,7 +524,7 @@ Use the following commands to enable bucket event notifications on a bucket name
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -647,7 +647,7 @@ Use the following commands to enable bucket event notifications on a bucket name
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 In this example, the ARN value is `arn:minio:sqs::1:nats`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -871,7 +871,7 @@ mc events add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
 mc events list myminio/images
 mc events list myminio/images
-arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -990,7 +990,7 @@ mc mb myminio/images
 mc events add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
 mc events list myminio/images
-arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -1095,7 +1095,7 @@ Use the following commands to enable bucket event notifications on a bucket name
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:kafka --suffix .jpg
 mc events list myminio/images
-arn:minio:sqs::1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
 ```
 
 In this example, the ARN value is `arn:minio:sqs::1:kafka`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
