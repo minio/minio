@@ -90,13 +90,13 @@ Minio supports all of the exchanges available in [RabbitMQ](https://www.rabbitmq
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the AMQP configuration in `/tmp/myconfig` , use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -112,7 +112,7 @@ SQS ARNs:  arn:minio:sqs::1:amqp
 
 The following example enables a bucket event notification to trigger when a JPEG image is uploaded to or deleted from the `images` bucket on the `myminio` server:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
 mc events list myminio/images
@@ -212,13 +212,13 @@ The following is an example of a configuration for MQTT:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the MQTT configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -236,7 +236,7 @@ Minio Server can communicate with an MGTT server using MQTT 3.1 and MGTT 3.1.1. 
 
 Use the following commands to enable a bucket event notification to trigger when a JPEG image is uploaded to or deleted from the ``images`` bucket on the ``myminio`` server:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:mqtt --suffix .jpg
 mc events list myminio/images
@@ -336,13 +336,13 @@ If authentication is enabled Elasticsearch, the credentials are supplied to Mini
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the Elasticsearch configuration in `/tmp/myconfig` , use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -358,7 +358,7 @@ SQS ARNs:  arn:minio:sqs::1:elasticsearch`
 
 Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:elasticsearch --suffix .jpg
 mc events list myminio/images
@@ -498,13 +498,13 @@ The following is an example of a configuration for Redis:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the Redis configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -520,7 +520,7 @@ SQS ARNs:  arn:minio:sqs::1:redis
 
 Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
 mc events list myminio/images
@@ -535,7 +535,7 @@ When a JPEG image is created/overwritten, a new key is added or an existing key 
 
 Use the `redis-cli` Redis client program to inspect the contents in Redis: 
 
-```sh
+```
 redis-cli -a yoursecret
 127.0.0.1:6379> monitor
 OK
@@ -587,7 +587,7 @@ The following is an example of a configuration block in `config.json` for NATS:
         "password": "yoursecret",
         "token": "",
         "secure": false,
-        "pingInterval": 0
+        "pingInterval": 0,
         "streaming": {
             "enable": false,
             "clusterID": "",
@@ -601,7 +601,7 @@ The following is an example of a configuration block in `config.json` for NATS:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
@@ -609,7 +609,7 @@ Restart Minio server for the changes to take effect.
 
 **Note:** ``bucketevents`` is the subject used by NATS in this example.
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -625,7 +625,7 @@ Minio server also supports [NATS Streaming mode](http://nats.io/documentation/st
         "password": "yoursecret",
         "token": "",
         "secure": false,
-        "pingInterval": 0
+        "pingInterval": 0,
         "streaming": {
             "enable": true,
             "clusterID": "test-cluster",
@@ -643,7 +643,7 @@ For more information about `clusterID` see the [NATS documentation](https://gith
 
 Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
 mc events list myminio/images
@@ -841,13 +841,13 @@ The following shows an example of a configuration for PostgreSQL:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the Postgres configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -961,13 +961,13 @@ The following shows an example of a configuration for MySQL:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the MySQL configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -1007,7 +1007,7 @@ mc cp myphoto.jpg myminio/images
 
 Open MySQL in another console and list the rows in the `minio_images` table:
 
-```sh
+```
 $ mysql -h 172.17.0.1 -P 3306 -u root -p miniodb
 mysql> select * from minio_images;
 ```
@@ -1071,13 +1071,13 @@ In this example, `bucketevents` is the topic used by Kafka.
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the Kafka configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
@@ -1091,7 +1091,7 @@ SQS ARNs:  arn:minio:sqs::1:kafka
 
 Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
-```sh
+```
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:kafka --suffix .jpg
 mc events list myminio/images
@@ -1153,13 +1153,13 @@ The following is an example webhook in ``config.json``:
 
 To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
 
-```sh
+```
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
 After updating the webhook configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
 
-```sh
+```
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
