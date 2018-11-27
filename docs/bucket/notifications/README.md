@@ -1,54 +1,71 @@
 # Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Events occurring on objects in a bucket can be monitored using bucket event notifications. Event types supported by Minio server are
+This topic describes the bucket notification events and publishing targets supported by Minio Server.
 
-| Supported Event Types | | |
-|:---------------------------|--------------------------------------------|-------------------------|
-| `s3:ObjectCreated:Put`     | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`|
-| `s3:ObjectCreated:Post`    | `s3:ObjectRemoved:Delete`                  |
-| `s3:ObjectCreated:Copy`    | `s3:ObjectAccessed:Get`                    |
+1. [Bucket Notification Event Support](#event-support) 
+2. [Publish Minio Events via AMQP](#publish-minio-events-via-amqp) 
+3. [Publish Minio Events via MQTT](#publish-minio-events-via-mqtt) 
+4. [Publish Minio Events via Elasticsearch](#publish-minio-events-via-elasticsearch) 
+5. [Publish Minio Events via Redis](#publish-minio-events-via-redis) 
+6. [Publish Minio Events via NATS](#publish-minio-events-via-nats) 
+7. [Publish Minio Events via PostgreSQL](#publish-minio-events-via-postgresql) 
+8. [Publish Minio Events via MySQL](#publish-minio-events-via-mysql) 
+9. [Publish Minio Events via Kafka](#publish-minio-events-via-kafka) 
+10. [Publish Minio Events via Webhooks](#publish-minio-events-via-webhooks)
 
-Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.minio.io/docs/minio-client-complete-guide#events). Minio SDK's [`BucketNotification` APIs](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message Minio sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
+**Note:** Before continuing, ensure the [Minio Server](https://docs.minio.io/docs/minio-quickstart-guide) and [Minio Client](https://docs.minio.io/docs/minio-client-quickstart-guide) are installed.
 
-Bucket events can be published to the following targets:
 
-| Supported Notification Targets | | |
-|:---------------------------|--------------------------------------------|-------------------------|
-| [`AMQP`](#AMQP) | [`Redis`](#Redis) | [`MySQL`](#MySQL) |
-| [`MQTT`](#MQTT) | [`NATS`](#NATS) | [`Apache Kafka`](#apache-kafka) |
-| [`Elasticsearch`](#Elasticsearch) | [`PostgreSQL`](#PostgreSQL) | [`Webhooks`](#webhooks) |
-| [`NSQ`](#NSQ) | | |
+## 1.<a name="event-support"></a> Bucket Notification Event Support
 
-## Prerequisites
+### 1.1 Event Types Supported by Minio Server
+Events occurring on objects in a bucket can be monitored using bucket event notifications. The following event types are supported by Minio Server:
 
-* Install and configure Minio Server from [here](https://docs.minio.io/docs/minio-quickstart-guide).
-* Install and configure Minio Client from [here](https://docs.minio.io/docs/minio-client-quickstart-guide).
+| **Event Type** | **Description** |
+|:---------------------------|--------------------------------------------|
+| `s3:ObjectCreated:Put`     | An object was created by an HTTP PUT operation. |
+| `s3:ObjectCreated:Post`    | An object was created by an HTTP POST operation. |
+| `s3:ObjectCreated:Copy`    | An object was created by an S3 copy operation. |
+| `s3:ObjectCreated:CompleteMultipartUpload` | An object was created by the completion of an S3 multi-part upload. |
+| `s3:ObjectRemoved:Delete`     | An object was removed by an HTTP DELETE operation. |
+| `s3:ObjectAccessed:Get`       | An object was obtained by an HTTP GET operation. |
 
-<a name="AMQP"></a>
-## Publish Minio events via AMQP
+### 1.2 Listening for Events
 
-Install RabbitMQ from [here](https://www.rabbitmq.com/).
+Use the following methods to set and listen for event notifications:
+* Invoke `mc` with the [`events` sub-command](https://docs.minio.io/docs/minio-client-complete-guide#events).
+* Invoke Minio's [`BucketNotification` APIs](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification).
 
-### Step 1: Add AMQP endpoint to Minio
+### 1.3 Notification Message Structure
 
-The Minio server configuration file is stored on the backend in json format. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server publishes an event by sending a [JSON notification message](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
-| Parameter | Type | Description |
+## 2. <a name="publish-minio-events-via-amqp"></a>Publish Minio Events via AMQP
+
+### 2.1 Install RabbitMQ
+
+Install RabbitMQ using these instructions: [https://www.rabbitmq.com/](https://www.rabbitmq.com/).
+
+### 2.2 Add an AMQP Endpoint to Minio
+
+The Minio Server configuration file is stored on the backend in JSON format. The AMQP configuration is located in the `amqp` key under the top-level `notify` key. Create a configuration key-value pair here for the AMQP instance. The key is a name for the AMQP endpoint, and the value is a collection of parameters described in the table below:
+
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `url` | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672` |
-| `exchange` | _string_ | Name of the exchange. |
-| `routingKey` | _string_ | Routing key for publishing. |
-| `exchangeType` | _string_ | Kind of exchange. |
-| `deliveryMode` | _uint8_ | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent. |
-| `mandatory` | _bool_ | Publishing related bool. |
-| `immediate` | _bool_ | Publishing related bool. |
-| `durable` | _bool_ | Exchange declaration related bool. |
-| `internal` | _bool_ | Exchange declaration related bool. |
-| `noWait` | _bool_ | Exchange declaration related bool. |
-| `autoDeleted` | _bool_ | Exchange declaration related bool. |
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `url` | `string` | (_Required_) The AMQP server endpoint (e.g. `amqp://myuser:mypassword@localhost:5672`). |
+| `exchange` | `string` | The name of the exchange. |
+| `routingKey` | `string` | The routing key for publishing. |
+| `exchangeType` | `string` | The type of exchange. |
+| `deliveryMode` | `uint8` | The delivery mode for publishing. Set this field to 0 or 1 for transient, or 2 for persistent. |
+| `mandatory` | `bool` | A flag related to publishing. |
+| `immediate` | `bool` | A flag related to publishing. |
+| `durable` | `bool` | A flag related to exchange declaration. |
+| `internal` | `bool` | A flag related to exchange declaration. |
+| `noWait` | `bool` | A flag related to exchange declaration. |
+| `autoDeleted` | `bool` | A flag related to exchange declaration. |
 
-An example configuration for RabbitMQ is shown below:
+The following example shows a configuration for RabbitMQ:
 
 ```json
 "amqp": {
@@ -68,33 +85,44 @@ An example configuration for RabbitMQ is shown below:
     }
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+Minio supports all of the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). The configuration above uses the `fanout` exchange.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the AMQP configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:amqp` at start-up if there were no errors.
+
+After updating the AMQP configuration in `/tmp/myconfig` , use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-Minio supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using ``fanout`` exchange.
 
-Note that, you can add as many AMQP server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the AMQP instance and an object of per-server configuration parameters.
+Restart Minio Server for the changes to take effect. A response similar to this one should be displayed at startup if there were no errors:
 
-
-### Step 2: Enable bucket notification using Minio client
-
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
-
+```sh
+SQS ARNs:  arn:minio:sqs::1:amqp
 ```
+
+**Note:** An arbitrary number of AMQP server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the AMQP instance, and an object name for the per-server configuration parameters.
+
+### 2.3 Enable Bucket Notification Using Minio Client
+
+The following example enables a bucket event notification to trigger when a JPEG image is uploaded to or deleted from the `images` bucket on the `myminio` server:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
+In this example, the ARN value is ``arn:minio:sqs::1:amqp``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-### Step 3: Test on RabbitMQ
+### 2.4 Test on RabbitMQ
 
-The python program below waits on the queue exchange ``bucketevents`` and prints event notifications on the console. We use [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library to do this.
+The following Python example program uses the [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library to wait for the `bucketevents` queue exchange, and prints an event notification to the console:
 
 ```py
 #!/usr/bin/env python
@@ -125,46 +153,48 @@ channel.basic_consume(callback,
 channel.start_consuming()
 ```
 
-Execute this example python program to watch for RabbitMQ events on the console.
+Use the following command to execute the program and watch for RabbitMQ events:
 
 ```py
 python rabbit.py
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+Open another console and use the following command to upload a JPEG image into the `images` bucket:
 
-```
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-You should receive the following event notification via RabbitMQ once the upload completes.
+Once the upload completes, return to the first console. A response similar to this one should be displayed showing an event notification from RabbitMQ:
 
-```py
-python rabbit.py
-'{"Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016–09–08T22:34:38.226Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"10.1.10.150:44576"},"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":200436,"sequencer":"147279EAF9F40933"}}}],"level":"info","msg":"","time":"2016–09–08T15:34:38–07:00"}'
+```json
+'{"Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016–09–08T22:34:38.226Z","eventName":"s3:ObjectCreated:Put",
+ "userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"10.1.10.150:44576"},"responseElements":{},"s3":
+ {"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},
+ "object":{"key":"myphoto.jpg","size":200436,"sequencer":"147279EAF9F40933"}}}],"level":"info","msg":"","time":"2016–09–08T15:34:38–07:00"}'
 ```
 
-<a name="MQTT"></a>
-## Publish Minio events MQTT
+## 3. <a name="publish-minio-events-via-mqtt"></a>Publish Minio Events via MQTT
 
-Install an MQTT Broker from [here](https://mosquitto.org/).
+### 3.1 Install an MQTT Broker
 
-### Step 1: Add MQTT endpoint to Minio
+Install an MQTT Broker using these instructions: [https://mosquitto.org/](https://mosquitto.org/).
 
-The Minio server configuration file is stored on the backend in json format. The MQTT configuration is located in the `mqtt` key under the `notify` top-level key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
+### 3.2 Add an MQTT Endpoint to Minio
 
+The Minio Server configuration file is stored on the backend in JSON format. The MQTT configuration is located in the `mqtt` key under the top-level `notify` key. Create a configuration key-value pair here for the MQTT instance. The key is a name for the MQTT endpoint, and the value is a collection of parameters described in the table below:
 
-| Parameter | Type | Description |
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `broker` | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883` |
-| `topic` | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio` |
-| `qos` | _int_ | Set the Quality of Service Level |
-| `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
-| `username` | _string_ | Username to connect to the MQTT server (if required) |
-| `password` | _string_ | Password to connect to the MQTT server (if required) |
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `broker` | `string` | (_Required_) The MQTT server endpoint (e.g. `tcp://localhost:1883`). |
+| `topic` | `string` | (_Required_) The name of the MQTT topic on which to publish (e.g. `minio`). |
+| `qos` | `int` | Sets the quality-of-service (QOS) level. |
+| `clientId` | `string` | The unique ID for the MQTT broker to identify Minio. |
+| `username` | `string` | The username to connect to the MQTT server (if required). |
+| `password` | `string` | The password to connect to the MQTT server (if required). |
 
-An example configuration for MQTT is shown below:
+The following is an example of a configuration for MQTT:
 
 ```json
 "mqtt": {
@@ -179,34 +209,45 @@ An example configuration for MQTT is shown below:
     }
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the MQTT configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mqtt` at start-up if there were no errors.
+
+After updating the MQTT configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
-Minio supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using ``tcp://``, ``tls://``, or ``ws://`` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
-
-Note that, you can add as many MQTT server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MQTT instance and an object of per-server configuration parameters.
-
-
-### Step 2: Enable bucket notification using Minio client
-
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:mqtt``.
+Restart Minio Server for the changes to take effect. A response similar to this one should be displayed at startup if there were no errors:
 
 ```
+SQS ARNs: arn:minio:sqs::1:mqtt
+```
+
+Minio Server can communicate with an MGTT server using MQTT 3.1 and MGTT 3.1.1. Minio Server can connect to these servers over TCP, TLS, or a Websocket connection using ``tcp://``, ``tls://``, or ``ws://`` respectively, as the scheme for the broker URL. For more information see the [Go Client Documentation](http://www.eclipse.org/paho/clients/golang/).
+
+**Note:** An arbitrary number of MQTT server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the MQTT instance, and an object name for the per-server configuration parameters.
+
+### 3.3 Enable Bucket Notifications Using Minio Client
+
+Use the following commands to enable a bucket event notification to trigger when a JPEG image is uploaded to or deleted from the ``images`` bucket on the ``myminio`` server:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:mqtt --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on MQTT
+In this example, the ARN value is ``arn:minio:sqs::1:mqtt``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-The python program below waits on mqtt topic ``/minio`` and prints event notifications on the console. We use [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to do this.
+### 3.4 Test on MQTT
+
+The following example Python program uses the [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to wait on the MQTT `/minio` topic and displays event notifications:
 
 ```py
 #!/usr/bin/env python3
@@ -231,54 +272,54 @@ client.connect("localhost",1883,60)
 client.loop_forever()
 ```
 
-Execute this example python program to watch for MQTT events on the console.
+Use the following command to execute this program and watch for MQTT events on the console:
 
 ```py
 python mqtt.py
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+Open another console and use the following command to upload a JPEG image into ``images`` bucket:
 
-```
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-You should receive the following event notification via MQTT once the upload completes.
+Once the upload completes, return to the first console. A response similar to this one should be displayed showing an event notification from MQTT:
 
-```py
-python mqtt.py
-{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}
+```json
+{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,
+ ”userIdentity”:{“principalId”:”minio”}, ”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":
+ {“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},
+”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}
 ```
 
-<a name="Elasticsearch"></a>
-## Publish Minio events via Elasticsearch
+## 4.<a name="publish-minio-events-via-elasticsearch"></a> Publish Minio Events via Elasticsearch
 
-Install [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) server.
+### 4.1 Install Elasticsearch
 
-This notification target supports two formats: _namespace_ and _access_.
+Minio requires Elasticsearch 5.x which is the latest major release series.
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with documents in the index. For each event in the Minio, the server creates a document with the bucket and object name from the event as the document ID. Other details of the event are stored in the body of the document. Thus if an existing object is over-written in Minio, the corresponding document in the Elasticsearch index is updated. If an object is deleted, the corresponding document is deleted from the index.
+Install Elasticsearch using these instructions: [https://www.elastic.co/downloads/elasticsearch](https://www.elastic.co/downloads/elasticsearch). For version upgrade migration guidelines see these instructions: [https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html).
 
-When the _access_ format is used, Minio appends events as documents in an Elasticsearch index. For each event, a document with the event details, with the timestamp of document set to the event's timestamp is appended to an index. The ID of the documented is randomly generated by Elasticsearch. No documents are deleted or modified in this format.
+This notification target supports two formats:
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+* **namespace**: Minio Server synchronizes objects in the bucket with documents in the index. For each event in Minio, the server creates a document, and a document ID composed of the bucket and object name; details of the event are stored in the body of the document. If an existing object is overwritten in Minio, the corresponding document in the Elasticsearch index is updated. If an object is deleted, the corresponding document is deleted from the index.
+* **access**: Minio appends events as documents in an Elasticsearch index. For each event, a document with the event details is appended to an index with the timestamp of the event. The ID of the document is randomly generated by Elasticsearch, and no documents are deleted or modified in this format.
 
-### Step 1: Ensure minimum requirements are met
+The steps below show how to use this notification target in the `namespace` format. The `access` format is very similar and is omitted for brevity.
 
-Minio requires a 5.x series version of Elasticsearch. This is the latest major release series. Elasticsearch provides version upgrade migration guidelines [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html).
+### 4.2 Add Elasticsearch endpoint to Minio
 
-### Step 2: Add Elasticsearch endpoint to Minio
+The Minio Server configuration file is stored on the backend in JSON format. The Elasticsearch configuration is located in the `elasticsearch` key under the top-level `notify` key. Create a configuration key-value pair here for the Elasticsearch instance. The key is a name for the Elasticsearch endpoint, and the value is a collection of parameters described in the table below:
 
-The Minio server configuration file is stored on the backend in json format. The Elasticsearch configuration is located in the `elasticsearch` key under the `notify` top-level key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
-
-| Parameter | Type | Description |
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `url` | _string_ | (Required) The Elasticsearch server's address, with optional authentication info. For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`. |
-| `index` | _string_ | (Required) The name of an Elasticsearch index in which Minio will store documents. |
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `format` | `string` | (_Required_) Specifies the format. This field must be set to `namespace` or `access`. |
+| `url` | `string` | (_Required_) The Elasticsearch server's address, with optional authentication information. **Example 1**: `http://localhost:9200`. **Example 2**: (with authentication information): `http://elastic:MagicWord@127.0.0.1:9200`. |
+| `index` | `string` | (_Required_) The name of an Elasticsearch index in which Minio will store documents. |
 
-An example of Elasticsearch configuration is as follows:
+The following example shows a configuration for Elasticsearch:
 
 ```json
 "elasticsearch": {
@@ -291,46 +332,60 @@ An example of Elasticsearch configuration is as follows:
 },
 ```
 
-If Elasticsearch has authentication enabled, the credentials can be supplied to Minio via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
+If authentication is enabled Elasticsearch, the credentials are supplied to Minio via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the Elasticsearch configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:elasticsearch` at start-up if there were no errors.
+
+After updating the Elasticsearch configuration in `/tmp/myconfig` , use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
-Note that, you can add as many Elasticsearch server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Elasticsearch instance and an object of per-server configuration parameters.
-
-### Step 3: Enable bucket notification using Minio client
-
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new document is added or an existing document is updated in the Elasticsearch index configured above. When an existing object is deleted, the corresponding document is deleted from the index. Thus, the rows in the Elasticsearch index, reflect the `.jpg` objects in the `images` bucket.
-
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
-
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+Restart Minio Server for the changes to effect. A response similar to this one should be displayed at startup if there were no errors:
 
 ```
+SQS ARNs:  arn:minio:sqs::1:elasticsearch`
+```
+
+**Note:** An arbitrary number of Elasticsearch server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the Elasticsearch instance, and an object name for the per-server configuration parameters.
+
+### 4.3 Enable Bucket Notifications Using Minio Client
+
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:elasticsearch --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on Elasticsearch
+**Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-Upload a JPEG image into ``images`` bucket.
+When a JPEG image is created/overwritten, a new document is added or an existing document is updated in the Elasticsearch index configured above. When an existing object is deleted, the corresponding document is deleted from the index. The rows in the Elasticsearch index reflect the `.jpg` objects in the `images` bucket.
 
-```
+### 4.4 Test on Elasticsearch
+
+Use the following command to upload a JPEG image into the ``images`` bucket:
+
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-Use curl to view contents of ``minio_events`` index.
+Use `curl` to view contents of ``minio_events`` index:
 
-```
+```sh
 $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
+```
+
+A response similar to this one should be displayed:
+
+```json
 {
   "took" : 40,
   "timed_out" : false,
@@ -397,36 +452,35 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 }
 ```
 
-This output shows that a document has been created for the event in Elasticsearch.
-
-Here we see that the document ID is the bucket and object name. In case `access` format was used, the document ID would be automatically generated by Elasticsearch.
+This output shows that a document has been created for the event in Elasticsearch, where the document ID contains the bucket and object name. If the `access` format is used, the document ID will be automatically generated by Elasticsearch.
 
 <a name="Redis"></a>
-## Publish Minio events via Redis
+## 5.<a name="publish-minio-events-via-redis"></a> Publish Minio Events via Redis
 
-Install [Redis](http://redis.io/download) server. For illustrative purposes, we have set the database password as "yoursecret".
+### 5.1 Install Redis
 
-This notification target supports two formats: _namespace_ and _access_.
+Install Redis using these instructions: [http://redis.io/download](http://redis.io/download). 
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with entries in a hash. For each entry, the key is formatted as "bucketName/objectName" for an object that exists in the bucket, and the value is the JSON-encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding entry in the hash is also updated or deleted.
+This notification target supports two formats:
 
-When the _access_ format is used, Minio appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON encoded list with two items, where the first item is a timestamp string, and the second item is a JSON object containing event data about the operation that happened in the bucket. No entries appended to the list are updated or deleted by Minio in this format.
+* **namespace**: Minio Server synchronizes objects in the bucket with entries in a hash. For each entry, the key is formatted as `bucketName/objectName` for an existing object in the bucket, and the value is the JSON-encoded event data about the operation that created or replaced the object in Minio Server. When objects are updated or deleted, the corresponding entry in the hash is also updated or deleted.
+* **access**: Minio Server appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON-encoded list with a timestamp string and a JSON object containing event data about the operation that occurred in the bucket. None of the entries appended to the list are updated or deleted by Minio in this format.
 
-The steps below show how to use this notification target in `namespace` and `access` format.
+The steps below show how to use this notification target in with `namespace` and `access` formats.
 
-### Step 1: Add Redis endpoint to Minio
+### 5.2 Add the Redis Endpoint to Minio
 
-The Minio server configuration file is stored on the backend in json format.The Redis configuration is located in the `redis` key under the `notify` top-level key. Create a configuration key-value pair here for your Redis instance. The key is a name for your Redis endpoint, and the value is a collection of key-value parameters described in the table below.
+The Minio Server configuration file is stored on the backend in JSON format. The Redis configuration is located in the `redis` key under the top-level `notify` key. Create a configuration key-value pair here for the Redis instance. The key is a name for the Redis endpoint, and the value is a collection of parameters described in the table below:
 
-| Parameter | Type | Description |
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `address` | _string_ | (Required) The Redis server's address. For example: `localhost:6379`. |
-| `password` | _string_ | (Optional) The Redis server's password. |
-| `key` | _string_ | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format.|
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `format` | `string` | (_Required_) Specifies the format. This field must be set to `namespace` or `access`. |
+| `address` | `string` | (_Required_) The Redis server's address (e.g. `localhost:6379`). |
+| `password` | `string` | (Optional) The Redis server's password. |
+| `key` | `string` | (_Required_) The name of the Redis key under which events are stored. A hash is used for the `namespace` format and a list is used for the `access` format.|
 
-An example of Redis configuration is as follows:
+The following is an example of a configuration for Redis:
 
 ```json
 "redis": {
@@ -439,71 +493,91 @@ An example of Redis configuration is as follows:
     }
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+**Note:** The database password has been set to `"yoursecret"` for illustrative purposes.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the Redis configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:redis` at start-up if there were no errors.
+
+After updating the Redis configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
-Note that, you can add as many Redis server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Redis instance and an object of per-server configuration parameters.
-
-### Step 2: Enable bucket notification using Minio client
-
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new key is added or an existing key is updated in the Redis hash configured above. When an existing object is deleted, the corresponding key is deleted from the Redis hash. Thus, the rows in the Redis hash, reflect the `.jpg` objects in the `images` bucket.
-
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
-
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+Restart Minio Server for the changes to effect. A response similar to this one should be displayed at startup if there were no errors:
 
 ```
+SQS ARNs:  arn:minio:sqs::1:redis
+```
+
+**Note:** an arbitrary number of Redis server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the Redis instance, and an object name for the per-server configuration parameters.
+
+### 5.3 Enable Bucket Notifications Using Minio Client
+
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on Redis
+**Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-Start the `redis-cli` Redis client program to inspect the contents in Redis. Run the `monitor` Redis command. This prints each operation performed on Redis as it occurs.
+When a JPEG image is created/overwritten, a new key is added or an existing key is updated in the Redis hash. When an existing object is deleted, the corresponding key is deleted from the Redis hash. The rows in the Redis hash reflect the `.jpg` objects in the `images` bucket.
 
-```
+### 5.4 Test on Redis
+
+Use the `redis-cli` Redis client program to inspect the contents in Redis: 
+
+```sh
 redis-cli -a yoursecret
 127.0.0.1:6379> monitor
 OK
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+The `monitor` argument prints each operation performed on Redis as it occurs.
 
-```
+Open another console and upload a JPEG image into the `images` bucket:
+
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-In the previous terminal, you will now see the operation that Minio performs on Redis:
+Once the upload completes, return to the first console. A response similar to this one should be displayed showing the operation that Minio performs on Redis:
 
 ```
 127.0.0.1:6379> monitor
 OK
 1490686879.650649 [0 172.17.0.1:44710] "PING"
-1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
+1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\
+"eventSource\":\"minio:s3\",\"awsRegion\":\"\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",
+\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":
+{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":
+{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":
+{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":
+\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",
+\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
 ```
 
-Here we see that Minio performed `HSET` on `minio_events` key.
+In this example, Minio Server performed `HSET` on the `minio_events` key. If the `access` format is used, `minio_events` will be a list, and Minio Server will perform an `RPUSH` to append to the list. A consumer of this list should use `BLPOP` to remove items from the left-end of the list.
 
-In case, `access` format was used, then `minio_events` would be a list, and the Minio server would have performed an `RPUSH` to append to the list. A consumer of this list would ideally use `BLPOP` to remove list items from the left-end of the list.
+## 6.<a name="publish-minio-events-via-nats"></a> Publish Minio Events via NATS
 
-<a name="NATS"></a>
-## Publish Minio events via NATS
+### 6.1 Install NATS
 
-Install NATS from [here](http://nats.io/).
+Install NATS using these instructions: [http://nats.io/](http://nats.io/).
 
-### Step 1: Add NATS endpoint to Minio
+### 6.2 Add NATS endpoint to Minio
 
-The NATS configuration block in ``config.json`` is as follows:
+The following is an example of a configuration block in `config.json` for NATS:
 
-```
+```json
 "nats": {
     "1": {
         "enable": true,
@@ -524,17 +598,24 @@ The NATS configuration block in ``config.json`` is as follows:
     }
 },
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the NATS configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
+
+Restart Minio server for the changes to take effect. 
+
+**Note:** ``bucketevents`` is the subject used by NATS in this example.
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-Minio server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure Minio server to send notifications to NATS Streaming server, update the Minio server configuration file as follows:
 
-```
+Minio server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure Minio Server to send notifications to a NATS streaming server, update the Minio Server configuration file as shown below:
+
+```json
 "nats": {
     "1": {
         "enable": true,
@@ -555,22 +636,29 @@ Minio server also supports [NATS Streaming mode](http://nats.io/documentation/st
     }
 },
 ```
-Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
 
-### Step 2: Enable bucket notification using Minio client
+For more information about `clusterID` see the [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). For more information about `maxPubAcksInflight`, see [Publisher rate limiting](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:nats``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+### 6.3 Enable Bucket Notifications Using Minio Client
 
-```
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on NATS
+In this example, the ARN value is `arn:minio:sqs::1:nats`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-If you use NATS server, check out this sample program below to log the bucket notification added to NATS.
+This enables bucket event notifications to trigger when a JPEG image is uploaded to or deleted from the `images` bucket on the `myminio` server.
+
+### 6.4 Test on NATS
+
+#### 6.4.1 Test on a NATS Server
+
+If a NATS server is being used, the example program below can be used as a template to log the bucket notification added to NATS:
 
 ```go
 package main
@@ -602,28 +690,42 @@ func main() {
 }
 ```
 
-```
+Use the following command to execute the program:
+
+```sh
 go run nats.go
+```
+
+A response similar to this one should be displayed:
+
+```
 2016/10/12 06:39:18 Connected
 2016/10/12 06:39:18 Subscribing to subject 'bucketevents'
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+Open another console and use the following command to upload a JPEG image into the `images` bucket:
 
-```
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-The example ``nats.go`` program prints event notification to console.
+Once the upload completes, return to the first console. A response similar to this one should be displayed:
 
 ```
-go run nats.go
 2016/10/12 06:51:26 Connected
 2016/10/12 06:51:26 Subscribing to subject 'bucketevents'
-2016/10/12 06:51:33 Received message '{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016-10-12T13:51:33Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"[::1]:57106"},"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":56060,"eTag":"1d97bf45ecb37f7a7b699418070df08f","sequencer":"147CCD1AE054BFD0"}}}],"level":"info","msg":"","time":"2016-10-12T06:51:33-07:00"}
+2016/10/12 06:51:33 Received message '{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":
+[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2016-10-12T13:51:33Z","eventName":
+"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"[::1]:57106"},
+"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images",
+"ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":56060,
+"eTag":"1d97bf45ecb37f7a7b699418070df08f","sequencer":"147CCD1AE054BFD0"}}}],"level":"info","msg":"",
+"time":"2016-10-12T06:51:33-07:00"}
 ```
 
-If you use NATS Streaming server, check out this sample program below to log the bucket notification added to NATS.
+#### 6.4.2 Test on a NATS Streaming Server
+
+If a NATS streaming server is in use, the sample program below can be used as a template to log the bucket notification added to NATS:
 
 ```go
 package main
@@ -653,59 +755,73 @@ func main() {
 }
 ```
 
-```
+Use the following command to execute the program:
+
+```sh
 go run nats.go
+```
+
+A response similar to this one should be displayed:
+
+```
 2017/07/07 11:47:40 Connected
 2017/07/07 11:47:40 Subscribing to subject 'bucketevents'
 ```
-Open another terminal and upload a JPEG image into ``images`` bucket.
 
-```
+Open another console and use the following command to upload a JPEG image into `images` bucket:
+
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-The example ``nats.go`` program prints event notification to console.
+Once the upload completes, return to the first console. A response similar to this one should be displayed:
 
 ```
-Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
+Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0",
+"eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put",
+"userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},
+"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},
+"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},
+"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92",
+"contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},
+"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],
+"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
 ```
 
-<a name="PostgreSQL"></a>
-## Publish Minio events via PostgreSQL
+## 7. <a name="publish-minio-events-via-postgresql"></a>Publish Minio Events via PostgreSQL
 
-Install [PostgreSQL](https://www.postgresql.org/) database server. For illustrative purposes, we have set the "postgres" user password as `password` and created a database called `minio_events` to store the events.
+### 7.1 Install PostgreSQL
 
-This notification target supports two formats: _namespace_ and _access_.
+Minio Server requires PostgreSQL 9.5 or above. Minio Server uses the [`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (UPSERT) feature, introduced in version 9.5 and the [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) data-type introduced in version 9.4.
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key and value. The key is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+Install a PostgreSQL database server using these instructions: [https://www.postgresql.org/](https://www.postgresql.org/).
 
-When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+This notification target supports two formats:
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+* **namespace**: Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: `key` and `value`. The `key` is the bucket and object name that exist in Minio Server. The `value` contains JSON-encoded event data about the operation that created/replaced the object in Minio Server. When objects are updated or deleted, the corresponding row from this table is updated or deleted as well.
+* **access**: Minio appends events to a table. It creates rows with two columns: `event_time` and `event_data`. The `event_time` is the time at which the event occurred in Minio Server. The `event_data` contains JSON-encoded event data about the operation on an object. No rows are deleted or modified in this format.
 
-### Step 1: Ensure minimum requirements are met
+The steps below show how to use this notification target in `namespace` format. The `access` format is very similar and is omitted for brevity.
 
-Minio requires PostgreSQL version 9.5 or above. Minio uses the [`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) feature, introduced in version 9.5 and the [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) data-type introduced in version 9.4.
+### 7.2 Add a PostgreSQL Endpoint to Minio
 
-### Step 2: Add PostgreSQL endpoint to Minio
+The Minio Server configuration file is stored on the backend in JSON format. The PostgreSQL configuration is located in the `postgresql` key under the top-level `notify` key. Create a configuration key-value pair here for the PostgreSQL instance. The key is a name for the PostgreSQL endpoint, and the value is a collection of  parameters described in the table below:
 
-The Minio server configuration file is stored on the backend in json format. The PostgreSQL configuration is located in the `postgresql` key under the `notify` top-level key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
-
-| Parameter | Type | Description |
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `connectionString` | _string_ | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) for the PostgreSQL server. Can be used to set `sslmode` for example. |
-| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
-| `host` | _string_ | (Optional) Host name of the PostgreSQL server. Defaults to `localhost`|
-| `port` | _string_ | (Optional) Port on which to connect to PostgreSQL server. Defaults to `5432`. |
-| `user` | _string_ | (Optional) Database user name. Defaults to user running the server process. |
-| `password` | _string_ | (Optional) Database password. |
-| `database` | _string_ | (Optional) Database name. |
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `format` | `string` | (_Required_) Specifies the format. This field must be set to `namespace` or `access`. |
+| `connectionString` | `string` | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection`string`Parameters) for the PostgreSQL server (e.g. to set `sslmode`). |
+| `table` | `string` | (_Required_) The table name in which events will be stored/updated. If the table does not exist, Minio Server creates it at startup.|
+| `host` | `string` | (Optional) The host name of the PostgreSQL server. This default value for this field is `localhost`. |
+| `port` | `string` | (Optional) The port on which to connect to the PostgreSQL server. The default value for this field is `5432`. |
+| `user` | `string` | (Optional) The database user name. The default value for this field is the user running the server process. |
+| `password` | `string` | (Optional) The database password. |
+| `database` | `string` | (Optional) The database name. |
 
-An example of PostgreSQL configuration is as follows:
+The following shows an example of a configuration for PostgreSQL:
 
-```
+```json
 "postgresql": {
     "1": {
         "enable": true,
@@ -721,25 +837,31 @@ An example of PostgreSQL configuration is as follows:
 }
 ```
 
-Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+**Note:** For illustrative purposes, the Postgres user password has been set to `password`, the name of the database to store the events has been set to `minio_events`, and SSL has been disabled. Disabling SSL is not recommended for production servers.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the Postgres configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:postgresql` at start-up if there were no errors.
+
+After updating the Postgres configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
 
+Restart Minio Server for the changes to take effect. A response similar to this one should be displayed at startup if there were no errors:
 
-### Step 3: Enable bucket notification using Minio client
+```
+SQS ARNs:  arn:minio:sqs::1:postgresql
+```
 
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new row is added or an existing row is updated in the PostgreSQL configured above. When an existing object is deleted, the corresponding row is deleted from the PostgreSQL table. Thus, the rows in the PostgreSQL table, reflect the `.jpg` objects in the `images` bucket.
+**Note:** An arbitrary number of PostgreSQL server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the PostgreSQL instance, and an object name for the per-server configuration parameters.
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+### 7.3 Enable Bucket Notifications Using Minio Client
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
 ```
 # Create bucket named `images` in myminio
@@ -752,62 +874,75 @@ mc events list myminio/images
 arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on PostgreSQL
+**Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+When a JPEG image is created/overwritten, a new row is added or an existing row is updated in the PostgreSQL table configured above. When an existing object is deleted, the corresponding row is deleted from the PostgreSQL table. The rows in the PostgreSQL table reflect the `.jpg` objects in the `images` bucket.
 
-```
+### 7.4 Test on PostgreSQL
+
+Open another console and use the following command to upload a JPEG image into `images` bucket:
+
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-Open PostgreSQL terminal to list the rows in the `bucketevents` table.
+Open a PostgreSQL console to list the rows in the `bucketevents` table:
 
 ```
 $ psql -h 127.0.0.1 -U postgres -d minio_events
 minio_events=# select * from bucketevents;
+```
 
+A response similar to this one should be displayed:
+
+```
 key                 |                      value
---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": "minio"}}, "object": {"key": "myphoto.jpg", "eTag": "1d97bf45ecb37f7a7b699418070df08f", "size": 56060, "sequencer": "147CE57C70B31931"}, "configurationId": "Config", "s3SchemaVersion": "1.0"}, "awsRegion": "", "eventName": "s3:ObjectCreated:Put", "eventTime": "2016-10-12T21:18:20Z", "eventSource": "aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {}, "requestParameters": {"sourceIPAddress": "[::1]:39706"}}]}
+--------------------+-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------
+images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": "minio"}},
+"object": {"key": "myphoto.jpg", "eTag": "1d97bf45ecb37f7a7b699418070df08f", "size": 56060, "sequencer": "147CE57C70B31931"}, "configurationId":
+"Config", "s3SchemaVersion": "1.0"}, "awsRegion": "", "eventName": "s3:ObjectCreated:Put", "eventTime": "2016-10-12T21:18:20Z", "eventSource":
+"aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {}, "requestParameters": {"sourceIPAddress": 
+"[::1]:39706"}}]}
 (1 row)
 ```
 
-<a name="MySQL"></a>
-## Publish Minio events via MySQL
+## 8.<a name="publish-minio-events-via-mysql"></a> Publish Minio Events via MySQL
 
-Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+### 8.1 Install MySQL
 
-This notification target supports two formats: _namespace_ and _access_.
+Minio requires MySQL version 5.7.8 or above. Minio uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data-type introduced in version 5.7.8. This configuration has been tested on MySQL 5.7.17.
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key_name and value. The key_name is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+Install MySQL using these instructions [https://dev.mysql.com/downloads/mysql/](https://dev.mysql.com/downloads/mysql/). 
 
-When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+This notification target supports two formats:
+* **namespace**: Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: `key_name` and `value`. The `key_name` is the bucket and object name of an object that exists in Minio Server. The value contains JSON-encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted as well.
+* **access**: Minio appends events to a table. It creates rows with two columns: `event_time` and `event_data`. The `event_time` is the time at which the event occurred in Minio Server. The `event_data` contains JSON-encoded event data about the operation on an object. No rows are deleted or modified in this format.
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+The steps below show how to use this notification target in `namespace` format. The `access` format is very similar and is omitted for brevity.
 
-### Step 1: Ensure minimum requirements are met
+### 8.2 Add a MySQL Server Endpoint Configuration to Minio
 
-Minio requires MySQL version 5.7.8 or above. Minio uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data-type introduced in version 5.7.8. We tested this setup on MySQL 5.7.17.
+The Minio Server configuration file is stored on the backend in JSON format. The MySQL configuration is located in the `mysql` key under the top-level `notify` key. Create a configuration key-value pair here for the MySQL instance. The key is a name for the MySQL endpoint, and the value is a collection of parameters described in the table below:
 
-### Step 2: Add MySQL server endpoint configuration to Minio
-
-The Minio server configuration file is stored on the backend in json format. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
-
-| Parameter | Type | Description |
+| **Parameter** | **Type** | **Description** |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `dsnString` | _string_ | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
-| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
-| `host` | _string_ | Host name of the MySQL server (used only if `dsnString` is empty). |
-| `port` | _string_ | Port on which to connect to the MySQL server (used only if `dsnString` is empty). |
-| `user` | _string_ | Database user-name (used only if `dsnString` is empty). |
-| `password` | _string_ | Database password (used only if `dsnString` is empty). |
-| `database` | _string_ | Database name (used only if `dsnString` is empty). |
+| `enable` | `bool` | (_Required_) Specifies if this server endpoint configuration is active/enabled. |
+| `format` | `string` | (_Required_) Specifies the format. This field must be set to `namespace` or `access`. |
+| `dsnString` | `string` | (Optional) The [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If this field is not specified, then the connection information specified for the `host`, `port`, `user`, `password`, and `database` parameters are used. |
+| `table` | `string` | (_Required_) The name of the table in which events will be stored/updated. If the table does not exist, Minio Server creates it at startup.|
+| `host` | `string` | The host name of the MySQL server. This value is only used if `dsnString` is empty. |
+| `port` | `string` | The port on which to connect to the MySQL server. This value is only used if `dsnString` is empty. |
+| `user` | `string` | The database user name. This value is only used if `dsnString` is empty. |
+| `password` | `string` | The database password. This value is only used if `dsnString` is empty. |
+| `database` | `string` | The database name. This value is only used if `dsnString` is empty. |
 
-An example of MySQL configuration is as follows:
+The following shows an example of a configuration for MySQL:
 
-```
+```json
 "mysql": {
         "1": {
                 "enable": true,
@@ -821,24 +956,32 @@ An example of MySQL configuration is as follows:
         }
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+**Note:** The root password has been set to `password` and the name of the database has been set to `miniodb` for illustrative purposes.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the MySQL configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:mysql` at start-up if there were no errors.
+
+After updating the MySQL configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
 
+Restart Minio Server for the changes to take effect. A response similar to this one should be displayed at startup if there were no errors:
 
-### Step 3: Enable bucket notification using Minio client
+```
+SQS ARNs:  arn:minio:sqs::1:mysql
+```
 
-We will now setup bucket notifications on a bucket named `images`. Whenever a JPEG image object is created/overwritten, a new row is added or an existing row is updated in the MySQL table configured above. When an existing object is deleted, the corresponding row is deleted from the MySQL table. Thus, the rows in the MySQL table, reflect the `.jpg` objects in the `images` bucket.
+**Note:** An arbitrary number of MySQL server endpoint configurations can be added by providing an identifier (e.g. `1` in the example above) for the MySQL instance, and an object name for the per-server configuration parameters.
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+### 8.3 Enable Bucket Notifications Using Minio Client
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
 
 ```
 # Create bucket named `images` in myminio
@@ -850,42 +993,71 @@ mc events list myminio/images
 arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on MySQL
+**Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-Open another terminal and upload a JPEG image into ``images`` bucket:
+When a JPEG image object is created/overwritten, a new row is added or an existing row is updated in the MySQL table configured above. When an existing object is deleted, the corresponding row is deleted from the MySQL table. The rows in the MySQL table reflect the `.jpg` objects in the `images` bucket.
 
-```
+### 8.4 Test on MySQL
+
+Use the following command to upload a JPEG image into the `images` bucket:
+
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-Open MySQL terminal and list the rows in the `minio_images` table.
+Open MySQL in another console and list the rows in the `minio_images` table:
 
-```
+```sh
 $ mysql -h 172.17.0.1 -P 3306 -u root -p miniodb
 mysql> select * from minio_images;
-+--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+```
+
+A response similar to this one should be displayed:
+
+```
++--------------------+----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+----------------------------+
 | key_name           | value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-+--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": "minio"}}, "object": {"key": "myphoto.jpg", "eTag": "467886be95c8ecfd71a2900e3f461b4f", "size": 26, "sequencer": "14AC59476F809FD3"}, "configurationId": "Config", "s3SchemaVersion": "1.0"}, "awsRegion": "", "eventName": "s3:ObjectCreated:Put", "eventTime": "2017-03-16T11:29:00Z", "eventSource": "aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {"x-amz-request-id": "14AC59476F809FD3", "x-minio-origin-endpoint": "http://192.168.86.110:9000"}, "requestParameters": {"sourceIPAddress": "127.0.0.1:38260"}}]} |
-+--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------------------+----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+----------------------------+
+| images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": 
+"minio"}}, "object": {"key": "myphoto.jpg", "eTag": "467886be95c8ecfd71a2900e3f461b4f", "size": 26, "sequencer": "14AC59476F809FD3"},
+"configurationId": "Config", "s3SchemaVersion": "1.0"}, "awsRegion": "", "eventName": "s3:ObjectCreated:Put", "eventTime": "2017-03-16T11:29:00Z",
+"eventSource": "aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {"x-amz-request-id":
+"14AC59476F809FD3", "x-minio-origin-endpoint": "http://192.168.86.110:9000"}, "requestParameters": {"sourceIPAddress": "127.0.0.1:38260"}}]} |
++--------------------+----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 1 row in set (0.01 sec)
 
-```
-
-<a name="apache-kafka"></a>
-## Publish Minio events via Kafka
-
-Install Apache Kafka from [here](http://kafka.apache.org/).
-
-### Step 1: Ensure minimum requirements are met
-
-Minio requires Kafka version 0.10 or 0.9. Internally Minio uses the [Shopify/sarama](https://github.com/Shopify/sarama/) library and so has the same version compatibility as provided by this library.
-
-### Step 2: Add Kafka endpoint to Minio
-
-The Minio server configuration file is stored on the backend in json format. Update the kafka configuration block in ``config.json`` as follows:
 
 ```
+
+## 9. <a name="publish-minio-events-via-kafka"></a>Publish Minio Events via Kafka
+
+### 9.1 Install Apache Kafka
+
+Minio requires Kafka version 0.9 or 0.10. Internally, Minio uses the [Shopify/sarama](https://github.com/Shopify/sarama/) library and has the same version compatibility as provided by this library.
+
+Install Apache Kafka using these instructions: [http://kafka.apache.org/](http://kafka.apache.org/).
+
+### 9.2 Add Kafka endpoint to Minio
+
+The Minio Server configuration file is stored on the backend in JSON format.
+
+The following shows an example of a configuration in `config.json` for Kafka:
+
+```json
 "kafka": {
     "1": {
         "enable": true,
@@ -894,191 +1066,174 @@ The Minio server configuration file is stored on the backend in json format. Upd
     }
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+In this example, `bucketevents` is the topic used by Kafka.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the Kafka configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs::1:kafka` at start-up if there were no errors.``bucketevents`` is the topic used by kafka in this example.
+
+After updating the Kafka configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-### Step 3: Enable bucket notification using Minio client
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:kafka``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+Restart the Minio server for the changes to take effect. A response similar to this one should be displayed at startup if there were no errors:
 
 ```
+SQS ARNs:  arn:minio:sqs::1:kafka
+``` 
+
+### 9.3 Enable Bucket Notifications Using Minio Client
+
+Use the following commands to enable bucket event notifications on a bucket named `images` for a Minio Server instance aliased as `myminio`:
+
+```sh
 mc mb myminio/images
 mc events add  myminio/images arn:minio:sqs::1:kafka --suffix .jpg
 mc events list myminio/images
 arn:minio:sqs::1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on Kafka
+In this example, the ARN value is `arn:minio:sqs::1:kafka`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-We used [kafkacat](https://github.com/edenhill/kafkacat) to print all notifications on the console.
+This enables a bucket event notification to trigger when a JPEG image is uploaded or deleted from `images` bucket on ``myminio`` server.
 
-```
+### 9.4 Test on Kafka
+
+The following examples use [kafkacat](https://github.com/edenhill/kafkacat) to display all notifications on the console:
+
+```sh
 kafkacat -C -b localhost:9092 -t bucketevents
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+Open another console and use the following command to upload a JPEG image into the `images` bucket:
 
-```
+```sh
 mc cp myphoto.jpg myminio/images
 ```
 
-``kafkacat`` prints the event notification to the console.
+Once the upload completes, return to the first console and invoke `kafkacat` to display the event notification to the console:
 
-```
+```sh
 kafkacat -b localhost:9092 -t bucketevents
-{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2017-01-31T10:01:51Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"requestParameters":{"sourceIPAddress":"192.173.5.2:57904"},"responseElements":{"x-amz-request-id":"149ED2FD25589220","x-minio-origin-endpoint":"http://192.173.5.2:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":541596,"eTag":"04451d05b4faf4d62f3d538156115e2a","sequencer":"149ED2FD25589220"}}}],"level":"info","msg":"","time":"2017-01-31T15:31:51+05:30"}
 ```
 
-<a name="webhooks"></a>
-## Publish Minio events via Webhooks
+A response similar to this one should be displayed:
+
+```json
+{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"",
+"eventTime":"2017-01-31T10:01:51Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},
+"requestParameters":{"sourceIPAddress":"192.173.5.2:57904"},"responseElements":{"x-amz-request-id":"149ED2FD25589220",
+"x-minio-origin-endpoint":"http://192.173.5.2:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":
+{"name":"images","ownerIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg",
+"size":541596,"eTag":"04451d05b4faf4d62f3d538156115e2a","sequencer":"149ED2FD25589220"}}}],"level":"info","msg":"","time":"2017-01-31T15:31:51+05:30"}
+```
+
+## 10. <a name="publish-minio-events-via-webhooks"></a> Publish Minio Events via Webhooks
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) are a way to receive information when it happens, rather than continually polling for that data.
 
-### Step 1: Add Webhook endpoint to Minio
+### 10.1 Add a Webhook Endpoint to Minio Server
 
-The Minio server configuration file is stored on the backend in json format. Update the Webhook configuration block in ``config.json`` as follows
+The Minio Server configuration file is stored on the backend in JSON format. 
 
-```
+The following is an example webhook in ``config.json``:
+
+```json
 "webhook": {
   "1": {
     "enable": true,
     "endpoint": "http://localhost:3000/"
 }
 ```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+
+To update the configuration, use `mc admin config get` to get the current JSON configuration file for the Minio deployment, and save it locally:
+
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
-After updating the webhook configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Here the endpoint is the server listening for webhook notifications. Save the file and restart the Minio server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your Minio server.
+
+After updating the webhook configuration in `/tmp/myconfig`, use `mc admin config set` to update the configuration for the deployment:
+
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
 ```
-### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded to ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:webhook``. To learn more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+The endpoint is the server listening for webhook notifications. Save the file and restart Minio Server for the changes to take effect. 
 
-```
+**Note:** The endpoint needs to be live and reachable when Minio Server is restarted.
+
+### 10.2 Enable Bucket Notifications Using Minio Client
+
+The following example enables a bucket event notification to trigger when a JPEG image is uploaded from the `images` bucket on the `myminio` server:
+
+```sh
 mc mb myminio/images
 mc mb myminio/images-thumbnail
 mc events add myminio/images arn:minio:sqs::1:webhook --events put --suffix .jpg
 ```
 
-Check if event notification is successfully configured by
+In this example, the ARN value is `arn:minio:sqs::1:amqp`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
-```
+Use the following command to check if the event notification was successful:
+
+```sh
 mc events list myminio/images
 ```
 
-You should get a response like this
+A response similar to this one should be displayed:
 
 ```
 arn:minio:sqs::1:webhook   s3:ObjectCreated:*   Filter: suffix=".jpg"
 ```
 
-### Step 3: Test with Thumbnailer
+### 10.3 Test with Thumbnailer
 
-We used [Thumbnailer](https://github.com/minio/thumbnailer) to listen for Minio notifications when a new JPEG file is uploaded (HTTP PUT). Triggered by a notification, Thumbnailer uploads a thumbnail of new image to Minio server. To start with, download and install Thumbnailer.
+[Thumbnailer](https://github.com/minio/thumbnailer) can be used to listen for Minio Server notifications when a new JPEG file is uploaded using HTTP PUT. Thumbnailer uploads the thumbnail of a new image to Minio Server when a notification occurs.
 
-```
+Use the following commands to download and install Thumbnailer:
+
+```sh
 git clone https://github.com/minio/thumbnailer/
 npm install
 ```
 
-Then open the Thumbnailer config file at ``config/webhook.json`` and add the configuration for your Minio server and then start Thumbnailer by
+Open the Thumbnailer configuration file located in ``config/webhook.json`` and add the configuration for Minio Server.
 
-```
+Use the following command to run Thumbnailer at `http://localhost:3000/`:
+
+```sh
 NODE_ENV=webhook node thumbnail-webhook.js
 ```
 
-Thumbnailer starts running at ``http://localhost:3000/``. Next, configure the Minio server to send notifications to this URL (as mentioned in step 1) and use ``mc`` to set up bucket notifications (as mentioned in step 2). Then upload a JPEG image to Minio server by
+Configure Minio Server to send notifications to this URL (as mentioned in step 1) and use ``mc`` to set up bucket notifications (as mentioned in step 2).
 
-```
+Use the following command to upload a JPEG image to Minio Server:
+
+```sh
 mc cp ~/images.jpg myminio/images
+```
+
+A response similar to this one should be displayed:
+
+```sh
 .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
 ```
-Wait a few moments, then check the bucket’s contents with mc ls — you will see a thumbnail appear.
+
+Wait a few moments and then use the following command to check the bucket’s contents: 
+
+```sh
+mc ls myminio/images-thumbnail
+```
+
+A response similar to this one should be displayed that includes the uploaded thumbnail:
 
 ```
-mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-<a name="NSQ"></a>
-## Publish Minio events to NSQ
-
-Install an NSQ Daemon from [here](https://nsq.io/). Or use the following Docker
-command for starting an nsq daemon:
-
-```
-docker run --rm -p 4150-4151:4150-4151 nsqio/nsq /nsqd
-```
-
-### Step 1: Add NSQ endpoint to Minio
-
-The Minio server configuration file is stored on the backend in json format. The NSQ configuration is located in the `nsq` key under the `notify` top-level key. Create a configuration key-value pair here for your NSQ instance. The key is a name for your NSQ endpoint, and the value is a collection of key-value parameters.
-
-An example configuration for NSQ is shown below:
-
-```json
-"nsq": {
-    "1": {
-        "enable": true,
-        "nsqdAddress": "127.0.0.1:4150",
-        "topic": "minio",
-        "tls": {
-            "enable": false,       
-            "skipVerify": true
-        }
-    }
-}
-```
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
-```sh
-$ mc admin config get myminio/ > /tmp/myconfig
-```
-After updating the NSQ configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:nsq` at start-up if there were no errors.
-```sh
-$ mc admin config set myminio < /tmp/myconfig
-```
-
-Note that, you can add as many NSQ daemon endpoint configurations as needed by providing an identifier (like "1" in the example above) for the NSQ instance and an object of per-server configuration parameters.
-
-
-### Step 2: Enable bucket notification using Minio client
-
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs::1:nsq``.
-
-```
-mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:nsq --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:nsq s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
-```
-
-### Step 3: Test on NSQ
-
-The simplest test is to download `nsq_tail` from [nsq github](https://github.com/nsqio/nsq/releases)
-
-```
-./nsq_tail -nsqd-tcp-address 127.0.0.1:4150 -topic minio
-```
-
-Open another terminal and upload a JPEG image into ``images`` bucket.
-
-```
-mc cp gopher.jpg myminio/images
-```
-
-You should receive the following event notification via NSQ once the upload completes.
-
-```
-{"EventName":"s3:ObjectCreated:Put","Key":"images/gopher.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2018-10-31T09:31:11Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"requestParameters":{"sourceIPAddress":"10.1.1.1"},"responseElements":{"x-amz-request-id":"1562A792DAA53426","x-minio-origin-endpoint":"http://10.0.3.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"arn":"arn:aws:s3:::images"},"object":{"key":"gopher.jpg","size":162023,"eTag":"5337769ffa594e742408ad3f30713cd7","contentType":"image/jpeg","userMetadata":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"1562A792DAA53426"}},"source":{"host":"","port":"","userAgent":"Minio (linux; amd64) minio-go/v6.0.8 mc/DEVELOPMENT.GOGET"}}]}
-```
-
-
-*NOTE* If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` on all the nodes with your bucket event notification backend configuration.
+**Note:** For [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` on all of the nodes with the backend configuration for bucket event notifications.
