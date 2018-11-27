@@ -1,54 +1,83 @@
 # Minio Azure Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio Gateway adds Amazon S3 compatibility to Microsoft Azure Blob Storage.
 
-## Run Minio Gateway for Microsoft Azure Blob Storage
-### Using Docker
-```
+This topic describes how to use Minio Gateway to add Amazon S3 compatibility to Microsoft Azure Blob Storage.
+
+1. [Run Minio Gateway for Microsoft Azure Blob Storage](#run-minio-gateway-for-azure) 
+2. [Test Using Minio Browser](#test-using-minio-browser) 
+3. [Test Using Minio Client](#test-using-minio-client)
+
+
+## <a name="run-minio-gateway-for-azure"></a> 1. Run Minio Gateway for Microsoft Azure Blob Storage
+
+### 1.1 Run Minio Gateway Using Docker
+
+```sh
 docker run -p 9000:9000 --name azure-s3 \
  -e "MINIO_ACCESS_KEY=azurestorageaccountname" \
  -e "MINIO_SECRET_KEY=azurestorageaccountkey" \
  minio/minio gateway azure
 ```
 
-### Using Binary
-```
+### 1.2 Run Minio Gateway Using the Minio Binary
+
+```sh
 export MINIO_ACCESS_KEY=azureaccountname
 export MINIO_SECRET_KEY=azureaccountkey
 minio gateway azure
 ```
-## Test using Minio Browser
-Minio Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+
+## <a name="test-using-minio-browser"></a> 2. Test Using Minio Browser
+
+Minio Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that Minio Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
-## Test using Minio Client `mc`
-`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
 
-### Configure `mc`
-```
+## <a name="test-using-minio-client"></a> 3. Test Using Minio Client
+
+Minio Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server  (e.g. `ls`, `cat`, `cp`, `mirror`, `diff`, `find`, etc.). 
+`mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+Test `mc` with the gateways using the instructions in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide).
+
+### 3.1 Configure the Gateway Using Minio Client
+
+Use the following command to configure the gateway:
+
+```sh
 mc config host add myazure http://gateway-ip:9000 azureaccountname azureaccountkey
 ```
 
-### List containers on Microsoft Azure
-```
+### 3.2 List the Containers on Microsoft Azure
+
+Use the following command to list the containers on Microsoft Azure:
+
+```sh
 mc ls myazure
+```
+
+A response similar to this one should be displayed:
+
+```
 [2017-02-22 01:50:43 PST]     0B ferenginar/
 [2017-02-26 21:43:51 PST]     0B my-container/
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
-### Known limitations
-Gateway inherits the following Azure limitations:
+### 3.3 Known Limitations
 
-- Only read-only bucket policy supported at bucket level, all other variations will return API Notimplemented error.
-- Bucket names with "." in the bucket name are not supported.
-- Non-empty buckets get removed on a DeleteBucket() call.
-- _List Multipart Uploads_ always returns empty list.
+Minio Gateway has the following limitations when used with Azure:
+
+- It only supports read-only bucket policies at the bucket level; all other variations will return `API Notimplemented`.
+- Bucket names cannot contain the period character.
+- Non-empty buckets are removed when `DeleteBucket()` is invoked.
+- The `List Multipart Uploads` command always returns an empty list.
 
 Other limitations:
 
 - Bucket notification APIs are not supported.
 
-## Explore Further
+## 4. Explore Further
+
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
 - [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
