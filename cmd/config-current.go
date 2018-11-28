@@ -556,8 +556,10 @@ func (s *serverConfig) loadToCachedConfigs() {
 	if globalPolicyOPA == nil {
 		if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
 			globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
-				URL:       s.Policy.OPA.URL,
-				AuthToken: s.Policy.OPA.AuthToken,
+				URL:         s.Policy.OPA.URL,
+				AuthToken:   s.Policy.OPA.AuthToken,
+				Transport:   NewCustomHTTPTransport(),
+				CloseRespFn: CloseResponse,
 			})
 		}
 	}

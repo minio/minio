@@ -18,20 +18,20 @@ package iampolicy
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
-	"net"
+	"io"
 	"net/http"
 	"os"
-	"time"
 
 	xnet "github.com/minio/minio/pkg/net"
 )
 
 // OpaArgs opa general purpose policy engine configuration.
 type OpaArgs struct {
-	URL       *xnet.URL `json:"url"`
-	AuthToken string    `json:"authToken"`
+	URL         *xnet.URL             `json:"url"`
+	AuthToken   string                `json:"authToken"`
+	Transport   http.RoundTripper     `json:"-"`
+	CloseRespFn func(r io.ReadCloser) `json:"-"`
 }
 
 // Validate - validate opa configuration params.
@@ -74,31 +74,8 @@ func (a *OpaArgs) UnmarshalJSON(data []byte) error {
 
 // Opa - implements opa policy agent calls.
 type Opa struct {
-	args           OpaArgs
-	secureFailed   bool
-	client         *http.Client
-	insecureClient *http.Client
-}
-
-// newCustomHTTPTransport returns a new http configuration
-// used while communicating with the cloud backends.
-// This sets the value for MaxIdleConnsPerHost from 2 (go default)
-// to 100.
-func newCustomHTTPTransport(insecure bool) *http.Transport {
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          1024,
-		MaxIdleConnsPerHost:   1024,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecure},
-		DisableCompression:    true,
-	}
+	args   OpaArgs
+	client *http.Client
 }
 
 // NewOpa - initializes opa policy engine connector.
@@ -108,9 +85,8 @@ func NewOpa(args OpaArgs) *Opa {
 		return nil
 	}
 	return &Opa{
-		args:           args,
-		client:         &http.Client{Transport: newCustomHTTPTransport(false)},
-		insecureClient: &http.Client{Transport: newCustomHTTPTransport(true)},
+		args:   args,
+		client: &http.Client{Transport: args.Transport},
 	}
 }
 
@@ -139,23 +115,11 @@ func (o *Opa) IsAllowed(args Args) bool {
 		req.Header.Set("Authorization", o.args.AuthToken)
 	}
 
-	var resp *http.Response
-	if o.secureFailed {
-		resp, err = o.insecureClient.Do(req)
-	} else {
-		resp, err = o.client.Do(req)
-		if err != nil {
-			o.secureFailed = true
-			resp, err = o.insecureClient.Do(req)
-			if err != nil {
-				return false
-			}
-		}
-	}
+	resp, err := o.client.Do(req)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer o.args.CloseRespFn(resp.Body)
 
 	// Handle OPA response
 	type opaResponse struct {

@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -148,9 +149,18 @@ func (target *AMQPTarget) Close() error {
 
 // NewAMQPTarget - creates new AMQP target.
 func NewAMQPTarget(id string, args AMQPArgs) (*AMQPTarget, error) {
-	conn, err := amqp.Dial(args.URL.String())
-	if err != nil {
-		return nil, err
+	var conn *amqp.Connection
+	var err error
+	// Retry 5 times with time interval of 2 seconds.
+	for i := 1; i <= 5; i++ {
+		conn, err = amqp.Dial(args.URL.String())
+		if err == nil {
+			break
+		}
+		if err != nil && i == 5 {
+			return nil, err
+		}
+		time.Sleep(2 * time.Second)
 	}
 
 	return &AMQPTarget{

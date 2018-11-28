@@ -23,6 +23,8 @@ import (
 const (
 	// Response request id.
 	responseRequestIDKey = "x-amz-request-id"
+	// Deployment id.
+	responseDeploymentIDKey = "x-minio-deployment-id"
 )
 
 // ObjectIdentifier carries key name for the object to delete.

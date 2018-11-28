@@ -83,8 +83,10 @@ func checkPathLength(pathName string) error {
 		return errFileNameTooLong
 	}
 
-	// Convert any '\' to '/'.
-	pathName = filepath.ToSlash(pathName)
+	if runtime.GOOS == "windows" {
+		// Convert any '\' to '/'.
+		pathName = filepath.ToSlash(pathName)
+	}
 
 	// Check each path segment length is > 255
 	for len(pathName) > 0 && pathName != "." && pathName != "/" {
@@ -374,6 +376,7 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 		default:
 			fi, err := os.Stat(entry)
 			if err != nil {
+				err = osErrToFSFileErr(err)
 				return err
 			}
 			atomic.AddUint64(&s.totalUsed, uint64(fi.Size()))
@@ -413,6 +416,7 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 				default:
 					fi, err := os.Stat(entry)
 					if err != nil {
+						err = osErrToFSFileErr(err)
 						return err
 					}
 					usage = usage + uint64(fi.Size())

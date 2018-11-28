@@ -147,7 +147,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               gcsBackend,
-		Usage:              "Google Cloud Storage.",
+		Usage:              "Google Cloud Storage",
 		Action:             gcsGatewayMain,
 		CustomHelpTemplate: gcsGatewayTemplate,
 		HideHelpCommand:    true,

@@ -41,7 +41,7 @@ func init() {
 var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
-		Usage:           "Start object storage gateway.",
+		Usage:           "start object storage gateway",
 		Flags:           append(serverFlags, globalFlags...),
 		HideHelpCommand: true,
 	}
@@ -135,7 +135,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	handleCommonCmdArgs(ctx)
 
 	// Get port to listen on from gateway address
-	_, gatewayPort, pErr := net.SplitHostPort(gatewayAddr)
+	var pErr error
+	_, globalMinioPort, pErr = net.SplitHostPort(gatewayAddr)
 	if pErr != nil {
 		logger.FatalIf(pErr, "Unable to start gateway")
 	}
@@ -144,7 +145,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(gatewayPort), "Unable to start the gateway")
+	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the gateway")
 
 	// Create certs path.
 	logger.FatalIf(createConfigDir(), "Unable to create configuration directories")
@@ -239,7 +240,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	loadLoggers()
 
 	// This is only to uniquely identify each gateway deployments.
-	logger.SetDeploymentID(os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID"))
+	globalDeploymentID = os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID")
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {

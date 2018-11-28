@@ -41,6 +41,15 @@ func (c *Sys) Unseal(shard string) (*SealStatusResponse, error) {
 	return sealStatusRequest(c, r)
 }
 
+func (c *Sys) UnsealWithOptions(opts *UnsealOpts) (*SealStatusResponse, error) {
+	r := c.c.NewRequest("PUT", "/v1/sys/unseal")
+	if err := r.SetJSONBody(opts); err != nil {
+		return nil, err
+	}
+
+	return sealStatusRequest(c, r)
+}
+
 func sealStatusRequest(c *Sys, r *Request) (*SealStatusResponse, error) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
@@ -57,13 +66,21 @@ func sealStatusRequest(c *Sys, r *Request) (*SealStatusResponse, error) {
 
 type SealStatusResponse struct {
 	Type         string `json:"type"`
+	Initialized  bool   `json:"initialized"`
 	Sealed       bool   `json:"sealed"`
 	T            int    `json:"t"`
 	N            int    `json:"n"`
 	Progress     int    `json:"progress"`
 	Nonce        string `json:"nonce"`
 	Version      string `json:"version"`
+	Migration    bool   `json:"migration"`
 	ClusterName  string `json:"cluster_name,omitempty"`
 	ClusterID    string `json:"cluster_id,omitempty"`
 	RecoverySeal bool   `json:"recovery_seal"`
+}
+
+type UnsealOpts struct {
+	Key     string `json:"key"`
+	Reset   bool   `json:"reset"`
+	Migrate bool   `json:"migrate"`
 }

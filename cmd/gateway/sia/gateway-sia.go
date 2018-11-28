@@ -97,7 +97,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               siaBackend,
-		Usage:              "Sia Decentralized Cloud.",
+		Usage:              "Sia Decentralized Cloud",
 		Action:             siaGatewayMain,
 		CustomHelpTemplate: siaGatewayTemplate,
 		HideHelpCommand:    true,

@@ -303,7 +303,7 @@ func (c cacheObjects) GetObject(ctx context.Context, bucket, object string, star
 		}
 		dcache.Delete(ctx, bucket, object)
 	}
-	if startOffset != 0 || length != objInfo.Size {
+	if startOffset != 0 || (length > 0 && length != objInfo.Size) {
 		// We don't cache partial objects.
 		return GetObjectFn(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}

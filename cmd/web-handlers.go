@@ -707,7 +707,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebUpload", mustGetClaimsFromToken(r))
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -768,7 +768,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadata(context.Background(), r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -845,7 +845,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownload", mustGetClaimsFromToken(r))
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
@@ -1027,7 +1027,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(ctx, w, r)
+	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
 
 	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
