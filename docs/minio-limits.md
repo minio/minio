@@ -6,7 +6,7 @@ This topic lists the limits for various parameters supported by Minio Server, Am
 2. [Maximum Browser Upload Size](#maximum-browser-upload-size) 
 3. [Maximum Sizes Using the S3 API](#maximum-sizes-using-the-s3-api) 
 4. [List of Amazon S3 APIs not Supported on Minio](#list-of-amazon-s3-apis-not-supported-on-Minio) 
-5. [Object Name Restrictions](#object-name-restrictions)
+5. [Object Name Restrictions in File Systems](#object-name-restrictions-in-file-systems)
 
 ### 1. <a name="supported-number-of-drives-and-servers-for-erasure-code"></a>Supported Number of Drives and Servers for Erasure Code
 
@@ -16,13 +16,13 @@ This topic lists the limits for various parameters supported by Minio Server, Am
 |Minimum number of servers| 2|
 |Maximum number of drives per server| Unlimited|
 |Read quorum| N/2|
-|Write quorum| N/2 + 1|
+|Write quorum| (N/2) + 1|
 
 ### 2. <a name="maximum-browser-upload-size"></a>Maximum Browser Upload Size 
 
 |**Item**|**Limit**|
 |:---|:---|
-|Web browser upload size limit| 5 TB|
+|Web browser upload size limit| 5 TiB|
 
 ### 3. <a name="maximum-sizes-using-the-s3-api"></a>Maximum Sizes Using the S3 API
 
@@ -30,11 +30,11 @@ This topic lists the limits for various parameters supported by Minio Server, Am
 |:---|:---|
 |Maximum number of buckets| no-limit|
 |Maximum number of objects per bucket| no-limit|
-|Maximum object size| 5 TB|
+|Maximum object size| 5 TiB|
 |Minimum object size| 0 B|
-|Maximum object size per PUT operation| 5 TB|
+|Maximum object size per PUT operation| 5 TiB|
 |Maximum number of parts per upload| 	10,000|
-|Part size|5 MB to 5 GB. The last part can be 0 B to 5 GB.|
+|Part size|5 MiB to 5 GiB. The last part can be 0 B to 5 GiB.|
 |Maximum number of parts returned per list in a request for parts| 1000|
 |Maximum number of objects returned per list in a request for objects| 1000|
 |Maximum number of multi-part uploads returned per list in a request for multi-part uploads| 1000|
@@ -60,5 +60,5 @@ The following APIs are considered redundant or less useful outside of AWS S3. If
 - `ObjectTorrent`
 - `ObjectVersions`
 
-### 5. <a name="object-name-restrictions"></a>Object Name Restrictions
-Minio does not support object names that contain any of the following characters: `^*|\/&#";`. This restriction is applicable to file systems that do not support filenames containing these characters. There may be additional filename character restrictions on other file systems.
+### 5. <a name="object-name-restrictions-in-file-systems"></a>Object Name Restrictions in File Systems
+Minio works with the NTFS and SFX file systems. Minio does not support object names that contain any of the following characters: `^*|\/&#";`. This restriction is applicable to file systems that do not support filenames containing these characters. There may be additional filename character restrictions on other file systems. 
