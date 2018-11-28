@@ -1,10 +1,12 @@
 # Distributed Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-When running Minio in distributed mode (_distributed Minio_), multiple drives from different machines can be pooled into a single object storage server. As drives are distributed across several nodes, distributed Minio ensures full data protection when multiple node failures occur.
+When running Minio in distributed mode (_distributed Minio_), multiple drives from different machines can be pooled into a single namespace. As drives are distributed across several nodes, distributed Minio ensures full data protection when multiple node failures occur.
 
 ## Why Distributed Minio?
 
 Running Minio in distributed mode allows for the deployment of a high-availability, object storage system, enabling optimal use of storage devices regardless of their location on a network.
+
+**Note:** Each cluster must reside in the same network, but multiple clusters from multiple networks can be federated.
 
 ### Data Protection
 
@@ -18,9 +20,9 @@ For example, an 8-node distributed Minio configuration with one hard drive per n
 
 ### Limits
 
-As with Minio running in standalone mode, distributed Minio supports 2-32 servers per tenant. There are no limits on the number of hard drives shared across these servers. For a multi-tenant configuration, orchestrate multiple Minio instances using a tool like Kubernetes.
+Distributed Minio supports 2-32 servers per tenant. There are no limits on the number of hard drives shared across these servers and nor does Minio impose a limit to the number of hard drives used. For a multi-tenant configuration, orchestrate multiple Minio instances using a tool like Kubernetes.
 
-**Note:** With distributed Minio, the number of nodes and hard drives can be adjusted within the limits. For example, a configuration can have 2 nodes with 4 hard drives each, 4 nodes with 4 hard drives each, 8 nodes with 2 hard drives each, 32 servers with 24 hard drives each, etc.
+**Note:** The of number of nodes in a Distributed Minio configuration must be within the limits. For example, a configuration can have 2 nodes with 4 hard drives each, 4 nodes with 4 hard drives each, 8 nodes with 2 hard drives each, 32 servers with 24 hard drives each, etc.
 
 The [storage classes](https://github.com/minio/minio/tree/master/docs/erasure/storage-class) can be used to set custom data and parity distribution across all of the drives.
 
@@ -53,7 +55,6 @@ To start a distributed Minio instance:
 * All nodes running distributed Minio must be in a homogeneous environment (meaning they have the same operating system, number of drives, and interconnects).
 * If the domain must be set, the `MINIO_DOMAIN` environment variable must be defined and exported.
 * Minio distributed mode requires directories that are exclusive to Minio. For example, if a volume is mounted under `/export`, pass `/export/data` as an argument to the `minio server` command.
-**Note:** The drives can be shared with other applications if required.
 * The IP addresses and drive paths below are intended for demonstration purposes only, and must be replaced with the actual IP addresses and drive paths/folders.
 * The time on the servers running distributed Minio instances should within three seconds of each other. Use [NTP](http://www.ntp.org/) to ensure consistent times across servers.
 * Running Distributed Minio on Windows is experimental as of now. Please proceed with caution.
@@ -75,7 +76,7 @@ minio server http://192.168.1.1{1...8}/export1
 **Note:** Arguments such as `{1...n}` have three dots. Using only two dots (e.g. `{1..4}`) will be interpreted by the shell and won't be passed to Minio Server. This affects the erasure coding order, possibly impacting performance and high availability. Always use `{1...n}` (three dots) to use Minio Server erasure code on data optimally.
 
 ### <a name="test-the-configuration"></a>3. Test the Configuration
-To test this configuration, access the Minio server via a browser or invoke it as described in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide).
+Test the configuration using `mc` as described in the [Minio Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
 - [Minio Large Bucket Support Guide](https://docs.minio.io/docs/minio-large-bucket-support-quickstart-guide)
