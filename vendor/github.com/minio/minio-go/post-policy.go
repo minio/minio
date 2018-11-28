@@ -206,6 +206,28 @@ func (p *PostPolicy) SetUserMetadata(key string, value string) error {
 	return nil
 }
 
+// SetUserData - Set user data as a key/value couple.
+// Can be retrieved through a HEAD request or an event.
+func (p *PostPolicy) SetUserData(key string, value string) error {
+	if key == "" {
+		return ErrInvalidArgument("Key is empty")
+	}
+	if value == "" {
+		return ErrInvalidArgument("Value is empty")
+	}
+	headerName := fmt.Sprintf("x-amz-%s", key)
+	policyCond := policyCondition{
+		matchType: "eq",
+		condition: fmt.Sprintf("$%s", headerName),
+		value:     value,
+	}
+	if err := p.addNewPolicy(policyCond); err != nil {
+		return err
+	}
+	p.formData[headerName] = value
+	return nil
+}
+
 // addNewPolicy - internal helper to validate adding new policies.
 func (p *PostPolicy) addNewPolicy(policyCond policyCondition) error {
 	if policyCond.matchType == "" || policyCond.condition == "" || policyCond.value == "" {

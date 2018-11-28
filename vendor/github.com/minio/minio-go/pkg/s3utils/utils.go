@@ -143,11 +143,40 @@ func IsAmazonGovCloudEndpoint(endpointURL url.URL) bool {
 }
 
 // IsAmazonFIPSGovCloudEndpoint - Match if it is exactly Amazon S3 FIPS GovCloud endpoint.
+// See https://aws.amazon.com/compliance/fips.
 func IsAmazonFIPSGovCloudEndpoint(endpointURL url.URL) bool {
 	if endpointURL == sentinelURL {
 		return false
 	}
-	return endpointURL.Host == "s3-fips-us-gov-west-1.amazonaws.com"
+	return endpointURL.Host == "s3-fips-us-gov-west-1.amazonaws.com" ||
+		endpointURL.Host == "s3-fips.dualstack.us-gov-west-1.amazonaws.com"
+}
+
+// IsAmazonFIPSUSEastWestEndpoint - Match if it is exactly Amazon S3 FIPS US East/West endpoint.
+// See https://aws.amazon.com/compliance/fips.
+func IsAmazonFIPSUSEastWestEndpoint(endpointURL url.URL) bool {
+	if endpointURL == sentinelURL {
+		return false
+	}
+	switch endpointURL.Host {
+	case "s3-fips.us-east-2.amazonaws.com":
+	case "s3-fips.dualstack.us-west-1.amazonaws.com":
+	case "s3-fips.dualstack.us-west-2.amazonaws.com":
+	case "s3-fips.dualstack.us-east-2.amazonaws.com":
+	case "s3-fips.dualstack.us-east-1.amazonaws.com":
+	case "s3-fips.us-west-1.amazonaws.com":
+	case "s3-fips.us-west-2.amazonaws.com":
+	case "s3-fips.us-east-1.amazonaws.com":
+	default:
+		return false
+	}
+	return true
+}
+
+// IsAmazonFIPSEndpoint - Match if it is exactly Amazon S3 FIPS endpoint.
+// See https://aws.amazon.com/compliance/fips.
+func IsAmazonFIPSEndpoint(endpointURL url.URL) bool {
+	return IsAmazonFIPSUSEastWestEndpoint(endpointURL) || IsAmazonFIPSGovCloudEndpoint(endpointURL)
 }
 
 // IsGoogleEndpoint - Match if it is exactly Google cloud storage endpoint.

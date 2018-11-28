@@ -362,10 +362,10 @@ func (c Client) ComposeObjectWithProgress(dst DestinationInfo, srcs []SourceInfo
 	srcSizes := make([]int64, len(srcs))
 	var totalSize, size, totalParts int64
 	var srcUserMeta map[string]string
-	var etag string
+	etags := make([]string, len(srcs))
 	var err error
 	for i, src := range srcs {
-		size, etag, srcUserMeta, err = src.getProps(c)
+		size, etags[i], srcUserMeta, err = src.getProps(c)
 		if err != nil {
 			return err
 		}
@@ -426,9 +426,9 @@ func (c Client) ComposeObjectWithProgress(dst DestinationInfo, srcs []SourceInfo
 
 	// 1. Ensure that the object has not been changed while
 	//    we are copying data.
-	for _, src := range srcs {
+	for i, src := range srcs {
 		if src.Headers.Get("x-amz-copy-source-if-match") == "" {
-			src.SetMatchETagCond(etag)
+			src.SetMatchETagCond(etags[i])
 		}
 	}
 
