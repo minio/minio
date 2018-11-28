@@ -53,12 +53,16 @@ A response similar to this one should be displayed:
 2018/11/21 10:16:18 wrote key.pem
 ```
 
+Rename `cert.pem` to `public.crt` and `key.pem` to `private.key`.
+
 ### <a name="using-open-ssl"></a>3.2 Use OpenSSL to Generate a Certificate
 
 Use one of the following methods to generate a certificate using `openssl`:
 
 * 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
 * 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
+* 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
+
 
 #### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
 
@@ -117,7 +121,7 @@ The default OpenSSL format for private encrypted keys is PKCS-8, but Minio only 
 openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
 ```  
 
-#### 3.2.3 Generate a self-signed certificate.
+#### <a name="generate-a-self-signed-certificate"></a>3.2.3 Generate a self-signed certificate.
 
 Use the following command to generate a self-signed certificate and enter a passphrase when prompted:
 
@@ -137,7 +141,7 @@ openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/
 
 This section describes how to specify an IP address to `openssl` when generating a certificate.
 
-#### 3.3.1 <a name="createconfigfile"></a>Create a configuration file.
+#### 3.3.1 Create a configuration file.
 
 Create a file named `openssl.conf` with the content below. Change `IP.1` to point to the correct IP address:
 
@@ -162,7 +166,7 @@ subjectAltName = @alt_names
 IP.1 = 127.0.0.1
 ```
 
-#### 3.3.2 <a name="specifyconfigfile"></a>Run `openssl` and specify the configuration file:
+#### 3.3.2 Run `openssl` and specify the configuration file:
 
 ```sh
 openssl req -x509 -nodes -days 730 -newkey rsa:2048 -keyout private.key -out public.crt -config openssl.conf
