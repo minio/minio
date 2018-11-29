@@ -34,7 +34,7 @@ var s3ErrorResponseMap = map[string]string{
 	"MissingContentLength":              "You must provide the Content-Length HTTP header.",
 	"MissingContentMD5":                 "Missing required header for this request: Content-Md5.",
 	"MissingRequestBodyError":           "Request body is empty.",
-	"NoSuchBucket":                      "The specified bucket does not exist",
+	"NoSuchBucket":                      "The specified bucket does not exist.",
 	"NoSuchBucketPolicy":                "The bucket policy does not exist",
 	"NoSuchKey":                         "The specified key does not exist.",
 	"NoSuchUpload":                      "The specified multipart upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",

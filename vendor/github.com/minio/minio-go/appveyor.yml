@@ -16,7 +16,7 @@ install:
   - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
   - go version
   - go env
-  - go get -u github.com/golang/lint/golint
+  - go get -u golang.org/x/lint/golint
   - go get -u github.com/remyoudompheng/go-misc/deadcode
   - go get -u github.com/gordonklaus/ineffassign
   - go get -u golang.org/x/crypto/argon2
