@@ -1,7 +1,0 @@
-log.console.enable = true
-version     =      "27"
-region = ""
-log.http.target1.enable = "target1-false"
-log.http.target2.enable = "target2-false"
-invalid.key = "xxx"
-log.http.target.1.enable = "xxx"

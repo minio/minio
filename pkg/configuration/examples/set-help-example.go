@@ -18,7 +18,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/configuration"
@@ -26,20 +28,48 @@ import (
 
 func main() {
 	var err error
+	var keys []string
+	var kv map[string]string
+	serverConfig := &configuration.ServerConfig{RWMutex: &sync.RWMutex{}}
 
-	serverConfig := &configuration.ServerConfig{}
-	// Load configuration data from disk to memory
-	fmt.Println("************************")
-	fmt.Println("***** Calling Load *****")
-	fmt.Println("************************")
-	if err = serverConfig.Load(); err != nil {
-		logger.FatalIf(err, "Failed to load configuration data: ")
+	// fmt.Println("******************************")
+	// fmt.Println("***** Calling SetHandler *****")
+	// fmt.Println("******************************")
+	// if err = serverConfig.SetHandler("region", "minio-region"); err != nil {
+	// 	logger.FatalIf(err, "Failed to load configuration data: ")
+	// }
+	// fmt.Println("******************************")
+	// fmt.Println("***** Calling GetHandler *****")
+	// fmt.Println("*****      region        *****")
+	// fmt.Println("******************************")
+	// keys = []string{"region"}
+	// if kv, err = serverConfig.GetHandler(keys); err != nil {
+	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
+	// }
+	// fmt.Printf("kv>\n%+v\n\n", kv)
+
+	fmt.Println("******************************")
+	fmt.Println("***** Calling GetHandler *****")
+	fmt.Println("***** return full config *****")
+	fmt.Println("******************************")
+	keys = []string{}
+	if kv, err = serverConfig.GetHandler(keys); err != nil {
+		logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	}
-
-	fmt.Println("******************************")
-	fmt.Println("***** Calling Gethandler *****")
-	fmt.Println("******************************")
-	kv, err := serverConfig.GetHandler()
-	fmt.Printf("GetHandler >\n%+v\n\n", kv)
-
+	// fmt.Printf("kv>\n%+v\n\n", kv)
+	fmt.Println()
+	b, err := json.MarshalIndent(kv, "", "  ")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	fmt.Print(string(b))
+	// fmt.Println("******************************")
+	// fmt.Println("***** Calling GetHandler *****")
+	// fmt.Println("***** region and version *****")
+	// fmt.Println("******************************")
+	// keys = []string{"region", "version"}
+	// if kv, err = serverConfig.GetHandler(keys); err != nil {
+	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
+	// }
+	// fmt.Printf("kv>\n%+v\n\n", kv)
 }
