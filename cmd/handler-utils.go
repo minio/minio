@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
 	httptracer "github.com/minio/minio/pkg/handlers"
 )
@@ -176,13 +177,13 @@ func getRedirectPostRawQuery(objInfo ObjectInfo) string {
 	return redirectValues.Encode()
 }
 
-// Returns access key in the request Authorization header.
-func getReqAccessKey(r *http.Request, region string) (accessKey string) {
-	cred, _, _ := getReqAccessKeyV4(r, region)
+// Returns access credentials in the request Authorization header.
+func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
+	cred, _, _ = getReqAccessKeyV4(r, region)
 	if cred.AccessKey == "" {
 		cred, _, _ = getReqAccessKeyV2(r)
 	}
-	return cred.AccessKey
+	return cred
 }
 
 // Extract request params to be sent with event notifiation.
@@ -192,10 +193,11 @@ func extractReqParams(r *http.Request) map[string]string {
 	}
 
 	region := globalServerConfig.GetRegion()
+	cred := getReqAccessCred(r, region)
 	// Success.
 	return map[string]string{
 		"region":          region,
-		"accessKey":       getReqAccessKey(r, region),
+		"accessKey":       cred.AccessKey,
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
