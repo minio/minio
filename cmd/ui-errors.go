@@ -203,4 +203,10 @@ Example 1:
 		"Please check the passed value",
 		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_ATTR=\"A,B,C\"",
 	)
+
+	uiErrInvalidExtPortValue = newUIErrFn(
+		"Invalid Extensions Port value",
+		"Please check the passed value",
+		"MINIO_EXT_PORT value must be available for use",
+	)
 )

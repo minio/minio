@@ -13,8 +13,12 @@ Read more on how to use these endpoints in [Minio healthcheck guide](https://git
 
 ### Prometheus Probe
 
-Minio server exposes Prometheus compatible data on a single endpoint.
+Minio server exposes Prometheus compatible data on two possible endpoints. By default, metrics are available from:
 
-- Prometheus data available at `/minio/prometheus/metrics`
+* `:9000/minio/prometheus/metrics`
 
-To use this endpoint, setup Prometheus to scrape data from this endpoint. Read more on how to use Prometheues to monitor Minio server in [How to monitor Minio server with Prometheus](https://github.com/minio/cookbook/blob/master/docs/how-to-monitor-minio-with-prometheus.md).
+If MINIO_EXT_PORT is set, Prometheus data is available from here also:
+
+* `:<MINIO_EXT_PORT>/metrics`
+
+To use the desired endpoint, setup Prometheus to scrape data from the correct endpoint. Read more on how to use Prometheues to monitor Minio server in [How to monitor Minio server with Prometheus](https://github.com/minio/cookbook/blob/master/docs/how-to-monitor-minio-with-prometheus.md).

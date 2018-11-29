@@ -355,4 +355,11 @@ func handleCommonEnvVars() {
 			globalCompressMimeTypes = contenttypes
 		}
 	}
+
+	extensionsPort := os.Getenv("MINIO_EXT_PORT")
+	if extensionsPort == globalMinioPort {
+		errorMsg := "Invalid MINIO_EXT_PORT value (:" + extensionsPort + ")"
+		logger.FatalIf(errors.New("port is already in use"), errorMsg)
+	}
+	globalExtensionsPort = ":" + extensionsPort
 }

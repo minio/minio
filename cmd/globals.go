@@ -258,6 +258,9 @@ var (
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
 
+	// Additional port to facilitate alternative path extensions e.g. /metrics
+	globalExtensionsPort string
+
 	// Add new variable global values here.
 )
 

@@ -325,6 +325,11 @@ func serverMain(ctx *cli.Context) {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
+	// if extensions port is set then enable server
+	if globalExtensionsPort != "" {
+		startExtensionsPortServer(getCert)
+	}
+
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	newObject, err := newObjectLayer(globalEndpoints)

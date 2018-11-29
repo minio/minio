@@ -153,6 +153,16 @@ export MINIO_DOMAIN=mydomain.com
 minio server /data
 ```
 
+### Metrics
+
+By default, Minio supports metrics scraping via /minio/prometheus/metrics on the server port.  By setting MINIO_EXT_PORT, metrics will also be available via the /metrics path on the specified port.
+Example:
+
+```sh
+export MINIO_EXT_PORT=9001
+minio server /data
+```
+
 ## Explore Further
 
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)

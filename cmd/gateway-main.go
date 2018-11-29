@@ -136,7 +136,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Get port to listen on from gateway address
 	var pErr error
-	_, globalMinioPort, pErr = net.SplitHostPort(gatewayAddr)
+	globalMinioHost, globalMinioPort, pErr = net.SplitHostPort(gatewayAddr)
 	if pErr != nil {
 		logger.FatalIf(pErr, "Unable to start gateway")
 	}
@@ -186,7 +186,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerHealthCheckRouter(router)
 
 	// Add server metrics router
-	registerMetricsRouter(router)
+	registerMetricsRouter(router, "")
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
@@ -216,6 +216,24 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
+
+	// if extensions port is set then attempt to enable server
+	if globalExtensionsPort != "" {
+		// validate that the extension port does not clash with the gateway backend storage (if applicable)
+		backendStorageEndpoint := ctx.Args().First()
+		if backendStorageEndpoint != "" {
+			sameTarget, err := sameLocalAddrs(backendStorageEndpoint, globalExtensionsPort)
+			if err != nil {
+				logger.FatalIf(err, "Failed to validate extensions port against backend storage (%v)", err)
+			}
+
+			if sameTarget {
+				errorMsg := "Invalid MINIO_EXT_PORT value (" + globalExtensionsPort + "), port points to the local backend storage"
+				logger.Fatal(uiErrInvalidExtPortValue(nil), errorMsg)
+			}
+		}
+		startExtensionsPortServer(getCert)
+	}
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 

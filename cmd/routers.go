@@ -51,8 +51,6 @@ var globalHandlers = []HandlerFunc{
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
 	addSecurityHeaders,
-	// Forward path style requests to actual host in a bucket federated setup.
-	setBucketForwardingHandler,
 	// Ratelimit the incoming requests using a token bucket algorithm
 	setRateLimitHandler,
 	// Validate all the incoming paths.
@@ -65,19 +63,12 @@ var globalHandlers = []HandlerFunc{
 	setRequestHeaderSizeLimitHandler,
 	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 	setCrossDomainPolicy,
-	// Redirect some pre-defined browser request paths to a static location prefix.
-	setBrowserRedirectHandler,
-	// Validates if incoming request is for restricted buckets.
-	setReservedBucketHandler,
 	// Adds cache control for all browser requests.
 	setBrowserCacheControlHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
 	// CORS setting for all browser API requests.
 	setCorsHandler,
-	// Validates all incoming URL resources, for invalid/unsupported
-	// resources client receives a HTTP error.
-	setIgnoreResourcesHandler,
 	// Auth handler verifies incoming authorization headers and
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
@@ -87,7 +78,20 @@ var globalHandlers = []HandlerFunc{
 	// filters HTTP headers which are treated as metadata and are reserved
 	// for internal use only.
 	filterReservedMetadata,
-	// Add new handlers here.
+	// Add new generic handlers here.
+}
+
+var bucketHandlers = []HandlerFunc{
+	// Forward path style requests to actual host in a bucket federated setup.
+	setBucketForwardingHandler,
+	// Validates if incoming request is for restricted buckets.
+	setReservedBucketHandler,
+	// Redirect some pre-defined browser request paths to a static location prefix.
+	setBrowserRedirectHandler,
+	// Validates all incoming URL resources, for invalid/unsupported
+	// resources client receives a HTTP error.
+	setIgnoreResourcesHandler,
+	// Add new bucket specific handlers here.
 }
 
 // configureServer handler returns final handler for the http server.
@@ -114,7 +118,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	registerHealthCheckRouter(router)
 
 	// Add server metrics router
-	registerMetricsRouter(router)
+	registerMetricsRouter(router, "")
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
@@ -127,5 +131,5 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	registerAPIRouter(router)
 
 	// Register rest of the handlers.
-	return registerHandlers(router, globalHandlers...), nil
+	return registerHandlers(registerHandlers(router, globalHandlers...), bucketHandlers...), nil
 }

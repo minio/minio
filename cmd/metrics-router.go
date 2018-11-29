@@ -25,8 +25,12 @@ const (
 )
 
 // registerMetricsRouter - add handler functions for metrics.
-func registerMetricsRouter(router *mux.Router) {
-	// metrics router
-	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+func registerMetricsRouter(router *mux.Router, path string) {
+	if path != "" {
+		metricsRouter := router.NewRoute().Subrouter()
+		metricsRouter.Handle(path, metricsHandler())
+	} else {
+		metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+		metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+	}
 }
