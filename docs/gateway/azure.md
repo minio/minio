@@ -2,10 +2,11 @@
 
 This topic describes how to use Minio Gateway to add Amazon S3 compatibility to Microsoft Azure Blob Storage.
 
-1. [Run Minio Gateway for Microsoft Azure Blob Storage](#run-minio-gateway-for-azure) 
-2. [Test Using Minio Browser](#test-using-minio-browser) 
-3. [Test Using Minio Client](#test-using-minio-client)
-
+- [Run Minio Gateway for Microsoft Azure Blob Storage](#run-minio-gateway-for-azure) 
+- [Test Using Minio Browser](#test-using-minio-browser) 
+- [Test Using Minio Client](#test-using-minio-client) 
+- [Known Limitations](#known-limitations) 
+- [Explore Further](#explore-further)
 
 ## <a name="run-minio-gateway-for-azure"></a> 1. Run Minio Gateway for Microsoft Azure Blob Storage
 
@@ -63,7 +64,7 @@ A response similar to this one should be displayed:
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
-### 3.3 Known Limitations
+## <a name="known-limitations"></a>4. Known Limitations
 
 Minio Gateway has the following limitations when used with Azure:
 
@@ -76,7 +77,7 @@ Other limitations:
 
 - Bucket notification APIs are not supported.
 
-## 4. Explore Further
+## <a name="explore-further"></a>5. Explore Further
 
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
