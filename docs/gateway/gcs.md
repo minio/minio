@@ -1,6 +1,6 @@
 # Minio GCS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-This topic describes how to use Minio GCS Gateway to add Amazon S3 compatibility to Google Cloud Storage (GCS).
+Minio GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
 
 - [Run Minio Gateway for GCS](#run-minio-gateway-for-gcs)
 - [Test Using Minio Browser](#test-using-minio-browser)
