@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"path"
 	"runtime"
@@ -299,11 +300,11 @@ func getHostsSlice(records []dns.SrvRecord) []string {
 	return hosts
 }
 
-// returns a random host (and corresponding port) from a slice of DNS records
-func getRandomHostPort(records []dns.SrvRecord) (string, int) {
+// returns a host (and corresponding port) from a slice of DNS records
+func getHostFromSrv(records []dns.SrvRecord) string {
 	rand.Seed(time.Now().Unix())
 	srvRecord := records[rand.Intn(len(records))]
-	return srvRecord.Host, srvRecord.Port
+	return net.JoinHostPort(srvRecord.Host, fmt.Sprintf("%d", srvRecord.Port))
 }
 
 // IsCompressed returns true if the object is marked as compressed.

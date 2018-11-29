@@ -183,6 +183,13 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	if cred.AccessKey == "" {
 		cred, _, _ = getReqAccessKeyV2(r)
 	}
+	if cred.AccessKey == "" {
+		claims, owner, _ := webRequestAuthenticate(r)
+		if owner {
+			return globalServerConfig.GetCredential()
+		}
+		cred, _ = globalIAMSys.GetUser(claims.Subject)
+	}
 	return cred
 }
 
@@ -194,6 +201,7 @@ func extractReqParams(r *http.Request) map[string]string {
 
 	region := globalServerConfig.GetRegion()
 	cred := getReqAccessCred(r, region)
+
 	// Success.
 	return map[string]string{
 		"region":          region,

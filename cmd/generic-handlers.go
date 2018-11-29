@@ -19,7 +19,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -627,11 +626,52 @@ type bucketForwardingHandler struct {
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if globalDNSConfig == nil || globalDomainName == "" ||
-		guessIsBrowserReq(r) || guessIsHealthCheckReq(r) ||
-		guessIsMetricsReq(r) || guessIsRPCReq(r) || isAdminReq(r) {
+		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+		guessIsRPCReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
+
+	// For browser requests, when federation is setup we need to
+	// specifically handle download and upload for browser requests.
+	if guessIsBrowserReq(r) && globalDNSConfig != nil && globalDomainName != "" {
+		var bucket, _ string
+		switch r.Method {
+		case http.MethodPut:
+			if getRequestAuthType(r) == authTypeJWT {
+				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/upload"))
+			}
+		case http.MethodGet:
+			if t := r.URL.Query().Get("token"); t != "" {
+				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/download"))
+			} else if getRequestAuthType(r) != authTypeJWT && !strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+				bucket, _ = urlPath2BucketObjectName(r.URL.Path)
+			}
+		}
+		if bucket != "" {
+			sr, err := globalDNSConfig.Get(bucket)
+			if err != nil {
+				if err == dns.ErrNoEntriesFound {
+					writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
+				} else {
+					writeErrorResponse(w, toAPIErrorCode(context.Background(), err), r.URL, guessIsBrowserReq(r))
+				}
+				return
+			}
+			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+				r.URL.Scheme = "http"
+				if globalIsSSL {
+					r.URL.Scheme = "https"
+				}
+				r.URL.Host = getHostFromSrv(sr)
+				f.fwd.ServeHTTP(w, r)
+				return
+			}
+		}
+		f.handler.ServeHTTP(w, r)
+		return
+	}
+
 	bucket, object := urlPath2BucketObjectName(r.URL.Path)
 	// ListBucket requests should be handled at current endpoint as
 	// all buckets data can be fetched from here.
@@ -663,12 +703,11 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
-		host, port := getRandomHostPort(sr)
 		r.URL.Scheme = "http"
 		if globalIsSSL {
 			r.URL.Scheme = "https"
 		}
-		r.URL.Host = fmt.Sprintf("%s:%d", host, port)
+		r.URL.Host = getHostFromSrv(sr)
 		f.fwd.ServeHTTP(w, r)
 		return
 	}
