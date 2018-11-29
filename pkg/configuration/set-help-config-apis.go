@@ -1489,7 +1489,7 @@ func init() {
 
 func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string, error) {
 	// Keys with user specified random subkey will be
-	// validated in this function. If valid, key will also be tranformed
+	// validated in this function. If valid, key will also be transformed
 	// to "transformedKey" with random subkey replaced with a "*"
 	var transformedKey string
 	// Min/Max number of characters required/allowed in a user
