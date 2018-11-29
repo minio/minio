@@ -2,9 +2,9 @@
 
 This quickstart guide describes how to quickly install and run a Minio Server Docker container.
 
-1. [Install Docker](#install-docker) 
-2. [Run Standalone Minio on Docker](#run-standalone-minio-on-docker) 
-3. [Run Distributed Minio on Docker](#run-distributed-minio-on-docker) 
+- [Install Docker](#install-docker) 
+- [Run Standalone Minio on Docker](#run-standalone-minio-on-docker) 
+- [Run Distributed Minio on Docker](#run-distributed-minio-on-docker) 
 
 ## <a name="install-docker"></a>1. Install Docker
 Install Docker using these instructions: <https://www.docker.com/community-edition#/download>.
@@ -27,11 +27,11 @@ docker run -p 9000:9000 minio/minio server /data
 ### 2.2 Run Minio with Persistent Storage
 To run a Minio container with persistent storage, local persistent directories must be mapped from the host OS to the virtual `config` and `export` directories. 
 
-Use one of the methods below to run the container with  `~/.minio` as the virtual `config` directory and `/data` as the `export` directory:
+Use one of the methods below to run the container with  `/config` as the virtual `config` directory and `/data` as the `export` directory:
 * [GNU/Linux and macOS](#persistent_linuxmac)
 * [Windows](#persistent_windows)
 
-**Note:** In the following examples, `~/.minio` and `/data` are local directories being mapped inside the container.
+**Note:** In the following examples, `/data` and `/config` are local directories being mapped inside the container.
 
 #### <a name="persistent_linuxmac"></a>GNU/Linux and macOS
 ```sh
@@ -64,7 +64,7 @@ To override Minio's auto-generated keys, pass the secret key and access key expl
 **Note:** Minio Server allows the use of regular strings for the access key and secret key.
 
 #### <a name="linuxmac_secret"></a>GNU/Linux and macOS
-```sh
+```
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
@@ -74,7 +74,7 @@ docker run -p 9000:9000 --name minio1 \
 ```
 
 #### <a name="windows_secret"></a>Windows
-```powershell
+```
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
@@ -137,26 +137,26 @@ Identify the ID of the container from the `Container ID` column displayed in the
 ### Starting and Stopping Containers
 To start a stopped container, use the [`docker start`](https://docs.docker.com/engine/reference/commandline/start/) command:
 
-```sh
+```
 docker start <container_id>
 ```
 
 To stop a running container, use the [`docker stop`](https://docs.docker.com/engine/reference/commandline/stop/) command:
-```sh
+```
 docker stop <container_id>
 ```
 
 ### Minio Container Logs
 To access Minio logs, use the [`docker logs`](https://docs.docker.com/engine/reference/commandline/logs/) command:
 
-```sh
+```
 docker logs <container_id>
 ```
 
 ### Monitor a Minio Docker Container
 To monitor the resources used by a Minio container, use the [`docker stats`](https://docs.docker.com/engine/reference/commandline/stats/) command:
 
-```sh
+```
 docker stats <container_id>
 ```
 
