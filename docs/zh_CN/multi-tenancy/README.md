@@ -27,7 +27,6 @@ minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3 /disk2/d
 
 ## 分布式部署
 要在分布式环境中托管多个租户，同时运行多个分布式Minio实例。
-To host multiple tenants in a distributed environment, run several distributed Minio instances concurrently.  
 
 #### 示例3 : 多主机，多块磁盘 (erasure code)
 

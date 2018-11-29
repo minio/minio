@@ -2413,8 +2413,64 @@ func migrateV27ToV28() error {
 	return nil
 }
 
+// Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
+func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
+	defer func() {
+		// Rename config.json to config.json.deprecated only upon
+		// success of this function.
+		if err == nil {
+			os.Rename(getConfigFile(), getConfigFile()+".deprecated")
+		}
+	}()
+
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	// Verify if backend already has the file.
+	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
+		return err
+	} // if errConfigNotFound proceed to migrate..
+
+	var config = &serverConfig{}
+	if _, err = Load(getConfigFile(), config); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		// Read from deprecate file as well if necessary.
+		if _, err = Load(getConfigFile()+".deprecated", config); err != nil {
+			return err
+		}
+	}
+
+	return saveServerConfig(context.Background(), objAPI, config)
+}
+
 // Migrates '.minio.sys/config.json' to v32.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
 	if err := migrateV27ToV28MinioSys(objAPI); err != nil {
 		return err
 	}

@@ -50,6 +50,8 @@ vault write -f auth/approle/role/my-role/secret-id
 
 The AppRole ID, AppRole Secret Id, Vault endpoint and Vault key name can now be used to start minio server with Vault as KMS.
 
+Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
+
 ### 3. Environment variables
 
 You'll need the Vault endpoint, AppRole ID, AppRole SecretID and encryption key-ring name defined in step 2.2
@@ -67,6 +69,10 @@ Optionally set `MINIO_SSE_VAULT_CAPATH` as the path to a directory of PEM-encode
 export MINIO_SSE_VAULT_CAPATH=/home/user/custom-pems
 ```
 
+Optionally set `VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
+```
+export VAULT_NAMESPACE=ns1
+```
 ### 4. Test your setup
 
 To test this setup, start minio server with environment variables set in Step 3, and server is ready to handle SSE-S3 requests.

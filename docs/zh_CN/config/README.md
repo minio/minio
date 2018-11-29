@@ -3,7 +3,7 @@
 Minio server在默认情况下会将所有配置信息存到 `${HOME}/.minio/config.json` 文件中。 以下部分提供每个字段的详细说明以及如何自定义它们。一个完整的 `config.json` 在 [这里](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
 ## 配置目录
-默认的配置目录是 `${HOME}/.minio`，你可以使用`--config-dir`命令行选项重写之。  You can override the default configuration directory using `--config-dir` command-line option. Minio server在首次启动时会生成一个新的`config.json`，里面带有自动生成的访问凭据。 
+默认的配置目录是 `${HOME}/.minio`，你可以使用`--config-dir`命令行选项重写之。Minio server在首次启动时会生成一个新的`config.json`，里面带有自动生成的访问凭据。 
 
 ```sh
 minio server --config-dir /etc/minio /data
