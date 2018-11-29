@@ -381,6 +381,7 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 
 var ignoredHiddenDirectories = []string{
 	minioMetaBucket,
+	".snapshot",
 	"lost+found",
 	"$RECYCLE.BIN",
 	"System Volume Information",
