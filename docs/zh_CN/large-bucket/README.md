@@ -44,4 +44,4 @@ minio server http://host{1...4}/export{1...16}
 - [使用 aws-cli](https://docs.minio.io/cn/aws-cli-with-minio)
 - [使用 s3cmd](https://docs.minio.io/cn/s3cmd-with-minio)
 - [使用 minio-go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
-- [Minio文档](https://docs.minio.io)
+- [Minio文档](https://docs.minio.io/cn)
