@@ -77,8 +77,8 @@ Minio支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这�
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:amqp --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:amqp --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -183,8 +183,8 @@ Minio支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP�
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:mqtt --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:mqtt --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -297,8 +297,8 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置�
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:elasticsearch --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:elasticsearch --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -436,8 +436,8 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配�
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:redis --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:redis --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -534,8 +534,8 @@ Minio服务也支持 [NATS Streaming mode](http://nats.io/documentation/streamin
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:nats --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:nats --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -711,10 +711,10 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc events add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+mc event add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
-mc events list myminio/images
-mc events list myminio/images
+mc event list myminio/images
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -805,9 +805,9 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配�
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc events add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+mc event add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
-mc events list myminio/images
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -865,8 +865,8 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:kafka --suffix .jpg
-mc events list myminio/images
+mc event add  myminio/images arn:minio:sqs:us-east-1:1:kafka --suffix .jpg
+mc event list myminio/images
 arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
@@ -916,13 +916,13 @@ endpoint是监听webhook通知的服务。保存配置文件并重启Minio服务
 ```
 mc mb myminio/images
 mc mb myminio/images-thumbnail
-mc events add myminio/images arn:minio:sqs:us-east-1:1:webhook --events put --suffix .jpg
+mc event add myminio/images arn:minio:sqs:us-east-1:1:webhook --events put --suffix .jpg
 ```
 
 验证事件通知是否配置正确：
 
 ```
-mc events list myminio/images
+mc event list myminio/images
 ```
 
 你应该可以收到如下的响应：
