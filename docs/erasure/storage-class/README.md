@@ -2,12 +2,10 @@
 
 Minio Server supports two storage classes in erasure coding mode: `Reduced Redundancy` class and `Standard` class. These classes enable Minio Server to save an object across a configurable number of data and parity drives.
 
-These classes are defined by setting environment variables and specifying the data and parity hard drives before starting Minio Server. The storage class to use for an object is set by defining the `x-amz-storage-class` metadata field. 
-
 This guide describes how to prepare for and use a storage class.
 
-* [Calculate Drive Requirements and Usage](#calculate-drive-requirements-and-usage)
-* [Get Started with Storage Class](#get-started-with-storage-class)
+- [Calculate Drive Requirements and Usage](#calculate-drive-requirements-and-usage)
+- [Get Started with Storage Class](#get-started-with-storage-class)
 
 ## <a name="calculate-drive-requirements-and-usage"></a>1. Calculate Drive Requirements and Usage
 
