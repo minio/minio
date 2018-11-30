@@ -196,6 +196,15 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
+	// Dummy endpoint representing gateway instance.
+	globalEndpoints = []Endpoint{{
+		URL:     &url.URL{Path: "/minio/gateway"},
+		IsLocal: true,
+	}}
+
+	// Initialize Admin Peers.
+	initGlobalAdminPeers(globalEndpoints)
+
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate
@@ -221,20 +230,24 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
+	if globalEtcdClient != nil {
+		// Initialize server config.
+		_ = globalConfigSys.Init(newObject)
+	} else {
+		// Initialize server config.
+		srvCfg := newServerConfig()
 
-	// Initialize server config.
-	srvCfg := newServerConfig()
+		// Override any values from ENVs.
+		srvCfg.loadFromEnvs()
 
-	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
+		// Load values to cached global values.
+		srvCfg.loadToCachedConfigs()
 
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
+		// hold the mutex lock before a new config is assigned.
+		globalServerConfigMu.Lock()
+		globalServerConfig = srvCfg
+		globalServerConfigMu.Unlock()
+	}
 
 	// Load logger subsystem
 	loadLoggers()
@@ -257,7 +270,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalIAMSys = NewIAMSys()
 	if globalEtcdClient != nil {
 		// Initialize IAM sys.
-		go globalIAMSys.Init(newObject)
+		_ = globalIAMSys.Init(newObject)
 	}
 
 	// Create new policy system.
@@ -268,6 +281,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if globalEtcdClient != nil {
+		_ = globalNotificationSys.Init(newObject)
+	}
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
