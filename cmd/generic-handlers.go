@@ -625,7 +625,9 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || globalDomainName == "" || guessIsBrowserReq(r) || guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || guessIsRPCReq(r) {
+	if globalDNSConfig == nil || globalDomainName == "" ||
+		guessIsBrowserReq(r) || guessIsHealthCheckReq(r) ||
+		guessIsMetricsReq(r) || guessIsRPCReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
 		return
 	}

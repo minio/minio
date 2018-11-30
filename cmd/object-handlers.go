@@ -644,6 +644,15 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
+// Returns a minio-go Client configured to access remote host described by destDNSRecord
+// Applicable only in a federated deployment
+var getRemoteInstanceClient = func(r *http.Request, host string, port int) (*miniogo.Core, error) {
+	// In a federated deployment, all the instances share config files and hence expected to have same
+	// credentials, make sure to send the same credentials for which the request came in.
+	cred := getReqAccessCred(r, globalServerConfig.GetRegion())
+	return miniogo.NewCore(net.JoinHostPort(host, strconv.Itoa(port)), cred.AccessKey, cred.SecretKey, globalIsSSL)
+}
+
 // CopyObjectHandler - Copy Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
@@ -949,17 +958,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var objInfo ObjectInfo
 
-	// Returns a minio-go Client configured to access remote host described by destDNSRecord
-	// Applicable only in a federated deployment
-	var getRemoteInstanceClient = func(host string, port int) (*miniogo.Core, error) {
-		// In a federated deployment, all the instances share config files and hence expected to have same
-		// credentials. So, access current instances creds and use it to create client for remote instance
-		endpoint := net.JoinHostPort(host, strconv.Itoa(port))
-		accessKey := globalServerConfig.Credential.AccessKey
-		secretKey := globalServerConfig.Credential.SecretKey
-		return miniogo.NewCore(endpoint, accessKey, secretKey, globalIsSSL)
-	}
-
 	if isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		if globalDNSConfig == nil {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
@@ -969,14 +967,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
 			// Send PutObject request to appropriate instance (in federated deployment)
 			host, port := getRandomHostPort(dstRecords)
-			client, rerr := getRemoteInstanceClient(host, port)
+			client, rerr := getRemoteInstanceClient(r, host, port)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
+			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+				srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			objInfo.ETag = remoteObjInfo.ETag
