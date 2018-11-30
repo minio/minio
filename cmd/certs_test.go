@@ -223,7 +223,8 @@ func TestGetRootCAs(t *testing.T) {
 		certCAsDir  string
 		expectedErr error
 	}{
-		{"nonexistent-dir", errFileNotFound},
+		// ignores non-existent directories.
+		{"nonexistent-dir", nil},
 		// Ignores directories.
 		{dir1, nil},
 		// Ignore empty directory.

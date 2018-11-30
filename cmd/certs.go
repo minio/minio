@@ -71,8 +71,12 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	// Get all CA file names.
 	var caFiles []string
 	fis, err := readDir(certsCAsDir)
-	if err != nil {
+	if err != nil && err != errFileNotFound {
 		return nil, err
+	}
+	// Return success if CA's directory is missing.
+	if err == errFileNotFound {
+		return nil, nil
 	}
 	for _, fi := range fis {
 		// Skip all directories.
