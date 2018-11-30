@@ -22,8 +22,8 @@ docker run -p 9000:9000 --name azure-s3 \
 ### 1.2 Run Minio Gateway Using the Minio Binary
 
 ```sh
-export MINIO_ACCESS_KEY=azureaccountname
-export MINIO_SECRET_KEY=azureaccountkey
+export MINIO_ACCESS_KEY=azurestorageaccountname
+export MINIO_SECRET_KEY=azurestorageaccountkey
 minio gateway azure
 ```
 
@@ -45,7 +45,7 @@ Test `mc` with the gateways using the instructions in the [Minio Client Quicksta
 Use the following command to configure the gateway:
 
 ```sh
-mc config host add myazure http://gateway-ip:9000 azureaccountname azureaccountkey
+mc config host add myazure http://gateway-ip:9000 azurestorageaccountname azurestorageaccountkey
 ```
 
 ### 3.2 List the Containers on Microsoft Azure
@@ -68,8 +68,8 @@ A response similar to this one should be displayed:
 
 Minio Gateway has the following limitations when used with Azure:
 
-- It only supports read-only bucket policies at the bucket level; all other variations will return `API Notimplemented`.
-- Bucket names cannot contain the period character.
+- It only supports read-only bucket policies at the bucket level; all other variations will return `API Not implemented`.
+- Bucket names cannot contain the period (".") character.
 - Non-empty buckets are removed when `DeleteBucket()` is invoked.
 - The `List Multipart Uploads` command always returns an empty list.
 
