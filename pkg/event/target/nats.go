@@ -40,7 +40,6 @@ type NATSArgs struct {
 	Streaming    struct {
 		Enable             bool   `json:"enable"`
 		ClusterID          string `json:"clusterID"`
-		ClientID           string `json:"clientID"`
 		Async              bool   `json:"async"`
 		MaxPubAcksInflight int    `json:"maxPubAcksInflight"`
 	} `json:"streaming"`
@@ -63,9 +62,6 @@ func (n NATSArgs) Validate() error {
 	if n.Streaming.Enable {
 		if n.Streaming.ClusterID == "" {
 			return errors.New("empty cluster id")
-		}
-		if n.Streaming.ClientID == "" {
-			return errors.New("empty client id")
 		}
 	}
 
@@ -128,6 +124,7 @@ func (target *NATSTarget) Close() (err error) {
 func NewNATSTarget(id string, args NATSArgs) (*NATSTarget, error) {
 	var natsConn *nats.Conn
 	var stanConn stan.Conn
+	var clientID string
 	var err error
 
 	if args.Streaming.Enable {
@@ -137,12 +134,9 @@ func NewNATSTarget(id string, args NATSArgs) (*NATSTarget, error) {
 		}
 		addressURL := scheme + "://" + args.Username + ":" + args.Password + "@" + args.Address.String()
 
-		clientID := args.Streaming.ClientID
-		if clientID == "" {
-			clientID, err = getNewUUID()
-			if err != nil {
-				return nil, err
-			}
+		clientID, err = getNewUUID()
+		if err != nil {
+			return nil, err
 		}
 
 		connOpts := []stan.Option{stan.NatsURL(addressURL)}

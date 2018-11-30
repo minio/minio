@@ -75,7 +75,6 @@ var configJSON = []byte(`{
 				"streaming": {
 					"enable": false,
 					"clusterID": "",
-					"clientID": "",
 					"async": false,
 					"maxPubAcksInflight": 0
 				}
