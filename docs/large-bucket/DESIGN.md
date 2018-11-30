@@ -1,8 +1,16 @@
 # Large Bucket Support Design Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-This document explains the design approach, advanced use cases and limits of the large bucket feature. If you're looking to get started with large bucket support, we suggest you go through the [getting started document](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md) first.
+This topic explains the design approach, advanced use cases, and limits of the large-bucket feature. To get started with large bucket support, see the [Large Bucket Support Quickstart Guide](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md).
 
-## Command-line
+- [General Command-line Usage](#general-command-line-usage) 
+- [Usage for Standalone and Distributed Erasure-coded Configurations](#usage-for-standalone-and-distributed-erasure-coded-configurations) 
+- [Other Usages](#other-usages) 
+- [Backend Changes](#backend-changes) 
+- [Limits](#limits)
+
+## <a name="general-command-line-usage"></a>1. General Command-line Usage
+
+The following shows the general usage for Minio Server:
 
 ```
 NAME:
@@ -13,64 +21,70 @@ USAGE:
   minio server [FLAGS] DIR{1...64}
 
 DIR:
-  DIR points to a directory on a filesystem. When you want to combine multiple drives
-  into a single large system, pass one directory per filesystem separated by space.
-  You may also use a `...` convention to abbreviate the directory arguments. Remote
-  directories in a distributed setup are encoded as HTTP(s) URIs.
+  DIR points to a directory on a file system. When combining multiple drives
+  into a single large system, pass one directory per file system separated by a space.
+  The `...` convention can also be used to abbreviate the directory arguments. Remote
+  directories in a distributed configuration are encoded as HTTP(s) URIs.
 ```
 
-## Common usage
+## <a name="usage-for-standalone-and-distributed-erasure-coded-configurations"></a>2. Usage for Standalone and Distributed Erasure-coded Configurations
 
-Standalone erasure coded configuration with 4 sets with 16 disks each.
+Use the following command for a standalone erasure-coded configuration with 4 sets, each consisting of 16 drives:
 
 ```
 minio server dir{1...64}
 ```
 
-Distributed erasure coded configuration with 64 sets with 16 disks each.
+Use the following command for a distributed erasure-coded configuration with 64 sets, each consisting of 16 drives:
 
 ```
 minio server http://host{1...16}/export{1...64}
 ```
 
-## Other usages
+## <a name="other-usages"></a>3. Other Usages
 
-### Advanced use cases with multiple ellipses
+### 3.1 Advanced Use Cases with Multiple Ellipses
 
-Standalone erasure coded configuration with 4 sets with 16 disks each, which spawns disks across controllers.
+Use the following command for a standalone erasure-coded configuration with 4 sets, each consisting of 16 drives, which spawns drives across controllers:
+
 ```
 minio server /mnt/controller{1...4}/data{1...16}
 ```
 
-Standalone erasure coded configuration with 16 sets 16 disks per set, across mnts, across controllers.
+Use the following command for a standalone erasure-coded configuration with 16 sets, each consisting of 16 drives, across mounts and controllers:
+
 ```
 minio server /mnt{1..4}/controller{1...4}/data{1...16}
 ```
 
-Distributed erasure coded configuration with 2 sets 16 disks per set across hosts.
+Use the following command for a distributed erasure-coded configuration with 2 sets, each consisting of 16 drives across hosts:
+
 ```
 minio server http://host{1...32}/disk1
 ```
 
-Distributed erasure coded configuration with rack level redundancy 32 sets in total, 16 disks per set.
+Use the following command for a distributed erasure-coded configuration using rack-level redundancy with 32 sets, each consisting of 16 drives:
+
 ```
 minio server http://rack{1...4}-host{1...8}.example.net/export{1...16}
 ```
 
-Distributed erasure coded configuration with no rack level redundancy but redundancy with in the rack we split the arguments, 32 sets in total, 16 disks per set.
+Use the following command for a distributed erasure-coded configuration with no rack-level redundancy, but the arguments split into 32 sets, each consisting of 16 drives:
+
 ```
 minio server http://rack1-host{1...8}.example.net/export{1...16} http://rack2-host{1...8}.example.net/export{1...16} http://rack3-host{1...8}.example.net/export{1...16} http://rack4-host{1...8}.example.net/export{1...16}
 ```
 
-### Expected expansion for double ellipses
+### 3.2 Expected Expansion for Double Ellipses
 
-Minio server internally expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process
+The follow example shows how Minio Server internally expands ellipses passed as arguments:
 
 ```
 minio server http://host{1...4}/export{1...8}
 ```
 
-Expected expansion
+Expected expansion:
+
 ```
 > http://host1/export1
 > http://host2/export1
@@ -106,14 +120,15 @@ Expected expansion
 > http://host4/export8
 ```
 
-## Backend `format.json` changes
+## <a name="backend-changes"></a>4. Backend Changes
 
-`format.json` has new fields
+### 4.1 Changes to Fields in `format.json`
 
-- `disk` is changed to `this`
-- `jbod` is changed to `sets` , along with this change sets is also a two dimensional list representing total sets and disks per set.
+In the backed, `format.json` has new fields:
+- `disk` is changed to `this`.
+- `jbod` is changed to `sets`. Along with this change, `sets` is also a two dimensional list representing the total number of sets and drives per set.
 
-A sample `format.json` looks like below
+The following shows an example of `format.json` with these new fields:
 
 ```json
 {
@@ -140,7 +155,9 @@ A sample `format.json` looks like below
 }
 ```
 
-New `format-xl.go` behavior is format structure is used as a opaque type, `Format` field signifies the format of the backend. Once the format has been identified it is now the job of the identified backend to further interpret the next structures and validate them.
+### 4.2 Changes to `format-xl.go`
+
+The new `format-xl.go` behavior contains a format structure that is used as an opaque type, where the `format` field signifies the format of the backend. Once the format has been identified, it is the job of the identified backend to further interpret the next structures and validate them.
 
 ```go
 type formatType string
@@ -156,7 +173,7 @@ type format struct {
 }
 ```
 
-### Current format
+#### 4.1. Current Format
 
 ```go
 type formatXLV1 struct{
@@ -169,7 +186,7 @@ type formatXLV1 struct{
 }
 ```
 
-### New format
+#### 4.2 New Format
 
 ```go
 type formatXLV2 struct {
@@ -184,7 +201,7 @@ type formatXLV2 struct {
 }
 ```
 
-## Limits
-
-- Minimum of 4 disks are needed for erasure coded configuration.
-- Maximum of 32 distinct nodes are supported in distributed configuration.
+## <a name="limits"></a>5. Limits
+Large-bucket support has the following limitations:
+* A minimum of 4 drives are needed for erasure-coded configurations.
+* A maximum of 32 distinct nodes are supported for distributed configurations.
