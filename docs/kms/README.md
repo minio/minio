@@ -69,9 +69,9 @@ Optionally set `MINIO_SSE_VAULT_CAPATH` as the path to a directory of PEM-encode
 export MINIO_SSE_VAULT_CAPATH=/home/user/custom-pems
 ```
 
-Optionally set `VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
+Optionally set `MINIO_SSE_VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
 ```
-export VAULT_NAMESPACE=ns1
+export MINIO_SSE_VAULT_NAMESPACE=ns1
 ```
 ### 4. Test your setup
 
