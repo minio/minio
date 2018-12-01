@@ -193,7 +193,7 @@ func NewVault(kmsConf KMSConfig) (KMS, error) {
 		return nil, err
 	}
 
-	if ns, ok := os.LookupEnv("VAULT_NAMESPACE"); ok {
+	if ns, ok := os.LookupEnv("MINIO_SSE_VAULT_NAMESPACE"); ok {
 		c.SetNamespace(ns)
 	}
 
