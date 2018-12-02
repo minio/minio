@@ -218,11 +218,13 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
-			selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
-			selectReq.OutputSerialization.CSV.QuoteFields != "" {
-			writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
-			return
+		if selectReq.OutputSerialization.CSV != nil {
+			if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
+				selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
+				selectReq.OutputSerialization.CSV.QuoteFields != "" {
+				writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 		if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
 			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
