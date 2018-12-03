@@ -108,7 +108,7 @@ func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-	return &nasObjects{newObject.(*minio.FSObjects)}, nil
+	return &nasObjects{newObject}, nil
 }
 
 // Production - nas gateway is production ready.
@@ -118,15 +118,5 @@ func (g *NAS) Production() bool {
 
 // nasObjects implements gateway for Minio and S3 compatible object storage servers.
 type nasObjects struct {
-	*minio.FSObjects
-}
-
-// IsNotificationSupported returns whether notifications are applicable for this layer.
-func (l *nasObjects) IsNotificationSupported() bool {
-	return false
-}
-
-// IsCompressionSupported returns whether compression is applicable for this layer.
-func (l *nasObjects) IsCompressionSupported() bool {
-	return false
+	minio.ObjectLayer
 }

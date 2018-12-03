@@ -61,6 +61,7 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 		logger.StartupMessage(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
 		logger.StartupMessage(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
 	}
+	printEventNotifiers()
 
 	if globalIsBrowserEnabled {
 		logger.StartupMessage(colorBlue("\nBrowser Access:"))
