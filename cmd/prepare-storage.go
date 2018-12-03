@@ -128,6 +128,15 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 	}
 	defer closeStorageDisks(storageDisks)
 
+	// Attempt to load all `format.json` from all disks.
+	formatConfigs, sErrs := loadFormatXLAll(storageDisks)
+	// Check if we have
+	for i, sErr := range sErrs {
+		if _, ok := formatCriticalErrors[sErr]; ok {
+			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
+		}
+	}
+
 	// Connect to all storage disks, a connection failure will be
 	// only logged after some retries.
 	for _, disk := range storageDisks {
@@ -136,15 +145,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 			if connectErr != nil && retryCount >= 5 {
 				logger.Info("Unable to connect to %s: %v\n", disk.String(), connectErr.Error())
 			}
-		}
-	}
-
-	// Attempt to load all `format.json` from all disks.
-	formatConfigs, sErrs := loadFormatXLAll(storageDisks)
-	// Check if we have
-	for i, sErr := range sErrs {
-		if _, ok := formatCriticalErrors[sErr]; ok {
-			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
 		}
 	}
 
