@@ -23,8 +23,8 @@ import (
 	"testing"
 )
 
-// Test for DelimitedCSVReader.
-func TestDelimitedReader(t *testing.T) {
+// Test for NormalizedCSVReader.
+func TestNormalizedReader(t *testing.T) {
 	expected := "username,age\nbanana,12\ncarrot,23\napple,34\nbrinjal,90\nraddish,45"
 
 	inputs := []struct {
@@ -51,10 +51,10 @@ func TestDelimitedReader(t *testing.T) {
 	for c, input := range inputs {
 		var readcsv []byte
 		var err error
-		delimitedReader := NewDelimitedReader(strings.NewReader(input.inputcsv), []rune(input.delimiter))
+		normalizedReader := NewNormalizedReader(strings.NewReader(input.inputcsv), []rune(input.delimiter))
 		for err == nil {
 			chunk := make([]byte, input.chunkSize)
-			_, err = delimitedReader.Read(chunk)
+			_, err = normalizedReader.Read(chunk)
 			readcsv = append(readcsv, chunk...)
 		}
 		if err != io.EOF {

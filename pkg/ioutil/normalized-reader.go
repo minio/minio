@@ -26,20 +26,20 @@ var (
 	rByte byte = 13 // the byte that corresponds to the '\r' rune.
 )
 
-// DelimitedReader reduces the custom delimiter to `\n`.
-type DelimitedReader struct {
+// NormalizedReader reduces the custom delimiter to `\n`.
+type NormalizedReader struct {
 	r           *bufio.Reader
 	delimiter   []rune // Select can have upto 2 characters as delimiter.
 	assignEmpty bool   // Decides whether the next read byte should be discarded.
 }
 
-// NewDelimitedReader detects the custom delimiter and replaces with `\n`.
-func NewDelimitedReader(r io.Reader, delimiter []rune) *DelimitedReader {
-	return &DelimitedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false}
+// NewNormalizedReader detects the custom delimiter and replaces with `\n`.
+func NewNormalizedReader(r io.Reader, delimiter []rune) *NormalizedReader {
+	return &NormalizedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false}
 }
 
 // Reads and replaces the custom delimiter with `\n`.
-func (r *DelimitedReader) Read(p []byte) (n int, err error) {
+func (r *NormalizedReader) Read(p []byte) (n int, err error) {
 	n, err = r.r.Read(p)
 	if err != nil {
 		return
