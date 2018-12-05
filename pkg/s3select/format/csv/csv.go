@@ -68,6 +68,9 @@ type Options struct {
 
 	// Progress enabled, enable/disable progress messages.
 	Progress bool
+
+	// The value to use for escaping when field delimiter is part of the value.
+	QuoteCharacter string
 }
 
 // cinput represents a record producing input from a formatted object.
@@ -89,8 +92,9 @@ type cinput struct {
 // Otherwise, the returned reader can be reliably consumed with Read().
 // until Read() return err.
 func New(opts *Options) (format.Select, error) {
-	// DelimitedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
-	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter), rune('"'))
+	// NormalizedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
+	// And replaces the custom quote character to "\""
+	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter), rune(opts.QuoteCharacter[0]))
 	reader := &cinput{
 		options: opts,
 		reader:  csv.NewReader(normalizedReader),
@@ -174,6 +178,9 @@ func (reader *cinput) Read() ([]byte, error) {
 		var data []byte
 		var err error
 		for i, value := range dec {
+			if reader.options.QuoteCharacter != "\"" {
+				value = strings.Replace(value, reader.options.QuoteCharacter, "\"", -1)
+			}
 			data, err = sjson.SetBytes(data, reader.header[i], value)
 			if err != nil {
 				return nil, err

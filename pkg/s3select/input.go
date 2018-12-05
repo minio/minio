@@ -74,6 +74,9 @@ func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Sele
 		if req.InputSerialization.CSV.RecordDelimiter == "" {
 			req.InputSerialization.CSV.RecordDelimiter = "\n"
 		}
+		if req.InputSerialization.CSV.QuoteCharacter == "" {
+			req.InputSerialization.CSV.QuoteCharacter = "\""
+		}
 		s3s, err = csv.New(&csv.Options{
 			HasHeader:            req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
 			RecordDelimiter:      req.InputSerialization.CSV.RecordDelimiter,
@@ -87,6 +90,7 @@ func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Sele
 			StreamSize:           size,
 			HeaderOpt:            req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
 			Progress:             req.RequestProgress.Enabled,
+			QuoteCharacter:       req.InputSerialization.CSV.QuoteCharacter,
 		})
 	} else if req.InputSerialization.JSON != nil {
 		//  Initializating options for JSON

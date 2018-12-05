@@ -28,30 +28,31 @@ func TestNormalizedReader(t *testing.T) {
 	expected := "username,age\nbanana,12\ncarrot,23\napple,34\nbrinjal,90\nraddish,45"
 
 	inputs := []struct {
-		inputcsv  string
-		delimiter string
-		chunkSize int
+		inputcsv       string
+		delimiter      string
+		chunkSize      int
+		quoteCharacter string
 	}{
 		// case 1 - with default `\n` delimiter.
-		{"username,age\nbanana,12\ncarrot,23\napple,34\nbrinjal,90\nraddish,45", "\n", 10},
+		{"username,age\nbanana,12\ncarrot,23\napple,34\nbrinjal,90\nraddish,45", "\n", 10, "\""},
 		// case 2 - with carriage return `\r` which should be replaced with `\n` by default.
-		{"username,age\rbanana,12\rcarrot,23\rapple,34\rbrinjal,90\rraddish,45", "\n", 10},
+		{"username,age\rbanana,12\rcarrot,23\rapple,34\rbrinjal,90\rraddish,45", "\n", 10, "\""},
 		// case 3 - with a double character delimiter (octals).
-		{"username,age\r\nbanana,12\r\ncarrot,23\r\napple,34\r\nbrinjal,90\r\nraddish,45", "\r\n", 10},
+		{"username,age\r\nbanana,12\r\ncarrot,23\r\napple,34\r\nbrinjal,90\r\nraddish,45", "\r\n", 10, "\""},
 		// case 4 - with a double character delimiter.
-		{"username,agexvbanana,12xvcarrot,23xvapple,34xvbrinjal,90xvraddish,45", "xv", 10},
+		{"username,agexvbanana,12xvcarrot,23xvapple,34xvbrinjal,90xvraddish,45", "xv", 10, "\""},
 		// case 5 - with a double character delimiter `\t `
-		{"username,age\t banana,12\t carrot,23\t apple,34\t brinjal,90\t raddish,45", "\t ", 10},
+		{"username,age\t banana,12\t carrot,23\t apple,34\t brinjal,90\t raddish,45", "\t ", 10, "\""},
 		// case 6 - This is a special case where the first delimiter match falls in the 13'th byte space
 		// ie, the last byte space of the read chunk, In this case the reader should peek in the next byte
 		// and replace with `\n`.
-		{"username,agexxbanana,12xxcarrot,23xxapple,34xxbrinjal,90xxraddish,45", "xx", 13},
+		{"username,agexxbanana,12xxcarrot,23xxapple,34xxbrinjal,90xxraddish,45", "xx", 13, "\""},
 	}
 
 	for c, input := range inputs {
 		var readcsv []byte
 		var err error
-		normalizedReader := NewNormalizedReader(strings.NewReader(input.inputcsv), []rune(input.delimiter))
+		normalizedReader := NewNormalizedReader(strings.NewReader(input.inputcsv), []rune(input.delimiter), rune(input.quoteCharacter[0]))
 		for err == nil {
 			chunk := make([]byte, input.chunkSize)
 			_, err = normalizedReader.Read(chunk)

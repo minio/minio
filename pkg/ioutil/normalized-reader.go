@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	nByte byte = 10 // the byte that corresponds to the '\n' rune.
-	rByte byte = 13 // the byte that corresponds to the '\r' rune.
+	nByte     byte = 10 // the byte that corresponds to the '\n' rune.
+	rByte     byte = 13 // the byte that corresponds to the '\r' rune.
 	quoteByte byte = 34 // the byte that corresponds to the '"' rune.
 )
 
@@ -32,7 +32,7 @@ type NormalizedReader struct {
 	r           *bufio.Reader
 	delimiter   []rune // Select can have upto 2 characters as delimiter.
 	assignEmpty bool   // Decides whether the next read byte should be discarded.
-	quote rune // Replace the custom quote with double quotes
+	quote       rune   // Replace the custom quote with double quotes
 }
 
 // NewNormalizedReader detects the custom delimiter and replaces with `\n`.
