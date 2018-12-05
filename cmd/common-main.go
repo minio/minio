@@ -221,14 +221,18 @@ func handleCommonEnvVars() {
 	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
 	if ok {
 		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
-		globalDomainIPs = set.NewStringSet()
 		for i, ip := range minioEndpoints {
 			if net.ParseIP(ip) == nil {
 				logger.FatalIf(errInvalidArgument, "Unable to initialize Minio server with invalid MINIO_PUBLIC_IPS[%d]: %s", i, ip)
 			}
-			globalDomainIPs.Add(ip)
 		}
+		updateDomainIPs(set.CreateStringSet(minioEndpoints...))
+	} else {
+		// Add found interfaces IP address to global domain IPS,
+		// loopback addresses will be naturally dropped.
+		updateDomainIPs(localIP4)
 	}
+
 	if globalDomainName != "" && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 		var err error
 		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIPs, globalMinioPort, globalEtcdClient)
