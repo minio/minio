@@ -132,6 +132,11 @@ func (a GatewayUnsupported) IsNotificationSupported() bool {
 	return false
 }
 
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
+func (a GatewayUnsupported) IsListenBucketSupported() bool {
+	return false
+}
+
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (a GatewayUnsupported) IsEncryptionSupported() bool {
 	return false

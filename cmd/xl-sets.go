@@ -516,6 +516,11 @@ func (s *xlSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
 }
 
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
+func (s *xlSets) IsListenBucketSupported() bool {
+	return true
+}
+
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (s *xlSets) IsEncryptionSupported() bool {
 	return s.getHashedSet("").IsEncryptionSupported()

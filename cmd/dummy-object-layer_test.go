@@ -154,6 +154,9 @@ func (api *DummyObjectLayer) DeleteBucketPolicy(context.Context, string) (err er
 func (api *DummyObjectLayer) IsNotificationSupported() (b bool) {
 	return
 }
+func (api *DummyObjectLayer) IsListenBucketSupported() (b bool) {
+	return
+}
 
 func (api *DummyObjectLayer) IsEncryptionSupported() (b bool) {
 	return
