@@ -1306,6 +1306,11 @@ func (fs *FSObjects) IsNotificationSupported() bool {
 	return true
 }
 
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
+func (fs *FSObjects) IsListenBucketSupported() bool {
+	return true
+}
+
 // IsEncryptionSupported returns whether server side encryption is applicable for this layer.
 func (fs *FSObjects) IsEncryptionSupported() bool {
 	return true

@@ -116,6 +116,11 @@ func (g *NAS) Production() bool {
 	return true
 }
 
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this gateway.
+func (g *NAS) IsListenBucketSupported() bool {
+	return false
+}
+
 // nasObjects implements gateway for Minio and S3 compatible object storage servers.
 type nasObjects struct {
 	minio.ObjectLayer

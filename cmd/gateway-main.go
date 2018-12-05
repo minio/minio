@@ -230,7 +230,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
-	if globalEtcdClient != nil {
+	if globalEtcdClient != nil && gatewayName == "nas" {
 		// Initialize server config.
 		_ = globalConfigSys.Init(newObject)
 	} else {
@@ -281,10 +281,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if globalEtcdClient != nil {
+	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
 		_ = globalNotificationSys.Init(newObject)
 	}
-
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
