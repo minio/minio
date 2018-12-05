@@ -33,11 +33,14 @@ type NormalizedReader struct {
 	delimiter   []rune // Select can have upto 2 characters as delimiter.
 	assignEmpty bool   // Decides whether the next read byte should be discarded.
 	quote       rune   // Replace the custom quote with double quotes
+	quoteEscape rune // Replace the quoteEscape character with double quotes
+	insideQuotes bool
+	insideQuoteEscape bool
 }
 
 // NewNormalizedReader detects the custom delimiter and replaces with `\n`.
-func NewNormalizedReader(r io.Reader, delimiter []rune, quote rune) *NormalizedReader {
-	return &NormalizedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false, quote: quote}
+func NewNormalizedReader(r io.Reader, delimiter []rune, quote rune, quoteEscape rune) *NormalizedReader {
+	return &NormalizedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false, quote: quote, quoteEscape: quoteEscape, insideQuotes: false, insideQuoteEscape: false}
 }
 
 // Reads and replaces the custom delimiter with `\n`.
@@ -47,6 +50,12 @@ func (r *NormalizedReader) Read(p []byte) (n int, err error) {
 		return
 	}
 	for i, b := range p {
+		if rune(quoteByte) != r.quote && rune(b) == rune(quoteByte) {
+			if r.insideQuotes || r.insideQuoteEscape {
+				p[i] = byte(r.quote)
+				continue
+			}
+		}
 		if r.assignEmpty {
 			swapAndNullify(p, i)
 			r.assignEmpty = false
@@ -56,6 +65,7 @@ func (r *NormalizedReader) Read(p []byte) (n int, err error) {
 			// Replace the carriage returns with `\n`.
 			// Mac styled csv will have `\r` as their record delimiter.
 			p[i] = nByte
+			continue
 		} else if rune(b) == r.delimiter[0] { // Eg, `\r\n`,`ab`,`a` are valid delimiters
 			if i+1 == len(p) && len(r.delimiter) > 1 {
 				// If the first delimiter match falls on the boundary,
@@ -75,11 +85,23 @@ func (r *NormalizedReader) Read(p []byte) (n int, err error) {
 				// Replace with `\n` incase of single charecter delimiter match.
 				p[i] = nByte
 			}
+			continue
 		}
 		// Replace the custom quote to double quote always
 		// to comply with the current csv reader
 		if rune(quoteByte) != r.quote && rune(b) == r.quote {
 			p[i] = quoteByte
+			if !r.insideQuoteEscape {
+				r.insideQuotes = !r.insideQuotes
+			}
+			continue
+		}
+		// Replace the custome quote escape character to double quote always
+		// to comply with the current csv reader
+		if rune(quoteByte) != r.quoteEscape && rune(b) == r.quoteEscape {
+			p[i] = quoteByte
+			r.insideQuoteEscape = !r.insideQuoteEscape
+			continue
 		}
 	}
 	return
