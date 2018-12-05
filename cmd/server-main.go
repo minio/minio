@@ -381,7 +381,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize notification system")
+		logger.LogIf(context.Background(), err)
 	}
 
 	globalObjLayerMutex.Lock()
