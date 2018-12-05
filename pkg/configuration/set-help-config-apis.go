@@ -22,9 +22,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -46,7 +46,7 @@ type configKey interface {
 	// 2. Conflict btw GET and SET responses to legacy keys:
 	// Get returns error message that the key is invalid while
 	// Set sets the value for a legacy key.
-	Set(key, value, comment string, cfg ServerConfig) error
+	Set(key, value string, cfg ServerConfig) (err error)
 	Help(key string) (helpText string, err error) //template like mc --help
 }
 
@@ -60,15 +60,31 @@ type ServerConfig struct {
 // method that is going to be executed
 type ServerConfigHandlers map[string]configKey
 
+// Structure of each line read from configuration file
+type lineStruct struct {
+	isComment         bool
+	isValid           bool
+	key, val, comment string
+}
+
+// Configuration information will be populated in a slice
+// of line structures when configuration file is read, so
+// confguration file will be fully represented in 'file'
+var file []lineStruct
+
 // Define Set and Help functions for each leaf node
 
 // =VERSION= >>>>>>
 type versionKey string
 
-func (v versionKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (v versionKey) Set(key, val string, cfg ServerConfig) error {
+	if _, err := strconv.Atoi(val); err != nil {
+		return errors.New("Type Mismatch; Expected integer for 'version' value: " + val)
+	}
 	cfg.kv[key] = val
 	return nil
 }
+
 func (v versionKey) Help(key string) (string, error) {
 	return "Display help information for \"version\"", nil
 } // >>>>>>> =VERSION=
@@ -76,7 +92,7 @@ func (v versionKey) Help(key string) (string, error) {
 // =credential.accessKey= >>>>>>
 type credentialAccessKey string
 
-func (c credentialAccessKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c credentialAccessKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -87,7 +103,7 @@ func (c credentialAccessKey) Help(key string) (string, error) {
 // =credential.secretKey= >>>>>>
 type credentialSecretKey string
 
-func (c credentialSecretKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c credentialSecretKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -98,7 +114,7 @@ func (c credentialSecretKey) Help(key string) (string, error) {
 // =REGION=  >>>>>>
 type regionKey string
 
-func (r regionKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (r regionKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -109,7 +125,7 @@ func (r regionKey) Help(key string) (string, error) {
 // =BROWSER= >>>>>>
 type browserKey string
 
-func (b browserKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (b browserKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -120,7 +136,7 @@ func (b browserKey) Help(key string) (string, error) {
 // =WORM= >>>>>>
 type wormKey string
 
-func (w wormKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (w wormKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -131,7 +147,7 @@ func (w wormKey) Help(key string) (string, error) {
 // =DOMAIN= >>>>>>
 type domainKey string
 
-func (d domainKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (d domainKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -142,7 +158,7 @@ func (d domainKey) Help(key string) (string, error) {
 // =CACHE.DRIVES= >>>>>>
 type cacheDrivesKey string
 
-func (d cacheDrivesKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (d cacheDrivesKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -153,7 +169,7 @@ func (d cacheDrivesKey) Help(key string) (string, error) {
 // =CACHE.EXPIRY= >>>>>>
 type cacheExpiryKey string
 
-func (c cacheExpiryKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c cacheExpiryKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -164,7 +180,7 @@ func (c cacheExpiryKey) Help(key string) (string, error) {
 // =CACHE.MAXUSE= >>>>>>
 type cacheMaxuseKey string
 
-func (c cacheMaxuseKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c cacheMaxuseKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -175,7 +191,7 @@ func (c cacheMaxuseKey) Help(key string) (string, error) {
 // =CACHE.EXCLUDE= >>>>>>
 type cacheExcludeKey string
 
-func (c cacheExcludeKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c cacheExcludeKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -186,7 +202,7 @@ func (c cacheExcludeKey) Help(key string) (string, error) {
 // =STORAGECLASS.STANDARD= >>>>>>
 type storageclassStandardKey string
 
-func (c storageclassStandardKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c storageclassStandardKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -197,7 +213,7 @@ func (c storageclassStandardKey) Help(key string) (string, error) {
 // =STORAGECLASS.RRS= >>>>>>
 type storageclassRRSKey string
 
-func (c storageclassRRSKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c storageclassRRSKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -208,7 +224,7 @@ func (c storageclassRRSKey) Help(key string) (string, error) {
 // =KMS.VAULT.ENDPOINT= >>>>>>
 type kmsVaultEndpointKey string
 
-func (c kmsVaultEndpointKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -219,7 +235,7 @@ func (c kmsVaultEndpointKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.TYPE= >>>>>>
 type kmsVaultAuthTypeKey string
 
-func (c kmsVaultAuthTypeKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultAuthTypeKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -230,7 +246,7 @@ func (c kmsVaultAuthTypeKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.APPROlE.ID= >>>>>>
 type kmsVaultAuthApproleIDKey string
 
-func (c kmsVaultAuthApproleIDKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultAuthApproleIDKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -241,7 +257,7 @@ func (c kmsVaultAuthApproleIDKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.APPROlE.SECRET= >>>>>>
 type kmsVaultAuthApproleSecretKey string
 
-func (c kmsVaultAuthApproleSecretKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultAuthApproleSecretKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -252,7 +268,7 @@ func (c kmsVaultAuthApproleSecretKey) Help(key string) (string, error) {
 // =KMS.VAULT.KEY-ID.NAME= >>>>>>
 type kmsVaultKeyIDNameKey string
 
-func (c kmsVaultKeyIDNameKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultKeyIDNameKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -263,7 +279,7 @@ func (c kmsVaultKeyIDNameKey) Help(key string) (string, error) {
 // =KMS.VAULT.KEY-ID.SECRET= >>>>>>
 type kmsVaultKeyIDVersionKey string
 
-func (c kmsVaultKeyIDVersionKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c kmsVaultKeyIDVersionKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -274,7 +290,7 @@ func (c kmsVaultKeyIDVersionKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*= >>>>>>
 type notifyAmqpAnyKey string
 
-func (c notifyAmqpAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -285,7 +301,7 @@ func (c notifyAmqpAnyKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.URL= >>>>>>
 type notifyAmqpAnyURLKey string
 
-func (c notifyAmqpAnyURLKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyURLKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -296,7 +312,7 @@ func (c notifyAmqpAnyURLKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.EXCHANGE= >>>>>>
 type notifyAmqpAnyExchangeKey string
 
-func (c notifyAmqpAnyExchangeKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyExchangeKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -307,7 +323,7 @@ func (c notifyAmqpAnyExchangeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.ROUTINGKEY= >>>>>>
 type notifyAmqpAnyRoutingKeyKey string
 
-func (c notifyAmqpAnyRoutingKeyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyRoutingKeyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -318,7 +334,7 @@ func (c notifyAmqpAnyRoutingKeyKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.EXCHANGETYPE= >>>>>>
 type notifyAmqpAnyExchangeTypeKey string
 
-func (c notifyAmqpAnyExchangeTypeKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyExchangeTypeKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -329,7 +345,7 @@ func (c notifyAmqpAnyExchangeTypeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.DELIVERYMODE= >>>>>>
 type notifyAmqpAnyDeliveryModeKey string
 
-func (c notifyAmqpAnyDeliveryModeKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyDeliveryModeKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -340,7 +356,7 @@ func (c notifyAmqpAnyDeliveryModeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.MANDATORY= >>>>>>
 type notifyAmqpAnyMandatoryKey string
 
-func (c notifyAmqpAnyMandatoryKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyMandatoryKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -351,7 +367,7 @@ func (c notifyAmqpAnyMandatoryKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.IMMMEDIATE= >>>>>>
 type notifyAmqpAnyImmediateKey string
 
-func (c notifyAmqpAnyImmediateKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyImmediateKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -362,7 +378,7 @@ func (c notifyAmqpAnyImmediateKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.DURABLE= >>>>>>
 type notifyAmqpAnyDurableKey string
 
-func (c notifyAmqpAnyDurableKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyDurableKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -373,7 +389,7 @@ func (c notifyAmqpAnyDurableKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.INTERNAL= >>>>>>
 type notifyAmqpAnyInternalKey string
 
-func (c notifyAmqpAnyInternalKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyInternalKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -384,7 +400,7 @@ func (c notifyAmqpAnyInternalKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.NOWAIT= >>>>>>
 type notifyAmqpAnyNoWaitKey string
 
-func (c notifyAmqpAnyNoWaitKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyNoWaitKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -395,7 +411,7 @@ func (c notifyAmqpAnyNoWaitKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.AUTODELETED= >>>>>>
 type notifyAmqpAnyAutoDeletedKey string
 
-func (c notifyAmqpAnyAutoDeletedKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyAmqpAnyAutoDeletedKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -406,7 +422,7 @@ func (c notifyAmqpAnyAutoDeletedKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*= >>>>>>
 type notifyElasticsearchAnyKey string
 
-func (c notifyElasticsearchAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -417,7 +433,7 @@ func (c notifyElasticsearchAnyKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.FORMAT= >>>>>>
 type notifyElasticsearchAnyFormatKey string
 
-func (c notifyElasticsearchAnyFormatKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -428,7 +444,7 @@ func (c notifyElasticsearchAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.URL= >>>>>>
 type notifyElasticsearchAnyURLKey string
 
-func (c notifyElasticsearchAnyURLKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyURLKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -439,7 +455,7 @@ func (c notifyElasticsearchAnyURLKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.INDEX= >>>>>>
 type notifyElasticsearchAnyIndexKey string
 
-func (c notifyElasticsearchAnyIndexKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyIndexKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -450,7 +466,7 @@ func (c notifyElasticsearchAnyIndexKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*= >>>>>>
 type notifyKafkaAnyKey string
 
-func (c notifyKafkaAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -461,7 +477,7 @@ func (c notifyKafkaAnyKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.BROKERS= >>>>>>
 type notifyKafkaAnyBrokersKey string
 
-func (c notifyKafkaAnyBrokersKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyBrokersKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -472,7 +488,7 @@ func (c notifyKafkaAnyBrokersKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TOPIC= >>>>>>
 type notifyKafkaAnyTopicKey string
 
-func (c notifyKafkaAnyTopicKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -483,7 +499,7 @@ func (c notifyKafkaAnyTopicKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS= >>>>>>
 type notifyKafkaAnyTLSKey string
 
-func (c notifyKafkaAnyTLSKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -494,7 +510,7 @@ func (c notifyKafkaAnyTLSKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS.SKIPVERIFY= >>>>>>
 type notifyKafkaAnyTLSSkipVerifyKey string
 
-func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -505,7 +521,7 @@ func (c notifyKafkaAnyTLSSkipVerifyKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS.CLIENTAUTH= >>>>>>
 type notifyKafkaAnyTLSClientAuthKey string
 
-func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -516,7 +532,7 @@ func (c notifyKafkaAnyTLSClientAuthKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL= >>>>>>
 type notifyKafkaAnySaslKey string
 
-func (c notifyKafkaAnySaslKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -527,7 +543,7 @@ func (c notifyKafkaAnySaslKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL.USERNAME= >>>>>>
 type notifyKafkaAnySaslUsernameKey string
 
-func (c notifyKafkaAnySaslUsernameKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslUsernameKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -538,7 +554,7 @@ func (c notifyKafkaAnySaslUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL.PASSWORD= >>>>>>
 type notifyKafkaAnySaslPasswordKey string
 
-func (c notifyKafkaAnySaslPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -549,7 +565,7 @@ func (c notifyKafkaAnySaslPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*= >>>>>>
 type notifyMqttAnyKey string
 
-func (c notifyMqttAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -560,7 +576,7 @@ func (c notifyMqttAnyKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.BROKER= >>>>>>
 type notifyMqttAnyBrokerKey string
 
-func (c notifyMqttAnyBrokerKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyBrokerKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -571,7 +587,7 @@ func (c notifyMqttAnyBrokerKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.TOPIC= >>>>>>
 type notifyMqttAnyTopicKey string
 
-func (c notifyMqttAnyTopicKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -582,7 +598,7 @@ func (c notifyMqttAnyTopicKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.QOS= >>>>>>
 type notifyMqttAnyQosKey string
 
-func (c notifyMqttAnyQosKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyQosKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -593,7 +609,7 @@ func (c notifyMqttAnyQosKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.CLIENTID= >>>>>>
 type notifyMqttAnyClientIDKey string
 
-func (c notifyMqttAnyClientIDKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyClientIDKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -604,7 +620,7 @@ func (c notifyMqttAnyClientIDKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.USERNAME= >>>>>>
 type notifyMqttAnyUsernameKey string
 
-func (c notifyMqttAnyUsernameKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -615,7 +631,7 @@ func (c notifyMqttAnyUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.PASSWORD= >>>>>>
 type notifyMqttAnyPasswordKey string
 
-func (c notifyMqttAnyPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -626,7 +642,7 @@ func (c notifyMqttAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.RECONNECTINTERVAL= >>>>>>
 type notifyMqttAnyReconnectIntervalKey string
 
-func (c notifyMqttAnyReconnectIntervalKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyReconnectIntervalKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -637,7 +653,7 @@ func (c notifyMqttAnyReconnectIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.KEEPALIVEINTERVAL= >>>>>>
 type notifyMqttAnyKeepAliveIntervalKey string
 
-func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -648,7 +664,7 @@ func (c notifyMqttAnyKeepAliveIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*= >>>>>>
 type notifyMysqlAnyKey string
 
-func (c notifyMysqlAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -659,7 +675,7 @@ func (c notifyMysqlAnyKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.FORMAT= >>>>>>
 type notifyMysqlAnyFormatKey string
 
-func (c notifyMysqlAnyFormatKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -670,7 +686,7 @@ func (c notifyMysqlAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.DSNSTRING= >>>>>>
 type notifyMysqlAnyDsnStringKey string
 
-func (c notifyMysqlAnyDsnStringKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyDsnStringKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -681,7 +697,7 @@ func (c notifyMysqlAnyDsnStringKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.TABLE= >>>>>>
 type notifyMysqlAnyTableKey string
 
-func (c notifyMysqlAnyTableKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -692,7 +708,7 @@ func (c notifyMysqlAnyTableKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.HOST= >>>>>>
 type notifyMysqlAnyHostKey string
 
-func (c notifyMysqlAnyHostKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -703,7 +719,7 @@ func (c notifyMysqlAnyHostKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.PORT= >>>>>>
 type notifyMysqlAnyPortKey string
 
-func (c notifyMysqlAnyPortKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -714,7 +730,7 @@ func (c notifyMysqlAnyPortKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.USER= >>>>>>
 type notifyMysqlAnyUserKey string
 
-func (c notifyMysqlAnyUserKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -725,7 +741,7 @@ func (c notifyMysqlAnyUserKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.PASSWORD= >>>>>>
 type notifyMysqlAnyPasswordKey string
 
-func (c notifyMysqlAnyPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -736,7 +752,7 @@ func (c notifyMysqlAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.DATABASE= >>>>>>
 type notifyMysqlAnyDatabaseKey string
 
-func (c notifyMysqlAnyDatabaseKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyMysqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -747,7 +763,7 @@ func (c notifyMysqlAnyDatabaseKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*= >>>>>>
 type notifyNatsAnyKey string
 
-func (c notifyNatsAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -758,7 +774,7 @@ func (c notifyNatsAnyKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.ADDRESS= >>>>>>
 type notifyNatsAnyAddressKey string
 
-func (c notifyNatsAnyAddressKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -769,7 +785,7 @@ func (c notifyNatsAnyAddressKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.SUBJECT= >>>>>>
 type notifyNatsAnySubjectKey string
 
-func (c notifyNatsAnySubjectKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnySubjectKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -780,7 +796,7 @@ func (c notifyNatsAnySubjectKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.USERNAME= >>>>>>
 type notifyNatsAnyUsernameKey string
 
-func (c notifyNatsAnyUsernameKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -791,7 +807,7 @@ func (c notifyNatsAnyUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.PASSWORD= >>>>>>
 type notifyNatsAnyPasswordKey string
 
-func (c notifyNatsAnyPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -802,7 +818,7 @@ func (c notifyNatsAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.TOKEN= >>>>>>
 type notifyNatsAnyTokenKey string
 
-func (c notifyNatsAnyTokenKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyTokenKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -813,7 +829,7 @@ func (c notifyNatsAnyTokenKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.SECURE= >>>>>>
 type notifyNatsAnySecureKey string
 
-func (c notifyNatsAnySecureKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnySecureKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -824,7 +840,7 @@ func (c notifyNatsAnySecureKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.PINGINTERVAL= >>>>>>
 type notifyNatsAnyPingIntervalKey string
 
-func (c notifyNatsAnyPingIntervalKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyPingIntervalKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -835,7 +851,7 @@ func (c notifyNatsAnyPingIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING= >>>>>>
 type notifyNatsAnyStreamingKey string
 
-func (c notifyNatsAnyStreamingKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -846,7 +862,7 @@ func (c notifyNatsAnyStreamingKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.CLUSTERID= >>>>>>
 type notifyNatsAnyStreamingClusterIDKey string
 
-func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -857,7 +873,7 @@ func (c notifyNatsAnyStreamingClusterIDKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.CLIENTID= >>>>>>
 type notifyNatsAnyStreamingClientIDKey string
 
-func (c notifyNatsAnyStreamingClientIDKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingClientIDKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -868,7 +884,7 @@ func (c notifyNatsAnyStreamingClientIDKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.ASYNC= >>>>>>
 type notifyNatsAnyStreamingAsyncKey string
 
-func (c notifyNatsAnyStreamingAsyncKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingAsyncKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -879,7 +895,7 @@ func (c notifyNatsAnyStreamingAsyncKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.MAXPUBACKSINGLIGHT= >>>>>>
 type notifyNatsAnyStreamingMaxPubAcksInflightKey string
 
-func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -890,7 +906,7 @@ func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Help(key string) (string, e
 // =NOTIFY.POSTGRESQL.*= >>>>>>
 type notifyPostgresqlAnyKey string
 
-func (c notifyPostgresqlAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -901,7 +917,7 @@ func (c notifyPostgresqlAnyKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.FORMAT= >>>>>>
 type notifyPostgresqlAnyFormatKey string
 
-func (c notifyPostgresqlAnyFormatKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -912,7 +928,7 @@ func (c notifyPostgresqlAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.CONNECTIONSTRING= >>>>>>
 type notifyPostgresqlAnyConnectionStringKey string
 
-func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -923,7 +939,7 @@ func (c notifyPostgresqlAnyConnectionStringKey) Help(key string) (string, error)
 // =NOTIFY.POSTGRESQL.*.TABLE= >>>>>>
 type notifyPostgresqlAnyTableKey string
 
-func (c notifyPostgresqlAnyTableKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -934,7 +950,7 @@ func (c notifyPostgresqlAnyTableKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.HOST= >>>>>>
 type notifyPostgresqlAnyHostKey string
 
-func (c notifyPostgresqlAnyHostKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -945,7 +961,7 @@ func (c notifyPostgresqlAnyHostKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.PORT= >>>>>>
 type notifyPostgresqlAnyPortKey string
 
-func (c notifyPostgresqlAnyPortKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -956,7 +972,7 @@ func (c notifyPostgresqlAnyPortKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.USER= >>>>>>
 type notifyPostgresqlAnyUserKey string
 
-func (c notifyPostgresqlAnyUserKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -967,7 +983,7 @@ func (c notifyPostgresqlAnyUserKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.PASSWORD= >>>>>>
 type notifyPostgresqlAnyPasswordKey string
 
-func (c notifyPostgresqlAnyPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -978,7 +994,7 @@ func (c notifyPostgresqlAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.DATABASE= >>>>>>
 type notifyPostgresqlAnyDatabaseKey string
 
-func (c notifyPostgresqlAnyDatabaseKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -989,7 +1005,7 @@ func (c notifyPostgresqlAnyDatabaseKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*= >>>>>>
 type notifyRedisAnyKey string
 
-func (c notifyRedisAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyRedisAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1000,7 +1016,7 @@ func (c notifyRedisAnyKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.FORMAT= >>>>>>
 type notifyRedisAnyFormatKey string
 
-func (c notifyRedisAnyFormatKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyRedisAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1011,7 +1027,7 @@ func (c notifyRedisAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.ADDRESS= >>>>>>
 type notifyRedisAnyAddressKey string
 
-func (c notifyRedisAnyAddressKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyRedisAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1022,7 +1038,7 @@ func (c notifyRedisAnyAddressKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.PASSWORD= >>>>>>
 type notifyRedisAnyPasswordKey string
 
-func (c notifyRedisAnyPasswordKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyRedisAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1033,7 +1049,7 @@ func (c notifyRedisAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.KEY= >>>>>>
 type notifyRedisAnyKeyKey string
 
-func (c notifyRedisAnyKeyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyRedisAnyKeyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1044,7 +1060,7 @@ func (c notifyRedisAnyKeyKey) Help(key string) (string, error) {
 // =NOTIFY.WEBHOOK.*= >>>>>>
 type notifyWebhookAnyKey string
 
-func (c notifyWebhookAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyWebhookAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1055,7 +1071,7 @@ func (c notifyWebhookAnyKey) Help(key string) (string, error) {
 // =NOTIFY.WEBHOOK.*.ENNDPOINT= >>>>>>
 type notifyWebhookAnyEndpointKey string
 
-func (c notifyWebhookAnyEndpointKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (c notifyWebhookAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1066,7 +1082,7 @@ func (c notifyWebhookAnyEndpointKey) Help(key string) (string, error) {
 // =LOG.CONSOLE= >>>>>>
 type logConsoleKey string
 
-func (l logConsoleKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logConsoleKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1077,7 +1093,7 @@ func (l logConsoleKey) Help(key string) (string, error) {
 // =LOG.CONSOLE.AUDIT= >>>>>>
 type logConsoleAuditKey string
 
-func (l logConsoleAuditKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1088,7 +1104,7 @@ func (l logConsoleAuditKey) Help(key string) (string, error) {
 // =LOG.CONSOLE.ANONYMOUS >>>>>>
 type logConsoleAnonymousKey string
 
-func (l logConsoleAnonymousKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1099,7 +1115,7 @@ func (l logConsoleAnonymousKey) Help(key string) (string, error) {
 // =LOG.HTTP.*= >>>>>>
 type logHTTPAnyKey string
 
-func (l logHTTPAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1110,7 +1126,7 @@ func (l logHTTPAnyKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.ENDPOINT= >>>>>>
 type logHTTPAnyEndpointKey string
 
-func (l logHTTPAnyEndpointKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1121,7 +1137,7 @@ func (l logHTTPAnyEndpointKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.AUDIT= >>>>>>
 type logHTTPAnyAuditKey string
 
-func (l logHTTPAnyAuditKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1132,7 +1148,7 @@ func (l logHTTPAnyAuditKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.ANONYMOUS= >>>>>>
 type logHTTPAnyAnonymousKey string
 
-func (l logHTTPAnyAnonymousKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l logHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1143,7 +1159,7 @@ func (l logHTTPAnyAnonymousKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE= >>>>>>
 type loggerConsoleKey string
 
-func (l loggerConsoleKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerConsoleKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
@@ -1158,7 +1174,7 @@ func (l loggerConsoleKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE.AUDIT= >>>>>>
 type loggerConsoleAuditKey string
 
-func (l loggerConsoleAuditKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
@@ -1173,7 +1189,7 @@ func (l loggerConsoleAuditKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE.ANONYMOUS >>>>>>
 type loggerConsoleAnonymousKey string
 
-func (l loggerConsoleAnonymousKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
@@ -1188,7 +1204,7 @@ func (l loggerConsoleAnonymousKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*= >>>>>>
 type loggerHTTPAnyKey string
 
-func (l loggerHTTPAnyKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.http.*"
 	key = strings.Replace(key, "logger", "log", 1)
@@ -1203,7 +1219,7 @@ func (l loggerHTTPAnyKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.ENDPOINT= >>>>>>
 type loggerHTTPAnyEndpointKey string
 
-func (l loggerHTTPAnyEndpointKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1214,7 +1230,7 @@ func (l loggerHTTPAnyEndpointKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.AUDIT= >>>>>>
 type loggerHTTPAnyAuditKey string
 
-func (l loggerHTTPAnyAuditKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1225,7 +1241,7 @@ func (l loggerHTTPAnyAuditKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.ANONYMOUS= >>>>>>
 type loggerHTTPAnyAnonymousKey string
 
-func (l loggerHTTPAnyAnonymousKey) Set(key, val, comment string, cfg ServerConfig) error {
+func (l loggerHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	cfg.kv[key] = val
 	return nil
 }
@@ -1505,13 +1521,14 @@ func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string
 
 	// Decide if the key is a child of "log" or "notify"
 	splitKey := strings.Split(key, ".")
+
 	switch splitKey[0] {
 	// Log key regular expression is used to replace the
 	// user specified random subKey with a "*"
 	// Example:
 	// key = "log.http.target1" where "target1" is the user specified
-	// random key. If key is valid, it'll be transformed into "log.http.*",
-	// which will  be used to get/set the value using ServerConfig
+	// random key. If the key is valid, it'll be transformed into "log.http.*",
+	// which will  be used to get/set the value using ServerConfig entries
 	case "log", "logger":
 		suffixPattern := "\\.endpoint|\\.audit|\\.anonymous)$"
 		r, _ = regexp.Compile("(log\\.http|logger\\.http)" + basePattern + suffixPattern)
@@ -1519,7 +1536,6 @@ func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string
 		// Second key after "notify" key
 		switch splitKey[1] {
 		case "amqp":
-			fmt.Println("Entered AMQP")
 			suffixPattern := "\\.url|\\.exchange|\\.routingKey|\\.exchangeType|\\.deliveryMode|\\.mandatory|\\.immediate|\\.durable|\\.internal|\\.noWait|\\.autoDeleted)$"
 			r, _ = regexp.Compile("(notify\\.amqp)" + basePattern + suffixPattern)
 		case "elasticsearch":
@@ -1559,12 +1575,6 @@ func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string
 	// following information:
 	// [fullKey, keysBeforeRandomKey, randomKey, keysAfterRandomKey]
 	matchedKeys := r.FindStringSubmatch(key)
-	if splitKey[1] == "amqp" {
-		fmt.Println("AMQP regexp r:", r)
-		fmt.Println("key:", key)
-		fmt.Println("matchedKeys: ", matchedKeys)
-		fmt.Println()
-	}
 	// Initialization
 	randomKey := ""
 	// Less than 3 matches in slice means key is invalid
@@ -1586,11 +1596,9 @@ func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string
 }
 
 // SetHandler sets key value in server configuration database
-func (s *ServerConfig) SetHandler(key, val, comment string) error {
-	var err error
-
+func (s *ServerConfig) SetHandler(key, val string) error {
 	// Load the configuration data from disk into memory
-	if err = s.load(); err != nil {
+	if err := s.load(); err != nil {
 		return errors.New("Failed to load the configuration file." + err.Error())
 	}
 
@@ -1600,19 +1608,32 @@ func (s *ServerConfig) SetHandler(key, val, comment string) error {
 	// assuming it has a user specified random subkey in it.
 	// If the key is found to be valid, set it to val.
 	if _, ok := serverConfHandler[key]; ok {
-		if err := serverConfHandler[key].Set(key, val, comment, *s); err != nil {
-			return errors.New("Failed to set config key='" + key + "', to value='" + val + "'. " + err.Error())
+		if err := serverConfHandler[key].Set(key, val, *s); err != nil {
+			return err
 		}
 	} else if transformedKey, err := checkRandomKeyValidity(key, serverConfHandler); err == nil {
 		// Validity check for keys with user specified random subkey
-		if err := serverConfHandler[transformedKey].Set(key, val, comment, *s); err != nil {
-			return errors.New("Failed to set config key='" + key + "', to value='" + val + "'. " + err.Error())
+		if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
+			return err
 		}
+	}
+	// 'file' slice, which holds the parsed config info, also needs to be updated
+	done := false
+	for i := range file {
+		if file[i].key == key {
+			file[i].val = val
+			done = true
+		}
+	}
+	// If the key has not been added into file yet,
+	// a new entry is needed to be created
+	if !done {
+		file = append(file, lineStruct{false, true, key, val, ""})
 	}
 
 	// Save the set/modified configuration from memory to disk
-	if err = s.save(); err != nil {
-		return errors.New("Can't save config file after setting key='" + key + "', to value='" + val + "'. " + err.Error())
+	if err := s.save(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1625,16 +1646,14 @@ func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 	}
 
 	// Zero length keys means full configuration
-	// file is returned
+	// file is requested
 	if len(keys) == 0 {
-		fmt.Println("FULL CONFIG")
 		return s.kv, nil
 	}
 	// Greater than zero length keys means only the
-	// the values for the provided keys are returned
+	// the values for the provided keys are requested
 	kvPartial := make(map[string]string)
 	for _, key := range keys {
-		fmt.Println("PARTIAL CONFIG")
 		kvPartial[key] = s.kv[key]
 	}
 	return kvPartial, nil
@@ -1693,43 +1712,45 @@ func writeLines(lines []string, path string) error {
 	return w.Flush()
 }
 
-func normalizeConfigEntry(entry string) (entryArr []string, isComment, validKV bool) {
-	// fmt.Println("entry --> ", entry)
-
-	rComment, _ := regexp.Compile("[\\s]*(#[\\s]*[^\\s]*)|[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)[\\s]*(#[\\s]*[^\\s]*)")
+func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bool) {
+	// Regexp to match full line comments, and the comments
+	// which start in the middle of the line after some characters
+	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//[\\s]*.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)[\\s]+(//.*)")
 	matchedComment := rComment.FindStringSubmatch(entry)
-
 	if len(matchedComment) > 0 {
-		// All comments are handled in this block
-		if matchedComment[1] == "" {
-			if len(matchedComment) >= 6 {
-				// Combination of key/value and comment in the
-				// same line is handled here.
-				// Since this line is a combination, we return
-				// false for "isComment" boolean
-				return strings.Split(strings.Replace(entry, matchedComment[3], " ", -1), " "), false, true
+		// entry most probably is a comment.
+		// Comments are handled in this block
+		for i, m := range matchedComment {
+			// Cleanup leading and trailing white spaces
+			matchedComment[i] = strings.TrimSpace(m)
+
+			if matchedComment[0] == "" {
+				// Empty lines are handled here.
+				// Treat them as if they are comments
+				return []string{matchedComment[0]}, true, true
 			}
-			// fmt.Println("Invalid key=value pair, ", entry)
-			logger.LogIf(context.Background(), errors.New("Invalid key=value pair, "+entry))
-			return strings.Split(entry, " "), true, false
+			if matchedComment[1] == "" {
+				// Combination of key/value and comment in the same line
+				// Return false for "isComment", since this is actually a setting
+				return []string{matchedComment[2], matchedComment[4], matchedComment[5]}, false, true
+			}
+			// Pure comments are handled here
+			return strings.Split(matchedComment[1], " "), true, true
 		}
-		// Pure comments are handled here
-		return strings.Split(matchedComment[1], " "), true, true
 	}
 	// Handle key=val pairs here
-	r, _ := regexp.Compile("[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)")
+	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)")
 	matchedKey := r.FindStringSubmatch(entry)
 	if len(matchedKey) >= 3 {
-		return strings.Split(strings.Replace(entry, matchedKey[2], " ", -1), " "), false, true
+		return []string{matchedKey[1], matchedKey[3]}, false, true
 	}
-	logger.LogIf(context.Background(), errors.New("Invalid key=value pair, "+entry))
 	return strings.Split(entry, " "), false, false
 }
 
 // Load loads configuration from disk to memory (serverConfig.kv)
 func (s *ServerConfig) load() error {
-	fmt.Println("Entered Load")
 	s.kv = make(map[string]string)
+	file = []lineStruct{}
 
 	// Check if configuration file exists
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
@@ -1745,61 +1766,101 @@ func (s *ServerConfig) load() error {
 			return err
 		}
 
-		// Go through each line of config file
-		var commentAttached, lineWithComment string
+		var key, val string
+		// Go through each line of config file and
+		// classify them as comments or key/value pairs.
+		// Only empty lines, comment lines (// xxxx xx x),
+		// key/value pairs (key = value) and combination of
+		// key/value pairs and comments in the same line
+		// (key = value // xxxx  xxx) are accepted.
 		for _, line := range lines {
-			element, isComment, validKV := normalizeConfigEntry(line)
-			if !validKV {
+			element, isComment, isValid := classifyConfigEntry(line)
+			if !isValid {
+				logger.LogIf(context.Background(), errors.New("Invalid key=value pair, "+strings.Join(element, " ")))
+				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: strings.Join(element, " ")})
 				continue
 			}
 			if isComment {
-				commentAttached += strings.Join(element, " ") + "\n"
+				file = append(file, lineStruct{isComment: isComment, isValid: isValid, comment: strings.Join(element, " ")})
 				continue
-			} else {
-				lineWithComment = commentAttached + strings.Join(element, " ")
-				commentAttached = ""
 			}
+			// Valid configurations are handled here.
+			// We expect the invalid configuration settings will
+			// be addressed in a SafeMode, which is still under
+			// design and decision phase, if minio server cannot
+			// be started with the invalid configuration setting
+			// Validate key/value pair
+			key = element[0]
+			val = element[1]
 			// Set the server configuration map, "s.kv",
-			key := element[0]
-			val := element[1]
-			// fmt.Printf("[%s]: %s\n", key, val)
 			// Validate assuming the key is a regular key with no user specified
 			// random subkey in it. If this check fails, try validating the key
 			// assuming it has a user specified random subkey in it.
 			if _, ok := serverConfHandler[key]; ok {
-				if err := serverConfHandler[key].Set(key, val, lineWithComment, *s); err != nil {
+				if err := serverConfHandler[key].Set(key, val, *s); err != nil {
 					// Report the error and continue with the next element
+					isValid = false
 					logger.LogIf(context.Background(), err)
 				}
-				continue
 			} else if transformedKey, err := checkRandomKeyValidity(key, serverConfHandler); err == nil {
 				// Validity check for keys with user specified random subkey
-				if err := serverConfHandler[transformedKey].Set(key, val, lineWithComment, *s); err != nil {
+				if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
 					// Report the error and continue with the next element
+					isValid = false
 					logger.LogIf(context.Background(), err)
 				}
-				continue
+			} else {
+				isValid = false
+				logger.LogIf(context.Background(), errors.New("Invalid key: "+key))
 			}
-			logger.LogIf(context.Background(), errors.New("Invalid key: "+key))
+			if len(element) >= 3 {
+				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: element[0], val: element[1], comment: element[2]})
+			} else {
+				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: element[0], val: element[1]})
+			}
 		}
 	}
+
 	return nil
 }
 
-// Save saves configuration info into disk
 func (s *ServerConfig) save() error {
-	var byteData []byte
+	var lines []string
 
 	// Lock for writing
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 
-	for k, v := range s.kv {
-		byteData = append(byteData, []byte(k+" = "+v+"\n")...)
+	for i := 0; i < len(file); i++ {
+		if file[i].isValid {
+			if file[i].isComment {
+				lines = append(lines, file[i].comment)
+				continue
+			}
+			if file[i].comment != "" {
+				lines = append(lines, file[i].key+" = "+file[i].val+" "+file[i].comment)
+				continue
+			}
+			lines = append(lines, file[i].key+" = "+file[i].val)
+			continue
+		}
+		errorEntry := ""
+		if file[i].key != "" {
+			errorEntry += file[i].key + " "
+		}
+		if file[i].val != "" {
+			errorEntry += file[i].val + " "
+		}
+		if file[i].comment != "" {
+			errorEntry += file[i].comment
+		}
+		if errorEntry != "" {
+			lines = append(lines, "// *** Invalid configuration entry: "+strings.TrimSpace(errorEntry))
+		}
 	}
 
-	// The following line is for debugging purposes
-	if err := ioutil.WriteFile(confFile, byteData, 0644); err != nil {
+	// Write into the file, "confFile"
+	if err := writeLines(lines, confFile); err != nil {
 		return err
 	}
 	return nil

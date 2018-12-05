@@ -18,7 +18,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -32,44 +31,64 @@ func main() {
 	var kv map[string]string
 	serverConfig := &configuration.ServerConfig{RWMutex: &sync.RWMutex{}}
 
-	// fmt.Println("******************************")
+	fmt.Println("Calling SetHandler 'version' 'minio'")
+	if err = serverConfig.SetHandler("version", "minio"); err != nil {
+		fmt.Println(err)
+		logger.FatalIf(err, "Failed to load configuration data")
+	}
+	keys = []string{"version"}
+	fmt.Println("Calling GetHandler 'version'")
+	if kv, err = serverConfig.GetHandler(keys); err != nil {
+		logger.FatalIf(err, "Failed to get version and version configuration parameters."+err.Error())
+	}
+	fmt.Printf("kv>\n%+v\n\n", kv)
+
+	// // fmt.Println("******************************")
 	// fmt.Println("***** Calling SetHandler *****")
-	// fmt.Println("******************************")
+	// // fmt.Println("******************************")
+	// fmt.Println()
 	// if err = serverConfig.SetHandler("region", "minio-region"); err != nil {
 	// 	logger.FatalIf(err, "Failed to load configuration data: ")
 	// }
-	// fmt.Println("******************************")
+
+	// // fmt.Println("******************************")
 	// fmt.Println("***** Calling GetHandler *****")
-	// fmt.Println("*****      region        *****")
-	// fmt.Println("******************************")
+	// // fmt.Println("*****      region        *****")
+	// // fmt.Println("******************************")
+	// fmt.Println()
 	// keys = []string{"region"}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
 	// fmt.Printf("kv>\n%+v\n\n", kv)
 
-	fmt.Println("******************************")
-	fmt.Println("***** Calling GetHandler *****")
-	fmt.Println("***** return full config *****")
-	fmt.Println("******************************")
-	keys = []string{}
-	if kv, err = serverConfig.GetHandler(keys); err != nil {
-		logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
-	}
-	// fmt.Printf("kv>\n%+v\n\n", kv)
-	fmt.Println()
-	b, err := json.MarshalIndent(kv, "", "  ")
-	if err != nil {
-		fmt.Println("error:", err)
-	}
-	fmt.Print(string(b))
-	// fmt.Println("******************************")
+	// // fmt.Println("******************************")
 	// fmt.Println("***** Calling GetHandler *****")
-	// fmt.Println("***** region and version *****")
-	// fmt.Println("******************************")
+	// // fmt.Println("***** region and version *****")
+	// // fmt.Println("******************************")
+	// fmt.Println()
 	// keys = []string{"region", "version"}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
 	// fmt.Printf("kv>\n%+v\n\n", kv)
+
+	// // fmt.Println("******************************")
+	// fmt.Println("***** Calling GetHandler *****")
+	// // fmt.Println("***** return full config *****")
+	// // fmt.Println("*****  when 'keys' = []  *****")
+	// fmt.Println("******************************")
+	// fmt.Println()
+	// keys = []string{}
+	// if kv, err = serverConfig.GetHandler(keys); err != nil {
+	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
+	// }
+	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// fmt.Println()
+	// b, err := json.MarshalIndent(kv, "", "  ")
+	// if err != nil {
+	// 	fmt.Println("error:", err)
+	// }
+	// fmt.Print(string(b))
+
 }

@@ -1,0 +1,126 @@
+// Minio Configuration
+// *** Invalid configuration entry: version =
+
+credential.accessKey = xxx // AccessKey cannot be changed
+credential.secretKey = yyy // SecretKey cannot be changed
+
+region = minio-region //567
+browser = on
+// *** Invalid configuration entry: worm =
+domain = ""
+
+storageclass.standard = ""
+storageclass.rrs = ""
+
+cache.drives = []
+cache.expiry = 111
+cache.maxuse = 100
+cache.exclude = []
+
+kms.vault.endpoint = ""
+kms.vault.auth.type = ""
+kms.vault.auth.approle.id = 44
+kms.vault.auth.approle.secret = aaa
+kms.vault.key-id.name = VKey
+kms.vault.key-id.version = 22
+
+notify.amqp.1 = false
+notify.amqp.1.url = "amqp://guest:guest@localhost:5672/"
+notify.amqp.1.exchange = "bucketevents"
+notify.amqp.1.routingKey = "bucketevents"
+notify.amqp.1.exchangeType = "fanout"
+notify.amqp.1.deliveryMode = 0
+notify.amqp.1.mandatory = false
+notify.amqp.1.immediate = true
+notify.amqp.1.durable = false
+notify.amqp.1.internal = false
+notify.amqp.1.noWait = true
+notify.amqp.1.autoDeleted = false
+
+notify.elasticsearch.1 = false
+notify.elasticsearch.1.format = "namespace"
+notify.elasticsearch.1.url = ""http://localhost:9200""
+notify.elasticsearch.1.index = "minio_events"
+
+notify.kafka.1 = false
+notify.kafka.1.brokers = null
+notify.kafka.1.topic = ""
+notify.kafka.1.tls = false
+notify.kafka.1.tls.skipVerify = false
+notify.kafka.1.tls.clientAuth = 0
+notify.kafka.1.sasl = false
+notify.kafka.1.sasl.username = ""
+notify.kafka.1.sasl.password = ""
+
+notify.mqtt.1 = false
+notify.mqtt.1.broker = ""
+notify.mqtt.1.topic = ""
+notify.mqtt.1.qos = 0
+notify.mqtt.1.clientId = ""
+notify.mqtt.1.username = ""
+notify.mqtt.1.password = ""
+notify.mqtt.1.reconnectInterval = 0
+notify.mqtt.1.keepAliveInterval = 0
+
+notify.mysql.1 = false
+notify.mysql.1.format = "namespace"
+notify.mysql.1.dsnString = ""
+notify.mysql.1.table = ""
+notify.mysql.1.host = ""
+notify.mysql.1.port = ""
+notify.mysql.1.user = ""
+notify.mysql.1.password = ""
+notify.mysql.1.database = ""
+
+notify.nats.1 = false
+notify.nats.1.address = ""
+notify.nats.1.subject = ""
+notify.nats.1.username = ""
+notify.nats.1.password = ""
+notify.nats.1.token = ""
+notify.nats.1.secure = false
+notify.nats.1.pingInterval = 0
+notify.nats.1.streaming = false
+notify.nats.1.streaming.clusterID = ""
+notify.nats.1.streaming.clientID = ""
+notify.nats.1.streaming.async = false
+notify.nats.1.streaming.maxPubAcksInflight = 0
+
+notify.postgresql.1 = false
+notify.postgresql.1.format = "namespace"
+notify.postgresql.1.connectionString = ""
+notify.postgresql.1.table = ""
+notify.postgresql.1.host = ""
+notify.postgresql.1.port = ""
+notify.postgresql.1.user = ""
+notify.postgresql.1.password = ""
+notify.postgresql.1.database = ""
+
+notify.redis.1 = false
+notify.redis.1.format = "namespace"
+notify.redis.1.address = ""
+notify.redis.1.password = ""
+notify.redis.1.key = ""
+
+notify.webhook.1 = false
+notify.webhook.1.endpoint = ""
+
+logger.console = true
+logger.console.audit = true
+logger.console.anonymous = true
+
+log.http.target1 = true
+log.http.target1.endpoint = "https://username:password@example1.com/api"
+log.http.target1.audit = false
+log.http.target1.anonymous = false
+
+log.http.target2 = false
+log.http.target2.endpoint = "https://username:password@example2.com/api"
+log.http.target2.audit = false
+log.http.target2.anonymous = false
+// *** Invalid configuration entry: version minio
+// *** Invalid configuration entry: version minio
+// *** Invalid configuration entry: version minio
+// *** Invalid configuration entry: version minio
+// *** Invalid configuration entry: version minio
+// *** Invalid configuration entry: version minio
