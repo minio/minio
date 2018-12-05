@@ -71,6 +71,9 @@ type Options struct {
 
 	// The value to use for escaping when field delimiter is part of the value.
 	QuoteCharacter string
+
+	// The value to use for escaping quotes inside value.
+	QuoteEscapeCharacter string
 }
 
 // cinput represents a record producing input from a formatted object.
@@ -94,7 +97,7 @@ type cinput struct {
 func New(opts *Options) (format.Select, error) {
 	// NormalizedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
 	// And replaces the custom quote character to "\""
-	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter), rune(opts.QuoteCharacter[0]))
+	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter), rune(opts.QuoteCharacter[0]), rune(opts.QuoteEscapeCharacter[0]))
 	reader := &cinput{
 		options: opts,
 		reader:  csv.NewReader(normalizedReader),
@@ -177,10 +180,9 @@ func (reader *cinput) Read() ([]byte, error) {
 	if dec != nil {
 		var data []byte
 		var err error
+		var replacer = strings.NewReplacer("\"", reader.options.QuoteCharacter, reader.options.QuoteCharacter, "\"")
 		for i, value := range dec {
-			if reader.options.QuoteCharacter != "\"" {
-				value = strings.Replace(value, reader.options.QuoteCharacter, "\"", -1)
-			}
+			value = replacer.Replace(value)
 			data, err = sjson.SetBytes(data, reader.header[i], value)
 			if err != nil {
 				return nil, err
