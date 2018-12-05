@@ -24,6 +24,7 @@ import (
 var (
 	nByte byte = 10 // the byte that corresponds to the '\n' rune.
 	rByte byte = 13 // the byte that corresponds to the '\r' rune.
+	quoteByte byte = 34 // the byte that corresponds to the '"' rune.
 )
 
 // NormalizedReader reduces the custom delimiter to `\n`.
@@ -31,11 +32,12 @@ type NormalizedReader struct {
 	r           *bufio.Reader
 	delimiter   []rune // Select can have upto 2 characters as delimiter.
 	assignEmpty bool   // Decides whether the next read byte should be discarded.
+	quote rune // Replace the custom quote with double quotes
 }
 
 // NewNormalizedReader detects the custom delimiter and replaces with `\n`.
-func NewNormalizedReader(r io.Reader, delimiter []rune) *NormalizedReader {
-	return &NormalizedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false}
+func NewNormalizedReader(r io.Reader, delimiter []rune, quote rune) *NormalizedReader {
+	return &NormalizedReader{r: bufio.NewReader(r), delimiter: delimiter, assignEmpty: false, quote: quote}
 }
 
 // Reads and replaces the custom delimiter with `\n`.
@@ -73,6 +75,11 @@ func (r *NormalizedReader) Read(p []byte) (n int, err error) {
 				// Replace with `\n` incase of single charecter delimiter match.
 				p[i] = nByte
 			}
+		}
+		// Replace the custom quote to double quote always
+		// to comply with the current csv reader
+		if rune(quoteByte) != r.quote && rune(b) == r.quote {
+			p[i] = quoteByte
 		}
 	}
 	return

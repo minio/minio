@@ -90,7 +90,7 @@ type cinput struct {
 // until Read() return err.
 func New(opts *Options) (format.Select, error) {
 	// DelimitedReader treats custom record delimiter like `\r\n`,`\r`,`ab` etc and replaces it with `\n`.
-	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter))
+	normalizedReader := ioutil.NewNormalizedReader(opts.ReadFrom, []rune(opts.RecordDelimiter), rune('"'))
 	reader := &cinput{
 		options: opts,
 		reader:  csv.NewReader(normalizedReader),
