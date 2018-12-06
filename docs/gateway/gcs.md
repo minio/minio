@@ -1,20 +1,26 @@
 # Minio GCS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio GCS Gateway adds Amazon S3 compatibility to Google Cloud Storage.
 
-## Run Minio Gateway for GCS
-### Create service account key for GCS and get the credentials file
-1. Go to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
-2. Select your project or create a new project. Note down your project ID.
-3. On the Credentials page, select the __Create credentials__ drop-down, then select __Service account key__.
-4. From the __Service account__ drop-down, select __New service account__
-5. Fill up __Service account name__ and __Service account ID__
-6. For the __Role__, click the select dropdown to choose __Storage__ -> __Storage Admin__ _(Full control of GCS resources)_
-7. Click the __Create__ button. This will download a credentials file to your desktop. Let's call this credentials.json
+Minio GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
 
-Note: Alternate ways to setup *Application Default Credentials* is explained [here](https://developers.google.com/identity/protocols/application-default-credentials)
+- [Run Minio Gateway for GCS](#run-minio-gateway-for-gcs)
+- [Test Using Minio Browser](#test-using-minio-browser)
+- [Test Using Minio Client](#test-using-minio-client)
 
-### Using Docker
-```
+## <a name="run-minio-gateway-for-gcs"></a>1. Run Minio Gateway for GCS
+
+### 1.1 Create a Service Account key for GCS and get the Credentials File
+1. Navigate to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
+2. Select a project or create a new project. Note the project ID.
+3. Select the **Create credentials** dropdown on the **Credentials** page, and click **Service account key**.
+4. Select **New service account** from the **Service account** dropdown.
+5. Populate the **Service account name** and **Service account ID**.
+6. Click the dropdown for the **Role** and choose **Storage** > **Storage Admin** *(Full control of GCS resources)*.
+7. Click the **Create** button to download a credentials file and rename it to `credentials.json`.
+
+**Note:** For alternate ways to set up *Application Default Credentials*, see [Setting Up Authentication for Server to Server Production Applications](https://developers.google.com/identity/protocols/application-default-credentials).
+
+### 1.1 Run Minio GCS Gateway Using Docker
+```sh
 docker run -p 9000:9000 --name gcs-s3 \
  -v /path/to/credentials.json:/credentials.json \
  -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
@@ -23,47 +29,60 @@ docker run -p 9000:9000 --name gcs-s3 \
  minio/minio gateway gcs yourprojectid
 ```
 
-### Using Binary
-```
+### 1.2 Run Minio GCS Gateway Using the Minio Binary
+
+```sh
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
 export MINIO_ACCESS_KEY=minioaccesskey
 export MINIO_SECRET_KEY=miniosecretkey
 minio gateway gcs yourprojectid
 ```
 
-## Test using Minio Browser
-Minio Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+## <a name="test-using-minio-browser"></a>2. Test Using Minio Browser
+
+Minio Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that Minio Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
 
-## Test using Minio Client `mc`
-`mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
+## <a name="test-using-minio-client"></a>3. Test Using Minio Client
 
-### Configure `mc`
-```
+Minio Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.).  `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+### 3.1 Configure the Gateway using Minio Client
+
+Use the following command to configure the gateway:
+
+```sh
 mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
 ```
 
-### List containers on GCS
-```
+### 3.2 List Containers on GCS
+
+Use the following command to list the containers on GCS:
+
+```sh
 mc ls mygcs
+```
+
+A response similar to this one should be displayed:
+
+```
 [2017-02-22 01:50:43 PST]     0B ferenginar/
 [2017-02-26 21:43:51 PST]     0B my-container/
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
-### Known limitations
-Gateway inherits the following GCS limitations:
+### 3.3 Known limitations
+Minio Gateway has the following limitations when used with GCS:
 
-- Only read-only or write-only bucket policy supported at bucket level, all other variations will return API Notimplemented error.
-- _List Multipart Uploads_ and _List Object parts_ always returns empty list. i.e Client will need to remember all the parts that it has uploaded and use it for _Complete Multipart Upload_
+* It only supports read-only and write-only bucket policies at the bucket level; all other variations will return `API Not implemented`.
+* The `List Multipart Uploads` and `List Object parts` commands always return empty lists. Therefore, the client must store all of the parts that it has uploaded and use that information when invoking the `_Complete Multipart Upload` command.
 
 Other limitations:
 
-- Bucket notification APIs are not supported.
+* Bucket notification APIs are not supported.
 
-## Explore Further
+## <a name="explore-further"></a>4. Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
 - [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
-
