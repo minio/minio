@@ -31,7 +31,10 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-const confFile string = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
+const (
+	confFile string = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
+	notSet          = "Configuration parameter has not been set yet."
+)
 
 var serverConfHandler ServerConfigHandlers
 
@@ -79,7 +82,7 @@ type versionKey string
 
 func (v versionKey) Set(key, val string, cfg ServerConfig) error {
 	if _, err := strconv.Atoi(val); err != nil {
-		return errors.New("Type Mismatch; Expected integer for 'version' value: " + val)
+		return errors.New("'version' value Type Mismatch!\nExpected integer, received '" + val + "'.")
 	}
 	cfg.kv[key] = val
 	return nil
@@ -1623,6 +1626,7 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 		if file[i].key == key {
 			file[i].val = val
 			done = true
+			break
 		}
 	}
 	// If the key has not been added into file yet,
@@ -1644,17 +1648,28 @@ func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 	if err := s.load(); err != nil {
 		return map[string]string{}, err
 	}
+	// Save the set/modified configuration from memory to disk
+	if err := s.save(); err != nil {
+		return map[string]string{}, err
+	}
 
 	// Zero length keys means full configuration
 	// file is requested
 	if len(keys) == 0 {
 		return s.kv, nil
 	}
-	// Greater than zero length keys means only the
-	// the values for the provided keys are requested
+	// Greater than zero length keys means multiple
+	// values for the provided keys are requested
 	kvPartial := make(map[string]string)
 	for _, key := range keys {
-		kvPartial[key] = s.kv[key]
+		if _, ok := serverConfHandler[key]; ok {
+			// 'key' is a valid configuration parameter
+			if val, ok := s.kv[key]; ok {
+				kvPartial[key] = val
+			} else {
+				kvPartial[key] = notSet
+			}
+		}
 	}
 	return kvPartial, nil
 }
@@ -1715,7 +1730,7 @@ func writeLines(lines []string, path string) error {
 func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bool) {
 	// Regexp to match full line comments, and the comments
 	// which start in the middle of the line after some characters
-	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//[\\s]*.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)[\\s]+(//.*)")
+	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//[\\s]*.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+//.*)")
 	matchedComment := rComment.FindStringSubmatch(entry)
 	if len(matchedComment) > 0 {
 		// entry most probably is a comment.
@@ -1754,7 +1769,7 @@ func (s *ServerConfig) load() error {
 
 	// Check if configuration file exists
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
-		logger.Fatal(errors.New("No configuration file found: "), err.Error())
+		logger.Fatal(err, "No configuration file found")
 	} else {
 		// Configuration file exists.
 		// Read configuration data from etcd or file
@@ -1838,7 +1853,7 @@ func (s *ServerConfig) save() error {
 				continue
 			}
 			if file[i].comment != "" {
-				lines = append(lines, file[i].key+" = "+file[i].val+" "+file[i].comment)
+				lines = append(lines, file[i].key+" = "+file[i].val+file[i].comment)
 				continue
 			}
 			lines = append(lines, file[i].key+" = "+file[i].val)

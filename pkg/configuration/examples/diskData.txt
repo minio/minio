@@ -1,12 +1,12 @@
 // Minio Configuration
-// *** Invalid configuration entry: version =
+version = 31
 
-credential.accessKey = xxx // AccessKey cannot be changed
-credential.secretKey = yyy // SecretKey cannot be changed
+credential.accessKey = xxx          // AccessKey cannot be changed
+credential.secretKey = yyy          // SecretKey cannot be changed
 
-region = minio-region //567
+region = us-east-1
 browser = on
-// *** Invalid configuration entry: worm =
+worm = ""
 domain = ""
 
 storageclass.standard = ""
@@ -118,9 +118,3 @@ log.http.target2 = false
 log.http.target2.endpoint = "https://username:password@example2.com/api"
 log.http.target2.audit = false
 log.http.target2.anonymous = false
-// *** Invalid configuration entry: version minio
-// *** Invalid configuration entry: version minio
-// *** Invalid configuration entry: version minio
-// *** Invalid configuration entry: version minio
-// *** Invalid configuration entry: version minio
-// *** Invalid configuration entry: version minio
