@@ -258,7 +258,8 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		listBuckets = web.CacheAPI().ListBuckets
 	}
 
-	if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
+	claims, owner, authErr := webRequestAuthenticate(r)
+	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
@@ -270,10 +271,19 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		}
 		for _, dnsRecord := range dnsBuckets {
 			bucketName := strings.Trim(dnsRecord.Key, "/")
-			reply.Buckets = append(reply.Buckets, WebBucketInfo{
-				Name:         bucketName,
-				CreationDate: dnsRecord.CreationDate,
-			})
+			if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.Subject,
+				Action:          iampolicy.Action(policy.GetObjectAction),
+				BucketName:      bucketName,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         owner,
+				ObjectName:      "",
+			}) {
+				reply.Buckets = append(reply.Buckets, WebBucketInfo{
+					Name:         bucketName,
+					CreationDate: dnsRecord.CreationDate,
+				})
+			}
 		}
 	} else {
 		buckets, err := listBuckets(context.Background())
@@ -281,10 +291,19 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			return toJSONError(err)
 		}
 		for _, bucket := range buckets {
-			reply.Buckets = append(reply.Buckets, WebBucketInfo{
-				Name:         bucket.Name,
-				CreationDate: bucket.Created,
-			})
+			if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.Subject,
+				Action:          iampolicy.Action(policy.GetObjectAction),
+				BucketName:      bucket.Name,
+				ConditionValues: getConditionValues(r, ""),
+				IsOwner:         owner,
+				ObjectName:      "",
+			}) {
+				reply.Buckets = append(reply.Buckets, WebBucketInfo{
+					Name:         bucket.Name,
+					CreationDate: bucket.Created,
+				})
+			}
 		}
 	}
 
