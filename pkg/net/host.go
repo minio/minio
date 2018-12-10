@@ -44,7 +44,7 @@ func (host Host) String() string {
 		return host.Name
 	}
 
-	return host.Name + ":" + host.Port.String()
+	return net.JoinHostPort(host.Name, host.Port.String())
 }
 
 // Equal - checks whether given host is equal or not.
@@ -127,6 +127,10 @@ func ParseHost(s string) (*Host, error) {
 		}
 
 		isPortSet = true
+	}
+
+	if i := strings.Index(host, "%"); i > -1 {
+		host = host[:i]
 	}
 
 	if !isValidHost(host) {

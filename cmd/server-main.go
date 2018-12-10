@@ -389,8 +389,7 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(globalMinioAddr)
-	printStartupMessage(apiEndpoints)
+	printStartupMessage(getAPIEndpoints())
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

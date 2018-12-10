@@ -34,6 +34,11 @@ matrix:
         - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 20m "$d"; done
         - bash buildscripts/go-coverage.sh
 
+before_script:
+  # Add an IPv6 config - see the corresponding Travis issue
+  # https://github.com/travis-ci/travis-ci/issues/8361
+  - if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'; fi
+
 before_install:
  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then nvm install stable ; fi
 

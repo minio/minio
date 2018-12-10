@@ -112,6 +112,9 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 				return ep, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")
 			}
 		}
+		if i := strings.Index(host, "%"); i > -1 {
+			host = host[:i]
+		}
 
 		if host == "" {
 			return ep, fmt.Errorf("invalid URL endpoint format: empty host name")
@@ -152,7 +155,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		// Only check if the arg is an ip address and ask for scheme since its absent.
 		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as
 		// /mnt/export1. So we go ahead and start the minio server in FS modes in these cases.
-		if isHostIPv4(arg) {
+		if isHostIP(arg) {
 			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
 		}
 		u = &url.URL{Path: path.Clean(arg)}
@@ -224,7 +227,6 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 		uniqueArgs.Add(arg)
 		endpoints = append(endpoints, endpoint)
 	}
-
 	return endpoints, nil
 }
 
@@ -341,7 +343,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			if err != nil {
 				host = endpoint.Host
 			}
-			hostIPSet, _ := getHostIP4(host)
+			hostIPSet, _ := getHostIP(host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
 					return serverAddr, endpoints, setupType,
@@ -411,12 +413,12 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 				host = localServerAddr
 			}
 
-			ipList, err := getHostIP4(host)
+			ipList, err := getHostIP(host)
 			logger.FatalIf(err, "unexpected error when resolving host '%s'", host)
 
-			// Filter ipList by IPs those start with '127.'.
+			// Filter ipList by IPs those start with '127.' or '::1'
 			loopBackIPs := ipList.FuncMatch(func(ip string, matchString string) bool {
-				return strings.HasPrefix(ip, "127.")
+				return strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1")
 			}, "")
 
 			// If loop back IP is found and ipList contains only loop back IPs, then error out.
@@ -485,10 +487,10 @@ func GetLocalPeer(endpoints EndpointList) (localPeer string) {
 		// Local peer can be empty in FS or Erasure coded mode.
 		// If so, return globalMinioHost + globalMinioPort value.
 		if globalMinioHost != "" {
-			return globalMinioHost + ":" + globalMinioPort
+			return net.JoinHostPort(globalMinioHost, globalMinioPort)
 		}
 
-		return "127.0.0.1:" + globalMinioPort
+		return net.JoinHostPort("127.0.0.1", globalMinioPort)
 	}
 	return peerSet.ToSlice()[0]
 }
@@ -525,10 +527,10 @@ func updateDomainIPs(endPoints set.StringSet) {
 				continue
 			}
 		}
-		IPs, _ := getHostIP4(host)
+		IPs, _ := getHostIP(host)
 		ipList = ipList.Union(IPs)
 	}
 	globalDomainIPs = ipList.FuncMatch(func(ip string, matchString string) bool {
-		return !strings.HasPrefix(ip, "127.")
+		return !strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1")
 	}, "")
 }
