@@ -117,7 +117,7 @@ func (g *NAS) Production() bool {
 }
 
 // IsListenBucketSupported returns whether listen bucket notification is applicable for this gateway.
-func (g *NAS) IsListenBucketSupported() bool {
+func (n *nasObjects) IsListenBucketSupported() bool {
 	return false
 }
 
