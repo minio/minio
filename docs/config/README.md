@@ -132,9 +132,9 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 
 ## Environment only settings
 
-#### Browser
+### Browser
 
-Enable or disable access to web UI. By default it is set to `on`. You may override this field with ``MINIO_BROWSER`` environment variable.
+Enable or disable access to web UI. By default it is set to `on`. You may override this field with `MINIO_BROWSER` environment variable.
 
 Example:
 
@@ -145,11 +145,22 @@ minio server /data
 
 ### Domain
 
-By default, Minio supports path-style requests that are of the format http://mydomain.com/bucket/object. MINIO_DOMAIN environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
+By default, Minio supports path-style requests that are of the format http://mydomain.com/bucket/object. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
 Example:
 
 ```sh
 export MINIO_DOMAIN=mydomain.com
+minio server /data
+```
+
+### Drive Sync
+
+By default, Minio writes to disk in synchronous mode for all metadata operations. Set `MINIO_DRIVE_SYNC` environment variable to enable synchronous mode for all data operations as well.
+
+Example:
+
+```sh
+export MINIO_DRIVE_SYNC=on
 minio server /data
 ```
 
