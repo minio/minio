@@ -30,7 +30,6 @@ import (
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
@@ -320,20 +319,6 @@ func handleCommonEnvVars() {
 		// if worm is turned off or on.
 		globalIsEnvWORM = true
 		globalWORMEnabled = bool(wormFlag)
-	}
-
-	kmsConf, err := crypto.NewVaultConfig()
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize hashicorp vault")
-	}
-	if kmsConf.Vault.Endpoint != "" {
-		kms, err := crypto.NewVault(kmsConf)
-		if err != nil {
-			logger.Fatal(err, "Unable to initialize KMS")
-		}
-		globalKMS = kms
-		globalKMSKeyID = kmsConf.Vault.Key.Name
-		globalKMSConfig = kmsConf
 	}
 
 	if compress := os.Getenv("MINIO_COMPRESS"); compress != "" {

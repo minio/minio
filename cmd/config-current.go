@@ -271,8 +271,8 @@ func (s *serverConfig) loadFromEnvs() {
 		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
 	}
 
-	if globalKMS != nil {
-		s.KMS = globalKMSConfig
+	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
+		logger.FatalIf(err, "Unable to setup the KMS")
 	}
 
 	if globalIsEnvCompression {
@@ -534,12 +534,8 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
-	if globalKMS == nil {
-		globalKMSConfig = s.KMS
-		if kms, err := crypto.NewVault(globalKMSConfig); err == nil {
-			globalKMS = kms
-			globalKMSKeyID = globalKMSConfig.Vault.Key.Name
-		}
+	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
+		logger.FatalIf(err, "Unable to setup the KMS")
 	}
 
 	if !globalIsCompressionEnabled {
