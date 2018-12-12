@@ -78,9 +78,16 @@ func TestGuessIsRPC(t *testing.T) {
 	if guessIsRPCReq(nil) {
 		t.Fatal("Unexpected return for nil request")
 	}
+
+	u, err := url.Parse("http://localhost:9000/minio/lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	r := &http.Request{
 		Proto:  "HTTP/1.0",
 		Method: http.MethodPost,
+		URL:    u,
 	}
 	if !guessIsRPCReq(r) {
 		t.Fatal("Test shouldn't fail for a possible net/rpc request.")

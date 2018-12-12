@@ -177,6 +177,10 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
+	if !objAPI.IsListenBucketSupported() {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
 

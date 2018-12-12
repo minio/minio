@@ -65,40 +65,60 @@ func New(reader io.Reader, size int64, req ObjectSelectRequest) (s3s format.Sele
 
 	//  Initializating options for CSV
 	if req.InputSerialization.CSV != nil {
-		if req.OutputSerialization.CSV.FieldDelimiter == "" {
-			req.OutputSerialization.CSV.FieldDelimiter = ","
-		}
 		if req.InputSerialization.CSV.FileHeaderInfo == "" {
 			req.InputSerialization.CSV.FileHeaderInfo = CSVFileHeaderInfoNone
 		}
 		if req.InputSerialization.CSV.RecordDelimiter == "" {
 			req.InputSerialization.CSV.RecordDelimiter = "\n"
 		}
-		s3s, err = csv.New(&csv.Options{
-			HasHeader:            req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
-			RecordDelimiter:      req.InputSerialization.CSV.RecordDelimiter,
-			FieldDelimiter:       req.InputSerialization.CSV.FieldDelimiter,
-			Comments:             req.InputSerialization.CSV.Comments,
-			Name:                 "S3Object", // Default table name for all objects
-			ReadFrom:             reader,
-			Compressed:           string(req.InputSerialization.CompressionType),
-			Expression:           cleanExpr(req.Expression),
-			OutputFieldDelimiter: req.OutputSerialization.CSV.FieldDelimiter,
-			StreamSize:           size,
-			HeaderOpt:            req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
-			Progress:             req.RequestProgress.Enabled,
-		})
+		options := &csv.Options{
+			Name:            "S3Object", // Default table name for all objects
+			HasHeader:       req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
+			RecordDelimiter: req.InputSerialization.CSV.RecordDelimiter,
+			FieldDelimiter:  req.InputSerialization.CSV.FieldDelimiter,
+			Comments:        req.InputSerialization.CSV.Comments,
+			ReadFrom:        reader,
+			Compressed:      string(req.InputSerialization.CompressionType),
+			Expression:      cleanExpr(req.Expression),
+			StreamSize:      size,
+			HeaderOpt:       req.InputSerialization.CSV.FileHeaderInfo == CSVFileHeaderInfoUse,
+			Progress:        req.RequestProgress.Enabled,
+		}
+		if req.OutputSerialization.CSV != nil {
+			if req.OutputSerialization.CSV.FieldDelimiter == "" {
+				req.OutputSerialization.CSV.FieldDelimiter = ","
+			}
+			options.OutputFieldDelimiter = req.OutputSerialization.CSV.FieldDelimiter
+			options.OutputRecordDelimiter = req.OutputSerialization.CSV.RecordDelimiter
+			options.OutputType = format.CSV
+		}
+		if req.OutputSerialization.JSON != nil {
+			options.OutputRecordDelimiter = req.OutputSerialization.JSON.RecordDelimiter
+			options.OutputType = format.JSON
+		}
+		// Initialize CSV input type
+		s3s, err = csv.New(options)
 	} else if req.InputSerialization.JSON != nil {
-		//  Initializating options for JSON
-		s3s, err = json.New(&json.Options{
-			Name:       "S3Object", // Default table name for all objects
-			ReadFrom:   reader,
-			Compressed: string(req.InputSerialization.CompressionType),
-			Expression: cleanExpr(req.Expression),
-			StreamSize: size,
-			Type:       req.InputSerialization.JSON.Type == JSONTypeDocument,
-			Progress:   req.RequestProgress.Enabled,
-		})
+		options := &json.Options{
+			Name:         "S3Object", // Default table name for all objects
+			ReadFrom:     reader,
+			Compressed:   string(req.InputSerialization.CompressionType),
+			Expression:   cleanExpr(req.Expression),
+			StreamSize:   size,
+			DocumentType: req.InputSerialization.JSON.Type == JSONTypeDocument,
+			Progress:     req.RequestProgress.Enabled,
+		}
+		if req.OutputSerialization.JSON != nil {
+			options.OutputRecordDelimiter = req.OutputSerialization.JSON.RecordDelimiter
+			options.OutputType = format.JSON
+		}
+		if req.OutputSerialization.CSV != nil {
+			options.OutputFieldDelimiter = req.OutputSerialization.CSV.FieldDelimiter
+			options.OutputRecordDelimiter = req.OutputSerialization.CSV.RecordDelimiter
+			options.OutputType = format.CSV
+		}
+		// Initialize JSON input type
+		s3s, err = json.New(options)
 	}
 	return s3s, err
 }

@@ -228,7 +228,8 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	return req.Method == http.MethodPost
+	return req.Method == http.MethodPost &&
+		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+"/")
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

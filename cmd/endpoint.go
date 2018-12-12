@@ -455,7 +455,12 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		return serverAddr, endpoints, setupType, err
 	}
 
-	updateDomainIPs(uniqueArgs)
+	_, dok := os.LookupEnv("MINIO_DOMAIN")
+	_, eok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
+	_, iok := os.LookupEnv("MINIO_PUBLIC_IPS")
+	if dok && eok && !iok {
+		updateDomainIPs(uniqueArgs)
+	}
 
 	setupType = DistXLSetupType
 	return serverAddr, endpoints, setupType, nil
@@ -509,21 +514,21 @@ func GetRemotePeers(endpoints EndpointList) []string {
 	return peerSet.ToSlice()
 }
 
-// In federated and distributed setup, update IP addresses of the hosts passed in command line
-// if MINIO_PUBLIC_IPS are not set manually
 func updateDomainIPs(endPoints set.StringSet) {
-	_, dok := os.LookupEnv("MINIO_DOMAIN")
-	_, eok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
-	_, iok := os.LookupEnv("MINIO_PUBLIC_IPS")
-	if dok && eok && !iok {
-		globalDomainIPs = set.NewStringSet()
-		for e := range endPoints {
-			host, _, _ := net.SplitHostPort(e)
-			ipList, _ := getHostIP4(host)
-			remoteIPList := ipList.FuncMatch(func(ip string, matchString string) bool {
-				return !strings.HasPrefix(ip, "127.")
-			}, "")
-			globalDomainIPs.Add(remoteIPList.ToSlice()[0])
+	ipList := set.NewStringSet()
+	for e := range endPoints {
+		host, _, err := net.SplitHostPort(e)
+		if err != nil {
+			if strings.Contains(err.Error(), "missing port in address") {
+				host = e
+			} else {
+				continue
+			}
 		}
+		IPs, _ := getHostIP4(host)
+		ipList = ipList.Union(IPs)
 	}
+	globalDomainIPs = ipList.FuncMatch(func(ip string, matchString string) bool {
+		return !strings.HasPrefix(ip, "127.")
+	}, "")
 }

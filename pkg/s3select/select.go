@@ -201,14 +201,19 @@ func processSelectReq(reqColNames []string, alias string, wc sqlparser.Expr, lre
 		lrecords = math.MaxInt64
 	}
 
-	columnsKv, err := columnsIndex(reqColNames, f)
-	if err != nil {
-		rowCh <- Row{
-			err: err,
+	var results []string
+	var columnsKv []columnKv
+	if f.Type() == format.CSV {
+		var err error
+		columnsKv, err = columnsIndex(reqColNames, f)
+		if err != nil {
+			rowCh <- Row{
+				err: err,
+			}
+			return
 		}
-		return
+		results = make([]string, len(columnsKv))
 	}
-	var results = make([]string, len(columnsKv))
 
 	for {
 		record, err := f.Read()
@@ -226,6 +231,19 @@ func processSelectReq(reqColNames []string, alias string, wc sqlparser.Expr, lre
 			}
 			close(rowCh)
 			return
+		}
+
+		// For JSON multi-line input type columns needs
+		// to be handled for each record.
+		if f.Type() == format.JSON {
+			columnsKv, err = columnsIndex(reqColNames, f)
+			if err != nil {
+				rowCh <- Row{
+					err: err,
+				}
+				return
+			}
+			results = make([]string, len(columnsKv))
 		}
 
 		f.UpdateBytesProcessed(int64(len(record)))
@@ -250,17 +268,17 @@ func processSelectReq(reqColNames []string, alias string, wc sqlparser.Expr, lre
 		if condition {
 			// if its an asterix we just print everything in the row
 			if reqColNames[0] == "*" && fnNames[0] == "" {
-				switch f.Type() {
+				switch f.OutputType() {
 				case format.CSV:
 					for i, kv := range columnsKv {
 						results[i] = gjson.GetBytes(record, kv.Key).String()
 					}
 					rowCh <- Row{
-						record: strings.Join(results, f.OutputFieldDelimiter()) + "\n",
+						record: strings.Join(results, f.OutputFieldDelimiter()) + f.OutputRecordDelimiter(),
 					}
 				case format.JSON:
 					rowCh <- Row{
-						record: string(record) + "\n",
+						record: string(record) + f.OutputRecordDelimiter(),
 					}
 				}
 			} else if alias != "" {

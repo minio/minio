@@ -94,6 +94,7 @@ type ObjectLayer interface {
 
 	// Supported operations check
 	IsNotificationSupported() bool
+	IsListenBucketSupported() bool
 	IsEncryptionSupported() bool
 
 	// Compression support check.

@@ -57,8 +57,11 @@ type Options struct {
 	// SQL expression meant to be evaluated.
 	Expression string
 
-	// What the outputted CSV will be delimited by .
+	// Output CSV will be delimited by.
 	OutputFieldDelimiter string
+
+	// Output CSV record will be delimited by.
+	OutputRecordDelimiter string
 
 	// Size of incoming object
 	StreamSize int64
@@ -68,6 +71,9 @@ type Options struct {
 
 	// Progress enabled, enable/disable progress messages.
 	Progress bool
+
+	// Output format type, supported values are CSV and JSON
+	OutputType format.Type
 }
 
 // cinput represents a record producing input from a formatted object.
@@ -147,6 +153,9 @@ func (reader *cinput) readHeader() error {
 		reader.firstRow = nil
 	} else {
 		reader.firstRow, readErr = reader.reader.Read()
+		if readErr != nil {
+			return format.ErrCSVParsingError
+		}
 		reader.header = make([]string, len(reader.firstRow))
 		for i := range reader.firstRow {
 			reader.header[i] = "_" + strconv.Itoa(i)
@@ -173,8 +182,13 @@ func (reader *cinput) Read() ([]byte, error) {
 	if dec != nil {
 		var data []byte
 		var err error
-		for i, value := range dec {
-			data, err = sjson.SetBytes(data, reader.header[i], value)
+		// Navigate column values in reverse order to preserve
+		// the input order for AWS S3 compatibility, because
+		// sjson adds json key/value pairs in first in last out
+		// fashion. This should be fixed in sjson ideally. Following
+		// work around is needed to circumvent this issue for now.
+		for i := len(dec) - 1; i >= 0; i-- {
+			data, err = sjson.SetBytes(data, reader.header[i], dec[i])
 			if err != nil {
 				return nil, err
 			}
@@ -184,8 +198,13 @@ func (reader *cinput) Read() ([]byte, error) {
 	return nil, nil
 }
 
-// OutputFieldDelimiter - returns the delimiter specified in input request
+// OutputFieldDelimiter - returns the requested output field delimiter.
 func (reader *cinput) OutputFieldDelimiter() string {
+	return reader.options.OutputFieldDelimiter
+}
+
+// OutputRecordDelimiter - returns the requested output record delimiter.
+func (reader *cinput) OutputRecordDelimiter() string {
 	return reader.options.OutputFieldDelimiter
 }
 
@@ -285,9 +304,14 @@ func (reader *cinput) CreateProgressXML() (string, error) {
 	return xml.Header + string(out), nil
 }
 
-// Type - return the data format type {
+// Type - return the data format type
 func (reader *cinput) Type() format.Type {
 	return format.CSV
+}
+
+// OutputType - return the data format type
+func (reader *cinput) OutputType() format.Type {
+	return reader.options.OutputType
 }
 
 // ColNameErrs is a function which makes sure that the headers are requested are

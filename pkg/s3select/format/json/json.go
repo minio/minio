@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/minio/minio/pkg/s3select/format"
+	"github.com/tidwall/gjson"
 )
 
 // Options options are passed to the underlying encoding/json reader.
@@ -40,24 +41,32 @@ type Options struct {
 	// SQL expression meant to be evaluated.
 	Expression string
 
-	// What the outputted  will be delimited by .
+	// Input record delimiter.
 	RecordDelimiter string
+
+	// Output CSV will be delimited by.
+	OutputFieldDelimiter string
+
+	// Output record delimiter.
+	OutputRecordDelimiter string
 
 	// Size of incoming object
 	StreamSize int64
 
-	// True if Type is DOCUMENTS
-	Type bool
+	// True if DocumentType is DOCUMENTS
+	DocumentType bool
 
 	// Progress enabled, enable/disable progress messages.
 	Progress bool
+
+	// Output format type, supported values are CSV and JSON
+	OutputType format.Type
 }
 
 // jinput represents a record producing input from a  formatted file or pipe.
 type jinput struct {
 	options         *Options
 	reader          *bufio.Reader
-	firstRow        []string
 	header          []string
 	minOutputLength int
 	stats           struct {
@@ -79,7 +88,6 @@ func New(opts *Options) (format.Select, error) {
 	reader.stats.BytesScanned = opts.StreamSize
 	reader.stats.BytesProcessed = 0
 	reader.stats.BytesReturned = 0
-
 	return reader, nil
 }
 
@@ -95,7 +103,7 @@ func (reader *jinput) UpdateBytesProcessed(size int64) {
 
 // Read the file and returns
 func (reader *jinput) Read() ([]byte, error) {
-	data, err := reader.reader.ReadBytes('\n')
+	data, _, err := reader.reader.ReadLine()
 	if err != nil {
 		if err == io.EOF || err == io.ErrClosedPipe {
 			err = nil
@@ -103,17 +111,32 @@ func (reader *jinput) Read() ([]byte, error) {
 			err = format.ErrJSONParsingError
 		}
 	}
+	if err == nil {
+		var header []string
+		gjson.ParseBytes(data).ForEach(func(key, value gjson.Result) bool {
+			header = append(header, key.String())
+			return true
+		})
+		reader.header = header
+	}
 	return data, err
 }
 
-// OutputFieldDelimiter - returns the delimiter specified in input request
+// OutputFieldDelimiter - returns the delimiter specified in input request,
+// for JSON output this value is empty, but does have a value when
+// output type is CSV.
 func (reader *jinput) OutputFieldDelimiter() string {
-	return ","
+	return reader.options.OutputFieldDelimiter
+}
+
+// OutputRecordDelimiter - returns the delimiter specified in input request, after each JSON record.
+func (reader *jinput) OutputRecordDelimiter() string {
+	return reader.options.OutputRecordDelimiter
 }
 
 // HasHeader - returns true or false depending upon the header.
 func (reader *jinput) HasHeader() bool {
-	return false
+	return true
 }
 
 // Expression - return the Select Expression for
@@ -128,7 +151,7 @@ func (reader *jinput) UpdateBytesReturned(size int64) {
 
 // Header returns a nil in case of
 func (reader *jinput) Header() []string {
-	return nil
+	return reader.header
 }
 
 // CreateStatXML is the function which does the marshaling from the stat
@@ -169,6 +192,11 @@ func (reader *jinput) CreateProgressXML() (string, error) {
 // Type - return the data format type {
 func (reader *jinput) Type() format.Type {
 	return format.JSON
+}
+
+// OutputType - return the data format type {
+func (reader *jinput) OutputType() format.Type {
+	return reader.options.OutputType
 }
 
 // ColNameErrs - this is a dummy function for JSON input type.

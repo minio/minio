@@ -1,90 +1,149 @@
 # How to secure access to Minio server with TLS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-This document explains how to configure Minio server with TLS certificates on Linux and Windows platforms.
+This guide explains how to configure Minio Server with TLS certificates on Linux and Windows platforms.
 
-## 1. Prerequisites
+1. [Install Minio Server](#install-minio-server) 
+2. [Use an Existing Key and Certificate with Minio](#use-an-existing-key-and-certificate-with-minio) 
+3. [Generate and use Self-signed Keys and Certificates with Minio](#generate-use-self-signed-keys-certificates) 
+4. [Install Certificates from Third-party CAs](#install-certificates-from-third-party-cas)
 
-Download Minio server from [here](https://docs.minio.io/docs/minio-quickstart-guide)
+## <a name="install-minio-server"></a>1. Install Minio Server
 
-## 2. Existing certificates
+Install Minio Server using the instructions in the [Minio Quickstart Guide](http://docs.minio.io/docs/minio-quickstart-guide).
 
-If you have already acquired private keys and public certificates, copy them under `certs` directory in your Minio config directory. By default config directory is `${HOME}/.minio/` or `%%USERPROFILE%%\.minio\` (based on your operating system). Note that the file should be named as `private.key` and `public.crt` for key and certificate respectively.
+## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with Minio 
 
-If the certificate is signed by a certificate authority (CA), `public.crt` should be the concatenation of the server's certificate, any intermediates, and the CA's root certificate.
+This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.minio.io/docs/).
 
-If you're looking to generate CA certificate for Minio using Let's Encrypt, follow the docs [here](https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio).
+Copy the existing private key and public certificate to the `certs` directory within the Minio configuration directory. The default configuration directory is:
+* **Linux:** `${HOME}/.minio/`
+* **Windows:** `%%USERPROFILE%%\.minio\`
 
-## 3. Generate self-signed certificates
+**Note:** 
+* The key and certificate files must be appended with `.key` and `.crt`, respectively.
+* A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
-Before generating your self-signed certificate, note that
+## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with Minio
 
-- Minio supports only key/certificate in PEM format on Linux.
-- Minio supports only key/certificate in PEM format on Windows. We don't support PFX certificates currently.
+This section describes how to generate a self-signed certificate using various tools:
 
-### Using generate_cert.go
+3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
+3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
+3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
+3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
 
-Download [generate_cert.go](https://golang.org/src/crypto/tls/generate_cert.go?m=text). This is a simple go tool to generate self-signed certificates.
+**Note:**
+* Minio only supports keys and certificates in PEM format on Linux and Windows.
+* Minio doesn't currently support PFX certificates.
 
-`generate_cert.go` already provides SAN certificates with DNS and IP entries:
+### <a name="using-go"></a>3.1 Use generate_cert.go to Generate a Certificate
+
+Download [`generate_cert.go`](https://golang.org/src/crypto/tls/generate_cert.go?m=text).
+
+`generate_cert.go` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
 
 ```sh
 go run generate_cert.go -ca --host "10.10.0.3"
 ```
 
-### Using OpenSSL
+A response similar to this one should be displayed:
 
-**Generate the private key**:
+```
+2018/11/21 10:16:18 wrote cert.pem
+2018/11/21 10:16:18 wrote key.pem
+```
 
-1. **ECDSA:**  
+Rename `cert.pem` to `public.crt` and `key.pem` to `private.key`.
+
+### <a name="using-open-ssl"></a>3.2 Use OpenSSL to Generate a Certificate
+
+Use one of the following methods to generate a certificate using `openssl`:
+
+* 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
+* 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
+* 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
+
+
+#### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
+
+Use the following command to generate a private key with ECDSA:
+
 ```sh
 openssl ecparam -genkey -name prime256v1 | openssl ec -out private.key
 ```
-or protect the private key additionally with a password:  
+
+A response similar to this one should be displayed:
+
+```
+read EC key
+writing EC key
+```
+
+Alternatively, use the following command to generate a private ECDSA key protected by a password:
+
 ```sh
 openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
 ```
 
-Notice that the NIST curves P-384 and P-521 are not supported yet.
+**Note:** NIST curves P-384 and P-521 are not currently supported.
 
-2. **RSA:**
+#### 3.2.2 <a name="generate-private-key-with-rsa"></a>Generate a private key with RSA.
+
+Use the following command to generate a private key with RSA:
+
 ```sh
 openssl genrsa -out private.key 2048
 ```  
-or protect the private key additionally with a password:  
+A response similar to this one should be displayed:
+
+```
+Generating RSA private key, 2048 bit long modulus
+............................................+++
+...........+++
+e is 65537 (0x10001)
+```
+
+Alternatively, use the following command to generate a private RSA key protected by a password:
+
 ```sh
 openssl genrsa -aes256 -out private.key 2048 -passout pass:PASSWORD
 ```
 
-If a password-protected private key is used the password must be provided through the environment variable `MINIO_CERT_PASSWD`:
-```sh
-export MINIO_CERT_PASSWD=PASSWORD
-``` 
-Please use your own password instead of PASSWORD.
+**Note:** When using a password-protected private key, the password must be provided through the environment variable `MINIO_CERT_PASSWD` using the following command:
 
-**Notice:**  
-The OpenSSL default format for encrypted private keys is PKCS-8. Minio only supports PKCS-1 encrypted private keys.
-An encrypted private PKCS-8 formated RSA key can be converted to an encrypted private PKCS-1 formated RSA key by:
+```sh
+export MINIO_CERT_PASSWD=<PASSWORD>
+``` 
+
+The default OpenSSL format for private encrypted keys is PKCS-8, but Minio only supports PKCS-1. An RSA key that has been formatted with PKCS-8 can be converted to PKCS-1 using the following command:
+
 ```sh
 openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
 ```  
 
-**Generate the self-signed certificate**:
+#### <a name="generate-a-self-signed-certificate"></a>3.2.3 Generate a self-signed certificate.
 
-Generate self-signed certificate using the below command (remember to replace `<domain.com>` with your actual domain name)
+Use the following command to generate a self-signed certificate and enter a passphrase when prompted:
 
 ```sh
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<domain.com>"
 ```
 
-Generate self-signed wildcard certificate using the below command. This certificate will be valid for all the sub-domains under `domain.com`. Wildcard certificates come in handy while deploying distributed Minio instances where there may be multiple sub-domains under a single domain, with each one running a separate Minio instance.
+**Note:** Replace `<domain.com>` with the development domain name.
+
+Alternatively, use the command below to generate a self-signed wildcard certificate that is valid for all subdomains under `<domain.com>`. Wildcard certificates are useful for deploying distributed Minio instances, where each instance runs on a subdomain under a single parent domain.
 
 ```sh
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
 ```
 
-### Using OpenSSL (with IP address)
+### <a name="using-open-ssl-with-ip"></a>3.3 Use OpenSSL (with IP address) to Generate a Certificate
 
-Create a file called `openssl.conf` and add the below text in the file. Note that you'll need to change the `IP.1` field to point to correct IP address.
+This section describes how to specify an IP address to `openssl` when generating a certificate.
+
+#### 3.3.1 Create a configuration file.
+
+Create a file named `openssl.conf` with the content below. Change `IP.1` to point to the correct IP address:
 
 ```sh
 [req]
@@ -107,31 +166,43 @@ subjectAltName = @alt_names
 IP.1 = 127.0.0.1
 ```
 
-Then run
+#### 3.3.2 Run `openssl` and specify the configuration file:
 
 ```sh
 openssl req -x509 -nodes -days 730 -newkey rsa:2048 -keyout private.key -out public.crt -config openssl.conf
 ```
 
-### Using GnuTLS (for Windows)
+### <a name="using-gnu-tls"></a>3.4 Use GnuTLS (for Windows) to Generate a Certificate
 
-Download and decompress the Windows version of GnuTLS from [here](http://www.gnutls.org/download.html)
+This section describes how to use GnuTLS on Windows to generate a certificate.
 
-Make sure to add extracted GnuTLS binary path to your system path.
+#### 3.4.1 Install and configure GnuTLS.
+Download and decompress the Windows version of GnuTLS from [here](http://www.gnutls.org/download.html).
+
+Use PowerShell to add the path of the extracted GnuTLS binary to the system path:
 
 ```
 setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
 ```
 
-You may need to restart your powershell console for this to take affect.
+**Note:** PowerShell may need to be restarted for this change to take effect.
 
-- Run the following command to create `private.key`
+#### 3.4.2 Generate a private key:
+Run the following command to generate a private `.key` file:
 
 ```
 certtool.exe --generate-privkey --outfile private.key
 ```
 
-- Create a file `cert.cnf` with all the necessary information to generate a certificate.
+A response similar to this one should be displayed:
+
+```
+Generating a 3072 bit RSA private key...
+```
+
+####3.4.3 Generate a public certificate:
+
+Create a file called `cert.cnf` with the content below. This file contains all of the information necessary to generate a certificate using `certtool.exe`:
 
 ```
 # X.509 Certificate options
@@ -173,15 +244,17 @@ tls_www_server
 encryption_key
 ```
 
-Generate public certificate
+Run `certtool.exe` and specify the configuration file to generate a certificate:
 
 ```
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt
 ```
 
-## 4. Install third-party CAs
+## <a name="install-certificates-from-third-party-cas"></a>4. Install Certificates from Third-party CAs
 
-Minio can be configured to connect to other servers, whether Minio nodes or servers like NATs, Redis. If these servers use certificates that are not registered in one of the known certificates authorities, you can make Minio server trust these CAs by dropping these certificates under Minio config path (`~/.minio/certs/CAs/` on Linux or `C:\Users\<Username>\.minio\certs\CAs` on Windows).
+Minio can connect to other servers, including Minio nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to Minio Server by placing these certificates under one of the following Minio configuration paths:
+* **Linux:** `~/.minio/certs/CAs/`
+* **Windows**: `C:\Users\<Username>\.minio\certs\CAs`
 
 # Explore Further
 * [TLS Configuration for Minio server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
