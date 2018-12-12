@@ -537,6 +537,9 @@ func (args eventArgs) ToEvent() event.Event {
 	if args.EventName != event.ObjectRemovedDelete {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
+		if args.Object.IsCompressed() {
+			newEvent.S3.Object.Size = args.Object.GetActualSize()
+		}
 		newEvent.S3.Object.ContentType = args.Object.ContentType
 		newEvent.S3.Object.UserMetadata = args.Object.UserDefined
 	}
