@@ -788,13 +788,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		length = actualSize
 	}
 
+	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	isCompressed := objectAPI.IsCompressionSupported() && isCompressible(r.Header, srcObject) && !isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI)
 	if isCompressed {
-		// Storing the compression metadata.
-		srcInfo.UserDefined[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
-		srcInfo.UserDefined[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
+		compressMetadata = make(map[string]string, 2)
+		// Preserving the compression metadata.
+		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 		// Remove all source encrypted related metadata to
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
@@ -935,6 +937,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	// Store the preserved compression metadata.
+	for k, v := range compressMetadata {
+		srcInfo.UserDefined[k] = v
 	}
 
 	// We need to preserve the encryption headers set in EncryptRequest,
