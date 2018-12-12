@@ -323,6 +323,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	var (
 		opts ObjectOptions
 		err  error
@@ -483,13 +488,18 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
-		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
+		writeErrorResponseHeadersOnly(w, ErrBadRequest)
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponseHeadersOnly(w, ErrNoSuchVersion)
+		return
+	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -695,6 +705,22 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		// Save unescaped string as is.
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
+	}
+
+	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
+	// Regardless of whether you have enabled versioning, each object in your bucket
+	// has a version ID. If you have not enabled versioning, Amazon S3 sets the value
+	// of the version ID to null. If you have enabled versioning, Amazon S3 assigns a
+	// unique version ID value for the object.
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		// Check if versionId query param was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid := u.Query().Get("versionId"); vid != "" && vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
+		cpSrcPath = u.Path
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
