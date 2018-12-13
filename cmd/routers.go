@@ -101,7 +101,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		registerDistXLRouters(router, endpoints)
 	}
 
-	// Add STS router only enabled if etcd is configured.
+	// Add STS router always.
 	registerSTSRouter(router)
 
 	// Add Admin RPC router

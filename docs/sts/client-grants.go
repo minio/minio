@@ -1,3 +1,5 @@
+// +build ignore
+
 /*
  * Minio Cloud Storage, (C) 2018 Minio, Inc.
  *
@@ -122,6 +124,7 @@ func main() {
 	v.Set("Action", "AssumeRoleWithClientGrants")
 	v.Set("Token", idpToken.AccessToken)
 	v.Set("DurationSeconds", fmt.Sprintf("%d", idpToken.Expiry))
+	v.Set("Version", "2011-06-15")
 
 	u, err := url.Parse(stsEndpoint)
 	if err != nil {

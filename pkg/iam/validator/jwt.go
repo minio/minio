@@ -34,8 +34,8 @@ import (
 
 // JWKSArgs - RSA authentication target arguments
 type JWKSArgs struct {
-	URL       *xnet.URL `json:"url"`
-	publicKey crypto.PublicKey
+	URL        *xnet.URL `json:"url"`
+	publicKeys map[string]crypto.PublicKey
 }
 
 // Validate JWT authentication target arguments
@@ -64,9 +64,14 @@ func (r *JWKSArgs) PopulatePublicKey() error {
 		return err
 	}
 
-	r.publicKey, err = jwk.Keys[0].DecodePublicKey()
-	if err != nil {
-		return err
+	r.publicKeys = make(map[string]crypto.PublicKey)
+	for _, key := range jwk.Keys {
+		var publicKey crypto.PublicKey
+		publicKey, err = key.DecodePublicKey()
+		if err != nil {
+			return err
+		}
+		r.publicKeys[key.Kid] = publicKey
 	}
 
 	return nil
@@ -172,18 +177,19 @@ func newCustomHTTPTransport(insecure bool) *http.Transport {
 
 // Validate - validates the access token.
 func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
+	jp := new(jwtgo.Parser)
+	jp.ValidMethods = []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
+
 	keyFuncCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
-		if _, ok := jwtToken.Method.(*jwtgo.SigningMethodRSA); !ok {
-			if _, ok = jwtToken.Method.(*jwtgo.SigningMethodECDSA); ok {
-				return p.args.publicKey, nil
-			}
-			return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
+		kid, ok := jwtToken.Header["kid"].(string)
+		if !ok {
+			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
 		}
-		return p.args.publicKey, nil
+		return p.args.publicKeys[kid], nil
 	}
 
 	var claims jwtgo.MapClaims
-	jwtToken, err := jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
+	jwtToken, err := jp.ParseWithClaims(token, &claims, keyFuncCallback)
 	if err != nil {
 		if err = p.args.PopulatePublicKey(); err != nil {
 			return nil, err

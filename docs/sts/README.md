@@ -11,7 +11,8 @@ Following are advantages for using temporary credentials:
 - Temporary credentials have a limited lifetime, there is no need to rotate them or explicitly revoke them. Expired temporary credentials cannot be reused.
 
 ## Identity Federation
-[**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS supports client grants, tested against identity providers such as WSO2, KeyCloak.
+- [**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) - Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep Minio credentials to be secured. Minio STS supports client grants, tested against identity providers such as WSO2, KeyCloak.
+- [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) - Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as Facebook, Google etc.
 
 ## Get started
 In this document we will explain in detail on how to configure all the prerequisites, primarily WSO2, OPA (open policy agent).
@@ -46,11 +47,11 @@ export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio gateway s3
 ```
 
-### 4. Test using full-example.go
-On another terminal run `full-example.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its WSO2. Uses the returned access token response to get new temporary credentials from the Minio server using the STS API call `AssumeRoleWithClientGrants`.
+### 4. Test using client-grants.go
+On another terminal run `client-grants.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its WSO2. Uses the returned access token response to get new temporary credentials from the Minio server using the STS API call `AssumeRoleWithClientGrants`.
 
 ```
-go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
+go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
 ##### Credentials
 {
