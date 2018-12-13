@@ -134,6 +134,11 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 		return nil, err
 	}
 
+	// Set content-type to default value if it is not set.
+	if _, ok := metadata["content-type"]; !ok {
+		metadata["content-type"] = "application/octet-stream"
+	}
+
 	// Success.
 	return metadata, nil
 }
