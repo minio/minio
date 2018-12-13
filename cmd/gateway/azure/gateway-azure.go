@@ -841,14 +841,14 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent CopyBlob API.
 func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
+	srcBlob := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject)
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
-	azureMeta, props, err := s3MetaToAzureProperties(ctx, srcInfo.UserDefined)
+	azureMeta, _, err := s3MetaToAzureProperties(ctx, srcInfo.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
 	destBlob.Metadata = azureMeta
-	err = destBlob.Copy(srcBlobURL, nil)
+	err = destBlob.Copy(srcBlob.GetURL(), nil)
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
@@ -862,7 +862,12 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 			return objInfo, azureToObjectError(err, srcBucket, srcObject)
 		}
 	}
-	destBlob.Properties = props
+	// Get source blob properties and set them to dest blob
+	err = srcBlob.GetProperties(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
+	}
+	destBlob.Properties = srcBlob.Properties
 	err = destBlob.SetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
