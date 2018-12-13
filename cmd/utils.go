@@ -105,6 +105,12 @@ const (
 	httpsScheme = "https"
 )
 
+// nopCharsetConverter is a dummy charset convert which just copies input to output,
+// it is used to ignore custom encoding charset in S3 XML body.
+func nopCharsetConverter(label string, input io.Reader) (io.Reader, error) {
+	return input, nil
+}
+
 // xmlDecoder provide decoded value in xml.
 func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 	var lbody io.Reader
@@ -114,6 +120,8 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 		lbody = body
 	}
 	d := xml.NewDecoder(lbody)
+	// Ignore any encoding set in the XML body
+	d.CharsetReader = nopCharsetConverter
 	return d.Decode(v)
 }
 
