@@ -47,7 +47,7 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errIsNotRegular, errFileAccessDenied:
+	case errIsNotRegular:
 		if len(params) >= 2 {
 			err = ObjectExistsAsDirectory{
 				Bucket: params[0],
