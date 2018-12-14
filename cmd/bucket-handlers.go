@@ -482,7 +482,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	bucket := mux.Vars(r)["bucket"]
 
 	// Require Content-Length to be set in the request
