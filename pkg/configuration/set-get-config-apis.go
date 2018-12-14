@@ -55,16 +55,6 @@ type configKey interface {
 	Help(key string) (helpText string, err error) //template like mc --help
 }
 
-// ServerConfig kv has leaf node/key names and their values
-type ServerConfig struct {
-	RWMutex *sync.RWMutex
-	kv      map[string]string
-}
-
-// ServerConfigHandlers is the mux that routes to the key
-// method that is going to be executed
-type ServerConfigHandlers map[string]configKey
-
 // Structure of each line read from configuration file
 type lineStruct struct {
 	isComment         bool
@@ -72,6 +62,17 @@ type lineStruct struct {
 	isValidValue      bool
 	key, val, comment string
 }
+
+// ServerConfig kv has leaf node/key names and their values
+type ServerConfig struct {
+	RWMutex     *sync.RWMutex
+	fileContent []lineStruct
+	// kv      map[string]string
+}
+
+// ServerConfigHandlers is the mux that routes to the key
+// method that is going to be executed
+type ServerConfigHandlers map[string]configKey
 
 // Configuration information will be populated in a slice
 // of line structures when configuration file is read, so
@@ -95,7 +96,8 @@ func (v versionKey) Set(key, val string, cfg ServerConfig) error {
 		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
 	}
 
-	cfg.kv[key] = val
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 
@@ -111,7 +113,9 @@ func (c credentialAccessKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c credentialAccessKey) Help(key string) (string, error) {
@@ -126,7 +130,9 @@ func (c credentialSecretKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c credentialSecretKey) Help(key string) (string, error) {
@@ -141,7 +147,9 @@ func (r regionKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (r regionKey) Help(key string) (string, error) {
@@ -161,7 +169,8 @@ func (b browserKey) Set(key, val string, cfg ServerConfig) error {
 		return errors.New("Type Mismatch: expected 'on' or 'off'; received '" + val + "'.")
 	}
 
-	cfg.kv[key] = val
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (b browserKey) Help(key string) (string, error) {
@@ -181,7 +190,8 @@ func (w wormKey) Set(key, val string, cfg ServerConfig) error {
 		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
 	}
 
-	cfg.kv[key] = val
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (w wormKey) Help(key string) (string, error) {
@@ -196,7 +206,9 @@ func (d domainKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (d domainKey) Help(key string) (string, error) {
@@ -211,7 +223,9 @@ func (d cacheDrivesKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (d cacheDrivesKey) Help(key string) (string, error) {
@@ -226,7 +240,9 @@ func (c cacheExpiryKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c cacheExpiryKey) Help(key string) (string, error) {
@@ -241,7 +257,9 @@ func (c cacheMaxuseKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c cacheMaxuseKey) Help(key string) (string, error) {
@@ -256,7 +274,9 @@ func (c cacheExcludeKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c cacheExcludeKey) Help(key string) (string, error) {
@@ -271,7 +291,9 @@ func (c storageclassStandardKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c storageclassStandardKey) Help(key string) (string, error) {
@@ -286,7 +308,9 @@ func (c storageclassRRSKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c storageclassRRSKey) Help(key string) (string, error) {
@@ -301,7 +325,9 @@ func (c kmsVaultEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultEndpointKey) Help(key string) (string, error) {
@@ -316,7 +342,9 @@ func (c kmsVaultAuthTypeKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultAuthTypeKey) Help(key string) (string, error) {
@@ -331,7 +359,9 @@ func (c kmsVaultAuthApproleIDKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultAuthApproleIDKey) Help(key string) (string, error) {
@@ -346,7 +376,9 @@ func (c kmsVaultAuthApproleSecretKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultAuthApproleSecretKey) Help(key string) (string, error) {
@@ -361,7 +393,9 @@ func (c kmsVaultKeyIDNameKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultKeyIDNameKey) Help(key string) (string, error) {
@@ -376,7 +410,9 @@ func (c kmsVaultKeyIDVersionKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c kmsVaultKeyIDVersionKey) Help(key string) (string, error) {
@@ -391,7 +427,9 @@ func (c notifyAmqpAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyKey) Help(key string) (string, error) {
@@ -406,7 +444,9 @@ func (c notifyAmqpAnyURLKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyURLKey) Help(key string) (string, error) {
@@ -421,7 +461,9 @@ func (c notifyAmqpAnyExchangeKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyExchangeKey) Help(key string) (string, error) {
@@ -436,7 +478,9 @@ func (c notifyAmqpAnyRoutingKeyKey) Set(key, val string, cfg ServerConfig) error
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyRoutingKeyKey) Help(key string) (string, error) {
@@ -451,7 +495,9 @@ func (c notifyAmqpAnyExchangeTypeKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyExchangeTypeKey) Help(key string) (string, error) {
@@ -466,7 +512,9 @@ func (c notifyAmqpAnyDeliveryModeKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyDeliveryModeKey) Help(key string) (string, error) {
@@ -481,7 +529,9 @@ func (c notifyAmqpAnyMandatoryKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyMandatoryKey) Help(key string) (string, error) {
@@ -496,7 +546,9 @@ func (c notifyAmqpAnyImmediateKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyImmediateKey) Help(key string) (string, error) {
@@ -511,7 +563,9 @@ func (c notifyAmqpAnyDurableKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyDurableKey) Help(key string) (string, error) {
@@ -526,7 +580,9 @@ func (c notifyAmqpAnyInternalKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyInternalKey) Help(key string) (string, error) {
@@ -541,7 +597,9 @@ func (c notifyAmqpAnyNoWaitKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyNoWaitKey) Help(key string) (string, error) {
@@ -556,7 +614,9 @@ func (c notifyAmqpAnyAutoDeletedKey) Set(key, val string, cfg ServerConfig) erro
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyAmqpAnyAutoDeletedKey) Help(key string) (string, error) {
@@ -571,7 +631,9 @@ func (c notifyElasticsearchAnyKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyElasticsearchAnyKey) Help(key string) (string, error) {
@@ -586,7 +648,9 @@ func (c notifyElasticsearchAnyFormatKey) Set(key, val string, cfg ServerConfig) 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyElasticsearchAnyFormatKey) Help(key string) (string, error) {
@@ -601,7 +665,9 @@ func (c notifyElasticsearchAnyURLKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyElasticsearchAnyURLKey) Help(key string) (string, error) {
@@ -616,7 +682,9 @@ func (c notifyElasticsearchAnyIndexKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyElasticsearchAnyIndexKey) Help(key string) (string, error) {
@@ -631,7 +699,9 @@ func (c notifyKafkaAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyKey) Help(key string) (string, error) {
@@ -646,7 +716,9 @@ func (c notifyKafkaAnyBrokersKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyBrokersKey) Help(key string) (string, error) {
@@ -661,7 +733,9 @@ func (c notifyKafkaAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyTopicKey) Help(key string) (string, error) {
@@ -676,7 +750,9 @@ func (c notifyKafkaAnyTLSKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyTLSKey) Help(key string) (string, error) {
@@ -691,7 +767,9 @@ func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyTLSSkipVerifyKey) Help(key string) (string, error) {
@@ -706,7 +784,9 @@ func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnyTLSClientAuthKey) Help(key string) (string, error) {
@@ -721,7 +801,9 @@ func (c notifyKafkaAnySaslKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnySaslKey) Help(key string) (string, error) {
@@ -736,7 +818,9 @@ func (c notifyKafkaAnySaslUsernameKey) Set(key, val string, cfg ServerConfig) er
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnySaslUsernameKey) Help(key string) (string, error) {
@@ -751,7 +835,9 @@ func (c notifyKafkaAnySaslPasswordKey) Set(key, val string, cfg ServerConfig) er
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyKafkaAnySaslPasswordKey) Help(key string) (string, error) {
@@ -766,7 +852,9 @@ func (c notifyMqttAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyKey) Help(key string) (string, error) {
@@ -781,7 +869,9 @@ func (c notifyMqttAnyBrokerKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyBrokerKey) Help(key string) (string, error) {
@@ -796,7 +886,9 @@ func (c notifyMqttAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyTopicKey) Help(key string) (string, error) {
@@ -811,7 +903,9 @@ func (c notifyMqttAnyQosKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyQosKey) Help(key string) (string, error) {
@@ -826,7 +920,9 @@ func (c notifyMqttAnyClientIDKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyClientIDKey) Help(key string) (string, error) {
@@ -841,7 +937,9 @@ func (c notifyMqttAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyUsernameKey) Help(key string) (string, error) {
@@ -856,7 +954,9 @@ func (c notifyMqttAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyPasswordKey) Help(key string) (string, error) {
@@ -871,7 +971,9 @@ func (c notifyMqttAnyReconnectIntervalKey) Set(key, val string, cfg ServerConfig
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyReconnectIntervalKey) Help(key string) (string, error) {
@@ -886,7 +988,9 @@ func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val string, cfg ServerConfig
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMqttAnyKeepAliveIntervalKey) Help(key string) (string, error) {
@@ -901,7 +1005,9 @@ func (c notifyMysqlAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyKey) Help(key string) (string, error) {
@@ -916,7 +1022,9 @@ func (c notifyMysqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyFormatKey) Help(key string) (string, error) {
@@ -931,7 +1039,9 @@ func (c notifyMysqlAnyDsnStringKey) Set(key, val string, cfg ServerConfig) error
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyDsnStringKey) Help(key string) (string, error) {
@@ -946,7 +1056,9 @@ func (c notifyMysqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyTableKey) Help(key string) (string, error) {
@@ -961,7 +1073,9 @@ func (c notifyMysqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyHostKey) Help(key string) (string, error) {
@@ -976,7 +1090,9 @@ func (c notifyMysqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyPortKey) Help(key string) (string, error) {
@@ -991,7 +1107,9 @@ func (c notifyMysqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyUserKey) Help(key string) (string, error) {
@@ -1006,7 +1124,9 @@ func (c notifyMysqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyPasswordKey) Help(key string) (string, error) {
@@ -1021,7 +1141,9 @@ func (c notifyMysqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyMysqlAnyDatabaseKey) Help(key string) (string, error) {
@@ -1036,7 +1158,9 @@ func (c notifyNatsAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyKey) Help(key string) (string, error) {
@@ -1051,7 +1175,9 @@ func (c notifyNatsAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyAddressKey) Help(key string) (string, error) {
@@ -1066,7 +1192,9 @@ func (c notifyNatsAnySubjectKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnySubjectKey) Help(key string) (string, error) {
@@ -1081,7 +1209,9 @@ func (c notifyNatsAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyUsernameKey) Help(key string) (string, error) {
@@ -1096,7 +1226,9 @@ func (c notifyNatsAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyPasswordKey) Help(key string) (string, error) {
@@ -1111,7 +1243,9 @@ func (c notifyNatsAnyTokenKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyTokenKey) Help(key string) (string, error) {
@@ -1126,7 +1260,9 @@ func (c notifyNatsAnySecureKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnySecureKey) Help(key string) (string, error) {
@@ -1141,7 +1277,9 @@ func (c notifyNatsAnyPingIntervalKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyPingIntervalKey) Help(key string) (string, error) {
@@ -1156,7 +1294,9 @@ func (c notifyNatsAnyStreamingKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyStreamingKey) Help(key string) (string, error) {
@@ -1171,7 +1311,9 @@ func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val string, cfg ServerConfi
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyStreamingClusterIDKey) Help(key string) (string, error) {
@@ -1186,7 +1328,9 @@ func (c notifyNatsAnyStreamingClientIDKey) Set(key, val string, cfg ServerConfig
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyStreamingClientIDKey) Help(key string) (string, error) {
@@ -1201,7 +1345,9 @@ func (c notifyNatsAnyStreamingAsyncKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyStreamingAsyncKey) Help(key string) (string, error) {
@@ -1216,7 +1362,9 @@ func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val string, cfg Se
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Help(key string) (string, error) {
@@ -1231,7 +1379,9 @@ func (c notifyPostgresqlAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyKey) Help(key string) (string, error) {
@@ -1246,7 +1396,9 @@ func (c notifyPostgresqlAnyFormatKey) Set(key, val string, cfg ServerConfig) err
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyFormatKey) Help(key string) (string, error) {
@@ -1261,7 +1413,9 @@ func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val string, cfg ServerC
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyConnectionStringKey) Help(key string) (string, error) {
@@ -1276,7 +1430,9 @@ func (c notifyPostgresqlAnyTableKey) Set(key, val string, cfg ServerConfig) erro
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyTableKey) Help(key string) (string, error) {
@@ -1291,7 +1447,9 @@ func (c notifyPostgresqlAnyHostKey) Set(key, val string, cfg ServerConfig) error
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyHostKey) Help(key string) (string, error) {
@@ -1306,7 +1464,9 @@ func (c notifyPostgresqlAnyPortKey) Set(key, val string, cfg ServerConfig) error
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyPortKey) Help(key string) (string, error) {
@@ -1321,7 +1481,9 @@ func (c notifyPostgresqlAnyUserKey) Set(key, val string, cfg ServerConfig) error
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyUserKey) Help(key string) (string, error) {
@@ -1336,7 +1498,9 @@ func (c notifyPostgresqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyPasswordKey) Help(key string) (string, error) {
@@ -1351,7 +1515,9 @@ func (c notifyPostgresqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) e
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyPostgresqlAnyDatabaseKey) Help(key string) (string, error) {
@@ -1366,7 +1532,9 @@ func (c notifyRedisAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyRedisAnyKey) Help(key string) (string, error) {
@@ -1381,7 +1549,9 @@ func (c notifyRedisAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyRedisAnyFormatKey) Help(key string) (string, error) {
@@ -1396,7 +1566,9 @@ func (c notifyRedisAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyRedisAnyAddressKey) Help(key string) (string, error) {
@@ -1411,7 +1583,9 @@ func (c notifyRedisAnyPasswordKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyRedisAnyPasswordKey) Help(key string) (string, error) {
@@ -1426,7 +1600,9 @@ func (c notifyRedisAnyKeyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyRedisAnyKeyKey) Help(key string) (string, error) {
@@ -1441,7 +1617,9 @@ func (c notifyWebhookAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyWebhookAnyKey) Help(key string) (string, error) {
@@ -1456,7 +1634,9 @@ func (c notifyWebhookAnyEndpointKey) Set(key, val string, cfg ServerConfig) erro
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (c notifyWebhookAnyEndpointKey) Help(key string) (string, error) {
@@ -1471,7 +1651,9 @@ func (l logConsoleKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logConsoleKey) Help(key string) (string, error) {
@@ -1486,7 +1668,9 @@ func (l logConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logConsoleAuditKey) Help(key string) (string, error) {
@@ -1501,7 +1685,9 @@ func (l logConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logConsoleAnonymousKey) Help(key string) (string, error) {
@@ -1516,7 +1702,9 @@ func (l logHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logHTTPAnyKey) Help(key string) (string, error) {
@@ -1531,7 +1719,9 @@ func (l logHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logHTTPAnyEndpointKey) Help(key string) (string, error) {
@@ -1546,7 +1736,9 @@ func (l logHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logHTTPAnyAuditKey) Help(key string) (string, error) {
@@ -1561,7 +1753,9 @@ func (l logHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l logHTTPAnyAnonymousKey) Help(key string) (string, error) {
@@ -1579,7 +1773,9 @@ func (l loggerConsoleKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1598,7 +1794,9 @@ func (l loggerConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1617,7 +1815,9 @@ func (l loggerConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1636,7 +1836,9 @@ func (l loggerHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1652,7 +1854,9 @@ func (l loggerHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l loggerHTTPAnyEndpointKey) Help(key string) (string, error) {
@@ -1667,7 +1871,9 @@ func (l loggerHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l loggerHTTPAnyAuditKey) Help(key string) (string, error) {
@@ -1682,7 +1888,9 @@ func (l loggerHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error 
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
 	// If tests/checks pass, it'll be set.
-	cfg.kv[key] = val
+
+	cfg.line.key = key
+	cfg.line.val = val
 	return nil
 }
 func (l loggerHTTPAnyAnonymousKey) Help(key string) (string, error) {
