@@ -641,7 +641,12 @@ func (h *healSequence) healDiskFormat() error {
 	// Healing succeeded notify the peers to reload format and re-initialize disks.
 	// We will not notify peers only if healing succeeded.
 	if err == nil {
-		peersReInitFormat(globalAdminPeers, h.settings.DryRun)
+		for host, rerr := range globalNotificationSys.ReloadFormat(h.settings.DryRun) {
+			if rerr != nil {
+				logger.GetReqInfo(h.ctx).SetTags("peerAddress", host.String())
+				logger.LogIf(h.ctx, rerr)
+			}
+		}
 	}
 
 	// Push format heal result

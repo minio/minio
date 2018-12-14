@@ -867,6 +867,14 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 		return
 	}
+
+	// Notify all other Minio peers to reload users
+	for host, err := range globalNotificationSys.LoadUsers() {
+		if err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
+			logger.LogIf(ctx, err)
+		}
+	}
 }
 
 // AddUser - PUT /minio/admin/v1/add-user?accessKey=<access_key>
@@ -926,6 +934,14 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if err = globalIAMSys.SetUser(accessKey, uinfo); err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 		return
+	}
+
+	// Notify all other Minio peers to reload users
+	for host, err := range globalNotificationSys.LoadUsers() {
+		if err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
+			logger.LogIf(ctx, err)
+		}
 	}
 }
 
@@ -992,6 +1008,14 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 		return
 	}
+
+	// Notify all other Minio peers to reload users
+	for host, err := range globalNotificationSys.LoadUsers() {
+		if err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
+			logger.LogIf(ctx, err)
+		}
+	}
 }
 
 // AddCannedPolicy - PUT /minio/admin/v1/add-canned-policy?name=<policy_name>
@@ -1049,6 +1073,14 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 		return
 	}
+
+	// Notify all other Minio peers to reload users
+	for host, err := range globalNotificationSys.LoadUsers() {
+		if err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
+			logger.LogIf(ctx, err)
+		}
+	}
 }
 
 // SetUserPolicy - PUT /minio/admin/v1/set-user-policy?accessKey=<access_key>&name=<policy_name>
@@ -1087,6 +1119,14 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 
 	if err := globalIAMSys.SetUserPolicy(accessKey, policyName); err != nil {
 		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+	}
+
+	// Notify all other Minio peers to reload users
+	for host, err := range globalNotificationSys.LoadUsers() {
+		if err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
+			logger.LogIf(ctx, err)
+		}
 	}
 }
 
