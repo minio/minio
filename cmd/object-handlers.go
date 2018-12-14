@@ -1454,6 +1454,22 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
 	}
 
+	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
+	// Regardless of whether you have enabled versioning, each object in your bucket
+	// has a version ID. If you have not enabled versioning, Amazon S3 sets the value
+	// of the version ID to null. If you have enabled versioning, Amazon S3 assigns a
+	// unique version ID value for the object.
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		// Check if versionId query param was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid := u.Query().Get("versionId"); vid != "" && vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
+		cpSrcPath = u.Path
+	}
+
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
@@ -2239,6 +2255,11 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
