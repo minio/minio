@@ -2319,7 +2319,7 @@ func getEndpointsLocalAddr(endpoints EndpointList) string {
 		}
 	}
 
-	return globalMinioHost + ":" + globalMinioPort
+	return net.JoinHostPort(globalMinioHost, globalMinioPort)
 }
 
 // fetches a random number between range min-max.

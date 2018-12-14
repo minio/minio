@@ -138,7 +138,7 @@ func TestGetHostIP(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		ipList, err := getHostIP4(testCase.host)
+		ipList, err := getHostIP(testCase.host)
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
@@ -157,17 +157,22 @@ func TestGetHostIP(t *testing.T) {
 
 // Tests finalize api endpoints.
 func TestGetAPIEndpoints(t *testing.T) {
+	host, port := globalMinioHost, globalMinioAddr
+	defer func() {
+		globalMinioHost, globalMinioAddr = host, port
+	}()
 	testCases := []struct {
-		serverAddr     string
+		host, port     string
 		expectedResult string
 	}{
-		{":80", "http://127.0.0.1:80"},
-		{"127.0.0.1:80", "http://127.0.0.1:80"},
-		{"localhost:80", "http://localhost:80"},
+		{"", "80", "http://127.0.0.1:80"},
+		{"127.0.0.1", "80", "http://127.0.0.1:80"},
+		{"localhost", "80", "http://localhost:80"},
 	}
 
 	for i, testCase := range testCases {
-		apiEndpoints := getAPIEndpoints(testCase.serverAddr)
+		globalMinioHost, globalMinioPort = testCase.host, testCase.port
+		apiEndpoints := getAPIEndpoints()
 		apiEndpointSet := set.CreateStringSet(apiEndpoints...)
 		if !apiEndpointSet.Contains(testCase.expectedResult) {
 			t.Fatalf("test %d: expected: Found, got: Not Found", i+1)
@@ -330,7 +335,7 @@ func TestSameLocalAddrs(t *testing.T) {
 		}
 	}
 }
-func TestIsHostIPv4(t *testing.T) {
+func TestIsHostIP(t *testing.T) {
 	testCases := []struct {
 		args           string
 		expectedResult bool
@@ -341,10 +346,11 @@ func TestIsHostIPv4(t *testing.T) {
 		{"http://192.168.1.0", false},
 		{"http://192.168.1.0:9000", false},
 		{"192.168.1.0", true},
+		{"[2001:3984:3989::20%eth0]:9000", true},
 	}
 
 	for _, testCase := range testCases {
-		ret := isHostIPv4(testCase.args)
+		ret := isHostIP(testCase.args)
 		if testCase.expectedResult != ret {
 			t.Fatalf("expected: %v , got: %v", testCase.expectedResult, ret)
 		}
