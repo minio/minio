@@ -22,7 +22,7 @@ Minio supports two different KMS concepts:
 **Important:**  
 If multiple Minio servers are configured as [gateways](https://github.com/minio/minio/blob/master/docs/gateway/README.md)
 pointing to the *same* backend - for example the same NAS storage - then the KMS configuration **must** be the same for
-all gateways. Otherwise one gateway may not be able to decrypt objects created by another gateway. It is the operators 
+all gateways. Otherwise one gateway may not be able to decrypt objects created by another gateway. It is the operators' 
 responsibility to ensure consistency.
 
 ## Get started
@@ -132,7 +132,7 @@ KMS configuration.
 Auto-Encryption is useful especially if the Minio operator wants to ensure that objects are **never** stored in 
 plaintext - for example if sensitive data is stored on public cloud storage.
 
-To enable auto-encryption either set the ENV. variable: 
+To enable auto-encryption set the environment variable to `on`:
 
 ```sh
 export MINIO_SSE_AUTO_ENCRYPTION=on
