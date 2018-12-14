@@ -742,11 +742,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
-
-	putObject := objectAPI.PutObject
-	if web.CacheAPI() != nil {
-		putObject = web.CacheAPI().PutObject
-	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -785,6 +780,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength
@@ -800,9 +798,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader := r.Body
+	var pReader *PutObjReader
+	var reader io.Reader = r.Body
 	actualSize := size
 
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
@@ -828,13 +832,35 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
 		reader = pipeReader
+		hashReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		if err != nil {
+			writeWebErrorResponse(w, err)
+			return
+		}
 	}
+	pReader = NewPutObjReader(hashReader, nil, nil)
 
-	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
-	if err != nil {
-		writeWebErrorResponse(w, err)
-		return
+	if objectAPI.IsEncryptionSupported() {
+		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
+			rawReader := hashReader
+			var objectEncryptionKey []byte
+			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+			info := ObjectInfo{Size: size}
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
+			if err != nil {
+				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
+		}
 	}
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(metadata)
+
 	var opts ObjectOptions
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -844,10 +870,25 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objInfo, err := putObject(ctx, bucket, object, NewPutObjReader(hashReader, nil, nil), metadata, opts)
+	putObject := objectAPI.PutObject
+	if !hasServerSideEncryptionHeader(r.Header) && web.CacheAPI() != nil {
+		putObject = web.CacheAPI().PutObject
+	}
+	objInfo, err := putObject(context.Background(), bucket, object, pReader, metadata, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
+	}
+	if objectAPI.IsEncryptionSupported() {
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			case crypto.SSEC.IsRequested(r.Header):
+				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			}
+		}
 	}
 
 	// Get host and port from Request.RemoteAddr.

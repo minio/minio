@@ -18,6 +18,12 @@ Minio supports two different KMS concepts:
    Note: If the Minio server machine is ever compromised, then the master key must also be 
    treated as compromised.
 
+**Important:**  
+If multiple minio server are configured as [gateways](https://github.com/minio/minio/blob/master/docs/gateway/README.md)
+pointing to the *same* backend - for example the same NAS storage - than the KMS configuration **must** be equal for
+all gateways. Otherwise one gateway may not be able to decrypt objects created by another gateway. It's the operators 
+responsibility to ensure that.
+
 ## Get started
 
 ### 1. Prerequisites
@@ -85,6 +91,12 @@ export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
 minio server ~/export
 ```
 
+Optionally set `MINIO_SSE_VAULT_CAPATH` to a directory of PEM-encoded CA cert files to use mTLS for client-server authentication.
+
+```
+export MINIO_SSE_VAULT_CAPATH=/home/user/custom-certs
+```
+
 Optionally set `MINIO_SSE_VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
 
 ```
@@ -92,6 +104,8 @@ export MINIO_SSE_VAULT_NAMESPACE=ns1
 ```
 
 Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_SSE_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
+
+
 
 #### 2.2 Specify a master key
 
@@ -105,6 +119,25 @@ export MINIO_SSE_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726
 ### 3. Test your setup
 
 To test this setup, start minio server with environment variables set in Step 3, and server is ready to handle SSE-S3 requests.
+
+### Auto-Encryption
+
+Minio can also enable auto-encryption **if** a valid KMS configuration is specified and the storage backend supports
+encrypted objects. Auto-Encryption, if enabled, ensures that all uploaded objects are encrypted using the specified
+KMS configuration.
+
+Auto-Encryption is useful especially if the Minio operator wants to ensure that objects are **never** stored in 
+plaintext - for example if sensitive data is stored on public cloud storage.
+
+To enable auto-encryption either set the ENV. variable: 
+
+```sh
+export MINIO_SSE_AUTO_ENCRYPTION=on
+```
+
+Note: Auto-Encryption only affects non-SSE-C requests since objects uploaded using SSE-C are already encrypted
+and S3 only allows either SSE-S3 or SSE-C but not both for the same object.   
+
 
 # Explore Further
 

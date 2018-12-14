@@ -619,6 +619,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 	var objectEncryptionKey []byte
+
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
 			var reader io.Reader

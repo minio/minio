@@ -231,6 +231,11 @@ var (
 	// Allocated KMS
 	globalKMS crypto.KMS
 
+	// Auto-Encryption, if enabled, turns any non-SSE-C request
+	// into an SSE-S3 request. If enabled a valid, non-empty KMS
+	// configuration must be present.
+	globalAutoEncryption bool
+
 	// Is compression include extensions/content-types set.
 	globalIsEnvCompression bool
 

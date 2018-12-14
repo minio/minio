@@ -30,6 +30,13 @@ const (
 	// a KMS master key used to protect SSE-S3 per-object keys.
 	// Valid values must be of the from: "KEY_ID:32_BYTE_HEX_VALUE".
 	EnvKMSMasterKey = "MINIO_SSE_MASTER_KEY"
+
+	// EnvAutoEncryption is the environment variable used to en/disable
+	// SSE-S3 auto-encryption. SSE-S3 auto-encryption, if enabled,
+	// requires a valid KMS configuration and turns any non-SSE-C
+	// request into an SSE-S3 request.
+	// If present EnvAutoEncryption must be either "on" or "off".
+	EnvAutoEncryption = "MINIO_SSE_AUTO_ENCRYPTION"
 )
 
 const (
@@ -140,6 +147,15 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 			return err
 		}
 		globalKMSKeyID = config.Vault.Key.Name
+	}
+
+	autoEncryption, err := ParseBoolFlag(env.Get(EnvAutoEncryption, "off"))
+	if err != nil {
+		return err
+	}
+	globalAutoEncryption = bool(autoEncryption)
+	if globalAutoEncryption && globalKMS == nil { // auto-encryption enabled but no KMS
+		return errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present")
 	}
 	return nil
 }

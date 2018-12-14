@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -222,7 +223,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
-
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
 	if globalEtcdClient != nil && gatewayName == "nas" {
@@ -279,6 +279,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
 		_ = globalNotificationSys.Init(newObject)
 	}
+
+	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
+		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but gateway does not support encryption")
+	}
+
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
