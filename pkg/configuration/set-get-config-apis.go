@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ import (
 const (
 	confFile string = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
 	notSet          = "Configuration parameter has not been set yet."
+	notValid        = "Not a key, nor prefix"
 )
 
 var serverConfHandler ServerConfigHandlers
@@ -66,14 +68,16 @@ type ServerConfigHandlers map[string]configKey
 // Structure of each line read from configuration file
 type lineStruct struct {
 	isComment         bool
-	isValid           bool
+	isValidFormat     bool
+	isValidValue      bool
 	key, val, comment string
 }
 
 // Configuration information will be populated in a slice
 // of line structures when configuration file is read, so
-// confguration file will be fully represented in 'file'
-var file []lineStruct
+// configuration file will be fully represented in a slice
+// called 'fileContent'
+var fileContent []lineStruct
 
 // Define Set and Help functions for each leaf node
 
@@ -81,9 +85,16 @@ var file []lineStruct
 type versionKey string
 
 func (v versionKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
+
+	// Type check
 	if _, err := strconv.Atoi(val); err != nil {
-		return errors.New("'version' value Type Mismatch!\nExpected integer, received '" + val + "'.")
+		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
 	}
+
 	cfg.kv[key] = val
 	return nil
 }
@@ -96,6 +107,10 @@ func (v versionKey) Help(key string) (string, error) {
 type credentialAccessKey string
 
 func (c credentialAccessKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -107,6 +122,10 @@ func (c credentialAccessKey) Help(key string) (string, error) {
 type credentialSecretKey string
 
 func (c credentialSecretKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -118,6 +137,10 @@ func (c credentialSecretKey) Help(key string) (string, error) {
 type regionKey string
 
 func (r regionKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -129,6 +152,15 @@ func (r regionKey) Help(key string) (string, error) {
 type browserKey string
 
 func (b browserKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
+	valLower := strings.ToLower(val)
+	if valLower != "on" && valLower != "off" {
+		return errors.New("Type Mismatch: expected 'on' or 'off'; received '" + val + "'.")
+	}
+
 	cfg.kv[key] = val
 	return nil
 }
@@ -140,6 +172,15 @@ func (b browserKey) Help(key string) (string, error) {
 type wormKey string
 
 func (w wormKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
+	valLower := strings.ToLower(val)
+	if valLower != "on" && valLower != "off" {
+		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
+	}
+
 	cfg.kv[key] = val
 	return nil
 }
@@ -151,6 +192,10 @@ func (w wormKey) Help(key string) (string, error) {
 type domainKey string
 
 func (d domainKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -162,6 +207,10 @@ func (d domainKey) Help(key string) (string, error) {
 type cacheDrivesKey string
 
 func (d cacheDrivesKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -173,6 +222,10 @@ func (d cacheDrivesKey) Help(key string) (string, error) {
 type cacheExpiryKey string
 
 func (c cacheExpiryKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -184,6 +237,10 @@ func (c cacheExpiryKey) Help(key string) (string, error) {
 type cacheMaxuseKey string
 
 func (c cacheMaxuseKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -195,6 +252,10 @@ func (c cacheMaxuseKey) Help(key string) (string, error) {
 type cacheExcludeKey string
 
 func (c cacheExcludeKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -206,6 +267,10 @@ func (c cacheExcludeKey) Help(key string) (string, error) {
 type storageclassStandardKey string
 
 func (c storageclassStandardKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -217,6 +282,10 @@ func (c storageclassStandardKey) Help(key string) (string, error) {
 type storageclassRRSKey string
 
 func (c storageclassRRSKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -228,6 +297,10 @@ func (c storageclassRRSKey) Help(key string) (string, error) {
 type kmsVaultEndpointKey string
 
 func (c kmsVaultEndpointKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -239,6 +312,10 @@ func (c kmsVaultEndpointKey) Help(key string) (string, error) {
 type kmsVaultAuthTypeKey string
 
 func (c kmsVaultAuthTypeKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -250,6 +327,10 @@ func (c kmsVaultAuthTypeKey) Help(key string) (string, error) {
 type kmsVaultAuthApproleIDKey string
 
 func (c kmsVaultAuthApproleIDKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -261,6 +342,10 @@ func (c kmsVaultAuthApproleIDKey) Help(key string) (string, error) {
 type kmsVaultAuthApproleSecretKey string
 
 func (c kmsVaultAuthApproleSecretKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -272,6 +357,10 @@ func (c kmsVaultAuthApproleSecretKey) Help(key string) (string, error) {
 type kmsVaultKeyIDNameKey string
 
 func (c kmsVaultKeyIDNameKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -283,6 +372,10 @@ func (c kmsVaultKeyIDNameKey) Help(key string) (string, error) {
 type kmsVaultKeyIDVersionKey string
 
 func (c kmsVaultKeyIDVersionKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -294,6 +387,10 @@ func (c kmsVaultKeyIDVersionKey) Help(key string) (string, error) {
 type notifyAmqpAnyKey string
 
 func (c notifyAmqpAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -305,6 +402,10 @@ func (c notifyAmqpAnyKey) Help(key string) (string, error) {
 type notifyAmqpAnyURLKey string
 
 func (c notifyAmqpAnyURLKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -316,6 +417,10 @@ func (c notifyAmqpAnyURLKey) Help(key string) (string, error) {
 type notifyAmqpAnyExchangeKey string
 
 func (c notifyAmqpAnyExchangeKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -327,6 +432,10 @@ func (c notifyAmqpAnyExchangeKey) Help(key string) (string, error) {
 type notifyAmqpAnyRoutingKeyKey string
 
 func (c notifyAmqpAnyRoutingKeyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -338,6 +447,10 @@ func (c notifyAmqpAnyRoutingKeyKey) Help(key string) (string, error) {
 type notifyAmqpAnyExchangeTypeKey string
 
 func (c notifyAmqpAnyExchangeTypeKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -349,6 +462,10 @@ func (c notifyAmqpAnyExchangeTypeKey) Help(key string) (string, error) {
 type notifyAmqpAnyDeliveryModeKey string
 
 func (c notifyAmqpAnyDeliveryModeKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -360,6 +477,10 @@ func (c notifyAmqpAnyDeliveryModeKey) Help(key string) (string, error) {
 type notifyAmqpAnyMandatoryKey string
 
 func (c notifyAmqpAnyMandatoryKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -371,6 +492,10 @@ func (c notifyAmqpAnyMandatoryKey) Help(key string) (string, error) {
 type notifyAmqpAnyImmediateKey string
 
 func (c notifyAmqpAnyImmediateKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -382,6 +507,10 @@ func (c notifyAmqpAnyImmediateKey) Help(key string) (string, error) {
 type notifyAmqpAnyDurableKey string
 
 func (c notifyAmqpAnyDurableKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -393,6 +522,10 @@ func (c notifyAmqpAnyDurableKey) Help(key string) (string, error) {
 type notifyAmqpAnyInternalKey string
 
 func (c notifyAmqpAnyInternalKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -404,6 +537,10 @@ func (c notifyAmqpAnyInternalKey) Help(key string) (string, error) {
 type notifyAmqpAnyNoWaitKey string
 
 func (c notifyAmqpAnyNoWaitKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -415,6 +552,10 @@ func (c notifyAmqpAnyNoWaitKey) Help(key string) (string, error) {
 type notifyAmqpAnyAutoDeletedKey string
 
 func (c notifyAmqpAnyAutoDeletedKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -426,6 +567,10 @@ func (c notifyAmqpAnyAutoDeletedKey) Help(key string) (string, error) {
 type notifyElasticsearchAnyKey string
 
 func (c notifyElasticsearchAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -437,6 +582,10 @@ func (c notifyElasticsearchAnyKey) Help(key string) (string, error) {
 type notifyElasticsearchAnyFormatKey string
 
 func (c notifyElasticsearchAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -448,6 +597,10 @@ func (c notifyElasticsearchAnyFormatKey) Help(key string) (string, error) {
 type notifyElasticsearchAnyURLKey string
 
 func (c notifyElasticsearchAnyURLKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -459,6 +612,10 @@ func (c notifyElasticsearchAnyURLKey) Help(key string) (string, error) {
 type notifyElasticsearchAnyIndexKey string
 
 func (c notifyElasticsearchAnyIndexKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -470,6 +627,10 @@ func (c notifyElasticsearchAnyIndexKey) Help(key string) (string, error) {
 type notifyKafkaAnyKey string
 
 func (c notifyKafkaAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -481,6 +642,10 @@ func (c notifyKafkaAnyKey) Help(key string) (string, error) {
 type notifyKafkaAnyBrokersKey string
 
 func (c notifyKafkaAnyBrokersKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -492,6 +657,10 @@ func (c notifyKafkaAnyBrokersKey) Help(key string) (string, error) {
 type notifyKafkaAnyTopicKey string
 
 func (c notifyKafkaAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -503,6 +672,10 @@ func (c notifyKafkaAnyTopicKey) Help(key string) (string, error) {
 type notifyKafkaAnyTLSKey string
 
 func (c notifyKafkaAnyTLSKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -514,6 +687,10 @@ func (c notifyKafkaAnyTLSKey) Help(key string) (string, error) {
 type notifyKafkaAnyTLSSkipVerifyKey string
 
 func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -525,6 +702,10 @@ func (c notifyKafkaAnyTLSSkipVerifyKey) Help(key string) (string, error) {
 type notifyKafkaAnyTLSClientAuthKey string
 
 func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -536,6 +717,10 @@ func (c notifyKafkaAnyTLSClientAuthKey) Help(key string) (string, error) {
 type notifyKafkaAnySaslKey string
 
 func (c notifyKafkaAnySaslKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -547,6 +732,10 @@ func (c notifyKafkaAnySaslKey) Help(key string) (string, error) {
 type notifyKafkaAnySaslUsernameKey string
 
 func (c notifyKafkaAnySaslUsernameKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -558,6 +747,10 @@ func (c notifyKafkaAnySaslUsernameKey) Help(key string) (string, error) {
 type notifyKafkaAnySaslPasswordKey string
 
 func (c notifyKafkaAnySaslPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -569,6 +762,10 @@ func (c notifyKafkaAnySaslPasswordKey) Help(key string) (string, error) {
 type notifyMqttAnyKey string
 
 func (c notifyMqttAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -580,6 +777,10 @@ func (c notifyMqttAnyKey) Help(key string) (string, error) {
 type notifyMqttAnyBrokerKey string
 
 func (c notifyMqttAnyBrokerKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -591,6 +792,10 @@ func (c notifyMqttAnyBrokerKey) Help(key string) (string, error) {
 type notifyMqttAnyTopicKey string
 
 func (c notifyMqttAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -602,6 +807,10 @@ func (c notifyMqttAnyTopicKey) Help(key string) (string, error) {
 type notifyMqttAnyQosKey string
 
 func (c notifyMqttAnyQosKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -613,6 +822,10 @@ func (c notifyMqttAnyQosKey) Help(key string) (string, error) {
 type notifyMqttAnyClientIDKey string
 
 func (c notifyMqttAnyClientIDKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -624,6 +837,10 @@ func (c notifyMqttAnyClientIDKey) Help(key string) (string, error) {
 type notifyMqttAnyUsernameKey string
 
 func (c notifyMqttAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -635,6 +852,10 @@ func (c notifyMqttAnyUsernameKey) Help(key string) (string, error) {
 type notifyMqttAnyPasswordKey string
 
 func (c notifyMqttAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -646,6 +867,10 @@ func (c notifyMqttAnyPasswordKey) Help(key string) (string, error) {
 type notifyMqttAnyReconnectIntervalKey string
 
 func (c notifyMqttAnyReconnectIntervalKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -657,6 +882,10 @@ func (c notifyMqttAnyReconnectIntervalKey) Help(key string) (string, error) {
 type notifyMqttAnyKeepAliveIntervalKey string
 
 func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -668,6 +897,10 @@ func (c notifyMqttAnyKeepAliveIntervalKey) Help(key string) (string, error) {
 type notifyMysqlAnyKey string
 
 func (c notifyMysqlAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -679,6 +912,10 @@ func (c notifyMysqlAnyKey) Help(key string) (string, error) {
 type notifyMysqlAnyFormatKey string
 
 func (c notifyMysqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -690,6 +927,10 @@ func (c notifyMysqlAnyFormatKey) Help(key string) (string, error) {
 type notifyMysqlAnyDsnStringKey string
 
 func (c notifyMysqlAnyDsnStringKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -701,6 +942,10 @@ func (c notifyMysqlAnyDsnStringKey) Help(key string) (string, error) {
 type notifyMysqlAnyTableKey string
 
 func (c notifyMysqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -712,6 +957,10 @@ func (c notifyMysqlAnyTableKey) Help(key string) (string, error) {
 type notifyMysqlAnyHostKey string
 
 func (c notifyMysqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -723,6 +972,10 @@ func (c notifyMysqlAnyHostKey) Help(key string) (string, error) {
 type notifyMysqlAnyPortKey string
 
 func (c notifyMysqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -734,6 +987,10 @@ func (c notifyMysqlAnyPortKey) Help(key string) (string, error) {
 type notifyMysqlAnyUserKey string
 
 func (c notifyMysqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -745,6 +1002,10 @@ func (c notifyMysqlAnyUserKey) Help(key string) (string, error) {
 type notifyMysqlAnyPasswordKey string
 
 func (c notifyMysqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -756,6 +1017,10 @@ func (c notifyMysqlAnyPasswordKey) Help(key string) (string, error) {
 type notifyMysqlAnyDatabaseKey string
 
 func (c notifyMysqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -767,6 +1032,10 @@ func (c notifyMysqlAnyDatabaseKey) Help(key string) (string, error) {
 type notifyNatsAnyKey string
 
 func (c notifyNatsAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -778,6 +1047,10 @@ func (c notifyNatsAnyKey) Help(key string) (string, error) {
 type notifyNatsAnyAddressKey string
 
 func (c notifyNatsAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -789,6 +1062,10 @@ func (c notifyNatsAnyAddressKey) Help(key string) (string, error) {
 type notifyNatsAnySubjectKey string
 
 func (c notifyNatsAnySubjectKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -800,6 +1077,10 @@ func (c notifyNatsAnySubjectKey) Help(key string) (string, error) {
 type notifyNatsAnyUsernameKey string
 
 func (c notifyNatsAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -811,6 +1092,10 @@ func (c notifyNatsAnyUsernameKey) Help(key string) (string, error) {
 type notifyNatsAnyPasswordKey string
 
 func (c notifyNatsAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -822,6 +1107,10 @@ func (c notifyNatsAnyPasswordKey) Help(key string) (string, error) {
 type notifyNatsAnyTokenKey string
 
 func (c notifyNatsAnyTokenKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -833,6 +1122,10 @@ func (c notifyNatsAnyTokenKey) Help(key string) (string, error) {
 type notifyNatsAnySecureKey string
 
 func (c notifyNatsAnySecureKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -844,6 +1137,10 @@ func (c notifyNatsAnySecureKey) Help(key string) (string, error) {
 type notifyNatsAnyPingIntervalKey string
 
 func (c notifyNatsAnyPingIntervalKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -855,6 +1152,10 @@ func (c notifyNatsAnyPingIntervalKey) Help(key string) (string, error) {
 type notifyNatsAnyStreamingKey string
 
 func (c notifyNatsAnyStreamingKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -866,6 +1167,10 @@ func (c notifyNatsAnyStreamingKey) Help(key string) (string, error) {
 type notifyNatsAnyStreamingClusterIDKey string
 
 func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -877,6 +1182,10 @@ func (c notifyNatsAnyStreamingClusterIDKey) Help(key string) (string, error) {
 type notifyNatsAnyStreamingClientIDKey string
 
 func (c notifyNatsAnyStreamingClientIDKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -888,6 +1197,10 @@ func (c notifyNatsAnyStreamingClientIDKey) Help(key string) (string, error) {
 type notifyNatsAnyStreamingAsyncKey string
 
 func (c notifyNatsAnyStreamingAsyncKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -899,6 +1212,10 @@ func (c notifyNatsAnyStreamingAsyncKey) Help(key string) (string, error) {
 type notifyNatsAnyStreamingMaxPubAcksInflightKey string
 
 func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -910,6 +1227,10 @@ func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Help(key string) (string, e
 type notifyPostgresqlAnyKey string
 
 func (c notifyPostgresqlAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -921,6 +1242,10 @@ func (c notifyPostgresqlAnyKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyFormatKey string
 
 func (c notifyPostgresqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -932,6 +1257,10 @@ func (c notifyPostgresqlAnyFormatKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyConnectionStringKey string
 
 func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -943,6 +1272,10 @@ func (c notifyPostgresqlAnyConnectionStringKey) Help(key string) (string, error)
 type notifyPostgresqlAnyTableKey string
 
 func (c notifyPostgresqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -954,6 +1287,10 @@ func (c notifyPostgresqlAnyTableKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyHostKey string
 
 func (c notifyPostgresqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -965,6 +1302,10 @@ func (c notifyPostgresqlAnyHostKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyPortKey string
 
 func (c notifyPostgresqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -976,6 +1317,10 @@ func (c notifyPostgresqlAnyPortKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyUserKey string
 
 func (c notifyPostgresqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -987,6 +1332,10 @@ func (c notifyPostgresqlAnyUserKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyPasswordKey string
 
 func (c notifyPostgresqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -998,6 +1347,10 @@ func (c notifyPostgresqlAnyPasswordKey) Help(key string) (string, error) {
 type notifyPostgresqlAnyDatabaseKey string
 
 func (c notifyPostgresqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1009,6 +1362,10 @@ func (c notifyPostgresqlAnyDatabaseKey) Help(key string) (string, error) {
 type notifyRedisAnyKey string
 
 func (c notifyRedisAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1020,6 +1377,10 @@ func (c notifyRedisAnyKey) Help(key string) (string, error) {
 type notifyRedisAnyFormatKey string
 
 func (c notifyRedisAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1031,6 +1392,10 @@ func (c notifyRedisAnyFormatKey) Help(key string) (string, error) {
 type notifyRedisAnyAddressKey string
 
 func (c notifyRedisAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1042,6 +1407,10 @@ func (c notifyRedisAnyAddressKey) Help(key string) (string, error) {
 type notifyRedisAnyPasswordKey string
 
 func (c notifyRedisAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1053,6 +1422,10 @@ func (c notifyRedisAnyPasswordKey) Help(key string) (string, error) {
 type notifyRedisAnyKeyKey string
 
 func (c notifyRedisAnyKeyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1064,6 +1437,10 @@ func (c notifyRedisAnyKeyKey) Help(key string) (string, error) {
 type notifyWebhookAnyKey string
 
 func (c notifyWebhookAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1075,6 +1452,10 @@ func (c notifyWebhookAnyKey) Help(key string) (string, error) {
 type notifyWebhookAnyEndpointKey string
 
 func (c notifyWebhookAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1086,6 +1467,10 @@ func (c notifyWebhookAnyEndpointKey) Help(key string) (string, error) {
 type logConsoleKey string
 
 func (l logConsoleKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1097,6 +1482,10 @@ func (l logConsoleKey) Help(key string) (string, error) {
 type logConsoleAuditKey string
 
 func (l logConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1108,6 +1497,10 @@ func (l logConsoleAuditKey) Help(key string) (string, error) {
 type logConsoleAnonymousKey string
 
 func (l logConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1119,6 +1512,10 @@ func (l logConsoleAnonymousKey) Help(key string) (string, error) {
 type logHTTPAnyKey string
 
 func (l logHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1130,6 +1527,10 @@ func (l logHTTPAnyKey) Help(key string) (string, error) {
 type logHTTPAnyEndpointKey string
 
 func (l logHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1141,6 +1542,10 @@ func (l logHTTPAnyEndpointKey) Help(key string) (string, error) {
 type logHTTPAnyAuditKey string
 
 func (l logHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1152,6 +1557,10 @@ func (l logHTTPAnyAuditKey) Help(key string) (string, error) {
 type logHTTPAnyAnonymousKey string
 
 func (l logHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1166,6 +1575,10 @@ func (l loggerConsoleKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
@@ -1181,6 +1594,10 @@ func (l loggerConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
@@ -1196,6 +1613,10 @@ func (l loggerConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error 
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
@@ -1211,6 +1632,10 @@ func (l loggerHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.http.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
@@ -1223,6 +1648,10 @@ func (l loggerHTTPAnyKey) Help(key string) (string, error) {
 type loggerHTTPAnyEndpointKey string
 
 func (l loggerHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1234,6 +1663,10 @@ func (l loggerHTTPAnyEndpointKey) Help(key string) (string, error) {
 type loggerHTTPAnyAuditKey string
 
 func (l loggerHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1245,6 +1678,10 @@ func (l loggerHTTPAnyAuditKey) Help(key string) (string, error) {
 type loggerHTTPAnyAnonymousKey string
 
 func (l loggerHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+	// Input validation for value, 'val'
+	// Value type, min/max limitations and other
+	// requirements are going to be tested here.
+	// If tests/checks pass, it'll be set.
 	cfg.kv[key] = val
 	return nil
 }
@@ -1506,93 +1943,41 @@ func init() {
 	serverConfHandler["logger.http.*.anonymous"] = loggerHTTPAnyAnonymousK
 }
 
-func checkRandomKeyValidity(key string, cfgHandler ServerConfigHandlers) (string, error) {
-	// Keys with user specified random subkey will be
-	// validated in this function. If valid, key will also be transformed
-	// to "transformedKey" with random subkey replaced with a "*"
-	var transformedKey string
-	// Min/Max number of characters required/allowed in a user
-	// specified random subkey must be in between 3 and 64
+func transformKey(key string) (string, error) {
+	// Tranform key, if it has a random subkey in it, to its
+	// '*' representation, otherwise, return the same 'key'.
+	// Random subkey are chosen by the user and it is expected
+	// to be consisted of only numbers and/or upper case letters.
+	// If the 'key' is found to be valid, it'll be transformed
+	// into a "newKey" by replacing the random subkey with a "*".
+	var newKey string
+	// Min/Max number of characters required/allowed in
+	// a random subkey.
 	minNoOfChrs := "1"
 	maxNoOfChrs := "64"
 
 	// Variable to hold the regular expression
 	var r *regexp.Regexp
-	// Base regular expression for both "log" and
-	// "notify" keys with a user specified random subkey
-	basePattern := "\\.([0-9a-zA-Z]{" + minNoOfChrs + "," + maxNoOfChrs + "})(|"
+	// Regular expression pattern for all keys with
+	// user specified random subkey, 1 to 64 characters
+	pattern := "[^\\s]+(\\.[0-9A-Z]{" + minNoOfChrs + "," + maxNoOfChrs + "})\\.?[^\\s]*"
+	r, _ = regexp.Compile(pattern)
+	matchedKeyFields := r.FindStringSubmatch(key)
 
-	// Decide if the key is a child of "log" or "notify"
-	splitKey := strings.Split(key, ".")
+	if len(matchedKeyFields) < 2 {
+		// No match (or length less than 2) means key has no
+		// random subkey in it. Then just return the same key back.
+		newKey = key
+	} else {
+		randomKey := matchedKeyFields[1]
 
-	switch splitKey[0] {
-	// Log key regular expression is used to replace the
-	// user specified random subKey with a "*"
-	// Example:
-	// key = "log.http.target1" where "target1" is the user specified
-	// random key. If the key is valid, it'll be transformed into "log.http.*",
-	// which will  be used to get/set the value using ServerConfig entries
-	case "log", "logger":
-		suffixPattern := "\\.endpoint|\\.audit|\\.anonymous)$"
-		r, _ = regexp.Compile("(log\\.http|logger\\.http)" + basePattern + suffixPattern)
-	case "notify":
-		// Second key after "notify" key
-		switch splitKey[1] {
-		case "amqp":
-			suffixPattern := "\\.url|\\.exchange|\\.routingKey|\\.exchangeType|\\.deliveryMode|\\.mandatory|\\.immediate|\\.durable|\\.internal|\\.noWait|\\.autoDeleted)$"
-			r, _ = regexp.Compile("(notify\\.amqp)" + basePattern + suffixPattern)
-		case "elasticsearch":
-			suffixPattern := "\\.format|\\.url|\\.index)$"
-			r, _ = regexp.Compile("(notify\\.elasticsearch)" + basePattern + suffixPattern)
-		case "kafka":
-			suffixPattern := "\\.brokers|\\.topic|\\.tls|\\.tls\\.skipVerify|\\.tls\\.clientAuth|\\.sasl|\\.sasl\\.username|\\.sasl\\.password)$"
-			r, _ = regexp.Compile("(notify\\.kafka)" + basePattern + suffixPattern)
-		case "mqtt":
-			suffixPattern := "\\.broker|\\.topic|\\.qos|\\.clientId|\\.username|\\.password|\\.reconnectInterval|\\.keepAliveInterval)$"
-			r, _ = regexp.Compile("(notify\\.mqtt)" + basePattern + suffixPattern)
-		case "mysql":
-			suffixPattern := "\\.format|\\.dsnString|\\.table|\\.host|\\.port|\\.user|\\.password|\\.database)$"
-			r, _ = regexp.Compile("(notify\\.mysql)" + basePattern + suffixPattern)
-		case "nats":
-			suffixPattern := "\\.address|\\.subject|\\.username|\\.password|\\.token|\\.secure|\\.pingInterval|\\.streaming|\\.streaming\\.clusterID|\\.streaming\\.clientID|\\.streaming\\.async|\\.streaming\\.maxPubAcksInflight)$"
-			r, _ = regexp.Compile("(notify\\.nats)" + basePattern + suffixPattern)
-		case "postgresql":
-			suffixPattern := "\\.format|\\.connectionString|\\.table|\\.host|\\.port|\\.user|\\.password|\\.database)$"
-			r, _ = regexp.Compile("(notify\\.postgresql)" + basePattern + suffixPattern)
-		case "redis":
-			suffixPattern := "\\.endpoint|\\.format|\\.address|\\.password|\\.key)$"
-			r, _ = regexp.Compile("(notify\\.redis)" + basePattern + suffixPattern)
-		case "webhook":
-			suffixPattern := "\\.endpoint)$"
-			r, _ = regexp.Compile("(notify\\.webhook)" + basePattern + suffixPattern)
-		}
-	default:
-		// Unexpected key name.
-		logger.LogIf(context.Background(), errors.New("Invalid key:"+key))
-		// Just assume to match the full key name
-		r, _ = regexp.Compile(key)
+		// Replace random subKey with a "*". The 'newKey' is
+		// will be the one we'll be searching for in 'serverConfHandler'.
+		newKey = strings.Replace(key, randomKey, ".*", 1)
+
 	}
-
-	// Get submatched subkeys using regular expression decided above
-	// FindStringSubmatch is expected to generate a slice with the
-	// following information:
-	// [fullKey, keysBeforeRandomKey, randomKey, keysAfterRandomKey]
-	matchedKeys := r.FindStringSubmatch(key)
-	// Initialization
-	randomKey := ""
-	// Less than 3 matches in slice means key is invalid
-	if len(matchedKeys) < 3 {
-		logger.LogIf(context.Background(), errors.New("Invalid key:"+key))
-		return "", errors.New("ERROR: Invalid key, " + key)
-	}
-	randomKey = matchedKeys[2]
-
-	// Replace found user specified random subKey with a "*".
-	// The transformedKey is the new key for ServerConfigHandlers map.
-	transformedKey = strings.Replace(matchedKeys[0], randomKey, "*", 1)
-
-	if _, ok := cfgHandler[transformedKey]; ok {
-		return transformedKey, nil
+	if _, ok := serverConfHandler[newKey]; ok {
+		return newKey, nil
 	}
 	return "", errors.New("ERROR: Invalid key, " + key)
 
@@ -1610,29 +1995,40 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 	// random subkey in it. If this fails, try validating the key
 	// assuming it has a user specified random subkey in it.
 	// If the key is found to be valid, set it to val.
+	isCorrectKeyName := false
 	if _, ok := serverConfHandler[key]; ok {
+		// It is a valid key
+		isCorrectKeyName = true
 		if err := serverConfHandler[key].Set(key, val, *s); err != nil {
 			return err
 		}
-	} else if transformedKey, err := checkRandomKeyValidity(key, serverConfHandler); err == nil {
-		// Validity check for keys with user specified random subkey
+	} else if transformedKey, err := transformKey(key); err == nil {
+		// It is a valid key with a user specified random subkey in it
+		isCorrectKeyName = true
 		if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
 			return err
 		}
+	} else {
+		// Log and return an error when 'key' is an incorrect config name
+		logger.LogIf(context.Background(), errors.New("Invalid key:"+key))
+		return errors.New("ERROR: Invalid key, " + key)
 	}
-	// 'file' slice, which holds the parsed config info, also needs to be updated
+	// Update 'fileContent' slice, which has all the lines
+	// of config file. First check if 'key' has been set in
+	// the config file. If so, modify it with the new value.
 	done := false
-	for i := range file {
-		if file[i].key == key {
-			file[i].val = val
+	for i := range fileContent {
+		if fileContent[i].key == key {
+			fileContent[i].val = val
 			done = true
 			break
 		}
 	}
-	// If the key has not been added into file yet,
-	// a new entry is needed to be created
+	// If the key has not been added into the 'fileContent' yet, a new
+	// entry is needed to be created. At this point, it is
+	// guaranteed that the 'key' is a valid config parameter name
 	if !done {
-		file = append(file, lineStruct{false, true, key, val, ""})
+		fileContent = append(fileContent, lineStruct{false, isCorrectKeyName, true, key, val, ""})
 	}
 
 	// Save the set/modified configuration from memory to disk
@@ -1646,10 +2042,7 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 	// Load the configuration data from disk into memory
 	if err := s.load(); err != nil {
-		return map[string]string{}, err
-	}
-	// Save the set/modified configuration from memory to disk
-	if err := s.save(); err != nil {
+		fmt.Println("Error while loading server configuration into memory:", err)
 		return map[string]string{}, err
 	}
 
@@ -1658,16 +2051,54 @@ func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 	if len(keys) == 0 {
 		return s.kv, nil
 	}
-	// Greater than zero length keys means multiple
-	// values for the provided keys are requested
+	// Greater than zero length 'keys' means multiple
+	// key values are requested to be retrieved.
 	kvPartial := make(map[string]string)
+	var err error
+	var transformedKey string
 	for _, key := range keys {
-		if _, ok := serverConfHandler[key]; ok {
-			// 'key' is a valid configuration parameter
-			if val, ok := s.kv[key]; ok {
-				kvPartial[key] = val
-			} else {
-				kvPartial[key] = notSet
+		var found = false
+		// Get the transformed form or the '*'
+		// representation of the key, if it exists.
+		// Otherwise, get the key name back without any change
+		if transformedKey, err = transformKey(key); err == nil {
+			if _, ok := serverConfHandler[transformedKey]; ok {
+				// 'key' is a valid configuration parameter
+				found = true
+				if val, ok := s.kv[key]; ok {
+					kvPartial[key] = val
+				} else {
+					kvPartial[key] = notSet
+					// We show the error to the user and keep
+					// on going through the rest of the keys
+				}
+			}
+		}
+		var origLengthKvPartial int
+		if !found {
+			// Key could be a prefix. Check it out.If so, come up with
+			// the list of matching keys and their values and return them.
+			//
+			// First get the initial length of kvPartial slice. We'll check
+			// it later to see if any new key has been added or not.
+			origLengthKvPartial = len(kvPartial)
+			for validKey := range s.kv {
+				if strings.HasPrefix(validKey, key) {
+					if val, ok := s.kv[validKey]; ok {
+						kvPartial[validKey] = val
+					} else {
+						kvPartial[key] = notSet
+						// We show the error to the user and keep
+						// on going through the rest of the keys
+						fmt.Printf("Couldn't get the value for key: %s (prefix %s)\n", validKey, key)
+					}
+				}
+			}
+			if origLengthKvPartial == len(kvPartial) {
+				// Key is not a prefix either. So, it
+				// must be an invalid key
+				kvPartial[key] = notValid
+				fmt.Println("Invalid key:", key)
 			}
 		}
 	}
@@ -1686,7 +2117,7 @@ func (s *ServerConfig) HelpHandler(key string) (string, error) {
 		if helpText, err = serverConfHandler[key].Help(key); err != nil {
 			return "", err
 		}
-	} else if transformedKey, err := checkRandomKeyValidity(key, serverConfHandler); err == nil {
+	} else if transformedKey, err := transformKey(key); err == nil {
 		// Validity check for keys with a user specified random subkey
 		if helpText, err = serverConfHandler[transformedKey].Help(key); err != nil {
 			return "", err
@@ -1727,18 +2158,17 @@ func writeLines(lines []string, path string) error {
 	return w.Flush()
 }
 
-func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bool) {
+func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKeyFormat bool) {
 	// Regexp to match full line comments, and the comments
 	// which start in the middle of the line after some characters
-	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//[\\s]*.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+//.*)")
+	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+//.*)")
 	matchedComment := rComment.FindStringSubmatch(entry)
 	if len(matchedComment) > 0 {
-		// entry most probably is a comment.
-		// Comments are handled in this block
+		// Line entry might be a comment.
+		// Comments are handled in this block.
 		for i, m := range matchedComment {
 			// Cleanup leading and trailing white spaces
 			matchedComment[i] = strings.TrimSpace(m)
-
 			if matchedComment[0] == "" {
 				// Empty lines are handled here.
 				// Treat them as if they are comments
@@ -1746,7 +2176,7 @@ func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bo
 			}
 			if matchedComment[1] == "" {
 				// Combination of key/value and comment in the same line
-				// Return false for "isComment", since this is actually a setting
+				// Return false for "isComment". This is a key/value setting.
 				return []string{matchedComment[2], matchedComment[4], matchedComment[5]}, false, true
 			}
 			// Pure comments are handled here
@@ -1754,9 +2184,9 @@ func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bo
 		}
 	}
 	// Handle key=val pairs here
-	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)")
+	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=?[\\s]*)([^\\s]*)")
 	matchedKey := r.FindStringSubmatch(entry)
-	if len(matchedKey) >= 3 {
+	if len(matchedKey) == 4 {
 		return []string{matchedKey[1], matchedKey[3]}, false, true
 	}
 	return strings.Split(entry, " "), false, false
@@ -1765,7 +2195,6 @@ func classifyConfigEntry(entry string) (entryArr []string, isComment, validKV bo
 // Load loads configuration from disk to memory (serverConfig.kv)
 func (s *ServerConfig) load() error {
 	s.kv = make(map[string]string)
-	file = []lineStruct{}
 
 	// Check if configuration file exists
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
@@ -1781,6 +2210,7 @@ func (s *ServerConfig) load() error {
 			return err
 		}
 
+		fileContent = []lineStruct{}
 		var key, val string
 		// Go through each line of config file and
 		// classify them as comments or key/value pairs.
@@ -1789,14 +2219,23 @@ func (s *ServerConfig) load() error {
 		// key/value pairs and comments in the same line
 		// (key = value // xxxx  xxx) are accepted.
 		for _, line := range lines {
-			element, isComment, isValid := classifyConfigEntry(line)
-			if !isValid {
+			element, isComment, isValidFormat := verifyConfigKeyFormat(line)
+			if !isValidFormat {
 				logger.LogIf(context.Background(), errors.New("Invalid key=value pair, "+strings.Join(element, " ")))
-				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: strings.Join(element, " ")})
+				fmt.Println("Invalid key=value pair, " + strings.Join(element, " "))
+				fileContent = append(fileContent, lineStruct{
+					isComment:     isComment,
+					isValidFormat: isValidFormat,
+					key:           strings.Join(element, " ")})
 				continue
 			}
 			if isComment {
-				file = append(file, lineStruct{isComment: isComment, isValid: isValid, comment: strings.Join(element, " ")})
+				// fileContent = append(fileContent, lineStruct{isComment: isComment,
+				// 	isValidFormat: isValidFormat,
+				// 	comment:       strings.Join(element, " ")})
+				//
+				// We decided not to maintain full comment lines
+				// and empty lines. Skip it and continue.
 				continue
 			}
 			// Valid configurations are handled here.
@@ -1811,27 +2250,41 @@ func (s *ServerConfig) load() error {
 			// Validate assuming the key is a regular key with no user specified
 			// random subkey in it. If this check fails, try validating the key
 			// assuming it has a user specified random subkey in it.
+			isValidValue := true
 			if _, ok := serverConfHandler[key]; ok {
 				if err := serverConfHandler[key].Set(key, val, *s); err != nil {
 					// Report the error and continue with the next element
-					isValid = false
+					isValidValue = false
 					logger.LogIf(context.Background(), err)
+					fmt.Printf("Error in '%s' key value: '%v'. %s\n\n", key, val, err)
 				}
-			} else if transformedKey, err := checkRandomKeyValidity(key, serverConfHandler); err == nil {
+			} else if transformedKey, err := transformKey(key); err == nil {
 				// Validity check for keys with user specified random subkey
 				if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
 					// Report the error and continue with the next element
-					isValid = false
+					isValidValue = false
 					logger.LogIf(context.Background(), err)
 				}
 			} else {
-				isValid = false
+				isValidFormat = false
 				logger.LogIf(context.Background(), errors.New("Invalid key: "+key))
 			}
-			if len(element) >= 3 {
-				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: element[0], val: element[1], comment: element[2]})
+
+			if len(element) > 2 {
+				fileContent = append(fileContent, lineStruct{
+					isComment:     isComment,
+					isValidFormat: isValidFormat,
+					isValidValue:  isValidValue,
+					key:           element[0],
+					val:           element[1],
+					comment:       element[2]})
 			} else {
-				file = append(file, lineStruct{isComment: isComment, isValid: isValid, key: element[0], val: element[1]})
+				fileContent = append(fileContent, lineStruct{
+					isComment:     isComment,
+					isValidFormat: isValidFormat,
+					isValidValue:  isValidValue,
+					key:           element[0],
+					val:           element[1]})
 			}
 		}
 	}
@@ -1846,28 +2299,40 @@ func (s *ServerConfig) save() error {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 
-	for i := 0; i < len(file); i++ {
-		if file[i].isValid {
-			if file[i].isComment {
-				lines = append(lines, file[i].comment)
+	// fileContent slice index reflects the original order
+	// of the lines in the Minio server configuration file.
+	// We decided to alphabetically sort the content out, so the
+	// original file content order of the configruation file will
+	// not be preserved.
+	sort.Slice(fileContent, func(i, j int) bool {
+		return fileContent[i].key < fileContent[j].key
+	})
+
+	// Create a slice, 'lines', to be used to generate the config
+	// file again. Only the valid values in valid format will be
+	// added into the configuration file.
+	for i := 0; i < len(fileContent); i++ {
+		if fileContent[i].isValidFormat {
+			if fileContent[i].isComment {
+				lines = append(lines, fileContent[i].comment)
 				continue
 			}
-			if file[i].comment != "" {
-				lines = append(lines, file[i].key+" = "+file[i].val+file[i].comment)
+			if fileContent[i].comment != "" {
+				lines = append(lines, fileContent[i].key+" = "+fileContent[i].val+fileContent[i].comment)
 				continue
 			}
-			lines = append(lines, file[i].key+" = "+file[i].val)
+			lines = append(lines, fileContent[i].key+" = "+fileContent[i].val)
 			continue
 		}
 		errorEntry := ""
-		if file[i].key != "" {
-			errorEntry += file[i].key + " "
+		if fileContent[i].key != "" {
+			errorEntry += fileContent[i].key + " "
 		}
-		if file[i].val != "" {
-			errorEntry += file[i].val + " "
+		if fileContent[i].val != "" {
+			errorEntry += "= " + fileContent[i].val + " "
 		}
-		if file[i].comment != "" {
-			errorEntry += file[i].comment
+		if fileContent[i].comment != "" {
+			errorEntry += fileContent[i].comment
 		}
 		if errorEntry != "" {
 			lines = append(lines, "// *** Invalid configuration entry: "+strings.TrimSpace(errorEntry))

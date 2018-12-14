@@ -31,7 +31,7 @@ func np(kv map[string]string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	fmt.Print(string(b))
+	fmt.Println(string(b))
 }
 
 func main() {
@@ -39,6 +39,16 @@ func main() {
 	var keys []string
 	var kv map[string]string
 	serverConfig := &configuration.ServerConfig{RWMutex: &sync.RWMutex{}}
+
+	fmt.Println()
+	fmt.Println("*** Get full configuration")
+	keys = []string{}
+	if kv, err = serverConfig.GetHandler(keys); err != nil {
+		logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
+	}
+	// fmt.Printf("kv>\n%+v\n\n", kv)
+	fmt.Println()
+	np(kv)
 
 	// fmt.Println("Set 'version'='31'")
 	// if err := serverConfig.SetHandler("version", "31"); err != nil {
@@ -57,40 +67,32 @@ func main() {
 	// fmt.Printf("'version': %v\n", kv["version"])
 	// np(kv)
 
-	fmt.Println("Set a config parameter, 'region'='minio-region'")
-	if err = serverConfig.SetHandler("region", "minio-region"); err != nil {
-		logger.FatalIf(err, "Failed to load configuration data: ")
-		fmt.Println("Failed to load configuration data:", err)
-	}
-	np(kv)
-	fmt.Println()
-
-	fmt.Println()
-	fmt.Println("Get config parameter, 'region'")
-	keys = []string{"region"}
-	if kv, err = serverConfig.GetHandler(keys); err != nil {
-		logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
-	}
-	fmt.Printf("kv>\n%+v\n\n", kv)
-	// np(kv)
-
-	// // fmt.Println("******************************")
-	// fmt.Println("***** Calling GetHandler *****")
-	// // fmt.Println("***** region and version *****")
-	// // fmt.Println("******************************")
+	// fmt.Println("Set a config parameter, 'region'='minio-region'")
+	// if err = serverConfig.SetHandler("region", "minio-region"); err != nil {
+	// 	logger.FatalIf(err, "Failed to load configuration data: ")
+	// 	fmt.Println("Failed to load configuration data:", err)
+	// }
 	// fmt.Println()
-	// keys = []string{"region", "version"}
+
+	// fmt.Println("Get config parameter, 'region'")
+	// keys = []string{"region"}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
 	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// np(kv)
 
-	// // fmt.Println("******************************")
-	// fmt.Println("***** Calling GetHandler *****")
-	// // fmt.Println("***** return full config *****")
-	// // fmt.Println("*****  when 'keys' = []  *****")
-	// fmt.Println("******************************")
 	// fmt.Println()
+	// fmt.Println("*** Get 'region', 'version', 'worm' and 'notify.redis' config info")
+	// keys = []string{"region", "version", "worm", "notify.redis"}
+	// if kv, err = serverConfig.GetHandler(keys); err != nil {
+	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
+	// }
+	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// np(kv)
+
+	// fmt.Println()
+	// fmt.Println("*** Get full configuration")
 	// keys = []string{}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
