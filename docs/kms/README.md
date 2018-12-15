@@ -44,7 +44,7 @@ Minio requires the following Vault setup:
 
 **2.1.1 Start Vault server in dev mode**
 
-In dev mode, Vault server runs in memory and starts unsealed. Note that running Vault in dev mode is insecure and any data stored in the Vault is lost upon restart.
+In dev mode, Vault server runs in-memory and starts unsealed. Note that running Vault in dev mode is insecure and any data stored in the Vault is lost upon restart.
 
 ```
 vault server -dev
