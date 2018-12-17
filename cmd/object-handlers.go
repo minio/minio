@@ -91,6 +91,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -218,11 +222,13 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
-			selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
-			selectReq.OutputSerialization.CSV.QuoteFields != "" {
-			writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
-			return
+		if selectReq.OutputSerialization.CSV != nil {
+			if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
+				selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
+				selectReq.OutputSerialization.CSV.QuoteFields != "" {
+				writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 		if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
 			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
@@ -316,10 +322,18 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	var (
 		opts ObjectOptions
@@ -481,13 +495,21 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
+		writeErrorResponseHeadersOnly(w, ErrBadRequest)
+		return
+	}
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
-
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponseHeadersOnly(w, ErrNoSuchVersion)
+		return
+	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -644,6 +666,15 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
+// Returns a minio-go Client configured to access remote host described by destDNSRecord
+// Applicable only in a federated deployment
+var getRemoteInstanceClient = func(r *http.Request, host string, port int) (*miniogo.Core, error) {
+	// In a federated deployment, all the instances share config files and hence expected to have same
+	// credentials, make sure to send the same credentials for which the request came in.
+	cred := getReqAccessCred(r, globalServerConfig.GetRegion())
+	return miniogo.NewCore(net.JoinHostPort(host, strconv.Itoa(port)), cred.AccessKey, cred.SecretKey, globalIsSSL)
+}
+
 // CopyObjectHandler - Copy Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
@@ -667,7 +698,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-
+	if !objectAPI.IsEncryptionSupported() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
 	dstObject := vars["object"]
@@ -684,6 +718,22 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		// Save unescaped string as is.
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
+	}
+
+	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
+	// Regardless of whether you have enabled versioning, each object in your bucket
+	// has a version ID. If you have not enabled versioning, Amazon S3 sets the value
+	// of the version ID to null. If you have enabled versioning, Amazon S3 assigns a
+	// unique version ID value for the object.
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		// Check if versionId query param was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid := u.Query().Get("versionId"); vid != "" && vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
+		cpSrcPath = u.Path
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
@@ -774,15 +824,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		length = actualSize
 	}
 
+	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	isCompressed := objectAPI.IsCompressionSupported() && isCompressible(r.Header, srcObject) && !isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI)
 	if isCompressed {
-		// Storing the compression metadata.
-		srcInfo.UserDefined[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
-		srcInfo.UserDefined[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
+		compressMetadata = make(map[string]string, 2)
+		// Preserving the compression metadata.
+		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 		// Remove all source encrypted related metadata to
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
@@ -813,8 +866,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	rawReader := srcInfo.Reader
-	pReader := NewPutObjReader(srcInfo.Reader, srcInfo.Reader, nil)
+	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
+
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		// Encryption parameters not applicable for this object.
@@ -882,15 +940,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			switch {
 			case !isSourceEncrypted && !isTargetEncrypted:
-				fallthrough
+				targetSize = srcInfo.Size
 			case isSourceEncrypted && isTargetEncrypted:
 				targetSize = srcInfo.Size
-			// Source not encrypted and target encrypted
 			case !isSourceEncrypted && isTargetEncrypted:
 				targetSize = srcInfo.EncryptedSize()
 			case isSourceEncrypted && !isTargetEncrypted:
 				targetSize, _ = srcInfo.DecryptedSize()
 			}
+
 			if isTargetEncrypted {
 				reader, objEncKey, err = newEncryptReader(srcInfo.Reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
@@ -910,6 +968,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+
 			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objEncKey)
 		}
 	}
@@ -920,6 +979,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	// Store the preserved compression metadata.
+	for k, v := range compressMetadata {
+		srcInfo.UserDefined[k] = v
 	}
 
 	// We need to preserve the encryption headers set in EncryptRequest,
@@ -945,17 +1009,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var objInfo ObjectInfo
 
-	// Returns a minio-go Client configured to access remote host described by destDNSRecord
-	// Applicable only in a federated deployment
-	var getRemoteInstanceClient = func(host string, port int) (*miniogo.Core, error) {
-		// In a federated deployment, all the instances share config files and hence expected to have same
-		// credentials. So, access current instances creds and use it to create client for remote instance
-		endpoint := net.JoinHostPort(host, strconv.Itoa(port))
-		accessKey := globalServerConfig.Credential.AccessKey
-		secretKey := globalServerConfig.Credential.SecretKey
-		return miniogo.NewCore(endpoint, accessKey, secretKey, globalIsSSL)
-	}
-
 	if isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		if globalDNSConfig == nil {
 			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
@@ -965,14 +1018,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
 			// Send PutObject request to appropriate instance (in federated deployment)
 			host, port := getRandomHostPort(dstRecords)
-			client, rerr := getRemoteInstanceClient(host, port)
+			client, rerr := getRemoteInstanceClient(r, host, port)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader, srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
+			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+				srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
 			if rerr != nil {
-				writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			objInfo.ETag = remoteObjInfo.ETag
@@ -1039,7 +1093,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -1206,6 +1263,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
@@ -1302,7 +1362,10 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -1334,6 +1397,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	var encMetadata = map[string]string{}
 
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
@@ -1399,6 +1465,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
+	if !objectAPI.IsEncryptionSupported() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
@@ -1414,6 +1484,22 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if err != nil {
 		// Save unescaped string as is.
 		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
+	}
+
+	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
+	// Regardless of whether you have enabled versioning, each object in your bucket
+	// has a version ID. If you have not enabled versioning, Amazon S3 sets the value
+	// of the version ID to null. If you have enabled versioning, Amazon S3 assigns a
+	// unique version ID value for the object.
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		// Check if versionId query param was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid := u.Query().Get("versionId"); vid != "" && vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
+		cpSrcPath = u.Path
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
@@ -1643,7 +1729,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-
+	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
+		return
+	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -2201,6 +2290,11 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if vid := r.URL.Query().Get("versionId"); vid != "" && vid != "null" {
+		writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
 		return
 	}
 

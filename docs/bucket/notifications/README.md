@@ -135,9 +135,9 @@ The following example enables a bucket event notification to trigger when a JPEG
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 In this example, the ARN value is ``arn:minio:sqs::1:amqp``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
 
@@ -247,9 +247,9 @@ Use the following commands to enable a bucket event notification to trigger when
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:mqtt --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:mqtt --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 In this example, the ARN value is ``arn:minio:sqs::1:mqtt``. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -357,9 +357,9 @@ Use the following commands to enable bucket event notifications on a bucket name
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:elasticsearch --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:elasticsearch --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -507,9 +507,9 @@ Use the following commands to enable bucket event notifications on a bucket name
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -624,9 +624,9 @@ Use the following commands to enable bucket event notifications on a bucket name
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 In this example, the ARN value is `arn:minio:sqs::1:nats`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -834,10 +834,10 @@ Use the following commands to enable bucket event notifications on a bucket name
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc events add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
-mc events list myminio/images
-arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event list myminio/images
+arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -934,10 +934,10 @@ Use the following commands to enable bucket event notifications on a bucket name
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc events add myminio/images arn:minio:sqs::1:mysql --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
-mc events list myminio/images
-arn:minio:sqs::1:mysql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event list myminio/images
+arn:minio:sqs::1:mysql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 **Note:** The ARN displayed by Minio in the previous step is required to configure this bucket notification. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -1007,9 +1007,9 @@ Use the following commands to enable bucket event notifications on a bucket name
 
 ```
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs::1:kafka --suffix .jpg
-mc events list myminio/images
-arn:minio:sqs::1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=".jpg"
+mc event add  myminio/images arn:minio:sqs::1:kafka --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
 In this example, the ARN value is `arn:minio:sqs::1:kafka`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -1076,7 +1076,7 @@ The following example enables a bucket event notification to trigger when a JPEG
 ```sh
 mc mb myminio/images
 mc mb myminio/images-thumbnail
-mc events add myminio/images arn:minio:sqs::1:webhook --events put --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:webhook --events put --suffix .jpg
 ```
 
 In this example, the ARN value is `arn:minio:sqs::1:amqp`. For more information about ARN see the [AWS ARN documentation](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
@@ -1084,7 +1084,7 @@ In this example, the ARN value is `arn:minio:sqs::1:amqp`. For more information 
 Use the following command to check if the event notification was successful:
 
 ```sh
-mc events list myminio/images
+mc event list myminio/images
 ```
 
 A response similar to this one should be displayed:

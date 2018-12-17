@@ -510,12 +510,12 @@ func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, obj
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
-	err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, minio.ToMinioClientCompleteParts(uploadedParts))
+	etag, err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, minio.ToMinioClientCompleteParts(uploadedParts))
 	if err != nil {
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return l.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	return minio.ObjectInfo{Bucket: bucket, Name: object, ETag: etag}, nil
 }
 
 // SetBucketPolicy sets policy on bucket

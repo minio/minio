@@ -1,5 +1,5 @@
 {
-	"version": "31",
+	"version": "33",
 	"credential": {
 		"accessKey": "36J9X8EZI4KEV1G7EHXA",
 		"secretKey": "ECk2uqOoNqvtJIMQ3WYugvmNPL_-zm3WcRqP5vUM",
@@ -115,7 +115,6 @@
 				"streaming": {
 					"enable": false,
 					"clusterID": "",
-					"clientID": "",
 					"async": false,
 					"maxPubAcksInflight": 0
 				}

@@ -20,12 +20,12 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"net/url"
 	"runtime"
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Documentation links, these are part of message printing code.
@@ -83,23 +83,12 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
-		url, err := url.Parse(apiEndpoint)
+		url, err := xnet.ParseURL(apiEndpoint)
 		if err != nil {
 			newAPIEndpoints[i] = apiEndpoint
 			continue
 		}
-		host, port := mustSplitHostPort(url.Host)
-		// For standard HTTP(s) ports such as "80" and "443"
-		// apiEndpoints should only be host without port.
-		switch {
-		case url.Scheme == "http" && port == "80":
-			fallthrough
-		case url.Scheme == "https" && port == "443":
-			url.Host = host
-			newAPIEndpoints[i] = url.String()
-		default:
-			newAPIEndpoints[i] = apiEndpoint
-		}
+		newAPIEndpoints[i] = url.String()
 	}
 	return newAPIEndpoints
 }

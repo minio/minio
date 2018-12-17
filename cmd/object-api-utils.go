@@ -635,12 +635,13 @@ func (p *PutObjReader) MD5CurrentHexString() string {
 func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, encKey []byte) *PutObjReader {
 	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
 
-	var objKey crypto.ObjectKey
-	copy(objKey[:], encKey)
-	p.sealMD5Fn = sealETagFn(objKey)
-	if encReader != nil {
+	if len(encKey) != 0 && encReader != nil {
+		var objKey crypto.ObjectKey
+		copy(objKey[:], encKey)
+		p.sealMD5Fn = sealETagFn(objKey)
 		p.Reader = encReader
 	}
+
 	return &p
 }
 
@@ -651,9 +652,10 @@ func sealETag(encKey crypto.ObjectKey, md5CurrSum []byte) []byte {
 	}
 	return encKey.SealETag(md5CurrSum)
 }
+
 func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
-	fn1 := func(md5sumcurr []byte) []byte {
+	fn := func(md5sumcurr []byte) []byte {
 		return sealETag(key, md5sumcurr)
 	}
-	return fn1
+	return fn
 }

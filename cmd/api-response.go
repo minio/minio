@@ -575,7 +575,9 @@ func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *u
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set("Retry-After", "120")
 	case ErrAccessDenied:
-		if browser {
+		// The request is from browser and also if browser
+		// is enabled we need to redirect.
+		if browser && globalIsBrowserEnabled {
 			w.Header().Set("Location", minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return

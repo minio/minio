@@ -557,7 +557,6 @@ func GetPolicy(statements []Statement, bucketName string, prefix string) BucketP
 		} else {
 			matchedObjResources = s.Resources.FuncMatch(resourceMatch, objectResource)
 		}
-
 		if !matchedObjResources.IsEmpty() {
 			readOnly, writeOnly := getObjectPolicy(s)
 			for resource := range matchedObjResources {
@@ -571,7 +570,8 @@ func GetPolicy(statements []Statement, bucketName string, prefix string) BucketP
 					matchedResource = resource
 				}
 			}
-		} else if s.Resources.Contains(bucketResource) {
+		}
+		if s.Resources.Contains(bucketResource) {
 			commonFound, readOnly, writeOnly := getBucketPolicy(s, prefix)
 			bucketCommonFound = bucketCommonFound || commonFound
 			bucketReadOnly = bucketReadOnly || readOnly
@@ -605,6 +605,7 @@ func GetPolicies(statements []Statement, bucketName, prefix string) map[string]B
 			}
 		}
 	}
+
 	// Pretend that policy resource as an actual object and fetch its policy
 	for r := range objResources {
 		// Put trailing * if exists in asterisk
@@ -613,7 +614,10 @@ func GetPolicies(statements []Statement, bucketName, prefix string) map[string]B
 			r = r[:len(r)-1]
 			asterisk = "*"
 		}
-		objectPath := r[len(awsResourcePrefix+bucketName)+1:]
+		var objectPath string
+		if len(r) >= len(awsResourcePrefix+bucketName)+1 {
+			objectPath = r[len(awsResourcePrefix+bucketName)+1:]
+		}
 		p := GetPolicy(statements, bucketName, objectPath)
 		policyRules[bucketName+"/"+objectPath+asterisk] = p
 	}

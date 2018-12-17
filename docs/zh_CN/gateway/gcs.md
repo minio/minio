@@ -36,7 +36,7 @@ Minio Gateway配有嵌入式网络对象浏览器。 将您的Web浏览器指向
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
 
-##使用Minio客户端 `mc`验证
+## 使用Minio客户端 `mc`验证
 `mc` 提供了诸如ls，cat，cp，mirror，diff等UNIX命令的替代方案。它支持文件系统和Amazon S3兼容的云存储服务。
 
 ### 配置  `mc`

@@ -228,7 +228,8 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	return req.Method == http.MethodPost
+	return req.Method == http.MethodPost &&
+		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+"/")
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -625,7 +626,9 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || globalDomainName == "" || guessIsBrowserReq(r) || guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || guessIsRPCReq(r) {
+	if globalDNSConfig == nil || globalDomainName == "" ||
+		guessIsBrowserReq(r) || guessIsHealthCheckReq(r) ||
+		guessIsMetricsReq(r) || guessIsRPCReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
 		return
 	}

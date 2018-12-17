@@ -96,6 +96,7 @@ func TestHasEllipses(t *testing.T) {
 			true,
 		},
 		{
+
 			[]string{
 				"mydisk-{1...4}{1..2.}",
 			},
@@ -201,6 +202,11 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			false,
 			0,
 		},
+		{
+			"{f...z}",
+			false,
+			0,
+		},
 		// Test for valid input.
 		{
 			"{1...64}",
@@ -221,6 +227,11 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			"{001...036}",
 			true,
 			36,
+		},
+		{
+			"{1...a}",
+			true,
+			10,
 		},
 	}
 

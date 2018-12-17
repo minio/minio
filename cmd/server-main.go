@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -381,7 +382,10 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize notification system")
+		logger.LogIf(context.Background(), err)
+	}
+	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
+		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
 	}
 
 	globalObjLayerMutex.Lock()
@@ -389,8 +393,7 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(globalMinioAddr)
-	printStartupMessage(apiEndpoints)
+	printStartupMessage(getAPIEndpoints())
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

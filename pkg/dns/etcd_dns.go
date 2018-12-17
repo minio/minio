@@ -85,16 +85,28 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 		}
 		srvRecord.Key = strings.TrimPrefix(string(n.Key), key)
 		srvRecord.Key = strings.TrimSuffix(srvRecord.Key, srvRecord.Host)
-		srvRecords = append(srvRecords, srvRecord)
+		// SRV records are stored in the following form
+		// /skydns/net/miniocloud/bucket1, so this function serves multiple
+		// purposes basically when we do a Get(bucketName) this function
+		// should return a single DNS record for any input 'bucketName'.
+		//
+		// In all other situations when we want to list all DNS records,
+		// which is handled in the else clause.
+		if key != msg.Path(fmt.Sprintf(".%s.", c.domainName), defaultPrefixPath) {
+			if srvRecord.Key == "/" {
+				srvRecords = append(srvRecords, srvRecord)
+			}
+		} else {
+			srvRecords = append(srvRecords, srvRecord)
+		}
 
 	}
-	if srvRecords != nil {
-		sort.Slice(srvRecords, func(i int, j int) bool {
-			return srvRecords[i].Key < srvRecords[j].Key
-		})
-	} else {
+	if len(srvRecords) == 0 {
 		return nil, ErrNoEntriesFound
 	}
+	sort.Slice(srvRecords, func(i int, j int) bool {
+		return srvRecords[i].Key < srvRecords[j].Key
+	})
 	return srvRecords, nil
 }
 
@@ -123,9 +135,18 @@ func (c *coreDNS) Put(bucket string) error {
 // Removes DNS entries added in Put().
 func (c *coreDNS) Delete(bucket string) error {
 	key := msg.Path(fmt.Sprintf("%s.%s.", bucket, c.domainName), defaultPrefixPath)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	_, err := c.etcdClient.Delete(ctx, key)
-	defer cancel()
+	srvRecords, err := c.list(key)
+	if err != nil {
+		return err
+	}
+	for _, record := range srvRecords {
+		dctx, dcancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+		if _, err = c.etcdClient.Delete(dctx, key+"/"+record.Host); err != nil {
+			dcancel()
+			return err
+		}
+		dcancel()
+	}
 	return err
 }
 
