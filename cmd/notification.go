@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"strings"
@@ -488,10 +489,10 @@ func (args eventArgs) ToEvent() event.Event {
 		host := globalMinioHost
 		if host == "" {
 			// FIXME: Send FQDN or hostname of this machine than sending IP address.
-			host = localIP4.ToSlice()[0]
+			host = sortIPs(localIP4.ToSlice())[0]
 		}
 
-		return fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), host, globalMinioPort)
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
 	}
 
 	eventTime := UTCNow()
@@ -500,6 +501,10 @@ func (args eventArgs) ToEvent() event.Event {
 	respElements := map[string]string{
 		"x-amz-request-id":        args.RespElements["requestId"],
 		"x-minio-origin-endpoint": getOriginEndpoint(), // Minio specific custom elements.
+	}
+	// Add deployment as part of
+	if globalDeploymentID != "" {
+		respElements["x-minio-deployment-id"] = globalDeploymentID
 	}
 	if args.RespElements["content-length"] != "" {
 		respElements["content-length"] = args.RespElements["content-length"]

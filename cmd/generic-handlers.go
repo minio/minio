@@ -743,7 +743,9 @@ func (s customHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set custom headers such as x-amz-request-id and x-minio-deployment-id
 	// for each request.
 	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
-	w.Header().Set(responseDeploymentIDKey, globalDeploymentID)
+	if globalDeploymentID != "" {
+		w.Header().Set(responseDeploymentIDKey, globalDeploymentID)
+	}
 	s.handler.ServeHTTP(logger.NewResponseWriter(w), r)
 }
 
