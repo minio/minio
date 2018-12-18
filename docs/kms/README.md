@@ -16,8 +16,8 @@ Minio supports two different KMS concepts:
    Direct master keys are useful if the storage backend is not on the same machine as the Minio server, e.g.,
    if network drives or Minio gateway is used and an external KMS would cause too much management overhead.  
    
-   Note: If the Minio server machine is ever compromised, then the master key must also be 
-   treated as compromised.
+   Note: KMS master keys are mainly for testing purposes. It's not recommended to use them for production deployments.
+   Further if the Minio server machine is ever compromised, then the master key must also be treated as compromised.
 
 **Important:**  
 If multiple Minio servers are configured as [gateways](https://github.com/minio/minio/blob/master/docs/gateway/README.md)
@@ -117,6 +117,12 @@ A KMS master key can be specified directly using:
 
 ```sh
 export MINIO_SSE_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574
+```
+
+Please use your own master key. A random master key can be generated using e.g. this command on Linux/Mac/BSD* systems:
+
+```sh
+head -c 32 /dev/urandom | xxd -c 32 -ps
 ```
 
 ### 3. Test your setup
