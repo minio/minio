@@ -100,7 +100,7 @@ go get -u github.com/minio/minio
 - [使用 `aws-cli`](https://docs.minio.io/cn/aws-cli-with-minio)
 - [使用 `s3cmd`](https://docs.minio.io/cn/s3cmd-with-minio)
 - [使用 `minio-go` SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
-- [Minio文档](https://docs.minio.io)
+- [Minio文档](https://docs.minio.io/cn/)
 
 ## 如何参与到Minio项目
 请参考 [贡献者指南](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)。欢迎各位中国程序员加到Minio项目中。
