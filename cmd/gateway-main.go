@@ -215,6 +215,22 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
+	// !!! Do not move this block !!!
+	// For all gateways, the config needs to be loaded from env
+	// prior to initializing the gateway layer
+	{
+		// Initialize server config.
+		srvCfg := newServerConfig()
+
+		// Override any values from ENVs.
+		srvCfg.loadFromEnvs()
+
+		// hold the mutex lock before a new config is assigned.
+		globalServerConfigMu.Lock()
+		globalServerConfig = srvCfg
+		globalServerConfigMu.Unlock()
+	}
+
 	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
 	if err != nil {
 		// Stop watching for any certificate changes.
@@ -223,27 +239,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
-	// Create a new config system.
-	globalConfigSys = NewConfigSys()
+
 	if globalEtcdClient != nil && gatewayName == "nas" {
-		// Initialize server config.
+		// Create a new config system.
+		globalConfigSys = NewConfigSys()
+
+		// Load globalServerConfig from etcd
 		_ = globalConfigSys.Init(newObject)
-	} else {
-		// Initialize server config.
-		srvCfg := newServerConfig()
-
-		// Override any values from ENVs.
-		srvCfg.loadFromEnvs()
-
-		// Load values to cached global values.
-		srvCfg.loadToCachedConfigs()
-
-		// hold the mutex lock before a new config is assigned.
-		globalServerConfigMu.Lock()
-		globalServerConfig = srvCfg
-		globalServerConfigMu.Unlock()
 	}
-
 	// Load logger subsystem
 	loadLoggers()
 
