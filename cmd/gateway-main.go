@@ -173,10 +173,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if globalEtcdClient != nil {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
-
-		// Enable admin router if etcd is enabled.
-		registerAdminRouter(router)
 	}
+
+	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
+	// operations such as profiling, server info etc.
+	registerAdminRouter(router, globalEtcdClient != nil)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
@@ -306,6 +307,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
+
+	// Set uptime time after object layer has initialized.
+	globalBootTime = UTCNow()
 
 	handleSignals()
 }

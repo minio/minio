@@ -107,8 +107,8 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	// Add Admin RPC router
 	registerAdminRPCRouter(router)
 
-	// Add Admin router.
-	registerAdminRouter(router)
+	// Add Admin router, all APIs are enabled in server mode.
+	registerAdminRouter(router, true)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
