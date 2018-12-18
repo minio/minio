@@ -38,7 +38,7 @@ import (
 
 var (
 	configJSON = []byte(`{
-  "version": "32",
+  "version": "33",
   "credential": {
     "accessKey": "minio",
     "secretKey": "minio123"
@@ -152,7 +152,6 @@ var (
         "streaming": {
           "enable": false,
           "clusterID": "",
-          "clientID": "",
           "async": false,
           "maxPubAcksInflight": 0
         }

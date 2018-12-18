@@ -16,5 +16,6 @@ package crypto
 
 // KMSConfig has the KMS config for hashicorp vault
 type KMSConfig struct {
-	Vault VaultConfig `json:"vault"`
+	AutoEncryption bool        `json:"-"`
+	Vault          VaultConfig `json:"vault"`
 }

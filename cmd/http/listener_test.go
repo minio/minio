@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -802,11 +803,19 @@ func TestIgnoreErr(t *testing.T) {
 			want: true,
 		},
 		{
+			err:  errors.New("EOF"),
+			want: true,
+		},
+		{
 			err:  &net.OpError{Err: &myTimeoutErr{timeout: false}},
 			want: false,
 		},
 		{
 			err:  io.ErrUnexpectedEOF,
+			want: false,
+		},
+		{
+			err:  nil,
 			want: false,
 		},
 	}

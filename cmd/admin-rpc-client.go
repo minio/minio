@@ -149,6 +149,11 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 		// Use first IPv4 instead of loopback address.
 		localAddr = net.JoinHostPort(sortIPs(localIP4.ToSlice())[0], globalMinioPort)
 	}
+	if strings.HasPrefix(localAddr, "[::1]:") {
+		// Use first IPv4 instead of loopback address.
+		localAddr = net.JoinHostPort(localIP6.ToSlice()[0], globalMinioPort)
+	}
+
 	adminPeerList = append(adminPeerList, adminPeer{
 		addr:      localAddr,
 		cmdRunner: localAdminClient{},

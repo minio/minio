@@ -539,8 +539,8 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		Statements: []policy.Statement{policy.NewStatement(
 			policy.Allow,
 			policy.NewPrincipal("*"),
-			policy.NewActionSet(policy.GetObjectAction),
-			policy.NewResourceSet(policy.NewResource(bucketName, "*")),
+			policy.NewActionSet(policy.ListBucketAction),
+			policy.NewResourceSet(policy.NewResource(bucketName, "")),
 			condition.NewFunctions(),
 		)},
 	}

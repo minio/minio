@@ -14,9 +14,9 @@ go get -u github.com/minio/minio-go
 ## Initialize Minio Client
 Minio client requires the following four parameters specified to connect to an Amazon S3 compatible object storage.
 
-| Parameter  | Description| 
+| Parameter  | Description|
 | :---         |     :---     |
-| endpoint   | URL to object storage service.   | 
+| endpoint   | URL to object storage service.   |
 | accessKeyID | Access key is the user ID that uniquely identifies your account. |   
 | secretAccessKey | Secret key is the password to your account. |
 | secure | Set this value to 'true' to enable secure (HTTPS) access. |
@@ -85,8 +85,9 @@ func main() {
 		} else {
 			log.Fatalln(err)
 		}
+	} else {
+		log.Printf("Successfully created %s\n", bucketName)
 	}
-	log.Printf("Successfully created %s\n", bucketName)
 
 	// Upload the zip file
 	objectName := "golden-oldies.zip"
@@ -106,7 +107,7 @@ func main() {
 ### Run FileUploader
 ```sh
 go run file-uploader.go
-2016/08/13 17:03:28 Successfully created mymusic 
+2016/08/13 17:03:28 Successfully created mymusic
 2016/08/13 17:03:40 Successfully uploaded golden-oldies.zip of size 16253413
 
 mc ls play/mymusic/
@@ -114,7 +115,7 @@ mc ls play/mymusic/
 ```
 
 ## API Reference
-The full API Reference is available here. 
+The full API Reference is available here.
 
 * [Complete API Reference](https://docs.minio.io/docs/golang-client-api-reference)
 
@@ -154,6 +155,8 @@ The full API Reference is available here.
 * [`RemoveObject`](https://docs.minio.io/docs/golang-client-api-reference#RemoveObject)
 * [`RemoveObjects`](https://docs.minio.io/docs/golang-client-api-reference#RemoveObjects)
 * [`RemoveIncompleteUpload`](https://docs.minio.io/docs/golang-client-api-reference#RemoveIncompleteUpload)
+* [`SelectObjectContent`](https://docs.minio.io/docs/golang-client-api-reference#SelectObjectContent)
+
 
 ### API Reference : Presigned Operations
 * [`PresignedGetObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedGetObject)
@@ -182,7 +185,7 @@ The full API Reference is available here.
 * [setbucketpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketpolicy.go)
 * [getbucketpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketpolicy.go)
 * [listbucketpolicies.go](https://github.com/minio/minio-go/blob/master/examples/s3/listbucketpolicies.go)
- 
+
 ### Full Examples : Bucket lifecycle Operations
 * [setbucketlifecycle.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketlifecycle.go)
 * [getbucketlifecycle.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketlifecycle.go)
@@ -223,7 +226,7 @@ The full API Reference is available here.
 
 ## Explore Further
 * [Complete Documentation](https://docs.minio.io)
-* [Minio Go Client SDK API Reference](https://docs.minio.io/docs/golang-client-api-reference) 
+* [Minio Go Client SDK API Reference](https://docs.minio.io/docs/golang-client-api-reference)
 * [Go Music Player App Full Application Example](https://docs.minio.io/docs/go-music-player-app)
 
 ## Contribute

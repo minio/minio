@@ -71,6 +71,7 @@ type posix struct {
 	connected bool
 
 	diskMount bool // indicates if the path is an actual mount.
+	driveSync bool // indicates if the backend is synchronous.
 
 	// Disk usage metrics
 	stopUsageCh chan struct{}
@@ -189,6 +190,15 @@ func newPosix(path string) (*posix, error) {
 		},
 		stopUsageCh: make(chan struct{}),
 		diskMount:   mountinfo.IsLikelyMountPoint(path),
+	}
+
+	var pf BoolFlag
+	if driveSync := os.Getenv("MINIO_DRIVE_SYNC"); driveSync != "" {
+		pf, err = ParseBoolFlag(driveSync)
+		if err != nil {
+			return nil, err
+		}
+		p.driveSync = bool(pf)
 	}
 
 	if !p.diskMount {
@@ -1013,8 +1023,14 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		return errFaultyDisk
 	}
 
-	// Create file if not found
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	var w *os.File
+	// Create file if not found, additionally also enables synchronous
+	// operation if asked by the user.
+	if s.driveSync {
+		w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
+	} else {
+		w, err = s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	}
 	if err != nil {
 		return err
 	}

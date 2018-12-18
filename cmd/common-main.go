@@ -30,7 +30,6 @@ import (
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
@@ -221,14 +220,18 @@ func handleCommonEnvVars() {
 	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
 	if ok {
 		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
-		globalDomainIPs = set.NewStringSet()
 		for i, ip := range minioEndpoints {
 			if net.ParseIP(ip) == nil {
 				logger.FatalIf(errInvalidArgument, "Unable to initialize Minio server with invalid MINIO_PUBLIC_IPS[%d]: %s", i, ip)
 			}
-			globalDomainIPs.Add(ip)
 		}
+		updateDomainIPs(set.CreateStringSet(minioEndpoints...))
+	} else {
+		// Add found interfaces IP address to global domain IPS,
+		// loopback addresses will be naturally dropped.
+		updateDomainIPs(localIP4)
 	}
+
 	if globalDomainName != "" && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 		var err error
 		globalDNSConfig, err = dns.NewCoreDNS(globalDomainName, globalDomainIPs, globalMinioPort, globalEtcdClient)
@@ -316,20 +319,6 @@ func handleCommonEnvVars() {
 		// if worm is turned off or on.
 		globalIsEnvWORM = true
 		globalWORMEnabled = bool(wormFlag)
-	}
-
-	kmsConf, err := crypto.NewVaultConfig()
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize hashicorp vault")
-	}
-	if kmsConf.Vault.Endpoint != "" {
-		kms, err := crypto.NewVault(kmsConf)
-		if err != nil {
-			logger.Fatal(err, "Unable to initialize KMS")
-		}
-		globalKMS = kms
-		globalKMSKeyID = kmsConf.Vault.Key.Name
-		globalKMSConfig = kmsConf
 	}
 
 	if compress := os.Getenv("MINIO_COMPRESS"); compress != "" {

@@ -99,7 +99,7 @@ type Options struct {
 // Global constants.
 const (
 	libraryName    = "minio-go"
-	libraryVersion = "v6.0.6"
+	libraryVersion = "v6.0.11"
 )
 
 // User Agent should always following the below style.
@@ -820,7 +820,7 @@ func (c Client) makeTargetURL(bucketName, objectName, bucketLocation string, isV
 			host = c.s3AccelerateEndpoint
 		} else {
 			// Do not change the host if the endpoint URL is a FIPS S3 endpoint.
-			if !s3utils.IsAmazonFIPSGovCloudEndpoint(*c.endpointURL) {
+			if !s3utils.IsAmazonFIPSEndpoint(*c.endpointURL) {
 				// Fetch new host based on the bucket location.
 				host = getS3Endpoint(bucketLocation)
 			}

@@ -892,3 +892,47 @@ type serverConfigV32 struct {
 		// Add new external policy enforcements here.
 	} `json:"policy"`
 }
+
+// serverConfigV33 is just like version '32', removes clientID from NATS.
+type serverConfigV33 struct {
+	quick.Config `json:"-"` // ignore interfaces
+
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential auth.Credentials `json:"credential"`
+	Region     string           `json:"region"`
+	Worm       BoolFlag         `json:"worm"`
+
+	// Storage class configuration
+	StorageClass storageClassConfig `json:"storageclass"`
+
+	// Cache configuration
+	Cache CacheConfig `json:"cache"`
+
+	// KMS configuration
+	KMS crypto.KMSConfig `json:"kms"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Logger configuration
+	Logger loggerConfig `json:"logger"`
+
+	// Compression configuration
+	Compression compressionConfig `json:"compress"`
+
+	// OpenID configuration
+	OpenID struct {
+		// JWKS validator config.
+		JWKS validator.JWKSArgs `json:"jwks"`
+	} `json:"openid"`
+
+	// External policy enforcements.
+	Policy struct {
+		// OPA configuration.
+		OPA iampolicy.OpaArgs `json:"opa"`
+
+		// Add new external policy enforcements here.
+	} `json:"policy"`
+}

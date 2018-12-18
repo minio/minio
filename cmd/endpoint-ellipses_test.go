@@ -226,6 +226,17 @@ func TestGetSetIndexes(t *testing.T) {
 	}
 }
 
+func getHexSequences(start int, number int, paddinglen int) (seq []string) {
+	for i := start; i <= number; i++ {
+		if paddinglen == 0 {
+			seq = append(seq, fmt.Sprintf("%x", i))
+		} else {
+			seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dx", paddinglen), i))
+		}
+	}
+	return seq
+}
+
 func getSequences(start int, number int, paddinglen int) (seq []string) {
 	for i := start; i <= number; i++ {
 		if paddinglen == 0 {
@@ -464,6 +475,52 @@ func TestParseEndpointSet(t *testing.T) {
 							Prefix: "/export",
 							Suffix: "/disk",
 							Seq:    getSequences(1, 10, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}},
+			},
+			true,
+		},
+		// IPv6 ellipses with hexadecimal expansion
+		{
+			"http://[2001:3984:3989::{1...a}]/disk{1...10}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 10, 0),
+						},
+						{
+							Prefix: "http://[2001:3984:3989::",
+							Suffix: "]/disk",
+							Seq:    getHexSequences(1, 10, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}},
+			},
+			true,
+		},
+		// IPv6 ellipses with hexadecimal expansion with 3 position numerics.
+		{
+			"http://[2001:3984:3989::{001...00a}]/disk{1...10}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 10, 0),
+						},
+						{
+							Prefix: "http://[2001:3984:3989::",
+							Suffix: "]/disk",
+							Seq:    getHexSequences(1, 10, 3),
 						},
 					},
 				},

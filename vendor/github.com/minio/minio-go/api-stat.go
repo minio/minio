@@ -47,6 +47,10 @@ func (c Client) BucketExists(bucketName string) (bool, error) {
 		return false, err
 	}
 	if resp != nil {
+		resperr := httpRespToErrorResponse(resp, bucketName, "")
+		if ToErrorResponse(resperr).Code == "NoSuchBucket" {
+			return false, nil
+		}
 		if resp.StatusCode != http.StatusOK {
 			return false, httpRespToErrorResponse(resp, bucketName, "")
 		}

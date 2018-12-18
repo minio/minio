@@ -18,8 +18,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -135,11 +135,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	handleCommonCmdArgs(ctx)
 
 	// Get port to listen on from gateway address
-	var pErr error
-	_, globalMinioPort, pErr = net.SplitHostPort(gatewayAddr)
-	if pErr != nil {
-		logger.FatalIf(pErr, "Unable to start gateway")
-	}
+	globalMinioHost, globalMinioPort = mustSplitHostPort(gatewayAddr)
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -196,6 +192,15 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router)
 
+	// Dummy endpoint representing gateway instance.
+	globalEndpoints = []Endpoint{{
+		URL:     &url.URL{Path: "/minio/gateway"},
+		IsLocal: true,
+	}}
+
+	// Initialize Admin Peers.
+	initGlobalAdminPeers(globalEndpoints)
+
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate
@@ -218,23 +223,26 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
-
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
+	if globalEtcdClient != nil && gatewayName == "nas" {
+		// Initialize server config.
+		_ = globalConfigSys.Init(newObject)
+	} else {
+		// Initialize server config.
+		srvCfg := newServerConfig()
 
-	// Initialize server config.
-	srvCfg := newServerConfig()
+		// Override any values from ENVs.
+		srvCfg.loadFromEnvs()
 
-	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
+		// Load values to cached global values.
+		srvCfg.loadToCachedConfigs()
 
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
+		// hold the mutex lock before a new config is assigned.
+		globalServerConfigMu.Lock()
+		globalServerConfig = srvCfg
+		globalServerConfigMu.Unlock()
+	}
 
 	// Load logger subsystem
 	loadLoggers()
@@ -257,7 +265,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalIAMSys = NewIAMSys()
 	if globalEtcdClient != nil {
 		// Initialize IAM sys.
-		go globalIAMSys.Init(newObject)
+		_ = globalIAMSys.Init(newObject)
 	}
 
 	// Create new policy system.
@@ -268,6 +276,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
+		_ = globalNotificationSys.Init(newObject)
+	}
+
+	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
+		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but gateway does not support encryption")
+	}
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
@@ -286,7 +301,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		}
 
 		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), gatewayName)
+		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
 
 	handleSignals()

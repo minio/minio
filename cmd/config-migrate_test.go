@@ -159,8 +159,8 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 }
 
-// Test if a config migration from v2 to v30 is successfully done
-func TestServerConfigMigrateV2toV30(t *testing.T) {
+// Test if a config migration from v2 to v33 is successfully done
+func TestServerConfigMigrateV2toV33(t *testing.T) {
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)

@@ -28,6 +28,9 @@ const (
 
 	// DistXLSetupType - Distributed XL setup type enum.
 	DistXLSetupType
+
+	// GatewaySetupType - gateway setup type enum.
+	GatewaySetupType
 )
 
 func (setupType SetupType) String() string {
@@ -38,6 +41,8 @@ func (setupType SetupType) String() string {
 		return globalMinioModeXL
 	case DistXLSetupType:
 		return globalMinioModeDistXL
+	case GatewaySetupType:
+		return globalMinioModeGatewayPrefix
 	}
 
 	return ""
