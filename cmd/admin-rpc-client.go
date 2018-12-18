@@ -45,27 +45,10 @@ func (rpcClient *AdminRPCClient) SignalService(signal serviceSignal) (err error)
 	return rpcClient.Call(adminServiceName+".SignalService", &args, &reply)
 }
 
-// ReInitFormat - re-initialize disk format, remotely.
-func (rpcClient *AdminRPCClient) ReInitFormat(dryRun bool) error {
-	args := ReInitFormatArgs{DryRun: dryRun}
-	reply := VoidReply{}
-
-	return rpcClient.Call(adminServiceName+".ReInitFormat", &args, &reply)
-}
-
 // ServerInfo - returns the server info of the server to which the RPC call is made.
 func (rpcClient *AdminRPCClient) ServerInfo() (sid ServerInfoData, err error) {
 	err = rpcClient.Call(adminServiceName+".ServerInfo", &AuthArgs{}, &sid)
 	return sid, err
-}
-
-// GetConfig - returns config.json of the remote server.
-func (rpcClient *AdminRPCClient) GetConfig() ([]byte, error) {
-	args := AuthArgs{}
-	var reply []byte
-
-	err := rpcClient.Call(adminServiceName+".GetConfig", &args, &reply)
-	return reply, err
 }
 
 // StartProfiling - starts profiling in the remote server.
@@ -125,9 +108,7 @@ func NewAdminRPCClient(host *xnet.Host) (*AdminRPCClient, error) {
 // commands like service stop and service restart.
 type adminCmdRunner interface {
 	SignalService(s serviceSignal) error
-	ReInitFormat(dryRun bool) error
 	ServerInfo() (ServerInfoData, error)
-	GetConfig() ([]byte, error)
 	StartProfiling(string) error
 	DownloadProfilingData() ([]byte, error)
 }
@@ -172,26 +153,6 @@ func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
 	}
 
 	return adminPeerList
-}
-
-// peersReInitFormat - reinitialize remote object layers to new format.
-func peersReInitFormat(peers adminPeers, dryRun bool) error {
-	errs := make([]error, len(peers))
-
-	// Send ReInitFormat RPC call to all nodes.
-	// for local adminPeer this is a no-op.
-	wg := sync.WaitGroup{}
-	for i, peer := range peers {
-		wg.Add(1)
-		go func(idx int, peer adminPeer) {
-			defer wg.Done()
-			if !peer.isLocal {
-				errs[idx] = peer.cmdRunner.ReInitFormat(dryRun)
-			}
-		}(i, peer)
-	}
-	wg.Wait()
-	return nil
 }
 
 // Initialize global adminPeer collection.

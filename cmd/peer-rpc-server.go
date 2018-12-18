@@ -192,6 +192,30 @@ func (receiver *peerRPCReceiver) SendEvent(args *SendEventArgs, reply *bool) err
 	return nil
 }
 
+// ReloadFormatArgs - send event RPC arguments.
+type ReloadFormatArgs struct {
+	AuthArgs
+	DryRun bool
+}
+
+// ReloadFormat - handles reload format RPC call, reloads latest `format.json`
+func (receiver *peerRPCReceiver) ReloadFormat(args *ReloadFormatArgs, reply *VoidReply) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	return objAPI.ReloadFormat(context.Background(), args.DryRun)
+}
+
+// LoadUsers - handles load users RPC call.
+func (receiver *peerRPCReceiver) LoadUsers(args *AuthArgs, reply *VoidReply) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	return globalIAMSys.Load(objAPI)
+}
+
 // LoadCredentials - handles load credentials RPC call.
 func (receiver *peerRPCReceiver) LoadCredentials(args *AuthArgs, reply *VoidReply) error {
 	objAPI := newObjectLayerFn()

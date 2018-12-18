@@ -63,34 +63,6 @@ func testAdminCmdRunnerSignalService(t *testing.T, client adminCmdRunner) {
 	}
 }
 
-func testAdminCmdRunnerReInitFormat(t *testing.T, client adminCmdRunner) {
-	tmpGlobalObjectAPI := globalObjectAPI
-	defer func() {
-		globalObjectAPI = tmpGlobalObjectAPI
-	}()
-
-	testCases := []struct {
-		objectAPI ObjectLayer
-		dryRun    bool
-		expectErr bool
-	}{
-		{&DummyObjectLayer{}, true, false},
-		{&DummyObjectLayer{}, false, false},
-		{nil, true, true},
-		{nil, false, true},
-	}
-
-	for i, testCase := range testCases {
-		globalObjectAPI = testCase.objectAPI
-		err := client.ReInitFormat(testCase.dryRun)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-	}
-}
-
 func testAdminCmdRunnerServerInfo(t *testing.T, client adminCmdRunner) {
 	tmpGlobalBootTime := globalBootTime
 	tmpGlobalObjectAPI := globalObjectAPI
@@ -129,33 +101,6 @@ func testAdminCmdRunnerServerInfo(t *testing.T, client adminCmdRunner) {
 		globalHTTPStats = testCase.httpStats
 		globalNotificationSys = testCase.notificationSys
 		_, err := client.ServerInfo()
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-	}
-}
-
-func testAdminCmdRunnerGetConfig(t *testing.T, client adminCmdRunner) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-
-	config := newServerConfig()
-
-	testCases := []struct {
-		config    *serverConfig
-		expectErr bool
-	}{
-		{globalServerConfig, false},
-		{config, false},
-	}
-
-	for i, testCase := range testCases {
-		globalServerConfig = testCase.config
-		_, err := client.GetConfig()
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -205,16 +150,6 @@ func TestAdminRPCClientSignalService(t *testing.T) {
 	testAdminCmdRunnerSignalService(t, rpcClient)
 }
 
-func TestAdminRPCClientReInitFormat(t *testing.T) {
-	httpServer, rpcClient, prevGlobalServerConfig := newAdminRPCHTTPServerClient(t)
-	defer httpServer.Close()
-	defer func() {
-		globalServerConfig = prevGlobalServerConfig
-	}()
-
-	testAdminCmdRunnerReInitFormat(t, rpcClient)
-}
-
 func TestAdminRPCClientServerInfo(t *testing.T) {
 	httpServer, rpcClient, prevGlobalServerConfig := newAdminRPCHTTPServerClient(t)
 	defer httpServer.Close()
@@ -223,14 +158,4 @@ func TestAdminRPCClientServerInfo(t *testing.T) {
 	}()
 
 	testAdminCmdRunnerServerInfo(t, rpcClient)
-}
-
-func TestAdminRPCClientGetConfig(t *testing.T) {
-	httpServer, rpcClient, prevGlobalServerConfig := newAdminRPCHTTPServerClient(t)
-	defer httpServer.Close()
-	defer func() {
-		globalServerConfig = prevGlobalServerConfig
-	}()
-
-	testAdminCmdRunnerGetConfig(t, rpcClient)
 }

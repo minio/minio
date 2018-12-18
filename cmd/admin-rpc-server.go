@@ -68,23 +68,6 @@ func (receiver *adminRPCReceiver) DownloadProfilingData(args *AuthArgs, reply *[
 	return
 }
 
-// GetConfig - returns the config.json of this server.
-func (receiver *adminRPCReceiver) GetConfig(args *AuthArgs, reply *[]byte) (err error) {
-	*reply, err = receiver.local.GetConfig()
-	return err
-}
-
-// ReInitFormatArgs - provides dry-run information to re-initialize format.json
-type ReInitFormatArgs struct {
-	AuthArgs
-	DryRun bool
-}
-
-// ReInitFormat - re-init 'format.json'
-func (receiver *adminRPCReceiver) ReInitFormat(args *ReInitFormatArgs, reply *VoidReply) error {
-	return receiver.local.ReInitFormat(args.DryRun)
-}
-
 // NewAdminRPCServer - returns new admin RPC server.
 func NewAdminRPCServer() (*xrpc.Server, error) {
 	rpcServer := xrpc.NewServer()

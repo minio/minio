@@ -115,12 +115,30 @@ func (rpcClient *PeerRPCClient) SendEvent(bucketName string, targetID, remoteTar
 	return err
 }
 
+// ReloadFormat - calls reload format RPC.
+func (rpcClient *PeerRPCClient) ReloadFormat(dryRun bool) error {
+	args := ReloadFormatArgs{
+		DryRun: dryRun,
+	}
+	reply := VoidReply{}
+
+	return rpcClient.Call(peerServiceName+".ReloadFormat", &args, &reply)
+}
+
+// LoadUsers - calls load users RPC.
+func (rpcClient *PeerRPCClient) LoadUsers() error {
+	args := AuthArgs{}
+	reply := VoidReply{}
+
+	return rpcClient.Call(peerServiceName+".LoadUsers", &args, &reply)
+}
+
 // LoadCredentials - calls load credentials RPC.
 func (rpcClient *PeerRPCClient) LoadCredentials() error {
 	args := AuthArgs{}
 	reply := VoidReply{}
 
-	return rpcClient.Call(peerServiceName+".SetCredentials", &args, &reply)
+	return rpcClient.Call(peerServiceName+".LoadCredentials", &args, &reply)
 }
 
 // NewPeerRPCClient - returns new peer RPC client.

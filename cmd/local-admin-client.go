@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"io/ioutil"
@@ -74,15 +72,6 @@ func (lc localAdminClient) ServerInfo() (sid ServerInfoData, e error) {
 			Region:   globalServerConfig.GetRegion(),
 		},
 	}, nil
-}
-
-// GetConfig - returns config.json of the local server.
-func (lc localAdminClient) GetConfig() ([]byte, error) {
-	if globalServerConfig == nil {
-		return nil, fmt.Errorf("config not present")
-	}
-
-	return json.Marshal(globalServerConfig)
 }
 
 // StartProfiling - starts profiling on the local server.

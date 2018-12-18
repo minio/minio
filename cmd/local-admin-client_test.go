@@ -24,14 +24,6 @@ func TestLocalAdminClientSignalService(t *testing.T) {
 	testAdminCmdRunnerSignalService(t, &localAdminClient{})
 }
 
-func TestLocalAdminClientReInitFormat(t *testing.T) {
-	testAdminCmdRunnerReInitFormat(t, &localAdminClient{})
-}
-
 func TestLocalAdminClientServerInfo(t *testing.T) {
 	testAdminCmdRunnerServerInfo(t, &localAdminClient{})
-}
-
-func TestLocalAdminClientGetConfig(t *testing.T) {
-	testAdminCmdRunnerGetConfig(t, &localAdminClient{})
 }

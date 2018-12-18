@@ -90,6 +90,60 @@ func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string)
 	}()
 }
 
+// ReloadFormat - calls ReloadFormat RPC call on all peers.
+func (sys *NotificationSys) ReloadFormat(dryRun bool) map[xnet.Host]error {
+	errors := make(map[xnet.Host]error)
+	var wg sync.WaitGroup
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient) {
+			defer wg.Done()
+			// Try to load format in three attempts, before giving up.
+			for i := 0; i < 3; i++ {
+				err := client.ReloadFormat(dryRun)
+				if err == nil {
+					break
+				}
+				errors[addr] = err
+				// Wait for one second and no need wait after last attempt.
+				if i < 2 {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}(addr, client)
+	}
+	wg.Wait()
+
+	return errors
+}
+
+// LoadUsers - calls LoadUsers RPC call on all peers.
+func (sys *NotificationSys) LoadUsers() map[xnet.Host]error {
+	errors := make(map[xnet.Host]error)
+	var wg sync.WaitGroup
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient) {
+			defer wg.Done()
+			// Try to load users in three attempts.
+			for i := 0; i < 3; i++ {
+				err := client.LoadUsers()
+				if err == nil {
+					break
+				}
+				errors[addr] = err
+				// Wait for one second and no need wait after last attempt.
+				if i < 2 {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}(addr, client)
+	}
+	wg.Wait()
+
+	return errors
+}
+
 // LoadCredentials - calls LoadCredentials RPC call on all peers.
 func (sys *NotificationSys) LoadCredentials() map[xnet.Host]error {
 	errors := make(map[xnet.Host]error)
@@ -98,7 +152,7 @@ func (sys *NotificationSys) LoadCredentials() map[xnet.Host]error {
 		wg.Add(1)
 		go func(addr xnet.Host, client *PeerRPCClient) {
 			defer wg.Done()
-			// Try to set credentials in three attempts.
+			// Try to load credentials in three attempts.
 			for i := 0; i < 3; i++ {
 				err := client.LoadCredentials()
 				if err == nil {
