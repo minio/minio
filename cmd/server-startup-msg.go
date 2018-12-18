@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"runtime"
 	"strings"
 
@@ -76,6 +77,19 @@ func printStartupMessage(apiEndPoints []string) {
 	}
 }
 
+// Returns true if input is not IPv4, false if it is.
+func isNotIPv4(host string) bool {
+	h, _, err := net.SplitHostPort(host)
+	if err != nil {
+		h = host
+	}
+	ip := net.ParseIP(h)
+	ok := ip.To4() != nil // This is always true of IP is IPv4
+
+	// Returns true if input is not IPv4.
+	return !ok
+}
+
 // strip api endpoints list with standard ports such as
 // port "80" and "443" before displaying on the startup
 // banner.  Returns a new list of API endpoints.
@@ -83,12 +97,16 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
-		url, err := xnet.ParseURL(apiEndpoint)
+		u, err := xnet.ParseURL(apiEndpoint)
 		if err != nil {
 			newAPIEndpoints[i] = apiEndpoint
 			continue
 		}
-		newAPIEndpoints[i] = url.String()
+		if globalMinioHost == "" && isNotIPv4(u.Host) {
+			// Skip all non-IPv4 endpoints when we bind to all interfaces.
+			continue
+		}
+		newAPIEndpoints[i] = u.String()
 	}
 	return newAPIEndpoints
 }

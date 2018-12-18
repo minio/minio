@@ -89,7 +89,7 @@ func mustGetLocalIP6() (ipList set.StringSet) {
 			ip = v.IP
 		}
 
-		if ip.To16() != nil {
+		if ip.To4() == nil {
 			ipList.Add(ip.String())
 		}
 	}
