@@ -935,8 +935,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 					return
 				}
 			}
+
 			for k, v := range srcInfo.UserDefined {
-				encMetadata[k] = v
+				if hasPrefix(k, ReservedMetadataPrefix) {
+					encMetadata[k] = v
+				}
 			}
 
 			// In case of SSE-S3 oldKey and newKey aren't used - the KMS manages the keys.
@@ -1317,15 +1320,15 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	etag := objInfo.ETag
 	if objInfo.IsCompressed() {
 		// Ignore compressed ETag.
-		objInfo.ETag = objInfo.ETag + "-1"
+		etag = objInfo.ETag + "-1"
+	} else if hasServerSideEncryptionHeader(r.Header) {
+		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
-	if hasServerSideEncryptionHeader(r.Header) {
-		w.Header().Set("ETag", "\""+getDecryptedETag(r.Header, objInfo, false)+"\"")
-	} else {
-		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
-	}
+	w.Header().Set("ETag", "\""+etag+"\"")
+
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
@@ -1970,19 +1973,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	etag := partInfo.ETag
 	if isCompressed {
 		pipeWriter.Close()
 		// Suppress compressed ETag.
-		partInfo.ETag = partInfo.ETag + "-1"
+		etag = partInfo.ETag + "-1"
+	} else if isEncrypted {
+		etag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
-
-	if partInfo.ETag != "" {
-		if isEncrypted {
-			w.Header().Set("ETag", "\""+tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))+"\"")
-		} else {
-			w.Header().Set("ETag", "\""+partInfo.ETag+"\"")
-		}
-	}
+	w.Header().Set("ETag", "\""+etag+"\"")
 
 	writeSuccessResponseHeadersOnly(w)
 }
