@@ -668,11 +668,25 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
-var getRemoteInstanceClient = func(r *http.Request, host string, port int) (*miniogo.Core, error) {
-	// In a federated deployment, all the instances share config files and hence expected to have same
-	// credentials, make sure to send the same credentials for which the request came in.
+var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
 	cred := getReqAccessCred(r, globalServerConfig.GetRegion())
-	return miniogo.NewCore(net.JoinHostPort(host, strconv.Itoa(port)), cred.AccessKey, cred.SecretKey, globalIsSSL)
+	// In a federated deployment, all the instances share config files
+	// and hence expected to have same credentials.
+	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
+	if err != nil {
+		return nil, err
+	}
+	core.SetCustomTransport(NewCustomHTTPTransport())
+	return core, nil
+}
+
+// Check if the bucket is on a remote site, this code only gets executed when federation is enabled.
+var isRemoteCallRequired = func(ctx context.Context, bucket string, objAPI ObjectLayer) bool {
+	if globalDNSConfig == nil {
+		return false
+	}
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	return err == toObjectErr(errVolumeNotFound, bucket)
 }
 
 // CopyObjectHandler - Copy Object
@@ -802,17 +816,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.metadataOnly = true
 	}
 
-	// Checks if a remote putobject call is needed for CopyObject operation
-	// 1. If source and destination bucket names are same, it means no call needed to etcd to get destination info
-	// 2. If destination bucket doesn't exist locally, only then a etcd call is needed
-	var isRemoteCallRequired = func(ctx context.Context, src, dst string, objAPI ObjectLayer) bool {
-		if src == dst {
-			return false
-		}
-		_, berr := objAPI.GetBucketInfo(ctx, dst)
-		return berr == toObjectErr(errVolumeNotFound, dst)
-	}
-
 	var reader io.Reader
 	var length = srcInfo.Size
 
@@ -827,10 +830,27 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		length = actualSize
 	}
 
+	// Check if the destination bucket is on a remote site, this code only gets executed
+	// when federation is enabled, ie when globalDNSConfig is non 'nil'.
+	//
+	// This function is similar to isRemoteCallRequired but specifically for COPY object API
+	// if destination and source are same we do not need to check for destnation bucket
+	// to exist locally.
+	var isRemoteCopyRequired = func(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
+		if globalDNSConfig == nil {
+			return false
+		}
+		if srcBucket == dstBucket {
+			return false
+		}
+		_, err := objAPI.GetBucketInfo(ctx, dstBucket)
+		return err == toObjectErr(errVolumeNotFound, dstBucket)
+	}
+
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
-	isCompressed := objectAPI.IsCompressionSupported() && isCompressible(r.Header, srcObject) && !isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI)
+	isCompressed := objectAPI.IsCompressionSupported() && isCompressible(r.Header, srcObject) && !isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
 	if isCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
@@ -1009,29 +1029,28 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var objInfo ObjectInfo
 
-	if isRemoteCallRequired(ctx, srcBucket, dstBucket, objectAPI) {
-		if globalDNSConfig == nil {
-			writeErrorResponse(w, ErrNoSuchBucket, r.URL, guessIsBrowserReq(r))
+	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
+		var dstRecords []dns.SrvRecord
+		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		if err != nil {
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		var dstRecords []dns.SrvRecord
-		if dstRecords, err = globalDNSConfig.Get(dstBucket); err == nil {
-			// Send PutObject request to appropriate instance (in federated deployment)
-			host, port := getRandomHostPort(dstRecords)
-			client, rerr := getRemoteInstanceClient(r, host, port)
-			if rerr != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
-				srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
-			if rerr != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			objInfo.ETag = remoteObjInfo.ETag
-			objInfo.ModTime = remoteObjInfo.LastModified
+
+		// Send PutObject request to appropriate instance (in federated deployment)
+		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		if rerr != nil {
+			writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
+			return
 		}
+		remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+			srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
+		if rerr != nil {
+			writeErrorResponse(w, toAPIErrorCode(ctx, rerr), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		objInfo.ETag = remoteObjInfo.ETag
+		objInfo.ModTime = remoteObjInfo.LastModified
 	} else {
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
