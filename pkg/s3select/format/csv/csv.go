@@ -205,7 +205,7 @@ func (reader *cinput) OutputFieldDelimiter() string {
 
 // OutputRecordDelimiter - returns the requested output record delimiter.
 func (reader *cinput) OutputRecordDelimiter() string {
-	return reader.options.OutputFieldDelimiter
+	return reader.options.OutputRecordDelimiter
 }
 
 // HasHeader - returns true or false depending upon the header.
