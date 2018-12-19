@@ -503,6 +503,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 				return nil, err
 			}
 
+			// Decrypt the ETag before top layer consumes this value.
+			oi.ETag = getDecryptedETag(h, oi, copySource)
+
 			// Apply the skipLen and limit on the
 			// decrypted stream
 			decReader = io.LimitReader(ioutil.NewSkipReader(decReader, skipLen), decRangeLength)
