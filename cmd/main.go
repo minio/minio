@@ -45,6 +45,10 @@ var globalFlags = []cli.Flag{
 		Usage: "Disable startup information.",
 	},
 	cli.BoolFlag{
+		Name:  "anonymous",
+		Usage: "Hide sensitive information from logging.",
+	},
+	cli.BoolFlag{
 		Name:  "json",
 		Usage: "Output server logs and startup information in json format.",
 	},

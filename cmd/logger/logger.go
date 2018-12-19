@@ -18,15 +18,26 @@ package logger
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"go/build"
+	"hash"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/minio/highwayhash"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger/message/log"
+)
+
+var (
+	// HighwayHash key for logging in anonymous mode
+	magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
+	// HighwayHash hasher for logging in anonymous mode
+	loggerHighwayHasher hash.Hash
 )
 
 // Disable disables all logging, false by default. (used for "go test")
@@ -94,7 +105,7 @@ func (level Level) String() string {
 // quietFlag: Hide startup messages if enabled
 // jsonFlag: Display in JSON format, if enabled
 var (
-	quietFlag, jsonFlag bool
+	quietFlag, jsonFlag, anonFlag bool
 	// Custom function to format error
 	errorFmtFunc func(string, error, bool) string
 )
@@ -108,6 +119,12 @@ func EnableQuiet() {
 func EnableJSON() {
 	jsonFlag = true
 	quietFlag = true
+}
+
+// EnableAnonymous - turns anonymous flag
+// to avoid printing sensitive information.
+func EnableAnonymous() {
+	anonFlag = true
 }
 
 // IsJSON - returns true if jsonFlag is true
@@ -187,6 +204,8 @@ func Init(goPath string, goRoot string) {
 	// paths like "{GOROOT}/src/github.com/minio/minio"
 	// and "{GOPATH}/src/github.com/minio/minio"
 	trimStrings = append(trimStrings, filepath.Join("github.com", "minio", "minio")+string(filepath.Separator))
+
+	loggerHighwayHasher, _ = highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
 }
 
 func trimTrace(f string) string {
@@ -237,6 +256,14 @@ func getTrace(traceLevel int) []string {
 		pc, file, lineNumber, ok = runtime.Caller(traceLevel)
 	}
 	return trace
+}
+
+// Return the highway hash of the passed string
+func hashString(input string) string {
+	defer loggerHighwayHasher.Reset()
+	loggerHighwayHasher.Write([]byte(input))
+	checksum := loggerHighwayHasher.Sum(nil)
+	return hex.EncodeToString(checksum)
 }
 
 // LogAlwaysIf prints a detailed error message during
@@ -310,6 +337,14 @@ func logIf(ctx context.Context, err error) {
 			Source:    trace,
 			Variables: tags,
 		},
+	}
+
+	if anonFlag {
+		entry.API.Args.Bucket = hashString(entry.API.Args.Bucket)
+		entry.API.Args.Object = hashString(entry.API.Args.Object)
+		entry.RemoteHost = hashString(entry.RemoteHost)
+		entry.Message = reflect.TypeOf(err).String()
+		entry.Trace.Variables = make(map[string]string)
 	}
 
 	// Iterate over all logger targets to send the log entry

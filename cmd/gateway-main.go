@@ -112,30 +112,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
-	// Get "json" flag from command line argument and
-	// enable json and quite modes if jason flag is turned on.
-	jsonFlag := ctx.IsSet("json") || ctx.GlobalIsSet("json")
-	if jsonFlag {
-		logger.EnableJSON()
-	}
-
-	// Get quiet flag from command line argument.
-	quietFlag := ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
-	if quietFlag {
-		logger.EnableQuiet()
-	}
-
-	// Fetch address option
-	gatewayAddr := ctx.GlobalString("address")
-	if gatewayAddr == ":"+globalMinioPort {
-		gatewayAddr = ctx.String("address")
-	}
-
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
 	// Get port to listen on from gateway address
-	globalMinioHost, globalMinioPort = mustSplitHostPort(gatewayAddr)
+	globalMinioHost, globalMinioPort = mustSplitHostPort(globalCLIContext.Addr)
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -207,7 +188,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{gatewayAddr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
+	globalHTTPServer = xhttp.NewServer([]string{globalCLIContext.Addr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
 	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
@@ -294,7 +275,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	if !quietFlag {
+	if !globalCLIContext.Quiet {
 		mode := globalMinioModeGatewayPrefix + gatewayName
 		// Check update mode.
 		checkUpdate(mode)

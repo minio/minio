@@ -41,7 +41,7 @@ func init() {
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
-		Value: ":" + globalMinioPort,
+		Value: ":" + globalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
 	},
 }
@@ -148,9 +148,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	// Server address.
-	serverAddr := ctx.String("address")
-	logger.FatalIf(CheckLocalServerAddr(serverAddr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
 
 	var setupType SetupType
 	var err error
@@ -163,9 +161,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	endpoints := strings.Fields(os.Getenv("MINIO_ENDPOINTS"))
 	if len(endpoints) > 0 {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, endpoints...)
+		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(serverAddr, ctx.Args()...)
+		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
@@ -206,19 +204,6 @@ func serverMain(ctx *cli.Context) {
 	// error during initialization will be shown as a fatal message
 	logger.Disable = true
 
-	// Get "json" flag from command line argument and
-	// enable json and quite modes if jason flag is turned on.
-	jsonFlag := ctx.IsSet("json") || ctx.GlobalIsSet("json")
-	if jsonFlag {
-		logger.EnableJSON()
-	}
-
-	// Get quiet flag from command line argument.
-	quietFlag := ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
-	if quietFlag {
-		logger.EnableQuiet()
-	}
-
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
@@ -247,7 +232,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !quietFlag {
+	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.minio.io.
 		mode := globalMinioModeFS
 		if globalIsDistXL {
