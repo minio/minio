@@ -798,7 +798,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
-
+	srcInfo.ETag = getDecryptedETag(r.Header, srcInfo, true)
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
 	if checkCopyObjectPreconditions(w, r, srcInfo) {
 		return
@@ -1586,7 +1586,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
-
+	srcInfo.ETag = getDecryptedETag(r.Header, srcInfo, true)
 	actualPartSize := srcInfo.Size
 	if crypto.IsEncrypted(srcInfo.UserDefined) {
 		actualPartSize, err = srcInfo.DecryptedSize()
@@ -1601,7 +1601,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeCopyPartErr(w, partRangeErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
-
 	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
 	if checkCopyObjectPartPreconditions(w, r, srcInfo) {
 		return
