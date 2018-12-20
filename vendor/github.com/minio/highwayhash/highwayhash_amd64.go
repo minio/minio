@@ -13,6 +13,7 @@ var (
 	useSSE4 = cpu.X86.HasSSE41
 	useAVX2 = false
 	useNEON = false
+	useVMX  = false
 )
 
 //go:noescape

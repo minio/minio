@@ -7,7 +7,7 @@
 
 It can be used to prevent hash-flooding attacks or authenticate short-lived messages. Additionally it can be used as a fingerprinting function. HighwayHash is not a general purpose cryptographic hash function (such as Blake2b, SHA-3 or SHA-2) and should not be used if strong collision resistance is required. 
 
-This repository contains a native Go version and optimized assembly implementations on both Intel and ARM platforms.  
+This repository contains a native Go version and optimized assembly implementations for Intel, ARM and ppc64le architectures.
 
 ### High performance
 
@@ -49,6 +49,17 @@ Platform/CPU      | Write 64         | Write 1024        | Write 8192
 ARM64 NEON        | 384 MB/s         | 955 MB/s          | 1053 MB/s
 
 *Note: For now just the (main) update loop is implemented in assembly, so for small messages there is still considerable overhead due to initialization and finalization.*
+
+### ppc64le Performance
+
+The ppc64le accelerated version is roughly 10x faster compared to the non-optimized version:
+
+```
+benchmark              old MB/s     new MB/s     speedup
+BenchmarkWrite_8K      531.19       5566.41      10.48x
+BenchmarkSum64_8K      518.86       4971.88      9.58x
+BenchmarkSum256_8K     502.45       4474.20      8.90x
+```
 
 ### Performance compared to other hashing techniques
 
