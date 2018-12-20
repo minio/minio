@@ -1212,14 +1212,20 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		fs.listPool.Set(params, walkResultCh, endWalkCh)
 	}
 
-	result := ListObjectsInfo{IsTruncated: !eof}
+	result := ListObjectsInfo{}
 	for _, objInfo := range objInfos {
-		result.NextMarker = objInfo.Name
 		if objInfo.IsDir && delimiter == slashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
 		result.Objects = append(result.Objects, objInfo)
+	}
+
+	if !eof {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+		}
 	}
 
 	// Success.

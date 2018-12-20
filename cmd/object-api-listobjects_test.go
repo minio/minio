@@ -574,6 +574,14 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
 			}
 
+			if testCase.result.IsTruncated && result.NextMarker == "" {
+				t.Errorf("Test %d: %s: Expected NextContinuationToken to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
+			}
+
+			if !testCase.result.IsTruncated && result.NextMarker != "" {
+				t.Errorf("Test %d: %s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
+			}
+
 		}
 		// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
 		if result.IsTruncated {
