@@ -1,0 +1,39 @@
+stages:
+- name: Build
+  steps:
+  - runScriptConfig:
+      image: golang:1.10-stretch
+      shellScript: |-
+        apt-get update
+        apt-get install -y gcc
+        mkdir -p /go/src/github.com/minio
+        ln -s `pwd` /go/src/github.com/minio/minio
+        cd /go/src/github.com/minio/minio
+        go build -o bin/minio github.com/minio/minio
+- name: Test
+  steps:
+  - runScriptConfig:
+      image: wlan0/minio-gateway-test-2
+      shellScript: |-
+        export SERVER_ENDPOINT=127.0.0.1:9000
+        export ENABLE_HTTPS=0
+        export MC_VERSION=RELEASE.2018-12-19T22-58-03Z
+        export AWS_CLI_VERSION=1.11.112
+        export GOPATH=/go
+        ./bin/minio gateway s3 &
+        cd /mint
+        /mint/release.sh
+        /mint/entrypoint.sh
+    envFrom:
+    - sourceName: s3-gateway-tests
+      sourceKey: ACCESS_KEY
+      targetKey: ACCESS_KEY
+    - sourceName: s3-gateway-tests
+      sourceKey: MINIO_ACCESS_KEY
+      targetKey: MINIO_ACCESS_KEY
+    - sourceName: s3-gateway-tests
+      sourceKey: SECRET_KEY
+      targetKey: SECRET_KEY
+    - sourceName: s3-gateway-tests
+      sourceKey: MINIO_SECRET_KEY
+      targetKey: MINIO_SECRET_KEY
