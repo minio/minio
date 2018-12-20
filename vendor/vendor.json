@@ -563,10 +563,10 @@
 			"revisionTime": "2017-10-07T12:43:06Z"
 		},
 		{
-			"checksumSHA1": "ehsrWipiGIWqa4To8TmelIx06vI=",
+			"checksumSHA1": "KiQa3vguztElzJkoqeIGHlfLFJA=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "0b30fa71cc8e4e9010c9aba6d0320e2e5b163b29",
-			"revisionTime": "2017-12-19T13:34:37Z"
+			"revision": "8885f3a1c73882e6f11b766242c69a1eb8f44b28",
+			"revisionTime": "2018-12-18T19:39:59Z"
 		},
 		{
 			"checksumSHA1": "xxLSo5tKtXc7jGrR70yoEfza8Cw=",
@@ -634,10 +634,10 @@
 			"revisionTime": "2018-01-23T12:12:34Z"
 		},
 		{
-			"checksumSHA1": "2Fu1GmLwDo6FFdahjnlWnPkwJTE=",
+			"checksumSHA1": "CD2MtlgA8h0z6hYJHURS5eOmZ1k=",
 			"path": "github.com/minio/highwayhash",
-			"revision": "85fc8a2dacad36a6beb2865793cd81363a496696",
-			"revisionTime": "2018-05-01T08:09:13Z"
+			"revision": "93ed73d641695483ab4438817457b6586ee5765c",
+			"revisionTime": "2018-12-20T01:13:08Z"
 		},
 		{
 			"checksumSHA1": "7/Hdd23/j4/yt4BXa+h0kqz1yjw=",

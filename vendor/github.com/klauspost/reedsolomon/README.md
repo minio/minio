@@ -24,6 +24,10 @@ go get -u github.com/klauspost/reedsolomon
 
 # Changes
 
+## December 18, 2018
+
+Assembly code for ppc64le has been contributed, this boosts performance by about 10x on this platform.
+
 ## November 18, 2017
 
 Added [WithAutoGoroutines](https://godoc.org/github.com/klauspost/reedsolomon#WithAutoGoroutines) which will attempt to calculate the optimal number of goroutines to use based on your expected shard size and detected CPU.
@@ -259,6 +263,18 @@ By exploiting NEON instructions the performance for ARM has been accelerated. Be
 | 10   | 2      | 20%    |           188 |            1738 |       925% |
 | 10   | 4      | 40%    |            96 |             839 |       877% |
 
+# Performance on ppc64le
+
+The performance for ppc64le has been accelerated. This gives roughly a 10x performance improvement on this architecture as can been seen below:
+
+```
+benchmark                      old MB/s     new MB/s     speedup
+BenchmarkGalois128K-160        948.87       8878.85      9.36x
+BenchmarkGalois1M-160          968.85       9041.92      9.33x
+BenchmarkGaloisXor128K-160     862.02       7905.00      9.17x
+BenchmarkGaloisXor1M-160       784.60       6296.65      8.03x
+```
+
 # asm2plan9s
 
 [asm2plan9s](https://github.com/fwessels/asm2plan9s) is used for assembling the AVX2 instructions into their BYTE/WORD/LONG equivalents.
@@ -266,8 +282,10 @@ By exploiting NEON instructions the performance for ARM has been accelerated. Be
 # Links
 * [Backblaze Open Sources Reed-Solomon Erasure Coding Source Code](https://www.backblaze.com/blog/reed-solomon/).
 * [JavaReedSolomon](https://github.com/Backblaze/JavaReedSolomon). Compatible java library by Backblaze.
+* [ocaml-reed-solomon-erasure](https://gitlab.com/darrenldl/ocaml-reed-solomon-erasure). Compatible OCaml implementation.
 * [reedsolomon-c](https://github.com/jannson/reedsolomon-c). C version, compatible with output from this package.
 * [Reed-Solomon Erasure Coding in Haskell](https://github.com/NicolasT/reedsolomon). Haskell port of the package with similar performance.
+* [reed-solomon-erasure](https://github.com/darrenldl/reed-solomon-erasure). Compatible Rust implementation.
 * [go-erasure](https://github.com/somethingnew2-0/go-erasure). A similar library using cgo, slower in my tests.
 * [rsraid](https://github.com/goayame/rsraid). A similar library written in Go. Slower, but supports more shards.
 * [Screaming Fast Galois Field Arithmetic](http://www.snia.org/sites/default/files2/SDC2013/presentations/NewThinking/EthanMiller_Screaming_Fast_Galois_Field%20Arithmetic_SIMD%20Instructions.pdf). Basis for SSE3 optimizations.
