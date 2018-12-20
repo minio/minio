@@ -38,33 +38,33 @@ Create new canned policy by name `getonly` using `getonly.json` policy file.
 mc admin policy add myminio getonly getonly.json
 ```
 
-Create a new user `newuser` on Minio use `mc admin user`, specify `getonly` canned policy for this `newuser`.
+Create a new user `newuser` on Minio use `mc admin users`, specify `getonly` canned policy for this `newuser`.
 ```
-mc admin user add myminio newuser newuser123 getonly
+mc admin users add myminio newuser newuser123 getonly
 ```
 
 ### 3. Disable user
 Disable user `newuser`.
 ```
-mc admin user disable myminio newuser
+mc admin users disable myminio newuser
 ```
 
 ### 4. Remove user
 Remove the user `newuser`.
 ```
-mc admin user remove myminio newuser
+mc admin users remove myminio newuser
 ```
 
 ### 5. Change user policy
 Change the policy for user `newuser` to `putonly` canned policy.
 ```
-mc admin user policy myminio newuser putonly
+mc admin users policy myminio newuser putonly
 ```
 
 ### 5. List all users
 List all enabled and disabled users.
 ```
-mc admin user list myminio
+mc admin users list myminio
 ```
 
 ### 6. Configure `mc`
