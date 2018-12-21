@@ -222,7 +222,7 @@ func (listener *httpListener) start() {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
 
-		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout)
+		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout, listener.maxHeaderBytes)
 		if listener.tlsConfig != nil {
 			ok, err := getPlainText(bufconn)
 			if err != nil {
@@ -261,7 +261,7 @@ func (listener *httpListener) start() {
 				return
 			}
 
-			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout)
+			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout, listener.maxHeaderBytes)
 		}
 
 		method, resource, host, err := getMethodResourceHost(bufconn, listener.maxHeaderBytes)

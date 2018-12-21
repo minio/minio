@@ -99,10 +99,10 @@ func (c *BufConn) Write(b []byte) (n int, err error) {
 }
 
 // newBufConn - creates a new connection object wrapping net.Conn.
-func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration) *BufConn {
+func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration, maxHeaderBytes int) *BufConn {
 	return &BufConn{
 		QuirkConn:    QuirkConn{Conn: c},
-		bufReader:    bufio.NewReader(c),
+		bufReader:    bufio.NewReaderSize(c, maxHeaderBytes),
 		readTimeout:  readTimeout,
 		writeTimeout: writeTimeout,
 	}
