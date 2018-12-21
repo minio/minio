@@ -30,18 +30,20 @@ import (
 
 // AMQPArgs - AMQP target arguments.
 type AMQPArgs struct {
-	Enable       bool     `json:"enable"`
-	URL          xnet.URL `json:"url"`
-	Exchange     string   `json:"exchange"`
-	RoutingKey   string   `json:"routingKey"`
-	ExchangeType string   `json:"exchangeType"`
-	DeliveryMode uint8    `json:"deliveryMode"`
-	Mandatory    bool     `json:"mandatory"`
-	Immediate    bool     `json:"immediate"`
-	Durable      bool     `json:"durable"`
-	Internal     bool     `json:"internal"`
-	NoWait       bool     `json:"noWait"`
-	AutoDeleted  bool     `json:"autoDeleted"`
+	Enable            bool       `json:"enable"`
+	URL               xnet.URL   `json:"url"`
+	Exchange          string     `json:"exchange"`
+	RoutingKey        string     `json:"routingKey"`
+	ExchangeType      string     `json:"exchangeType"`
+	DeliveryMode      uint8      `json:"deliveryMode"`
+	Mandatory         bool       `json:"mandatory"`
+	Immediate         bool       `json:"immediate"`
+	Durable           bool       `json:"durable"`
+	Internal          bool       `json:"internal"`
+	NoWait            bool       `json:"noWait"`
+	AutoDeleted       bool       `json:"autoDeleted"`
+	Arguments         amqp.Table `json:"arguments"`
+	PublishingHeaders amqp.Table `json:"publishingHeaders"`
 }
 
 // Validate AMQP arguments
@@ -130,16 +132,19 @@ func (target *AMQPTarget) Send(eventData event.Event) error {
 	}
 
 	if err = ch.ExchangeDeclare(target.args.Exchange, target.args.ExchangeType, target.args.Durable,
-		target.args.AutoDeleted, target.args.Internal, target.args.NoWait, nil); err != nil {
+		target.args.AutoDeleted, target.args.Internal, target.args.NoWait, target.args.Arguments); err != nil {
 		return err
 	}
 
+	publishing := amqp.Publishing{
+		Headers:      target.args.PublishingHeaders,
+		ContentType:  "application/json",
+		DeliveryMode: target.args.DeliveryMode,
+		Body:         data,
+	}
+
 	return ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
-		target.args.Immediate, amqp.Publishing{
-			ContentType:  "application/json",
-			DeliveryMode: target.args.DeliveryMode,
-			Body:         data,
-		})
+		target.args.Immediate, publishing)
 }
 
 // Close - does nothing and available for interface compatibility.
@@ -161,6 +166,14 @@ func NewAMQPTarget(id string, args AMQPArgs) (*AMQPTarget, error) {
 			return nil, err
 		}
 		time.Sleep(2 * time.Second)
+	}
+
+	if args.Arguments == nil {
+		args.Arguments = make(amqp.Table)
+	}
+
+	if args.PublishingHeaders == nil {
+		args.PublishingHeaders = make(amqp.Table)
 	}
 
 	return &AMQPTarget{

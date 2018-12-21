@@ -47,6 +47,8 @@ The Minio server configuration file is stored on the backend in json format. The
 | `internal` | _bool_ | Exchange declaration related bool. |
 | `noWait` | _bool_ | Exchange declaration related bool. |
 | `autoDeleted` | _bool_ | Exchange declaration related bool. |
+| `arguments` | _key/value_ | Exchange related arguments. |
+| `publishingHeaders`| _object_ | Publishing related headers |
 
 An example configuration for RabbitMQ is shown below:
 
@@ -64,7 +66,13 @@ An example configuration for RabbitMQ is shown below:
         "durable": false,
         "internal": false,
         "noWait": false,
-        "autoDeleted": false
+        "autoDeleted": false,
+        "arguments": {
+          "x-type": "direct"
+        },
+        "publishingHeaders": {
+          "x-delay": 50000,
+        }
     }
 }
 ```
