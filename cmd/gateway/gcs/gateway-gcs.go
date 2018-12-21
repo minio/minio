@@ -1033,8 +1033,7 @@ func (l *gcsGateway) ListMultipartUploads(ctx context.Context, bucket string, pr
 				UploadID:  components[3],
 				Initiated: attrs.Created,
 			}
-			uploads = []minio.MultipartInfo{upload}
-			break
+			uploads = append(uploads, upload)
 		}
 	}
 
