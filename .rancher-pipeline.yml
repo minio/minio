@@ -2,14 +2,19 @@ stages:
 - name: Build
   steps:
   - runScriptConfig:
-      image: golang:1.10-stretch
+      image: golang:1.10.4
       shellScript: |-
-        apt-get update
-        apt-get install -y gcc
         mkdir -p /go/src/github.com/minio
         ln -s `pwd` /go/src/github.com/minio/minio
         cd /go/src/github.com/minio/minio
-        go build -o bin/minio github.com/minio/minio
+        make
+        diff -au <(gofmt -s -d cmd) <(printf "")
+        make test GOFLAGS="-timeout 15m -race -v"
+        make verify
+        make coverage
+        cd browser
+        yarn
+        yarn test
 - name: Test
   steps:
   - runScriptConfig:
