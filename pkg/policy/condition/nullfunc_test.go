@@ -37,23 +37,23 @@ func TestNullFuncEvaluate(t *testing.T) {
 		values         map[string][]string
 		expectedResult bool
 	}{
-		{case1Function, map[string][]string{"prefix": {"true"}}, true},
-		{case1Function, map[string][]string{"prefix": {"false"}}, true},
-		{case1Function, map[string][]string{"prefix": {"mybucket/foo"}}, true},
-		{case1Function, map[string][]string{}, false},
-		{case1Function, map[string][]string{"delimiter": {"/"}}, false},
-		{case2Function, map[string][]string{"prefix": {"true"}}, false},
-		{case2Function, map[string][]string{"prefix": {"false"}}, false},
-		{case2Function, map[string][]string{"prefix": {"mybucket/foo"}}, false},
-		{case2Function, map[string][]string{}, true},
-		{case2Function, map[string][]string{"delimiter": {"/"}}, true},
+		{case1Function, map[string][]string{"prefix": {"true"}}, false},
+		{case1Function, map[string][]string{"prefix": {"false"}}, false},
+		{case1Function, map[string][]string{"prefix": {"mybucket/foo"}}, false},
+		{case1Function, map[string][]string{}, true},
+		{case1Function, map[string][]string{"delimiter": {"/"}}, true},
+		{case2Function, map[string][]string{"prefix": {"true"}}, true},
+		{case2Function, map[string][]string{"prefix": {"false"}}, true},
+		{case2Function, map[string][]string{"prefix": {"mybucket/foo"}}, true},
+		{case2Function, map[string][]string{}, false},
+		{case2Function, map[string][]string{"delimiter": {"/"}}, false},
 	}
 
 	for i, testCase := range testCases {
 		result := testCase.function.evaluate(testCase.values)
 
 		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+			t.Errorf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 		}
 	}
 }

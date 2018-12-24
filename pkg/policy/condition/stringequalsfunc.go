@@ -18,6 +18,7 @@ package condition
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -44,7 +45,11 @@ type stringEqualsFunc struct {
 // evaluate() - evaluates to check whether value by Key in given values is in
 // condition values.
 func (f stringEqualsFunc) evaluate(values map[string][]string) bool {
-	requestValue := values[f.k.Name()]
+	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
+	if !ok {
+		requestValue = values[f.k.Name()]
+	}
+
 	return !f.values.Intersection(set.CreateStringSet(requestValue...)).IsEmpty()
 }
 

@@ -18,17 +18,19 @@ package condition
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 )
 
-// nullFunc - Null condition function. It checks whether Key is present in given
+// nullFunc - Null condition function. It checks whether Key is not present in given
 // values or not.
 // For example,
 //   1. if Key = S3XAmzCopySource and Value = true, at evaluate() it returns whether
-//      S3XAmzCopySource is in given value map or not.
-//   2. if Key = S3XAmzCopySource and Value = false, at evaluate() it returns whether
 //      S3XAmzCopySource is NOT in given value map or not.
+//   2. if Key = S3XAmzCopySource and Value = false, at evaluate() it returns whether
+//      S3XAmzCopySource is in given value map or not.
+// https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html#Conditions_Null
 type nullFunc struct {
 	k     Key
 	value bool
@@ -37,13 +39,16 @@ type nullFunc struct {
 // evaluate() - evaluates to check whether Key is present in given values or not.
 // Depending on condition boolean value, this function returns true or false.
 func (f nullFunc) evaluate(values map[string][]string) bool {
-	requestValue := values[f.k.Name()]
-
-	if f.value {
-		return len(requestValue) != 0
+	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
+	if !ok {
+		requestValue = values[f.k.Name()]
 	}
 
-	return len(requestValue) == 0
+	if f.value {
+		return len(requestValue) == 0
+	}
+
+	return len(requestValue) != 0
 }
 
 // key() - returns condition key which is used by this condition function.
