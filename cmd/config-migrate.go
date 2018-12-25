@@ -231,7 +231,7 @@ func migrateConfig() error {
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
 func purgeV1() error {
-	configFile := filepath.Join(getConfigDir(), "fsUsers.json")
+	configFile := filepath.Join(globalConfigDir.Get(), "fsUsers.json")
 
 	cv1 := &configV1{}
 	_, err := Load(configFile, cv1)

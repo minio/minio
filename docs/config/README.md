@@ -2,17 +2,19 @@
 
 ## Configuration Directory
 
-The default configuration directory is `${HOME}/.minio`. Till the release `RELEASE.2018-08-02T23-11-36Z`, Minio server configuration file (`config.json`) was stored in the configuration directory. However for releases beyond `RELEASE.2018-08-18T03-49-57Z`, the configuration file (only), has been migrated to the storage back-end (storage back-end is the directory passed to Minio server while starting the server).
+Till Minio release `RELEASE.2018-08-02T23-11-36Z`, Minio server configuration file (`config.json`) was stored in the configuration directory specified by `--config-dir` or defaulted to `${HOME}/.minio`. However from releases after `RELEASE.2018-08-18T03-49-57Z`, the configuration file (only), has been migrated to the storage backend (storage backend is the directory passed to Minio server while starting the server).
 
-You can override the default configuration directory using `--config-dir` command-line option. Please note that this won't have an effect on the `config.json` file as it is always stored on the backend storage, along with data. Minio server generates a new `config.json` with auto-generated access credentials when its started for the first time.
+You can specify the location of your existing config using `--config-dir`, Minio will migrate the `config.json` to your backend storage. Your current `config.json` will be renamed upon successful migration as `config.json.deprecated` in your current `--config-dir`. All your existing configurations are honored after this migration.
+
+Additionally `--config-dir` is now a legacy option which will is scheduled for removal in future, so please update your local startup, ansible scripts accordingly.
 
 ```sh
-minio server --config-dir /etc/minio /data
+minio server /data
 ```
 
 ### Certificate Directory
 
-TLS certificates are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
 Following is the directory structure for Minio server with TLS certificates.
 
@@ -25,14 +27,13 @@ $ tree ~/.minio
 │   └── public.crt
 ```
 
+You can provide a custom certs directory using `--certs-dir` command line option.
 
 ### Accessing configuration file
 
 All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
 #### Editing configuration file fields
-
-
 
 ##### Get current configuration for Minio deployment
 
@@ -61,6 +62,8 @@ The `mc admin` config API will evolve soon to be able to configure specific fiel
 |``credential``| | Auth credential for object storage and web access.|
 |``credential.accessKey`` | _string_ | Access key of minimum 3 characters in length. You may override this field with `MINIO_ACCESS_KEY` environment variable.|
 |``credential.secretKey`` | _string_ | Secret key of minimum 8 characters in length. You may override this field with `MINIO_SECRET_KEY` environment variable.|
+
+> NOTE: In distributed setup it is mandatory to use environment variables `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` for credentials.
 
 Example:
 

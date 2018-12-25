@@ -404,7 +404,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 
 // Sets the global config path to empty string.
 func resetGlobalConfigPath() {
-	setConfigDir("")
+	globalConfigDir = &ConfigDir{path: ""}
 }
 
 // sets globalObjectAPI to `nil`.
