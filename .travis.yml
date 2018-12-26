@@ -16,22 +16,24 @@ matrix:
       sudo: required
       env:
         - ARCH=x86_64
+        - CGO_ENABLED=0
       go: 1.11.4
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
-        - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
+        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 15m "$d"; done
         - make verify
         - make coverage
         - cd browser && yarn && yarn test && cd ..
     - os: windows
       env:
         - ARCH=x86_64
+        - CGO_ENABLED=0
       go: 1.11.4
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
-        - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 20m "$d"; done
+        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 20m "$d"; done
         - bash buildscripts/go-coverage.sh
 
 before_script:
