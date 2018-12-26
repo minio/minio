@@ -18,6 +18,7 @@ package condition
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -45,7 +46,12 @@ type stringLikeFunc struct {
 // evaluate() - evaluates to check whether value by Key in given values is wildcard
 // matching in condition values.
 func (f stringLikeFunc) evaluate(values map[string][]string) bool {
-	for _, v := range values[f.k.Name()] {
+	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
+	if !ok {
+		requestValue = values[f.k.Name()]
+	}
+
+	for _, v := range requestValue {
 		if !f.values.FuncMatch(wildcard.Match, v).IsEmpty() {
 			return true
 		}

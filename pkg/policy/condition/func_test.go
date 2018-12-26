@@ -53,12 +53,12 @@ func TestFunctionsEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{
 			"x-amz-copy-source": {"mybucket/myobject"},
 			"SourceIp":          {"192.168.1.10"},
-		}, true},
+		}, false},
 		{case1Function, map[string][]string{
 			"x-amz-copy-source": {"mybucket/myobject"},
 			"SourceIp":          {"192.168.1.10"},
 			"Refer":             {"http://example.org/"},
-		}, true},
+		}, false},
 		{case1Function, map[string][]string{"x-amz-copy-source": {"mybucket/myobject"}}, false},
 		{case1Function, map[string][]string{"SourceIp": {"192.168.1.10"}}, false},
 		{case1Function, map[string][]string{
@@ -79,7 +79,7 @@ func TestFunctionsEvaluate(t *testing.T) {
 		result := testCase.functions.Evaluate(testCase.values)
 
 		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
+			t.Errorf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 		}
 	}
 }
