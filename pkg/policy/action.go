@@ -161,36 +161,50 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	AbortMultipartUploadAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	CreateBucketAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	DeleteBucketPolicyAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	DeleteObjectAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	GetBucketLocationAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	GetBucketNotificationAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	GetBucketPolicyAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	GetObjectAction: condition.NewKeySet(
@@ -199,16 +213,22 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		condition.S3XAmzStorageClass,
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	HeadBucketAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	ListAllMyBucketsAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	ListBucketAction: condition.NewKeySet(
@@ -217,31 +237,43 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		condition.S3MaxKeys,
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	ListBucketMultipartUploadsAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	ListenBucketNotificationAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	ListMultipartUploadPartsAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	PutBucketNotificationAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	PutBucketPolicyAction: condition.NewKeySet(
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 
 	PutObjectAction: condition.NewKeySet(
@@ -252,5 +284,7 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		condition.S3XAmzStorageClass,
 		condition.AWSReferer,
 		condition.AWSSourceIP,
+		condition.AWSUserAgent,
+		condition.AWSSecureTransport,
 	),
 }

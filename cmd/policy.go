@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -183,7 +184,12 @@ func NewPolicySys() *PolicySys {
 }
 
 func getConditionValues(request *http.Request, locationConstraint string) map[string][]string {
-	args := make(map[string][]string)
+	args := map[string][]string{
+		"SourceIp":        {handlers.GetSourceIP(request)},
+		"SecureTransport": {fmt.Sprintf("%t", request.TLS != nil)},
+		"UserAgent":       {request.UserAgent()},
+		"Referer":         {request.Referer()},
+	}
 
 	for key, values := range request.Header {
 		if existingValues, found := args[key]; found {
@@ -200,8 +206,6 @@ func getConditionValues(request *http.Request, locationConstraint string) map[st
 			args[key] = values
 		}
 	}
-
-	args["SourceIp"] = []string{handlers.GetSourceIP(request)}
 
 	if locationConstraint != "" {
 		args["LocationConstraint"] = []string{locationConstraint}
