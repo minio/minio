@@ -94,7 +94,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.ll.lockMap["name"]
+			gotLri := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					Writer:          true,
@@ -174,7 +174,7 @@ func TestLockRpcServerUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.ll.lockMap["name"]
+			gotLri := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo(nil)
 			if !testLockEquality(expectedLri, gotLri) {
 				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -210,7 +210,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.ll.lockMap["name"]
+			gotLri := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					Writer:          false,
@@ -312,7 +312,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.ll.lockMap["name"]
+			gotLri := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					Writer:          false,
@@ -336,7 +336,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.ll.lockMap["name"]
+			gotLri := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo(nil)
 			if !testLockEquality(expectedLri, gotLri) {
 				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -531,9 +531,6 @@ func TestLockServerInit(t *testing.T) {
 		globalIsDistXL = testCase.isDistXL
 		globalLockServer = nil
 		_, _ = newDsyncNodes(testCase.endpoints)
-		if err != nil {
-			t.Fatalf("Got unexpected error initializing lock servers: %v", err)
-		}
 		if globalLockServer == nil && testCase.isDistXL {
 			t.Errorf("Test %d: Expected initialized lock RPC receiver, but got uninitialized", i+1)
 		}

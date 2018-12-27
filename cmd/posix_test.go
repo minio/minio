@@ -188,7 +188,7 @@ func TestPosixIsDirEmpty(t *testing.T) {
 
 	// Should give false on non-existent directory.
 	dir1 := slashpath.Join(tmp, "non-existent-directory")
-	if isDirEmpty(dir1) != false {
+	if isDirEmpty(dir1) {
 		t.Error("expected false for non-existent directory, got true")
 	}
 
@@ -199,7 +199,7 @@ func TestPosixIsDirEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if isDirEmpty(dir2) != false {
+	if isDirEmpty(dir2) {
 		t.Error("expected false for a file, got true")
 	}
 
@@ -210,7 +210,7 @@ func TestPosixIsDirEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if isDirEmpty(dir3) != true {
+	if !isDirEmpty(dir3) {
 		t.Error("expected true for empty dir, got false")
 	}
 }

@@ -740,6 +740,9 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if data.Size() < azureBlockSize/10 {
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
 		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, opts.UserDefined)
+		if err != nil {
+			return objInfo, azureToObjectError(err, bucket, object)
+		}
 		if err = blob.CreateBlockBlobFromReader(data, nil); err != nil {
 			return objInfo, azureToObjectError(err, bucket, object)
 		}

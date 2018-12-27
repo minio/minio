@@ -77,11 +77,6 @@ func (t mytype) Foo(a *Auth, b *int) error {
 	return nil
 }
 
-// incompatible method because of unexported method.
-func (t mytype) foo(a *Auth, b *int) error {
-	return nil
-}
-
 // incompatible method because of first argument is not Authenticator.
 func (t *mytype) Bar(a, b *int) error {
 	return nil

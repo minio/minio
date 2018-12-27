@@ -47,7 +47,6 @@ func TestNamespaceLockTest(t *testing.T) {
 		unlk             func(s1, s2, s3 string)
 		rlk              func(s1, s2, s3 string, t time.Duration) bool
 		runlk            func(s1, s2, s3 string)
-		lkCount          int
 		lockedRefCount   uint
 		unlockedRefCount uint
 		shouldPass       bool

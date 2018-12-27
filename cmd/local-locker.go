@@ -145,11 +145,9 @@ func (l *localLocker) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
 	if len(args.UID) != 0 {
 		return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
 	}
-	if _, ok := l.lockMap[args.Resource]; ok {
-		// Only clear lock when it is taken
-		// Remove the lock (irrespective of write or read lock)
-		delete(l.lockMap, args.Resource)
-	}
+	// Only clear lock when it is taken
+	// Remove the lock (irrespective of write or read lock)
+	delete(l.lockMap, args.Resource)
 	return true, nil
 }
 
@@ -159,11 +157,7 @@ func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
 
 	lockCopy := make(map[string][]lockRequesterInfo)
 	for k, v := range l.lockMap {
-		var lockSlice []lockRequesterInfo
-		for _, lockInfo := range v {
-			lockSlice = append(lockSlice, lockInfo)
-		}
-		lockCopy[k] = lockSlice
+		lockCopy[k] = append(lockCopy[k], v...)
 	}
 	return lockCopy
 }

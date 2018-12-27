@@ -307,7 +307,6 @@ func (writer *messageWriter) start() {
 		case <-recordStagingTicker.C:
 			if !writer.flushRecords() {
 				quitFlag = true
-				break
 			}
 
 		case <-keepAliveTicker.C:

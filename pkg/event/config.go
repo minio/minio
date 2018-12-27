@@ -191,13 +191,11 @@ func (q Queue) ToRulesMap() RulesMap {
 
 // Unused.  Available for completion.
 type lambda struct {
-	common
 	ARN string `xml:"CloudFunction"`
 }
 
 // Unused. Available for completion.
 type topic struct {
-	common
 	ARN string `xml:"Topic" json:"Topic"`
 }
 

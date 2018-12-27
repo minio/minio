@@ -100,7 +100,6 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 		b.Fatal(err)
 	}
 
-	md5hex := getMD5Hash(textData)
 	sha256hex := ""
 
 	var textPartData []byte
@@ -117,7 +116,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			} else {
 				textPartData = textData[j*partSize:]
 			}
-			md5hex = getMD5Hash([]byte(textPartData))
+			md5hex := getMD5Hash([]byte(textPartData))
 			var partInfo PartInfo
 			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, j,
 				mustGetPutObjReader(b, bytes.NewBuffer(textPartData), int64(len(textPartData)), md5hex, sha256hex), ObjectOptions{})
@@ -230,10 +229,8 @@ func getRandomByte() []byte {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	// seeding the random number generator.
 	rand.Seed(UTCNow().UnixNano())
-	var b byte
 	// pick a character randomly.
-	b = letterBytes[rand.Intn(len(letterBytes))]
-	return []byte{b}
+	return []byte{letterBytes[rand.Intn(len(letterBytes))]}
 }
 
 // picks a random byte and repeats it to size bytes.

@@ -381,7 +381,6 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	} else {
 		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 	}
-	return
 }
 
 func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
@@ -437,9 +436,17 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Method only allowed in XL mode.
+	// Method only allowed in Distributed XL mode.
 	if !globalIsDistXL {
 		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	// Authenticate request
+	// Setting the region as empty so as the mc server info command is irrespective to the region.
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
 	}
 

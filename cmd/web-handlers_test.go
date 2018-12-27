@@ -120,7 +120,7 @@ func TestWriteWebErrorResponse(t *testing.T) {
 		recvDesc := buffer.Bytes()
 		// Check if the written desc is same as the one expected.
 		if !bytes.Equal(recvDesc, []byte(desc)) {
-			t.Errorf("Test %d: Unexpected response, expecting %s, got %s", i+1, desc, string(buffer.Bytes()))
+			t.Errorf("Test %d: Unexpected response, expecting %s, got %s", i+1, desc, buffer.String())
 		}
 		buffer.Reset()
 	}
@@ -491,23 +491,23 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	test := func(token string) (error, *ListObjectsRep) {
+	test := func(token string) (*ListObjectsRep, error) {
 		listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
 		listObjectsReply := &ListObjectsRep{}
 		var req *http.Request
 		req, err = newTestWebRPCRequest("Web.ListObjects", token, listObjectsRequest)
 		if err != nil {
-			t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+			return nil, err
 		}
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
-			return fmt.Errorf("Expected the response status to be 200, but instead found `%d`", rec.Code), listObjectsReply
+			return listObjectsReply, fmt.Errorf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 		}
 		err = getTestWebRPCResponse(rec, &listObjectsReply)
 		if err != nil {
-			return err, listObjectsReply
+			return listObjectsReply, err
 		}
-		return nil, listObjectsReply
+		return listObjectsReply, nil
 	}
 	verifyReply := func(reply *ListObjectsRep) {
 		if len(reply.Objects) == 0 {
@@ -522,14 +522,14 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	}
 
 	// Authenticated ListObjects should succeed.
-	err, reply := test(authorization)
+	reply, err := test(authorization)
 	if err != nil {
 		t.Fatal(err)
 	}
 	verifyReply(reply)
 
 	// Unauthenticated ListObjects should fail.
-	err, _ = test("")
+	_, err = test("")
 	if err == nil {
 		t.Fatalf("Expected error `%s`", err)
 	}
@@ -552,7 +552,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	defer globalPolicySys.Remove(bucketName)
 
 	// Unauthenticated ListObjects with READ bucket policy should succeed.
-	err, reply = test("")
+	reply, err = test("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1559,7 +1559,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
 	}
-	resp := string(rec.Body.Bytes())
+	resp := rec.Body.String()
 	if !strings.EqualFold(resp, errAuthentication.Error()) {
 		t.Fatalf("Unexpected error message, expected: %s, found: `%s`", errAuthentication, resp)
 	}
@@ -1580,7 +1580,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
 	}
-	resp = string(rec.Body.Bytes())
+	resp = rec.Body.String()
 	if !strings.EqualFold(resp, errAuthentication.Error()) {
 		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errAuthentication, resp)
 	}

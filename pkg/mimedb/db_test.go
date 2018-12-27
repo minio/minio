@@ -31,9 +31,8 @@ func TestMimeLookup(t *testing.T) {
 }
 
 func TestTypeByExtension(t *testing.T) {
-	var contentType string
 	// Test TypeByExtension.
-	contentType = TypeByExtension(".txt")
+	contentType := TypeByExtension(".txt")
 	if contentType != "text/plain" {
 		t.Fatalf("Invalid content type are found expected \"text/plain\", got %s", contentType)
 	}

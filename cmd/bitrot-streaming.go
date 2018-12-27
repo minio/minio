@@ -146,7 +146,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	}
 	b.h.Write(buf)
 
-	if bytes.Compare(b.h.Sum(nil), b.hashBytes) != 0 {
+	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
 		err = hashMismatchError{hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil))}
 		logger.LogIf(context.Background(), err)
 		return 0, err

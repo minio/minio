@@ -186,9 +186,8 @@ func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 
 // Parses all the presigned signature values into separate elements.
 func parsePreSignV4(query url.Values, region string) (psv preSignValues, aec APIErrorCode) {
-	var err APIErrorCode
 	// verify whether the required query params exist.
-	err = doesV4PresignParamsExist(query)
+	err := doesV4PresignParamsExist(query)
 	if err != ErrNone {
 		return psv, err
 	}

@@ -94,23 +94,20 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case _ = <-retryTimerCh:
-			// Load IAMSys once during boot.
-			if err := sys.refresh(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for IAM subsystem to be initialized..")
-					continue
-				}
-				return err
+	for range newRetryTimerSimple(doneCh) {
+		// Load IAMSys once during boot.
+		if err := sys.refresh(objAPI); err != nil {
+			if err == errDiskNotFound ||
+				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+				logger.Info("Waiting for IAM subsystem to be initialized..")
+				continue
 			}
-			return nil
+			return err
 		}
+		break
 	}
+	return nil
 }
 
 // DeleteCannedPolicy - deletes a canned policy.

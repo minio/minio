@@ -522,7 +522,7 @@ func TestGetXLID(t *testing.T) {
 	}
 
 	formats[2].ID = "bad-id"
-	if id, err = formatXLGetDeploymentID(quorumFormat, formats); err != errCorruptedFormat {
+	if _, err = formatXLGetDeploymentID(quorumFormat, formats); err != errCorruptedFormat {
 		t.Fatal("Unexpected Success")
 	}
 }

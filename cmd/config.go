@@ -127,23 +127,18 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	//    of the object layer.
 	//  - Write quorum not met when upgrading configuration
 	//    version is needed.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case _ = <-retryTimerCh:
-			err := initConfig(objAPI)
-			if err != nil {
-				if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for configuration to be initialized..")
-					continue
-				}
-				return err
+	for range newRetryTimerSimple(doneCh) {
+		if err := initConfig(objAPI); err != nil {
+			if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+				logger.Info("Waiting for configuration to be initialized..")
+				continue
 			}
-
-			return nil
+			return err
 		}
+		break
 	}
+	return nil
 }
 
 // NewConfigSys - creates new config system object.

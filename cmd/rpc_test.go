@@ -285,10 +285,8 @@ func TestRPCClientCall(t *testing.T) {
 	case1ExpectedResult := 19 * 8
 
 	testCases := []struct {
-		serviceMethod string
-		args          interface {
-			SetAuthArgs(args AuthArgs)
-		}
+		serviceMethod  string
+		args           *Args
 		result         interface{}
 		changeConfig   bool
 		expectedResult interface{}

@@ -306,7 +306,6 @@ type TestServer struct {
 	SecretKey string
 	Server    *httptest.Server
 	Obj       ObjectLayer
-	endpoints EndpointList
 }
 
 // UnstartedTestServer - Configures a temp FS/XL backend,
@@ -949,7 +948,7 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 // Sign given request using Signature V2.
 func signRequestV2(req *http.Request, accessKey, secretKey string) error {
-	req = s3signer.SignV2(*req, accessKey, secretKey, false)
+	s3signer.SignV2(*req, accessKey, secretKey, false)
 	return nil
 }
 
@@ -1303,36 +1302,6 @@ func getRandomObjectName() string {
 func getRandomBucketName() string {
 	return randString(60)
 
-}
-
-// TruncateWriter - Writes `n` bytes, then returns with number of bytes written.
-// differs from iotest.TruncateWriter, the difference is commented in the Write method.
-func TruncateWriter(w io.Writer, n int64) io.Writer {
-	return &truncateWriter{w, n}
-}
-
-type truncateWriter struct {
-	w io.Writer
-	n int64
-}
-
-func (t *truncateWriter) Write(p []byte) (n int, err error) {
-	if t.n <= 0 {
-		return len(p), nil
-	}
-	// real write
-	n = len(p)
-	if int64(n) > t.n {
-		n = int(t.n)
-	}
-	n, err = t.w.Write(p[0:n])
-	t.n -= int64(n)
-	// Removed from iotest.TruncateWriter.
-	// Need the Write method to return truncated number of bytes written, not the size of the buffer requested to be written.
-	// if err == nil {
-	// 	n = len(p)
-	// }
-	return
 }
 
 // NewEOFWriter returns a Writer that writes to w,
@@ -1696,11 +1665,10 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	// Register the API end points with XL object layer.
 	// Registering only the GetObject handler.
 	apiRouter := initTestAPIEndPoints(obj, endpoints)
-	var f http.HandlerFunc
-	f = func(w http.ResponseWriter, r *http.Request) {
+	f := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.RequestURI = r.URL.RequestURI()
 		apiRouter.ServeHTTP(w, r)
-	}
+	})
 	return bucketName, f, nil
 }
 
@@ -2171,40 +2139,6 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	muxRouter := mux.NewRouter().SkipClean(true)
 	registerWebRouter(muxRouter)
 	return muxRouter
-}
-
-func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
-	// init disks
-	objLayer, fsDirs, err := prepareXL16()
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// Create an instance of TestServer.
-	testRPCServer := TestServer{}
-
-	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// Fetch credentials for the test server.
-	credentials := globalServerConfig.GetCredential()
-	testRPCServer.AccessKey = credentials.AccessKey
-	testRPCServer.SecretKey = credentials.SecretKey
-
-	// set object layer
-	testRPCServer.Obj = objLayer
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Register router on a new mux
-	muxRouter := mux.NewRouter().SkipClean(true)
-	registerPeerRPCRouter(muxRouter)
-
-	// Initialize and run the TestServer.
-	testRPCServer.Server = httptest.NewServer(muxRouter)
-	return testRPCServer, fsDirs
 }
 
 // generateTLSCertKey creates valid key/cert with registered DNS or IP address

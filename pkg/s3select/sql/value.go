@@ -248,7 +248,7 @@ func (v *Value) CSVString() string {
 	case typeBool:
 		return fmt.Sprintf("%v", v.value.(bool))
 	case typeString:
-		return fmt.Sprintf("%s", v.value.(string))
+		return v.value.(string)
 	case typeInt:
 		return fmt.Sprintf("%v", v.value.(int64))
 	case typeFloat:
@@ -610,22 +610,22 @@ func (v *Value) minmax(a *Value, isMax, isFirstRow bool) error {
 	return nil
 }
 
-func inferTypeAsTimestamp(v *Value) {
+func inferTypeAsTimestamp(v *Value) error {
 	if s, ok := v.ToString(); ok {
 		t, err := parseSQLTimestamp(s)
 		if err != nil {
-			return
+			return err
 		}
 		v.setTimestamp(t)
 	} else if b, ok := v.ToBytes(); ok {
 		s := string(b)
 		t, err := parseSQLTimestamp(s)
 		if err != nil {
-			return
+			return err
 		}
 		v.setTimestamp(t)
 	}
-	return
+	return nil
 }
 
 // inferTypeAsString is used to convert untyped values to string - it

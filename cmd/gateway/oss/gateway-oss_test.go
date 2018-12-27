@@ -111,9 +111,8 @@ func TestOSSToObjectError(t *testing.T) {
 
 func TestS3MetaToOSSOptions(t *testing.T) {
 	var err error
-	var headers map[string]string
 
-	headers = map[string]string{
+	headers := map[string]string{
 		"x-amz-meta-invalid_meta": "value",
 	}
 	_, err = appendS3MetaToOSSOptions(context.Background(), nil, headers)

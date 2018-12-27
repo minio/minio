@@ -199,8 +199,7 @@ func TestQueueUnmarshalXML(t *testing.T) {
 }
 
 func TestQueueValidate(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -281,8 +280,7 @@ func TestQueueValidate(t *testing.T) {
 }
 
 func TestQueueSetRegion(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -341,8 +339,7 @@ func TestQueueSetRegion(t *testing.T) {
 }
 
 func TestQueueToRulesMap(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -520,8 +517,7 @@ func TestConfigUnmarshalXML(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <NotificationConfiguration>
    <QueueConfiguration>
       <Id>1</Id>
@@ -628,8 +624,7 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestConfigSetRegion(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <NotificationConfiguration>
    <QueueConfiguration>
       <Id>1</Id>
@@ -733,8 +728,7 @@ func TestConfigSetRegion(t *testing.T) {
 }
 
 func TestConfigToRulesMap(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <NotificationConfiguration>
    <QueueConfiguration>
       <Id>1</Id>

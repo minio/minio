@@ -34,7 +34,7 @@ func TestGoroutineCountCheck(t *testing.T) {
 		// Make goroutines -- to make sure number of go-routines is higher than threshold
 		if tt.threshold == 5 || tt.threshold == 6 {
 			for i := 0; i < 6; i++ {
-				go time.Sleep(5)
+				go time.Sleep(5 * time.Nanosecond)
 			}
 		}
 		if err := goroutineCountCheck(tt.threshold); (err != nil) != tt.wantErr {

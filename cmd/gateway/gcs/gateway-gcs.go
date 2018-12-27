@@ -888,6 +888,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 	object := l.client.Bucket(bucket).Object(key)
 
 	w := object.NewWriter(ctx)
+
 	// Disable "chunked" uploading in GCS client if the size of the data to be uploaded is below
 	// the current chunk-size of the writer. This avoids an unnecessary memory allocation.
 	if data.Size() < int64(w.ChunkSize) {

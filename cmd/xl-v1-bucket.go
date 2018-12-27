@@ -130,11 +130,7 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 		}
 		volInfo, serr := disk.StatVol(bucketName)
 		if serr == nil {
-			bucketInfo = BucketInfo{
-				Name:    volInfo.Name,
-				Created: volInfo.Created,
-			}
-			return bucketInfo, nil
+			return BucketInfo(volInfo), nil
 		}
 		err = serr
 		// For any reason disk went offline continue and pick the next one.
@@ -185,10 +181,7 @@ func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, 
 				if isReservedOrInvalidBucket(volInfo.Name) {
 					continue
 				}
-				bucketsInfo = append(bucketsInfo, BucketInfo{
-					Name:    volInfo.Name,
-					Created: volInfo.Created,
-				})
+				bucketsInfo = append(bucketsInfo, BucketInfo(volInfo))
 			}
 			// For buckets info empty, loop once again to check
 			// if we have, can happen if disks were down.

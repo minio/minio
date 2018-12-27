@@ -60,7 +60,7 @@ func TestCertNew(t *testing.T) {
 	if !reflect.DeepEqual(gcert.Certificate, expectedCert.Certificate) {
 		t.Error("certificate doesn't match expected certificate")
 	}
-	c, err = certs.New("server.crt", "server2.key", tls.LoadX509KeyPair)
+	_, err = certs.New("server.crt", "server2.key", tls.LoadX509KeyPair)
 	if err == nil {
 		t.Fatal("Expected to fail but got success")
 	}

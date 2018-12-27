@@ -274,10 +274,6 @@ func (e *FuncExpr) aggregateRow(r Record) error {
 // called after calling aggregateRow() on each input row, to calculate
 // the final aggregate result.
 
-func (e *Expression) getAggregate() (*Value, error) {
-	return e.evalNode(nil)
-}
-
 func (e *FuncExpr) getAggregate() (*Value, error) {
 	switch e.getFunctionName() {
 	case aggFnCount:

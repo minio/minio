@@ -1111,16 +1111,8 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 	res.Before.Drives = make([]madmin.HealDriveInfo, len(beforeDrives))
 	// Copy "after" drive state too from before.
 	for k, v := range beforeDrives {
-		res.Before.Drives[k] = madmin.HealDriveInfo{
-			UUID:     v.UUID,
-			Endpoint: v.Endpoint,
-			State:    v.State,
-		}
-		res.After.Drives[k] = madmin.HealDriveInfo{
-			UUID:     v.UUID,
-			Endpoint: v.Endpoint,
-			State:    v.State,
-		}
+		res.Before.Drives[k] = madmin.HealDriveInfo(v)
+		res.After.Drives[k] = madmin.HealDriveInfo(v)
 	}
 
 	for index, sErr := range sErrs {
@@ -1253,12 +1245,8 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 		if err != nil {
 			return result, err
 		}
-		for _, v := range healResult.Before.Drives {
-			result.Before.Drives = append(result.Before.Drives, v)
-		}
-		for _, v := range healResult.After.Drives {
-			result.After.Drives = append(result.After.Drives, v)
-		}
+		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
+		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
 	}
 
 	for _, endpoint := range s.endpoints {
@@ -1326,10 +1314,7 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 			return nil, err
 		}
 		for _, currBucket := range buckets {
-			healBuckets[currBucket.Name] = BucketInfo{
-				Name:    currBucket.Name,
-				Created: currBucket.Created,
-			}
+			healBuckets[currBucket.Name] = BucketInfo(currBucket)
 		}
 	}
 	for _, bucketInfo := range healBuckets {

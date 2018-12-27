@@ -50,6 +50,9 @@ func (h *Target) startHTTPLogger() {
 			}
 
 			req, err := gohttp.NewRequest("POST", h.endpoint, bytes.NewBuffer(logJSON))
+			if err != nil {
+				continue
+			}
 			req.Header.Set("Content-Type", "application/json")
 
 			resp, err := h.client.Do(req)

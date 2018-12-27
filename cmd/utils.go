@@ -228,11 +228,7 @@ func getProfileData() ([]byte, error) {
 }
 
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
-func startProfiler(profilerType, dirPath string) (interface {
-	Stop()
-	Path() string
-}, error) {
-
+func startProfiler(profilerType, dirPath string) (minioProfiler, error) {
 	var err error
 	if dirPath == "" {
 		dirPath, err = ioutil.TempDir("", "profile")
@@ -277,13 +273,16 @@ func startProfiler(profilerType, dirPath string) (interface {
 	}, nil
 }
 
-// Global profiler to be used by service go-routine.
-var globalProfiler interface {
+// minioProfiler - minio profiler interface.
+type minioProfiler interface {
 	// Stop the profiler
 	Stop()
 	// Return the path of the profiling file
 	Path() string
 }
+
+// Global profiler to be used by service go-routine.
+var globalProfiler minioProfiler
 
 // dump the request into a string in JSON format.
 func dumpRequest(r *http.Request) string {
@@ -307,7 +306,7 @@ func dumpRequest(r *http.Request) string {
 	}
 
 	// Formatted string.
-	return strings.TrimSpace(string(buffer.Bytes()))
+	return strings.TrimSpace(buffer.String())
 }
 
 // isFile - returns whether given path is a file or not.
