@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -33,16 +34,17 @@ import (
 )
 
 const (
-	confFile string = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
-	notSet          = "Configuration parameter has not been set yet."
-	notValid        = "Not a key, nor prefix"
+	// ** revisit confFile value and reset it **
+	confFile     = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
+	notSet       = "Configuration parameter has not been set to a valid value yet."
+	notSetPrefix = "Configuration parameter(s) that start with this prefix have not been set to valid value(s) yet."
+	notValid     = "Not a key, nor prefix"
+	commentChar  = "##"
 )
 
-var serverConfHandler ServerConfigHandlers
-
 type configKey interface {
-	// Set honors both new and legacy keys. Check/validation logic
-	// is also included in Set function.
+	// 'Set' method honors both new and legacy keys.
+	// Check/validation logic is also included in 'Set' method.
 
 	// The followings are the risks supporting both new and
 	// legacy keys at the same time.
@@ -51,9 +53,15 @@ type configKey interface {
 	// 2. Conflict btw GET and SET responses to legacy keys:
 	// Get returns error message that the key is invalid while
 	// Set sets the value for a legacy key.
-	Set(key, value string, cfg ServerConfig) (err error)
+	Set(key, value string, isSetHandlerCall bool, cfg *ServerConfig) (err error)
 	Help(key string) (helpText string, err error) //template like mc --help
 }
+
+// ServerConfigHandlers is the mux that routes to the key
+// methods as defined in configKey' struct
+type ServerConfigHandlers map[string]configKey
+
+var serverConfHandler ServerConfigHandlers
 
 // Structure of each line read from configuration file
 type lineStruct struct {
@@ -65,39 +73,68 @@ type lineStruct struct {
 
 // ServerConfig kv has leaf node/key names and their values
 type ServerConfig struct {
-	RWMutex     *sync.RWMutex
+	RWMutex *sync.RWMutex
+	// When configuration information is read from the config file,
+	// each line or the configuration information/parameter is
+	// populated in 'fileContent'. This slice is the mirror
+	// representation of the configuration in the memory.
 	fileContent []lineStruct
-	// kv      map[string]string
 }
-
-// ServerConfigHandlers is the mux that routes to the key
-// method that is going to be executed
-type ServerConfigHandlers map[string]configKey
-
-// Configuration information will be populated in a slice
-// of line structures when configuration file is read, so
-// configuration file will be fully represented in a slice
-// called 'fileContent'
-var fileContent []lineStruct
 
 // Define Set and Help functions for each leaf node
 
 // =VERSION= >>>>>>
 type versionKey string
 
-func (v versionKey) Set(key, val string, cfg ServerConfig) error {
+func (v versionKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := "31"
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
-
-	// Type check
-	if _, err := strconv.Atoi(val); err != nil {
-		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if _, err = strconv.Atoi(val); err != nil {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
 	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -108,16 +145,58 @@ func (v versionKey) Help(key string) (string, error) {
 // =credential.accessKey= >>>>>>
 type credentialAccessKey string
 
-func (c credentialAccessKey) Set(key, val string, cfg ServerConfig) error {
+func (c credentialAccessKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
+
 func (c credentialAccessKey) Help(key string) (string, error) {
 	return "Display help information for \"credential.accessKey\"", nil
 } // >>>>>>> =credential.accessKey=
@@ -125,14 +204,55 @@ func (c credentialAccessKey) Help(key string) (string, error) {
 // =credential.secretKey= >>>>>>
 type credentialSecretKey string
 
-func (c credentialSecretKey) Set(key, val string, cfg ServerConfig) error {
+func (c credentialSecretKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c credentialSecretKey) Help(key string) (string, error) {
@@ -142,14 +262,55 @@ func (c credentialSecretKey) Help(key string) (string, error) {
 // =REGION=  >>>>>>
 type regionKey string
 
-func (r regionKey) Set(key, val string, cfg ServerConfig) error {
+func (r regionKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (r regionKey) Help(key string) (string, error) {
@@ -159,20 +320,59 @@ func (r regionKey) Help(key string) (string, error) {
 // =BROWSER= >>>>>>
 type browserKey string
 
-func (b browserKey) Set(key, val string, cfg ServerConfig) error {
+func (b browserKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := "off"
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
 	valLower := strings.ToLower(val)
 	if valLower != "on" && valLower != "off" {
-		return errors.New("Type Mismatch: expected 'on' or 'off'; received '" + val + "'.")
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Expected either 'on' or 'off'. Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
 	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
+
 func (b browserKey) Help(key string) (string, error) {
 	return "Display help information for \"browser\"", nil
 } // >>>>>>> =BROWSER=
@@ -180,20 +380,59 @@ func (b browserKey) Help(key string) (string, error) {
 // =WORM= >>>>>>
 type wormKey string
 
-func (w wormKey) Set(key, val string, cfg ServerConfig) error {
+func (w wormKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := "off"
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
 	valLower := strings.ToLower(val)
 	if valLower != "on" && valLower != "off" {
-		return errors.New("Type Mismatch: expected integer; received '" + val + "'.")
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Expected either 'on' or 'off'. Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
 	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
+
 func (w wormKey) Help(key string) (string, error) {
 	return "Display help information for \"worm\"", nil
 } // >>>>>>> =WORM=
@@ -201,14 +440,55 @@ func (w wormKey) Help(key string) (string, error) {
 // =DOMAIN= >>>>>>
 type domainKey string
 
-func (d domainKey) Set(key, val string, cfg ServerConfig) error {
+func (d domainKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (d domainKey) Help(key string) (string, error) {
@@ -218,14 +498,55 @@ func (d domainKey) Help(key string) (string, error) {
 // =CACHE.DRIVES= >>>>>>
 type cacheDrivesKey string
 
-func (d cacheDrivesKey) Set(key, val string, cfg ServerConfig) error {
+func (d cacheDrivesKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (d cacheDrivesKey) Help(key string) (string, error) {
@@ -235,14 +556,55 @@ func (d cacheDrivesKey) Help(key string) (string, error) {
 // =CACHE.EXPIRY= >>>>>>
 type cacheExpiryKey string
 
-func (c cacheExpiryKey) Set(key, val string, cfg ServerConfig) error {
+func (c cacheExpiryKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c cacheExpiryKey) Help(key string) (string, error) {
@@ -252,14 +614,55 @@ func (c cacheExpiryKey) Help(key string) (string, error) {
 // =CACHE.MAXUSE= >>>>>>
 type cacheMaxuseKey string
 
-func (c cacheMaxuseKey) Set(key, val string, cfg ServerConfig) error {
+func (c cacheMaxuseKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c cacheMaxuseKey) Help(key string) (string, error) {
@@ -269,14 +672,55 @@ func (c cacheMaxuseKey) Help(key string) (string, error) {
 // =CACHE.EXCLUDE= >>>>>>
 type cacheExcludeKey string
 
-func (c cacheExcludeKey) Set(key, val string, cfg ServerConfig) error {
+func (c cacheExcludeKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c cacheExcludeKey) Help(key string) (string, error) {
@@ -286,14 +730,55 @@ func (c cacheExcludeKey) Help(key string) (string, error) {
 // =STORAGECLASS.STANDARD= >>>>>>
 type storageclassStandardKey string
 
-func (c storageclassStandardKey) Set(key, val string, cfg ServerConfig) error {
+func (c storageclassStandardKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c storageclassStandardKey) Help(key string) (string, error) {
@@ -303,14 +788,55 @@ func (c storageclassStandardKey) Help(key string) (string, error) {
 // =STORAGECLASS.RRS= >>>>>>
 type storageclassRRSKey string
 
-func (c storageclassRRSKey) Set(key, val string, cfg ServerConfig) error {
+func (c storageclassRRSKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c storageclassRRSKey) Help(key string) (string, error) {
@@ -320,14 +846,55 @@ func (c storageclassRRSKey) Help(key string) (string, error) {
 // =KMS.VAULT.ENDPOINT= >>>>>>
 type kmsVaultEndpointKey string
 
-func (c kmsVaultEndpointKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultEndpointKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultEndpointKey) Help(key string) (string, error) {
@@ -337,14 +904,55 @@ func (c kmsVaultEndpointKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.TYPE= >>>>>>
 type kmsVaultAuthTypeKey string
 
-func (c kmsVaultAuthTypeKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultAuthTypeKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultAuthTypeKey) Help(key string) (string, error) {
@@ -354,14 +962,55 @@ func (c kmsVaultAuthTypeKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.APPROlE.ID= >>>>>>
 type kmsVaultAuthApproleIDKey string
 
-func (c kmsVaultAuthApproleIDKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultAuthApproleIDKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultAuthApproleIDKey) Help(key string) (string, error) {
@@ -371,14 +1020,55 @@ func (c kmsVaultAuthApproleIDKey) Help(key string) (string, error) {
 // =KMS.VAULT.AUTH.APPROlE.SECRET= >>>>>>
 type kmsVaultAuthApproleSecretKey string
 
-func (c kmsVaultAuthApproleSecretKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultAuthApproleSecretKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultAuthApproleSecretKey) Help(key string) (string, error) {
@@ -388,14 +1078,55 @@ func (c kmsVaultAuthApproleSecretKey) Help(key string) (string, error) {
 // =KMS.VAULT.KEY-ID.NAME= >>>>>>
 type kmsVaultKeyIDNameKey string
 
-func (c kmsVaultKeyIDNameKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultKeyIDNameKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultKeyIDNameKey) Help(key string) (string, error) {
@@ -405,14 +1136,55 @@ func (c kmsVaultKeyIDNameKey) Help(key string) (string, error) {
 // =KMS.VAULT.KEY-ID.SECRET= >>>>>>
 type kmsVaultKeyIDVersionKey string
 
-func (c kmsVaultKeyIDVersionKey) Set(key, val string, cfg ServerConfig) error {
+func (c kmsVaultKeyIDVersionKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c kmsVaultKeyIDVersionKey) Help(key string) (string, error) {
@@ -422,14 +1194,55 @@ func (c kmsVaultKeyIDVersionKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*= >>>>>>
 type notifyAmqpAnyKey string
 
-func (c notifyAmqpAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyKey) Help(key string) (string, error) {
@@ -439,14 +1252,55 @@ func (c notifyAmqpAnyKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.URL= >>>>>>
 type notifyAmqpAnyURLKey string
 
-func (c notifyAmqpAnyURLKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyURLKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyURLKey) Help(key string) (string, error) {
@@ -456,14 +1310,55 @@ func (c notifyAmqpAnyURLKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.EXCHANGE= >>>>>>
 type notifyAmqpAnyExchangeKey string
 
-func (c notifyAmqpAnyExchangeKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyExchangeKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyExchangeKey) Help(key string) (string, error) {
@@ -473,14 +1368,55 @@ func (c notifyAmqpAnyExchangeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.ROUTINGKEY= >>>>>>
 type notifyAmqpAnyRoutingKeyKey string
 
-func (c notifyAmqpAnyRoutingKeyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyRoutingKeyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyRoutingKeyKey) Help(key string) (string, error) {
@@ -490,14 +1426,55 @@ func (c notifyAmqpAnyRoutingKeyKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.EXCHANGETYPE= >>>>>>
 type notifyAmqpAnyExchangeTypeKey string
 
-func (c notifyAmqpAnyExchangeTypeKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyExchangeTypeKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyExchangeTypeKey) Help(key string) (string, error) {
@@ -507,14 +1484,55 @@ func (c notifyAmqpAnyExchangeTypeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.DELIVERYMODE= >>>>>>
 type notifyAmqpAnyDeliveryModeKey string
 
-func (c notifyAmqpAnyDeliveryModeKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyDeliveryModeKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyDeliveryModeKey) Help(key string) (string, error) {
@@ -524,14 +1542,55 @@ func (c notifyAmqpAnyDeliveryModeKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.MANDATORY= >>>>>>
 type notifyAmqpAnyMandatoryKey string
 
-func (c notifyAmqpAnyMandatoryKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyMandatoryKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyMandatoryKey) Help(key string) (string, error) {
@@ -541,14 +1600,55 @@ func (c notifyAmqpAnyMandatoryKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.IMMMEDIATE= >>>>>>
 type notifyAmqpAnyImmediateKey string
 
-func (c notifyAmqpAnyImmediateKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyImmediateKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyImmediateKey) Help(key string) (string, error) {
@@ -558,14 +1658,55 @@ func (c notifyAmqpAnyImmediateKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.DURABLE= >>>>>>
 type notifyAmqpAnyDurableKey string
 
-func (c notifyAmqpAnyDurableKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyDurableKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyDurableKey) Help(key string) (string, error) {
@@ -575,14 +1716,55 @@ func (c notifyAmqpAnyDurableKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.INTERNAL= >>>>>>
 type notifyAmqpAnyInternalKey string
 
-func (c notifyAmqpAnyInternalKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyInternalKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyInternalKey) Help(key string) (string, error) {
@@ -592,14 +1774,55 @@ func (c notifyAmqpAnyInternalKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.NOWAIT= >>>>>>
 type notifyAmqpAnyNoWaitKey string
 
-func (c notifyAmqpAnyNoWaitKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyNoWaitKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyNoWaitKey) Help(key string) (string, error) {
@@ -609,14 +1832,55 @@ func (c notifyAmqpAnyNoWaitKey) Help(key string) (string, error) {
 // =NOTIFY.AMQP.*.AUTODELETED= >>>>>>
 type notifyAmqpAnyAutoDeletedKey string
 
-func (c notifyAmqpAnyAutoDeletedKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyAmqpAnyAutoDeletedKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyAmqpAnyAutoDeletedKey) Help(key string) (string, error) {
@@ -626,14 +1890,55 @@ func (c notifyAmqpAnyAutoDeletedKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*= >>>>>>
 type notifyElasticsearchAnyKey string
 
-func (c notifyElasticsearchAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyElasticsearchAnyKey) Help(key string) (string, error) {
@@ -643,14 +1948,55 @@ func (c notifyElasticsearchAnyKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.FORMAT= >>>>>>
 type notifyElasticsearchAnyFormatKey string
 
-func (c notifyElasticsearchAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyFormatKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyElasticsearchAnyFormatKey) Help(key string) (string, error) {
@@ -660,14 +2006,55 @@ func (c notifyElasticsearchAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.URL= >>>>>>
 type notifyElasticsearchAnyURLKey string
 
-func (c notifyElasticsearchAnyURLKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyURLKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyElasticsearchAnyURLKey) Help(key string) (string, error) {
@@ -677,14 +2064,55 @@ func (c notifyElasticsearchAnyURLKey) Help(key string) (string, error) {
 // =NOTIFY.ELASTICSEARCH.*.INDEX= >>>>>>
 type notifyElasticsearchAnyIndexKey string
 
-func (c notifyElasticsearchAnyIndexKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyElasticsearchAnyIndexKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyElasticsearchAnyIndexKey) Help(key string) (string, error) {
@@ -694,14 +2122,55 @@ func (c notifyElasticsearchAnyIndexKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*= >>>>>>
 type notifyKafkaAnyKey string
 
-func (c notifyKafkaAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyKey) Help(key string) (string, error) {
@@ -711,14 +2180,55 @@ func (c notifyKafkaAnyKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.BROKERS= >>>>>>
 type notifyKafkaAnyBrokersKey string
 
-func (c notifyKafkaAnyBrokersKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyBrokersKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyBrokersKey) Help(key string) (string, error) {
@@ -728,14 +2238,55 @@ func (c notifyKafkaAnyBrokersKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TOPIC= >>>>>>
 type notifyKafkaAnyTopicKey string
 
-func (c notifyKafkaAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTopicKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyTopicKey) Help(key string) (string, error) {
@@ -745,14 +2296,55 @@ func (c notifyKafkaAnyTopicKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS= >>>>>>
 type notifyKafkaAnyTLSKey string
 
-func (c notifyKafkaAnyTLSKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyTLSKey) Help(key string) (string, error) {
@@ -762,14 +2354,55 @@ func (c notifyKafkaAnyTLSKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS.SKIPVERIFY= >>>>>>
 type notifyKafkaAnyTLSSkipVerifyKey string
 
-func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSSkipVerifyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyTLSSkipVerifyKey) Help(key string) (string, error) {
@@ -779,14 +2412,55 @@ func (c notifyKafkaAnyTLSSkipVerifyKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.TLS.CLIENTAUTH= >>>>>>
 type notifyKafkaAnyTLSClientAuthKey string
 
-func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnyTLSClientAuthKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnyTLSClientAuthKey) Help(key string) (string, error) {
@@ -796,14 +2470,55 @@ func (c notifyKafkaAnyTLSClientAuthKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL= >>>>>>
 type notifyKafkaAnySaslKey string
 
-func (c notifyKafkaAnySaslKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnySaslKey) Help(key string) (string, error) {
@@ -813,14 +2528,55 @@ func (c notifyKafkaAnySaslKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL.USERNAME= >>>>>>
 type notifyKafkaAnySaslUsernameKey string
 
-func (c notifyKafkaAnySaslUsernameKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslUsernameKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnySaslUsernameKey) Help(key string) (string, error) {
@@ -830,14 +2586,55 @@ func (c notifyKafkaAnySaslUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.KAFKA.*.SASL.PASSWORD= >>>>>>
 type notifyKafkaAnySaslPasswordKey string
 
-func (c notifyKafkaAnySaslPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyKafkaAnySaslPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyKafkaAnySaslPasswordKey) Help(key string) (string, error) {
@@ -847,14 +2644,55 @@ func (c notifyKafkaAnySaslPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*= >>>>>>
 type notifyMqttAnyKey string
 
-func (c notifyMqttAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyKey) Help(key string) (string, error) {
@@ -864,14 +2702,55 @@ func (c notifyMqttAnyKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.BROKER= >>>>>>
 type notifyMqttAnyBrokerKey string
 
-func (c notifyMqttAnyBrokerKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyBrokerKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyBrokerKey) Help(key string) (string, error) {
@@ -881,14 +2760,55 @@ func (c notifyMqttAnyBrokerKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.TOPIC= >>>>>>
 type notifyMqttAnyTopicKey string
 
-func (c notifyMqttAnyTopicKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyTopicKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyTopicKey) Help(key string) (string, error) {
@@ -898,14 +2818,55 @@ func (c notifyMqttAnyTopicKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.QOS= >>>>>>
 type notifyMqttAnyQosKey string
 
-func (c notifyMqttAnyQosKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyQosKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyQosKey) Help(key string) (string, error) {
@@ -915,14 +2876,55 @@ func (c notifyMqttAnyQosKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.CLIENTID= >>>>>>
 type notifyMqttAnyClientIDKey string
 
-func (c notifyMqttAnyClientIDKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyClientIDKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyClientIDKey) Help(key string) (string, error) {
@@ -932,14 +2934,55 @@ func (c notifyMqttAnyClientIDKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.USERNAME= >>>>>>
 type notifyMqttAnyUsernameKey string
 
-func (c notifyMqttAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyUsernameKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyUsernameKey) Help(key string) (string, error) {
@@ -949,14 +2992,55 @@ func (c notifyMqttAnyUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.PASSWORD= >>>>>>
 type notifyMqttAnyPasswordKey string
 
-func (c notifyMqttAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyPasswordKey) Help(key string) (string, error) {
@@ -966,14 +3050,55 @@ func (c notifyMqttAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.RECONNECTINTERVAL= >>>>>>
 type notifyMqttAnyReconnectIntervalKey string
 
-func (c notifyMqttAnyReconnectIntervalKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyReconnectIntervalKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyReconnectIntervalKey) Help(key string) (string, error) {
@@ -983,14 +3108,55 @@ func (c notifyMqttAnyReconnectIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.MQTT.*.KEEPALIVEINTERVAL= >>>>>>
 type notifyMqttAnyKeepAliveIntervalKey string
 
-func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMqttAnyKeepAliveIntervalKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMqttAnyKeepAliveIntervalKey) Help(key string) (string, error) {
@@ -1000,14 +3166,55 @@ func (c notifyMqttAnyKeepAliveIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*= >>>>>>
 type notifyMysqlAnyKey string
 
-func (c notifyMysqlAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyKey) Help(key string) (string, error) {
@@ -1017,14 +3224,55 @@ func (c notifyMysqlAnyKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.FORMAT= >>>>>>
 type notifyMysqlAnyFormatKey string
 
-func (c notifyMysqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyFormatKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyFormatKey) Help(key string) (string, error) {
@@ -1034,14 +3282,55 @@ func (c notifyMysqlAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.DSNSTRING= >>>>>>
 type notifyMysqlAnyDsnStringKey string
 
-func (c notifyMysqlAnyDsnStringKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyDsnStringKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyDsnStringKey) Help(key string) (string, error) {
@@ -1051,14 +3340,55 @@ func (c notifyMysqlAnyDsnStringKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.TABLE= >>>>>>
 type notifyMysqlAnyTableKey string
 
-func (c notifyMysqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyTableKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyTableKey) Help(key string) (string, error) {
@@ -1068,14 +3398,55 @@ func (c notifyMysqlAnyTableKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.HOST= >>>>>>
 type notifyMysqlAnyHostKey string
 
-func (c notifyMysqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyHostKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyHostKey) Help(key string) (string, error) {
@@ -1085,14 +3456,55 @@ func (c notifyMysqlAnyHostKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.PORT= >>>>>>
 type notifyMysqlAnyPortKey string
 
-func (c notifyMysqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyPortKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyPortKey) Help(key string) (string, error) {
@@ -1102,14 +3514,55 @@ func (c notifyMysqlAnyPortKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.USER= >>>>>>
 type notifyMysqlAnyUserKey string
 
-func (c notifyMysqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyUserKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyUserKey) Help(key string) (string, error) {
@@ -1119,14 +3572,55 @@ func (c notifyMysqlAnyUserKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.PASSWORD= >>>>>>
 type notifyMysqlAnyPasswordKey string
 
-func (c notifyMysqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyPasswordKey) Help(key string) (string, error) {
@@ -1136,14 +3630,55 @@ func (c notifyMysqlAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.MYSQL.*.DATABASE= >>>>>>
 type notifyMysqlAnyDatabaseKey string
 
-func (c notifyMysqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyMysqlAnyDatabaseKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyMysqlAnyDatabaseKey) Help(key string) (string, error) {
@@ -1153,14 +3688,55 @@ func (c notifyMysqlAnyDatabaseKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*= >>>>>>
 type notifyNatsAnyKey string
 
-func (c notifyNatsAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyKey) Help(key string) (string, error) {
@@ -1170,14 +3746,55 @@ func (c notifyNatsAnyKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.ADDRESS= >>>>>>
 type notifyNatsAnyAddressKey string
 
-func (c notifyNatsAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyAddressKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyAddressKey) Help(key string) (string, error) {
@@ -1187,14 +3804,55 @@ func (c notifyNatsAnyAddressKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.SUBJECT= >>>>>>
 type notifyNatsAnySubjectKey string
 
-func (c notifyNatsAnySubjectKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnySubjectKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnySubjectKey) Help(key string) (string, error) {
@@ -1204,14 +3862,55 @@ func (c notifyNatsAnySubjectKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.USERNAME= >>>>>>
 type notifyNatsAnyUsernameKey string
 
-func (c notifyNatsAnyUsernameKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyUsernameKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyUsernameKey) Help(key string) (string, error) {
@@ -1221,14 +3920,55 @@ func (c notifyNatsAnyUsernameKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.PASSWORD= >>>>>>
 type notifyNatsAnyPasswordKey string
 
-func (c notifyNatsAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyPasswordKey) Help(key string) (string, error) {
@@ -1238,14 +3978,55 @@ func (c notifyNatsAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.TOKEN= >>>>>>
 type notifyNatsAnyTokenKey string
 
-func (c notifyNatsAnyTokenKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyTokenKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyTokenKey) Help(key string) (string, error) {
@@ -1255,14 +4036,55 @@ func (c notifyNatsAnyTokenKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.SECURE= >>>>>>
 type notifyNatsAnySecureKey string
 
-func (c notifyNatsAnySecureKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnySecureKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnySecureKey) Help(key string) (string, error) {
@@ -1272,14 +4094,55 @@ func (c notifyNatsAnySecureKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.PINGINTERVAL= >>>>>>
 type notifyNatsAnyPingIntervalKey string
 
-func (c notifyNatsAnyPingIntervalKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyPingIntervalKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyPingIntervalKey) Help(key string) (string, error) {
@@ -1289,14 +4152,55 @@ func (c notifyNatsAnyPingIntervalKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING= >>>>>>
 type notifyNatsAnyStreamingKey string
 
-func (c notifyNatsAnyStreamingKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyStreamingKey) Help(key string) (string, error) {
@@ -1306,14 +4210,55 @@ func (c notifyNatsAnyStreamingKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.CLUSTERID= >>>>>>
 type notifyNatsAnyStreamingClusterIDKey string
 
-func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingClusterIDKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyStreamingClusterIDKey) Help(key string) (string, error) {
@@ -1323,14 +4268,55 @@ func (c notifyNatsAnyStreamingClusterIDKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.CLIENTID= >>>>>>
 type notifyNatsAnyStreamingClientIDKey string
 
-func (c notifyNatsAnyStreamingClientIDKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingClientIDKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyStreamingClientIDKey) Help(key string) (string, error) {
@@ -1340,14 +4326,55 @@ func (c notifyNatsAnyStreamingClientIDKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.ASYNC= >>>>>>
 type notifyNatsAnyStreamingAsyncKey string
 
-func (c notifyNatsAnyStreamingAsyncKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingAsyncKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyStreamingAsyncKey) Help(key string) (string, error) {
@@ -1357,14 +4384,55 @@ func (c notifyNatsAnyStreamingAsyncKey) Help(key string) (string, error) {
 // =NOTIFY.NATS.*.STREAMING.MAXPUBACKSINGLIGHT= >>>>>>
 type notifyNatsAnyStreamingMaxPubAcksInflightKey string
 
-func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Help(key string) (string, error) {
@@ -1374,14 +4442,55 @@ func (c notifyNatsAnyStreamingMaxPubAcksInflightKey) Help(key string) (string, e
 // =NOTIFY.POSTGRESQL.*= >>>>>>
 type notifyPostgresqlAnyKey string
 
-func (c notifyPostgresqlAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyKey) Help(key string) (string, error) {
@@ -1391,14 +4500,55 @@ func (c notifyPostgresqlAnyKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.FORMAT= >>>>>>
 type notifyPostgresqlAnyFormatKey string
 
-func (c notifyPostgresqlAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyFormatKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyFormatKey) Help(key string) (string, error) {
@@ -1408,14 +4558,55 @@ func (c notifyPostgresqlAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.CONNECTIONSTRING= >>>>>>
 type notifyPostgresqlAnyConnectionStringKey string
 
-func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyConnectionStringKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyConnectionStringKey) Help(key string) (string, error) {
@@ -1425,14 +4616,55 @@ func (c notifyPostgresqlAnyConnectionStringKey) Help(key string) (string, error)
 // =NOTIFY.POSTGRESQL.*.TABLE= >>>>>>
 type notifyPostgresqlAnyTableKey string
 
-func (c notifyPostgresqlAnyTableKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyTableKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyTableKey) Help(key string) (string, error) {
@@ -1442,14 +4674,55 @@ func (c notifyPostgresqlAnyTableKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.HOST= >>>>>>
 type notifyPostgresqlAnyHostKey string
 
-func (c notifyPostgresqlAnyHostKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyHostKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyHostKey) Help(key string) (string, error) {
@@ -1459,14 +4732,55 @@ func (c notifyPostgresqlAnyHostKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.PORT= >>>>>>
 type notifyPostgresqlAnyPortKey string
 
-func (c notifyPostgresqlAnyPortKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyPortKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyPortKey) Help(key string) (string, error) {
@@ -1476,14 +4790,55 @@ func (c notifyPostgresqlAnyPortKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.USER= >>>>>>
 type notifyPostgresqlAnyUserKey string
 
-func (c notifyPostgresqlAnyUserKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyUserKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyUserKey) Help(key string) (string, error) {
@@ -1493,14 +4848,55 @@ func (c notifyPostgresqlAnyUserKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.PASSWORD= >>>>>>
 type notifyPostgresqlAnyPasswordKey string
 
-func (c notifyPostgresqlAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyPasswordKey) Help(key string) (string, error) {
@@ -1510,14 +4906,55 @@ func (c notifyPostgresqlAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.POSTGRESQL.*.DATABASE= >>>>>>
 type notifyPostgresqlAnyDatabaseKey string
 
-func (c notifyPostgresqlAnyDatabaseKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyPostgresqlAnyDatabaseKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyPostgresqlAnyDatabaseKey) Help(key string) (string, error) {
@@ -1527,14 +4964,55 @@ func (c notifyPostgresqlAnyDatabaseKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*= >>>>>>
 type notifyRedisAnyKey string
 
-func (c notifyRedisAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyRedisAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyRedisAnyKey) Help(key string) (string, error) {
@@ -1544,14 +5022,55 @@ func (c notifyRedisAnyKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.FORMAT= >>>>>>
 type notifyRedisAnyFormatKey string
 
-func (c notifyRedisAnyFormatKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyRedisAnyFormatKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyRedisAnyFormatKey) Help(key string) (string, error) {
@@ -1561,14 +5080,55 @@ func (c notifyRedisAnyFormatKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.ADDRESS= >>>>>>
 type notifyRedisAnyAddressKey string
 
-func (c notifyRedisAnyAddressKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyRedisAnyAddressKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyRedisAnyAddressKey) Help(key string) (string, error) {
@@ -1578,14 +5138,55 @@ func (c notifyRedisAnyAddressKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.PASSWORD= >>>>>>
 type notifyRedisAnyPasswordKey string
 
-func (c notifyRedisAnyPasswordKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyRedisAnyPasswordKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyRedisAnyPasswordKey) Help(key string) (string, error) {
@@ -1595,14 +5196,55 @@ func (c notifyRedisAnyPasswordKey) Help(key string) (string, error) {
 // =NOTIFY.REDIS.*.KEY= >>>>>>
 type notifyRedisAnyKeyKey string
 
-func (c notifyRedisAnyKeyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyRedisAnyKeyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyRedisAnyKeyKey) Help(key string) (string, error) {
@@ -1612,14 +5254,55 @@ func (c notifyRedisAnyKeyKey) Help(key string) (string, error) {
 // =NOTIFY.WEBHOOK.*= >>>>>>
 type notifyWebhookAnyKey string
 
-func (c notifyWebhookAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyWebhookAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyWebhookAnyKey) Help(key string) (string, error) {
@@ -1629,14 +5312,55 @@ func (c notifyWebhookAnyKey) Help(key string) (string, error) {
 // =NOTIFY.WEBHOOK.*.ENNDPOINT= >>>>>>
 type notifyWebhookAnyEndpointKey string
 
-func (c notifyWebhookAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+func (c notifyWebhookAnyEndpointKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (c notifyWebhookAnyEndpointKey) Help(key string) (string, error) {
@@ -1646,14 +5370,55 @@ func (c notifyWebhookAnyEndpointKey) Help(key string) (string, error) {
 // =LOG.CONSOLE= >>>>>>
 type logConsoleKey string
 
-func (l logConsoleKey) Set(key, val string, cfg ServerConfig) error {
+func (l logConsoleKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logConsoleKey) Help(key string) (string, error) {
@@ -1663,14 +5428,55 @@ func (l logConsoleKey) Help(key string) (string, error) {
 // =LOG.CONSOLE.AUDIT= >>>>>>
 type logConsoleAuditKey string
 
-func (l logConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
+func (l logConsoleAuditKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logConsoleAuditKey) Help(key string) (string, error) {
@@ -1680,14 +5486,55 @@ func (l logConsoleAuditKey) Help(key string) (string, error) {
 // =LOG.CONSOLE.ANONYMOUS >>>>>>
 type logConsoleAnonymousKey string
 
-func (l logConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+func (l logConsoleAnonymousKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logConsoleAnonymousKey) Help(key string) (string, error) {
@@ -1697,14 +5544,55 @@ func (l logConsoleAnonymousKey) Help(key string) (string, error) {
 // =LOG.HTTP.*= >>>>>>
 type logHTTPAnyKey string
 
-func (l logHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (l logHTTPAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logHTTPAnyKey) Help(key string) (string, error) {
@@ -1714,14 +5602,55 @@ func (l logHTTPAnyKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.ENDPOINT= >>>>>>
 type logHTTPAnyEndpointKey string
 
-func (l logHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+func (l logHTTPAnyEndpointKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logHTTPAnyEndpointKey) Help(key string) (string, error) {
@@ -1731,14 +5660,55 @@ func (l logHTTPAnyEndpointKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.AUDIT= >>>>>>
 type logHTTPAnyAuditKey string
 
-func (l logHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
+func (l logHTTPAnyAuditKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logHTTPAnyAuditKey) Help(key string) (string, error) {
@@ -1748,14 +5718,55 @@ func (l logHTTPAnyAuditKey) Help(key string) (string, error) {
 // =LOG.HTTP.*.ANONYMOUS= >>>>>>
 type logHTTPAnyAnonymousKey string
 
-func (l logHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+func (l logHTTPAnyAnonymousKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l logHTTPAnyAnonymousKey) Help(key string) (string, error) {
@@ -1765,17 +5776,59 @@ func (l logHTTPAnyAnonymousKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE= >>>>>>
 type loggerConsoleKey string
 
-func (l loggerConsoleKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerConsoleKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1786,17 +5839,58 @@ func (l loggerConsoleKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE.AUDIT= >>>>>>
 type loggerConsoleAuditKey string
 
-func (l loggerConsoleAuditKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerConsoleAuditKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1807,17 +5901,58 @@ func (l loggerConsoleAuditKey) Help(key string) (string, error) {
 // =LOGGER.CONSOLE.ANONYMOUS >>>>>>
 type loggerConsoleAnonymousKey string
 
-func (l loggerConsoleAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerConsoleAnonymousKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.console.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1828,17 +5963,58 @@ func (l loggerConsoleAnonymousKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*= >>>>>>
 type loggerHTTPAnyKey string
 
-func (l loggerHTTPAnyKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerHTTPAnyKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
 	// This is a deprecated key function. It'll still stay
 	// active, but we save the value in "log.http.*"
 	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	logger.LogIf(context.Background(), errors.New("Key name \"logger\" is DEPRECATED!\nWrote the value in \"log\" instead"))
 	return nil
 }
@@ -1849,14 +6025,58 @@ func (l loggerHTTPAnyKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.ENDPOINT= >>>>>>
 type loggerHTTPAnyEndpointKey string
 
-func (l loggerHTTPAnyEndpointKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerHTTPAnyEndpointKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	// This is a deprecated key function. It'll still stay
+	// active, but we save the value in "log.http.*"
+	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l loggerHTTPAnyEndpointKey) Help(key string) (string, error) {
@@ -1866,14 +6086,58 @@ func (l loggerHTTPAnyEndpointKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.AUDIT= >>>>>>
 type loggerHTTPAnyAuditKey string
 
-func (l loggerHTTPAnyAuditKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerHTTPAnyAuditKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	// This is a deprecated key function. It'll still stay
+	// active, but we save the value in "log.http.*"
+	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l loggerHTTPAnyAuditKey) Help(key string) (string, error) {
@@ -1883,14 +6147,58 @@ func (l loggerHTTPAnyAuditKey) Help(key string) (string, error) {
 // =LOGGER.HTTP.*.ANONYMOUS= >>>>>>
 type loggerHTTPAnyAnonymousKey string
 
-func (l loggerHTTPAnyAnonymousKey) Set(key, val string, cfg ServerConfig) error {
+func (l loggerHTTPAnyAnonymousKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfig) error {
+	// This is a deprecated key function. It'll still stay
+	// active, but we save the value in "log.http.*"
+	key = strings.Replace(key, "logger", "log", 1)
+	var err error
+	defaultValue := ""
 	// Input validation for value, 'val'
 	// Value type, min/max limitations and other
 	// requirements are going to be tested here.
-	// If tests/checks pass, it'll be set.
+	// If value validation tests/checks pass, it'll be set in the memory.
+	if reflect.TypeOf(val).Name() != "string" {
+		// If SetHandler called this Set method, then we'll return
+		// on error
+		if !isSetHandlerCall {
+			return errors.New("Could not load '" + key + "'.")
+		}
+		// We'll still write the 'key' in cfg.fileContent, but
+		// with its default value since user provided 'val' failed
+		// the validation
+		val = defaultValue
+		// Also set the error message to be thrown
+		// at the end for the incorrect value
+		err = errors.New("Replacing key value with its default, '" +
+			defaultValue + "'.")
+	}
+	// 'val' is either the provided value or the default value
+	// Anyways, it is GOOD!
+	// Check if 'key' was already in the config file.
+	// If so, modify it with the provided value.
+	done := false
+	for i := range cfg.fileContent {
+		if cfg.fileContent[i].key == key {
+			cfg.fileContent[i].val = val
+			cfg.fileContent[i].isValidValue = true
+			done = true
+			break
+		}
+	}
 
-	cfg.line.key = key
-	cfg.line.val = val
+	if !done {
+		// 'key' is a new configuration setting, so append it
+		cfg.fileContent = append(cfg.fileContent, lineStruct{
+			isComment:     false,
+			isValidFormat: true,
+			isValidValue:  true,
+			key:           key,
+			val:           val,
+			comment:       ""})
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (l loggerHTTPAnyAnonymousKey) Help(key string) (string, error) {
@@ -2193,54 +6501,44 @@ func transformKey(key string) (string, error) {
 
 // SetHandler sets key value in server configuration database
 func (s *ServerConfig) SetHandler(key, val string) error {
+	var err error
 	// Load the configuration data from disk into memory
-	if err := s.load(); err != nil {
-		return errors.New("Failed to load the configuration file." + err.Error())
+	if errMap := s.load(true); len(errMap) > 0 {
+		for errKey, e := range errMap {
+			if e != nil && errKey != "Invalid value: "+key {
+				fmt.Printf("%s\n", e.Error())
+			}
+		}
 	}
 
-	// Set
 	// Validate assuming the key is a regular key with no user specified
 	// random subkey in it. If this fails, try validating the key
 	// assuming it has a user specified random subkey in it.
-	// If the key is found to be valid, set it to val.
-	isCorrectKeyName := false
+	// If the key is found to be valid, set it to val. Otherwise (else),
+	// assume the key has a user specified random subkey in it, and
+	// validate the key name accordingly after transferring the user
+	// specified random key part to '*' in the key name.
 	if _, ok := serverConfHandler[key]; ok {
 		// It is a valid key
-		isCorrectKeyName = true
-		if err := serverConfHandler[key].Set(key, val, *s); err != nil {
-			return err
+		if e := serverConfHandler[key].Set(key, val, true, s); e != nil {
+			err = e
 		}
 	} else if transformedKey, err := transformKey(key); err == nil {
 		// It is a valid key with a user specified random subkey in it
-		isCorrectKeyName = true
-		if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
-			return err
+		if e := serverConfHandler[transformedKey].Set(key, val, true, s); e != nil {
+			err = e
 		}
 	} else {
-		// Log and return an error when 'key' is an incorrect config name
+		// Log and return an error when 'key' is an invalid name
 		logger.LogIf(context.Background(), errors.New("Invalid key:"+key))
-		return errors.New("ERROR: Invalid key, " + key)
-	}
-	// Update 'fileContent' slice, which has all the lines
-	// of config file. First check if 'key' has been set in
-	// the config file. If so, modify it with the new value.
-	done := false
-	for i := range fileContent {
-		if fileContent[i].key == key {
-			fileContent[i].val = val
-			done = true
-			break
-		}
-	}
-	// If the key has not been added into the 'fileContent' yet, a new
-	// entry is needed to be created. At this point, it is
-	// guaranteed that the 'key' is a valid config parameter name
-	if !done {
-		fileContent = append(fileContent, lineStruct{false, isCorrectKeyName, true, key, val, ""})
+		return errors.New("ERROR: Invalid key: " + key)
 	}
 
 	// Save the set/modified configuration from memory to disk
-	if err := s.save(); err != nil {
+	if e := s.save(); e != nil {
+		return e
+	}
+	if err != nil {
 		return err
 	}
 	return nil
@@ -2249,56 +6547,74 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 // GetHandler gets single or multiple or full configuration info
 func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 	// Load the configuration data from disk into memory
-	if err := s.load(); err != nil {
-		fmt.Println("Error while loading server configuration into memory:", err)
-		return map[string]string{}, err
+	if errArr := s.load(false); len(errArr) > 0 {
+		for _, e := range errArr {
+			if e != nil {
+				fmt.Printf("%s\n", e.Error())
+			}
+		}
 	}
 
-	// Zero length keys means full configuration
-	// file is requested
-	if len(keys) == 0 {
-		return s.kv, nil
+	// Create a key/value map, 'kv', from array of structs, 's.fileContent'
+	kv := make(map[string]string)
+	for _, c := range s.fileContent {
+		kv[c.key] = c.val
 	}
-	// Greater than zero length 'keys' means multiple
+
+	// Zero length 'keys' parameter means full
+	// configuration info is requested to be retrieved.
+	if len(keys) == 0 {
+		return kv, nil
+	}
+	// 'keys' with greater than zero length means one or more/multiple
 	// key values are requested to be retrieved.
 	kvPartial := make(map[string]string)
 	var err error
-	var transformedKey string
 	for _, key := range keys {
 		var found = false
 		// Get the transformed form or the '*'
 		// representation of the key, if it exists.
 		// Otherwise, get the key name back without any change
-		if transformedKey, err = transformKey(key); err == nil {
-			if _, ok := serverConfHandler[transformedKey]; ok {
-				// 'key' is a valid configuration parameter
-				found = true
-				if val, ok := s.kv[key]; ok {
-					kvPartial[key] = val
-				} else {
-					kvPartial[key] = notSet
-					// We show the error to the user and keep
-					// on going through the rest of the keys
-				}
+		if _, err = transformKey(key); err == nil {
+			// if _, ok := serverConfHandler[transformedKey]; ok {
+			// 'key' is a valid configuration parameter
+			found = true
+			if _, ok := serverConfHandler[key]; ok {
+				kvPartial[key] = kv[key]
+			} else {
+				kvPartial[key] = notSet
+				// We show the error to the user and keep
+				// on going through the rest of the keys
 			}
 		}
 		var origLengthKvPartial int
 		if !found {
-			// Key could be a prefix. Check it out.If so, come up with
+			// Key could be a prefix. Check it out if it is. If so, come up with
 			// the list of matching keys and their values and return them.
 			//
 			// First get the initial length of kvPartial slice. We'll check
-			// it later to see if any new key has been added or not.
+			// it later to see if any new key has been added into the list or not.
 			origLengthKvPartial = len(kvPartial)
-			for validKey := range s.kv {
+			for validKey := range serverConfHandler {
 				if strings.HasPrefix(validKey, key) {
-					if val, ok := s.kv[validKey]; ok {
+					if val, ok := kv[validKey]; ok {
 						kvPartial[validKey] = val
-					} else {
-						kvPartial[key] = notSet
-						// We show the error to the user and keep
-						// on going through the rest of the keys
-						fmt.Printf("Couldn't get the value for key: %s (prefix %s)\n", validKey, key)
+						continue
+					}
+					// Maybe the 'validKey' is one of those keys with wildcard
+					// character,  '*'. Let's check if there is any matching
+					// entry or entries in the conifguration settings.
+					// 'validKey' becomes the regular expression
+					rPrefix, _ := regexp.Compile(validKey)
+					// Create a boolean to decide if one or more matching
+					// entries are found in the configuration settings.
+					// Loop through to collect all matching configurations
+					for k, v := range kv {
+						matchedPrefix := rPrefix.FindStringSubmatch(k)
+						if len(matchedPrefix) > 0 {
+							kvPartial[k] = v
+							continue
+						}
 					}
 				}
 			}
@@ -2306,7 +6622,6 @@ func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 				// Key is not a prefix either. So, it
 				// must be an invalid key
 				kvPartial[key] = notValid
-				fmt.Println("Invalid key:", key)
 			}
 		}
 	}
@@ -2369,8 +6684,9 @@ func writeLines(lines []string, path string) error {
 func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKeyFormat bool) {
 	// Regexp to match full line comments, and the comments
 	// which start in the middle of the line after some characters
-	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(//.*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+//.*)")
+	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(" + commentChar + ".*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+" + commentChar + ".*)")
 	matchedComment := rComment.FindStringSubmatch(entry)
+
 	if len(matchedComment) > 0 {
 		// Line entry might be a comment.
 		// Comments are handled in this block.
@@ -2392,7 +6708,7 @@ func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKey
 		}
 	}
 	// Handle key=val pairs here
-	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=?[\\s]*)([^\\s]*)")
+	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]*)")
 	matchedKey := r.FindStringSubmatch(entry)
 	if len(matchedKey) == 4 {
 		return []string{matchedKey[1], matchedKey[3]}, false, true
@@ -2401,49 +6717,52 @@ func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKey
 }
 
 // Load loads configuration from disk to memory (serverConfig.kv)
-func (s *ServerConfig) load() error {
-	s.kv = make(map[string]string)
-
+func (s *ServerConfig) load(isSetHandlerCall bool) map[string]error {
+	errMap := make(map[string]error)
 	// Check if configuration file exists
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
-		logger.Fatal(err, "No configuration file found")
+		// Return right away if configuration file doesn't exist
+		return map[string]error{"Config File": err}
 	} else {
 		// Configuration file exists.
 		// Read configuration data from etcd or file
 		s.RWMutex.RLock()
 		defer s.RWMutex.RUnlock()
 
+		s.fileContent = []lineStruct{}
 		lines, err := readLines(confFile)
 		if err != nil {
-			return err
+			// Return right away if something is wrong
+			// with reading the configuration file
+			return map[string]error{"Config File": err}
 		}
 
-		fileContent = []lineStruct{}
+		// 'newInd' is the index of the in memory 'fileContent' array,
+		// that will be populated here with configuration information.
+		newInd := -1
 		var key, val string
 		// Go through each line of config file and
 		// classify them as comments or key/value pairs.
 		// Only empty lines, comment lines (// xxxx xx x),
 		// key/value pairs (key = value) and combination of
 		// key/value pairs and comments in the same line
-		// (key = value // xxxx  xxx) are accepted.
-		for _, line := range lines {
+		// (key = value // xxxx  xxx) are honored. The rest
+		// of other formats are rejected.
+		for ind, line := range lines {
+			newInd++
 			element, isComment, isValidFormat := verifyConfigKeyFormat(line)
+			key = element[0]
+			val = element[1]
 			if !isValidFormat {
-				logger.LogIf(context.Background(), errors.New("Invalid key=value pair, "+strings.Join(element, " ")))
-				fmt.Println("Invalid key=value pair, " + strings.Join(element, " "))
-				fileContent = append(fileContent, lineStruct{
-					isComment:     isComment,
-					isValidFormat: isValidFormat,
-					key:           strings.Join(element, " ")})
+				logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
+				errMap["Invalid key: "+key] = errors.New("Invalid key, '" + key + "'. (line:" + strconv.Itoa(ind+1) + ")")
+				newInd--
 				continue
 			}
 			if isComment {
-				// fileContent = append(fileContent, lineStruct{isComment: isComment,
-				// 	isValidFormat: isValidFormat,
-				// 	comment:       strings.Join(element, " ")})
-				//
-				// We decided not to maintain full comment lines
-				// and empty lines. Skip it and continue.
+				// We've decided not to support full comment lines
+				// and empty lines. Skip it and continue. 12/12/2018
+				newInd--
 				continue
 			}
 			// Valid configurations are handled here.
@@ -2452,49 +6771,56 @@ func (s *ServerConfig) load() error {
 			// design and decision phase, if minio server cannot
 			// be started with the invalid configuration setting
 			// Validate key/value pair
-			key = element[0]
-			val = element[1]
-			// Set the server configuration map, "s.kv",
-			// Validate assuming the key is a regular key with no user specified
-			// random subkey in it. If this check fails, try validating the key
-			// assuming it has a user specified random subkey in it.
+
+			// Set the server configuration map, "s.fileContent",
+			// Validate by first assuming the key is a regular key with no user
+			// specified random subkey in it. If this check fails, try validating
+			// the key assuming it has a user specified random subkey in it.
 			isValidValue := true
 			if _, ok := serverConfHandler[key]; ok {
-				if err := serverConfHandler[key].Set(key, val, *s); err != nil {
+				if err := serverConfHandler[key].Set(key, val, isSetHandlerCall, s); err != nil {
 					// Report the error and continue with the next element
 					isValidValue = false
 					logger.LogIf(context.Background(), err)
-					fmt.Printf("Error in '%s' key value: '%v'. %s\n\n", key, val, err)
+					errMap["Invalid value: "+key] = errors.New("Incorrect '" +
+						key + "' value: '" + val + "'. " + err.Error() +
+						" (line:" + strconv.Itoa(ind+1) + ")")
+					newInd--
+					continue
 				}
 			} else if transformedKey, err := transformKey(key); err == nil {
-				// Validity check for keys with user specified random subkey
-				if err := serverConfHandler[transformedKey].Set(key, val, *s); err != nil {
+				if err := serverConfHandler[transformedKey].Set(key, val, isSetHandlerCall, s); err != nil {
 					// Report the error and continue with the next element
-					isValidValue = false
 					logger.LogIf(context.Background(), err)
+					errMap["Invalid value: "+key] = errors.New("Incorrect '" +
+						key + "' value: '" + val + "'. " + err.Error() +
+						" (line:" + strconv.Itoa(ind+1) + ")")
+					newInd--
+					continue
 				}
 			} else {
-				isValidFormat = false
-				logger.LogIf(context.Background(), errors.New("Invalid key: "+key))
+				logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
+				errMap["Invalid key, "+key] = errors.New("Invalid key, '" +
+					key + "'. (line:" + strconv.Itoa(ind+1) + ")")
+				newInd--
+				continue
 			}
 
-			if len(element) > 2 {
-				fileContent = append(fileContent, lineStruct{
-					isComment:     isComment,
-					isValidFormat: isValidFormat,
-					isValidValue:  isValidValue,
-					key:           element[0],
-					val:           element[1],
-					comment:       element[2]})
-			} else {
-				fileContent = append(fileContent, lineStruct{
-					isComment:     isComment,
-					isValidFormat: isValidFormat,
-					isValidValue:  isValidValue,
-					key:           element[0],
-					val:           element[1]})
+			if isValidFormat && isValidValue {
+				if len(element) > 2 {
+					s.fileContent[newInd].comment = element[2]
+					s.fileContent[newInd].isValidValue = isValidValue
+				} else {
+					s.fileContent[newInd].isValidValue = isValidValue
+				}
 			}
 		}
+	}
+
+	// Display error messages if errArr has errors collected
+	// during loading process of configuration file into memory
+	if len(errMap) > 0 {
+		return errMap
 	}
 
 	return nil
@@ -2507,40 +6833,41 @@ func (s *ServerConfig) save() error {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 
-	// fileContent slice index reflects the original order
-	// of the lines in the Minio server configuration file.
-	// We decided to alphabetically sort the content out, so the
-	// original file content order of the configruation file will
-	// not be preserved.
-	sort.Slice(fileContent, func(i, j int) bool {
-		return fileContent[i].key < fileContent[j].key
+	// 'fileContent' slice index reflects the original order
+	// of the lines in Minio server configuration file.
+	// We decided to alphabetically sort the content out.
+	// That means, the original order of the configuration
+	// file content will not be preserved after a 'SetHandler'
+	// function call.
+	sort.Slice(s.fileContent, func(i, j int) bool {
+		return s.fileContent[i].key < s.fileContent[j].key
 	})
 
 	// Create a slice, 'lines', to be used to generate the config
 	// file again. Only the valid values in valid format will be
 	// added into the configuration file.
-	for i := 0; i < len(fileContent); i++ {
-		if fileContent[i].isValidFormat {
-			if fileContent[i].isComment {
-				lines = append(lines, fileContent[i].comment)
+	for _, content := range s.fileContent {
+		if content.isValidFormat {
+			if content.isComment {
+				lines = append(lines, content.comment)
 				continue
 			}
-			if fileContent[i].comment != "" {
-				lines = append(lines, fileContent[i].key+" = "+fileContent[i].val+fileContent[i].comment)
+			if content.comment != "" {
+				lines = append(lines, content.key+" = "+content.val+content.comment)
 				continue
 			}
-			lines = append(lines, fileContent[i].key+" = "+fileContent[i].val)
+			lines = append(lines, content.key+" = "+content.val)
 			continue
 		}
 		errorEntry := ""
-		if fileContent[i].key != "" {
-			errorEntry += fileContent[i].key + " "
+		if content.key != "" {
+			errorEntry += content.key + " "
 		}
-		if fileContent[i].val != "" {
-			errorEntry += "= " + fileContent[i].val + " "
+		if content.val != "" {
+			errorEntry += "= " + content.val + " "
 		}
-		if fileContent[i].comment != "" {
-			errorEntry += fileContent[i].comment
+		if content.comment != "" {
+			errorEntry += content.comment
 		}
 		if errorEntry != "" {
 			lines = append(lines, "// *** Invalid configuration entry: "+strings.TrimSpace(errorEntry))

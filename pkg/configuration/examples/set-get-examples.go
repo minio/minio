@@ -41,7 +41,11 @@ func main() {
 	serverConfig := &configuration.ServerConfig{RWMutex: &sync.RWMutex{}}
 
 	fmt.Println()
-	fmt.Println("*** Get full configuration")
+	fmt.Println()
+
+	fmt.Println("*******************************************")
+	fmt.Println("GET full configuration")
+	fmt.Println("*******************************************")
 	keys = []string{}
 	if kv, err = serverConfig.GetHandler(keys); err != nil {
 		logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
@@ -50,55 +54,103 @@ func main() {
 	fmt.Println()
 	np(kv)
 
-	// fmt.Println("Set 'version'='31'")
-	// if err := serverConfig.SetHandler("version", "31"); err != nil {
-	// 	fmt.Printf("ERROR: %v\n\n", err)
-	// 	// os.Exit(1)
-	// }
-	// fmt.Println("Success! Yeay!")
+	fmt.Println()
+	fmt.Println()
 
-	// fmt.Println("Get 'version' value")
-	// keys = []string{"version"}
-	// fmt.Println("Calling GetHandler 'version'")
-	// if kv, err = serverConfig.GetHandler(keys); err != nil {
-	// 	fmt.Printf("ERROR: %v\n\n", err)
+	// fmt.Println("*******************************************")
+	// fmt.Println("SET 'worm'='12'")
+	// fmt.Println("*******************************************")
+	// if err := serverConfig.SetHandler("worm", "12"); err != nil {
+	// 	fmt.Printf("ERROR setting 'worm' = '12': %v\n\n", err)
 	// 	// os.Exit(1)
+	// } else {
+	// 	fmt.Println("Success! Yeay!")
 	// }
-	// fmt.Printf("'version': %v\n", kv["version"])
-	// np(kv)
 
-	// fmt.Println("Set a config parameter, 'region'='minio-region'")
-	// if err = serverConfig.SetHandler("region", "minio-region"); err != nil {
-	// 	logger.FatalIf(err, "Failed to load configuration data: ")
-	// 	fmt.Println("Failed to load configuration data:", err)
-	// }
+	// fmt.Println()
 	// fmt.Println()
 
-	// fmt.Println("Get config parameter, 'region'")
+	fmt.Println("*******************************************")
+	fmt.Println("GET 'wox' value")
+	fmt.Println("*******************************************")
+	keys = []string{"wox"}
+	if kv, err = serverConfig.GetHandler(keys); err != nil {
+		fmt.Printf("ERROR: %v\n\n", err)
+		// os.Exit(1)
+	}
+	fmt.Printf("'wox': %v\n", kv["wox"])
+	np(kv)
+
+	fmt.Println()
+	fmt.Println()
+
+	// fmt.Println("*******************************************")
+	// fmt.Println("SET a config parameter, 'log.http.TARGET3.anonymous'='false'")
+	// fmt.Println("*******************************************")
+	// if err = serverConfig.SetHandler("log.http.TARGET3.anonymous", "false"); err != nil {
+	// 	logger.FatalIf(err, "Failed to load configuration data: ")
+	// 	fmt.Println("Failed to load configuration data:", err)
+	// } else {
+	// 	fmt.Println("Success! Yeay!")
+	// }
+
+	// fmt.Println()
+	// fmt.Println()
+
+	// fmt.Println("*******************************************")
+	// fmt.Println("SET a config parameter, 'notify.kafka.1123'='true'")
+	// fmt.Println("*******************************************")
+	// if err = serverConfig.SetHandler("notify.kafka.1123", "true"); err != nil {
+	// 	logger.FatalIf(err, "Failed to load configuration data: ")
+	// 	fmt.Println("Failed to load configuration data:", err)
+	// } else {
+	// 	fmt.Println("Success! Yeay!")
+	// }
+
+	// fmt.Println()
+	// fmt.Println()
+
+	// fmt.Println("*******************************************")
+	// fmt.Println("GET config parameter, 'region'")
+	// fmt.Println("*******************************************")
 	// keys = []string{"region"}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
-	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// // fmt.Printf("kv>\n%+v\n\n", kv)
+	// fmt.Println()
 	// np(kv)
 
 	// fmt.Println()
-	// fmt.Println("*** Get 'region', 'version', 'worm' and 'notify.redis' config info")
-	// keys = []string{"region", "version", "worm", "notify.redis"}
+	// fmt.Println()
+
+	// fmt.Println("*******************************************")
+	// fmt.Println("GET 'region', 'version', 'worm' and 'log' config info")
+	// fmt.Println("*******************************************")
+	// fmt.Println()
+	// keys = []string{"region", "version", "worm", "log"}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
-	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// // fmt.Printf("kv>\n%+v\n\n", kv)
+	// fmt.Println()
 	// np(kv)
 
 	// fmt.Println()
-	// fmt.Println("*** Get full configuration")
+	// fmt.Println()
+
+	// fmt.Println("*******************************************")
+	// fmt.Println("GET full configuration")
+	// fmt.Println("*******************************************")
 	// keys = []string{}
 	// if kv, err = serverConfig.GetHandler(keys); err != nil {
 	// 	logger.FatalIf(err, "Failed to get region and version configuration parameters."+err.Error())
 	// }
-	// fmt.Printf("kv>\n%+v\n\n", kv)
+	// // fmt.Printf("kv>\n%+v\n\n", kv)
 	// fmt.Println()
 	// np(kv)
+
+	// fmt.Println()
+	// fmt.Println()
 
 }
