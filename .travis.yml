@@ -16,19 +16,19 @@ matrix:
       sudo: required
       env:
         - ARCH=x86_64
-      go: 1.10.4
+      go: 1.11.4
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
-        - make test GOFLAGS="-timeout 15m -race -v"
+        - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
         - make verify
         - make coverage
         - cd browser && yarn && yarn test && cd ..
     - os: windows
       env:
         - ARCH=x86_64
-      go: 1.10.4
+      go: 1.11.4
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
         - for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 20m "$d"; done

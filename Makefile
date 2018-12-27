@@ -60,7 +60,7 @@ spelling:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@go test $(GOFLAGS) -tags kqueue ./...
+	@go test -tags kqueue ./...
 
 verify: build
 	@echo "Verifying build"
@@ -73,7 +73,7 @@ coverage: build
 # Builds minio locally.
 build: checks
 	@echo "Building minio binary to './minio'"
-	@CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
+	@GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 docker: build
 	@docker build -t $(TAG) . -f Dockerfile.dev
