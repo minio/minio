@@ -68,17 +68,38 @@ const (
 
 	// AWSSourceIP - key representing client's IP address (not intermittent proxies) of any API.
 	AWSSourceIP = "aws:SourceIp"
+
+	// AWSUserAgent - key representing UserAgent header for any API.
+	AWSUserAgent = "aws:UserAgent"
+
+	// AWSSecureTransport - key representing if the clients request is authenticated or not.
+	AWSSecureTransport = "aws:SecureTransport"
 )
+
+// AllSupportedKeys - is list of all all supported keys.
+var AllSupportedKeys = []Key{
+	S3XAmzCopySource,
+	S3XAmzServerSideEncryption,
+	S3XAmzServerSideEncryptionAwsKMSKeyID,
+	S3XAmzMetadataDirective,
+	S3XAmzStorageClass,
+	S3LocationConstraint,
+	S3Prefix,
+	S3Delimiter,
+	S3MaxKeys,
+	AWSReferer,
+	AWSSourceIP,
+	AWSUserAgent,
+	AWSSecureTransport,
+	// Add new supported condition keys.
+}
 
 // IsValid - checks if key is valid or not.
 func (key Key) IsValid() bool {
-	switch key {
-	case S3XAmzCopySource, S3XAmzServerSideEncryption, S3XAmzServerSideEncryptionAwsKMSKeyID:
-		fallthrough
-	case S3XAmzMetadataDirective, S3XAmzStorageClass, S3LocationConstraint, S3Prefix:
-		fallthrough
-	case S3Delimiter, S3MaxKeys, AWSReferer, AWSSourceIP:
-		return true
+	for _, supKey := range AllSupportedKeys {
+		if supKey == key {
+			return true
+		}
 	}
 
 	return false

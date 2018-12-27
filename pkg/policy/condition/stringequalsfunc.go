@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -127,11 +127,13 @@ func validateStringEqualsValues(n name, key Key, values set.StringSet) error {
 	for _, s := range values.ToSlice() {
 		switch key {
 		case S3XAmzCopySource:
-			tokens := strings.SplitN(s, "/", 2)
-			if len(tokens) < 2 {
+			bucket, object := path2BucketAndObject(s)
+			if object == "" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzCopySource, n)
 			}
-			// FIXME: tokens[0] must be a valid bucket name.
+			if err := s3utils.CheckValidBucketName(bucket); err != nil {
+				return err
+			}
 		case S3XAmzServerSideEncryption:
 			if s != "aws:kms" && s != "AES256" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzServerSideEncryption, n)

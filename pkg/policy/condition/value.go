@@ -21,7 +21,25 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 )
+
+// Splits an incoming path into bucket and object components.
+func path2BucketAndObject(path string) (bucket, object string) {
+	// Skip the first element if it is '/', split the rest.
+	path = strings.TrimPrefix(path, "/")
+	pathComponents := strings.SplitN(path, "/", 2)
+
+	// Save the bucket and object extracted from path.
+	switch len(pathComponents) {
+	case 1:
+		bucket = pathComponents[0]
+	case 2:
+		bucket = pathComponents[0]
+		object = pathComponents[1]
+	}
+	return bucket, object
+}
 
 // Value - is enum type of string, int or bool.
 type Value struct {

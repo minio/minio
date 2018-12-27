@@ -268,6 +268,11 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 
 	case3Data := []byte(`{}`)
 
+	// Remove this test after supporting date conditions.
+	case4Data := []byte(`{
+"DateEquals": { "aws:CurrentTime": "2013-06-30T00:00:00Z" }
+}`)
+
 	testCases := []struct {
 		data           []byte
 		expectedResult Functions
@@ -278,6 +283,8 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 		{case2Data, NewFunctions(func6), false},
 		// empty condition error.
 		{case3Data, nil, true},
+		// unsupported condition error.
+		{case4Data, nil, true},
 	}
 
 	for i, testCase := range testCases {
