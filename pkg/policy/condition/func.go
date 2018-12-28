@@ -99,6 +99,7 @@ var conditionFuncMap = map[name]func(Key, ValueSet) (Function, error){
 	ipAddress:                 newIPAddressFunc,
 	notIPAddress:              newNotIPAddressFunc,
 	null:                      newNullFunc,
+	boolean:                   newBooleanFunc,
 	// Add new conditions here.
 }
 

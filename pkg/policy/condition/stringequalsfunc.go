@@ -134,8 +134,8 @@ func validateStringEqualsValues(n name, key Key, values set.StringSet) error {
 			if err := s3utils.CheckValidBucketName(bucket); err != nil {
 				return err
 			}
-		case S3XAmzServerSideEncryption:
-			if s != "aws:kms" && s != "AES256" {
+		case S3XAmzServerSideEncryption, S3XAmzServerSideEncryptionCustomerAlgorithm:
+			if s != "AES256" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzServerSideEncryption, n)
 			}
 		case S3XAmzMetadataDirective:
